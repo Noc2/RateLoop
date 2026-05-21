@@ -152,6 +152,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
             _tlockDrandChainHash(),
             ciphertext
         );
+        _openRoundForTest(engine, contentId, voter);
         vm.prank(voter);
         lrepToken.approve(address(engine), stakeAmt);
         uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(contentId), referenceRatingBps);
@@ -236,6 +237,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
         bytes32 commitHash =
             _commitHash(isUp, salt, voter, contentId, referenceRatingBps, targetRound, drandChainHash, ciphertext);
+        _openRoundForTest(votingEngine, contentId, voter);
         vm.prank(voter);
         token.approve(address(votingEngine), stakeAmt);
         uint256 cachedRoundContext2 = _roundContext(votingEngine.previewCommitRoundId(contentId), referenceRatingBps);

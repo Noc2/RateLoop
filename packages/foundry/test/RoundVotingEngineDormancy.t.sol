@@ -110,6 +110,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         bytes32 salt = keccak256(abi.encodePacked(voter4, block.timestamp, contentId));
 
         vm.warp(T0 + 31 days);
+        _openRoundForTest(engine, contentId, voter4);
         TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(address(engine), voter4, true, salt, contentId);
         vm.startPrank(voter4);
         lrepToken.approve(address(engine), STAKE);
@@ -143,6 +144,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         bytes32 salt = keccak256(abi.encodePacked(voter3, block.timestamp, contentId));
 
         vm.warp(T0 + 31 days);
+        _openRoundForTest(engine, contentId, voter3);
         TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(address(engine), voter3, true, salt, contentId);
         vm.startPrank(voter3);
         lrepToken.approve(address(engine), STAKE);
@@ -177,19 +179,18 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
 
     function _commit(address voter, uint256 contentId, bool isUp) internal {
         bytes32 salt = keccak256(abi.encodePacked(voter, block.timestamp));
-        bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
-        bytes32 commitHash = _commitHash(isUp, salt, voter, contentId, ciphertext);
+        _openRoundForTest(engine, contentId, voter);
+        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(address(engine), voter, isUp, salt, contentId);
         vm.startPrank(voter);
         lrepToken.approve(address(engine), STAKE);
-        uint256 cachedRoundContext2 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+        uint256 cachedRoundContext2 = _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps);
         engine.commitVote(
             contentId,
             cachedRoundContext2,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            commitHash,
-            ciphertext,
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
             STAKE,
             address(0)
         );

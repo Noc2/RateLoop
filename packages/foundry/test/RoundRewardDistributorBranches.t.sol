@@ -158,6 +158,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         salt = keccak256(abi.encodePacked(voter, contentId));
         bytes32 ch = _commitHash(isUp, salt, voter, contentId);
         bytes memory ct = _testCiphertext(isUp, salt, contentId);
+        _openRoundForTest(votingEngine, contentId, voter);
         vm.prank(voter);
         lrepToken.approve(address(votingEngine), stake);
         uint256 cachedRoundContext1 =
@@ -200,6 +201,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         commitKey = _commitKey(voter, commitHash);
 
+        _openRoundForTest(votingEngine, contentId, voter);
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), stake);
         votingEngine.commitVote(

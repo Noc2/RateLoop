@@ -119,6 +119,11 @@ contract VotingHandler is VotingTestBase {
         bytes32 commitHash = _commitHash(isUp, salt, voter, contentId, ciphertext);
 
         vm.startPrank(voter);
+        try engine.openRound(contentId) { }
+        catch {
+            vm.stopPrank();
+            return;
+        }
         lrepToken.approve(address(engine), stakeAmount);
         uint256 cachedRoundContext1 =
             _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());

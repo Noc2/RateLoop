@@ -206,6 +206,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         uint256 stake
     ) internal returns (bytes32 commitKey, bytes32 salt) {
         salt = keccak256(abi.encodePacked(voter, block.timestamp));
+        _openRoundForTest(engine, contentId, voter);
         uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
         bytes32 commitHash = _commitHash(
@@ -1505,28 +1506,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         raterRegistry.removeDelegate();
         _setAcceptedDelegate(raterRegistry, voter4, delegate);
 
-        bytes32 salt = keccak256("raw-delegate-submit-vote");
-        uint16 referenceRatingBps = _currentRatingReferenceBps(1);
-        bytes memory ciphertext = _testCiphertext(true, salt, 1);
-        bytes32 commitHash = _commitHash(
-            true, salt, delegate, 1, referenceRatingBps, _tlockCommitTargetRound(), _tlockDrandChainHash(), ciphertext
-        );
-
-        vm.startPrank(delegate);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext2 = _roundContext(votingEngine.previewCommitRoundId(1), referenceRatingBps);
         vm.expectRevert(RoundVotingEngine.SelfVote.selector);
-        votingEngine.commitVote(
-            1,
-            cachedRoundContext2,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            commitHash,
-            ciphertext,
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
+        vm.prank(delegate);
+        votingEngine.openRound(1);
     }
 
     function test_SubmitContent_RaterRegistryNotConfigured_Succeeds() public {
@@ -2179,6 +2161,23 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_CancelContent_AllowsEmptyOpenedRoundWithoutCommits() public {
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/open-then-cancel", "goal", "goal", "tags", 0);
+        vm.stopPrank();
+
+        vm.prank(voter1);
+        votingEngine.openRound(1);
+
+        vm.prank(submitter);
+        registry.cancelContent(1);
+
+        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Cancelled), "empty open round can be cancelled");
+        assertFalse(votingEngine.hasCommits(1), "open round records no commits");
+    }
+
     function test_CancelContent_HasVotes_Reverts() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
@@ -2251,7 +2250,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(registry.getRating(1), ratingBefore);
     }
 
-    function test_SetVotingEngine_ReplacementCannotOpenRoundWhileTrackedOldRoundOpen() public {
+    function test_SetVotingEngine_ReplacementCannotCommitWhileTrackedOldRoundOpen() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/tracked-open-engine", "goal", "goal", "tags", 0);
@@ -2267,6 +2266,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
+        _openRoundForTest(replacementEngine, 1, voter2);
         bytes32 salt = keccak256(abi.encodePacked(voter2, block.timestamp));
         uint16 referenceRatingBps = _currentRatingReferenceBps(1);
         bytes memory ciphertext = _testCiphertext(true, salt, 1);
@@ -2276,11 +2276,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(voter2);
         lrepToken.approve(address(replacementEngine), STAKE);
-        uint256 cachedRoundContext = _roundContext(replacementEngine.previewCommitRoundId(1), referenceRatingBps);
+        uint256 roundContext = _roundContext(replacementEngine.previewCommitRoundId(1), referenceRatingBps);
         vm.expectRevert(ContentRegistry.ActiveRoundOnPreviousEngine.selector);
         replacementEngine.commitVote(
             1,
-            cachedRoundContext,
+            roundContext,
             _tlockCommitTargetRound(),
             _tlockDrandChainHash(),
             commitHash,
@@ -2763,6 +2763,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.cancelExpiredRound(1, roundId);
 
         bytes32 salt = keccak256(abi.encodePacked(voter2, block.timestamp));
+        _openRoundForTest(votingEngine, 1, voter2);
         uint256 nextRoundId = votingEngine.previewCommitRoundId(1);
         uint64 targetRound = _tlockCommitTargetRound(votingEngine, 1);
         bytes32 drandChainHash = _tlockDrandChainHash();

@@ -178,6 +178,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes32 commitHash = _commitHash(isUp, salt, voter, contentId, targetRound, drandChainHash, ciphertext);
+        _openRoundForTest(votingEngine, contentId, voter);
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =
@@ -423,6 +424,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes32 commitHash = _commitHash(isUp, salt, voter, contentId, targetRound, drandChainHash, ciphertext);
+        _openRoundForTest(votingEngine, contentId, voter);
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext2 =

@@ -523,30 +523,26 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 contentId = _submitContentWithoutOpeningRound();
 
         vm.prank(voter1);
-        (
-            uint256 roundId,
-            uint48 startTime,
-            uint32 epochDuration,
-            uint32 maxDuration,
-            uint16 maxVoters,
-            uint16 roundReferenceRatingBps,
-            bytes32 drandChainHash,
-            uint64 drandGenesisTime,
-            uint64 drandPeriod
-        ) = votingEngine.openRound(contentId);
+        votingEngine.openRound(contentId);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        RoundLib.RoundConfig memory roundCfg = RoundEngineReadHelpers.roundConfig(votingEngine, contentId, roundId);
+        (bytes32 drandChainHash, uint64 drandGenesisTime, uint64 drandPeriod) =
+            votingEngine.roundDrandConfig(contentId, roundId);
+        uint16 roundReferenceRatingBps = votingEngine.roundReferenceRatingBpsForRound(contentId, roundId);
 
         assertEq(roundId, 1, "round id");
-        assertEq(startTime, block.timestamp, "start time");
-        assertEq(epochDuration, EPOCH_DURATION, "epoch duration");
-        assertEq(maxDuration, 7 days, "max duration");
-        assertEq(maxVoters, 200, "max voters");
+        assertEq(round.startTime, block.timestamp, "start time");
+        assertEq(roundCfg.epochDuration, EPOCH_DURATION, "epoch duration");
+        assertEq(roundCfg.maxDuration, 7 days, "max duration");
+        assertEq(roundCfg.maxVoters, 200, "max voters");
         assertEq(roundReferenceRatingBps, _defaultRatingReferenceBps(), "reference rating");
         assertEq(drandChainHash, _tlockDrandChainHash(), "drand hash");
         assertEq(drandGenesisTime, _tlockDrandGenesisTime(), "drand genesis");
         assertEq(drandPeriod, _tlockDrandPeriod(), "drand period");
         assertFalse(votingEngine.hasCommits(contentId), "open round is not a commit");
 
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Open), "state");
         assertEq(round.voteCount, 0, "vote count");
         assertEq(round.totalStake, 0, "stake");
@@ -554,16 +550,23 @@ contract RoundIntegrationTest is VotingTestBase {
 
     function test_OpenRound_IsIdempotentForOpenRound() public {
         uint256 contentId = _submitContentWithoutOpeningRound();
+        (,,,, uint256 lastActivityBefore,,,,,) = registry.contents(contentId);
 
         vm.prank(voter1);
-        (uint256 firstRoundId, uint48 firstStartTime,,,,,,,) = votingEngine.openRound(contentId);
+        votingEngine.openRound(contentId);
+        uint256 firstRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        uint48 firstStartTime = RoundEngineReadHelpers.round(votingEngine, contentId, firstRoundId).startTime;
         vm.warp(block.timestamp + 1 minutes);
         vm.prank(voter2);
-        (uint256 secondRoundId, uint48 secondStartTime,,,,,,,) = votingEngine.openRound(contentId);
+        votingEngine.openRound(contentId);
+        uint256 secondRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        uint48 secondStartTime = RoundEngineReadHelpers.round(votingEngine, contentId, secondRoundId).startTime;
 
         assertEq(secondRoundId, firstRoundId, "same round");
         assertEq(secondStartTime, firstStartTime, "same start");
         assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), firstRoundId, "active round");
+        (,,,, uint256 lastActivityAfter,,,,,) = registry.contents(contentId);
+        assertEq(lastActivityAfter, lastActivityBefore, "open round does not refresh activity");
     }
 
     function test_OpenRound_CancelsExpiredEmptyRoundBeforeOpeningNext() public {
@@ -573,7 +576,8 @@ contract RoundIntegrationTest is VotingTestBase {
         votingEngine.openRound(contentId);
         vm.warp(block.timestamp + 8 days);
         vm.prank(voter2);
-        (uint256 nextRoundId,,,,,,,,) = votingEngine.openRound(contentId);
+        votingEngine.openRound(contentId);
+        uint256 nextRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
 
         assertEq(nextRoundId, 2, "next round");
         assertEq(
@@ -1986,16 +1990,7 @@ contract RoundIntegrationTest is VotingTestBase {
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext35 = _roundContext(votingEngine.previewCommitRoundId(contentId), referenceRatingBps);
         vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext35,
-            targetRound,
-            drandChainHash,
-            ch,
-            ct,
-            STAKE,
-            address(0)
-        );
+        votingEngine.commitVote(contentId, cachedRoundContext35, targetRound, drandChainHash, ch, ct, STAKE, address(0));
         vm.stopPrank();
 
         // After 25 hours — succeeds
@@ -2005,16 +2000,7 @@ contract RoundIntegrationTest is VotingTestBase {
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext36 =
             _roundContext(votingEngine.previewCommitRoundId(contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext36,
-            targetRound,
-            drandChainHash,
-            ch,
-            ct,
-            STAKE,
-            address(0)
-        );
+        votingEngine.commitVote(contentId, cachedRoundContext36, targetRound, drandChainHash, ch, ct, STAKE, address(0));
         vm.stopPrank();
 
         assertEq(RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), 2, "New round should be created");

@@ -204,6 +204,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         bytes32 commitHash = _commitHash(isUp, salt, voter, contentId);
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
 
+        _openRoundForTest(votingEngine, contentId, voter);
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =

@@ -144,6 +144,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
     {
         salt = keccak256(abi.encodePacked(voter, block.timestamp, cid));
         _VoteCtx memory c = _buildVoteCtx(voter, cid, up, salt);
+        _openRoundForTest(engine, cid, voter);
         vm.prank(voter);
         lrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(cid), c.referenceRatingBps);

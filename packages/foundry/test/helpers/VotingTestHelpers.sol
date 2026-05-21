@@ -752,8 +752,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     }
 
     function _commitTestVote(DirectTestCommitRequest memory request) internal returns (bytes32 commitKey) {
-        vm.prank(request.voter);
-        request.engine.openRound(request.contentId);
+        _openRoundForTest(request.engine, request.contentId, request.voter);
         TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(
             address(request.engine), request.voter, request.isUp, request.salt, request.contentId
         );
@@ -775,6 +774,11 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
         _rememberTestReveal(artifacts.commitKey, request.isUp, request.salt);
         return artifacts.commitKey;
+    }
+
+    function _openRoundForTest(RoundVotingEngine engine, uint256 contentId, address opener) internal {
+        vm.prank(opener);
+        engine.openRound(contentId);
     }
 
     function _rememberTestReveal(bytes32 commitKey, bool isUp, bytes32 salt) internal {

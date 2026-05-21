@@ -136,6 +136,7 @@ contract SelectiveRevelationTest is VotingTestBase {
     {
         salt = keccak256(abi.encodePacked(voter, block.timestamp));
         CommitArtifacts memory artifacts = _buildCommitArtifacts(voter, contentId, isUp, salt);
+        _openRoundForTest(engine, contentId, voter);
         vm.startPrank(voter);
         lrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 =

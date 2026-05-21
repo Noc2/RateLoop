@@ -165,6 +165,7 @@ contract AdversarialTests is VotingTestBase {
         returns (bytes32 commitKey, bytes32 salt)
     {
         salt = keccak256(abi.encodePacked(voter, block.timestamp, contentId, isUp));
+        _openRoundForTest(engine, contentId, voter);
         uint64 targetRound = _tlockCommitTargetRound(engine, contentId);
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId, targetRound, drandChainHash);
@@ -679,6 +680,8 @@ contract AdversarialTests is VotingTestBase {
         vm.stopPrank();
 
         // Unanimous votes
+        vm.prank(voter1);
+        eng2.openRound(1);
         bytes32 salt1 = keccak256(abi.encodePacked(voter1, block.timestamp, uint256(1)));
         uint64 targetRound1 = _tlockCommitTargetRound(eng2, 1);
         bytes32 drandChainHash = _tlockDrandChainHash();
@@ -836,6 +839,7 @@ contract AdversarialTests is VotingTestBase {
 
         // Holder votes (uses token 1)
         bytes32 salt = keccak256(abi.encodePacked(holder, block.timestamp, contentId));
+        _openRoundForTest(engine, contentId, holder);
         bytes32 commitHash = _commitHash(true, salt, holder, contentId);
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
         vm.startPrank(holder);
@@ -918,6 +922,7 @@ contract AdversarialTests is VotingTestBase {
         // The holder voted at t=1000. _settleRound warped to startTime+EPOCH+1 ≈ 1601.
         // Cooldown = 24h = 86400s. We're at ~1601, cooldown expires at ~87400.
         // So delegate should be blocked.
+        _openRoundForTest(engine, contentId, delegate);
         bytes32 salt2 = keccak256(abi.encodePacked(delegate, block.timestamp, contentId, false));
         bytes memory ciphertext2 = _testCiphertext(false, salt2, contentId);
         uint16 referenceRatingBps2 = _currentRatingReferenceBps(contentId);
@@ -1037,6 +1042,7 @@ contract AdversarialTests is VotingTestBase {
     function test_RevealTiming_BeforeEpoch_Reverts() public {
         uint256 contentId = _submitContent();
 
+        _openRoundForTest(engine, contentId, voter1);
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, contentId, true));
         bytes32 commitHash = _commitHash(true, salt, voter1, contentId);
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
@@ -1069,6 +1075,7 @@ contract AdversarialTests is VotingTestBase {
     function test_RevealTiming_WrongSalt_Reverts() public {
         uint256 contentId = _submitContent();
 
+        _openRoundForTest(engine, contentId, voter1);
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, contentId, true));
         bytes32 commitHash = _commitHash(true, salt, voter1, contentId);
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
@@ -1104,6 +1111,7 @@ contract AdversarialTests is VotingTestBase {
     function test_RevealTiming_WrongDirection_Reverts() public {
         uint256 contentId = _submitContent();
 
+        _openRoundForTest(engine, contentId, voter1);
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, contentId, true));
         bytes32 commitHash = _commitHash(true, salt, voter1, contentId);
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
@@ -1138,6 +1146,7 @@ contract AdversarialTests is VotingTestBase {
     function test_RevealTiming_OpaqueCiphertext_RevertsOnCommit() public {
         uint256 contentId = _submitContent();
 
+        _openRoundForTest(engine, contentId, voter1);
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, contentId, "opaque"));
         bytes memory opaqueCiphertext = abi.encodePacked(
             "-----BEGIN AGE ENCRYPTED FILE-----\n", "opaque-test-payload\n", "-----END AGE ENCRYPTED FILE-----\n"
@@ -1208,26 +1217,9 @@ contract AdversarialTests is VotingTestBase {
     function test_SelfVote_SubmitterBlocked() public {
         uint256 contentId = _submitContent();
 
-        bytes32 salt = keccak256(abi.encodePacked(submitter, block.timestamp, contentId, true));
-        bytes32 commitHash = _commitHash(true, salt, submitter, contentId);
-        bytes memory ciphertext = _testCiphertext(true, salt, contentId);
-
-        vm.startPrank(submitter);
-        lrepToken.approve(address(engine), STAKE);
-        uint256 cachedRoundContext11 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.SelfVote.selector);
-        engine.commitVote(
-            contentId,
-            cachedRoundContext11,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            commitHash,
-            ciphertext,
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
+        vm.prank(submitter);
+        engine.openRound(contentId);
     }
 
     // =========================================================================

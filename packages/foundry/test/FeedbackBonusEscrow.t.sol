@@ -717,19 +717,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32[] memory commitKeys = new bytes32[](voters.length);
 
         for (uint256 i = 0; i < voters.length; i++) {
-            salts[i] = keccak256(abi.encodePacked(voters[i], contentId, directions[i], i));
-            commitKeys[i] = _commitTestVote(
-                DirectTestCommitRequest({
-                    engine: votingEngine,
-                    lrepToken: lrepToken,
-                    voter: voters[i],
-                    contentId: contentId,
-                    isUp: directions[i],
-                    stake: STAKE,
-                    frontend: frontend,
-                    salt: salts[i]
-                })
-            );
+            (salts[i], commitKeys[i]) = _commitFeedbackVote(voters[i], contentId, directions[i], i, frontend);
         }
 
         roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
@@ -742,25 +730,30 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
     }
 
-    function _expectSelfVoteCommitRevert(address voter, uint256 contentId, bytes32 salt) internal {
-        TestCommitArtifacts memory artifacts =
-            _buildTestCommitArtifacts(address(votingEngine), voter, true, salt, contentId);
-        vm.startPrank(voter);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext1 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), artifacts.roundReferenceRatingBps);
-        vm.expectRevert(RoundVotingEngine.SelfVote.selector);
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext1,
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            STAKE,
-            address(0)
+    function _commitFeedbackVote(address voter, uint256 contentId, bool isUp, uint256 index, address frontend)
+        internal
+        returns (bytes32 salt, bytes32 commitKey)
+    {
+        salt = keccak256(abi.encodePacked(voter, contentId, isUp, index));
+        commitKey = _commitTestVote(
+            DirectTestCommitRequest({
+                engine: votingEngine,
+                lrepToken: lrepToken,
+                voter: voter,
+                contentId: contentId,
+                isUp: isUp,
+                stake: STAKE,
+                frontend: frontend,
+                salt: salt
+            })
         );
-        vm.stopPrank();
+    }
+
+    function _expectSelfVoteCommitRevert(address voter, uint256 contentId, bytes32 salt) internal {
+        salt;
+        vm.expectRevert(RoundVotingEngine.SelfVote.selector);
+        vm.prank(voter);
+        votingEngine.openRound(contentId);
     }
 
     function _registerFrontend(address frontend) internal {

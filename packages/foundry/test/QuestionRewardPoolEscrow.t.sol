@@ -3996,24 +3996,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function _expectSelfVoteCommitRevert(address voter, uint256 contentId, bytes32 salt) internal {
-        TestCommitArtifacts memory artifacts =
-            _buildTestCommitArtifacts(address(votingEngine), voter, true, salt, contentId);
-        vm.startPrank(voter);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext1 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), artifacts.roundReferenceRatingBps);
+        salt;
         vm.expectRevert(RoundVotingEngine.SelfVote.selector);
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext1,
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            STAKE,
-            address(0)
-        );
-        vm.stopPrank();
+        vm.prank(voter);
+        votingEngine.openRound(contentId);
     }
 
     function _createRewardPool(uint256 contentId, uint256 amount, uint256 requiredVoters, uint256 requiredSettledRounds)
@@ -4272,6 +4258,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         internal
         returns (bytes32 commitKey)
     {
+        _openRoundForTest(votingEngine, contentId, voter);
         uint256 roundId = votingEngine.currentRoundId(contentId);
         if (roundId == 0) {
             roundId = _defaultTestCommitRoundId(contentId);
@@ -4318,6 +4305,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 revealableAfter,
         bytes32 salt
     ) internal returns (bytes32 commitKey) {
+        _openRoundForTest(votingEngine, contentId, voter);
         uint256 roundId = votingEngine.currentRoundId(contentId);
         if (roundId == 0) {
             roundId = _defaultTestCommitRoundId(contentId);

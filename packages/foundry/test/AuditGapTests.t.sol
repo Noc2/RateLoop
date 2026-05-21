@@ -143,6 +143,7 @@ contract AuditGapTests is VotingTestBase {
         salt = keccak256(abi.encodePacked(voter, block.timestamp, contentId, isUp));
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
         bytes32 hash = _commitHash(isUp, salt, voter, contentId, ciphertext);
+        _openRoundForTest(votingEngine, contentId, voter);
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), stakeAmt);
         uint256 cachedRoundContext1 =

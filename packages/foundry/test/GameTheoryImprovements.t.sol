@@ -135,6 +135,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         bytes32 ch =
             _commitHash(isUp, salt, voter, contentId, _defaultRatingReferenceBps(), targetRound, drandChainHash, ct);
 
+        _openRoundForTest(engine, contentId, voter);
         vm.startPrank(voter);
         lrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 =

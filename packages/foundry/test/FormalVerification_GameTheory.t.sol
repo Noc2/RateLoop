@@ -126,6 +126,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         bytes memory ciphertext = _testCiphertext(up, salt, cid, targetRound, drandChainHash);
         bytes32 commitHash =
             _commitHash(up, salt, voter, cid, _defaultRatingReferenceBps(), targetRound, drandChainHash, ciphertext);
+        _openRoundForTest(engine, cid, voter);
         vm.prank(voter);
         lrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(cid), _defaultRatingReferenceBps());

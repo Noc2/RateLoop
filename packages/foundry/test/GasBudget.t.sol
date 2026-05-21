@@ -100,6 +100,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(1)));
         bytes32 commitHash = _commitHash(true, salt, voter1, contentId);
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
+        _openRoundForTest(votingEngine, contentId, voter1);
 
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
@@ -131,6 +132,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         bytes32 commitHash = _commitHash(true, salt, voter1, contentId);
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
 
+        _openRoundForTest(votingEngine, contentId, voter1);
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =
@@ -256,6 +258,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(4)));
         bytes32 commitHash = _commitHash(true, salt, voter1, contentId);
 
+        _openRoundForTest(votingEngine, contentId, voter1);
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext5 =
