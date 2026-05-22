@@ -1,4 +1,5 @@
 import {
+  formatUsdAmount,
   getConfiguredQuestionRewardPoolEscrowAddress,
   getDefaultUsdcAddress,
   getDefaultUsdcDisplayName,
@@ -12,6 +13,28 @@ test("parseUsdRewardPoolAmount accepts plain decimal USDC amounts", () => {
   assert.equal(parseUsdRewardPoolAmount("10"), 10_000_000n);
   assert.equal(parseUsdRewardPoolAmount("1234.56"), 1_234_560_000n);
   assert.equal(parseUsdRewardPoolAmount("0.000001"), 1n);
+});
+
+// Codex P2 follow-up to L-9: cent rounding must carry into the whole-dollar portion
+// when the rounded cent value would otherwise be 100 (e.g. 1_999_999 micro -> "$2.00",
+// not "$1.100"). These cases also pin the L-9 behaviour (0.005 USD -> $0.01) so the
+// two fixes can't accidentally regress in opposite directions.
+test("formatUsdAmount carries whole dollars when cents would round to 100", () => {
+  assert.equal(formatUsdAmount(1_999_999n), "$2.00");
+  assert.equal(formatUsdAmount(999_999n), "$1.00");
+  assert.equal(formatUsdAmount(10_999_999n), "$11.00");
+  assert.equal(formatUsdAmount(999_999_999_999n), "$1,000,000.00");
+});
+
+test("formatUsdAmount rounds 0.005 USD up to $0.01 and 0.004999 down to $0.00", () => {
+  assert.equal(formatUsdAmount(5_000n), "$0.01");
+  assert.equal(formatUsdAmount(4_999n), "$0.00");
+});
+
+test("formatUsdAmount keeps whole-dollar inputs as $N with no trailing decimals", () => {
+  assert.equal(formatUsdAmount(0n), "$0");
+  assert.equal(formatUsdAmount(1_000_000n), "$1");
+  assert.equal(formatUsdAmount(10_000_000_000n), "$10,000");
 });
 
 test("parseUsdRewardPoolAmount accepts comma-grouped USD amounts", () => {
