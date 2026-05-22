@@ -681,6 +681,16 @@ export async function decryptTlockVoteCiphertext(
   const client = runtime.client ?? mainnetClient();
   const decryptFn = runtime.decryptFn ?? timelockDecrypt;
   const armored = hexToString(ciphertext);
+  // Cheap structural sanity check before handing the payload to the tlock library.
+  // The age armor header alone is ~36 chars and the smallest valid body is bounded by
+  // MIN_ENCRYPTED_BODY_LENGTH, so anything shorter than the armor framing + body
+  // floor cannot plausibly decrypt to our 36-byte RBTS plaintext.
+  if (armored.length < AGE_ARMOR_HEADER.length + AGE_ARMOR_FOOTER.length + MIN_ENCRYPTED_BODY_LENGTH) {
+    return null;
+  }
+  if (!armored.includes(AGE_ARMOR_HEADER) || !armored.includes(AGE_ARMOR_FOOTER)) {
+    return null;
+  }
   const plaintext = await decryptFn(armored, client);
   return decodeRbtsVotePlaintext(plaintext);
 }
