@@ -316,6 +316,16 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       const calls = prepared.transactionPlan?.calls ?? [];
       if (authorizationRequest && calls.length === 0) {
         const typedData = readTypedData(authorizationRequest);
+        // H-1 (2026-05-22 audit): refuse to sign typed data whose domain.chainId disagrees
+        // with the chain advertised by the signing intent. Without the cross-check, a
+        // compromised backend could surface a "World Chain Sepolia" intent to the user
+        // while handing them a domain bound to mainnet (or vice versa), enabling
+        // cross-chain signature reuse.
+        if (intent?.chainId && typedData.domain.chainId !== intent.chainId) {
+          throw new Error(
+            `Signing intent advertises chain ${intent.chainId} but the EIP-712 domain is bound to chain ${typedData.domain.chainId}. Refusing to sign.`,
+          );
+        }
         const authorization = readAuthorization(authorizationRequest);
         const signature = await signTypedDataAsync({
           domain: typedData.domain,
