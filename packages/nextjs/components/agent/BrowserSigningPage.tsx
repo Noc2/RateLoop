@@ -230,7 +230,9 @@ type DecodedCall = { name: string; args: Array<{ label: string; value: string }>
 function decodeKnownErc20Call(data: string): DecodedCall {
   if (typeof data !== "string" || data.length < 10) return null;
   const selector = data.slice(0, 10).toLowerCase();
-  const definition = (KNOWN_ERC20_SELECTORS as Record<string, { name: string; argLabels: readonly string[] }>)[selector];
+  const definition = (KNOWN_ERC20_SELECTORS as Record<string, { name: string; argLabels: readonly string[] }>)[
+    selector
+  ];
   if (!definition) return null;
   const body = data.slice(10);
   if (body.length < definition.argLabels.length * 64) return null;
