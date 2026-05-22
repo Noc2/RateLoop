@@ -161,7 +161,5 @@ export function formatUsdAmount(value: bigint | number | string | undefined | nu
   const cents = rawCents % 100n;
   const groupedWhole = wholeCents.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const fractional = raw % 1_000_000n;
-  return fractional > 0n
-    ? `$${groupedWhole}.${cents.toString().padStart(2, "0")}`
-    : `$${groupedWhole}`;
+  return fractional > 0n ? `$${groupedWhole}.${cents.toString().padStart(2, "0")}` : `$${groupedWhole}`;
 }
