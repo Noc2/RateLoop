@@ -67,6 +67,7 @@ interface CleanupCursor {
 const MAX_CLEANUP_BATCHES_PER_TICK = 4;
 const MAX_CLEANUP_COMPLETED = 5000;
 const MAX_CLEANUP_QUEUE = 2000;
+const PONDER_FETCH_TIMEOUT_MS = 5_000;
 const cleanupQueue = new Map<string, CleanupCursor>();
 const cleanupCompletedRounds = new Set<string>();
 const cleanupDiscoveryRoundByContent = new Map<bigint, bigint>();
@@ -408,7 +409,10 @@ async function fetchIndexedCiphertext(params: {
   url.searchParams.set("limit", "200");
 
   try {
-    const response = await fetch(url);
+    // H-4 (2026-05-22 audit): previously fetched without any timeout, so a slow Ponder
+    // response could stall the whole reveal loop. 5s is well above Ponder's normal
+    // p99; anything beyond is unhealthy and the keeper retries on the next tick.
+    const response = await fetch(url, { signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS) });
     if (!response.ok) {
       params.logger.warn("Failed to fetch indexed vote ciphertext", {
         kind: params.kind,
