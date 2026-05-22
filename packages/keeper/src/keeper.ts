@@ -140,11 +140,15 @@ const DECRYPTABLE_AT_ROUND_PATTERN = /decryptable at round (\d+)/i;
 
 function trackDecryptFailure(commitKey: string): number {
   const count = (decryptFailureCount.get(commitKey) ?? 0) + 1;
+  // LRU touch: delete + re-insert moves the recently-failed entry to the back of the Map's
+  // insertion order, so the oldest *untouched* entry is always the eviction candidate.
+  // FIFO previously could evict a permanently-broken commit, reset its failure count, and
+  // then start retrying it forever from zero.
+  decryptFailureCount.delete(commitKey);
   decryptFailureCount.set(commitKey, count);
-  // FIFO eviction: remove oldest entries when the map grows too large
   if (decryptFailureCount.size > MAX_DECRYPT_FAILURE_ENTRIES) {
-    const first = decryptFailureCount.keys().next().value;
-    if (first !== undefined) decryptFailureCount.delete(first);
+    const oldest = decryptFailureCount.keys().next().value;
+    if (oldest !== undefined) decryptFailureCount.delete(oldest);
   }
   return count;
 }
