@@ -349,18 +349,11 @@ export async function decryptTlockVoteCiphertext(
 function validateCiphertextMetadata(
   commit: CommitData,
   ciphertext: `0x${string}`,
-): { ok: true } | { ok: false; reason: string; permanent: boolean } {
-  // L-5 (2026-05-22 audit): differentiate failure modes. A null commit field or a
-  // metadata mismatch can be caused by Ponder serving the wrong record (transient — a
-  // restart, re-sync, or RPC double-check can fix it). A structurally unparseable
-  // ciphertext, by contrast, means the bytes themselves are corrupt and will never
-  // decrypt no matter how many times we retry; that's the only path that should
-  // short-circuit retries.
+): { ok: true } | { ok: false; reason: string } {
   if (commit.targetRound == null || commit.drandChainHash == null) {
     return {
       ok: false,
       reason: "missing tlock metadata on the stored commit",
-      permanent: false,
     };
   }
 
@@ -369,7 +362,6 @@ function validateCiphertextMetadata(
     return {
       ok: false,
       reason: "malformed tlock ciphertext metadata",
-      permanent: true,
     };
   }
 
@@ -380,7 +372,6 @@ function validateCiphertextMetadata(
     return {
       ok: false,
       reason: `tlock metadata mismatch (stored round ${commit.targetRound.toString()}, ciphertext round ${metadata.targetRound.toString()})`,
-      permanent: false,
     };
   }
 
@@ -919,15 +910,13 @@ async function _revealCommits(
 
       const metadataValidation = validateCiphertextMetadata(commit, ciphertext);
       if (!metadataValidation.ok) {
-        if (metadataValidation.permanent) {
-          markPermanentDecryptFailure(commitKey);
-        }
+        markPermanentDecryptFailure(commitKey);
         incrementCounter("keeper_decrypt_failures_total");
         logger.error("tlock ciphertext metadata invalid", {
           contentId: contentId.toString(),
           roundId: roundId.toString(),
           commitKey,
-          permanent: metadataValidation.permanent,
+          permanent: true,
           error: metadataValidation.reason,
         });
         continue;
@@ -1120,15 +1109,13 @@ async function _revealAdvisoryCommits(
 
       const metadataValidation = validateCiphertextMetadata(commit, ciphertext);
       if (!metadataValidation.ok) {
-        if (metadataValidation.permanent) {
-          markPermanentDecryptFailure(commitKey);
-        }
+        markPermanentDecryptFailure(commitKey);
         incrementCounter("keeper_decrypt_failures_total");
         logger.error("advisory tlock ciphertext metadata invalid", {
           contentId: contentId.toString(),
           roundId: roundId.toString(),
           commitKey,
-          permanent: metadataValidation.permanent,
+          permanent: true,
           error: metadataValidation.reason,
         });
         continue;

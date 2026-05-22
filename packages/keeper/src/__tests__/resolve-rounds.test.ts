@@ -767,10 +767,7 @@ describe("resolveRounds", () => {
     );
   });
 
-  it("treats mismatched tlock metadata as a transient failure (does not mark permanent)", async () => {
-    // L-5 (2026-05-22 audit): metadata-mismatch can arise from Ponder serving a stale
-    // or wrong record; marking it permanent prevents recovery once the indexer corrects
-    // itself. Only the structurally-unparseable case stays permanent.
+  it("treats mismatched tlock metadata as a permanent failure without decrypting", async () => {
     const round = makeRound({
       state: 0,
       voteCount: 1n,
@@ -806,7 +803,7 @@ describe("resolveRounds", () => {
         contentId: "1",
         roundId: "1",
         commitKey: COMMIT_KEY_1,
-        permanent: false,
+        permanent: true,
         error: expect.stringContaining("tlock metadata mismatch"),
       }),
     );
