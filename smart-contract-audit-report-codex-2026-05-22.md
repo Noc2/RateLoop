@@ -2,7 +2,7 @@
 
 Audited commit: `e0b6523b1a00a28048c06fbee74b12e0e49a4282`
 
-Auditor: Codex, with three read-only parallel side reviews covering voting/round lifecycle, reward/oracle/fund movement, and registry/governance/config surfaces.
+Auditor: Codex, with three read-only parallel side reviews covering voting/round lifecycle, reward/oracle/fund movement, and registry/governance/config surfaces. Follow-up pass: Codex with three additional read-only side reviews and an OWASP/SCSVS-style checklist sweep.
 
 ## Summary
 
@@ -11,13 +11,14 @@ Auditor: Codex, with three read-only parallel side reviews covering voting/round
 | Critical | 0 |
 | High | 0 |
 | Medium | 2 |
-| Low | 0 |
-| Informational / notes | 5 |
+| Low | 1 |
+| Informational / notes | 6 |
 
-No confirmed direct fund-theft exploit was found in this pass. I did find two Medium liveness/configuration issues that are worth fixing before deployment:
+No confirmed direct fund-theft exploit was found in this pass. I did find two Medium liveness/configuration issues and one Low advisory-path availability issue that are worth fixing or consciously accepting before deployment:
 
 1. A quorum-revealed round can become permanently un-settleable if every capped RBTS seed refresh ages out.
 2. `ProtocolConfig` can allow/default round voter caps that downstream mandatory bounty submission code rejects, letting governance misconfiguration halt submission paths.
+3. Gas-only fresh-address sybils can fill a round's zero-stake advisory vote cap, censoring honest advisory launch-credit participation for that round.
 
 ## Scope
 
@@ -52,7 +53,7 @@ make check-storage-layouts
 
 Results:
 
-- `forge test --offline`: passed, `1308` tests, `0` failed.
+- `forge test --offline`: passed twice during the initial and follow-up passes; latest run passed `1308` tests, `0` failed.
 - `make check-contract-sizes`: passed; all checked contracts are below the EIP-170 deployed bytecode limit. Closest contracts: `RoundVotingEngine` at `24457` bytes, `ContentRegistry` at `24328` bytes, `QuestionRewardPoolEscrow` at `24139` bytes.
 - `make check-storage-layouts`: passed after `forge clean` and a fresh build; all pinned storage layouts matched.
 
@@ -63,8 +64,9 @@ Static-analysis availability:
 
 External reference checks:
 
-- Solidity documents that `blockhash` returns a non-zero hash only for one of the 256 most recent blocks, otherwise zero: https://docs.soliditylang.org
+- Solidity documents that `blockhash` returns a non-zero hash only for one of the 256 most recent blocks, otherwise zero: https://docs.soliditylang.org/en/latest/units-and-global-variables.html#block-and-transaction-properties
 - OpenZeppelin documents `SafeERC20.forceApprove` as the intended compatibility path for tokens that require zeroing allowance before setting a non-zero value, such as USDT: https://docs.openzeppelin.com/contracts/4.x/api/token/erc20
+- OWASP Smart Contract Top 10 and SCSVS were used as a cross-check checklist for access control, business logic, oracle/randomness, denial-of-service, and arithmetic/asset-accounting classes: https://owasp.org/www-project-smart-contract-top-10/ and https://owasp.org/www-project-smart-contract-security-verification-standard/
 
 ## Findings
 
@@ -74,10 +76,13 @@ Severity: Medium
 
 Affected code:
 
-- `packages/foundry/contracts/RoundVotingEngine.sol:872-890`
-- `packages/foundry/contracts/RoundVotingEngine.sol:900-908`
+- `packages/foundry/contracts/RoundVotingEngine.sol:97-103`
+- `packages/foundry/contracts/RoundVotingEngine.sol:872-908`
 - `packages/foundry/contracts/libraries/RoundRevealLib.sol:271-295`
 - `packages/foundry/contracts/RoundVotingEngine.sol:1215-1228`
+- `packages/foundry/contracts/ContentRegistry.sol:1043`
+- `packages/foundry/contracts/ContentRegistry.sol:1123`
+- `packages/foundry/contracts/ContentRegistry.sol:1479`
 
 Description:
 
@@ -91,6 +96,8 @@ After the third successful refresh, if that final marker also ages out, both set
 - `finalizeRevealFailedRound` rejects rounds that already reached reveal quorum.
 - New commits are blocked because `thresholdReachedAt != 0`.
 
+This applies to quorum-revealed RBTS rounds that need scoring entropy. Exact raw ties return `Tied` before RBTS scoring, so they do not depend on the expired seed path.
+
 Exploit / grief path:
 
 1. A round reaches RBTS reveal quorum.
@@ -101,7 +108,7 @@ Exploit / grief path:
 
 Impact:
 
-All stakes/rewards in that round can remain locked indefinitely, and the content cannot progress into a fresh round. This is a liveness/funds-availability grief, not a direct theft vector.
+All stakes/rewards in that round can remain locked indefinitely, and the content cannot progress into a fresh round. Content dormancy and engine rotation are not clean escape hatches: open rounds block dormancy finalization, and a replacement engine still rejects new activity when the tracked prior engine reports an open round. This is a liveness/funds-availability grief, not a direct theft vector.
 
 Recommendation:
 
@@ -124,9 +131,11 @@ Affected code:
 
 - `packages/foundry/contracts/ProtocolConfig.sol:186-195`
 - `packages/foundry/contracts/ProtocolConfig.sol:627-642`
+- `packages/foundry/contracts/ContentRegistry.sol:482`
 - `packages/foundry/contracts/ContentRegistry.sol:503-516`
 - `packages/foundry/contracts/ContentRegistry.sol:656-663`
 - `packages/foundry/contracts/ContentRegistry.sol:1371-1374`
+- `packages/foundry/contracts/ContentRegistry.sol:1384`
 - `packages/foundry/contracts/libraries/QuestionRewardPoolEscrowPoolActionsLib.sol:221-225`
 
 Description:
@@ -137,6 +146,8 @@ Description:
 - Question bundles reject `maxVoters > 100`.
 
 Because `ContentRegistry` reads `protocolConfig.config()` as the default content round config, a `CONFIG_ROLE` holder can set `maxVoters` above the escrow-compatible cap. New default single-question submissions will then revert when the registry tries to attach the mandatory reward pool. If governance also raises `roundConfigBounds.minVoterCap` above the downstream cap, even custom round configs cannot choose an escrow-compatible value.
+
+The bundle path has the same shape with a lower downstream cap: registry-side bundle validation caps `maxVoters` at `100`, while `ProtocolConfig` can still validate larger default/custom caps. A first call to `setRoundConfigBounds(minVoterCap > 200)` is constrained by validation of the existing stored config, but once the stored config is raised, bounds can be moved in a way that makes bounty-compatible custom configs unavailable.
 
 Exploit / failure path:
 
@@ -160,9 +171,47 @@ Unify the cap source. Prefer moving downstream caps into `ProtocolConfig` or exp
 
 Suggested test:
 
-Add end-to-end tests where `ProtocolConfig.setConfig` attempts `maxVoters = 201` and where `setRoundConfigBounds` attempts `minVoterCap > 200`, then assert mandatory submission paths remain reachable or the config update reverts.
+Add end-to-end tests where `ProtocolConfig.setConfig` attempts `maxVoters = 201`, where bundle submission config attempts `maxVoters = 101`, and where bounds are moved after a raised stored config. Assert mandatory submission paths remain reachable or the invalid config update reverts.
+
+### L-01 - Zero-stake advisory vote cap can be filled by fresh-address sybils
+
+Severity: Low
+
+Affected code:
+
+- `packages/foundry/contracts/AdvisoryVoteRecorder.sol:248-250`
+- `packages/foundry/contracts/AdvisoryVoteRecorder.sol:257-306`
+- `packages/foundry/contracts/AdvisoryVoteRecorder.sol:340-350`
+- `packages/foundry/test/RoundVotingEngineBranches.t.sol:3151`
+
+Description:
+
+`recordAdvisoryVote` intentionally records zero-stake advisory commits for an already-open staked round. The recorder dedupes and cooldowns by resolved rater identity, but address-only raters resolve to fresh address identities. An attacker can therefore create fresh EOAs and submit valid advisory commits until `roundAdvisoryCommitKeys[contentId][roundId].length >= maxVoters`. Once the advisory cap is full, availability reports `MaxAdvisoryVotersReached` and later honest advisory commits revert.
+
+Exploit / grief path:
+
+1. A staked round is open and still in its first blind epoch.
+2. The attacker prepares valid zero-stake advisory commits from fresh EOAs.
+3. Each fresh EOA passes address-identity dedupe and consumes one advisory slot.
+4. After `maxVoters` advisory commits, honest zero-stake advisory raters cannot join that round.
+
+Impact:
+
+This censors the optional advisory launch-credit path for the affected round. It does not block staked voting, settlement, reward escrow, or custody accounting, and honest raters can still participate by submitting a normal staked vote. The cost is mostly gas and account management, so the path is cheap enough to document or harden before launch.
+
+Recommendation:
+
+Decide whether advisory participation is meant to be open to address-only raters or reserved for higher-trust identities. Reasonable mitigations include a small refundable LREP bond, an active human-credential gate, a separate advisory cap that address-only identities cannot fully consume, or reserved advisory slots/priority for verified-human identities.
+
+Suggested test:
+
+Add an adversarial branch test where `maxVoters` fresh EOAs fill advisory slots, then an honest verified/human advisory rater is rejected. If a mitigation is added, the test should assert that the mitigated honest rater can still access the advisory path.
 
 ## Positive Verifications / Non-Findings
+
+### Follow-up report cross-check
+
+I re-read the earlier May audit/readiness reports against current code and did not confirm additional unresolved exploit findings beyond M-01, M-02, and L-01 above. Previously reported areas that now appear fixed or consciously accepted include identity canonicalization collisions, oracle challenge/finalization edge cases, launch pending-credit finalization, escrow/oracle recovery paths, content callback reentrancy hardening, RBTS/advisory sampler edge cases, and Solidity version pinning.
 
 ### Oracle trust model
 
@@ -195,7 +244,8 @@ Upgradeable contracts have pinned storage-layout snapshots, and `make check-stor
 
 1. Fix M-01 before deployment. It can permanently lock a live round and content item through inaction plus cheap refresh griefing.
 2. Fix M-02 before deployment. It is cheap to correct now and prevents governance/config mistakes from breaking mandatory bounty-backed submissions.
-3. Install Slither and Aderyn in the local/CI audit image so future audit reports can include those static-analysis outputs instead of recording tool unavailability.
+3. Fix or consciously document L-01 before launch. If zero-stake advisory launch-credit participation is intended to be broadly available, add an anti-spam gate rather than letting address-only identities consume the entire advisory cap.
+4. Install Slither and Aderyn in the local/CI audit image so future audit reports can include those static-analysis outputs instead of recording tool unavailability.
 
 ## Limitations
 
