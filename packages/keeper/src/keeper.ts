@@ -273,15 +273,15 @@ async function _syncBundleQuestionTerminal(
       args: [contentId, roundId],
     });
     logger.debug("Synced bundle question terminal", {
-      contentId: Number(contentId),
-      roundId: Number(roundId),
+      contentId: contentId.toString(),
+      roundId: roundId.toString(),
     });
   } catch (err: unknown) {
     const reason = getRevertReason(err);
     if (!isExpectedRevert(reason)) {
       logger.debug("Bundle sync skipped", {
-        contentId: Number(contentId),
-        roundId: Number(roundId),
+        contentId: contentId.toString(),
+        roundId: roundId.toString(),
         error: reason,
       });
     }
@@ -587,7 +587,7 @@ export async function resolveRounds(
               args: [contentId, activeRoundId],
             });
             logger.info("Settled round", {
-              contentId: Number(contentId),
+              contentId: contentId.toString(),
               roundId: Number(activeRoundId),
             });
             result.roundsSettled++;
@@ -623,7 +623,7 @@ export async function resolveRounds(
             const reason = getRevertReason(err);
             if (!isExpectedRevert(reason)) {
               logger.warn("Failed to settle round", {
-                contentId: Number(contentId),
+                contentId: contentId.toString(),
                 roundId: Number(activeRoundId),
                 error: reason,
               });
@@ -675,7 +675,7 @@ export async function resolveRounds(
                 args: [contentId, activeRoundId],
               });
               logger.info("Finalized reveal-failed round", {
-                contentId: Number(contentId),
+                contentId: contentId.toString(),
                 roundId: Number(activeRoundId),
               });
               result.roundsRevealFailedFinalized++;
@@ -685,7 +685,7 @@ export async function resolveRounds(
             const reason = getRevertReason(err);
             if (!isExpectedRevert(reason)) {
               logger.warn("Failed to finalize reveal-failed round", {
-                contentId: Number(contentId),
+                contentId: contentId.toString(),
                 roundId: Number(activeRoundId),
                 error: reason,
               });
@@ -715,7 +715,7 @@ export async function resolveRounds(
                 args: [contentId, activeRoundId],
               });
               logger.info("Cancelled expired round", {
-                contentId: Number(contentId),
+                contentId: contentId.toString(),
                 roundId: Number(activeRoundId),
               });
               result.roundsCancelled++;
@@ -724,7 +724,7 @@ export async function resolveRounds(
             const reason = getRevertReason(err);
             if (!isExpectedRevert(reason)) {
               logger.warn("Failed to cancel expired round", {
-                contentId: Number(contentId),
+                contentId: contentId.toString(),
                 roundId: Number(activeRoundId),
                 error: reason,
               });
@@ -743,7 +743,7 @@ export async function resolveRounds(
         );
       } catch (err: unknown) {
         logger.debug("Could not discover cleanup candidate", {
-          contentId: Number(contentId),
+          contentId: contentId.toString(),
           error: getRevertReason(err),
         });
       }
@@ -780,7 +780,7 @@ export async function resolveRounds(
             args: [contentId],
           });
           logger.info("Marked content as dormant", {
-            contentId: Number(contentId),
+            contentId: contentId.toString(),
           });
           result.contentMarkedDormant++;
         }
@@ -791,14 +791,14 @@ export async function resolveRounds(
           !reason.includes("Content has active round")
         ) {
           logger.debug("Could not check dormancy", {
-            contentId: Number(contentId),
+            contentId: contentId.toString(),
             error: reason,
           });
         }
       }
     } catch (err: unknown) {
       logger.error("Error processing content", {
-        contentId: Number(contentId),
+        contentId: contentId.toString(),
         error: getRevertReason(err),
       });
     }
@@ -909,8 +909,8 @@ async function _revealCommits(
         markPermanentDecryptFailure(commitKey);
         incrementCounter("keeper_decrypt_failures_total");
         logger.error("tlock ciphertext metadata invalid", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
+          contentId: contentId.toString(),
+          roundId: roundId.toString(),
           commitKey,
           permanent: true,
           error: metadataValidation.reason,
@@ -932,8 +932,8 @@ async function _revealCommits(
         if (decryptError.retryable) {
           decryptFailureCount.delete(commitKey);
           logger.debug("tlock ciphertext not decryptable yet", {
-            contentId: Number(contentId),
-            roundId: Number(roundId),
+            contentId: contentId.toString(),
+            roundId: roundId.toString(),
             commitKey,
             decryptableAtRound: decryptError.decryptableAtRound,
             error: decryptError.message,
@@ -948,8 +948,8 @@ async function _revealCommits(
             ? logger.error.bind(logger)
             : logger.warn.bind(logger);
         logFn("tlock decryption failed", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
+          contentId: contentId.toString(),
+          roundId: roundId.toString(),
           commitKey,
           attempt: count,
           permanent: count >= MAX_DECRYPT_RETRIES,
@@ -966,8 +966,8 @@ async function _revealCommits(
             ? logger.error.bind(logger)
             : logger.warn.bind(logger);
         logFn("Failed to decode tlock ciphertext", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
+          contentId: contentId.toString(),
+          roundId: roundId.toString(),
           commitKey,
           attempt: count,
           permanent: count >= MAX_DECRYPT_RETRIES,
@@ -996,8 +996,8 @@ async function _revealCommits(
           ],
         });
         logger.info("Revealed RBTS vote", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
+          contentId: contentId.toString(),
+          roundId: roundId.toString(),
           voter: commit.voter,
         });
         revealed++;
@@ -1005,8 +1005,8 @@ async function _revealCommits(
         const reason = getRevertReason(err);
         if (!isExpectedRevert(reason)) {
           logger.warn("Failed to reveal vote", {
-            contentId: Number(contentId),
-            roundId: Number(roundId),
+            contentId: contentId.toString(),
+            roundId: roundId.toString(),
             commitKey,
             error: reason,
           });
@@ -1014,8 +1014,8 @@ async function _revealCommits(
       }
     } catch (err: unknown) {
       logger.debug("Error processing commit", {
-        contentId: Number(contentId),
-        roundId: Number(roundId),
+        contentId: contentId.toString(),
+        roundId: roundId.toString(),
         commitKey,
         error: getRevertReason(err),
       });
@@ -1108,8 +1108,8 @@ async function _revealAdvisoryCommits(
         markPermanentDecryptFailure(commitKey);
         incrementCounter("keeper_decrypt_failures_total");
         logger.error("advisory tlock ciphertext metadata invalid", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
+          contentId: contentId.toString(),
+          roundId: roundId.toString(),
           commitKey,
           permanent: true,
           error: metadataValidation.reason,
@@ -1130,8 +1130,8 @@ async function _revealAdvisoryCommits(
         if (decryptError.retryable) {
           decryptFailureCount.delete(commitKey);
           logger.debug("advisory tlock ciphertext not decryptable yet", {
-            contentId: Number(contentId),
-            roundId: Number(roundId),
+            contentId: contentId.toString(),
+            roundId: roundId.toString(),
             commitKey,
             decryptableAtRound: decryptError.decryptableAtRound,
             error: decryptError.message,
@@ -1143,8 +1143,8 @@ async function _revealAdvisoryCommits(
         incrementCounter("keeper_decrypt_failures_total");
         const logFn = count >= MAX_DECRYPT_RETRIES ? logger.error.bind(logger) : logger.warn.bind(logger);
         logFn("advisory tlock decryption failed", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
+          contentId: contentId.toString(),
+          roundId: roundId.toString(),
           commitKey,
           attempt: count,
           permanent: count >= MAX_DECRYPT_RETRIES,
@@ -1158,8 +1158,8 @@ async function _revealAdvisoryCommits(
         incrementCounter("keeper_decrypt_failures_total");
         const logFn = count >= MAX_DECRYPT_RETRIES ? logger.error.bind(logger) : logger.warn.bind(logger);
         logFn("Failed to decode advisory tlock ciphertext", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
+          contentId: contentId.toString(),
+          roundId: roundId.toString(),
           commitKey,
           attempt: count,
           permanent: count >= MAX_DECRYPT_RETRIES,
@@ -1178,8 +1178,8 @@ async function _revealAdvisoryCommits(
           args: [commitKey, decrypted.isUp, decrypted.predictedUpBps, decrypted.salt],
         });
         logger.info("Revealed advisory vote", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
+          contentId: contentId.toString(),
+          roundId: roundId.toString(),
           commitKey,
         });
         revealed++;
@@ -1187,8 +1187,8 @@ async function _revealAdvisoryCommits(
         const reason = getRevertReason(err);
         if (!isExpectedRevert(reason)) {
           logger.warn("Failed to reveal advisory vote", {
-            contentId: Number(contentId),
-            roundId: Number(roundId),
+            contentId: contentId.toString(),
+            roundId: roundId.toString(),
             commitKey,
             error: reason,
           });
@@ -1196,8 +1196,8 @@ async function _revealAdvisoryCommits(
       }
     } catch (err: unknown) {
       logger.debug("Error processing advisory commit", {
-        contentId: Number(contentId),
-        roundId: Number(roundId),
+        contentId: contentId.toString(),
+        roundId: roundId.toString(),
         commitKey,
         error: getRevertReason(err),
       });
@@ -1246,8 +1246,8 @@ async function _claimAdvisoryLaunchCredits(
         args: [commitKey],
       });
       logger.info("Claimed advisory launch credit", {
-        contentId: Number(contentId),
-        roundId: Number(roundId),
+        contentId: contentId.toString(),
+        roundId: roundId.toString(),
         commitKey,
       });
       claimed++;
@@ -1255,8 +1255,8 @@ async function _claimAdvisoryLaunchCredits(
       const reason = getRevertReason(err);
       if (!isExpectedRevert(reason)) {
         logger.debug("Could not claim advisory launch credit", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
+          contentId: contentId.toString(),
+          roundId: roundId.toString(),
           commitKey,
           error: reason,
         });
@@ -1382,8 +1382,8 @@ async function _processRoundCleanupBatch(
       ],
     });
     logger.info("Processed unrevealed vote cleanup", {
-      contentId: Number(contentId),
-      roundId: Number(roundId),
+      contentId: contentId.toString(),
+      roundId: roundId.toString(),
       startIndex: pendingIndex,
       batchSize: config.cleanupBatchSize,
     });
@@ -1396,8 +1396,8 @@ async function _processRoundCleanupBatch(
     const reason = getRevertReason(err);
     if (!isExpectedRevert(reason)) {
       logger.warn("Failed to process unrevealed votes", {
-        contentId: Number(contentId),
-        roundId: Number(roundId),
+        contentId: contentId.toString(),
+        roundId: roundId.toString(),
         startIndex: pendingIndex,
         batchSize: config.cleanupBatchSize,
         error: reason,
