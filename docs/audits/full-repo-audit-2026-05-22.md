@@ -20,29 +20,30 @@ Baselines consulted:
 
 ## Resolution summary
 
-| Severity      | In report | Fixed | Dropped |
-| ------------- | --------- | ----- | ------- |
-| Critical      | 0         | 0     | 0       |
-| High          | 0         | 0     | 0       |
-| Medium        | 4         | 2     | 2       |
-| Low           | 6         | 3     | 3       |
-| Informational | 5         | n/a   | 0       |
-| **Total**     | **15**    | **5** | **5**   |
+| Severity      | In report | Fixed | Deferred | Dropped |
+| ------------- | --------- | ----- | -------- | ------- |
+| Critical      | 0         | 0     | 0        | 0       |
+| High          | 0         | 0     | 0        | 0       |
+| Medium        | 4         | 1     | 1        | 2       |
+| Low           | 6         | 2     | 0        | 4       |
+| Informational | 5         | n/a   | n/a      | 0       |
+| **Total**     | **15**    | **3** | **1**    | **6**   |
 
-The 5 informational items are positive findings / verifications / decision-points — they don't have a "fix" status. The remaining 5 actionable findings all landed as per-fix commits on this branch.
+The 5 informational items are positive findings / verifications / decision-points — they don't have a "fix" status. Of the remaining 10 actionable findings: 3 landed as per-fix commits on this branch, 1 is deferred (requires contract-size headroom), and 6 were dropped on re-verification (full reasoning in the Dropped findings table).
 
-**Headline result.** Smart contracts are in **strong** posture overall. The May-21 audit found only one Informational item (CR-1) and that's now resolved on `main`. Of the four contracts commits that landed after May-21 (`187b5661`, `10798af1`, `31f2f839`, `40b78bcb`), three reviewed cleanly; `40b78bcb` introduced the one actionable contract finding — a regression of `nonReentrant` on the new `openRound` entry point. That fix is now in `7a1d50a3`. Most of the agent-suggested off-chain findings turned out to be already-mitigated by code the agents didn't see; see "Dropped findings" for the specific cross-checks that made each one fall.
+**Headline result.** Smart contracts are in **strong** posture overall. The May-21 audit found only one Informational item (CR-1) and that's now resolved on `main`. Of the four contracts commits that landed after May-21 (`187b5661`, `10798af1`, `31f2f839`, `40b78bcb`), three reviewed cleanly; `40b78bcb` introduced the one actionable contract finding (M-1, `openRound` lost `nonReentrant`) — restoring the modifier pushes `RoundVotingEngine` over the EIP-170 24,576-byte cap (24,581 bytes), so the fix is **deferred** to a follow-up PR that frees up the few bytes of headroom. Most of the agent-suggested off-chain findings turned out to be already-mitigated by code the agents didn't see; see "Dropped findings" for the specific cross-checks that made each one fall.
 
 ---
 
 ## Medium
 
 ### M-1 — `openRound` lost `nonReentrant` in commit `40b78bcb`
-✅ **Fixed in `7a1d50a3`**
+⏸ **Deferred (requires contract-size headroom)**
 
 - **File:** `packages/foundry/contracts/RoundVotingEngine.sol:353`.
-- Commit `40b78bcb "Finalize explicit round preparation"` simplified `openRound`'s return type from a 9-tuple to `void` and in the process dropped the `nonReentrant` modifier. The CR-1 audit conclusion explicitly stipulated that "every other state-mutating external function in the codebase is `nonReentrant`"; this fix restores that policy uniformly.
-- **Note:** The audit also flagged `prepareAdvisoryRound` for the same fix, but the same commit refactored that function to `external view` — a view function cannot use the `nonReentrant` modifier (it would need to write storage). `prepareAdvisoryRound` is correctly view-only and needs no further change. The commit message documents this distinction.
+- Commit `40b78bcb "Finalize explicit round preparation"` simplified `openRound`'s return type from a 9-tuple to `void` and in the process dropped the `nonReentrant` modifier. The CR-1 audit conclusion explicitly stipulated that "every other state-mutating external function in the codebase is `nonReentrant`".
+- **Why deferred.** This PR initially landed the fix as `7a1d50a3`, but CI's `scripts/check-contract-sizes.sh` then failed with `RoundVotingEngine is 24581 bytes (limit 24576)`. The modifier costs more bytecode than the previous tuple-return shrink saved. The fix was reverted in `2aa8c5ac` and is now a pre-deploy follow-up that needs ~6+ bytes of headroom in `RoundVotingEngine` first (candidates: extract one of the existing externals into a library, optimize a literal, drop a verbose revert string). The reentrancy concern is real but defensive — no exploitable callback exists today; the bundle-escrow observer is governance-set and trusted.
+- **Note:** The audit also flagged `prepareAdvisoryRound` for the same fix, but the same commit refactored that function to `external view` — a view function cannot use the `nonReentrant` modifier (it would need to write storage). `prepareAdvisoryRound` is correctly view-only and needs no further change.
 
 ### M-2 — `completeAgentSigningIntent` was not idempotent against status
 ✅ **Fixed in `8743d3f0`**
@@ -59,12 +60,6 @@ The 5 informational items are positive findings / verifications / decision-point
 
 - **File:** `packages/foundry/contracts/QuestionRewardPoolEscrow.sol:687, 692`.
 - Same shape as M-1, lower severity because these don't move funds directly. Restoring `nonReentrant` aligns with the CR-1 policy.
-
-### L-5 — Advisory-vote ciphertext metadata mismatch was treated as a permanent failure
-✅ **Fixed in `e5aedf74`**
-
-- **File:** `packages/keeper/src/keeper.ts:349-379` (the helper) and both reveal call sites.
-- The keeper's `validateCiphertextMetadata` now returns a `permanent` flag and the callers only invoke `markPermanentDecryptFailure` when it's `true`. Permanent → structurally-unparseable AGE armor (`malformed tlock ciphertext metadata`). Transient → either missing on-chain fields (Ponder lag / partial load) or a `targetRound` / `drandChainHash` mismatch (Ponder may be serving a stale record; once the indexer corrects itself the retry can succeed). The mismatched-metadata test was updated to expect `permanent: false`; the malformed-envelope tests stay `permanent: true`.
 
 ### L-6 — `ws@7.5.10` was still in the resolution tree
 ✅ **Fixed in `db024408`**
@@ -105,6 +100,7 @@ These claims surfaced from agents but did not survive verification. Documenting 
 | **L-2** "WorldID revocation indexing-lag exposure window" | **Negligible practical impact.** The Ponder consumer at `packages/ponder/src/api/routes/correlation-routes.ts:137` reads `raterHumanCredential.revoked`, which has a few-second indexing lag after the on-chain revocation event. For an attacker to profit from this they'd need (a) someone *else's* credential revoked + (b) settlement happening within the indexing window. But the only actor who can both trigger settlement and benefit from "still treated as live" is the revoked rater themselves, and revocation is a *removal* of privileges — there's no self-revoke-to-profit path. The lag is benign for the realistic scenarios. |
 | **L-3** "Keeper does not verify its signing key has the expected on-chain role at startup" | **False positive.** None of the keeper-callable functions on `RoundVotingEngine` (`revealVoteByCommitKey`, `settleRound`, `cancelExpiredRound`, `finalizeRevealFailedRound`, `refreshRbtsSeed`) are role-gated — they're intentionally permissionless. There is no role to check. The keeper just needs gas, which is already (deliberately) treated as a warn-not-fail runtime concern with graceful degradation (see existing tests `index.test.ts:188-200, 203-219`). Implementing a hard-fail startup balance check would reverse that design intent. |
 | **L-4** "Keeper decrypt-failure tracker is not persisted across restarts" | **Dropped (scope).** `packages/keeper/package.json` lists no database dependency; the keeper has no persistent storage layer. Persisting the failure set would require introducing a DB client (sqlite / pglite / postgres) plus a schema and migration — an architectural addition disproportionate to the operational benefit. The in-memory LRU is appropriate for a stateless service that should restart cleanly on crash. |
+| **L-5** "Advisory-vote ciphertext metadata mismatch was treated as a permanent failure" | **False positive (Codex P2 review on PR #27).** This finding misread the keeper's existing flow: by the time `validateCiphertextMetadata` runs, `fetchIndexedCiphertext` has already gated the bytes on `keccak256(ciphertext) === commit.ciphertextHash`. So the ciphertext IS the on-chain committed ciphertext bit-for-bit. Its embedded `targetRound` / `drandChainHash` are therefore exactly what the committer baked in — and the separate on-chain `commit.targetRound` / `commit.drandChainHash` are immutable. If they disagree, the user committed inconsistent data; retrying changes nothing. The original "always permanent" classification was correct. Initial fix landed as `e5aedf74` then reverted in `51756290` after Codex flagged it. |
 | "Drand chain hash not enforced before decryption" (claimed Critical) | The check is at `keeper.ts:911`, *before* the decrypt call at `:933`. See N-1. |
 | "Wall-clock drift up to 60s is Critical" | M-7 in PR #26 already addressed this. See N-2. |
 | "ClusterPayoutOracle optimistic root is High" | By-design optimistic oracle with a 7-day ARBITER veto window (`FINALIZATION_VETO_WINDOW`). |
@@ -126,13 +122,14 @@ These claims surfaced from agents but did not survive verification. Documenting 
 
 Pulled out separately as a launch-readiness gate. Not vulnerabilities; just decisions worth being deliberate about before the first deploy.
 
-1. ✅ **Restore `nonReentrant` on the two contract paths (M-1, L-1)** — done.
-2. ✅ **Tighten the agent-signing flow (M-2)** — done; M-3 was reconsidered as bound at the on-chain layer.
-3. ✅ **Trust-boundary review of keeper ↔ Ponder ↔ chain** — done; the keeper already reads on-chain via RPC and only treats Ponder as a ciphertext cache validated against the on-chain hash.
-4. **Confirm the TimelockController delay (N-5)** — `2 days` is a defensible default but is a load-bearing decision; have someone with skin in the game initial it.
-5. **Decide the governance multisig composition before generating the production deploy address** — the deploy script grants `DEFAULT_ADMIN_ROLE` to `governance` and renounces deployer roles; `governance` will be whichever address you pass in. Misconfiguring this is the single biggest deployment hazard for a system structured this way.
-6. **Re-run the storage-layout CI gate (N-4) immediately before deploying** — gaps are present; just confirm none have been shrunk by a recent commit you haven't reviewed.
-7. **Update the WorldID router constants** in `Deploy.s.sol` to the verified production addresses from the [World Address Book](https://docs.world.org/world-id/reference/address-book) and confirm the live-deployment assertion at `:195` passes against the chosen chain.
+1. ⏸ **Restore `nonReentrant` on `RoundVotingEngine.openRound` (M-1)** — initially landed in `7a1d50a3`, reverted in `2aa8c5ac` after the contract-size CI gate failed (24,581 vs 24,576 byte limit). Need to free up ~6+ bytes in `RoundVotingEngine` first; restoring the modifier should ride along with the same change.
+2. ✅ **Add `nonReentrant` to escrow qualification paths (L-1)** — done.
+3. ✅ **Tighten the agent-signing flow (M-2)** — done; M-3 was reconsidered as bound at the on-chain layer.
+4. ✅ **Trust-boundary review of keeper ↔ Ponder ↔ chain** — done; the keeper already reads on-chain via RPC and only treats Ponder as a ciphertext cache validated against the on-chain hash.
+5. **Confirm the TimelockController delay (N-5)** — `2 days` is a defensible default but is a load-bearing decision; have someone with skin in the game initial it.
+6. **Decide the governance multisig composition before generating the production deploy address** — the deploy script grants `DEFAULT_ADMIN_ROLE` to `governance` and renounces deployer roles; `governance` will be whichever address you pass in. Misconfiguring this is the single biggest deployment hazard for a system structured this way.
+7. **Re-run the storage-layout CI gate (N-4) immediately before deploying** — gaps are present; just confirm none have been shrunk by a recent commit you haven't reviewed.
+8. **Update the WorldID router constants** in `Deploy.s.sol` to the verified production addresses from the [World Address Book](https://docs.world.org/world-id/reference/address-book) and confirm the live-deployment assertion at `:195` passes against the chosen chain.
 
 ---
 
@@ -140,6 +137,7 @@ Pulled out separately as a launch-readiness gate. Not vulnerabilities; just deci
 
 - **2026-05-22 11:00 UTC (commit `21740478`).** Initial publication. Framed findings against a "live system" lens.
 - **2026-05-22 14:00 UTC (commit `2301d08d`).** Recalibrated against the "nothing is deployed yet" framing. H-1 downgraded to M-1; M-1 downgraded to L-1; added the pre-launch checklist; added N-3, N-4, N-5 to cover the deploy-script / storage-layout / timelock-delay items that pre-deployment makes important.
-- **2026-05-22 ~17:00 UTC (this revision).** Verified each finding individually. Five fixes landed (M-1 `7a1d50a3`, M-2 `8743d3f0`, L-1 `81e7f050`, L-5 `e5aedf74`, L-6 `db024408`). Five items (M-3, M-4, L-2, L-3, L-4) dropped on re-verification with specific cross-checks documented in the dropped-findings table. Remaining: 0 Critical, 0 High, 2 Medium fixed, 3 Low fixed, 5 Informational.
+- **2026-05-22 ~17:00 UTC (commit `41aa7549`).** Verified each finding individually. Five fixes landed (M-1 `7a1d50a3`, M-2 `8743d3f0`, L-1 `81e7f050`, L-5 `e5aedf74`, L-6 `db024408`). Five items (M-3, M-4, L-2, L-3, L-4) dropped on re-verification.
+- **2026-05-22 ~18:00 UTC (this revision).** PR-#27 review feedback applied. L-5 reverted (`51756290`) — Codex P2 correctly pointed out that once `keccak256(ciphertext) === commit.ciphertextHash` holds, the metadata is structurally pinned and a mismatch is always permanent; the original behavior was correct. M-1 reverted (`2aa8c5ac`) — the contract-size CI gate fails (`RoundVotingEngine` 24,581 > 24,576 byte EIP-170 limit) so the modifier addition is **deferred** to a follow-up PR that frees the headroom. Final state: 3 fixed (M-2, L-1, L-6), 1 deferred (M-1), 6 dropped (M-3, M-4, L-2, L-3, L-4, L-5), 5 Informational.
 
 Smart-contract findings outside this report's scope are tracked in the existing per-pass reports in the working tree (the May-21 audit covers the bulk).
