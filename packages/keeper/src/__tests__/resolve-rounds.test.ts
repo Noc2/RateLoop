@@ -694,8 +694,8 @@ describe("resolveRounds", () => {
     expect(logger.error).toHaveBeenCalledWith(
       "tlock ciphertext metadata invalid",
       expect.objectContaining({
-        contentId: 1,
-        roundId: 1,
+        contentId: "1",
+        roundId: "1",
         commitKey: COMMIT_KEY_1,
         permanent: true,
         error: "malformed tlock ciphertext metadata",
@@ -758,8 +758,8 @@ describe("resolveRounds", () => {
     expect(logger.error).toHaveBeenCalledWith(
       "tlock ciphertext metadata invalid",
       expect.objectContaining({
-        contentId: 1,
-        roundId: 1,
+        contentId: "1",
+        roundId: "1",
         commitKey: COMMIT_KEY_1,
         permanent: true,
         error: "malformed tlock ciphertext metadata",
@@ -800,8 +800,8 @@ describe("resolveRounds", () => {
     expect(logger.error).toHaveBeenCalledWith(
       "tlock ciphertext metadata invalid",
       expect.objectContaining({
-        contentId: 1,
-        roundId: 1,
+        contentId: "1",
+        roundId: "1",
         commitKey: COMMIT_KEY_1,
         permanent: true,
         error: expect.stringContaining("tlock metadata mismatch"),
@@ -855,8 +855,8 @@ describe("resolveRounds", () => {
     expect(logger.debug).toHaveBeenLastCalledWith(
       "tlock ciphertext not decryptable yet",
       expect.objectContaining({
-        contentId: 1,
-        roundId: 1,
+        contentId: "1",
+        roundId: "1",
         commitKey: COMMIT_KEY_1,
         decryptableAtRound: "27013021",
         error: TOO_EARLY_TLOCK_ERROR,
@@ -900,8 +900,8 @@ describe("resolveRounds", () => {
     expect(logger.error).toHaveBeenLastCalledWith(
       "tlock decryption failed",
       expect.objectContaining({
-        contentId: 1,
-        roundId: 1,
+        contentId: "1",
+        roundId: "1",
         commitKey: COMMIT_KEY_1,
         attempt: 10,
         permanent: true,
@@ -911,8 +911,8 @@ describe("resolveRounds", () => {
     expect(logger.warn).toHaveBeenLastCalledWith(
       "tlock decryption failed",
       expect.objectContaining({
-        contentId: 1,
-        roundId: 1,
+        contentId: "1",
+        roundId: "1",
         commitKey: COMMIT_KEY_1,
         attempt: 9,
         permanent: false,
