@@ -122,10 +122,14 @@ export async function POST(request: NextRequest) {
       }
       const mintAmount = parseUnits(requestedAmount.toString(), LREP_DECIMALS);
 
+      // M-3 (2026-05-22 audit): LoopReputation exposes mint(address,uint256) gated on
+      // MINTER_ROLE, which the local deployer signer holds. Use mint here so the faucet
+      // works on a fresh anvil instance without pre-funding the signer; matches the
+      // mint-usdc path below.
       const txHash = await walletClient.writeContract({
         address: lrepAddress,
         abi: erc20FaucetAbi,
-        functionName: "transfer",
+        functionName: "mint",
         args: [address as `0x${string}`, mintAmount],
       });
 
