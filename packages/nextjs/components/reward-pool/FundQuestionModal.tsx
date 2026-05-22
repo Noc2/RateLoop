@@ -158,14 +158,17 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
         return;
       }
 
-      const allowance = (await readContract(wagmiConfig, {
-        address: usdcAddress,
-        abi: ERC20_APPROVAL_ABI,
-        functionName: "allowance",
-        args: [address, escrowAddress],
-      })) as bigint;
+      const readUsdcAllowance = async () =>
+        (await readContract(wagmiConfig, {
+          address: usdcAddress,
+          abi: ERC20_APPROVAL_ABI,
+          functionName: "allowance",
+          args: [address, escrowAddress],
+        })) as bigint;
 
-      if (allowance < parsedAmount) {
+      const initialAllowance = await readUsdcAllowance();
+
+      if (initialAllowance < parsedAmount) {
         const approveHash = await writeContractAsync({
           address: usdcAddress,
           abi: ERC20_APPROVAL_ABI,
@@ -173,6 +176,16 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
           args: [escrowAddress, parsedAmount],
         });
         await waitForTransactionReceipt(wagmiConfig, { hash: approveHash });
+
+        // M-5 (2026-05-22 audit): re-read the allowance after waiting on the approval so
+        // any concurrent spender that consumed it cannot turn the subsequent
+        // createRewardPool into an opaque revert. Fail fast with a clearer message instead.
+        const allowanceAfterApprove = await readUsdcAllowance();
+        if (allowanceAfterApprove < parsedAmount) {
+          throw new Error(
+            "USDC allowance dropped below the required amount before the bounty could be funded. Please try again.",
+          );
+        }
       }
 
       const publicClient = getPublicClient(wagmiConfig, { chainId: chainId as any });
