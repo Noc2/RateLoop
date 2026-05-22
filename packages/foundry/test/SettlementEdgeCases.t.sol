@@ -100,8 +100,8 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasury);
 
-        // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=1000
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, 7 days, 3, 1000);
+        // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=200
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, 7 days, 3, 200);
 
         FrontendRegistry frImpl = new FrontendRegistry();
         frontendRegistry = FrontendRegistry(
@@ -301,7 +301,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         ProtocolConfig(address(votingEngine.protocolConfig())).setRewardDistributor(address(dist));
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), 1 hours, 7 days, 3, 1000);
+        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), 1 hours, 7 days, 3, 200);
 
         token.mint(submitter, 10_000e6);
         token.mint(voter1, 10_000e6);

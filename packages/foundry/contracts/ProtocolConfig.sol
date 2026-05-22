@@ -21,6 +21,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint256 public constant ABSOLUTE_MAX_ROUND_DURATION = 30 days;
     uint256 public constant MIN_SUBMISSION_LREP_POOL_FLOOR = 1e6;
     uint256 public constant MIN_SUBMISSION_USDC_POOL_FLOOR = 1e6;
+    uint16 internal constant MAX_DEFAULT_ROUND_VOTERS = 200;
+    uint16 internal constant MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP = 100;
+    uint16 internal constant MAX_CREATOR_ROUND_VOTERS = 1_000;
 
     /// @notice drand `quicknet` (mainnet) chain hash. Used by the legacy `initialize` / `initializeWithTreasury`
     ///         paths for back-compat with existing tests and mainnet (chainId 480) deployments.
@@ -181,7 +184,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             epochDuration: uint32(20 minutes),
             maxDuration: uint32(20 minutes),
             minVoters: uint16(3),
-            maxVoters: uint16(200)
+            maxVoters: MAX_DEFAULT_ROUND_VOTERS
         });
         roundConfigBounds = RoundConfigBounds({
             minEpochDuration: uint32(1 minutes),
@@ -191,7 +194,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             minSettlementVoters: uint16(3),
             maxSettlementVoters: uint16(100),
             minVoterCap: uint16(3),
-            maxVoterCap: uint16(1_000)
+            maxVoterCap: MAX_CREATOR_ROUND_VOTERS
         });
         revealGracePeriod = 60 minutes;
         // DRAND-1 (2026-05-21 testnet-readiness audit): drand config is now an explicit init
@@ -526,6 +529,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function _setConfig(uint256 epochDuration, uint256 maxDuration, uint256 minVoters, uint256 maxVoters) internal {
         RoundLib.RoundConfig memory nextConfig =
             _validateRoundConfig(epochDuration, maxDuration, minVoters, maxVoters, roundConfigBounds);
+        if (nextConfig.maxVoters > MAX_DEFAULT_ROUND_VOTERS) revert InvalidConfig();
         if (drandPeriod > nextConfig.epochDuration) revert InvalidConfig();
 
         if (revealGracePeriod > 0 && revealGracePeriod < nextConfig.epochDuration) {
@@ -610,7 +614,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (minRoundDuration / minEpochDuration > 2016) revert InvalidConfig();
         if (minSettlementVoters < 3 || maxSettlementVoters < minSettlementVoters) revert InvalidConfig();
         if (minVoterCap < minSettlementVoters || maxVoterCap < maxSettlementVoters) revert InvalidConfig();
-        if (maxVoterCap > 1_000) revert InvalidConfig();
+        if (minVoterCap > MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP) revert InvalidConfig();
+        if (maxVoterCap > MAX_CREATOR_ROUND_VOTERS) revert InvalidConfig();
 
         bounds = RoundConfigBounds({
             minEpochDuration: uint32(minEpochDuration),

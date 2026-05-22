@@ -615,6 +615,13 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.revealGracePeriod(), 2 hours);
     }
 
+    function test_SetConfig_RejectsDefaultRoundVoterCapAboveMandatoryRewardCap() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setConfig(20 minutes, 20 minutes, 3, 201);
+    }
+
     function test_SetRoundConfigBounds_RevalidatesStoredDrandPeriod() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         vm.warp(100);
@@ -631,6 +638,13 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setRoundConfigBounds(1 minutes, 7 days, 1 minutes, 10 minutes, 3, 100, 3, 1_000);
+    }
+
+    function test_SetRoundConfigBounds_RejectsBundleIncompatibleMinimumVoterCap() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRoundConfigBounds(1 minutes, 7 days, 1 minutes, 30 days, 3, 100, 101, 1_000);
     }
 
     function test_SetRoundConfigBounds_RejectsAbsoluteMaxRoundDuration() public {

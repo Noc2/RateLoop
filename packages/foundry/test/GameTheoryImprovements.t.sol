@@ -95,9 +95,9 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasuryAddr);
 
-        // Override config: 1-hour epochs, 7-day max, minVoters=3, maxVoters=1000
+        // Override config: 1-hour epochs, 7-day max, minVoters=3, maxVoters=200
         _setTlockRoundConfig(
-            ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 1000
+            ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 200
         );
 
         // Fund submitter and voters

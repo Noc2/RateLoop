@@ -67,7 +67,7 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         raterIdentityRegistry = new MockRaterIdentityRegistry();
         ProtocolConfig(address(engine.protocolConfig())).setRaterRegistry(address(raterIdentityRegistry));
 
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, 7 days, 3, 1000);
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, 7 days, 3, 200);
 
         address[5] memory users = [submitter, voter1, voter2, voter3, voter4];
         for (uint256 i = 0; i < users.length; i++) {

@@ -139,8 +139,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             DEFAULT_DRAND_PERIOD
         );
 
-        // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=1000
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 1000);
+        // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=200
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 200);
 
         mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
 
@@ -2924,7 +2924,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryVoteAfterExpiredBelowQuorum_RevertsWithoutRollingStaleRound() public {
         vm.prank(owner);
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 1 hours, 3, 1000);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 1 hours, 3, 200);
 
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
@@ -2946,7 +2946,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryVoteAtBlindEpochBoundary_RevertsWhileRoundOpen() public {
         vm.prank(owner);
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 1000);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 200);
 
         uint256 contentId = _submitContent();
         _openStakedRound(voter2, contentId, "advisory-boundary-open");
