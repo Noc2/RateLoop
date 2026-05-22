@@ -363,6 +363,14 @@ export async function completeAgentSigningIntent(params: {
 }) {
   const intent = await loadIntentByToken(params);
   assertFresh(intent);
+  // M-2 (2026-05-22 audit): refuse to re-complete an already-submitted intent so a
+  // replayed HTTP call (client retry loop, MitM replay, browser back-forward) cannot
+  // re-invoke curyo_confirm_ask_transactions with the same (operationKey,
+  // transactionHashes). Returning the existing record is idempotent and matches the
+  // shape the caller saw on the first successful completion.
+  if (intent.status === "submitted") {
+    return signingIntentResponse(intent);
+  }
   if (!intent.operationKey) {
     throw new McpToolError("Prepare this signing intent before completing it.");
   }
