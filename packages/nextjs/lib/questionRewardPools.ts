@@ -155,6 +155,7 @@ export function formatUsdAmount(value: bigint | number | string | undefined | nu
   const whole = raw / 1_000_000n;
   const fractional = raw % 1_000_000n;
   const groupedWhole = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const cents = (fractional / 10_000n).toString().padStart(2, "0");
+  // Round to nearest cent so 0.005 USD -> "$0.01" rather than "$0.00".
+  const cents = ((fractional + 5_000n) / 10_000n).toString().padStart(2, "0");
   return fractional > 0n ? `$${groupedWhole}.${cents}` : `$${groupedWhole}`;
 }
