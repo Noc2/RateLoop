@@ -98,7 +98,9 @@ describe("keeper config", () => {
 
     expect(config.privateKey).toBe(privateKey);
     expect(config.keystoreAccount).toBe("keeper");
-    expect(config.keystorePassword).toBe("");
+    // H-8 (2026-05-22 audit): keystorePassword is no longer carried on the long-lived
+    // config object; the keystore loader reads it from process.env at decrypt time.
+    expect("keystorePassword" in config).toBe(false);
   });
 
   it("requires either a keystore account or private key", async () => {

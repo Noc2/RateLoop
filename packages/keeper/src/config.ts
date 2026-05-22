@@ -419,7 +419,10 @@ function loadConfig() {
 
     // Wallet
     keystoreAccount,
-    keystorePassword: process.env.KEYSTORE_PASSWORD,
+    // H-8 (2026-05-22 audit): the password used to live on the long-running config
+    // object, so any future JSON.stringify(config) (diagnostics, crash dump, telemetry)
+    // would leak it. keystore.ts reads process.env.KEYSTORE_PASSWORD directly when
+    // decrypting, so the config object no longer needs to carry it at all.
     privateKey,
 
     // Keeper behavior
