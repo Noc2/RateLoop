@@ -197,7 +197,7 @@ export function useFreeTransactionAllowance() {
     // for users who would have recovered immediately on the next request. Retry with a
     // short exponential backoff and cap at 30s so a sustained outage still surfaces.
     retry: 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30_000),
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30_000),
   });
 
   const fallbackSummary = useMemo(
