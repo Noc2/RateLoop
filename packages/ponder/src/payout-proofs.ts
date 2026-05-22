@@ -45,6 +45,9 @@ interface CandidatePayoutWeight {
 }
 
 const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
+// H-5 (2026-05-22 audit): reject payloads larger than this before consuming them so
+// a misconfigured or hostile artifact host cannot OOM the indexer through slow-read.
+const ARTIFACT_MAX_BYTES = 10_000_000;
 const artifactCache = new Map<string, Promise<unknown>>();
 const httpsArtifactAllowlist = (
   process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? ""
@@ -119,7 +122,40 @@ async function readArtifactJson(uri: string): Promise<unknown> {
   if (!response.ok) {
     throw new Error(`Payout artifact request failed: ${response.status}`);
   }
-  return response.json();
+  // Fast path: the server told us how big the body is — refuse before reading.
+  const contentLengthHeader = response.headers.get("content-length");
+  if (contentLengthHeader) {
+    const declaredLength = Number.parseInt(contentLengthHeader, 10);
+    if (Number.isFinite(declaredLength) && declaredLength > ARTIFACT_MAX_BYTES) {
+      throw new Error(`Payout artifact too large: ${declaredLength} > ${ARTIFACT_MAX_BYTES} bytes`);
+    }
+  }
+  // Slow path: stream the body and bail past the cap so a server that omits
+  // content-length still cannot make us read an unbounded payload.
+  if (!response.body) {
+    return response.json();
+  }
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  const reader = response.body.getReader();
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    totalBytes += value.byteLength;
+    if (totalBytes > ARTIFACT_MAX_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error(`Payout artifact exceeded ${ARTIFACT_MAX_BYTES} bytes during read`);
+    }
+    chunks.push(value);
+  }
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(combined));
 }
 
 function normalizeArtifactUri(uri: string): string | null {
