@@ -201,6 +201,42 @@ function readAuthorization(request: JsonRecord | null | undefined) {
   return authorization as JsonRecord;
 }
 
+// C-2 (2026-05-22 audit): decode the two ERC-20 selectors most commonly seen here
+// (transfer, approve) so the user can see who/how-much before signing. The page
+// also shows raw calldata, but humans skim — a decoded "approve(spender=0x.., amount=..)"
+// line makes a phishing substitution (e.g. "Approve USDC" description hiding a
+// transfer to attacker) far easier to spot. Extend the table when new selectors
+// appear on the agent-call path; unknown selectors render the raw calldata as before.
+const KNOWN_ERC20_SELECTORS = {
+  "0xa9059cbb": { name: "transfer", argLabels: ["recipient", "amount"] },
+  "0x095ea7b3": { name: "approve", argLabels: ["spender", "amount"] },
+  "0x23b872dd": { name: "transferFrom", argLabels: ["from", "to", "amount"] },
+} as const satisfies Record<string, { name: string; argLabels: readonly string[] }>;
+
+type DecodedCall = { name: string; args: Array<{ label: string; value: string }> } | null;
+
+function decodeKnownErc20Call(data: string): DecodedCall {
+  if (typeof data !== "string" || data.length < 10) return null;
+  const selector = data.slice(0, 10).toLowerCase();
+  const definition = (KNOWN_ERC20_SELECTORS as Record<string, { name: string; argLabels: readonly string[] }>)[selector];
+  if (!definition) return null;
+  const body = data.slice(10);
+  if (body.length < definition.argLabels.length * 64) return null;
+  const args = definition.argLabels.map((label, index) => {
+    const word = body.slice(index * 64, (index + 1) * 64);
+    if (label === "amount") {
+      try {
+        return { label, value: BigInt(`0x${word}`).toString() };
+      } catch {
+        return { label, value: `0x${word}` };
+      }
+    }
+    // address args occupy the low 20 bytes of a 32-byte word
+    return { label, value: `0x${word.slice(-40)}` };
+  });
+  return { name: definition.name, args };
+}
+
 function readResponseError(value: unknown, fallback: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
   const record = value as { error?: unknown; message?: unknown };
@@ -549,6 +585,22 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
                         <p className="font-mono text-xs text-base-content/55">
                           selector: <span className="text-base-content/75">{call.data.slice(0, 10)}</span>
                         </p>
+                        {(() => {
+                          const decoded = decodeKnownErc20Call(call.data);
+                          if (!decoded) return null;
+                          return (
+                            <p className="font-mono text-xs text-warning">
+                              decoded: {decoded.name}(
+                              {decoded.args.map((arg, argIndex) => (
+                                <span key={arg.label}>
+                                  {argIndex > 0 ? ", " : ""}
+                                  {arg.label}=<span className="text-base-content/85">{arg.value}</span>
+                                </span>
+                              ))}
+                              )
+                            </p>
+                          );
+                        })()}
                         <p className="break-all font-mono text-[10px] text-base-content/40">data: {call.data}</p>
                       </div>
                     ) : null}
