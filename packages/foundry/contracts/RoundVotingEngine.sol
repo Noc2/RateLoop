@@ -350,7 +350,7 @@ contract RoundVotingEngine is
     /// @notice Open the current rating round before preparing a blind vote.
     /// @dev Commits no vote and records no stake; it only fixes the round start/config/drand
     ///      snapshots so the caller can encrypt against deterministic commit timing.
-    function openRound(uint256 contentId) external whenNotPaused {
+    function openRound(uint256 contentId) external nonReentrant whenNotPaused {
         VotePreflightLib.validateRoundOpener(
             IRaterIdentityRegistry(protocolConfig.raterRegistry()), registry, msg.sender, contentId
         );
