@@ -18,8 +18,35 @@ const defaultDnsResolvers: UrlSafetyDnsResolvers = {
 
 let dnsResolvers = defaultDnsResolvers;
 
+// L-2: short-TTL cache so paired isSafeUrl + fetchPublicHttpsUrl calls on the same URL
+// don't perform two DNS lookups (each lookup is a re-validation window for rebinding).
+// Keep TTL small to avoid hiding genuine DNS changes for long-lived caches.
+const RESOLUTION_CACHE_TTL_MS = 30_000;
+const RESOLUTION_CACHE_MAX_ENTRIES = 256;
+type CachedResolution = { expiresAt: number; result: SafeUrlAddress | null };
+const resolutionCache = new Map<string, CachedResolution>();
+
 export function __setUrlSafetyDnsResolversForTests(resolvers: Partial<UrlSafetyDnsResolvers> | null) {
   dnsResolvers = resolvers ? { ...defaultDnsResolvers, ...resolvers } : defaultDnsResolvers;
+  resolutionCache.clear();
+}
+
+function readResolutionCache(key: string): SafeUrlAddress | null | undefined {
+  const entry = resolutionCache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt < Date.now()) {
+    resolutionCache.delete(key);
+    return undefined;
+  }
+  return entry.result;
+}
+
+function writeResolutionCache(key: string, result: SafeUrlAddress | null) {
+  if (resolutionCache.size >= RESOLUTION_CACHE_MAX_ENTRIES) {
+    const oldestKey = resolutionCache.keys().next().value;
+    if (oldestKey !== undefined) resolutionCache.delete(oldestKey);
+  }
+  resolutionCache.set(key, { expiresAt: Date.now() + RESOLUTION_CACHE_TTL_MS, result });
 }
 
 function parseIpv4(ip: string): number[] | null {
@@ -99,24 +126,33 @@ export async function resolvePublicUrlAddress(url: string): Promise<SafeUrlAddre
   // Reject IPv6 addresses (bracketed in URLs, parsed hostname strips brackets)
   if (hostname.startsWith("[") || hostname.includes(":")) return null;
 
+  // Use the cached resolution if a paired isSafeUrl/fetchPublicHttpsUrl call already resolved
+  // this hostname recently; the cache hands the same resolved IP to both callers so an attacker
+  // who flips DNS between the check and the fetch cannot bypass the safety gate.
+  const cached = readResolutionCache(hostname);
+  if (cached !== undefined) {
+    return cached === null ? null : { ...cached, url: parsed };
+  }
+
+  let result: SafeUrlAddress | null = null;
   try {
     const ipv4 = await dnsResolvers.resolve4(hostname).catch(() => [] as string[]);
     const ipv6 = await dnsResolvers.resolve6(hostname).catch(() => [] as string[]);
     const allIps = [...ipv4, ...ipv6];
-    if (allIps.length === 0) return null;
-    if (allIps.some(isPrivateIp)) return null;
-
-    if (ipv4.length > 0) {
-      return { address: ipv4[0], family: 4, url: parsed };
-    }
-    if (ipv6.length > 0) {
-      return { address: ipv6[0], family: 6, url: parsed };
+    if (allIps.length > 0 && !allIps.some(isPrivateIp)) {
+      if (ipv4.length > 0) {
+        result = { address: ipv4[0], family: 4, url: parsed };
+      } else if (ipv6.length > 0) {
+        result = { address: ipv6[0], family: 6, url: parsed };
+      }
     }
   } catch {
-    return null;
+    result = null;
   }
 
-  return null;
+  // Cache the resolution (including null) so subsequent calls within the TTL reuse the answer.
+  writeResolutionCache(hostname, result);
+  return result;
 }
 
 export async function isSafeUrl(url: string): Promise<boolean> {

@@ -40,6 +40,23 @@ if (rateLimitMisconfigured) {
   );
 }
 
+// H-7 (2026-05-22 audit): the in-memory limiter resets on process restart and is per-replica.
+// Operators running multiple Ponder instances behind a load balancer will see the effective
+// limit divide by replica count, and burst traffic immediately after a redeploy goes
+// uncounted. Surface this at boot so it cannot be silently misconfigured; opt-in via
+// PONDER_REPLICA_COUNT > 1 (or RATE_LIMIT_BACKEND=memory to acknowledge the trade-off).
+{
+  const replicaCount = Number.parseInt(process.env.PONDER_REPLICA_COUNT ?? "1", 10);
+  const backendAcknowledged = process.env.RATE_LIMIT_BACKEND === "memory";
+  if (isProduction && Number.isFinite(replicaCount) && replicaCount > 1 && !backendAcknowledged) {
+    console.warn(
+      `[ponder] WARNING: in-memory rate limiter is running with ${replicaCount} replicas; ` +
+      "the effective per-IP limit divides by replica count. Migrate to a shared store " +
+      "(e.g. Redis) or set RATE_LIMIT_BACKEND=memory to acknowledge this trade-off.",
+    );
+  }
+}
+
 app.use("/*", async (c, next) => {
   if (rateLimitMisconfigured) {
     return c.json({ error: "RATE_LIMIT_TRUSTED_IP_HEADERS not configured. Set the env var." }, 503);

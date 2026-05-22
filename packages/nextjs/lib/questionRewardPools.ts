@@ -152,9 +152,14 @@ export function formatSubmissionRewardAmount(
 
 export function formatUsdAmount(value: bigint | number | string | undefined | null): string {
   const raw = typeof value === "bigint" ? value : BigInt(value ?? 0);
-  const whole = raw / 1_000_000n;
+  // L-9 (2026-05-22 audit) follow-up: round to nearest cent and carry into the
+  // whole-dollar portion when the rounded cent value rolls past 99 — otherwise
+  // 1_999_999 micro-USD would render as "$1.100". Round once in total cents,
+  // then split.
+  const rawCents = (raw + 5_000n) / 10_000n;
+  const wholeCents = rawCents / 100n;
+  const cents = rawCents % 100n;
+  const groupedWhole = wholeCents.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const fractional = raw % 1_000_000n;
-  const groupedWhole = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  const cents = (fractional / 10_000n).toString().padStart(2, "0");
-  return fractional > 0n ? `$${groupedWhole}.${cents}` : `$${groupedWhole}`;
+  return fractional > 0n ? `$${groupedWhole}.${cents.toString().padStart(2, "0")}` : `$${groupedWhole}`;
 }

@@ -448,7 +448,7 @@ const AIPage = async () => {
       <h2 id="signing">Browser Signing Handoff</h2>
       <p>
         If the agent cannot sign wallet calls directly, create a signing intent and send the returned{" "}
-        <code>/agent/sign/{"{intentId}"}?token=...</code> URL to the operator. The browser page connects the wallet,
+        <code>/agent/sign/{"{intentId}"}#token=...</code> URL to the operator. The browser page connects the wallet,
         prepares the ask, sends the required transactions, and confirms the hashes back to RateLoop. The operator only
         needs the wallet approval page; a RateLoop account is not required.
       </p>

@@ -93,6 +93,37 @@ function readEnv(key: string): string | undefined {
   return value ? value : undefined;
 }
 
+// L-7 (2026-05-22 audit): fire-and-forget eth_chainId probe so a misconfigured RPC URL
+// surfaces a clear warning at boot instead of cascading into opaque indexing errors
+// minutes later. Non-blocking — the indexer still starts and proceeds normally.
+function probeRpcConnectivity(rpcUrl: string, expectedChainId: number, envKey: string): void {
+  void fetch(rpcUrl, {
+    method: "POST",
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
+    headers: { "content-type": "application/json" },
+    signal: AbortSignal.timeout(5_000),
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        console.warn(`[ponder] ${envKey} returned HTTP ${response.status} on eth_chainId probe`);
+        return;
+      }
+      const body = (await response.json().catch(() => null)) as { result?: string } | null;
+      const reportedChainId = body?.result ? Number.parseInt(body.result, 16) : NaN;
+      if (!Number.isFinite(reportedChainId)) {
+        console.warn(`[ponder] ${envKey} probe returned no chainId`);
+      } else if (reportedChainId !== expectedChainId) {
+        console.warn(
+          `[ponder] ${envKey} reports chainId ${reportedChainId} but ${expectedChainId} expected`,
+        );
+      }
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[ponder] ${envKey} probe failed: ${message}`);
+    });
+}
+
 function getRpcUrl(network: PonderNetworkName): string {
   const { chainId, defaultRpcUrl } = NETWORKS[network];
   const key = `PONDER_RPC_URL_${chainId}`;
@@ -119,6 +150,10 @@ function getRpcUrl(network: PonderNetworkName): string {
 
     throw new Error(`${key} must be a valid URL.`);
   }
+
+  // Schedule a one-shot probe; runs after the config load returns, so any failure
+  // surfaces as a warning in the same logs the indexer is about to write into.
+  probeRpcConnectivity(value, chainId, key);
 
   return value;
 }

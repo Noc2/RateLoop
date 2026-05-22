@@ -192,7 +192,12 @@ export function useFreeTransactionAllowance() {
     },
     enabled: Boolean(address) && typeof resolvedChainId === "number",
     staleTime: 30_000,
-    retry: false,
+    // M-2 (2026-05-22 audit): a single transient 5xx previously locked the hook into
+    // {isResolved: false} for the rest of the session, blocking sponsored transactions
+    // for users who would have recovered immediately on the next request. Retry with a
+    // short exponential backoff and cap at 30s so a sustained outage still surfaces.
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30_000),
   });
 
   const fallbackSummary = useMemo(

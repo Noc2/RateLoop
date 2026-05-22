@@ -7,7 +7,6 @@ import { mergeRpcOverrides, resolveRpcOverrides } from "~~/utils/rpcUrls";
 
 const isProduction = process.env.NODE_ENV === "production";
 export type { SupportedTargetNetwork } from "~~/utils/env/targetNetworks";
-const DEV_WALLET_CONNECT_PROJECT_ID = "3a8170812b534d0ff9d794f19a901d64";
 
 function optionalEnv(value: string | undefined): string | undefined {
   const trimmedValue = value?.trim();
@@ -95,8 +94,12 @@ if (!allowUndeployedTargetNetworks && missingRequiredContracts.length > 0) {
   );
 }
 
-const walletConnectProjectId =
-  rawPublicEnv.walletConnectProjectId ?? (!isProduction ? DEV_WALLET_CONNECT_PROJECT_ID : undefined);
+// M-13 (2026-05-22 audit): the previous hardcoded dev fallback was visible in source
+// and reusable by anyone who pulled the repo, so a third party could spin up a clone
+// under the same WalletConnect project metadata. Require explicit configuration via
+// NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID; when unset, WalletConnect is simply omitted
+// from the wallet list (other connectors still work for local development).
+const walletConnectProjectId = rawPublicEnv.walletConnectProjectId;
 
 const frontendCode = rawPublicEnv.frontendCode;
 if (frontendCode && !isAddress(frontendCode)) {

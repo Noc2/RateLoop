@@ -44,3 +44,25 @@ test("isSafeUrl accepts public HTTPS hostnames with public DNS answers", async (
   assert.equal(resolved?.family, 4);
   assert.equal(resolved?.url.toString(), "https://example.com/callback");
 });
+
+test("resolvePublicUrlAddress reuses the cached resolution to defend against DNS rebinding", async () => {
+  let resolve4Calls = 0;
+  let currentAnswer = ["93.184.216.34"];
+  __setUrlSafetyDnsResolversForTests({
+    resolve4: async () => {
+      resolve4Calls += 1;
+      return currentAnswer;
+    },
+    resolve6: async () => [],
+  });
+
+  const first = await resolvePublicUrlAddress("https://example.com/callback");
+  assert.equal(first?.address, "93.184.216.34");
+  assert.equal(resolve4Calls, 1);
+
+  // Simulate an attacker flipping DNS between safety check and outbound fetch.
+  currentAnswer = ["10.0.0.7"];
+  const second = await resolvePublicUrlAddress("https://example.com/callback");
+  assert.equal(second?.address, "93.184.216.34", "second resolution must reuse cached public IP");
+  assert.equal(resolve4Calls, 1, "no additional DNS lookups within the cache TTL");
+});

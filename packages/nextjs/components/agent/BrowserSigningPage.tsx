@@ -70,6 +70,18 @@ function delay(ms: number) {
 }
 
 function readToken(searchParams: URLSearchParams) {
+  // C-1 (2026-05-22 audit): new signing links carry the token in the URL fragment
+  // (#token=...) so it cannot leak via Referer or proxy logs. Fall back to the legacy
+  // query parameter (?token=) so any links still in flight when the server-side
+  // emitter changed continue to work until they expire (typically <= 15 minutes).
+  if (typeof window !== "undefined") {
+    const hash = window.location.hash;
+    if (hash) {
+      const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+      const fromHash = hashParams.get("token");
+      if (fromHash) return fromHash;
+    }
+  }
   return searchParams.get("token") ?? "";
 }
 
@@ -122,16 +134,74 @@ function assertZeroValue(value: unknown, field: string) {
   throw new Error(`${field} must be zero.`);
 }
 
-function readTypedData(request: JsonRecord | null | undefined) {
+type ValidatedTypedData = {
+  domain: {
+    chainId: number;
+    name?: string;
+    verifyingContract: Address;
+    version?: string;
+    salt?: Hex;
+  };
+  message: JsonRecord;
+  primaryType: string;
+  types: Record<string, Array<{ name: string; type: string }>>;
+};
+
+// H-2 / N-1 (2026-05-22 audit): the domain used to flow through the page as a plain
+// JsonRecord cast via `as never` into signTypedDataAsync, which let a compromised
+// backend slip in any chainId/verifyingContract pair (cross-protocol signature
+// reuse). Validate the structural shape up front and reject anything malformed.
+function readTypedData(request: JsonRecord | null | undefined): ValidatedTypedData {
   const typedData = request?.typedData ?? request?.eip712;
   if (!typedData || typeof typedData !== "object" || Array.isArray(typedData)) {
     throw new Error("RateLoop did not return x402 typed data.");
   }
-  return typedData as {
-    domain: JsonRecord;
-    message: JsonRecord;
-    primaryType: string;
-    types: Record<string, Array<{ name: string; type: string }>>;
+  const candidate = typedData as JsonRecord;
+  const domainRaw = candidate.domain;
+  if (!domainRaw || typeof domainRaw !== "object" || Array.isArray(domainRaw)) {
+    throw new Error("Signing intent is missing an EIP-712 domain.");
+  }
+  const domain = domainRaw as JsonRecord;
+  const chainIdRaw = domain.chainId;
+  const chainId =
+    typeof chainIdRaw === "number"
+      ? chainIdRaw
+      : typeof chainIdRaw === "string"
+        ? Number.parseInt(chainIdRaw, 10)
+        : NaN;
+  if (!Number.isFinite(chainId) || chainId <= 0) {
+    throw new Error("EIP-712 domain.chainId is not a valid chain identifier.");
+  }
+  const verifyingContract = normalizeAddress(domain.verifyingContract, "EIP-712 domain.verifyingContract");
+  if (domain.name !== undefined && typeof domain.name !== "string") {
+    throw new Error("EIP-712 domain.name must be a string when present.");
+  }
+  if (domain.version !== undefined && typeof domain.version !== "string") {
+    throw new Error("EIP-712 domain.version must be a string when present.");
+  }
+  const salt = domain.salt !== undefined ? normalizeHex(domain.salt, "EIP-712 domain.salt") : undefined;
+  const messageRaw = candidate.message;
+  if (!messageRaw || typeof messageRaw !== "object" || Array.isArray(messageRaw)) {
+    throw new Error("Signing intent is missing an EIP-712 message.");
+  }
+  if (typeof candidate.primaryType !== "string" || !candidate.primaryType) {
+    throw new Error("Signing intent is missing primaryType.");
+  }
+  const typesRaw = candidate.types;
+  if (!typesRaw || typeof typesRaw !== "object" || Array.isArray(typesRaw)) {
+    throw new Error("Signing intent is missing types.");
+  }
+  return {
+    domain: {
+      chainId,
+      name: domain.name as string | undefined,
+      verifyingContract,
+      version: domain.version as string | undefined,
+      salt,
+    },
+    message: messageRaw as JsonRecord,
+    primaryType: candidate.primaryType,
+    types: typesRaw as Record<string, Array<{ name: string; type: string }>>,
   };
 }
 
@@ -141,6 +211,44 @@ function readAuthorization(request: JsonRecord | null | undefined) {
     return readTypedData(request).message;
   }
   return authorization as JsonRecord;
+}
+
+// C-2 (2026-05-22 audit): decode the two ERC-20 selectors most commonly seen here
+// (transfer, approve) so the user can see who/how-much before signing. The page
+// also shows raw calldata, but humans skim — a decoded "approve(spender=0x.., amount=..)"
+// line makes a phishing substitution (e.g. "Approve USDC" description hiding a
+// transfer to attacker) far easier to spot. Extend the table when new selectors
+// appear on the agent-call path; unknown selectors render the raw calldata as before.
+const KNOWN_ERC20_SELECTORS = {
+  "0xa9059cbb": { name: "transfer", argLabels: ["recipient", "amount"] },
+  "0x095ea7b3": { name: "approve", argLabels: ["spender", "amount"] },
+  "0x23b872dd": { name: "transferFrom", argLabels: ["from", "to", "amount"] },
+} as const satisfies Record<string, { name: string; argLabels: readonly string[] }>;
+
+type DecodedCall = { name: string; args: Array<{ label: string; value: string }> } | null;
+
+function decodeKnownErc20Call(data: string): DecodedCall {
+  if (typeof data !== "string" || data.length < 10) return null;
+  const selector = data.slice(0, 10).toLowerCase();
+  const definition = (KNOWN_ERC20_SELECTORS as Record<string, { name: string; argLabels: readonly string[] }>)[
+    selector
+  ];
+  if (!definition) return null;
+  const body = data.slice(10);
+  if (body.length < definition.argLabels.length * 64) return null;
+  const args = definition.argLabels.map((label, index) => {
+    const word = body.slice(index * 64, (index + 1) * 64);
+    if (label === "amount") {
+      try {
+        return { label, value: BigInt(`0x${word}`).toString() };
+      } catch {
+        return { label, value: `0x${word}` };
+      }
+    }
+    // address args occupy the low 20 bytes of a 32-byte word
+    return { label, value: `0x${word.slice(-40)}` };
+  });
+  return { name: definition.name, args };
 }
 
 function readResponseError(value: unknown, fallback: string) {
@@ -171,9 +279,13 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   const [token] = useState(() => readToken(searchParams));
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!window.location.search.includes("token=")) return;
-    const cleanedUrl = `${window.location.pathname}${window.location.hash}`;
-    window.history.replaceState(null, "", cleanedUrl);
+    // Strip the token from BOTH the query string (legacy links) and the fragment
+    // (new format) so a returning user sharing their screen doesn't expose it, and
+    // so that browser back/forward navigation lands on a clean URL.
+    const hasTokenInQuery = window.location.search.includes("token=");
+    const hasTokenInHash = window.location.hash.includes("token=");
+    if (!hasTokenInQuery && !hasTokenInHash) return;
+    window.history.replaceState(null, "", window.location.pathname);
   }, []);
   const [intent, setIntent] = useState<SigningIntent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -258,13 +370,23 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       const calls = prepared.transactionPlan?.calls ?? [];
       if (authorizationRequest && calls.length === 0) {
         const typedData = readTypedData(authorizationRequest);
+        // H-1 (2026-05-22 audit): refuse to sign typed data whose domain.chainId disagrees
+        // with the chain advertised by the signing intent. Without the cross-check, a
+        // compromised backend could surface a "World Chain Sepolia" intent to the user
+        // while handing them a domain bound to mainnet (or vice versa), enabling
+        // cross-chain signature reuse.
+        if (intent?.chainId && typedData.domain.chainId !== intent.chainId) {
+          throw new Error(
+            `Signing intent advertises chain ${intent.chainId} but the EIP-712 domain is bound to chain ${typedData.domain.chainId}. Refusing to sign.`,
+          );
+        }
         const authorization = readAuthorization(authorizationRequest);
         const signature = await signTypedDataAsync({
           domain: typedData.domain,
           message: typedData.message,
           primaryType: typedData.primaryType,
           types: typedData.types,
-        } as never);
+        });
         prepared = await postPrepare({
           ...authorization,
           signature,
@@ -481,6 +603,22 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
                         <p className="font-mono text-xs text-base-content/55">
                           selector: <span className="text-base-content/75">{call.data.slice(0, 10)}</span>
                         </p>
+                        {(() => {
+                          const decoded = decodeKnownErc20Call(call.data);
+                          if (!decoded) return null;
+                          return (
+                            <p className="font-mono text-xs text-warning">
+                              decoded: {decoded.name}(
+                              {decoded.args.map((arg, argIndex) => (
+                                <span key={arg.label}>
+                                  {argIndex > 0 ? ", " : ""}
+                                  {arg.label}=<span className="text-base-content/85">{arg.value}</span>
+                                </span>
+                              ))}
+                              )
+                            </p>
+                          );
+                        })()}
                         <p className="break-all font-mono text-[10px] text-base-content/40">data: {call.data}</p>
                       </div>
                     ) : null}

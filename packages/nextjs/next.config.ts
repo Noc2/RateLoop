@@ -24,6 +24,12 @@ const isDev = process.env.NODE_ENV === "development";
 // `wss://*.pusher.com` for every Vercel deployment (incl. production) which widened the
 // trusted-script and connect-src surface for production users. Narrow the gate to
 // preview / development only.
+//
+// N-3 (2026-05-22 audit): VERCEL_ENV is set exclusively by the Vercel build/runtime
+// platform — it is not user-supplied and cannot be spoofed from a browser request.
+// See https://vercel.com/docs/projects/environment-variables/system-environment-variables.
+// If this CSP gate is ever ported off Vercel, replace the check with the new platform's
+// equivalent rather than relying on a request-derived signal.
 const isVercelLiveEnabled = process.env.VERCEL_ENV === "preview" || process.env.VERCEL_ENV === "development";
 const allowLocalE2EProductionBuild = isLocalE2EProductionBuildEnabled();
 const targetNetworksFallback = isDev || allowLocalE2EProductionBuild ? DEFAULT_DEV_TARGET_NETWORKS : undefined;

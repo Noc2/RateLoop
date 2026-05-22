@@ -12,6 +12,17 @@ test("formatLrepAmount preserves half-LREP stake precision", () => {
   assert.equal(formatLrepAmount(6_000_000n), "6");
 });
 
+test("formatLrepAmount keeps precision past Number.MAX_SAFE_INTEGER", () => {
+  // 9_007_199_254_740_993 micro-LREP would lose 1 micro through Number conversion.
+  assert.equal(formatLrepAmount(9_007_199_254_740_993n), "9,007,199,254.7");
+});
+
+test("formatLrepAmount(_, 0) rounds half up to the nearest whole unit", () => {
+  assert.equal(formatLrepAmount(500_000n, 0), "1");
+  assert.equal(formatLrepAmount(499_999n, 0), "0");
+  assert.equal(formatLrepAmount(10_500_000n, 0), "11");
+});
+
 test("getRoundProgressMessaging shows blind urgency", () => {
   const message = getRoundProgressMessaging({
     phase: "voting",

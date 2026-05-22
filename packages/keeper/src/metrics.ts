@@ -181,13 +181,20 @@ function makeHandler(authToken: string | null) {
       res.end("Unauthorized\n");
       return;
     }
-    if (req.url === "/metrics" && req.method === "GET") {
-      res.writeHead(200, { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" });
-      res.end(renderMetrics());
-    } else if (req.url === "/health" && req.method === "GET") {
-      const { status, body } = renderHealth();
-      res.writeHead(status, { "Content-Type": "application/json" });
-      res.end(body);
+    if (req.url === "/metrics" || req.url === "/health") {
+      if (req.method !== "GET") {
+        res.writeHead(405, { Allow: "GET" });
+        res.end("Method Not Allowed\n");
+        return;
+      }
+      if (req.url === "/metrics") {
+        res.writeHead(200, { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" });
+        res.end(renderMetrics());
+      } else {
+        const { status, body } = renderHealth();
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(body);
+      }
     } else {
       res.writeHead(404);
       res.end("Not Found\n");

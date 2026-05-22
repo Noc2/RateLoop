@@ -44,7 +44,10 @@ export async function GET(request: NextRequest) {
     if (requestedType && requestedType !== "voters") {
       return NextResponse.json({ error: "Unsupported leaderboard type" }, { status: 400 });
     }
-    const limit = Math.min(Math.max(parseInt(request.nextUrl.searchParams.get("limit") ?? "20") || 20, 1), MAX_LIMIT);
+    const limit = Math.min(
+      Math.max(Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "20", 10) || 20, 1),
+      MAX_LIMIT,
+    );
     const chainIdRaw = request.nextUrl.searchParams.get("chainId");
     const fallbackChainId = getPrimaryServerTargetNetwork()?.id;
     const parsedChainId = chainIdRaw ? Number.parseInt(chainIdRaw, 10) : fallbackChainId;

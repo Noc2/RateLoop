@@ -159,6 +159,19 @@ export async function getVoteTlockChainInfo(
   };
 }
 
+/**
+ * C-3 (2026-05-22 audit): the formula here uses (targetRound - 1) * period because the
+ * local convention (see {@link computeTargetRoundForBeaconTime} at the bottom of this file)
+ * treats round 1 as occurring at the genesis time itself. The drand network's own
+ * signature-publishing schedule produces round R at `genesis + R * period`, so callers
+ * may see "reveal available" up to one period before drand has actually published the
+ * round's signature; this is currently absorbed as a brief retry at the call site.
+ *
+ * If a follow-up confirms drand's schedule should govern the displayed availability
+ * (rather than the local round numbering), change to `targetRound * periodSeconds` and
+ * update the boundary tests in voting.test.ts in lockstep. Do NOT change one without
+ * the other.
+ */
 export function deriveVoteTlockRevealAvailableAtSeconds(
   targetRound: bigint,
   chainInfo: VoteTlockChainInfo,
@@ -681,6 +694,16 @@ export async function decryptTlockVoteCiphertext(
   const client = runtime.client ?? mainnetClient();
   const decryptFn = runtime.decryptFn ?? timelockDecrypt;
   const armored = hexToString(ciphertext);
+  // Cheap structural sanity check before handing the payload to the tlock library.
+  // The age armor header alone is ~36 chars and the smallest valid body is bounded by
+  // MIN_ENCRYPTED_BODY_LENGTH, so anything shorter than the armor framing + body
+  // floor cannot plausibly decrypt to our 36-byte RBTS plaintext.
+  if (armored.length < AGE_ARMOR_HEADER.length + AGE_ARMOR_FOOTER.length + MIN_ENCRYPTED_BODY_LENGTH) {
+    return null;
+  }
+  if (!armored.includes(AGE_ARMOR_HEADER) || !armored.includes(AGE_ARMOR_FOOTER)) {
+    return null;
+  }
   const plaintext = await decryptFn(armored, client);
   return decodeRbtsVotePlaintext(plaintext);
 }

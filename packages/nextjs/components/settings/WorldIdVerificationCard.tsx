@@ -59,12 +59,11 @@ function formatLrepAmount(amount: bigint | undefined) {
   }).format(value);
 }
 
-function publishWorldIdConnectorURI(connectorURI: string) {
-  if (typeof window === "undefined") return;
-
-  (window as typeof window & { __rateloopWorldIdConnectorURI?: string }).__rateloopWorldIdConnectorURI = connectorURI;
-  window.dispatchEvent(new CustomEvent("rateloop:world-id-connector-uri", { detail: { connectorURI } }));
-}
+// M-12 (2026-05-22 audit): previously published the connector URI to a public window
+// global plus a global CustomEvent. Both surfaces were readable by any third-party
+// script on the page (analytics, embedded widgets) which let other code observe the
+// active World ID session. There are no in-repo consumers, so the publish is dropped
+// entirely — re-introduce a module-local emitter if a consumer ever needs it.
 
 export function WorldIdVerificationCard({ address }: { address?: string }) {
   const config = getWorldIdClientConfig();
@@ -570,7 +569,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       }
 
       setConnectorURI(request.connectorURI);
-      publishWorldIdConnectorURI(request.connectorURI);
       setIsPreparingWorldIdRequest(false);
 
       const completion = await pollWorldIdRequest(request, {

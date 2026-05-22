@@ -622,7 +622,12 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   );
   const createBody = (await createResponse.json()) as Record<string, unknown>;
   const intentId = String(createBody.id);
-  const token = new URL(String(createBody.signingUrl)).searchParams.get("token");
+  // C-1 (2026-05-22 audit): token now lives in the URL fragment so it doesn't leak via
+  // Referer or proxy logs. Parse from `#token=...` (and tolerate the legacy `?token=`
+  // shape so this assertion keeps working through any rollback window).
+  const signingUrl = new URL(String(createBody.signingUrl));
+  const hashParams = new URLSearchParams(signingUrl.hash.replace(/^#/, ""));
+  const token = hashParams.get("token") ?? signingUrl.searchParams.get("token");
 
   assert.equal(createResponse.status, 200);
   assert.match(intentId, /^asi_/);
