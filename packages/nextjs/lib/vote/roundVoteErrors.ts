@@ -53,7 +53,12 @@ export function normalizeRoundVoteError(message: string) {
     return "This content is no longer active for voting.";
   }
   if (
-    matchesContractError(message, normalizedMessage, "TargetRoundOutOfWindow", TARGET_ROUND_OUT_OF_WINDOW_ERROR_SELECTOR)
+    matchesContractError(
+      message,
+      normalizedMessage,
+      "TargetRoundOutOfWindow",
+      TARGET_ROUND_OUT_OF_WINDOW_ERROR_SELECTOR,
+    )
   ) {
     return "The voting window moved while your vote was being prepared. Please try again.";
   }
