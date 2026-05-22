@@ -70,6 +70,18 @@ function delay(ms: number) {
 }
 
 function readToken(searchParams: URLSearchParams) {
+  // C-1 (2026-05-22 audit): new signing links carry the token in the URL fragment
+  // (#token=...) so it cannot leak via Referer or proxy logs. Fall back to the legacy
+  // query parameter (?token=) so any links still in flight when the server-side
+  // emitter changed continue to work until they expire (typically <= 15 minutes).
+  if (typeof window !== "undefined") {
+    const hash = window.location.hash;
+    if (hash) {
+      const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+      const fromHash = hashParams.get("token");
+      if (fromHash) return fromHash;
+    }
+  }
   return searchParams.get("token") ?? "";
 }
 
@@ -265,9 +277,13 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   const [token] = useState(() => readToken(searchParams));
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!window.location.search.includes("token=")) return;
-    const cleanedUrl = `${window.location.pathname}${window.location.hash}`;
-    window.history.replaceState(null, "", cleanedUrl);
+    // Strip the token from BOTH the query string (legacy links) and the fragment
+    // (new format) so a returning user sharing their screen doesn't expose it, and
+    // so that browser back/forward navigation lands on a clean URL.
+    const hasTokenInQuery = window.location.search.includes("token=");
+    const hasTokenInHash = window.location.hash.includes("token=");
+    if (!hasTokenInQuery && !hasTokenInHash) return;
+    window.history.replaceState(null, "", window.location.pathname);
   }, []);
   const [intent, setIntent] = useState<SigningIntent | null>(null);
   const [isLoading, setIsLoading] = useState(true);

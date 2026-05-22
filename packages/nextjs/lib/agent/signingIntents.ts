@@ -128,8 +128,14 @@ function rowToIntent(row: Record<string, unknown> | undefined): AgentSigningInte
 }
 
 function signingUrl(params: { intentId: string; origin: string; token: string }) {
+  // C-1 (2026-05-22 audit): place the bearer token in the URL fragment instead of
+  // the query string. Fragments are not sent in HTTP request lines, are not logged
+  // by intermediate proxies, are not leaked through the Referer header on any
+  // outbound navigation, and are not indexed by analytics that scrape query
+  // parameters. The browser still retains them in history, but every other leak
+  // vector goes away. The signing page reads the token from window.location.hash.
   const url = new URL(`/agent/sign/${params.intentId}`, params.origin);
-  url.searchParams.set("token", params.token);
+  url.hash = `token=${encodeURIComponent(params.token)}`;
   return url.toString();
 }
 
