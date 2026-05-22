@@ -48,7 +48,35 @@ const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
 // H-5 (2026-05-22 audit): reject payloads larger than this before consuming them so
 // a misconfigured or hostile artifact host cannot OOM the indexer through slow-read.
 const ARTIFACT_MAX_BYTES = 10_000_000;
-const artifactCache = new Map<string, Promise<unknown>>();
+// H-6 (2026-05-22 audit): previously an unbounded Map keyed by URI; replace with a
+// hand-rolled LRU (no new dependency) so long-running indexers cannot drift into a
+// slow leak once the question count grows.
+const ARTIFACT_CACHE_MAX_ENTRIES = 1_000;
+class LruPromiseCache {
+  private readonly inner = new Map<string, Promise<unknown>>();
+  constructor(private readonly maxEntries: number) {}
+  get(key: string): Promise<unknown> | undefined {
+    const value = this.inner.get(key);
+    if (value === undefined) return undefined;
+    // Touch -> move to end so the most-recently-accessed key is never the eviction target.
+    this.inner.delete(key);
+    this.inner.set(key, value);
+    return value;
+  }
+  set(key: string, value: Promise<unknown>): void {
+    if (this.inner.has(key)) this.inner.delete(key);
+    this.inner.set(key, value);
+    while (this.inner.size > this.maxEntries) {
+      const oldest = this.inner.keys().next().value;
+      if (oldest === undefined) break;
+      this.inner.delete(oldest);
+    }
+  }
+  delete(key: string): void {
+    this.inner.delete(key);
+  }
+}
+const artifactCache = new LruPromiseCache(ARTIFACT_CACHE_MAX_ENTRIES);
 const httpsArtifactAllowlist = (
   process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? ""
 )
