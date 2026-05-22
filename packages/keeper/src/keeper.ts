@@ -66,6 +66,7 @@ interface CleanupCursor {
 
 const MAX_CLEANUP_BATCHES_PER_TICK = 4;
 const MAX_CLEANUP_COMPLETED = 5000;
+const MAX_CLEANUP_QUEUE = 2000;
 const cleanupQueue = new Map<string, CleanupCursor>();
 const cleanupCompletedRounds = new Set<string>();
 const cleanupDiscoveryRoundByContent = new Map<bigint, bigint>();
@@ -207,6 +208,19 @@ function enqueueRoundForCleanup(
   }
 
   cleanupQueue.set(key, { contentId, roundId, nextIndex: startIndex });
+
+  // Evict oldest pending cursors when the queue grows past the cap so a slow drain cannot
+  // turn the keeper into a memory-leak under sustained load. The dropped cursors will be
+  // re-enqueued the next time their round surfaces from event scanning.
+  if (cleanupQueue.size > MAX_CLEANUP_QUEUE) {
+    const overflow = cleanupQueue.size - MAX_CLEANUP_QUEUE;
+    let removed = 0;
+    for (const oldestKey of cleanupQueue.keys()) {
+      if (removed >= overflow) break;
+      cleanupQueue.delete(oldestKey);
+      removed += 1;
+    }
+  }
 }
 
 function markCleanupCompleted(contentId: bigint, roundId: bigint): void {
