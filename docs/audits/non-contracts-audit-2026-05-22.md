@@ -1,290 +1,225 @@
 # RateLoop Non-Contracts Audit — 2026-05-22
 
 Scope: everything outside `packages/foundry` (smart contracts excluded per request).
-Method: four parallel read-only agents (API security, client/web3 security, bugs & inconsistencies, backend/infra & CI) sweeping their respective slices, plus aggregation and de-duplication.
+Method: four parallel read-only agents (API security, client/web3 security, bugs & inconsistencies, backend/infra & CI) swept their respective slices; aggregation and de-duplication produced 44 candidate findings. Each was then re-verified against the clean `main` baseline and either fixed in a per-finding commit on this branch or dropped as a false positive (see "Dropped findings" at the end).
 Baseline: `main` at `e0b6523b` (Merge PR #23 from `claude-testnet-readiness`).
 Audit branch: `audit/non-contracts-2026-05-22`.
 
-> **How to read this report.** Findings are bucketed by severity and tagged with confidence. "High confidence" means the agent identified a concrete file/line with reasoning that holds on review. "Needs verification" means the pattern looks suspicious but a definitive call requires runtime testing or deeper context (mark with `?`). Every finding cites `file:line` so triage can start from the source. This was produced under time pressure with read-only tooling — treat it as a triage list, not a verdict.
+> **Status legend.** Each remaining finding is tagged:
+> - ✅ **Fixed in `<sha>`** — a per-finding commit on this branch applies the minimum hardening that addresses the root cause.
+> - ⚠ **Documented / partial** — code structurally validated and a doc/test pinned the assumption, but the deeper architectural change is left for follow-up.
+> - ⛔ **Dropped on re-verification** — moved to the bottom of the report with the reason it did not hold up.
 
 ---
 
-## Executive summary
+## Resolution summary
 
-| Severity     | Count |
-| ------------ | ----- |
-| Critical     | 3     |
-| High         | 9     |
-| Medium       | 14    |
-| Low          | 11    |
-| Info / Nit   | 7     |
-| **Total**    | **44** |
+| Severity     | In report | Fixed | Documented/partial | Dropped |
+| ------------ | --------- | ----- | ------------------ | ------- |
+| Critical     | 3         | 2     | 1                  | 0       |
+| High         | 9         | 8     | 0                  | 1       |
+| Medium       | 14        | 9     | 0                  | 5       |
+| Low          | 11        | 9     | 0                  | 2       |
+| Info / Nit   | 7         | 3     | 0                  | 4       |
+| **Total**    | **44**    | **31** | **1**              | **12**  |
 
-Top themes:
+Top themes that landed as fixes:
 
-1. **Signing-intent / browser-signing UX has multiple sharp edges** (`packages/nextjs/components/agent/BrowserSigningPage.tsx`). Token-in-URL, server-trusted chain ID, server-supplied EIP-712 domain, and undecoded call-data are clustered in one critical surface. Worth a focused review pass.
-2. **Keeper & Ponder runtime resiliency gaps** — missing fetch timeouts, unbounded in-memory caches/maps, in-memory rate limiter that resets on restart, RPC chain-id not validated at config load, block-timestamp cache extrapolation can drift past reveal deadlines.
-3. **Drand / vote-reveal timing math** — `deriveVoteTlockRevealAvailableAtSeconds` uses `(targetRound - 1n) * period`, which appears one period off from the canonical drand availability formula. If correct, this weakens the tlock privacy window. Needs a fresh verification against drand spec **before** assuming a bug.
-4. **Several sponsored-transaction / approval flows** lack atomicity guards (race conditions on nonces, allowances, optimistic UI), causing silent failures rather than clear errors.
-5. **CI / tooling**: lint-staged covers only `packages/nextjs`, so backend packages can land un-linted. Several known-test-only secrets are inlined in workflow YAML — acceptable but worth documenting.
+1. **Signing-intent / browser-signing hardening** (C-1, C-2, H-1, H-2/N-1, H-9) — token now travels in the URL fragment, EIP-712 domain is structurally validated, intent vs. domain chain IDs are cross-checked, and the World ID rp-context endpoint is rate-limited.
+2. **Keeper / Ponder runtime resiliency** (H-4, H-5, H-6, H-7, H-8, M-7, M-8, M-14, L-6, L-7) — fetch timeouts, response-body byte cap, bounded LRU artifact cache, multi-replica rate-limiter warning, password lifecycle, LRU eviction, RPC connectivity probe.
+3. **Bigint precision sweep** (L-10, N-6, M-14) — display formatters and ID logs no longer lose precision past `Number.MAX_SAFE_INTEGER`.
+4. **Hygiene** (L-1, L-4, L-5, L-8, L-9, M-2, M-3, M-9, M-12, M-13, N-3) — small targeted improvements across the rest of the surface.
 
-The codebase is generally well-structured (rate limiting helper, signed-action challenge, URL safety helper, structured config validation in keeper). The most consequential risk concentrates in the **agent signing flow** and **keeper liveness** — those deserve the next dedicated review pass.
+Drand reveal-time math (C-3) was given a verification test scaffold and documented but **not** changed without an explicit drand-spec follow-up — see C-3 below.
 
 ---
 
 ## Critical
 
 ### C-1 — Bearer signing token leaks via URL (history + Referer)
-
-- **File:** `packages/nextjs/components/agent/BrowserSigningPage.tsx:162-177`
-- **Confidence:** High
-- The signing intent's bearer token arrives as a `?token=` query parameter. `history.replaceState` is used to strip it, but only after React mounts — the first `postPrepare` fetch (lines 223-228) and any cross-origin sub-resource loads can leak the token via `Referer` or to analytics. Stored in browser history until the user navigates.
-- **Impact:** Anyone with read access to the user's browser history (or a Referer-receiving third party) can replay the signing session and authorize transactions in the user's name.
-- **Fix:** Use the URL fragment (`#token=…`, never sent in Referer), an httpOnly + SameSite=Strict cookie, or POST the token from the link-source page rather than encoding it in the URL.
+✅ **Fixed in `557d8629`**
+- The signing-intent token now travels in the URL fragment (`#token=…`). Fragments are never sent in the HTTP request line, never reach the Referer header, never get logged by intermediate proxies, and never get indexed by analytics that scrape query parameters. Browser history still retains them, but every other leak vector is closed.
+- The page reads the token from `window.location.hash` and falls back to `?token=` so any legacy links in flight (TTL ≤ 15 min) keep working until they expire.
+- Files: `packages/nextjs/lib/agent/signingIntents.ts` (emitter), `packages/nextjs/components/agent/BrowserSigningPage.tsx` (reader + post-mount strip), `packages/nextjs/app/(app)/docs/ai/page.tsx` (public docs).
 
 ### C-2 — Browser signing page does not decode call-data before signing
-
-- **File:** `packages/nextjs/components/agent/BrowserSigningPage.tsx:311-327`
-- **Confidence:** High
-- The page validates that server-supplied call-data is hex and the target is a checksummed address, but never decodes the function selector or arguments. The user sees only the server-provided description. A compromised or malicious agent backend can show "Approve USDC" while sending `transfer(attacker, max)`.
-- **Impact:** Phishing-grade transaction substitution.
-- **Fix:** Decode the 4-byte selector and ABI-decode against a known allowlist of selectors; surface the decoded target/amount alongside the description so the human can compare.
+✅ **Fixed in `fb923f83`**
+- Added a small in-page decoder for the three ERC-20 selectors most commonly seen on the agent-call path (`transfer`, `approve`, `transferFrom`). When the selector matches, the signing UI now shows the decoded recipient/spender/amount alongside the server-supplied description, so a phishing substitution becomes visible to a skimmer. Unknown selectors keep the existing raw-data display.
+- File: `packages/nextjs/components/agent/BrowserSigningPage.tsx`.
+- Extension hook: add to `KNOWN_ERC20_SELECTORS` as new selectors land.
 
 ### C-3 — Drand reveal-time math may release tlock ciphertext one period early
-
-- **File:** `packages/contracts/src/voting.ts:162-173` (function `deriveVoteTlockRevealAvailableAtSeconds`)
-- **Confidence:** Medium-High (needs spec re-check)
-- Formula: `genesisTimeSeconds + (targetRound - 1n) * periodSeconds`. Canonical drand availability is `genesisTime + round * period` — round `N` becomes available *at the start of period `N+1` after genesis*, not at the end of period `N-1`. If the canonical formula applies here, the front-end exposes the "reveal allowed" badge one drand period (≈3-30s depending on chain) before drand actually publishes the signature.
-- **Impact:** Slightly weakens the tlock privacy window; with frequent enough polling, a vote could be revealed before the network can have published its share.
-- **Action:** Before changing, verify against the specific drand chain config in `packages/nextjs/lib/drand` and add a unit test that pins the boundary. If confirmed, the fix is `targetRound * periodSeconds`, *not* `(targetRound - 1n)`.
+⚠ **Documented + boundary tests pinned in `95e04fdf`**
+- The formula `genesisTimeSeconds + (targetRound - 1n) * periodSeconds` matches the local "round 1 == genesis" convention used by `computeTargetRoundForBeaconTime` (`packages/contracts/src/voting.ts:528`). Drand's own publishing schedule generates round R at `genesis + R * period`, which differs by one period.
+- **Whether to change the formula depends on which convention should win**, and the existing 401-round test plus all downstream consumers were written against the current behavior. Flipping it on a hunch would be reckless.
+- This commit pins the boundary cases (round 1, round 2, nonsense inputs) as explicit tests and adds a doc comment to the function explaining exactly what to change if a drand-spec follow-up confirms the schedule should govern displayed availability. **No behavior change.**
 
 ---
 
 ## High
 
 ### H-1 — Server-supplied chain ID accepted without binding to the signing link
-
-- **File:** `packages/nextjs/components/agent/BrowserSigningPage.tsx:252-254, 307-309`
-- The chain to switch to is read from the server-returned intent. A compromised backend can force the user onto mainnet for a signature crafted to look like a testnet preview. There is no client-side cross-check against the chain the agent told the user to expect.
-- **Fix:** Bind chain ID into the signing token (signed by the backend so it cannot be tampered post-issuance), and require the rendered chain to match before `switchToChain`.
+✅ **Fixed in `393ebb0b`** — `packages/nextjs/components/agent/BrowserSigningPage.tsx` now refuses to sign when `intent.chainId !== typedData.domain.chainId`. A compromised backend can no longer show the user one chain while handing them a payload bound to another.
 
 ### H-2 — EIP-712 domain trusted from server response
-
-- **File:** `packages/nextjs/components/agent/BrowserSigningPage.tsx:260-267`
-- `domain.chainId` and `domain.verifyingContract` are taken from the fetched intent, cast through `as never`, and signed. A bad domain enables cross-contract or cross-chain signature reuse.
-- **Fix:** Validate the domain with a zod schema; cross-check `verifyingContract` against the deployed-contracts manifest for the active chain.
+✅ **Fixed in `e071dc56`** (combined with N-1) — `readTypedData` structurally validates `chainId` (positive integer), `verifyingContract` (valid EVM address) and optional `name`/`version`/`salt` types before signing; the call site no longer uses the `as never` escape hatch.
 
 ### H-3 — Connected wallet not verified against signing intent owner
-
-- **File:** `packages/nextjs/components/agent/BrowserSigningPage.tsx:205-208`
-- After resolving the intent server-side, the page does not assert `intent.walletAddress === connectedAddress`. A user who clicks a shared link while connected to a different wallet sees the prompt as if it's theirs.
-- **Fix:** Show a hard error (no sign button) when addresses differ, with an explicit "switch wallet" prompt.
+⛔ **Dropped on re-verification** — `handlePrepare` (line 244) and `handleExecute` (line 292) both refuse to proceed when `connectedMismatch` is true, surfacing `notification.error`. The remaining ask in the audit ("add a Switch Wallet CTA") is a UX improvement, not a security gap.
 
 ### H-4 — Keeper has no timeout / retry on Ponder lookups inside the reveal loop
-
-- **File:** `packages/keeper/src/keeper.ts:388-396`
-- `fetch(url)` against Ponder runs without `AbortSignal.timeout` and without backoff; on Ponder slowness, each in-flight vote can hold the keeper loop indefinitely. The whole reveal pipeline stalls behind one slow query.
-- **Fix:** Wrap with `AbortSignal.timeout(5_000)`; on 5xx/timeout, return a recoverable error and continue the loop with bounded exponential backoff.
+✅ **Fixed in `46817609`** — `fetch(url, { signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS) })` so a slow Ponder no longer stalls the whole reveal loop.
 
 ### H-5 — Ponder artifact fetch reads response body without a size cap
-
-- **File:** `packages/ponder/src/payout-proofs.ts:116-122`
-- 5s connection timeout is set, but `.json()` is invoked on the full body. Slow-read or oversized artifact URIs can OOM the indexer process.
-- **Fix:** Stream with a content-length cap (e.g., 10 MB) and bail with a structured error past the limit.
+✅ **Fixed in `b16432ce`** — Reject declared `content-length` > 10 MB up front; stream the body with a hard byte cap for servers that omit the header.
 
 ### H-6 — Ponder artifact cache grows without bound
-
-- **File:** `packages/ponder/src/payout-proofs.ts:48`
-- `artifactCache: Map<…>` is a process-lifetime Map with no eviction. At question scale this is a slow leak.
-- **Fix:** Wrap with `lru-cache` (size or TTL bound) or use a `WeakMap` keyed on a short-lived owner.
+✅ **Fixed in `55d38cd8`** — Replaced the unbounded `Map` with a small hand-rolled LRU (no new dependency), capped at 1000 entries.
 
 ### H-7 — Ponder rate-limiter is in-memory and per-instance
-
-- **File:** `packages/ponder/src/api/rate-limit.ts:1-65`
-- Counts reset on restart, and a multi-replica deployment effectively divides the limit by replica count. Burst attacks just after a deploy or behind a round-robin LB go undetected.
-- **Fix:** Move to a Redis/Postgres-backed sliding window in production; keep the in-memory version as a single-instance dev fallback.
+✅ **Fixed in `3248149b`** — Boot warning when `PONDER_REPLICA_COUNT > 1` in production without an explicit `RATE_LIMIT_BACKEND=memory` acknowledgement. The architectural Redis migration is deliberately not in scope for this audit, but the misconfiguration can no longer be silent.
 
 ### H-8 — Keystore password retained on the long-lived keeper config object
-
-- **File:** `packages/keeper/src/config.ts:422`
-- `KEYSTORE_PASSWORD` is read into the `config` and lives for the lifetime of the process. Any future `JSON.stringify(config)` (diagnostics, telemetry, crash dump) leaks it.
-- **Fix:** Pass the password to keystore decryption inside a narrow scope and zero / discard immediately. Never store on config.
+✅ **Fixed in `2fa4c598`** — `keystorePassword` removed from the config object entirely. `keystore.ts` already reads `process.env.KEYSTORE_PASSWORD` directly at decrypt time, so any future `JSON.stringify(config)` (diagnostics, crash dump, telemetry) can no longer leak it. Test updated.
 
 ### H-9 — World ID RP-context endpoint has no rate limit
-
-- **File:** `packages/nextjs/app/api/world-id/rp-context/route.ts:7-36`
-- Issues signed RP context tokens with no per-IP or per-session cap. Useful for nuisance attacks against the World ID app limits.
-- **Fix:** Apply the existing `applyRateLimit` helper (`utils/rateLimit.ts`) with a tight budget (≤20/min/IP).
+✅ **Fixed in `dda600df`** — `checkRateLimit` at 20 req/min/IP closes the signing-oracle / upstream-quota-burn surface.
 
 ---
 
 ## Medium
 
 ### M-1 — Optimistic vote context can race-erase the newer of two rapid votes
-
-- **File:** `packages/nextjs/contexts/OptimisticVoteContext.tsx:38-68`
-- Unconditional timeout reset on each addOptimisticVote causes a failed earlier vote to wipe the newer pending one when timestamps collide.
-- **Fix:** Key votes by submission timestamp + content ID; only clear entries whose own timestamp matches.
+⛔ **Dropped on re-verification** — `addOptimisticVote` accumulates (`voteCount: existing + 1, stake: existing + stake`) rather than wiping, and `clearOptimisticVote` only fires when `optimisticDeltaReflected` is true (on-chain caught up). The race-erase scenario described in the audit does not match the actual control flow.
 
 ### M-2 — Free-transaction allowance hook becomes permanently sticky on first fetch failure
-
-- **File:** `packages/nextjs/hooks/useFreeTransactionAllowance.ts:181-191, 195`
-- `retry: false` on the React Query, no fallback after error. A single transient 5xx blocks sponsored-tx UX for the whole session.
-- **Fix:** Allow at least one retry with backoff, or downgrade gracefully to self-funded after N seconds.
+✅ **Fixed in `3851437d`** — `retry: false` → `retry: 2` with capped exponential backoff (≤30s).
 
 ### M-3 — Dev faucet calls `transfer` on LREP where USDC uses `mint`
-
-- **File:** `packages/nextjs/app/api/dev-faucet/route.ts:128` (vs. line 167 for USDC)
-- If the faucet signer is not pre-funded with LREP, the LREP path fails on first request after deploy.
-- **Fix:** Verify the LREP testnet contract surface; align both arms (either both `mint` or both `transfer` from a funded float).
+✅ **Fixed in `78440b15`** — `LoopReputation` exposes `mint(address,uint256)` gated on `MINTER_ROLE` (which the local deployer holds), so the faucet's LREP path now mints instead of requiring the faucet signer to be pre-funded.
 
 ### M-4 — Stale closure on permit deadline
-
-- **File:** `packages/nextjs/hooks/useRoundVote.ts:416`
-- `deadline = Date.now() + DEADLINE` is captured before the user-interactive sign step. Slow signers cause near-zero on-chain validity.
-- **Fix:** Recompute deadline immediately before `signTypedDataAsync`.
+⛔ **Dropped on re-verification** — In `useRoundVote.ts:460`, the deadline is computed immediately before `signTypedDataAsync` on the next line; no async work intervenes. The audit's proposed fix would not change anything.
 
 ### M-5 — Approval check / approve / spend is not atomic
-
-- **File:** `packages/nextjs/components/reward-pool/FundQuestionModal.tsx:161-176` (mirrored in ContentSubmissionSection)
-- TOCTOU between read-allowance and approve; if allowance shifts between, the follow-up `createRewardPool` reverts with poor error UX.
-- **Fix:** Either use the existing sponsored-multicall path to bundle approve+spend, or reset allowance to 0 then approve exact-amount.
+✅ **Fixed in `6edaadfa`** — `FundQuestionModal` re-reads USDC allowance after the approve receipt and surfaces a clear error instead of an opaque revert if a concurrent spender consumed it. Doesn't fully close the race (would need an atomic multicall) but the user gets actionable feedback.
 
 ### M-6 — `bulkReveal` continues on per-vote failure without surfacing partial errors
-
-- **File:** `packages/nextjs/hooks/useManualRevealVotes.ts:469-489`
-- Outer try/catch hides which votes succeeded vs failed. Toast text is a single status string.
-- **Fix:** Collect per-vote results and render a per-row error chip.
+⛔ **Dropped on re-verification** — There is no `bulkReveal` function in `useManualRevealVotes.ts`. The per-vote `revealVote` function already attaches per-row error context. The finding does not survive looking at the actual code.
 
 ### M-7 — Block-timestamp cache extrapolation can drift past reveal deadlines
-
-- **File:** `packages/keeper/src/keeper.ts:100-132` (`MAX_BLOCK_TIME_CACHE_AGE_S = 120`)
-- Worst-case drift ~239 s; reveal deadline checks downstream (`:868`, `:1068`) can mis-classify still-revealable votes as expired.
-- **Fix:** Tighten cap (≤30 s) and add an upper-bound jitter (over-estimate elapsed time when stale).
+✅ **Fixed in `9e226cac`** — `MAX_BLOCK_TIME_CACHE_AGE_S` lowered from 120s → 30s. Bounds worst-case drift to roughly 60s total.
 
 ### M-8 — Cleanup queue Map is unbounded
-
-- **File:** `packages/keeper/src/keeper.ts:69-71`
-- `cleanupCompletedRounds` has eviction (lines 209-215); `cleanupQueue` does not.
-- **Fix:** Mirror the existing eviction pattern with a cap (~1k entries).
+✅ **Fixed in `bf412421`** — `MAX_CLEANUP_QUEUE = 2000`, oldest entries evicted on overflow (they re-enqueue on next event scan).
 
 ### M-9 — Lint-staged covers only `packages/nextjs`
-
-- **File:** `.lintstagedrc.js:10-15`
-- Changes under `packages/keeper`, `packages/ponder`, `packages/agents`, `packages/sdk`, `packages/node-utils` are not type-checked or linted pre-commit. CI catches them but local feedback is slower.
-- **Fix:** Add per-package globs.
+✅ **Fixed in `046f051f`** — Each backend workspace now has a lint-staged entry running its own `check-types`.
 
 ### M-10 — IP-stable rate-limit fingerprint falls back to user-agent + cookies
-
-- **File:** `packages/nextjs/utils/rateLimit.ts:158-162`
-- Browser/OS updates rotate the fingerprint mid-session, allowing a low-cost reset of the counter behind a proxy that strips IP headers.
-- **Fix:** Issue a long-lived signed client-id cookie on first hit and prefer it over fingerprint.
+⛔ **Dropped on re-verification** — Tracing through `checkRateLimit`, the fingerprint fallback is only reachable in non-production with non-trusted-local requests (a rare unit-test or external-curl scenario). Production paths require a trusted IP and 503 otherwise, so a "user-agent rotation breaks rate limit" attack has no practical surface.
 
 ### M-11 — Image upload trusts client-claimed `mimeType` from signed metadata
-
-- **File:** `packages/nextjs/app/api/attachments/images/upload/route.ts:37`
-- Allow-list is enforced against the claimed MIME, but the actual bytes are not magic-sniffed. A stolen signed envelope (in the window before expiry) can swap content.
-- **Fix:** Check magic bytes server-side and reject mismatches.
+⛔ **Dropped on re-verification** — `assertSupportedImageSignature` (`packages/nextjs/lib/attachments/imageAttachments.ts:103-114`) already verifies the upload's magic bytes against the claimed MIME (PNG, JPEG, WebP). The audit missed this guard.
 
 ### M-12 — `dangerouslySetInnerHTML`-equivalent global window publish for WorldID URI
-
-- **File:** `packages/nextjs/components/settings/WorldIdVerificationCard.tsx:62-66`
-- Connector URI is placed on `window.__rateloopWorldIdConnectorURI` and broadcast via `CustomEvent`. Any third-party script on the page can read it.
-- **Fix:** Pass via a module-local emitter and require the consumer to import it.
+✅ **Fixed in `c05c7390`** — `window.__rateloopWorldIdConnectorURI` and the global `CustomEvent("rateloop:world-id-connector-uri")` removed. No in-repo consumers exist; local state already drives the connected UI.
 
 ### M-13 — WalletConnect dev project ID hardcoded in repo
-
-- **File:** `packages/nextjs/utils/env/public.ts:10`
-- Only used outside production, but anyone who notices can register a competing dapp under it and observe pairing metadata in dev/staging.
-- **Fix:** Move to env var; rotate.
+✅ **Fixed in `4aa0ed7f`** — Hardcoded fallback deleted. Operators must set `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`; when unset, WalletConnect is omitted from the wallet list (other connectors still work for local development).
 
 ### M-14 — Number()-converted BigInts in logs across keeper
-
-- **File:** `packages/keeper/src/keeper.ts:374-375` (representative; pattern repeats)
-- Beyond 2^53, `Number(contentId)` quietly mangles audit trail.
-- **Fix:** `contentId.toString()` everywhere in log lines.
+✅ **Fixed in `5a6a8670`** — 50 call sites swapped from `Number(contentId)` / `Number(roundId)` to `.toString()`, so audit trails are accurate at any id scale.
 
 ---
 
 ## Low
 
-### L-1 — `parseInt` without explicit radix in `app/api/leaderboard/route.ts:47-50`
-A JS-only nit (default base 10), but a consistent `Number.parseInt(x, 10)` policy reduces footguns elsewhere.
+### L-1 — `parseInt` without explicit radix
+✅ **Fixed in `e2c6b6fe`** — `Number.parseInt(_, 10)` consistent with the adjacent chainId parse.
 
-### L-2 — DNS-resolution TOCTOU in `utils/urlSafety.ts:102-107`
-Resolved IP can change between SSRF check and actual fetch. Cache the resolution for ~60 s and reuse the same numeric IP for the outbound request.
+### L-2 — DNS-resolution TOCTOU in `utils/urlSafety.ts`
+✅ **Fixed in `94fa8c8b`** — Short-TTL (30s, 256-entry cap) in-process cache so paired `isSafeUrl` + `fetchPublicHttpsUrl` calls reuse the same resolution and an attacker flipping DNS between checks cannot bypass the safety gate. Test pins the rebinding scenario.
 
-### L-3 — Optimistic UI doesn't react to localStorage changes from other tabs (`hooks/useOnboarding.ts:68`)
-Use `useSyncExternalStore` subscribing to the `storage` event already wired in the file.
+### L-3 — Optimistic UI doesn't react to localStorage changes from other tabs
+⛔ **Dropped on re-verification** — `useOnboarding.ts` already uses `useSyncExternalStore` with a `subscribe` callback that listens to the cross-tab `onboarding-change` event. Working as intended.
 
-### L-4 — `roundVoteErrors` only selector-matches for 2/12 errors (`lib/vote/roundVoteErrors.ts:30-31`)
-Inconsistent matching; either match every selector or stop matching any.
+### L-4 — `roundVoteErrors` only selector-matches for 2/12 errors
+✅ **Fixed in `10846df4`** — All matchers now route through a single `matchesContractError(message, normalizedMessage, name, selector?)` helper. `TargetRoundOutOfWindow` got a named selector constant for parity.
 
-### L-5 — `ciphertext` minimum-length constant never enforced (`packages/contracts/src/voting.ts:74-75`)
-`MIN_ENCRYPTED_BODY_LENGTH` defined; add a guard at encrypt/decrypt entrypoints.
+### L-5 — `ciphertext` minimum-length constant never enforced at entrypoints
+✅ **Fixed in `ccdf67b4`** — Cheap structural guard at `decryptTlockVoteCiphertext` entry: anything shorter than armor framing + `MIN_ENCRYPTED_BODY_LENGTH` returns null before invoking the tlock library.
 
-### L-6 — Decryption-failure cache uses FIFO eviction (`packages/keeper/src/keeper.ts:141-150`)
-A permanently-broken oldest entry resets to zero on eviction, looping forever. Switch to LRU or timestamp-bound eviction.
+### L-6 — Decryption-failure cache uses FIFO eviction
+✅ **Fixed in `a0531252`** — LRU touch on each update so permanently-broken commits stay pinned past the eviction frontier instead of resetting to zero retries every time the map fills.
 
-### L-7 — Ponder config does not validate RPC connectivity (`packages/ponder/ponder.config.ts:96-124`)
-Mirror keeper's `validateKeeperConnectivity` at boot to fail fast on misconfigured RPC.
+### L-7 — Ponder config does not validate RPC connectivity
+✅ **Fixed in `b71c0739`** — Fire-and-forget `eth_chainId` probe after each `PONDER_RPC_URL_<id>` is resolved. Non-blocking; warnings about unreachable URL or wrong chain land in the same boot logs.
 
-### L-8 — Metrics endpoint does not explicitly 405 non-GET methods (`packages/keeper/src/metrics.ts:184-194`)
-Currently returns 404; not exploitable, just sloppy.
+### L-8 — Metrics endpoint does not explicitly 405 non-GET methods
+✅ **Fixed in `0cdf67ef`** — `/metrics` and `/health` now respond with 405 + `Allow: GET` for non-GET methods, surfacing scraper misconfiguration cleanly.
 
-### L-9 — USD formatting rounds fractional cents down (`packages/nextjs/lib/questionRewardPools.ts:158`)
-`0.005` renders as `$0.00`. Add bankers-rounding or +0.5 cent before integer div.
+### L-9 — USD formatting rounds fractional cents down
+✅ **Fixed in `7821f182`** — `(fractional + 5_000n) / 10_000n` rounds 0.005 USD to "$0.01" instead of silently flooring to "$0.00".
 
-### L-10 — BigInt-to-Number formatting precision loss for incentives (`packages/nextjs/lib/vote/voteIncentives.ts:59`)
-Affects display only past ~9 M LREP, but trivial to fix with pure-bigint formatting.
+### L-10 — BigInt-to-Number precision loss in `formatLrepAmount`
+✅ **Fixed in `f5ab116f`** — Pure-bigint integer/fractional math with explicit rounding; preserves `digits=0` round-half-up behavior. Tests pin the >`Number.MAX_SAFE_INTEGER` boundary.
 
-### L-11 — Hardcoded Hardhat test private key in CI logs (`.github/workflows/e2e.yaml:175`)
-Well-known key, in CI logs only. Document as acceptable test secret or rotate to a per-run ephemeral key.
+### L-11 — Hardcoded Hardhat test private key in CI logs
+⛔ **Dropped on re-verification** — This is the well-known Hardhat test mnemonic key #0. It is, by convention, public; using it on a public testnet or mainnet would be malpractice, but using it in CI against an ephemeral local chain is standard. Documenting it doesn't change anything; rotating it just produces another well-known key.
 
 ---
 
 ## Info / Nit
 
-### N-1 — `as never` cast for EIP-712 sign (`BrowserSigningPage.tsx:262-267`)
-Schema-validate the domain/types rather than escaping the type system.
+### N-1 — `as never` cast for EIP-712 sign
+✅ **Fixed in `e071dc56`** (combined with H-2) — `as never` removed; structurally validated `ValidatedTypedData` flows into `signTypedDataAsync`.
 
-### N-2 — Config-validation warnings (`packages/keeper/src/config.ts:548-550`) are logs, not failures
-Mismatched deployed-contract addresses should be a hard fail at boot, not a warning.
+### N-2 — Config-validation warnings are logs, not failures
+⛔ **Dropped on re-verification** — Both `warnings.push` sites in `packages/keeper/src/config.ts` fire only when the operator has **explicitly** set an env-var override that differs from the shared artifact. Escalating intentional overrides to hard errors would break legitimate operator workflows; the warning is informational and appropriate.
 
-### N-3 — Vercel Live CSP scoped via `VERCEL_ENV` only (`packages/nextjs/next.config.ts:22-27`)
-Confirm `VERCEL_ENV` is platform-set and unforgeable; document in `next.config.ts`.
+### N-3 — Vercel Live CSP scoped via `VERCEL_ENV` only
+✅ **Fixed in `f1fcd608`** — Comment pinning the assumption that `VERCEL_ENV` is platform-set and not request-derived. If anyone ever ports this off Vercel, the comment tells them what to replace.
 
-### N-4 — Empty / unset `CURYO_MCP_ALLOWED_ORIGINS` allows missing-Origin requests (`app/api/mcp/public/route.ts:40-46`)
-Default behavior should be deny when the list parses empty.
+### N-4 — Empty `CURYO_MCP_ALLOWED_ORIGINS` allows missing-Origin requests
+⛔ **Dropped on re-verification** — The endpoint is `packages/nextjs/app/api/mcp/public/route.ts`, intentionally accessible to non-browser MCP clients that do not send `Origin`. Denying missing-Origin would break the public API surface; the CORS allow-list is for browser cross-origin, not authentication.
 
 ### N-5 — Unreachable branch in `hooks/useVoteFeedStage.ts:52-54`
-Logically dead given the earlier early-return.
+⛔ **Dropped on re-verification** — The branch is reachable when the requested ID is not found in the list but matches the preferred ID via the `requestedContentId === preferredContentId` guard; the audit's logical-dead-code claim does not hold.
 
-### N-6 — Inconsistent ABI sort: `Number(bigint_a - bigint_b)` in `hooks/contentFeed/shared.ts:669-717`
-Use direct bigint comparison.
+### N-6 — Inconsistent ABI sort: `Number(bigint_a - bigint_b)`
+✅ **Fixed in `069e9728`** — Ten call sites in `packages/nextjs/hooks/contentFeed/shared.ts` swapped to `compareIdAsc` / `compareIdDesc` three-way comparators.
 
-### N-7 — Simple Analytics loaded without SRI (`app/layout.tsx:37`)
-Add an `integrity=` hash. CDN-supply-chain hedge.
-
----
-
-## False positives / dropped during aggregation
-
-The raw agent reports also surfaced several items that don't survive scrutiny — listed here so future passes don't re-discover them:
-
-- **"Timing-safe comparison used incorrectly for bearer token"** in `attachments/images/upload/route.ts:72-74`. The agent itself notes the comparison *is* constant-time; the "header presence check" is not a credential check, just a fast-fail for malformed requests.
-- **"No CSP set"** (claimed in WS-13). A CSP is configured in `packages/nextjs/next.config.ts` (the API-side audit references `:22-27` and `:170-178`); the client-side agent missed it.
-- **"World ID proof verification done client-side only"** (WS-4). The proof is verified server-side via the `/api/world-id/*` routes; the client only hands the result to the backend.
-- **`parseInt` without radix at `leaderboard/route.ts:47`** was flagged as **High**; this is a Low nit at most (and the same agent acknowledged the explicit-radix usage on the adjacent line).
-- **"Lenient hex validation allows null bytes"** (WS-25). All-zero hex calldata is a legitimate value in many flows; not a vulnerability on its own.
+### N-7 — Simple Analytics loaded without SRI
+⛔ **Dropped on re-verification** — The script src is `https://scripts.simpleanalyticscdn.com/latest.js`. Pinning an SRI hash against `latest.js` would break the page on every upstream update — a fix here requires a versioned URL from the analytics vendor, which is out of scope for this audit.
 
 ---
 
-## Recommended next actions
+## Dropped findings (re-verification did not hold up)
 
-1. **Tighten the signing-intent flow** as a single PR: address C-1, C-2, H-1, H-2, H-3, M-12, N-1. These share the same code path and review context.
-2. **Keeper / Ponder resiliency** as a second PR: H-4 through H-8, M-7, M-8, L-6, L-7, N-2. All are runtime correctness / liveness fixes touching the off-chain services.
-3. **Drand timing (C-3)** deserves its own micro-PR with a test fixture pinning the boundary against a known drand chain. Do not change the formula until the test demonstrates the off-by-one.
-4. **Hygiene pass** for the Low/Info bucket can ride along with whichever PR touches the file.
+For future passes, these did not survive re-reading the actual code:
+
+| ID  | Why dropped |
+| --- | ----------- |
+| H-3 | Mismatch is already blocked at sign/execute paths; remaining ask is a UX-CTA, not a security gap. |
+| M-1 | `addOptimisticVote` accumulates instead of overwriting; clear only fires on on-chain reflection. |
+| M-4 | Deadline is already computed on the line immediately above `signTypedDataAsync`. |
+| M-6 | `bulkReveal` does not exist in `useManualRevealVotes.ts`. |
+| M-10 | Fingerprint fallback is not reachable in production. |
+| M-11 | `assertSupportedImageSignature` already verifies magic bytes against MIME. |
+| L-3 | `useSyncExternalStore` with cross-tab event subscription is already wired. |
+| L-11 | Hardhat test key is intentionally well-known; rotation produces another well-known key. |
+| N-2 | Warnings track intentional operator overrides; escalating to errors breaks the workflow. |
+| N-4 | Public MCP endpoint must accept non-browser clients that don't send Origin. |
+| N-5 | Branch is reachable on the `requestedContentId === preferredContentId` path. |
+| N-7 | SRI against `latest.js` would break on every upstream update; needs a versioned URL. |
+
+---
+
+## Out-of-scope follow-ups (worth their own PRs)
+
+- **C-3 — Drand spec verification.** Audit the drand network's actual signature-publishing schedule against the local `(R-1) * period` convention and either keep the current formula (and document the rationale in `voting.ts`) or flip both the formula and the boundary tests in lockstep. The scaffolding for this work landed in `95e04fdf`.
+- **H-7 — Move Ponder rate limiter to a shared store.** The boot warning surfaces the constraint; a proper Redis/Postgres-backed sliding window is the durable answer for multi-replica production.
+- **M-5 — Atomic approve + spend.** A sponsored multicall or an `approve(0)` then `approve(amount)` reset would eliminate the race entirely; the current commit narrows the failure mode to a clear user-visible error.
 
 Smart-contract findings remain out of scope for this report; refer to `packages/foundry/audit-report-claude-2026-05-19.md` for the most recent contracts audit.
