@@ -684,13 +684,14 @@ contract QuestionRewardPoolEscrow is
         emit RewardPoolClusterPayoutOracleRepointed(rewardPoolId, oldOracle, newOracle);
     }
 
-    function qualifyRound(uint256 rewardPoolId, uint256 roundId) external {
+    function qualifyRound(uint256 rewardPoolId, uint256 roundId) external nonReentrant {
         RewardPool storage rewardPool = _getIncompleteRewardPoolForQualification(rewardPoolId);
         _qualifyRound(rewardPoolId, rewardPool, roundId);
     }
 
     function advanceQualificationCursor(uint256 rewardPoolId, uint256 maxRounds)
         external
+        nonReentrant
         returns (uint256 skipped, uint256 nextRoundToEvaluate)
     {
         RewardPool storage rewardPool = _getIncompleteRewardPoolForQualification(rewardPoolId);
