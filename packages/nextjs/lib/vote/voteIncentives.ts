@@ -56,8 +56,28 @@ function formatPreciseDuration(seconds: number): string {
 }
 
 export function formatLrepAmount(amountMicro: bigint | number, maximumFractionDigits = 1): string {
-  const value = typeof amountMicro === "bigint" ? Number(amountMicro) / 1e6 : amountMicro;
-  return value.toLocaleString(undefined, { maximumFractionDigits });
+  // Use bigint arithmetic so balances past Number.MAX_SAFE_INTEGER don't silently lose precision.
+  const microBigInt = typeof amountMicro === "bigint" ? amountMicro : BigInt(Math.trunc(amountMicro));
+  const whole = microBigInt / 1_000_000n;
+  const fractionalMicro = microBigInt % 1_000_000n;
+  const digits = Math.min(Math.max(maximumFractionDigits, 0), 6);
+  if (digits === 0) {
+    // Round half up to the nearest whole unit.
+    const roundedWhole = fractionalMicro >= 500_000n ? whole + 1n : whole;
+    return roundedWhole.toLocaleString();
+  }
+  if (fractionalMicro === 0n) {
+    return whole.toLocaleString();
+  }
+  // Round fractionalMicro to `digits` decimal places.
+  const divisor = 10n ** BigInt(6 - digits);
+  const rounded = (fractionalMicro + divisor / 2n) / divisor;
+  const upperBound = 10n ** BigInt(digits);
+  if (rounded >= upperBound) {
+    return (whole + 1n).toLocaleString();
+  }
+  const fractionalString = rounded.toString().padStart(digits, "0").replace(/0+$/, "");
+  return fractionalString ? `${whole.toLocaleString()}.${fractionalString}` : whole.toLocaleString();
 }
 
 export function describeOpenRoundActivity(
