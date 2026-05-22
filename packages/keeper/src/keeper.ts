@@ -106,7 +106,12 @@ const MAX_DECRYPT_FAILURE_ENTRIES = 10_000;
 // silently power the keeper forever.
 let lastBlockTimestampS: bigint | null = null;
 let lastBlockObservedAtMs: number | null = null;
-const MAX_BLOCK_TIME_CACHE_AGE_S = 120; // 2 minutes; longer than any sane mainnet block cadence.
+// M-7 (2026-05-22 audit): the previous 120s ceiling let extrapolation drift up to
+// ~239s away from chain time at worst (120s cache age + 119s elapsed at miss time),
+// which can move reveal-deadline checks downstream into the wrong classification.
+// 30s is still longer than any realistic L2 block cadence we target but bounds the
+// worst-case drift to roughly one minute total.
+const MAX_BLOCK_TIME_CACHE_AGE_S = 30;
 
 async function resolveOnChainNowSeconds(publicClient: PublicClient): Promise<bigint> {
   try {
