@@ -874,14 +874,20 @@ contract RoundVotingEngine is
     ///      from the next block onward. This preserves liveness without falling back to caller-chosen entropy.
     ///      M-Vote-2: capped at `MAX_RBTS_SEED_REFRESHES` per round to bound seed grinding by the
     ///      threshold-closing voter. Once exhausted, callers must accept the captured entropy or
-    ///      let governance arbitrate via `cancelExpiredRound`.
+    ///      wait for it to expire, at which point the round is cancelled and stakes are refundable.
     function refreshRbtsSeed(uint256 contentId, uint256 roundId) external nonReentrant {
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         if (round.revealedCount < _rbtsRevealQuorum(roundCfg.minVoters)) revert NotEnoughVotes();
         uint8 refreshCount = _roundRbtsSeedRefreshCount[contentId][roundId];
-        if (refreshCount >= MAX_RBTS_SEED_REFRESHES) revert RbtsSeedRefreshCapped();
+        if (refreshCount >= MAX_RBTS_SEED_REFRESHES) {
+            if (!RoundRevealLib.isExpiredRbtsSeed(roundRbtsSeedEntropy, contentId, roundId)) {
+                revert RbtsSeedRefreshCapped();
+            }
+            _markRoundCancelled(contentId, roundId, round);
+            return;
+        }
         unchecked {
             _roundRbtsSeedRefreshCount[contentId][roundId] = refreshCount + 1;
         }

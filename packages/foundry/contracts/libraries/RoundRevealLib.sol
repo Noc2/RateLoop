@@ -273,11 +273,19 @@ library RoundRevealLib {
         uint256 contentId,
         uint256 roundId
     ) external {
-        uint256 seedWord = uint256(roundRbtsSeedEntropy[contentId][roundId]);
-        if (seedWord < RBTS_SEED_BLOCK_FLAG) revert RevealGraceActive();
-        uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
-        if (block.number <= seedBlock || blockhash(seedBlock) != bytes32(0)) revert RevealGraceActive();
+        if (!isExpiredRbtsSeed(roundRbtsSeedEntropy, contentId, roundId)) revert RevealGraceActive();
         _captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
+    }
+
+    function isExpiredRbtsSeed(
+        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        uint256 contentId,
+        uint256 roundId
+    ) public view returns (bool) {
+        uint256 seedWord = uint256(roundRbtsSeedEntropy[contentId][roundId]);
+        if (seedWord < RBTS_SEED_BLOCK_FLAG) return false;
+        uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
+        return block.number > seedBlock && blockhash(seedBlock) == bytes32(0);
     }
 
     function finalizeRbtsSeed(

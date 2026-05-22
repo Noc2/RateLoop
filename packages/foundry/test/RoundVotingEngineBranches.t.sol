@@ -1001,6 +1001,46 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
     }
 
+    function test_RbtsSeedRefreshExhaustionCancelsRoundForRefunds() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+
+        for (uint256 i = 0; i < 3; i++) {
+            bytes32 marker = engine.roundRbtsSeedEntropy(contentId, roundId);
+            uint256 seedBlock = uint256(marker) ^ (uint256(1) << 255);
+            vm.roll(seedBlock + 257);
+            engine.refreshRbtsSeed(contentId, roundId);
+        }
+
+        bytes32 finalMarker = engine.roundRbtsSeedEntropy(contentId, roundId);
+        uint256 finalSeedBlock = uint256(finalMarker) ^ (uint256(1) << 255);
+        vm.roll(finalSeedBlock + 257);
+
+        vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
+        engine.settleRound(contentId, roundId);
+
+        uint256 balanceBefore = lrepToken.balanceOf(voter1);
+        engine.refreshRbtsSeed(contentId, roundId);
+
+        RoundLib.Round memory cancelledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(cancelledRound.state), uint256(RoundLib.RoundState.Cancelled));
+
+        vm.prank(voter1);
+        engine.claimCancelledRoundRefund(contentId, roundId);
+        assertEq(lrepToken.balanceOf(voter1), balanceBefore + 10e6, "revealed voter can recover stake");
+    }
+
     function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {
         uint256 contentId = _submitContent();
 
