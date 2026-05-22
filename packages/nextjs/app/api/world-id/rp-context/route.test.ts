@@ -1,7 +1,7 @@
+import { NextRequest } from "next/server";
 import { POST } from "./route";
 import assert from "node:assert/strict";
 import { afterEach, before, test } from "node:test";
-import { NextRequest } from "next/server";
 import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
 
 const env = process.env as Record<string, string | undefined>;
