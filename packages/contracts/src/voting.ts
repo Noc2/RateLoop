@@ -159,6 +159,19 @@ export async function getVoteTlockChainInfo(
   };
 }
 
+/**
+ * C-3 (2026-05-22 audit): the formula here uses (targetRound - 1) * period because the
+ * local convention (see {@link computeTargetRoundForBeaconTime} at the bottom of this file)
+ * treats round 1 as occurring at the genesis time itself. The drand network's own
+ * signature-publishing schedule produces round R at `genesis + R * period`, so callers
+ * may see "reveal available" up to one period before drand has actually published the
+ * round's signature; this is currently absorbed as a brief retry at the call site.
+ *
+ * If a follow-up confirms drand's schedule should govern the displayed availability
+ * (rather than the local round numbering), change to `targetRound * periodSeconds` and
+ * update the boundary tests in voting.test.ts in lockstep. Do NOT change one without
+ * the other.
+ */
 export function deriveVoteTlockRevealAvailableAtSeconds(
   targetRound: bigint,
   chainInfo: VoteTlockChainInfo,

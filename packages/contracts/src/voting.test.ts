@@ -737,3 +737,49 @@ test("deriveVoteTlockRevealAvailableAtSeconds converts a committed round into it
     1692804567n,
   );
 });
+
+// C-3 (2026-05-22 audit): pin the boundary cases for deriveVoteTlockRevealAvailableAtSeconds
+// so any future change to the formula is forced through an explicit test update plus
+// alignment with the local "round R == genesis + (R-1)*period" convention used by
+// computeTargetRoundForBeaconTime (see voting.ts:528) and the drand chain's actual
+// signature-availability schedule. If a follow-up confirms drand publishes round R at
+// genesis + R*period rather than genesis + (R-1)*period, this test must be updated
+// in lockstep with the formula in voting.ts.
+test("deriveVoteTlockRevealAvailableAtSeconds: round 1 == genesis (local convention)", () => {
+  assert.equal(
+    deriveVoteTlockRevealAvailableAtSeconds(1n, {
+      periodSeconds: 3n,
+      genesisTimeSeconds: 1_000_000n,
+      drandChainHash:
+        "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+    }),
+    1_000_000n,
+  );
+});
+
+test("deriveVoteTlockRevealAvailableAtSeconds: round 2 == genesis + period", () => {
+  assert.equal(
+    deriveVoteTlockRevealAvailableAtSeconds(2n, {
+      periodSeconds: 3n,
+      genesisTimeSeconds: 1_000_000n,
+      drandChainHash:
+        "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+    }),
+    1_000_003n,
+  );
+});
+
+test("deriveVoteTlockRevealAvailableAtSeconds: nonsense inputs collapse to 0", () => {
+  const chain = {
+    periodSeconds: 3n,
+    genesisTimeSeconds: 1_000_000n,
+    drandChainHash:
+      "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971" as const,
+  };
+  assert.equal(deriveVoteTlockRevealAvailableAtSeconds(0n, chain), 0n);
+  assert.equal(deriveVoteTlockRevealAvailableAtSeconds(-1n, chain), 0n);
+  assert.equal(
+    deriveVoteTlockRevealAvailableAtSeconds(401n, { ...chain, periodSeconds: 0n }),
+    0n,
+  );
+});
