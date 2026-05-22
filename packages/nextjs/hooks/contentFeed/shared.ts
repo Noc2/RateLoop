@@ -661,17 +661,21 @@ function getSortableRating(item: ContentItem): number {
   return getVisibleContentRating(item) ?? Number.NEGATIVE_INFINITY;
 }
 
+// Three-way comparator for bigint ids; safe past Number.MAX_SAFE_INTEGER.
+const compareIdAsc = (a: ContentItem, b: ContentItem): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const compareIdDesc = (a: ContentItem, b: ContentItem): number => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
+
 export function sortRpcFeed(feed: ContentItem[], sortBy: FeedSort, searchQuery?: string): ContentItem[] {
   const items = [...feed];
 
   switch (sortBy) {
     case "oldest":
-      items.sort((a, b) => Number(a.id - b.id));
+      items.sort((a, b) => compareIdAsc(a, b));
       break;
     case "relevance": {
       const normalizedQuery = searchQuery?.trim().toLowerCase();
       if (!normalizedQuery) {
-        items.sort((a, b) => Number(b.id - a.id));
+        items.sort((a, b) => compareIdDesc(a, b));
         break;
       }
 
@@ -688,7 +692,7 @@ export function sortRpcFeed(feed: ContentItem[], sortBy: FeedSort, searchQuery?:
           return ratingDifference;
         }
 
-        return Number(b.id - a.id);
+        return compareIdDesc(a, b);
       });
       break;
     }
@@ -699,7 +703,7 @@ export function sortRpcFeed(feed: ContentItem[], sortBy: FeedSort, searchQuery?:
         if (aAmount !== bAmount) {
           return aAmount > bAmount ? -1 : 1;
         }
-        return Number(b.id - a.id);
+        return compareIdDesc(a, b);
       });
       break;
     case "bounty_first":
@@ -710,17 +714,17 @@ export function sortRpcFeed(feed: ContentItem[], sortBy: FeedSort, searchQuery?:
         const bHasReward = bAmount > 0n;
         if (aHasReward !== bHasReward) return aHasReward ? -1 : 1;
         if (aAmount !== bAmount) return aAmount > bAmount ? -1 : 1;
-        return Number(b.id - a.id);
+        return compareIdDesc(a, b);
       });
       break;
     case "newest":
-      items.sort((a, b) => Number(b.id - a.id));
+      items.sort((a, b) => compareIdDesc(a, b));
       break;
     case "highest_rated":
       items.sort((a, b) => {
         const ratingDifference = getSortableRating(b) - getSortableRating(a);
         if (ratingDifference !== 0) return ratingDifference;
-        return Number(b.id - a.id);
+        return compareIdDesc(a, b);
       });
       break;
     case "lowest_rated":
@@ -732,18 +736,18 @@ export function sortRpcFeed(feed: ContentItem[], sortBy: FeedSort, searchQuery?:
         if (aUnrated !== bUnrated) return aUnrated ? 1 : -1;
         const ratingDifference = aRating - bRating;
         if (ratingDifference !== 0) return ratingDifference;
-        return Number(b.id - a.id);
+        return compareIdDesc(a, b);
       });
       break;
     case "most_votes":
       items.sort((a, b) => {
         const voteDifference = b.totalVotes - a.totalVotes;
         if (voteDifference !== 0) return voteDifference;
-        return Number(b.id - a.id);
+        return compareIdDesc(a, b);
       });
       break;
     default:
-      items.sort((a, b) => Number(b.id - a.id));
+      items.sort((a, b) => compareIdDesc(a, b));
       break;
   }
 
