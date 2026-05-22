@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -9,6 +9,7 @@ import {
   assertSharedDeploymentArtifactsSynced,
   filterGeneratedContractsForDeployTarget,
   parseTransactionAndReceiptRun,
+  processAllDeployments,
 } from "./generateTsAbis.js";
 
 const ORIGINAL_DEPLOY_TARGET_NETWORK = process.env.DEPLOY_TARGET_NETWORK;
@@ -54,6 +55,40 @@ test("parseTransactionAndReceiptRun skips malformed broadcast JSON with an empty
       transactions: [],
       receipts: [],
     });
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("processAllDeployments tracks proxy addresses for latest broadcast freshness", () => {
+  const tempDir = mkdtempSync(join(tmpdir(), "rateloop-broadcast-"));
+  try {
+    const chainDir = join(tempDir, "Deploy.s.sol", "4801");
+    mkdirSync(chainDir, { recursive: true });
+    writeFileSync(
+      join(chainDir, "run-1.json"),
+      JSON.stringify({
+        transactions: [
+          {
+            transactionType: "CREATE",
+            contractName: "TransparentUpgradeableProxy",
+            contractAddress: "0x0000000000000000000000000000000000000004",
+            hash: "0xproxy",
+          },
+        ],
+        receipts: [{ transactionHash: "0xproxy", blockNumber: "0x65" }],
+      })
+    );
+
+    const { latestBroadcastDeploymentAddresses } =
+      processAllDeployments(tempDir);
+
+    assert.equal(
+      latestBroadcastDeploymentAddresses[4801].has(
+        "0x0000000000000000000000000000000000000004"
+      ),
+      true
+    );
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

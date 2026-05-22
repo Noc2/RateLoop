@@ -198,7 +198,7 @@ function parseOptionalBlockNumber(value) {
   return Number(BigInt(value));
 }
 
-function processAllDeployments(broadcastPath) {
+export function processAllDeployments(broadcastPath) {
   const scriptFolders = getDirectories(broadcastPath);
   const allDeployments = new Map();
   const allDeploymentsByAddress = new Map();
@@ -231,10 +231,7 @@ function processAllDeployments(broadcastPath) {
           latestBroadcastTimestamps[chainId] = timestamp;
           latestBroadcastDeploymentAddresses[chainId] = new Set();
         }
-        if (
-          timestamp === latestBroadcastTimestamps[chainId] &&
-          shouldExportRawDeploymentContract(deployment.contractName)
-        ) {
+        if (timestamp === latestBroadcastTimestamps[chainId]) {
           latestBroadcastDeploymentAddresses[chainId].add(
             deployment.address.toLowerCase()
           );
