@@ -122,16 +122,74 @@ function assertZeroValue(value: unknown, field: string) {
   throw new Error(`${field} must be zero.`);
 }
 
-function readTypedData(request: JsonRecord | null | undefined) {
+type ValidatedTypedData = {
+  domain: {
+    chainId: number;
+    name?: string;
+    verifyingContract: Address;
+    version?: string;
+    salt?: Hex;
+  };
+  message: JsonRecord;
+  primaryType: string;
+  types: Record<string, Array<{ name: string; type: string }>>;
+};
+
+// H-2 / N-1 (2026-05-22 audit): the domain used to flow through the page as a plain
+// JsonRecord cast via `as never` into signTypedDataAsync, which let a compromised
+// backend slip in any chainId/verifyingContract pair (cross-protocol signature
+// reuse). Validate the structural shape up front and reject anything malformed.
+function readTypedData(request: JsonRecord | null | undefined): ValidatedTypedData {
   const typedData = request?.typedData ?? request?.eip712;
   if (!typedData || typeof typedData !== "object" || Array.isArray(typedData)) {
     throw new Error("RateLoop did not return x402 typed data.");
   }
-  return typedData as {
-    domain: JsonRecord;
-    message: JsonRecord;
-    primaryType: string;
-    types: Record<string, Array<{ name: string; type: string }>>;
+  const candidate = typedData as JsonRecord;
+  const domainRaw = candidate.domain;
+  if (!domainRaw || typeof domainRaw !== "object" || Array.isArray(domainRaw)) {
+    throw new Error("Signing intent is missing an EIP-712 domain.");
+  }
+  const domain = domainRaw as JsonRecord;
+  const chainIdRaw = domain.chainId;
+  const chainId =
+    typeof chainIdRaw === "number"
+      ? chainIdRaw
+      : typeof chainIdRaw === "string"
+        ? Number.parseInt(chainIdRaw, 10)
+        : NaN;
+  if (!Number.isFinite(chainId) || chainId <= 0) {
+    throw new Error("EIP-712 domain.chainId is not a valid chain identifier.");
+  }
+  const verifyingContract = normalizeAddress(domain.verifyingContract, "EIP-712 domain.verifyingContract");
+  if (domain.name !== undefined && typeof domain.name !== "string") {
+    throw new Error("EIP-712 domain.name must be a string when present.");
+  }
+  if (domain.version !== undefined && typeof domain.version !== "string") {
+    throw new Error("EIP-712 domain.version must be a string when present.");
+  }
+  const salt = domain.salt !== undefined ? normalizeHex(domain.salt, "EIP-712 domain.salt") : undefined;
+  const messageRaw = candidate.message;
+  if (!messageRaw || typeof messageRaw !== "object" || Array.isArray(messageRaw)) {
+    throw new Error("Signing intent is missing an EIP-712 message.");
+  }
+  if (typeof candidate.primaryType !== "string" || !candidate.primaryType) {
+    throw new Error("Signing intent is missing primaryType.");
+  }
+  const typesRaw = candidate.types;
+  if (!typesRaw || typeof typesRaw !== "object" || Array.isArray(typesRaw)) {
+    throw new Error("Signing intent is missing types.");
+  }
+  return {
+    domain: {
+      chainId,
+      name: domain.name as string | undefined,
+      verifyingContract,
+      version: domain.version as string | undefined,
+      salt,
+    },
+    message: messageRaw as JsonRecord,
+    primaryType: candidate.primaryType,
+    types: typesRaw as Record<string, Array<{ name: string; type: string }>>,
   };
 }
 
@@ -264,7 +322,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
           message: typedData.message,
           primaryType: typedData.primaryType,
           types: typedData.types,
-        } as never);
+        });
         prepared = await postPrepare({
           ...authorization,
           signature,
