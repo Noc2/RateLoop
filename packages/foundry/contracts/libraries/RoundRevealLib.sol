@@ -42,6 +42,7 @@ library RoundRevealLib {
         uint16 minVoters;
         uint256 targetRoundRevealableAt;
         bytes32 drandChainHash;
+        bool countForSettlement;
     }
 
     struct RbtsRoundTotals {
@@ -121,20 +122,18 @@ library RoundRevealLib {
         commit.revealableAfter = block.timestamp.toUint48();
         round.revealedCount++;
 
-        if (params.isUp) {
-            round.upPool += commit.stakeAmount;
-            round.upCount++;
-        } else {
-            round.downPool += commit.stakeAmount;
-            round.downCount++;
-        }
-
         effectiveStake = _effectiveStake(commit.stakeAmount, commit.epochIndex);
         ratingEvidenceWeight = _ratingEvidenceWeight(commit.stakeAmount, commit.epochIndex);
-        if (params.isUp) {
-            round.weightedUpPool += effectiveStake;
-        } else {
-            round.weightedDownPool += effectiveStake;
+        if (params.countForSettlement) {
+            if (params.isUp) {
+                round.upPool += commit.stakeAmount;
+                round.upCount++;
+                round.weightedUpPool += effectiveStake;
+            } else {
+                round.downPool += commit.stakeAmount;
+                round.downCount++;
+                round.weightedDownPool += effectiveStake;
+            }
         }
 
         if (round.revealedCount >= params.minVoters && round.thresholdReachedAt == 0) {
@@ -143,7 +142,7 @@ library RoundRevealLib {
 
         nextEligibleFrontendStake = params.currentEligibleFrontendStake;
         nextEligibleFrontendCount = params.currentEligibleFrontendCount;
-        if (commit.frontend != address(0) && frontendEligibleAtCommit[params.commitKey]) {
+        if (params.countForSettlement && commit.frontend != address(0) && frontendEligibleAtCommit[params.commitKey]) {
             nextEligibleFrontendStake += commit.stakeAmount;
             if (perFrontendStake[commit.frontend] == 0) {
                 nextEligibleFrontendCount++;

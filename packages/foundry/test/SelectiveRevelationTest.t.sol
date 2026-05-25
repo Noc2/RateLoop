@@ -314,7 +314,24 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         // Same-block post-threshold reveals share the threshold timestamp, so the scoring
         // set must be frozen by the pre-threshold weight marker instead.
+        RoundLib.Round memory beforeLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        uint256 upPoolBefore = beforeLateReveal.upPool;
+        uint256 downPoolBefore = beforeLateReveal.downPool;
+        uint256 weightedUpPoolBefore = beforeLateReveal.weightedUpPool;
+        uint256 weightedDownPoolBefore = beforeLateReveal.weightedDownPool;
+        uint256 upEvidenceBefore = engine.roundRatingUpEvidence(contentId, roundId);
+        uint256 downEvidenceBefore = engine.roundRatingDownEvidence(contentId, roundId);
         _reveal(contentId, roundId, ck4, true, s4);
+
+        RoundLib.Round memory afterLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(afterLateReveal.upPool, upPoolBefore, "late reveal cannot move settlement up pool");
+        assertEq(afterLateReveal.downPool, downPoolBefore, "late reveal cannot move settlement down pool");
+        assertEq(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "late reveal cannot move weighted up");
+        assertEq(afterLateReveal.weightedDownPool, weightedDownPoolBefore, "late reveal cannot move weighted down");
+        assertEq(engine.roundRatingUpEvidence(contentId, roundId), upEvidenceBefore, "late reveal cannot add up evidence");
+        assertEq(
+            engine.roundRatingDownEvidence(contentId, roundId), downEvidenceBefore, "late reveal cannot add down evidence"
+        );
 
         vm.roll(block.number + 1);
         engine.settleRound(contentId, roundId);
