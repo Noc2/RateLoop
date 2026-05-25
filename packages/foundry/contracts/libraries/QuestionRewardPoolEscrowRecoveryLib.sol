@@ -71,7 +71,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         require(rewardPool.id != 0, "Bounty not found");
         require(_usesClusterPayoutSnapshot(rewardPool, rewardPoolClusterPayoutOracle), "Not cluster-snapshot pool");
-        require(!rewardPool.refunded && !rewardPool.unallocatedRefunded, "Bounty refunded");
+        require(!rewardPool.refunded, "Bounty refunded");
         require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
         require(rejectedRecoveredRound[rewardPoolId][roundId], "Round not recovered");
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round already qualified");

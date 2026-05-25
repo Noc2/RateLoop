@@ -296,6 +296,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         RewardPool storage rewardPool,
         uint256 claimGrace
     ) private returns (uint256 refundAmount) {
+        require(rewardPool.pendingRecoveredRounds == 0, "Recovered round pending");
         uint256 claimDeadline = rewardPool.claimDeadline;
         require(claimDeadline != 0, "Grace");
         require(block.timestamp > claimDeadline + claimGrace, "Grace");

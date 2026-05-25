@@ -685,7 +685,9 @@ contract QuestionRewardPoolEscrow is
     }
 
     function qualifyRound(uint256 rewardPoolId, uint256 roundId) external nonReentrant {
-        RewardPool storage rewardPool = _getIncompleteRewardPoolForQualification(rewardPoolId);
+        RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
+        bool reopened = reopenedRecoveredRound[rewardPoolId][roundId];
+        _requireQualifiableRewardPool(rewardPool, reopened);
         _qualifyRound(rewardPoolId, rewardPool, roundId);
     }
 
@@ -1282,7 +1284,8 @@ contract QuestionRewardPoolEscrow is
 
     function _qualifyRoundIfNeeded(uint256 rewardPoolId, RewardPool storage rewardPool, uint256 roundId) internal {
         if (!roundSnapshots[rewardPoolId][roundId].qualified) {
-            _requireIncompleteRewardPool(rewardPool);
+            bool reopened = reopenedRecoveredRound[rewardPoolId][roundId];
+            _requireQualifiableRewardPool(rewardPool, reopened);
             _qualifyRound(rewardPoolId, rewardPool, roundId);
         }
     }
@@ -1290,6 +1293,14 @@ contract QuestionRewardPoolEscrow is
     function _requireIncompleteRewardPool(RewardPool storage rewardPool) internal view {
         require(!rewardPool.refunded, "Bounty refunded");
         require(!rewardPool.unallocatedRefunded, "Bounty refunded");
+        require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
+    }
+
+    function _requireQualifiableRewardPool(RewardPool storage rewardPool, bool reopened) internal view {
+        require(!rewardPool.refunded, "Bounty refunded");
+        if (!reopened) {
+            require(!rewardPool.unallocatedRefunded, "Bounty refunded");
+        }
         require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
     }
 
