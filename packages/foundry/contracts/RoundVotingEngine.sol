@@ -1320,7 +1320,9 @@ contract RoundVotingEngine is
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
-        bool thresholdAlreadyReached = round.thresholdReachedAt != 0;
+        uint256 thresholdReachedAtBefore = round.thresholdReachedAt;
+        bool thresholdAlreadyReached = thresholdReachedAtBefore != 0;
+        bool countForSettlement = !thresholdAlreadyReached || block.timestamp == thresholdReachedAtBefore;
         (
             uint256 eligibleFrontendStake,
             uint256 eligibleFrontendCount,
@@ -1346,7 +1348,7 @@ contract RoundVotingEngine is
                 minVoters: _rbtsRevealQuorum(roundCfg.minVoters),
                 targetRoundRevealableAt: targetRoundRevealableAt,
                 drandChainHash: _getRoundDrandChainHash(contentId, roundId),
-                countForSettlement: !thresholdAlreadyReached
+                countForSettlement: countForSettlement
             })
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
@@ -1371,7 +1373,7 @@ contract RoundVotingEngine is
         // current bound is well below that, but the `unchecked` block was a bytecode-trim
         // micro-optimization that traded a real (if remote) safety guarantee for a few hundred
         // gas. Restore the default checked arithmetic here.
-        if (!thresholdAlreadyReached) {
+        if (countForSettlement) {
             if (isUp) {
                 roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
             } else {

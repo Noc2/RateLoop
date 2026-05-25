@@ -312,8 +312,11 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, false, s3);
 
-        // Same-block post-threshold reveals share the threshold timestamp, so the scoring
-        // set must be frozen by the pre-threshold weight marker instead.
+        // A later-block post-threshold reveal has had a chance to observe the provisional
+        // settlement, so it must not be able to move settlement pools while remaining outside
+        // the RBTS scoring set.
+        vm.warp(block.timestamp + 1);
+        vm.roll(block.number + 1);
         RoundLib.Round memory beforeLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
         uint256 upPoolBefore = beforeLateReveal.upPool;
         uint256 downPoolBefore = beforeLateReveal.downPool;
