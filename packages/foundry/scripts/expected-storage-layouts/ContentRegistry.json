@@ -1,158 +1,565 @@
-[
-  {
-    "slot": 0,
-    "offset": 0,
-    "label": "lrepToken",
-    "type": "t_contract(IERC20)"
-  },
-  {
-    "slot": 1,
-    "offset": 0,
-    "label": "votingEngine",
-    "type": "t_address"
-  },
-  {
-    "slot": 2,
-    "offset": 0,
-    "label": "categoryRegistry",
-    "type": "t_contract(ICategoryRegistry)"
-  },
-  {
-    "slot": 3,
-    "offset": 0,
-    "label": "bonusPool",
-    "type": "t_address"
-  },
-  {
-    "slot": 4,
-    "offset": 0,
-    "label": "treasury",
-    "type": "t_address"
-  },
-  {
-    "slot": 5,
-    "offset": 0,
-    "label": "nextContentId",
-    "type": "t_uint256"
-  },
-  {
-    "slot": 6,
-    "offset": 0,
-    "label": "nextQuestionBundleId",
-    "type": "t_uint256"
-  },
-  {
-    "slot": 7,
-    "offset": 0,
-    "label": "contents",
-    "type": "t_mapping(t_uint256,t_struct(Content))"
-  },
-  {
-    "slot": 8,
-    "offset": 0,
-    "label": "submissionKeyUsed",
-    "type": "t_mapping(t_bytes32,t_bool)"
-  },
-  {
-    "slot": 9,
-    "offset": 0,
-    "label": "questionRewardPoolEscrow",
-    "type": "t_address"
-  },
-  {
-    "slot": 10,
-    "offset": 0,
-    "label": "votingEngineGeneration",
-    "type": "t_uint256"
-  },
-  {
-    "slot": 11,
-    "offset": 0,
-    "label": "votingEngineCallbackGeneration",
-    "type": "t_mapping(t_address,t_uint256)"
-  },
-  {
-    "slot": 12,
-    "offset": 0,
-    "label": "contentSettlementEngineGeneration",
-    "type": "t_mapping(t_uint256,t_uint256)"
-  },
-  {
-    "slot": 13,
-    "offset": 0,
-    "label": "contentSubmissionKey",
-    "type": "t_mapping(t_uint256,t_bytes32)"
-  },
-  {
-    "slot": 14,
-    "offset": 0,
-    "label": "getSubmitterIdentity",
-    "type": "t_mapping(t_uint256,t_address)"
-  },
-  {
-    "slot": 15,
-    "offset": 0,
-    "label": "contentSubmitterIdentityKey",
-    "type": "t_mapping(t_uint256,t_bytes32)"
-  },
-  {
-    "slot": 16,
-    "offset": 0,
-    "label": "contentRoundConfig",
-    "type": "t_mapping(t_uint256,t_struct(RoundConfig))"
-  },
-  {
-    "slot": 17,
-    "offset": 0,
-    "label": "contentBundleId",
-    "type": "t_mapping(t_uint256,t_uint256)"
-  },
-  {
-    "slot": 18,
-    "offset": 0,
-    "label": "dormancyAnchorAt",
-    "type": "t_mapping(t_uint256,t_uint256)"
-  },
-  {
-    "slot": 19,
-    "offset": 0,
-    "label": "contentRoundTrackingEngine",
-    "type": "t_mapping(t_uint256,t_address)"
-  },
-  {
-    "slot": 20,
-    "offset": 0,
-    "label": "protocolConfig",
-    "type": "t_contract(ProtocolConfig)"
-  },
-  {
-    "slot": 21,
-    "offset": 0,
-    "label": "pendingSubmissions",
-    "type": "t_mapping(t_bytes32,t_struct(PendingSubmission))"
-  },
-  {
-    "slot": 22,
-    "offset": 0,
-    "label": "dormantKeyReleasableAt",
-    "type": "t_mapping(t_uint256,t_uint256)"
-  },
-  {
-    "slot": 23,
-    "offset": 0,
-    "label": "_ratingState",
-    "type": "t_mapping(t_uint256,t_struct(RatingState))"
-  },
-  {
-    "slot": 24,
-    "offset": 0,
-    "label": "contentSlashConfigSnapshot",
-    "type": "t_mapping(t_uint256,t_struct(SlashConfig))"
-  },
-  {
-    "slot": 25,
-    "offset": 0,
-    "label": "__gap",
-    "type": "t_array(t_uint256)"
-  }
-]
+{
+  "storage": [
+    {
+      "slot": 0,
+      "offset": 0,
+      "label": "lrepToken",
+      "type": "t_contract(IERC20)"
+    },
+    {
+      "slot": 1,
+      "offset": 0,
+      "label": "votingEngine",
+      "type": "t_address"
+    },
+    {
+      "slot": 2,
+      "offset": 0,
+      "label": "categoryRegistry",
+      "type": "t_contract(ICategoryRegistry)"
+    },
+    {
+      "slot": 3,
+      "offset": 0,
+      "label": "bonusPool",
+      "type": "t_address"
+    },
+    {
+      "slot": 4,
+      "offset": 0,
+      "label": "treasury",
+      "type": "t_address"
+    },
+    {
+      "slot": 5,
+      "offset": 0,
+      "label": "nextContentId",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 6,
+      "offset": 0,
+      "label": "nextQuestionBundleId",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 7,
+      "offset": 0,
+      "label": "contents",
+      "type": "t_mapping(t_uint256,t_struct(Content))"
+    },
+    {
+      "slot": 8,
+      "offset": 0,
+      "label": "submissionKeyUsed",
+      "type": "t_mapping(t_bytes32,t_bool)"
+    },
+    {
+      "slot": 9,
+      "offset": 0,
+      "label": "questionRewardPoolEscrow",
+      "type": "t_address"
+    },
+    {
+      "slot": 10,
+      "offset": 0,
+      "label": "votingEngineGeneration",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 11,
+      "offset": 0,
+      "label": "votingEngineCallbackGeneration",
+      "type": "t_mapping(t_address,t_uint256)"
+    },
+    {
+      "slot": 12,
+      "offset": 0,
+      "label": "contentSettlementEngineGeneration",
+      "type": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "slot": 13,
+      "offset": 0,
+      "label": "contentSubmissionKey",
+      "type": "t_mapping(t_uint256,t_bytes32)"
+    },
+    {
+      "slot": 14,
+      "offset": 0,
+      "label": "getSubmitterIdentity",
+      "type": "t_mapping(t_uint256,t_address)"
+    },
+    {
+      "slot": 15,
+      "offset": 0,
+      "label": "contentSubmitterIdentityKey",
+      "type": "t_mapping(t_uint256,t_bytes32)"
+    },
+    {
+      "slot": 16,
+      "offset": 0,
+      "label": "contentRoundConfig",
+      "type": "t_mapping(t_uint256,t_struct(RoundConfig))"
+    },
+    {
+      "slot": 17,
+      "offset": 0,
+      "label": "contentBundleId",
+      "type": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "slot": 18,
+      "offset": 0,
+      "label": "dormancyAnchorAt",
+      "type": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "slot": 19,
+      "offset": 0,
+      "label": "contentRoundTrackingEngine",
+      "type": "t_mapping(t_uint256,t_address)"
+    },
+    {
+      "slot": 20,
+      "offset": 0,
+      "label": "protocolConfig",
+      "type": "t_contract(ProtocolConfig)"
+    },
+    {
+      "slot": 21,
+      "offset": 0,
+      "label": "pendingSubmissions",
+      "type": "t_mapping(t_bytes32,t_struct(PendingSubmission))"
+    },
+    {
+      "slot": 22,
+      "offset": 0,
+      "label": "dormantKeyReleasableAt",
+      "type": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "slot": 23,
+      "offset": 0,
+      "label": "_ratingState",
+      "type": "t_mapping(t_uint256,t_struct(RatingState))"
+    },
+    {
+      "slot": 24,
+      "offset": 0,
+      "label": "contentSlashConfigSnapshot",
+      "type": "t_mapping(t_uint256,t_struct(SlashConfig))"
+    },
+    {
+      "slot": 25,
+      "offset": 0,
+      "label": "__gap",
+      "type": "t_array(t_uint256)"
+    }
+  ],
+  "types": [
+    {
+      "id": "t_address",
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_array(t_uint256)",
+      "encoding": "inplace",
+      "label": "uint256[42]",
+      "numberOfBytes": "1344",
+      "base": "t_uint256"
+    },
+    {
+      "id": "t_bool",
+      "encoding": "inplace",
+      "label": "bool",
+      "numberOfBytes": "1"
+    },
+    {
+      "id": "t_bytes32",
+      "encoding": "inplace",
+      "label": "bytes32",
+      "numberOfBytes": "32"
+    },
+    {
+      "id": "t_contract(ICategoryRegistry)",
+      "encoding": "inplace",
+      "label": "contract ICategoryRegistry",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_contract(IERC20)",
+      "encoding": "inplace",
+      "label": "contract IERC20",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_contract(ProtocolConfig)",
+      "encoding": "inplace",
+      "label": "contract ProtocolConfig",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_enum(ContentStatus)",
+      "encoding": "inplace",
+      "label": "enum ContentRegistry.ContentStatus",
+      "numberOfBytes": "1"
+    },
+    {
+      "id": "t_int128",
+      "encoding": "inplace",
+      "label": "int128",
+      "numberOfBytes": "16"
+    },
+    {
+      "id": "t_mapping(t_address,t_uint256)",
+      "encoding": "mapping",
+      "label": "mapping(address => uint256)",
+      "numberOfBytes": "32",
+      "key": "t_address",
+      "value": "t_uint256"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_bool)",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => bool)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_struct(PendingSubmission))",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => struct ContentRegistry.PendingSubmission)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_struct(PendingSubmission)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_address)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => address)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_address"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_bytes32)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => bytes32)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_bytes32"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(Content))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct ContentRegistry.Content)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(Content)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(RatingState))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct RatingLib.RatingState)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(RatingState)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(RoundConfig))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct RoundLib.RoundConfig)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(RoundConfig)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(SlashConfig))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct RatingLib.SlashConfig)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(SlashConfig)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_uint256)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => uint256)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_uint256"
+    },
+    {
+      "id": "t_struct(Content)",
+      "encoding": "inplace",
+      "label": "struct ContentRegistry.Content",
+      "numberOfBytes": "128",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "id",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "contentHash",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "submitter",
+          "type": "t_address"
+        },
+        {
+          "slot": 2,
+          "offset": 20,
+          "label": "createdAt",
+          "type": "t_uint48"
+        },
+        {
+          "slot": 2,
+          "offset": 26,
+          "label": "lastActivityAt",
+          "type": "t_uint48"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "status",
+          "type": "t_enum(ContentStatus)"
+        },
+        {
+          "slot": 3,
+          "offset": 1,
+          "label": "dormantCount",
+          "type": "t_uint8"
+        },
+        {
+          "slot": 3,
+          "offset": 2,
+          "label": "reviver",
+          "type": "t_address"
+        },
+        {
+          "slot": 3,
+          "offset": 22,
+          "label": "rating",
+          "type": "t_uint8"
+        },
+        {
+          "slot": 3,
+          "offset": 23,
+          "label": "categoryId",
+          "type": "t_uint64"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(PendingSubmission)",
+      "encoding": "inplace",
+      "label": "struct ContentRegistry.PendingSubmission",
+      "numberOfBytes": "96",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "submitter",
+          "type": "t_address"
+        },
+        {
+          "slot": 0,
+          "offset": 20,
+          "label": "reservedAt",
+          "type": "t_uint48"
+        },
+        {
+          "slot": 0,
+          "offset": 26,
+          "label": "expiresAt",
+          "type": "t_uint48"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "submitterIdentity",
+          "type": "t_address"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "submitterIdentityKey",
+          "type": "t_bytes32"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(RatingState)",
+      "encoding": "inplace",
+      "label": "struct RatingLib.RatingState",
+      "numberOfBytes": "96",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "ratingLogitX18",
+          "type": "t_int128"
+        },
+        {
+          "slot": 0,
+          "offset": 16,
+          "label": "confidenceMass",
+          "type": "t_uint128"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "effectiveEvidence",
+          "type": "t_uint128"
+        },
+        {
+          "slot": 1,
+          "offset": 16,
+          "label": "settledRounds",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 1,
+          "offset": 20,
+          "label": "ratingBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 1,
+          "offset": 22,
+          "label": "conservativeRatingBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 1,
+          "offset": 24,
+          "label": "lastUpdatedAt",
+          "type": "t_uint48"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "lowSince",
+          "type": "t_uint48"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(RoundConfig)",
+      "encoding": "inplace",
+      "label": "struct RoundLib.RoundConfig",
+      "numberOfBytes": "32",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "epochDuration",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 4,
+          "label": "maxDuration",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 8,
+          "label": "minVoters",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 0,
+          "offset": 10,
+          "label": "maxVoters",
+          "type": "t_uint16"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(SlashConfig)",
+      "encoding": "inplace",
+      "label": "struct RatingLib.SlashConfig",
+      "numberOfBytes": "64",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "slashThresholdBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 0,
+          "offset": 2,
+          "label": "minSlashSettledRounds",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 0,
+          "offset": 4,
+          "label": "minSlashLowDuration",
+          "type": "t_uint48"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "minSlashEvidence",
+          "type": "t_uint256"
+        }
+      ]
+    },
+    {
+      "id": "t_uint128",
+      "encoding": "inplace",
+      "label": "uint128",
+      "numberOfBytes": "16"
+    },
+    {
+      "id": "t_uint16",
+      "encoding": "inplace",
+      "label": "uint16",
+      "numberOfBytes": "2"
+    },
+    {
+      "id": "t_uint256",
+      "encoding": "inplace",
+      "label": "uint256",
+      "numberOfBytes": "32"
+    },
+    {
+      "id": "t_uint32",
+      "encoding": "inplace",
+      "label": "uint32",
+      "numberOfBytes": "4"
+    },
+    {
+      "id": "t_uint48",
+      "encoding": "inplace",
+      "label": "uint48",
+      "numberOfBytes": "6"
+    },
+    {
+      "id": "t_uint64",
+      "encoding": "inplace",
+      "label": "uint64",
+      "numberOfBytes": "8"
+    },
+    {
+      "id": "t_uint8",
+      "encoding": "inplace",
+      "label": "uint8",
+      "numberOfBytes": "1"
+    }
+  ]
+}

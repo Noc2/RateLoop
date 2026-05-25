@@ -9,6 +9,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXPECTED_DIR="$ROOT_DIR/scripts/expected-storage-layouts"
+CANONICALIZE_SCRIPT="$ROOT_DIR/scripts/storage-layout-canonicalize.py"
 mkdir -p "$EXPECTED_DIR"
 
 CONTRACTS=(
@@ -25,22 +26,7 @@ CONTRACTS=(
 for contract in "${CONTRACTS[@]}"; do
   echo "Snapshotting $contract"
   forge inspect "contracts/$contract.sol:$contract" storageLayout --json \
-    | python3 -c "
-import sys, json, re
-d = json.loads(sys.stdin.read())
-# Codex P2 (PR #20 review): keep the full type identifier so nested type changes are
-# caught. Only strip the compile-specific solc IDs and '_storage' location markers.
-def canon_type(t):
-    return re.sub(r'\)(?:\d+)(?:_storage)?', ')', t).replace('_storage', '')
-canonical = sorted(
-    [
-        {'slot': int(e['slot']), 'offset': e['offset'], 'label': e['label'], 'type': canon_type(e['type'])}
-        for e in d['storage']
-    ],
-    key=lambda r: (r['slot'], r['offset']),
-)
-print(json.dumps(canonical, indent=2))
-" > "$EXPECTED_DIR/$contract.json"
+    | python3 "$CANONICALIZE_SCRIPT" > "$EXPECTED_DIR/$contract.json"
 done
 
 echo "Updated snapshots under $EXPECTED_DIR. Commit them alongside the contract change."

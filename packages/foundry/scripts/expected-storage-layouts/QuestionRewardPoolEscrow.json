@@ -1,152 +1,864 @@
-[
-  {
-    "slot": 0,
-    "offset": 0,
-    "label": "lrepToken",
-    "type": "t_contract(IERC20)"
-  },
-  {
-    "slot": 1,
-    "offset": 0,
-    "label": "usdcToken",
-    "type": "t_contract(IERC20)"
-  },
-  {
-    "slot": 2,
-    "offset": 0,
-    "label": "registry",
-    "type": "t_contract(ContentRegistry)"
-  },
-  {
-    "slot": 3,
-    "offset": 0,
-    "label": "votingEngine",
-    "type": "t_contract(RoundVotingEngine)"
-  },
-  {
-    "slot": 4,
-    "offset": 0,
-    "label": "raterRegistry",
-    "type": "t_contract(IRaterIdentityRegistry)"
-  },
-  {
-    "slot": 5,
-    "offset": 0,
-    "label": "nextRewardPoolId",
-    "type": "t_uint256"
-  },
-  {
-    "slot": 6,
-    "offset": 0,
-    "label": "rewardPools",
-    "type": "t_mapping(t_uint256,t_struct(RewardPool))"
-  },
-  {
-    "slot": 7,
-    "offset": 0,
-    "label": "roundSnapshots",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(RoundSnapshot)))"
-  },
-  {
-    "slot": 8,
-    "offset": 0,
-    "label": "rewardClaimed",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
-  },
-  {
-    "slot": 9,
-    "offset": 0,
-    "label": "bundleRewards",
-    "type": "t_mapping(t_uint256,t_struct(BundleReward))"
-  },
-  {
-    "slot": 10,
-    "offset": 0,
-    "label": "bundleQuestions",
-    "type": "t_mapping(t_uint256,t_array(t_struct(BundleQuestion))dyn)"
-  },
-  {
-    "slot": 11,
-    "offset": 0,
-    "label": "bundleQuestionRecordedRounds",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint32))"
-  },
-  {
-    "slot": 12,
-    "offset": 0,
-    "label": "bundleRoundIds",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_uint256,t_uint64)))"
-  },
-  {
-    "slot": 13,
-    "offset": 0,
-    "label": "bundleRoundSetSnapshots",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(BundleRoundSetSnapshot)))"
-  },
-  {
-    "slot": 14,
-    "offset": 0,
-    "label": "bundleRoundSetRewardClaimed",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
-  },
-  {
-    "slot": 15,
-    "offset": 0,
-    "label": "rewardPoolPayerIdentity",
-    "type": "t_mapping(t_uint256,t_address)"
-  },
-  {
-    "slot": 16,
-    "offset": 0,
-    "label": "rewardPoolPayerIdentityKey",
-    "type": "t_mapping(t_uint256,t_bytes32)"
-  },
-  {
-    "slot": 17,
-    "offset": 0,
-    "label": "contentBundleId",
-    "type": "t_mapping(t_uint256,t_uint256)"
-  },
-  {
-    "slot": 18,
-    "offset": 0,
-    "label": "contentBundleIndex",
-    "type": "t_mapping(t_uint256,t_uint256)"
-  },
-  {
-    "slot": 19,
-    "offset": 0,
-    "label": "defaultFrontendFeeBps",
-    "type": "t_uint16"
-  },
-  {
-    "slot": 20,
-    "offset": 0,
-    "label": "rewardPoolClusterPayoutOracle",
-    "type": "t_mapping(t_uint256,t_address)"
-  },
-  {
-    "slot": 21,
-    "offset": 0,
-    "label": "bundleQuestionTerminalSyncCursor",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
-  },
-  {
-    "slot": 22,
-    "offset": 0,
-    "label": "rejectedRecoveredRound",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
-  },
-  {
-    "slot": 23,
-    "offset": 0,
-    "label": "reopenedRecoveredRound",
-    "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
-  },
-  {
-    "slot": 24,
-    "offset": 0,
-    "label": "__gap",
-    "type": "t_array(t_uint256)"
-  }
-]
+{
+  "storage": [
+    {
+      "slot": 0,
+      "offset": 0,
+      "label": "lrepToken",
+      "type": "t_contract(IERC20)"
+    },
+    {
+      "slot": 1,
+      "offset": 0,
+      "label": "usdcToken",
+      "type": "t_contract(IERC20)"
+    },
+    {
+      "slot": 2,
+      "offset": 0,
+      "label": "registry",
+      "type": "t_contract(ContentRegistry)"
+    },
+    {
+      "slot": 3,
+      "offset": 0,
+      "label": "votingEngine",
+      "type": "t_contract(RoundVotingEngine)"
+    },
+    {
+      "slot": 4,
+      "offset": 0,
+      "label": "raterRegistry",
+      "type": "t_contract(IRaterIdentityRegistry)"
+    },
+    {
+      "slot": 5,
+      "offset": 0,
+      "label": "nextRewardPoolId",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 6,
+      "offset": 0,
+      "label": "rewardPools",
+      "type": "t_mapping(t_uint256,t_struct(RewardPool))"
+    },
+    {
+      "slot": 7,
+      "offset": 0,
+      "label": "roundSnapshots",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(RoundSnapshot)))"
+    },
+    {
+      "slot": 8,
+      "offset": 0,
+      "label": "rewardClaimed",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
+    },
+    {
+      "slot": 9,
+      "offset": 0,
+      "label": "bundleRewards",
+      "type": "t_mapping(t_uint256,t_struct(BundleReward))"
+    },
+    {
+      "slot": 10,
+      "offset": 0,
+      "label": "bundleQuestions",
+      "type": "t_mapping(t_uint256,t_array(t_struct(BundleQuestion))dyn)"
+    },
+    {
+      "slot": 11,
+      "offset": 0,
+      "label": "bundleQuestionRecordedRounds",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint32))"
+    },
+    {
+      "slot": 12,
+      "offset": 0,
+      "label": "bundleRoundIds",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_uint256,t_uint64)))"
+    },
+    {
+      "slot": 13,
+      "offset": 0,
+      "label": "bundleRoundSetSnapshots",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(BundleRoundSetSnapshot)))"
+    },
+    {
+      "slot": 14,
+      "offset": 0,
+      "label": "bundleRoundSetRewardClaimed",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
+    },
+    {
+      "slot": 15,
+      "offset": 0,
+      "label": "rewardPoolPayerIdentity",
+      "type": "t_mapping(t_uint256,t_address)"
+    },
+    {
+      "slot": 16,
+      "offset": 0,
+      "label": "rewardPoolPayerIdentityKey",
+      "type": "t_mapping(t_uint256,t_bytes32)"
+    },
+    {
+      "slot": 17,
+      "offset": 0,
+      "label": "contentBundleId",
+      "type": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "slot": 18,
+      "offset": 0,
+      "label": "contentBundleIndex",
+      "type": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "slot": 19,
+      "offset": 0,
+      "label": "defaultFrontendFeeBps",
+      "type": "t_uint16"
+    },
+    {
+      "slot": 20,
+      "offset": 0,
+      "label": "rewardPoolClusterPayoutOracle",
+      "type": "t_mapping(t_uint256,t_address)"
+    },
+    {
+      "slot": 21,
+      "offset": 0,
+      "label": "bundleQuestionTerminalSyncCursor",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))"
+    },
+    {
+      "slot": 22,
+      "offset": 0,
+      "label": "rejectedRecoveredRound",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
+    },
+    {
+      "slot": 23,
+      "offset": 0,
+      "label": "reopenedRecoveredRound",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))"
+    },
+    {
+      "slot": 24,
+      "offset": 0,
+      "label": "__gap",
+      "type": "t_array(t_uint256)"
+    }
+  ],
+  "types": [
+    {
+      "id": "t_address",
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_array(t_struct(BundleQuestion))dyn",
+      "encoding": "dynamic_array",
+      "label": "struct BundleQuestion[]",
+      "numberOfBytes": "32",
+      "base": "t_struct(BundleQuestion)"
+    },
+    {
+      "id": "t_array(t_uint256)",
+      "encoding": "inplace",
+      "label": "uint256[48]",
+      "numberOfBytes": "1536",
+      "base": "t_uint256"
+    },
+    {
+      "id": "t_bool",
+      "encoding": "inplace",
+      "label": "bool",
+      "numberOfBytes": "1"
+    },
+    {
+      "id": "t_bytes32",
+      "encoding": "inplace",
+      "label": "bytes32",
+      "numberOfBytes": "32"
+    },
+    {
+      "id": "t_contract(ContentRegistry)",
+      "encoding": "inplace",
+      "label": "contract ContentRegistry",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_contract(IERC20)",
+      "encoding": "inplace",
+      "label": "contract IERC20",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_contract(IRaterIdentityRegistry)",
+      "encoding": "inplace",
+      "label": "contract IRaterIdentityRegistry",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_contract(RoundVotingEngine)",
+      "encoding": "inplace",
+      "label": "contract RoundVotingEngine",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_bool)",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => bool)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_address)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => address)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_address"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_array(t_struct(BundleQuestion))dyn)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct BundleQuestion[])",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_array(t_struct(BundleQuestion))dyn"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_bool)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => bool)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_bytes32)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => bytes32)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_bytes32"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(bytes32 => bool))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_bytes32,t_bool)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => bool))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_bool)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool)))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_uint256,t_uint64)))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64)))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint64))"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(BundleRoundSetSnapshot)))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => struct BundleRoundSetSnapshot))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_struct(BundleRoundSetSnapshot))"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_struct(RoundSnapshot)))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => struct RoundSnapshot))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_struct(RoundSnapshot))"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint256))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => uint256))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_uint256)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint32))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => uint32))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_uint32)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint64))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => uint64))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_uint64)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(BundleReward))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct BundleReward)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(BundleReward)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(BundleRoundSetSnapshot))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct BundleRoundSetSnapshot)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(BundleRoundSetSnapshot)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(RewardPool))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct RewardPool)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(RewardPool)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_struct(RoundSnapshot))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => struct RoundSnapshot)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_struct(RoundSnapshot)"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_uint256)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => uint256)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_uint256"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_uint32)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => uint32)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_uint32"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_uint64)",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => uint64)",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_uint64"
+    },
+    {
+      "id": "t_struct(BundleQuestion)",
+      "encoding": "inplace",
+      "label": "struct BundleQuestion",
+      "numberOfBytes": "64",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "contentId",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "submitterIdentityKey",
+          "type": "t_bytes32"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(BundleReward)",
+      "encoding": "inplace",
+      "label": "struct BundleReward",
+      "numberOfBytes": "320",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "id",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 0,
+          "offset": 8,
+          "label": "bountyOpensAt",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 0,
+          "offset": 16,
+          "label": "bountyClosesAt",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 0,
+          "offset": 24,
+          "label": "feedbackClosesAt",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "funder",
+          "type": "t_address"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "funderIdentity",
+          "type": "t_address"
+        },
+        {
+          "slot": 2,
+          "offset": 20,
+          "label": "asset",
+          "type": "t_uint8"
+        },
+        {
+          "slot": 2,
+          "offset": 21,
+          "label": "questionCount",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 2,
+          "offset": 25,
+          "label": "requiredCompleters",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "requiredSettledRounds",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 3,
+          "offset": 4,
+          "label": "completedRoundSets",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 3,
+          "offset": 8,
+          "label": "claimedCount",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 3,
+          "offset": 12,
+          "label": "frontendFeeBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 3,
+          "offset": 14,
+          "label": "bountyEligibility",
+          "type": "t_uint8"
+        },
+        {
+          "slot": 4,
+          "offset": 0,
+          "label": "funderIdentityKey",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 5,
+          "offset": 0,
+          "label": "fundedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 6,
+          "offset": 0,
+          "label": "unallocatedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 7,
+          "offset": 0,
+          "label": "claimedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 8,
+          "offset": 0,
+          "label": "bountyEligibilityDataHash",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 9,
+          "offset": 0,
+          "label": "refunded",
+          "type": "t_bool"
+        },
+        {
+          "slot": 9,
+          "offset": 1,
+          "label": "nonRefundable",
+          "type": "t_bool"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(BundleRoundSetSnapshot)",
+      "encoding": "inplace",
+      "label": "struct BundleRoundSetSnapshot",
+      "numberOfBytes": "96",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "qualified",
+          "type": "t_bool"
+        },
+        {
+          "slot": 0,
+          "offset": 1,
+          "label": "claimedCount",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 5,
+          "label": "eligibleCompleters",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "allocation",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "frontendFeeAllocation",
+          "type": "t_uint256"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(RewardPool)",
+      "encoding": "inplace",
+      "label": "struct RewardPool",
+      "numberOfBytes": "480",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "id",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 0,
+          "offset": 8,
+          "label": "contentId",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 0,
+          "offset": 16,
+          "label": "startRoundId",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 0,
+          "offset": 24,
+          "label": "nextRoundToEvaluate",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "challengedRoundId",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 8,
+          "label": "bountyOpensAt",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 16,
+          "label": "bountyClosesAt",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 24,
+          "label": "claimDeadline",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "funder",
+          "type": "t_address"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "funderIdentity",
+          "type": "t_address"
+        },
+        {
+          "slot": 4,
+          "offset": 0,
+          "label": "submitterIdentity",
+          "type": "t_address"
+        },
+        {
+          "slot": 5,
+          "offset": 0,
+          "label": "funderIdentityKey",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 6,
+          "offset": 0,
+          "label": "submitterIdentityKey",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 7,
+          "offset": 0,
+          "label": "asset",
+          "type": "t_uint8"
+        },
+        {
+          "slot": 8,
+          "offset": 0,
+          "label": "fundedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 9,
+          "offset": 0,
+          "label": "unallocatedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 10,
+          "offset": 0,
+          "label": "claimedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 11,
+          "offset": 0,
+          "label": "requiredVoters",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 11,
+          "offset": 4,
+          "label": "requiredSettledRounds",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 11,
+          "offset": 8,
+          "label": "qualifiedRounds",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 11,
+          "offset": 12,
+          "label": "refunded",
+          "type": "t_bool"
+        },
+        {
+          "slot": 11,
+          "offset": 13,
+          "label": "unallocatedRefunded",
+          "type": "t_bool"
+        },
+        {
+          "slot": 11,
+          "offset": 14,
+          "label": "frontendFeeBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 11,
+          "offset": 16,
+          "label": "bountyKind",
+          "type": "t_uint8"
+        },
+        {
+          "slot": 11,
+          "offset": 17,
+          "label": "bountyEligibility",
+          "type": "t_uint8"
+        },
+        {
+          "slot": 11,
+          "offset": 18,
+          "label": "nonRefundable",
+          "type": "t_bool"
+        },
+        {
+          "slot": 12,
+          "offset": 0,
+          "label": "reasonHash",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 13,
+          "offset": 0,
+          "label": "bountyEligibilityDataHash",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 14,
+          "offset": 0,
+          "label": "pendingRecoveredRounds",
+          "type": "t_uint32"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(RoundSnapshot)",
+      "encoding": "inplace",
+      "label": "struct RoundSnapshot",
+      "numberOfBytes": "320",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "qualified",
+          "type": "t_bool"
+        },
+        {
+          "slot": 0,
+          "offset": 1,
+          "label": "eligibleVoters",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 5,
+          "label": "rawEligibleVoters",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "allocation",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "claimedCount",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "frontendFeeAllocation",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 4,
+          "offset": 0,
+          "label": "totalClaimWeight",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 5,
+          "offset": 0,
+          "label": "claimedWeight",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 6,
+          "offset": 0,
+          "label": "claimedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 7,
+          "offset": 0,
+          "label": "frontendFeeClaimedAmount",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 8,
+          "offset": 0,
+          "label": "firstClaimPaid",
+          "type": "t_bool"
+        },
+        {
+          "slot": 9,
+          "offset": 0,
+          "label": "clusterWeightRoot",
+          "type": "t_bytes32"
+        }
+      ]
+    },
+    {
+      "id": "t_uint16",
+      "encoding": "inplace",
+      "label": "uint16",
+      "numberOfBytes": "2"
+    },
+    {
+      "id": "t_uint256",
+      "encoding": "inplace",
+      "label": "uint256",
+      "numberOfBytes": "32"
+    },
+    {
+      "id": "t_uint32",
+      "encoding": "inplace",
+      "label": "uint32",
+      "numberOfBytes": "4"
+    },
+    {
+      "id": "t_uint64",
+      "encoding": "inplace",
+      "label": "uint64",
+      "numberOfBytes": "8"
+    },
+    {
+      "id": "t_uint8",
+      "encoding": "inplace",
+      "label": "uint8",
+      "numberOfBytes": "1"
+    }
+  ]
+}

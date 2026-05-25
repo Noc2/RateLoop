@@ -1,134 +1,415 @@
-[
-  {
-    "slot": 0,
-    "offset": 0,
-    "label": "rewardDistributor",
-    "type": "t_address"
-  },
-  {
-    "slot": 1,
-    "offset": 0,
-    "label": "categoryRegistry",
-    "type": "t_address"
-  },
-  {
-    "slot": 2,
-    "offset": 0,
-    "label": "frontendRegistry",
-    "type": "t_address"
-  },
-  {
-    "slot": 3,
-    "offset": 0,
-    "label": "treasury",
-    "type": "t_address"
-  },
-  {
-    "slot": 4,
-    "offset": 0,
-    "label": "config",
-    "type": "t_struct(RoundConfig)"
-  },
-  {
-    "slot": 5,
-    "offset": 0,
-    "label": "revealGracePeriod",
-    "type": "t_uint256"
-  },
-  {
-    "slot": 6,
-    "offset": 0,
-    "label": "drandChainHash",
-    "type": "t_bytes32"
-  },
-  {
-    "slot": 7,
-    "offset": 0,
-    "label": "drandGenesisTime",
-    "type": "t_uint64"
-  },
-  {
-    "slot": 7,
-    "offset": 8,
-    "label": "drandPeriod",
-    "type": "t_uint64"
-  },
-  {
-    "slot": 8,
-    "offset": 0,
-    "label": "ratingConfig",
-    "type": "t_struct(RatingConfig)"
-  },
-  {
-    "slot": 19,
-    "offset": 0,
-    "label": "slashConfig",
-    "type": "t_struct(SlashConfig)"
-  },
-  {
-    "slot": 21,
-    "offset": 0,
-    "label": "minSubmissionLrepPool",
-    "type": "t_uint256"
-  },
-  {
-    "slot": 22,
-    "offset": 0,
-    "label": "minSubmissionUsdcPool",
-    "type": "t_uint256"
-  },
-  {
-    "slot": 23,
-    "offset": 0,
-    "label": "roundConfigBounds",
-    "type": "t_struct(RoundConfigBounds)"
-  },
-  {
-    "slot": 24,
-    "offset": 0,
-    "label": "rewardDistributorAuthorized",
-    "type": "t_mapping(t_address,t_bool)"
-  },
-  {
-    "slot": 25,
-    "offset": 0,
-    "label": "rewardDistributorVotingEngine",
-    "type": "t_mapping(t_address,t_address)"
-  },
-  {
-    "slot": 26,
-    "offset": 0,
-    "label": "rewardDistributorForVotingEngine",
-    "type": "t_mapping(t_address,t_address)"
-  },
-  {
-    "slot": 27,
-    "offset": 0,
-    "label": "raterRegistry",
-    "type": "t_address"
-  },
-  {
-    "slot": 28,
-    "offset": 0,
-    "label": "launchDistributionPool",
-    "type": "t_address"
-  },
-  {
-    "slot": 29,
-    "offset": 0,
-    "label": "clusterPayoutOracle",
-    "type": "t_address"
-  },
-  {
-    "slot": 30,
-    "offset": 0,
-    "label": "advisoryVoteRecorder",
-    "type": "t_address"
-  },
-  {
-    "slot": 31,
-    "offset": 0,
-    "label": "__gap",
-    "type": "t_array(t_uint256)"
-  }
-]
+{
+  "storage": [
+    {
+      "slot": 0,
+      "offset": 0,
+      "label": "rewardDistributor",
+      "type": "t_address"
+    },
+    {
+      "slot": 1,
+      "offset": 0,
+      "label": "categoryRegistry",
+      "type": "t_address"
+    },
+    {
+      "slot": 2,
+      "offset": 0,
+      "label": "frontendRegistry",
+      "type": "t_address"
+    },
+    {
+      "slot": 3,
+      "offset": 0,
+      "label": "treasury",
+      "type": "t_address"
+    },
+    {
+      "slot": 4,
+      "offset": 0,
+      "label": "config",
+      "type": "t_struct(RoundConfig)"
+    },
+    {
+      "slot": 5,
+      "offset": 0,
+      "label": "revealGracePeriod",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 6,
+      "offset": 0,
+      "label": "drandChainHash",
+      "type": "t_bytes32"
+    },
+    {
+      "slot": 7,
+      "offset": 0,
+      "label": "drandGenesisTime",
+      "type": "t_uint64"
+    },
+    {
+      "slot": 7,
+      "offset": 8,
+      "label": "drandPeriod",
+      "type": "t_uint64"
+    },
+    {
+      "slot": 8,
+      "offset": 0,
+      "label": "ratingConfig",
+      "type": "t_struct(RatingConfig)"
+    },
+    {
+      "slot": 19,
+      "offset": 0,
+      "label": "slashConfig",
+      "type": "t_struct(SlashConfig)"
+    },
+    {
+      "slot": 21,
+      "offset": 0,
+      "label": "minSubmissionLrepPool",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 22,
+      "offset": 0,
+      "label": "minSubmissionUsdcPool",
+      "type": "t_uint256"
+    },
+    {
+      "slot": 23,
+      "offset": 0,
+      "label": "roundConfigBounds",
+      "type": "t_struct(RoundConfigBounds)"
+    },
+    {
+      "slot": 24,
+      "offset": 0,
+      "label": "rewardDistributorAuthorized",
+      "type": "t_mapping(t_address,t_bool)"
+    },
+    {
+      "slot": 25,
+      "offset": 0,
+      "label": "rewardDistributorVotingEngine",
+      "type": "t_mapping(t_address,t_address)"
+    },
+    {
+      "slot": 26,
+      "offset": 0,
+      "label": "rewardDistributorForVotingEngine",
+      "type": "t_mapping(t_address,t_address)"
+    },
+    {
+      "slot": 27,
+      "offset": 0,
+      "label": "raterRegistry",
+      "type": "t_address"
+    },
+    {
+      "slot": 28,
+      "offset": 0,
+      "label": "launchDistributionPool",
+      "type": "t_address"
+    },
+    {
+      "slot": 29,
+      "offset": 0,
+      "label": "clusterPayoutOracle",
+      "type": "t_address"
+    },
+    {
+      "slot": 30,
+      "offset": 0,
+      "label": "advisoryVoteRecorder",
+      "type": "t_address"
+    },
+    {
+      "slot": 31,
+      "offset": 0,
+      "label": "__gap",
+      "type": "t_array(t_uint256)"
+    }
+  ],
+  "types": [
+    {
+      "id": "t_address",
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_array(t_uint256)",
+      "encoding": "inplace",
+      "label": "uint256[23]",
+      "numberOfBytes": "736",
+      "base": "t_uint256"
+    },
+    {
+      "id": "t_bool",
+      "encoding": "inplace",
+      "label": "bool",
+      "numberOfBytes": "1"
+    },
+    {
+      "id": "t_bytes32",
+      "encoding": "inplace",
+      "label": "bytes32",
+      "numberOfBytes": "32"
+    },
+    {
+      "id": "t_mapping(t_address,t_address)",
+      "encoding": "mapping",
+      "label": "mapping(address => address)",
+      "numberOfBytes": "32",
+      "key": "t_address",
+      "value": "t_address"
+    },
+    {
+      "id": "t_mapping(t_address,t_bool)",
+      "encoding": "mapping",
+      "label": "mapping(address => bool)",
+      "numberOfBytes": "32",
+      "key": "t_address",
+      "value": "t_bool"
+    },
+    {
+      "id": "t_struct(RatingConfig)",
+      "encoding": "inplace",
+      "label": "struct RatingLib.RatingConfig",
+      "numberOfBytes": "352",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "smoothingAlpha",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "smoothingBeta",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "observationBetaX18",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 3,
+          "offset": 0,
+          "label": "confidenceMassInitial",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 4,
+          "offset": 0,
+          "label": "confidenceMassMin",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 5,
+          "offset": 0,
+          "label": "confidenceMassMax",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 6,
+          "offset": 0,
+          "label": "confidenceGainBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 6,
+          "offset": 2,
+          "label": "confidenceReopenBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 7,
+          "offset": 0,
+          "label": "surpriseReferenceX18",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 8,
+          "offset": 0,
+          "label": "maxDeltaLogitX18",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 9,
+          "offset": 0,
+          "label": "maxAbsLogitX18",
+          "type": "t_uint256"
+        },
+        {
+          "slot": 10,
+          "offset": 0,
+          "label": "conservativePenaltyMaxBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 10,
+          "offset": 2,
+          "label": "conservativePenaltyMinBps",
+          "type": "t_uint16"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(RoundConfig)",
+      "encoding": "inplace",
+      "label": "struct RoundLib.RoundConfig",
+      "numberOfBytes": "32",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "epochDuration",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 4,
+          "label": "maxDuration",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 8,
+          "label": "minVoters",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 0,
+          "offset": 10,
+          "label": "maxVoters",
+          "type": "t_uint16"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(RoundConfigBounds)",
+      "encoding": "inplace",
+      "label": "struct ProtocolConfig.RoundConfigBounds",
+      "numberOfBytes": "32",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "minEpochDuration",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 4,
+          "label": "maxEpochDuration",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 8,
+          "label": "minRoundDuration",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 12,
+          "label": "maxRoundDuration",
+          "type": "t_uint32"
+        },
+        {
+          "slot": 0,
+          "offset": 16,
+          "label": "minSettlementVoters",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 0,
+          "offset": 18,
+          "label": "maxSettlementVoters",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 0,
+          "offset": 20,
+          "label": "minVoterCap",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 0,
+          "offset": 22,
+          "label": "maxVoterCap",
+          "type": "t_uint16"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(SlashConfig)",
+      "encoding": "inplace",
+      "label": "struct RatingLib.SlashConfig",
+      "numberOfBytes": "64",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "slashThresholdBps",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 0,
+          "offset": 2,
+          "label": "minSlashSettledRounds",
+          "type": "t_uint16"
+        },
+        {
+          "slot": 0,
+          "offset": 4,
+          "label": "minSlashLowDuration",
+          "type": "t_uint48"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "minSlashEvidence",
+          "type": "t_uint256"
+        }
+      ]
+    },
+    {
+      "id": "t_uint16",
+      "encoding": "inplace",
+      "label": "uint16",
+      "numberOfBytes": "2"
+    },
+    {
+      "id": "t_uint256",
+      "encoding": "inplace",
+      "label": "uint256",
+      "numberOfBytes": "32"
+    },
+    {
+      "id": "t_uint32",
+      "encoding": "inplace",
+      "label": "uint32",
+      "numberOfBytes": "4"
+    },
+    {
+      "id": "t_uint48",
+      "encoding": "inplace",
+      "label": "uint48",
+      "numberOfBytes": "6"
+    },
+    {
+      "id": "t_uint64",
+      "encoding": "inplace",
+      "label": "uint64",
+      "numberOfBytes": "8"
+    }
+  ]
+}
