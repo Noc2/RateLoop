@@ -196,9 +196,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     /// @notice Claim reward for a settled round.
     /// @dev RBTS-scored rounds pay score-based stake return plus voter-pool rewards by score weight.
     ///      Recipient split: returned stake flows to `commit.voter` (whoever funded the stake —
-    ///      typically a delegate), while voter-pool rewards flow to the current rater identity holder
-    ///      (resolved via RaterRegistry). A rotated or removed delegate therefore cannot capture
-    ///      historical voter-pool rewards, while still receiving any stake returned by settlement.
+    ///      typically a delegate), while voter-pool rewards flow to the round-snapshotted rater
+    ///      identity holder. A rotated or removed delegate therefore cannot capture historical
+    ///      voter-pool rewards, while still receiving any stake returned by settlement.
     ///      This mirrors `claimCancelledRoundRefund`, which routes stake refunds to the original payer.
     /// @param contentId The content ID.
     /// @param roundId The round ID.

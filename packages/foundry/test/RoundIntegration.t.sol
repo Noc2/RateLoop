@@ -1498,6 +1498,47 @@ contract RoundIntegrationTest is VotingTestBase {
         assertGt(lrepToken.balanceOf(voter1), balanceBefore);
     }
 
+    function test_SettledRound_ReassignedIdentityCannotCaptureHistoricalReward() public {
+        uint256 contentId = _submitContent();
+
+        address[] memory voters = new address[](3);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        bool[] memory dirs = new bool[](3);
+        dirs[0] = true;
+        dirs[1] = true;
+        dirs[2] = false;
+
+        uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
+        bytes32 commitKey = _commitKeyForVoter(contentId, roundId, voter1);
+        bytes32 identityKey = bytes32(uint256(uint160(voter1)));
+        address reassignedHolder = address(0xBEEF);
+
+        assertEq(votingEngine.commitIdentityHolder(contentId, roundId, commitKey), voter1);
+
+        vm.startPrank(owner);
+        lrepToken.mint(reassignedHolder, 10_000e6);
+        raterRegistry.revokeHumanCredential(voter1);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, identityKey);
+        raterRegistry.seedHumanCredential(reassignedHolder, uint64(block.timestamp + 30 days), identityKey, bytes32("ev"));
+        vm.stopPrank();
+
+        (bytes32 resolvedCommitKey, address rewardRecipient) =
+            votingEngine.resolveClaimCommit(contentId, roundId, reassignedHolder);
+        assertEq(resolvedCommitKey, commitKey);
+        assertEq(rewardRecipient, voter1);
+
+        uint256 originalHolderBalanceBefore = lrepToken.balanceOf(voter1);
+        uint256 reassignedHolderBalanceBefore = lrepToken.balanceOf(reassignedHolder);
+
+        vm.prank(reassignedHolder);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertGt(lrepToken.balanceOf(voter1), originalHolderBalanceBefore, "original holder receives reward");
+        assertEq(lrepToken.balanceOf(reassignedHolder), reassignedHolderBalanceBefore, "reassigned holder is relay only");
+    }
+
     /// @dev Verifies the `RewardClaimed` event correctly attributes stake refund to the
     ///      `stakePayer` (commit.voter / delegate) and reward to `voter` (current holder)
     ///      when these are different addresses. Without this split, off-chain indexers

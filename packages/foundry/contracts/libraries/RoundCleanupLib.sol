@@ -171,7 +171,10 @@ library RoundCleanupLib {
         if (resolved.identityKey != bytes32(0)) {
             commitKey = roundIdentityCommitKey[resolved.identityKey];
             if (commitKey != bytes32(0)) {
-                rewardRecipient = resolved.holder == address(0) ? account : resolved.holder;
+                rewardRecipient = roundCommitIdentityHolder[commitKey];
+                if (rewardRecipient == address(0)) {
+                    rewardRecipient = resolved.holder == address(0) ? account : resolved.holder;
+                }
                 return (commitKey, rewardRecipient);
             }
         }
