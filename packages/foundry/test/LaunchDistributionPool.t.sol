@@ -952,7 +952,12 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterFullLaunchCap(alice), 10e6);
         assertTrue(pool.raterFullLaunchCapUnlocked(alice));
         assertEq(pool.raterLaunchCapNullifier(alice), bytes32("alice-human"));
-        assertEq(pool.launchFullCapNullifierRater(bytes32("alice-human")), alice);
+        assertEq(
+            pool.launchFullCapNullifierRater(
+                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("alice-human"))
+            ),
+            alice
+        );
         assertEq(pool.raterLaunchPaid(alice), 1e6);
         assertEq(lrep.balanceOf(alice), 1e6);
     }
@@ -1022,7 +1027,12 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterFullLaunchCap(alice), 10e6);
         assertTrue(pool.raterFullLaunchCapUnlocked(alice));
         assertEq(pool.raterLaunchCapNullifier(alice), bytes32("alice-human"));
-        assertEq(pool.launchFullCapNullifierRater(bytes32("alice-human")), alice);
+        assertEq(
+            pool.launchFullCapNullifierRater(
+                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("alice-human"))
+            ),
+            alice
+        );
     }
 
     function test_OneNullifierCannotUnlockFullEarnedCapForTwoRaters() public {
@@ -1662,6 +1672,29 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(alice), 10e6);
     }
 
+    function test_ClaimVerifiedBonusNamespacesProviderNullifiers() public {
+        _verify(alice, bytes32("shared-human"));
+        registry.seedHumanCredential(bob, uint64(block.timestamp + 30 days), bytes32("shared-human"), 0);
+
+        vm.prank(alice);
+        pool.claimVerifiedBonus(address(0));
+
+        vm.prank(bob);
+        uint256 bobPayout = pool.claimVerifiedBonus(address(0));
+
+        assertEq(bobPayout, 10e6);
+        assertTrue(
+            pool.verifiedCredentialClaimed(
+                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("shared-human"))
+            )
+        );
+        assertTrue(
+            pool.verifiedCredentialClaimed(
+                _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, bytes32("shared-human"))
+            )
+        );
+    }
+
     function _recordLaunchReward(address rater, uint256 roundId, bytes32 anchorId) internal returns (uint256) {
         return _recordLaunchRewardWithScore(rater, roundId, anchorId, 8_000);
     }
@@ -1838,6 +1871,14 @@ contract LaunchDistributionPoolTest is Test {
         uint256[8] memory proof;
         vm.prank(account);
         registry.attestHumanCredentialWithProof(1, uint256(nullifier), proof);
+    }
+
+    function _credentialKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifier)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(provider, nullifier));
     }
 
     function _setEligibleRaterCount(uint256 count) internal {

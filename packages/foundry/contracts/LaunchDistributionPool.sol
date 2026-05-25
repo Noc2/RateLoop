@@ -376,7 +376,8 @@ contract LaunchDistributionPool is
             revert NotVerified();
         }
         if (credential.nullifierHash == bytes32(0)) revert NotVerified();
-        if (verifiedCredentialClaimed[credential.nullifierHash] || verifiedBonusClaimedByAccount[msg.sender]) {
+        bytes32 credentialKey = _credentialClaimKey(credential.provider, credential.nullifierHash);
+        if (verifiedCredentialClaimed[credentialKey] || verifiedBonusClaimedByAccount[msg.sender]) {
             revert AlreadyClaimed();
         }
 
@@ -384,7 +385,7 @@ contract LaunchDistributionPool is
         uint256 remaining = _remainingVerifiedReferralPool();
         if (baseBonus == 0 || remaining < baseBonus) revert PoolDepleted();
 
-        verifiedCredentialClaimed[credential.nullifierHash] = true;
+        verifiedCredentialClaimed[credentialKey] = true;
         verifiedBonusClaimedByAccount[msg.sender] = true;
         verifiedClaimCount += 1;
         verifiedReferralDistributed += baseBonus;
@@ -419,17 +420,17 @@ contract LaunchDistributionPool is
         if (!raterLaunchCapAssigned[rater]) revert InvalidAmount();
         if (raterFullLaunchCapUnlocked[rater]) return 0;
 
-        bytes32 nullifierHash = _activeHumanNullifier(rater);
+        (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(rater);
         if (nullifierHash == bytes32(0)) revert NotVerified();
 
-        address claimedBy = launchFullCapNullifierRater[nullifierHash];
+        address claimedBy = launchFullCapNullifierRater[credentialKey];
         if (claimedBy != address(0) && claimedBy != rater) revert AlreadyClaimed();
 
         uint256 previousCap = raterLaunchCap[rater];
         uint256 fullCap = raterFullLaunchCap[rater];
         raterFullLaunchCapUnlocked[rater] = true;
         raterLaunchCapNullifier[rater] = nullifierHash;
-        launchFullCapNullifierRater[nullifierHash] = rater;
+        launchFullCapNullifierRater[credentialKey] = rater;
         raterLaunchCap[rater] = fullCap;
 
         catchUpPaid = _payLaunchCapCatchUp(rater, fullCap, launchRewardPolicy);
@@ -882,14 +883,14 @@ contract LaunchDistributionPool is
         internal
         returns (uint256 activeCap, bool fullCapUnlocked)
     {
-        bytes32 nullifierHash = _activeHumanNullifier(rater);
+        (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(rater);
         if (nullifierHash != bytes32(0)) {
-            address claimedBy = launchFullCapNullifierRater[nullifierHash];
+            address claimedBy = launchFullCapNullifierRater[credentialKey];
             if (claimedBy == address(0) || claimedBy == rater) {
                 fullCapUnlocked = true;
                 raterFullLaunchCapUnlocked[rater] = true;
                 raterLaunchCapNullifier[rater] = nullifierHash;
-                launchFullCapNullifierRater[nullifierHash] = rater;
+                launchFullCapNullifierRater[credentialKey] = rater;
             }
         }
 
@@ -1142,14 +1143,27 @@ contract LaunchDistributionPool is
     }
 
     function _activeHumanNullifier(address rater) internal view returns (bytes32) {
+        (bytes32 nullifierHash,) = _activeHumanCredential(rater);
+        return nullifierHash;
+    }
+
+    function _activeHumanCredential(address rater) internal view returns (bytes32 nullifierHash, bytes32 credentialKey) {
         RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(rater);
         if (
             credential.verified && !credential.revoked && credential.expiresAt > block.timestamp
                 && credential.nullifierHash != bytes32(0)
         ) {
-            return credential.nullifierHash;
+            nullifierHash = credential.nullifierHash;
+            credentialKey = _credentialClaimKey(credential.provider, credential.nullifierHash);
         }
-        return bytes32(0);
+    }
+
+    function _credentialClaimKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(provider, nullifierHash));
     }
 
     function _roundPayoutSnapshotProposedAfter(
