@@ -331,9 +331,13 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertEq(afterLateReveal.downPool, downPoolBefore, "late reveal cannot move settlement down pool");
         assertEq(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "late reveal cannot move weighted up");
         assertEq(afterLateReveal.weightedDownPool, weightedDownPoolBefore, "late reveal cannot move weighted down");
-        assertEq(engine.roundRatingUpEvidence(contentId, roundId), upEvidenceBefore, "late reveal cannot add up evidence");
         assertEq(
-            engine.roundRatingDownEvidence(contentId, roundId), downEvidenceBefore, "late reveal cannot add down evidence"
+            engine.roundRatingUpEvidence(contentId, roundId), upEvidenceBefore, "late reveal cannot add up evidence"
+        );
+        assertEq(
+            engine.roundRatingDownEvidence(contentId, roundId),
+            downEvidenceBefore,
+            "late reveal cannot add down evidence"
         );
 
         vm.roll(block.number + 1);
@@ -346,13 +350,13 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck4), 0, "winning late reveal not forfeited");
     }
 
-    function test_SameBlockPostThresholdRevealThatMovesSettlementEntersRbtsScoringSet() public {
+    function test_SameBlockPostThresholdRevealCannotMoveSettlementOrEnterRbtsScoringSet() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, false, STAKE);
-        (bytes32 ck4, bytes32 s4) = _commit(voters[3], contentId, true, STAKE);
+        (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, 1e6);
+        (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, 1e6);
+        (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, true, 1e6);
+        (bytes32 ck4, bytes32 s4) = _commit(voters[3], contentId, false, 10e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -360,20 +364,38 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         _reveal(contentId, roundId, ck1, true, s1);
         _reveal(contentId, roundId, ck2, true, s2);
-        _reveal(contentId, roundId, ck3, false, s3);
+        _reveal(contentId, roundId, ck3, true, s3);
 
         RoundLib.Round memory beforeLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
         uint256 upPoolBefore = beforeLateReveal.upPool;
+        uint256 downPoolBefore = beforeLateReveal.downPool;
         uint256 weightedUpPoolBefore = beforeLateReveal.weightedUpPool;
+        uint256 weightedDownPoolBefore = beforeLateReveal.weightedDownPool;
         uint256 upEvidenceBefore = engine.roundRatingUpEvidence(contentId, roundId);
+        uint256 downEvidenceBefore = engine.roundRatingDownEvidence(contentId, roundId);
 
-        _reveal(contentId, roundId, ck4, true, s4);
+        _reveal(contentId, roundId, ck4, false, s4);
 
         RoundLib.Round memory afterLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertGt(afterLateReveal.upPool, upPoolBefore, "same-block late reveal moves up pool");
-        assertGt(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "same-block late reveal moves weight");
-        assertGt(engine.roundRatingUpEvidence(contentId, roundId), upEvidenceBefore, "same-block late evidence");
-        assertGt(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "same-block late reveal enters RBTS set");
+        assertEq(afterLateReveal.upPool, upPoolBefore, "same-block late reveal cannot move up pool");
+        assertEq(afterLateReveal.downPool, downPoolBefore, "same-block late reveal cannot move down pool");
+        assertEq(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "same-block late reveal cannot move up weight");
+        assertEq(
+            afterLateReveal.weightedDownPool, weightedDownPoolBefore, "same-block late reveal cannot move down weight"
+        );
+        assertEq(engine.roundRatingUpEvidence(contentId, roundId), upEvidenceBefore, "same-block late up evidence");
+        assertEq(
+            engine.roundRatingDownEvidence(contentId, roundId), downEvidenceBefore, "same-block late down evidence"
+        );
+        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "same-block late reveal omitted");
+
+        vm.roll(block.number + 1);
+        engine.settleRound(contentId, roundId);
+
+        RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertTrue(settled.upWins, "same-block down backrun cannot flip settlement");
+        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck4), 0, "late reveal has no RBTS reward");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 10e6, "late reveal gets stake back");
     }
 
     // =========================================================================
