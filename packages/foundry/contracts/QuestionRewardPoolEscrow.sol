@@ -1303,6 +1303,8 @@ contract QuestionRewardPoolEscrow is
         bool reopened = reopenedRecoveredRound[rewardPoolId][roundId];
         if (reopened) {
             reopenedRecoveredRound[rewardPoolId][roundId] = false;
+        } else {
+            _requireNoPendingRecoveredRounds(rewardPool);
         }
         if (_usesClusterPayoutSnapshot(rewardPool)) {
             QuestionRewardPoolEscrowQualificationLib.qualifyRoundWithClusterSnapshot(
@@ -1317,6 +1319,9 @@ contract QuestionRewardPoolEscrow is
                 PAYOUT_DOMAIN_QUESTION_REWARD,
                 reopened
             );
+            if (reopened) {
+                _consumePendingRecoveredRound(rewardPool);
+            }
             return;
         }
 
@@ -1337,6 +1342,9 @@ contract QuestionRewardPoolEscrow is
             BPS_SCALE,
             reopened
         );
+        if (reopened) {
+            _consumePendingRecoveredRound(rewardPool);
+        }
 
         emit RewardPoolRoundQualified(
             rewardPoolId, rewardPool.contentId, roundId, allocation, effectiveParticipantUnits, frontendFeeAllocation
@@ -1442,6 +1450,17 @@ contract QuestionRewardPoolEscrow is
         return QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
             votingEngine, votingEngine.protocolConfig(), contentId, roundId, account
         );
+    }
+
+    function _requireNoPendingRecoveredRounds(RewardPool storage rewardPool) private view {
+        require(rewardPool.pendingRecoveredRounds == 0, "Recovered round pending");
+    }
+
+    function _consumePendingRecoveredRound(RewardPool storage rewardPool) private {
+        require(rewardPool.pendingRecoveredRounds > 0, "Recovered round pending");
+        unchecked {
+            rewardPool.pendingRecoveredRounds -= 1;
+        }
     }
 
     uint256[48] private __gap;

@@ -2981,6 +2981,86 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(finalSnapshot.clusterWeightRoot, honestRoot);
     }
 
+    function testRecoveredSnapshotRoundBlocksLaterQualificationUntilRequalified() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 2);
+
+        uint256 firstRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory firstWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, firstRoundId, 0);
+        bytes32 firstRoot = oracle.payoutWeightLeaf(firstWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, firstRoundId, 3, 30_000, firstWeight.effectiveWeight, firstRoot
+        );
+        rewardPoolEscrow.qualifyRound(rewardPoolId, firstRoundId);
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, firstRoundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-first"));
+        vm.prank(owner);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, firstRoundId);
+
+        vm.warp(block.timestamp + 25 hours);
+        uint256 secondRoundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory secondWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, secondRoundId, 0);
+        _finalizeClusterPayoutSnapshot(
+            oracle, rewardPoolId, contentId, secondRoundId, 3, 30_000, secondWeight.effectiveWeight
+        );
+
+        vm.expectRevert("Recovered round pending");
+        rewardPoolEscrow.qualifyRound(rewardPoolId, secondRoundId);
+
+        IClusterPayoutOracle.PayoutWeight memory honestWeight = firstWeight;
+        honestWeight.reasonHash = keccak256("honest-replacement");
+        bytes32 honestRoot = oracle.payoutWeightLeaf(honestWeight);
+        _finalizeClusterRoundPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            firstRoundId,
+            uint64(firstRoundId),
+            3,
+            30_000,
+            honestWeight.effectiveWeight,
+            honestRoot
+        );
+
+        vm.prank(owner);
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, firstRoundId);
+        vm.prank(voter1);
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, firstRoundId, honestWeight, new bytes32[](0));
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, secondRoundId);
+        RoundSnapshot memory secondSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, secondRoundId);
+        assertTrue(secondSnapshot.qualified);
+    }
+
+    function testRecoveredSnapshotRoundBlocksUnallocatedRefund() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 expiresAt = block.timestamp + 1 days;
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 2, expiresAt);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("reject-original"));
+        vm.prank(owner);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+
+        vm.warp(expiresAt + 1);
+        vm.expectRevert("Recovered round pending");
+        rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+    }
+
     // FE-1 negative test: the admin entrypoint refuses to reopen a recovered round unless the
     // oracle has a new finalized snapshot for that round.
     function testReopenRecoveredSnapshotRound_RevertsWithoutNewOracleSnapshot() public {

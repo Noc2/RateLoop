@@ -276,6 +276,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         require(!rewardPool.refunded, "Already refunded");
         require(!rewardPool.unallocatedRefunded, "Already refunded");
         require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
+        require(rewardPool.pendingRecoveredRounds == 0, "Recovered round pending");
         QuestionRewardPoolEscrowQualificationLib.requireNoPendingFinishedRound(
             votingEngine, rewardPool.contentId, rewardPool.nextRoundToEvaluate, rewardPool.bountyClosesAt
         );

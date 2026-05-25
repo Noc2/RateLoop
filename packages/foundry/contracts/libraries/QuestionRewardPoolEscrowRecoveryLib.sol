@@ -47,8 +47,10 @@ library QuestionRewardPoolEscrowRecoveryLib {
         uint256 allocationToReturn = snapshot.allocation;
         rewardPool.unallocatedAmount += allocationToReturn;
         require(rewardPool.qualifiedRounds > 0, "No qualified rounds");
+        require(rewardPool.pendingRecoveredRounds < type(uint32).max, "Too many recovered rounds");
         unchecked {
             rewardPool.qualifiedRounds -= 1;
+            rewardPool.pendingRecoveredRounds += 1;
         }
         delete roundSnapshots[rewardPoolId][roundId];
         rejectedRecoveredRound[rewardPoolId][roundId] = true;

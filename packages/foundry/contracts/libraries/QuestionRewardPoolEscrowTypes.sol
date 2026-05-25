@@ -25,6 +25,7 @@ struct RewardPool {
     uint32 requiredVoters;
     uint32 requiredSettledRounds;
     uint32 qualifiedRounds;
+    uint32 pendingRecoveredRounds;
     bool refunded;
     bool unallocatedRefunded;
     uint16 frontendFeeBps;
