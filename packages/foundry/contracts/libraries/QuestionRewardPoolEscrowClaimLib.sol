@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
-import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
-import { ProtocolConfig } from "../ProtocolConfig.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import {IFrontendRegistry} from "../interfaces/IFrontendRegistry.sol";
+import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
+import {ProtocolConfig} from "../ProtocolConfig.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
+import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import {QuestionRewardPoolEscrowQualificationLib} from "./QuestionRewardPoolEscrowQualificationLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 /// @dev Equal-share inputs shared by `RoundSnapshot` (per-round) and
 ///      `BundleRoundSetSnapshot` (per-bundle) callers. Packed into a single struct so
@@ -234,7 +234,7 @@ library QuestionRewardPoolEscrowClaimLib {
             );
             if (!canQualify) return 0;
 
-            uint256 allocation = _previewRoundAllocation(rewardPool);
+            uint256 allocation = _previewRoundAllocation(rewardPool, false);
             if (allocation == 0 || allocation < effectiveParticipantUnits) return 0;
             return _claimableWeighted(
                 votingEngine,
@@ -351,7 +351,7 @@ library QuestionRewardPoolEscrowClaimLib {
             );
             if (!canQualify) return 0;
 
-            uint256 allocation = _previewRoundAllocation(rewardPool);
+            uint256 allocation = _previewRoundAllocation(rewardPool, false);
             if (allocation == 0 || allocation < effectiveParticipantUnits) return 0;
             return _claimableWeighted(
                 votingEngine,
@@ -488,8 +488,7 @@ library QuestionRewardPoolEscrowClaimLib {
 
     function _canPreviewNewQualification(RewardPool storage rewardPool, uint256 roundId) private view returns (bool) {
         if (
-            rewardPool.refunded || rewardPool.unallocatedRefunded
-                || rewardPool.pendingRecoveredRounds != 0
+            rewardPool.refunded || rewardPool.unallocatedRefunded || rewardPool.pendingRecoveredRounds != 0
                 || rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds
         ) return false;
         return roundId >= rewardPool.startRoundId && roundId == rewardPool.nextRoundToEvaluate;
@@ -536,8 +535,19 @@ library QuestionRewardPoolEscrowClaimLib {
             );
     }
 
-    function _previewRoundAllocation(RewardPool storage rewardPool) private view returns (uint256 allocation) {
+    function _previewRoundAllocation(RewardPool storage rewardPool, bool reopened)
+        private
+        view
+        returns (uint256 allocation)
+    {
         if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds) return 0;
+        if (reopened && rewardPool.unallocatedRefunded) {
+            uint256 pendingRecoveredRounds = rewardPool.pendingRecoveredRounds;
+            if (pendingRecoveredRounds == 0) return 0;
+            return pendingRecoveredRounds == 1
+                ? rewardPool.unallocatedAmount
+                : rewardPool.unallocatedAmount / pendingRecoveredRounds;
+        }
         uint256 remainingRounds = uint256(rewardPool.requiredSettledRounds) - rewardPool.qualifiedRounds;
         allocation = remainingRounds == 1
             ? rewardPool.unallocatedAmount

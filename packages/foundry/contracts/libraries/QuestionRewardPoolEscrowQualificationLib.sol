@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { ProtocolConfig } from "../ProtocolConfig.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
-import { RoundLib } from "./RoundLib.sol";
-import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
-import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ProtocolConfig} from "../ProtocolConfig.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
+import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
+import {RoundLib} from "./RoundLib.sol";
+import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
+import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     using SafeCast for uint256;
@@ -192,7 +192,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         require(canQualify, "Too few eligible voters");
         require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
 
-        allocation = _previewRoundAllocation(rewardPool);
+        allocation = _previewRoundAllocation(rewardPool, reopened);
         require(allocation > 0 && allocation <= rewardPool.unallocatedAmount, "No allocation");
         require(allocation >= effectiveUnits, "Small allocation");
         frontendFeeAllocation = (allocation * rewardPool.frontendFeeBps) / bpsScale;
@@ -289,7 +289,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             "Too few eligible voters"
         );
 
-        uint256 allocation = _previewRoundAllocation(rewardPool);
+        uint256 allocation = _previewRoundAllocation(rewardPool, reopened);
         require(allocation > 0 && allocation <= rewardPool.unallocatedAmount, "No allocation");
         require(allocation >= effectiveParticipantUnits, "Small allocation");
         uint256 frontendFeeAllocation = (allocation * rewardPool.frontendFeeBps) / BPS_SCALE;
@@ -435,7 +435,7 @@ library QuestionRewardPoolEscrowQualificationLib {
                 submitterIdentityKey: rewardPool.submitterIdentityKey
             })
         );
-        if (canQualify) canQualify = _previewRoundAllocation(rewardPool) >= effectiveParticipantUnits;
+        if (canQualify) canQualify = _previewRoundAllocation(rewardPool, false) >= effectiveParticipantUnits;
         return (true, canQualify, effectiveParticipantUnits);
     }
 
@@ -482,7 +482,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
             canQualify = rawEligibleVoters >= rewardPool.requiredVoters && effectiveParticipantUnits >= effectiveFloor
                 && payoutSnapshot.totalClaimWeight > 0;
-            if (canQualify) canQualify = _previewRoundAllocation(rewardPool) >= effectiveParticipantUnits;
+            if (canQualify) canQualify = _previewRoundAllocation(rewardPool, false) >= effectiveParticipantUnits;
             return (true, canQualify, effectiveParticipantUnits);
         } catch {
             return (false, false, 0);
@@ -562,8 +562,19 @@ library QuestionRewardPoolEscrowQualificationLib {
         return BPS_SCALE;
     }
 
-    function _previewRoundAllocation(RewardPool storage rewardPool) private view returns (uint256 allocation) {
+    function _previewRoundAllocation(RewardPool storage rewardPool, bool reopened)
+        private
+        view
+        returns (uint256 allocation)
+    {
         if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds) return 0;
+        if (reopened && rewardPool.unallocatedRefunded) {
+            uint256 pendingRecoveredRounds = rewardPool.pendingRecoveredRounds;
+            if (pendingRecoveredRounds == 0) return 0;
+            return pendingRecoveredRounds == 1
+                ? rewardPool.unallocatedAmount
+                : rewardPool.unallocatedAmount / pendingRecoveredRounds;
+        }
         uint256 remainingRounds = uint256(rewardPool.requiredSettledRounds) - rewardPool.qualifiedRounds;
         allocation = remainingRounds == 1
             ? rewardPool.unallocatedAmount
