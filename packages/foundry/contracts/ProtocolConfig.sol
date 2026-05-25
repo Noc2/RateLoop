@@ -8,6 +8,7 @@ import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.so
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
 
@@ -437,6 +438,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function _setFrontendRegistry(address value) internal {
         if (value == address(0)) revert InvalidAddress();
+        _validateFrontendRegistry(value);
         frontendRegistry = value;
         emit FrontendRegistryUpdated(value);
     }
@@ -490,6 +492,20 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             revert InvalidConfig();
         }
         try IClusterPayoutOracle(value).roundPayoutSnapshotProposedAt(0, 0, 0, 0) returns (uint64) { }
+        catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateFrontendRegistry(address value) internal view {
+        if (value.code.length == 0) revert InvalidAddress();
+        try IFrontendRegistry(value).STAKE_AMOUNT() returns (uint256) { }
+        catch {
+            revert InvalidConfig();
+        }
+        try IFrontendRegistry(value).getFrontendInfo(address(this)) returns (
+            address, uint256, bool, bool
+        ) { }
         catch {
             revert InvalidConfig();
         }

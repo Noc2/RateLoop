@@ -5138,6 +5138,10 @@ contract MockBundleFrontendRegistry {
         frontends[frontend] = FrontendInfo({ operator: operator, eligible: eligible, canClaim: canClaim });
     }
 
+    function STAKE_AMOUNT() external pure returns (uint256) {
+        return 1;
+    }
+
     function isEligible(address frontend) external view returns (bool) {
         return frontends[frontend].eligible;
     }

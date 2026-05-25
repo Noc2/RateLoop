@@ -17,6 +17,20 @@ contract MockRewardDistributorForConfig {
     }
 }
 
+contract MockFrontendRegistryForConfig {
+    function STAKE_AMOUNT() external pure returns (uint256) {
+        return 1_000e6;
+    }
+
+    function getFrontendInfo(address frontend)
+        external
+        pure
+        returns (address operator, uint256 stakedAmount, bool eligible, bool slashed)
+    {
+        return (frontend, 0, false, false);
+    }
+}
+
 contract MockAdvisoryVoteRecorderForConfig {
     address internal recorderProtocolConfig;
     bool internal revertProtocolConfig;
@@ -151,6 +165,26 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
         config.setRaterRegistry(address(0));
+    }
+
+    function test_SetFrontendRegistry_ValidatesIntegration() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address frontendRegistry = address(new MockFrontendRegistryForConfig());
+
+        config.setFrontendRegistry(frontendRegistry);
+
+        assertEq(config.frontendRegistry(), frontendRegistry);
+    }
+
+    function test_SetFrontendRegistry_RejectsInvalidIntegration() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address invalidRegistry = address(new MockRewardDistributorForConfig(address(this)));
+
+        vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
+        config.setFrontendRegistry(address(0xFEE));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setFrontendRegistry(invalidRegistry);
     }
 
     function test_SetAdvisoryVoteRecorder_UpdatesAddressAndEmits() public {
