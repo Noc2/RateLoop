@@ -5,6 +5,7 @@ import {
   setAgentCallbackDeliverRouteTestOverrides,
   setAgentCallbackSweepRouteTestOverrides,
 } from "~~/lib/agent-callbacks/route-test-overrides";
+import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
 
 type DeliverRouteModule = typeof import("./deliver/route");
 type SweepRouteModule = typeof import("./sweep/route");
@@ -36,6 +37,15 @@ function makeRequest(path: string, headers: Record<string, string> = {}) {
 }
 
 before(async () => {
+  __setRateLimitStoreForTests({
+    execute: async input => {
+      const sql = typeof input === "string" ? input : input.sql;
+      if (sql.includes("api_rate_limits")) {
+        return { rows: [{ request_count: 1 }] } as never;
+      }
+      return { rows: [{ name: "cleanup" }] } as never;
+    },
+  });
   deliverRoute = await import("./deliver/route");
   sweepRoute = await import("./sweep/route");
 });
@@ -54,6 +64,7 @@ beforeEach(() => {
 after(() => {
   setAgentCallbackDeliverRouteTestOverrides(null);
   setAgentCallbackSweepRouteTestOverrides(null);
+  __setRateLimitStoreForTests(null);
   if (originalSecret === undefined) {
     delete env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET;
   } else {

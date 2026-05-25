@@ -13,8 +13,12 @@ import {
 
 const env = process.env as Record<string, string | undefined>;
 const originalAgents = env.CURYO_MCP_AGENTS;
+const originalAllowUnlimitedBudget = env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET;
+const originalBearerScopes = env.CURYO_MCP_BEARER_SCOPES;
 const originalBearerToken = env.CURYO_MCP_BEARER_TOKEN;
+const originalDailyBudget = env.CURYO_MCP_DAILY_BUDGET_USDC;
 const originalDatabaseUrl = env.DATABASE_URL;
+const originalPerAskLimit = env.CURYO_MCP_PER_ASK_LIMIT_USDC;
 let dbModule: typeof import("../db");
 let dbTestMemory: typeof import("../db/testMemory");
 
@@ -36,7 +40,11 @@ before(async () => {
 });
 
 beforeEach(async () => {
+  delete env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET;
+  delete env.CURYO_MCP_BEARER_SCOPES;
   delete env.CURYO_MCP_BEARER_TOKEN;
+  delete env.CURYO_MCP_DAILY_BUDGET_USDC;
+  delete env.CURYO_MCP_PER_ASK_LIMIT_USDC;
   env.CURYO_MCP_AGENTS = JSON.stringify([
     {
       dailyBudgetAtomic: "5000000",
@@ -58,16 +66,40 @@ after(() => {
     env.CURYO_MCP_AGENTS = originalAgents;
   }
 
+  if (originalAllowUnlimitedBudget === undefined) {
+    delete env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET;
+  } else {
+    env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET = originalAllowUnlimitedBudget;
+  }
+
+  if (originalBearerScopes === undefined) {
+    delete env.CURYO_MCP_BEARER_SCOPES;
+  } else {
+    env.CURYO_MCP_BEARER_SCOPES = originalBearerScopes;
+  }
+
   if (originalBearerToken === undefined) {
     delete env.CURYO_MCP_BEARER_TOKEN;
   } else {
     env.CURYO_MCP_BEARER_TOKEN = originalBearerToken;
   }
 
+  if (originalDailyBudget === undefined) {
+    delete env.CURYO_MCP_DAILY_BUDGET_USDC;
+  } else {
+    env.CURYO_MCP_DAILY_BUDGET_USDC = originalDailyBudget;
+  }
+
   if (originalDatabaseUrl === undefined) {
     delete env.DATABASE_URL;
   } else {
     env.DATABASE_URL = originalDatabaseUrl;
+  }
+
+  if (originalPerAskLimit === undefined) {
+    delete env.CURYO_MCP_PER_ASK_LIMIT_USDC;
+  } else {
+    env.CURYO_MCP_PER_ASK_LIMIT_USDC = originalPerAskLimit;
   }
 });
 
@@ -78,6 +110,38 @@ test("getConfiguredMcpAgents loads hashed bearer agents", () => {
   assert.equal(agent.dailyBudgetAtomic, 5_000_000n);
   assert.equal(agent.perAskLimitAtomic, 1_000_000n);
   assert.equal(agent.scopes.has(MCP_SCOPES.ask), true);
+});
+
+test("getConfiguredMcpAgents requires positive budgets for static ask tokens", () => {
+  delete env.CURYO_MCP_AGENTS;
+  env.CURYO_MCP_BEARER_TOKEN = "static-token";
+
+  assert.throws(() => getConfiguredMcpAgents(), /must be positive for static curyo:ask tokens/);
+
+  env.CURYO_MCP_DAILY_BUDGET_USDC = "5000000";
+  env.CURYO_MCP_PER_ASK_LIMIT_USDC = "1000000";
+
+  const [agent] = getConfiguredMcpAgents();
+  assert.equal(agent.dailyBudgetAtomic, 5_000_000n);
+  assert.equal(agent.perAskLimitAtomic, 1_000_000n);
+});
+
+test("getConfiguredMcpAgents permits static read-only and explicit unlimited tokens", () => {
+  delete env.CURYO_MCP_AGENTS;
+  env.CURYO_MCP_BEARER_TOKEN = "static-token";
+  env.CURYO_MCP_BEARER_SCOPES = MCP_SCOPES.read;
+
+  let [agent] = getConfiguredMcpAgents();
+  assert.equal(agent.dailyBudgetAtomic, 0n);
+  assert.equal(agent.perAskLimitAtomic, 0n);
+
+  env.CURYO_MCP_BEARER_SCOPES = MCP_SCOPES.ask;
+  env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET = "true";
+
+  [agent] = getConfiguredMcpAgents();
+  assert.equal(agent.scopes.has(MCP_SCOPES.ask), true);
+  assert.equal(agent.dailyBudgetAtomic, 0n);
+  assert.equal(agent.perAskLimitAtomic, 0n);
 });
 
 test("authenticateMcpRequest accepts valid bearer token and scope", async () => {

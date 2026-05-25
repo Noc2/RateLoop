@@ -318,17 +318,22 @@ function parseMaxPaymentAmount(value: unknown): bigint {
 }
 
 function parseAgentWalletAddress(args: JsonObject, agent: McpAgentAuth): Address {
-  const rawAddress =
+  const scopedAddress = agent.walletAddress?.trim() || "";
+  const suppliedAddress =
     typeof args.walletAddress === "string"
       ? args.walletAddress.trim()
       : typeof args.agentWalletAddress === "string"
         ? args.agentWalletAddress.trim()
-        : agent.walletAddress?.trim() || "";
+        : "";
+  const rawAddress = scopedAddress || suppliedAddress;
   if (!isAddress(rawAddress)) {
     throw new McpToolError(
       "walletAddress is required and must be the user-controlled smart wallet or scoped agent wallet that will sign the transaction plan.",
       400,
     );
+  }
+  if (scopedAddress && suppliedAddress && scopedAddress.toLowerCase() !== suppliedAddress.toLowerCase()) {
+    throw new McpToolError("walletAddress does not match the scoped MCP agent wallet.", 403);
   }
 
   return rawAddress;
@@ -624,12 +629,13 @@ async function quoteQuestion(args: JsonObject, agent: McpAgentAuth) {
   const dependencies = getMcpToolDependencies();
   const payload = parseX402QuestionRequest(args);
   assertManagedQuestionCategoriesAllowed(agent, payload);
+  const walletAddress = parseAgentWalletAddress(args, agent);
   const managedPayload = toManagedMcpPayload(agent, payload);
   const config = dependencies.resolveX402QuestionConfig(managedPayload.chainId);
   const quote = await dependencies.preflightX402QuestionSubmission({
     agentId: agent.id,
     config,
-    ownerWalletAddress: agent.walletAddress,
+    ownerWalletAddress: walletAddress,
     payload: managedPayload,
   });
   return {

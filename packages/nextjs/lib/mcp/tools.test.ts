@@ -315,6 +315,36 @@ test("quote and ask flows pass submission identity into image preflight", async 
   assert.equal(publicCalls[0]?.ownerWalletAddress, AGENT.walletAddress);
 });
 
+test("managed quote and ask reject wallet overrides outside the scoped agent wallet", async () => {
+  __setMcpToolTestOverridesForTests({
+    getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
+    ...quoteOverrides(),
+  });
+
+  const argumentsWithOverride = askArguments({
+    walletAddress: "0x00000000000000000000000000000000000000bb",
+  });
+
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: argumentsWithOverride,
+        name: "curyo_quote_question",
+      }),
+    /does not match the scoped MCP agent wallet/i,
+  );
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: argumentsWithOverride,
+        name: "curyo_ask_humans",
+      }),
+    /does not match the scoped MCP agent wallet/i,
+  );
+});
+
 test("curyo_ask_humans rejects bundle members outside the agent category allowlist", async () => {
   await assert.rejects(
     () =>

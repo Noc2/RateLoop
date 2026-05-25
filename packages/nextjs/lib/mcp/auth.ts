@@ -45,6 +45,10 @@ function parseAtomicAmount(value: unknown, fieldName: string): bigint {
   return BigInt(rawValue);
 }
 
+function parseBooleanEnv(value: string | undefined): boolean {
+  return /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
+}
+
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
@@ -93,19 +97,30 @@ export function getConfiguredMcpAgents(): McpAgentAuth[] {
   const scopes = process.env.CURYO_MCP_BEARER_SCOPES?.split(",")
     .map(scope => scope.trim())
     .filter(Boolean) ?? [MCP_SCOPES.ask, MCP_SCOPES.balance, MCP_SCOPES.quote, MCP_SCOPES.read];
+  const dailyBudgetAtomic = parseAtomicAmount(
+    process.env.CURYO_MCP_DAILY_BUDGET_USDC ?? "0",
+    "CURYO_MCP_DAILY_BUDGET_USDC",
+  );
+  const perAskLimitAtomic = parseAtomicAmount(
+    process.env.CURYO_MCP_PER_ASK_LIMIT_USDC ?? "0",
+    "CURYO_MCP_PER_ASK_LIMIT_USDC",
+  );
+  const allowUnlimitedBudget = parseBooleanEnv(process.env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET);
+
+  if (scopes.includes(MCP_SCOPES.ask) && !allowUnlimitedBudget) {
+    if (dailyBudgetAtomic <= 0n || perAskLimitAtomic <= 0n) {
+      throw new Error(
+        "CURYO_MCP_DAILY_BUDGET_USDC and CURYO_MCP_PER_ASK_LIMIT_USDC must be positive for static curyo:ask tokens, or set CURYO_MCP_ALLOW_UNLIMITED_BUDGET=true.",
+      );
+    }
+  }
 
   return [
     {
       allowedCategoryIds: null,
-      dailyBudgetAtomic: parseAtomicAmount(
-        process.env.CURYO_MCP_DAILY_BUDGET_USDC ?? "0",
-        "CURYO_MCP_DAILY_BUDGET_USDC",
-      ),
+      dailyBudgetAtomic,
       id: process.env.CURYO_MCP_AGENT_ID?.trim() || "default",
-      perAskLimitAtomic: parseAtomicAmount(
-        process.env.CURYO_MCP_PER_ASK_LIMIT_USDC ?? "0",
-        "CURYO_MCP_PER_ASK_LIMIT_USDC",
-      ),
+      perAskLimitAtomic,
       scopes: new Set(scopes),
       tokenHash: sha256(token),
       walletAddress: process.env.CURYO_MCP_WALLET_ADDRESS?.trim() || null,
