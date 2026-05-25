@@ -378,4 +378,19 @@ describe("keeper config", () => {
       "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL is required when auto correlation snapshots use file artifact storage",
     );
   });
+
+  it("requires an HTTPS artifact URL for automatic file artifact storage", async () => {
+    await expect(
+      loadKeeperConfig({
+        KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+        KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+        KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+        KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: "http://artifacts.example.com/rateloop/",
+        PONDER_BASE_URL: "https://ponder.example.com",
+        CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+      }),
+    ).rejects.toThrow(
+      "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be an HTTPS URL when auto correlation snapshots use file artifact storage",
+    );
+  });
 });

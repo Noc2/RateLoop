@@ -46,6 +46,7 @@ Within the package directory, additional scripts are available:
 | `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Optional fallback start blocks when the active chain has no shared deployment metadata                                      |
 | `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                   |
 | `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                                               |
+| `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST`          | Comma-separated HTTPS URL prefixes Ponder may fetch for keeper-published payout artifacts                                  |
 
 For live supported chains, Ponder treats `@rateloop/contracts` as the source of truth and ignores stale address/start-block env values.
 For local Hardhat/Anvil, Ponder prefers the address env values generated into `packages/ponder/.env.local` so a fresh
@@ -53,6 +54,10 @@ For local Hardhat/Anvil, Ponder prefers the address env values generated into `p
 the Foundry deployment script refreshes `packages/ponder/.env.local` to match the deployment target. Local deploys set
 `PONDER_NETWORK=hardhat`; live deploys such as
 `yarn deploy --network worldchainSepolia --keystore <name>` set the matching live network.
+
+When the keeper publishes correlation payout artifacts with `KEEPER_CORRELATION_ARTIFACT_STORAGE=file`, set
+`PAYOUT_ARTIFACT_HTTPS_ALLOWLIST` to the same public HTTPS prefix as the keeper's
+`KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL`. Ponder refuses other HTTPS artifact URLs while building payout proofs.
 
 ## Project Structure
 

@@ -23,7 +23,8 @@ export function getMissingKeeperEnvVars(env) {
   if (correlationSnapshotsEnabled) {
     const artifactPath = env.KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH?.trim();
     const mode = env.KEEPER_CORRELATION_SNAPSHOTS_MODE?.trim() || (artifactPath ? "file" : "auto");
-    const artifactStorage = env.KEEPER_CORRELATION_ARTIFACT_STORAGE?.trim() || "data-uri";
+    const artifactStorage =
+      env.KEEPER_CORRELATION_ARTIFACT_STORAGE?.trim() || defaultCorrelationArtifactStorage(env.CHAIN_ID);
 
     if (mode === "file" && !artifactPath) {
       missing.push("KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH");
@@ -41,6 +42,10 @@ export function getMissingKeeperEnvVars(env) {
   }
 
   return missing;
+}
+
+function defaultCorrelationArtifactStorage(chainId) {
+  return String(chainId ?? "").trim() === "31337" ? "data-uri" : "file";
 }
 
 function isTruthy(value) {

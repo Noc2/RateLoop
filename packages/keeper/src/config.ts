@@ -530,6 +530,16 @@ function loadConfig() {
     }
     if (
       correlationSnapshotMode === "auto" &&
+      correlationSnapshotArtifactStorageMode === "file" &&
+      correlationSnapshotArtifactPublicBaseUrl &&
+      !correlationSnapshotArtifactPublicBaseUrl.startsWith("https://")
+    ) {
+      errors.push(
+        "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be an HTTPS URL when auto correlation snapshots use file artifact storage",
+      );
+    }
+    if (
+      correlationSnapshotMode === "auto" &&
       correlationSnapshotArtifactStorageMode === "data-uri" &&
       isProduction
     ) {

@@ -77,12 +77,9 @@ class LruPromiseCache {
   }
 }
 const artifactCache = new LruPromiseCache(ARTIFACT_CACHE_MAX_ENTRIES);
-const httpsArtifactAllowlist = (
-  process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? ""
-)
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
+const httpsArtifactAllowlist = parseHttpsArtifactAllowlist(
+  process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? "",
+);
 
 export async function resolveQuestionPayoutProof(
   params: ResolveQuestionPayoutProofParams,
@@ -193,17 +190,54 @@ function normalizeArtifactUri(uri: string): string | null {
     return value;
   }
   if (value.startsWith("https://")) {
-    return httpsArtifactAllowlist.some((prefix) => value.startsWith(prefix))
-      ? value
-      : null;
+    return isAllowedHttpsArtifactUrl(value) ? value : null;
   }
   if (value.startsWith("ipfs://")) {
-    return `https://ipfs.io/ipfs/${value.slice("ipfs://".length)}`;
+    const gatewayUri = `https://ipfs.io/ipfs/${value.slice("ipfs://".length)}`;
+    return isAllowedHttpsArtifactUrl(gatewayUri) ? gatewayUri : null;
   }
   if (value.startsWith("ar://")) {
-    return `https://arweave.net/${value.slice("ar://".length)}`;
+    const gatewayUri = `https://arweave.net/${value.slice("ar://".length)}`;
+    return isAllowedHttpsArtifactUrl(gatewayUri) ? gatewayUri : null;
   }
   return null;
+}
+
+function parseHttpsArtifactAllowlist(value: string): URL[] {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .flatMap((entry) => {
+      try {
+        const url = new URL(entry);
+        return url.protocol === "https:" ? [url] : [];
+      } catch {
+        return [];
+      }
+    });
+}
+
+function isAllowedHttpsArtifactUrl(value: string): boolean {
+  let artifactUrl: URL;
+  try {
+    artifactUrl = new URL(value);
+  } catch {
+    return false;
+  }
+  if (artifactUrl.protocol !== "https:") return false;
+
+  return httpsArtifactAllowlist.some((allowedUrl) => {
+    if (artifactUrl.origin !== allowedUrl.origin) return false;
+    const allowedPath = stripTrailingSlash(allowedUrl.pathname);
+    if (allowedPath === "") return true;
+    const artifactPath = stripTrailingSlash(artifactUrl.pathname);
+    return artifactPath === allowedPath || artifactPath.startsWith(`${allowedPath}/`);
+  });
+}
+
+function stripTrailingSlash(value: string): string {
+  return value === "/" ? "" : value.replace(/\/+$/, "");
 }
 
 function readDataUri(uri: string) {
