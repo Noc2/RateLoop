@@ -1357,15 +1357,10 @@ contract RoundVotingEngine is
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         }
         commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
-        // L-Vote-B: `commitRbtsWeight` is written only when threshold-not-yet-reached at the start
-        // of this reveal. Same-block reveals ordered after the keeper that closes threshold are
-        // intentionally excluded from RBTS reward weight and sampler index — the sampler seed is
-        // frozen at threshold close, so admitting later reveals into the scoring set would let a
-        // sequencer-positioned reveal influence the sampler index without affecting the seed.
-        // Excluding them is the design choice (commit abccc7c8). Same-second commits resolve via
-        // strict ordering, so any keeper-vs-honest race is decided by sequencer ordering of the
-        // settle vs reveal txs and is not protocol-level griefable.
-        if (!thresholdAlreadyReached) {
+        // L-Vote-B / H-Vote-1: settlement pools and RBTS scoring use the same eligibility
+        // predicate. Same-block reveals that can influence settlement are RBTS-scored too;
+        // later-block reveals remain stake-return-only and cannot move settlement.
+        if (countForSettlement) {
             commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
         }
         // L-Vote-A: keep evidence accumulation checked so a future governance proposal that

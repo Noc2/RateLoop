@@ -346,6 +346,36 @@ contract SelectiveRevelationTest is VotingTestBase {
         assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck4), 0, "winning late reveal not forfeited");
     }
 
+    function test_SameBlockPostThresholdRevealThatMovesSettlementEntersRbtsScoringSet() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, false, STAKE);
+        (bytes32 ck4, bytes32 s4) = _commit(voters[3], contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, true, s2);
+        _reveal(contentId, roundId, ck3, false, s3);
+
+        RoundLib.Round memory beforeLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        uint256 upPoolBefore = beforeLateReveal.upPool;
+        uint256 weightedUpPoolBefore = beforeLateReveal.weightedUpPool;
+        uint256 upEvidenceBefore = engine.roundRatingUpEvidence(contentId, roundId);
+
+        _reveal(contentId, roundId, ck4, true, s4);
+
+        RoundLib.Round memory afterLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertGt(afterLateReveal.upPool, upPoolBefore, "same-block late reveal moves up pool");
+        assertGt(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "same-block late reveal moves weight");
+        assertGt(engine.roundRatingUpEvidence(contentId, roundId), upEvidenceBefore, "same-block late evidence");
+        assertGt(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "same-block late reveal enters RBTS set");
+    }
+
     // =========================================================================
     // GRACE PERIOD EXPIRY
     // =========================================================================
