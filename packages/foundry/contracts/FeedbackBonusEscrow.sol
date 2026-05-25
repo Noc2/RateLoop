@@ -455,6 +455,11 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         if (identityKey != bytes32(0)) {
             commitKey = votingEngine.identityCommitKey(pool.contentId, pool.roundId, identityKey);
             if (commitKey != bytes32(0)) {
+                address committedHolder = votingEngine.commitIdentityHolder(pool.contentId, pool.roundId, commitKey);
+                if (committedHolder != address(0)) {
+                    rewardRecipient = committedHolder;
+                }
+                _requireAwardRecipientMatchesCommit(pool, recipient, commitKey, rewardRecipient);
                 return (identityKey, rewardRecipient, commitKey);
             }
         }
@@ -486,6 +491,16 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
                 rewardRecipient = committedHolder;
             }
         }
+    }
+
+    function _requireAwardRecipientMatchesCommit(
+        FeedbackBonusPool storage pool,
+        address recipient,
+        bytes32 commitKey,
+        address rewardRecipient
+    ) private view {
+        (address committedVoter,,,,,,) = votingEngine.commitCore(pool.contentId, pool.roundId, commitKey);
+        require(recipient == committedVoter || recipient == rewardRecipient, "No commit");
     }
 
     function _resolveIdentity(uint256 contentId, uint256 roundId, address account)

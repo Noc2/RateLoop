@@ -489,7 +489,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(voter1), voterBalanceBefore + recipientAmount);
     }
 
-    function testAwardPaysIdentityHolderWhenNewDelegateIsRecipient() public {
+    function testAwardRejectsNewDelegateForHistoricalCommit() public {
         address newDelegate = address(0xD1E);
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);
@@ -506,15 +506,35 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         raterRegistry.removeDelegate();
         _setAcceptedDelegate(raterRegistry, voter1, newDelegate);
 
+        vm.prank(funder);
+        vm.expectRevert("No commit");
+        feedbackBonusEscrow.awardFeedbackBonus(poolId, newDelegate, FEEDBACK_HASH, 10e6);
+    }
+
+    function testAwardPaysCommittedHolderWhenOriginalDelegateIsRecipient() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+
+        _setAcceptedDelegate(raterRegistry, voter1, delegate1);
+
+        address[] memory voters = new address[](3);
+        voters[0] = delegate1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        _settleRoundWith(voters, contentId, _directions(true, true, false));
+
+        vm.prank(voter1);
+        raterRegistry.removeDelegate();
+
         uint256 holderBalanceBefore = usdc.balanceOf(voter1);
-        uint256 delegateBalanceBefore = usdc.balanceOf(newDelegate);
+        uint256 delegateBalanceBefore = usdc.balanceOf(delegate1);
 
         vm.prank(funder);
-        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, newDelegate, FEEDBACK_HASH, 10e6);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, delegate1, FEEDBACK_HASH, 10e6);
 
         assertEq(recipientAmount, 10e6);
         assertEq(usdc.balanceOf(voter1), holderBalanceBefore + recipientAmount);
-        assertEq(usdc.balanceOf(newDelegate), delegateBalanceBefore);
+        assertEq(usdc.balanceOf(delegate1), delegateBalanceBefore);
     }
 
     function testAwardUsesCommittedHolderAfterIdentityKeyRotation() public {
