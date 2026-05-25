@@ -34,6 +34,12 @@ contract ClusterPayoutOracleTest is Test {
     function test_ConstructorRequiresFrontendRegistry() public {
         vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
         new ClusterPayoutOracle(address(this), address(0), address(usdc));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        new ClusterPayoutOracle(address(this), address(0xBEEF), address(usdc));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        new ClusterPayoutOracle(address(this), address(questionConsumer), address(usdc));
     }
 
     function test_ConstructorRequiresChallengeBondToken() public {
@@ -102,6 +108,25 @@ contract ClusterPayoutOracleTest is Test {
         uint8 questionRewardDomain = oracle.PAYOUT_DOMAIN_QUESTION_REWARD();
         vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
         oracle.setRoundPayoutSnapshotConsumer(questionRewardDomain, address(0xBEEF));
+    }
+
+    function test_SetFrontendRegistryRejectsInvalidConfig() public {
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        oracle.setFrontendRegistry(address(0));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        oracle.setFrontendRegistry(address(0xBEEF));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
+        oracle.setFrontendRegistry(address(questionConsumer));
+
+        MockFrontendRegistry replacement = new MockFrontendRegistry();
+        replacement.setEligible(address(this), true);
+        oracle.setFrontendRegistry(address(replacement));
+
+        oracle.proposeCorrelationEpoch(
+            100, 1, 20, keccak256("replacement-cluster-root"), keccak256("params"), keccak256("artifact"), "ipfs://ok"
+        );
     }
 
     // M-Oracle-1: snapshot proposals must wait until the consumer signals the round source is
@@ -915,6 +940,8 @@ contract BondChallengeForwarder {
 }
 
 contract MockFrontendRegistry {
+    uint256 public constant STAKE_AMOUNT = 1_000e6;
+
     mapping(address => bool) internal eligible;
 
     function setEligible(address frontend, bool value) external {

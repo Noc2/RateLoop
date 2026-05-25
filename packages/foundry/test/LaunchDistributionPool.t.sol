@@ -1917,6 +1917,8 @@ contract LaunchDistributionPoolTest is Test {
 }
 
 contract MockLaunchOracleFrontendRegistry {
+    uint256 public constant STAKE_AMOUNT = 1_000e6;
+
     mapping(address => bool) internal eligible;
 
     function setEligible(address frontend, bool value) external {

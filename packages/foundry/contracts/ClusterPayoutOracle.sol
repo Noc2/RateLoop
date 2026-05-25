@@ -704,6 +704,16 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
     function _setFrontendRegistry(address newFrontendRegistry) private {
         if (newFrontendRegistry == address(0)) revert InvalidAddress();
+        if (newFrontendRegistry.code.length == 0) revert InvalidAddress();
+        try IFrontendRegistry(newFrontendRegistry).STAKE_AMOUNT() returns (uint256 stakeAmount) {
+            if (stakeAmount == 0) revert InvalidAddress();
+        } catch {
+            revert InvalidAddress();
+        }
+        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) { }
+        catch {
+            revert InvalidAddress();
+        }
         frontendRegistry = IFrontendRegistry(newFrontendRegistry);
         emit FrontendRegistryUpdated(newFrontendRegistry);
     }
