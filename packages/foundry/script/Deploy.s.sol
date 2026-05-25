@@ -304,13 +304,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             new AdvisoryVoteRecorder(address(votingEngine), address(registry), governance);
         protocolConfig.setAdvisoryVoteRecorder(address(advisoryVoteRecorder));
         launchDistributionPool.setAuthorizedCaller(address(advisoryVoteRecorder), true);
-        lrepToken.mint(deployer, LAUNCH_DISTRIBUTION_AMOUNT);
-        lrepToken.approve(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
-        launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
-        protocolConfig.setLaunchDistributionPool(address(launchDistributionPool));
-        console.log("LaunchDistributionPool deployed and funded with 75M LREP");
-        console.log("ClusterPayoutOracle deployed at:", address(clusterPayoutOracle));
-        console.log("AdvisoryVoteRecorder deployed at:", address(advisoryVoteRecorder));
 
         if (!isLocalDev) {
             address[] memory excludedHolders = _buildQuorumExcludedHolders(
@@ -324,6 +317,14 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             RateLoopGovernor(payable(governorAddr)).initializePools(excludedHolders);
             launchDistributionPool.transferOwnership(governance);
         }
+
+        lrepToken.mint(deployer, LAUNCH_DISTRIBUTION_AMOUNT);
+        lrepToken.approve(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
+        launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
+        protocolConfig.setLaunchDistributionPool(address(launchDistributionPool));
+        console.log("LaunchDistributionPool deployed and funded with 75M LREP");
+        console.log("ClusterPayoutOracle deployed at:", address(clusterPayoutOracle));
+        console.log("AdvisoryVoteRecorder deployed at:", address(advisoryVoteRecorder));
 
         if (isLocalDev) {
             _fundLocalDevAccounts(lrepToken, localUsdcToken, raterRegistry);

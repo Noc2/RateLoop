@@ -119,6 +119,32 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(address(pool.clusterPayoutOracle()), address(oracle));
     }
 
+    function test_InterruptedDeploymentCannotRetargetGovernanceAndDrainPool() public {
+        address deployer = address(0xD00D);
+        address intendedGovernance = address(0xBEEF);
+        LoopReputation interruptedLrep = new LoopReputation(address(this), address(this));
+
+        LaunchDistributionPool interruptedPool;
+        vm.prank(deployer);
+        interruptedPool = new LaunchDistributionPool(address(interruptedLrep), address(registry), intendedGovernance);
+
+        interruptedLrep.mint(deployer, interruptedPool.TOTAL_POOL_AMOUNT());
+        vm.startPrank(deployer);
+        interruptedLrep.approve(address(interruptedPool), interruptedPool.TOTAL_POOL_AMOUNT());
+        interruptedPool.depositPool(interruptedPool.TOTAL_POOL_AMOUNT());
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        interruptedPool.setGovernance(deployer);
+
+        uint256 poolAmount = interruptedPool.TOTAL_POOL_AMOUNT();
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        interruptedPool.withdrawRemaining(deployer, poolAmount);
+        vm.stopPrank();
+
+        assertEq(interruptedPool.poolBalance(), interruptedPool.TOTAL_POOL_AMOUNT());
+        assertEq(interruptedLrep.balanceOf(address(interruptedPool)), interruptedPool.TOTAL_POOL_AMOUNT());
+    }
+
     function test_DefaultLaunchRewardPolicyUsesAntiFarmDefaults() public view {
         (
             uint16 minQualifyingScoreBps,

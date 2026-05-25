@@ -227,6 +227,7 @@ contract LaunchDistributionPool is
 
     function setGovernance(address newGovernance) external onlyOwner {
         if (newGovernance == address(0)) revert InvalidAddress();
+        if (owner() != governance) revert InvalidAddress();
         governance = newGovernance;
         emit GovernanceUpdated(newGovernance);
     }
