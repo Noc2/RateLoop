@@ -2212,7 +2212,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.cancelContent(1);
     }
 
-    function test_SetVotingEngine_OldEngineCannotWriteRegistryStatePostRotation() public {
+    function test_SetVotingEngine_OldTrackedRoundCanSettleRegistryStatePostRotation() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/in-flight-engine", "goal", "goal", "tags", 0);
@@ -2230,10 +2230,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.unpause();
         vm.stopPrank();
 
-        // Post-rotation, the old engine is no longer canonical. Callbacks from it now revert
-        // immediately rather than silently no-op (M-Identity-1 fix). The old engine can still
-        // execute its own state machine (settleRound) but the registry-side rating update is
-        // swallowed by the settlement-side-effects try/catch, so the rating stays at default.
         uint16 ratingBefore = registry.getRating(1);
         vm.prank(address(votingEngine));
         vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
@@ -2245,9 +2241,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(1, roundId, ck3, false, 5_000, salt3);
         _settleAfterRbtsSeed(votingEngine, 1, roundId);
 
-        // The old engine's rating-state callback reverted (caught by RoundSettlementSideEffectsLib),
-        // so the registry-side rating must remain unchanged.
-        assertEq(registry.getRating(1), ratingBefore);
+        assertGt(registry.getRating(1), ratingBefore, "tracked old engine settlement updates rating");
+        vm.warp(block.timestamp + 30 days);
+        assertFalse(registry.isDormancyEligible(1), "settlement refreshes dormancy anchor");
     }
 
     function test_SetVotingEngine_ReplacementCannotCommitWhileTrackedOldRoundOpen() public {
@@ -2331,6 +2327,30 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.warp(T0 + 30 days + 30 minutes);
         assertTrue(registry.isDormancyEligible(1), "stale settlement must not refresh dormancy anchor");
+    }
+
+    function test_SetVotingEngine_OldEngineRecordMeaningfulActivity_RevertsOnFreshContent_AfterRotation() public {
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 20e6);
+        _submitContentWithReservation(registry, "https://example.com/old-engine-tracked", "g", "g", "t", 0);
+        _submitContentWithReservation(registry, "https://example.com/old-engine-untracked", "g", "g", "t", 0);
+        vm.stopPrank();
+
+        _commit(voter1, 1, true);
+
+        RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        vm.prank(address(votingEngine));
+        registry.recordMeaningfulActivity(1);
+
+        vm.prank(address(votingEngine));
+        vm.expectRevert(ContentRegistry.OnlyVotingEngine.selector);
+        registry.recordMeaningfulActivity(2);
     }
 
     function test_CancelContent_VotingEngineNotSet_AllowsCancel() public {

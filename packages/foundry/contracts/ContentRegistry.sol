@@ -338,11 +338,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     /// @notice Set the VotingEngine address (can only be called by CONFIG_ROLE).
-    /// @dev Authorization for the previous engine is NOT cleared by this call; the canonical
-    ///      check in `_authorizeEngineCallback` rejects any non-canonical caller, so a rotated
-    ///      engine cannot mutate registry state. Operators should still follow up with
-    ///      `revokeVotingEngine(prevEngine)` to clear the per-engine grant for hygiene and to
-    ///      make off-chain monitoring of obsolete engines unambiguous.
+    /// @dev Authorization for the previous engine is NOT cleared by this call so already-tracked
+    ///      rounds can finish settlement callbacks. Operators should still follow up with
+    ///      `revokeVotingEngine(prevEngine)` after old rounds have drained.
     function setVotingEngine(address _votingEngine) external onlyRole(CONFIG_ROLE) {
         require(_votingEngine != address(0), "Invalid address");
         require(_votingEngine.code.length != 0, "No code");
@@ -358,8 +356,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     /// @notice Revoke callback authorization for a previously-registered voting engine.
-    /// @dev Belt-and-suspenders for the canonical-only check in `_authorizeEngineCallback`.
-    ///      Use after `setVotingEngine` rotates to a new engine and any in-flight rounds on
+    /// @dev Use after `setVotingEngine` rotates to a new engine and any in-flight rounds on
     ///      the old engine have been drained. Cannot be used on the canonical engine — call
     ///      `setVotingEngine` to rotate first.
     function revokeVotingEngine(address engine) external onlyRole(CONFIG_ROLE) {
@@ -1101,16 +1098,18 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     // --- VotingEngine callbacks ---
 
-    /// @dev Authorize a callback from the canonical voting engine. Rejects any caller that is
-    ///      not `votingEngine` outright — a rotated (deauthorized-by-rotation) engine cannot
-    ///      mutate state even on content the new engine has not yet touched. Returns the
-    ///      canonical engine's generation so callers can stamp it onto per-content state.
-    function _authorizeEngineCallback(uint256) private view returns (uint256 callerGeneration) {
+    function _authorizeCurrentEngineCallback() private view returns (uint256 callerGeneration) {
         if (msg.sender != votingEngine) revert OnlyVotingEngine();
         callerGeneration = votingEngineCallbackGeneration[msg.sender];
-        // Defense-in-depth: if revokeVotingEngine were ever (incorrectly) used on the canonical
-        // engine, callerGeneration would be zero — fail closed.
         if (callerGeneration == 0) revert OnlyVotingEngine();
+    }
+
+    function _authorizeSettlementCallback(uint256 contentId) private view returns (uint256 callerGeneration) {
+        callerGeneration = votingEngineCallbackGeneration[msg.sender];
+        if (callerGeneration == 0) revert OnlyVotingEngine();
+        if (msg.sender == votingEngine) return callerGeneration;
+        if (contentRoundTrackingEngine[contentId] != msg.sender) revert OnlyVotingEngine();
+        if (callerGeneration < contentSettlementEngineGeneration[contentId]) revert OnlyVotingEngine();
     }
 
     /// @notice Called by VotingEngine to update raw activity timestamp after commits.
@@ -1118,7 +1117,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ///      Stamps the per-content generation so any pre-existing older-engine grants are
     ///      shut out from this content even before `revokeVotingEngine` is called.
     function updateActivity(uint256 contentId) external nonReentrant {
-        uint256 callerGeneration = _authorizeEngineCallback(contentId);
+        uint256 callerGeneration = _authorizeCurrentEngineCallback();
 
         address trackedEngine = contentRoundTrackingEngine[contentId];
         if (trackedEngine != address(0) && trackedEngine != msg.sender && _engineHasOpenRound(trackedEngine, contentId))
@@ -1134,7 +1133,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @notice Called by VotingEngine when content reaches milestone 0 through a settled round.
     function recordMeaningfulActivity(uint256 contentId) external nonReentrant {
-        uint256 callerGeneration = _authorizeEngineCallback(contentId);
+        uint256 callerGeneration = _authorizeSettlementCallback(contentId);
         contents[contentId].lastActivityAt = uint48(block.timestamp);
         dormancyAnchorAt[contentId] = block.timestamp;
         if (callerGeneration > contentSettlementEngineGeneration[contentId]) {
@@ -1148,7 +1147,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint16 referenceRatingBps,
         RatingLib.RatingState calldata nextState
     ) external nonReentrant {
-        uint256 callerGeneration = _authorizeEngineCallback(contentId);
+        uint256 callerGeneration = _authorizeSettlementCallback(contentId);
 
         Content storage c = contents[contentId];
         require(c.id != 0, "Content does not exist");
