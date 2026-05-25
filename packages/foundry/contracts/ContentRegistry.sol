@@ -1487,8 +1487,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 activeRoundId = IRoundVotingEngine(engine).currentRoundId(contentId);
         if (activeRoundId == 0) return false;
 
-        (, RoundLib.RoundState roundState,,,,,,,,,,,,) = IRoundVotingEngine(engine).rounds(contentId, activeRoundId);
-        return roundState == RoundLib.RoundState.Open;
+        (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,,,,,,,,,) =
+            IRoundVotingEngine(engine).rounds(contentId, activeRoundId);
+        return roundState == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
     }
 
     function _getInitialConfidenceMass() internal view returns (uint256) {

@@ -2749,6 +2749,43 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
     }
 
+    function test_MarkDormant_ZeroStakeOpenRound_AllowsDormant() public {
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/zero-stake-open", "goal", "goal", "tags", 0);
+        vm.stopPrank();
+
+        vm.warp(T0 + 31 days);
+        vm.prank(voter1);
+        votingEngine.openRound(1);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, 1);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, 1, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Open));
+        assertEq(round.voteCount, 0);
+        assertEq(round.totalStake, 0);
+
+        registry.markDormant(1);
+
+        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+    }
+
+    function test_IsDormancyEligible_ZeroStakeOpenRound_ReturnsTrue() public {
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(
+            registry, "https://example.com/zero-stake-open-eligible", "goal", "goal", "tags", 0
+        );
+        vm.stopPrank();
+
+        vm.warp(T0 + 31 days);
+        vm.prank(voter1);
+        votingEngine.openRound(1);
+
+        assertTrue(registry.isDormancyEligible(1), "empty open round should not block dormancy eligibility");
+    }
+
     function test_CommitVote_DormancyEligibleContent_CanStartNewRoundAfterCancellation() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
