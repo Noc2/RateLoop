@@ -108,9 +108,9 @@ export async function resolveQuestionPayoutProof(
   }
 
   const leaves = payoutWeights
-    .map((payoutWeight) => normalizeHex(payoutWeight.leaf))
+    .map((payoutWeight) => normalizeHex(payoutWeight.leaf, 32))
     .filter((leaf): leaf is Hex => leaf !== null);
-  const leaf = normalizeHex(candidate.leaf);
+  const leaf = normalizeHex(candidate.leaf, 32);
   if (!leaf || leaves.length === 0) return null;
 
   try {
@@ -256,7 +256,7 @@ function readDataUri(uri: string) {
 }
 
 function artifactHashMatches(artifact: unknown, expectedHash: Hex | null | undefined) {
-  const normalizedExpectedHash = normalizeHex(expectedHash);
+  const normalizedExpectedHash = normalizeHex(expectedHash, 32);
   if (!normalizedExpectedHash) return true;
   const actualHash = keccak256(toBytes(canonicalJson(artifact)));
   return actualHash.toLowerCase() === normalizedExpectedHash.toLowerCase();
@@ -335,9 +335,9 @@ function payoutWeightMatches(
     normalizeBigIntString(payoutWeight.contentId) ===
       params.contentId.toString() &&
     normalizeBigIntString(payoutWeight.roundId) === params.roundId.toString() &&
-    normalizeHex(payoutWeight.commitKey)?.toLowerCase() ===
+    normalizeHex(payoutWeight.commitKey, 32)?.toLowerCase() ===
       params.commitKey?.toLowerCase() &&
-    normalizeHex(payoutWeight.identityKey)?.toLowerCase() ===
+    normalizeHex(payoutWeight.identityKey, 32)?.toLowerCase() ===
       params.identityKey?.toLowerCase()
   );
 }
@@ -349,13 +349,13 @@ function normalizePayoutWeight(
   const rewardPoolId = normalizeBigIntString(value.rewardPoolId);
   const contentId = normalizeBigIntString(value.contentId);
   const roundId = normalizeBigIntString(value.roundId);
-  const commitKey = normalizeHex(value.commitKey);
-  const identityKey = normalizeHex(value.identityKey);
-  const account = normalizeHex(value.account);
+  const commitKey = normalizeHex(value.commitKey, 32);
+  const identityKey = normalizeHex(value.identityKey, 32);
+  const account = normalizeHex(value.account, 20);
   const baseWeight = normalizeBigIntString(value.baseWeight);
   const independenceBps = normalizeNumber(value.independenceBps);
   const effectiveWeight = normalizeBigIntString(value.effectiveWeight);
-  const reasonHash = normalizeHex(value.reasonHash);
+  const reasonHash = normalizeHex(value.reasonHash, 32);
 
   if (
     domain === null ||
@@ -388,14 +388,15 @@ function normalizePayoutWeight(
   };
 }
 
-function normalizeHex(value: unknown): Hex | null {
+function normalizeHex(value: unknown, byteLength: number): Hex | null {
   if (typeof value !== "string" || !/^0x[0-9a-fA-F]+$/.test(value)) return null;
+  if (value.length !== 2 + byteLength * 2) return null;
   return value as Hex;
 }
 
 function normalizeHexArray(value: unknown): Hex[] | null {
   if (!Array.isArray(value)) return null;
-  const normalized = value.map(normalizeHex);
+  const normalized = value.map((item) => normalizeHex(item, 32));
   return normalized.every((item): item is Hex => item !== null)
     ? normalized
     : null;

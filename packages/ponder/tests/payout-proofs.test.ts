@@ -29,6 +29,17 @@ const artifact = {
   ],
 };
 
+function artifactWithPayoutWeight(overrides: Record<string, unknown>) {
+  return {
+    payoutWeights: [
+      {
+        ...artifact.payoutWeights[0],
+        ...overrides,
+      },
+    ],
+  };
+}
+
 function canonicalJson(value: unknown): string {
   return JSON.stringify(sortJson(value));
 }
@@ -102,6 +113,30 @@ describe("payout artifact proof resolution", () => {
         ...proofParams,
         artifactHash: `0x${"ff".repeat(32)}`,
         artifactUri,
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("rejects payout weights with malformed ABI hex widths", async () => {
+    const { resolveQuestionPayoutProof } = await loadResolver();
+    const badAccountArtifact = artifactWithPayoutWeight({
+      account: `0x${"33".repeat(32)}`,
+    });
+    const badProofArtifact = artifactWithPayoutWeight({
+      proof: [`0x${"55".repeat(20)}`],
+    });
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactUri: `data:application/json;base64,${Buffer.from(JSON.stringify(badAccountArtifact), "utf8").toString("base64")}`,
+      }),
+    ).resolves.toBeNull();
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactUri: `data:application/json;base64,${Buffer.from(JSON.stringify(badProofArtifact), "utf8").toString("base64")}`,
       }),
     ).resolves.toBeNull();
   });
