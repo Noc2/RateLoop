@@ -125,7 +125,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.setFrontendRegistry(address(replacement));
 
         oracle.proposeCorrelationEpoch(
-            100, 1, 20, keccak256("replacement-cluster-root"), keccak256("params"), keccak256("artifact"), "ipfs://ok"
+            100, 1, 20, keccak256("replacement-cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://ok"
         );
     }
 
@@ -192,7 +192,7 @@ contract ClusterPayoutOracleTest is Test {
                 totalClaimWeight: 2_500,
                 weightRoot: leaf,
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("round-artifact"),
+                artifactHash: keccak256("epoch-artifact"),
                 artifactURI: "ipfs://round"
             })
         );
@@ -442,7 +442,7 @@ contract ClusterPayoutOracleTest is Test {
                 totalClaimWeight: 2_500,
                 weightRoot: leaf,
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("round-artifact"),
+                artifactHash: keccak256("epoch-artifact"),
                 artifactURI: "ipfs://round"
             })
         );
@@ -482,7 +482,7 @@ contract ClusterPayoutOracleTest is Test {
                 totalClaimWeight: 2_500,
                 weightRoot: keccak256("leaf"),
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("round-artifact"),
+                artifactHash: keccak256("epoch-artifact"),
                 artifactURI: "ipfs://round"
             })
         );
@@ -569,7 +569,7 @@ contract ClusterPayoutOracleTest is Test {
             totalClaimWeight: 1_000,
             weightRoot: oracle.payoutWeightLeaf(payout),
             reasonRoot: keccak256("bad-reason-root"),
-            artifactHash: keccak256("bad-round-artifact"),
+            artifactHash: keccak256("replacement-epoch-artifact"),
             artifactURI: "ipfs://round"
         });
         oracle.proposeRoundPayoutSnapshot(input);
@@ -578,7 +578,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.rejectRoundPayoutSnapshot(snapshotKey, keccak256("bad-round"));
 
         input.reasonRoot = keccak256("replacement-reason-root");
-        input.artifactHash = keccak256("replacement-round-artifact");
+        input.artifactHash = keccak256("replacement-epoch-artifact");
         input.artifactURI = "ipfs://round-replacement";
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeRoundPayoutSnapshot(input);
@@ -588,7 +588,7 @@ contract ClusterPayoutOracleTest is Test {
 
         ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(proposal.artifactHash, keccak256("replacement-round-artifact"));
+        assertEq(proposal.artifactHash, keccak256("replacement-epoch-artifact"));
     }
 
     function test_FinalizedRoundPayoutSnapshotCanBeRejectedWhenConsumerHasNotAppliedIt() public {
@@ -611,7 +611,7 @@ contract ClusterPayoutOracleTest is Test {
         ClusterPayoutOracle.RoundPayoutProposal memory rejected = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(rejected.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
 
-        input.artifactHash = keccak256("replacement-round-artifact");
+        input.artifactHash = keccak256("epoch-artifact");
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeRoundPayoutSnapshot(input);
 
@@ -619,7 +619,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
         ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
-        assertEq(replacement.artifactHash, keccak256("replacement-round-artifact"));
+        assertEq(replacement.artifactHash, keccak256("epoch-artifact"));
         assertEq(replacement.consumer, address(questionConsumer));
     }
 
@@ -675,6 +675,7 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
 
         input.weightRoot = keccak256("replacement-after-consumed-root");
+        input.artifactHash = keccak256("epoch-artifact");
         vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
         oracle.proposeRoundPayoutSnapshot(input);
     }
@@ -726,7 +727,7 @@ contract ClusterPayoutOracleTest is Test {
                 totalClaimWeight: 1_000,
                 weightRoot: keccak256("leaf"),
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("round-artifact"),
+                artifactHash: keccak256("epoch-artifact"),
                 artifactURI: "ipfs://round"
             })
         );
@@ -753,10 +754,24 @@ contract ClusterPayoutOracleTest is Test {
                 totalClaimWeight: 1_000,
                 weightRoot: keccak256("leaf"),
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("round-artifact"),
+                artifactHash: keccak256("epoch-artifact"),
                 artifactURI: "ipfs://round"
             })
         );
+    }
+
+    function test_RoundSnapshotMustUseFinalizedEpochArtifactHash() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        input.artifactHash = keccak256("other-artifact");
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
     }
 
     function _defaultRoundPayoutInput(uint64 epochId)
@@ -775,7 +790,7 @@ contract ClusterPayoutOracleTest is Test {
             totalClaimWeight: 2_500,
             weightRoot: keccak256("leaf"),
             reasonRoot: keccak256("reason-root"),
-            artifactHash: keccak256("round-artifact"),
+            artifactHash: keccak256("epoch-artifact"),
             artifactURI: "ipfs://round"
         });
     }
@@ -899,7 +914,7 @@ contract ClusterPayoutOracleProposerBondTest is Test {
             totalClaimWeight: 2_500,
             weightRoot: keccak256("leaf"),
             reasonRoot: keccak256("reason-root"),
-            artifactHash: keccak256("round-artifact"),
+            artifactHash: keccak256("epoch-artifact"),
             artifactURI: "ipfs://round"
         });
         vm.prank(proposer);

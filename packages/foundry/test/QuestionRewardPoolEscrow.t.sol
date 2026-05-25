@@ -4410,7 +4410,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 totalClaimWeight: totalClaimWeight,
                 weightRoot: weightRoot,
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("round-artifact"),
+                artifactHash: keccak256("epoch-artifact"),
                 artifactURI: "ipfs://round"
             })
         );
@@ -4443,7 +4443,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 totalClaimWeight: totalClaimWeight,
                 weightRoot: weightRoot,
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("round-artifact"),
+                artifactHash: keccak256("epoch-artifact"),
                 artifactURI: "ipfs://round"
             })
         );

@@ -80,9 +80,14 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
     throw new Error("PONDER_BASE_URL is required for automatic correlation snapshots");
   }
 
-  const candidates = await fetchRoundCandidates(
+  const candidateWindow = await fetchRoundCandidateWindow(
     config.ponderBaseUrl,
     config.correlationSnapshots.maxRoundsPerTick,
+  );
+  const candidates = selectCompleteEpochCandidates(
+    candidateWindow,
+    config.correlationSnapshots.maxRoundsPerTick,
+    logger,
   );
   if (candidates.length === 0) {
     return {};
@@ -216,14 +221,50 @@ function buildPublicEpochs(
     }));
 }
 
-async function fetchRoundCandidates(
+async function fetchRoundCandidateWindow(
   ponderBaseUrl: string,
-  limit: number,
+  maxRoundsPerTick: number,
 ): Promise<CorrelationRoundCandidate[]> {
-  const url = new URL("/correlation/round-candidates", ponderBaseUrl);
-  url.searchParams.set("limit", String(limit));
-  const response = await fetchJson<CandidateResponse>(url);
-  return (response.items ?? []).map(parseCandidate);
+  const candidates: CorrelationRoundCandidate[] = [];
+  const targetCount = maxRoundsPerTick + 1;
+  for (let offset = 0; candidates.length < targetCount;) {
+    const limit = Math.min(targetCount - candidates.length, 200);
+    const url = new URL("/correlation/round-candidates", ponderBaseUrl);
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("offset", String(offset));
+    const response = await fetchJson<CandidateResponse>(url);
+    const items = response.items ?? [];
+    candidates.push(...items.map(parseCandidate));
+    if (items.length < limit) {
+      break;
+    }
+    offset += items.length;
+  }
+  return candidates;
+}
+
+function selectCompleteEpochCandidates(
+  candidates: readonly CorrelationRoundCandidate[],
+  maxRoundsPerTick: number,
+  logger: Logger,
+): CorrelationRoundCandidate[] {
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const epochRoundId = candidates[0]!.roundId;
+  const epochCandidates = candidates.filter((candidate) => candidate.roundId === epochRoundId);
+  const sawNextEpoch = candidates.some((candidate) => candidate.roundId !== epochRoundId);
+  if (epochCandidates.length > maxRoundsPerTick || (!sawNextEpoch && candidates.length > maxRoundsPerTick)) {
+    logger.warn("Skipping automatic correlation epoch because one round exceeds maxRoundsPerTick", {
+      roundId: epochRoundId.toString(),
+      candidateCountSeen: epochCandidates.length,
+      maxRoundsPerTick,
+    });
+    return [];
+  }
+
+  return epochCandidates;
 }
 
 async function fetchRoundVotes(

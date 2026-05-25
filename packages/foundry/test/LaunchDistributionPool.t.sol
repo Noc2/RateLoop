@@ -556,7 +556,7 @@ contract LaunchDistributionPoolTest is Test {
                 totalClaimWeight: 2_500,
                 weightRoot: leaf,
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("round-artifact"),
+                artifactHash: keccak256("epoch-artifact"),
                 artifactURI: "ipfs://round"
             })
         );
@@ -599,7 +599,7 @@ contract LaunchDistributionPoolTest is Test {
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
-        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("wrong-consumer"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
 
         vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
         pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
@@ -610,7 +610,7 @@ contract LaunchDistributionPoolTest is Test {
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
-        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("early-snapshot"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
 
         // L-Oracle-C: pass `block.timestamp + 1` as sourceReadyAt so the pending credit is
         // recorded AFTER the snapshot was proposed — replicating the "snapshot proposed before
@@ -642,7 +642,7 @@ contract LaunchDistributionPoolTest is Test {
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
         vm.warp(uint256(sourceReadyAt) + 1);
-        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("source-ready-snapshot"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
 
         vm.warp(block.timestamp + 30);
         assertEq(
@@ -727,7 +727,7 @@ contract LaunchDistributionPoolTest is Test {
             _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
 
         ClusterPayoutOracle currentOracle = _configureLaunchOracle(1);
-        _proposeAndFinalizeLaunchPayoutSnapshot(currentOracle, 1, payout, keccak256("rotated-oracle"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(currentOracle, 1, payout, keccak256("epoch-artifact"));
 
         vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
         pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
@@ -735,7 +735,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
         assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 0);
 
-        _proposeAndFinalizeLaunchPayoutSnapshot(recordedOracle, 1, payout, keccak256("recorded-oracle"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(recordedOracle, 1, payout, keccak256("epoch-artifact"));
 
         uint256 paidAfterSnapshot = pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
 
@@ -781,7 +781,7 @@ contract LaunchDistributionPoolTest is Test {
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(80, commitKey, alice, 2_500, keccak256("clustered"));
-        _proposeAndFinalizeLaunchPayoutSnapshot(currentOracle, 80, payout, keccak256("rescued-oracle"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(currentOracle, 80, payout, keccak256("epoch-artifact"));
         assertEq(pool.finalizeEarnedRaterRewardCredit(1, 80, commitKey, payout, new bytes32[](0)), 0);
         assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 1);
         assertEq(pool.raterDistinctAnchorRoundCount(alice), 1);
@@ -826,7 +826,7 @@ contract LaunchDistributionPoolTest is Test {
 
         IClusterPayoutOracle.PayoutWeight memory alicePayout =
             _launchPayoutWeight(1, aliceCommitKey, alice, 2_500, keccak256("alice-clustered"));
-        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, alicePayout, keccak256("bad-launch-root"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, alicePayout, keccak256("epoch-artifact"));
 
         assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, aliceCommitKey, alicePayout, new bytes32[](0)), 0);
         assertTrue(pool.earnedRewardCreditFinalized(1, 1, aliceCommitKey));
@@ -853,7 +853,7 @@ contract LaunchDistributionPoolTest is Test {
                 totalClaimWeight: bobPayout.effectiveWeight,
                 weightRoot: bobLeaf,
                 reasonRoot: keccak256("reason-root"),
-                artifactHash: keccak256("replacement-launch-root"),
+                artifactHash: keccak256("epoch-artifact"),
                 artifactURI: "ipfs://round"
             })
         );
@@ -1335,7 +1335,7 @@ contract LaunchDistributionPoolTest is Test {
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(1, advisoryCommitKey, alice, pool.BPS_DENOMINATOR(), keccak256("advisory"));
-        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("advisory-launch-root"));
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
 
         uint256 paidAfterSnapshot =
             pool.finalizeEarnedRaterRewardCredit(1, 1, advisoryCommitKey, payout, new bytes32[](0));
@@ -1835,9 +1835,7 @@ contract LaunchDistributionPoolTest is Test {
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(roundId, _commitKey(roundId), rater, effectiveWeight, keccak256("clustered"));
-        _proposeAndFinalizeLaunchPayoutSnapshot(
-            oracle, roundId, payout, keccak256(abi.encode("round-artifact", roundId))
-        );
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, roundId, payout, keccak256("epoch-artifact"));
 
         paidAmount = pool.finalizeEarnedRaterRewardCredit(1, roundId, _commitKey(roundId), payout, new bytes32[](0));
     }

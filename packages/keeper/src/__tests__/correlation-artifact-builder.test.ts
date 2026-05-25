@@ -46,7 +46,8 @@ describe("automatic correlation artifact builder", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(input.toString());
       if (url.pathname === "/correlation/round-candidates") {
-        expect(url.searchParams.get("limit")).toBe("5");
+        expect(url.searchParams.get("limit")).toBe("6");
+        expect(url.searchParams.get("offset")).toBe("0");
         return jsonResponse({
           items: [
             {
@@ -181,6 +182,46 @@ describe("automatic correlation artifact builder", () => {
     expect(artifact.correlationEpochs?.[0]?.clusterRoot).toMatch(/^0x[0-9a-f]{64}$/);
     expect(artifact.correlationEpochs?.[0]?.clusterRoot).not.toBe(
       `0x${"0".repeat(64)}`,
+    );
+  });
+
+  it("skips an automatic epoch when the first round has more candidates than the tick limit", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/correlation/round-candidates") {
+        return jsonResponse({
+          items: Array.from({ length: 6 }, (_, index) => ({
+            rewardPoolId: String(index + 1),
+            contentId: String(index + 10),
+            roundId: "4",
+          })),
+        });
+      }
+      return new Response("round votes should not be requested", { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
+
+    expect(artifact).toEqual({});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skipping automatic correlation epoch because one round exceeds maxRoundsPerTick",
+      expect.objectContaining({
+        roundId: "4",
+        maxRoundsPerTick: 5,
+      }),
     );
   });
 });

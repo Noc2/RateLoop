@@ -325,6 +325,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         CorrelationEpochSnapshot storage epoch = correlationEpochSnapshots[input.correlationEpochId];
         if (epoch.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
         if (input.roundId < epoch.fromRoundId || input.roundId > epoch.toRoundId) revert InvalidSnapshot();
+        if (input.artifactHash != epoch.artifactHash) revert InvalidSnapshot();
 
         bytes32 snapshotKey = roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         if (rejectedRoundPayoutSnapshotRoots[snapshotKey][input.weightRoot]) revert InvalidSnapshot();
