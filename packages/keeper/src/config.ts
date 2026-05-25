@@ -382,8 +382,7 @@ function loadConfig() {
     // Network
     rpcUrl: requireUrlEnv("RPC_URL", errors),
     chainId,
-    chainName:
-      readEnv("CHAIN_NAME") || CHAIN_NAMES[chainId] || `Chain ${chainId}`,
+    chainName: CHAIN_NAMES[chainId] || readEnv("CHAIN_NAME") || `Chain ${chainId}`,
 
     // Contracts
     contracts: {

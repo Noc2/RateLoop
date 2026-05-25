@@ -61,6 +61,15 @@ describe("keeper config", () => {
     expect(config.frontendFees.enabled).toBe(false);
   });
 
+  it("ignores stale CHAIN_NAME overrides for known chain ids", async () => {
+    const { config } = await loadKeeperConfig({
+      CHAIN_ID: "31337",
+      CHAIN_NAME: "World Chain Sepolia",
+    });
+
+    expect(config.chainName).toBe("Foundry");
+  });
+
   it("accepts a private key when no keystore account is configured", async () => {
     const privateKey = `0x${"11".repeat(32)}`;
     const { config } = await loadKeeperConfig(
