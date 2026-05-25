@@ -25,7 +25,7 @@ const directHttpEndpoints = [
   { method: "GET", path: "/api/agent/asks/{operationKey}" },
   { method: "GET", path: "/api/agent/results/{operationKey}" },
   { method: "POST", path: "/api/agent/signing-intents" },
-  { method: "GET", path: "/api/agent/signing-intents/{intentId}?token=..." },
+  { method: "GET", path: "/api/agent/signing-intents/{intentId}" },
   { method: "POST", path: "/api/agent/signing-intents/{intentId}/prepare" },
   { method: "POST", path: "/api/agent/signing-intents/{intentId}/complete" },
 ] as const;

@@ -623,19 +623,21 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   const createBody = (await createResponse.json()) as Record<string, unknown>;
   const intentId = String(createBody.id);
   // C-1 (2026-05-22 audit): token now lives in the URL fragment so it doesn't leak via
-  // Referer or proxy logs. Parse from `#token=...` (and tolerate the legacy `?token=`
-  // shape so this assertion keeps working through any rollback window).
+  // Referer or proxy logs.
   const signingUrl = new URL(String(createBody.signingUrl));
   const hashParams = new URLSearchParams(signingUrl.hash.replace(/^#/, ""));
-  const token = hashParams.get("token") ?? signingUrl.searchParams.get("token");
+  const token = hashParams.get("token");
 
   assert.equal(createResponse.status, 200);
   assert.match(intentId, /^asi_/);
   assert.ok(token);
+  assert.equal(signingUrl.searchParams.get("token"), null);
   assert.equal(createBody.status, "pending");
 
   const readResponse = await signingIntentRoute.GET(
-    makePublicGet(`https://curyo.xyz/api/agent/signing-intents/${intentId}?token=${token}`),
+    makePublicGet(`https://curyo.xyz/api/agent/signing-intents/${intentId}`, {
+      "x-rateloop-signing-intent-token": token,
+    }),
     { params: Promise.resolve({ intentId }) },
   );
   const readBody = (await readResponse.json()) as Record<string, unknown>;
@@ -658,6 +660,17 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal(prepareBody.operationKey, OPERATION_KEY);
   assert.equal(prepareBody.status, "awaiting_wallet_signature");
   assert.equal((prepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
+});
+
+test("agent signing intent read requires a private token outside the request URL", async () => {
+  const response = await signingIntentRoute.GET(
+    makePublicGet("https://curyo.xyz/api/agent/signing-intents/asi_missing"),
+    { params: Promise.resolve({ intentId: "asi_missing" }) },
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 400);
+  assert.equal(body.error, "token is required.");
 });
 
 test("agent asks route requires walletAddress for tokenless asks", async () => {

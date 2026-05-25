@@ -314,7 +314,11 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/agent/signing-intents/${intentId}?token=${encodeURIComponent(token)}`);
+      const response = await fetch(`/api/agent/signing-intents/${intentId}`, {
+        headers: {
+          "x-rateloop-signing-intent-token": token,
+        },
+      });
       const body = (await response.json()) as SigningIntent | { message?: string; error?: string };
       if (!response.ok) throw new Error(readResponseError(body, "Failed to load signing intent."));
       setIntent(body as SigningIntent);
