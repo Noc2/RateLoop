@@ -106,7 +106,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
         commitKey: vote.commitKey,
         baseWeight: sql<bigint>`10000`,
         verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
-        historicalVoteCount: sql<number>`coalesce(${voterStats.totalSettledVotes}, 0)`,
+        historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
         features: sql<string>`''`,
       })
       .from(vote)

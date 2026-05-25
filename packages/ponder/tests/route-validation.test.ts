@@ -1706,7 +1706,7 @@ describe("registerCorrelationRoutes", () => {
   });
 
   it("returns eligible revealed vote inputs for correlation scoring", async () => {
-    const { queryBuilder } = mockPonderModules([
+    const { db, queryBuilder } = mockPonderModules([
       {
         account: "0x0000000000000000000000000000000000000001",
         voter: "0x0000000000000000000000000000000000000001",
@@ -1741,6 +1741,10 @@ describe("registerCorrelationRoutes", () => {
       verifiedHuman: true,
       features: [`identity:0x${"a".repeat(64)}`],
     });
+    const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
+    expect(selection).toContain("historicalVoteCount");
+    expect(selection).toContain("totalSettledVotes");
+    expect(selection).toContain("- 1");
     const whereArg = queryBuilder.where.mock.calls[0]?.[0];
     const serialized = serializeExpression(whereArg);
     expect(serialized).toContain("vote.revealed");
