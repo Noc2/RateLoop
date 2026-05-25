@@ -2,7 +2,7 @@ import { VOTE_COOLDOWN_SECONDS } from "~~/lib/vote/cooldown";
 
 export const SELF_VOTE_ERROR_SELECTOR = "0x2f4015a5";
 export const CONTENT_NOT_ACTIVE_ERROR_SELECTOR = "0x74e73b6d";
-export const TARGET_ROUND_OUT_OF_WINDOW_ERROR_SELECTOR = "0xe56a7aca";
+const TARGET_ROUND_OUT_OF_WINDOW_ERROR_SELECTOR = "0xe56a7aca";
 
 /**
  * Match either the symbolic revert name (case-sensitive PascalCase from viem) or, when

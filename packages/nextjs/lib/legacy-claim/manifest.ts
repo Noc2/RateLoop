@@ -18,7 +18,7 @@ export type LegacyClaimEntry = {
   proof: `0x${string}`[];
 };
 
-export type LegacyClaimManifest = {
+type LegacyClaimManifest = {
   merkleRoot: `0x${string}` | null;
   /** Sum of all entry allocations, denominated in LREP atomic units. */
   allocationTotal: string;

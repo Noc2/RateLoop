@@ -138,10 +138,6 @@ async function resolveOnChainNowSeconds(publicClient: PublicClient): Promise<big
   }
 }
 
-export function resetBlockTimestampCacheForTests(): void {
-  lastBlockTimestampS = null;
-  lastBlockObservedAtMs = null;
-}
 const TOO_EARLY_TLOCK_ERROR_FRAGMENT = "too early to decrypt the ciphertext";
 const DECRYPTABLE_AT_ROUND_PATTERN = /decryptable at round (\d+)/i;
 

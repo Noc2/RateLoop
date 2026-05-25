@@ -3,7 +3,7 @@ import path from "node:path";
 import { keccak256, toBytes } from "viem";
 import { config } from "./config.js";
 
-export interface StoredCorrelationArtifact {
+interface StoredCorrelationArtifact {
   artifactHash: `0x${string}`;
   artifactURI: string;
   canonicalJson: string;
