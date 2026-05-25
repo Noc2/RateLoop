@@ -199,6 +199,9 @@ contract AdversarialTests is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         for (uint256 i = 0; i < commitKeys.length; i++) {
             _reveal(contentId, roundId, commitKeys[i]);
+            if (engine.roundThresholdReachedBlock(contentId, roundId) == block.number) {
+                vm.roll(block.number + 1);
+            }
         }
         _settleAfterRbtsSeed(engine, contentId, roundId);
     }

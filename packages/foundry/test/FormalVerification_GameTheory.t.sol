@@ -150,6 +150,9 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
                 (bool up, bytes32 s, bool exists) = _testRevealPayload(keys[i]);
                 if (exists) {
                     try engine.revealVoteByCommitKey(cid, roundId, keys[i], up, 5_000, s) { } catch { }
+                    if (engine.roundThresholdReachedBlock(cid, roundId) == block.number) {
+                        vm.roll(block.number + 1);
+                    }
                 }
             }
         }

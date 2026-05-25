@@ -296,7 +296,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         }
     }
 
-    function test_PostThresholdRevealCannotEnterRbtsScoringSet() public {
+    function test_LaterBlockPostThresholdRevealCanEnterRbtsScoringSet() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
@@ -312,9 +312,8 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, false, s3);
 
-        // A later-block post-threshold reveal has had a chance to observe the provisional
-        // settlement, so it must not be able to move settlement pools while remaining outside
-        // the RBTS scoring set.
+        // A later-block post-threshold reveal keeps the existing round economics. The
+        // same-block backrun case is covered separately below.
         vm.warp(block.timestamp + 1);
         vm.roll(block.number + 1);
         RoundLib.Round memory beforeLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -327,27 +326,26 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck4, true, s4);
 
         RoundLib.Round memory afterLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(afterLateReveal.upPool, upPoolBefore, "late reveal cannot move settlement up pool");
-        assertEq(afterLateReveal.downPool, downPoolBefore, "late reveal cannot move settlement down pool");
-        assertEq(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "late reveal cannot move weighted up");
-        assertEq(afterLateReveal.weightedDownPool, weightedDownPoolBefore, "late reveal cannot move weighted down");
+        assertGt(afterLateReveal.upPool, upPoolBefore, "later-block reveal can move settlement up pool");
+        assertEq(afterLateReveal.downPool, downPoolBefore, "later-block reveal leaves down pool unchanged");
+        assertGt(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "later-block reveal can move weighted up");
+        assertEq(afterLateReveal.weightedDownPool, weightedDownPoolBefore, "later-block reveal leaves weighted down");
         assertEq(
-            engine.roundRatingUpEvidence(contentId, roundId), upEvidenceBefore, "late reveal cannot add up evidence"
+            engine.roundRatingUpEvidence(contentId, roundId),
+            upEvidenceBefore + 1_500_000,
+            "later-block reveal adds up evidence"
         );
         assertEq(
             engine.roundRatingDownEvidence(contentId, roundId),
             downEvidenceBefore,
-            "late reveal cannot add down evidence"
+            "later-block reveal leaves down evidence"
         );
 
         vm.roll(block.number + 1);
         engine.settleRound(contentId, roundId);
 
         assertGt(engine.commitRbtsScoringWeight(contentId, roundId, ck1), 0, "threshold reveal set scored");
-        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "late reveal omitted from scoring set");
-        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck4), 0, "late reveal has no RBTS reward");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), STAKE, "winning late reveal gets stake back");
-        assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck4), 0, "winning late reveal not forfeited");
+        assertGt(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "later-block reveal enters scoring set");
     }
 
     function test_SameBlockPostThresholdRevealCannotMoveSettlementOrEnterRbtsScoringSet() public {

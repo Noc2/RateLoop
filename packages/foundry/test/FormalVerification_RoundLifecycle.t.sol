@@ -423,6 +423,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         engine.revealVoteByCommitKey(cid, rid, ck0, true, 5_000, s0);
         engine.revealVoteByCommitKey(cid, rid, ck1, false, 5_000, s1);
         engine.revealVoteByCommitKey(cid, rid, ck2, true, 5_000, s2);
+        vm.roll(block.number + 1);
         engine.revealVoteByCommitKey(cid, rid, ck3, false, 5_000, s3);
 
         RoundLib.Round memory afterReveal = RoundEngineReadHelpers.round(engine, cid, rid);

@@ -172,6 +172,9 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
+        if (engine.roundThresholdReachedBlock(contentId, roundId) == block.number) {
+            vm.roll(block.number + 1);
+        }
     }
 
     function _commitKeyForVoter(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, address voter)

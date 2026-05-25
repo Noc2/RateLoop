@@ -423,6 +423,9 @@ contract RoundIntegrationTest is VotingTestBase {
             votingEngine.revealVoteByCommitKey(
                 contentId, roundId, commitKeys[i], directions[i], _defaultPredictionBps(i, directions[i]), salts[i]
             );
+            if (votingEngine.roundThresholdReachedBlock(contentId, roundId) == block.number) {
+                vm.roll(block.number + 1);
+            }
         }
     }
 

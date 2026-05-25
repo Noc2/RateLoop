@@ -156,6 +156,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitedPool;
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitClaimants;
     mapping(uint256 => mapping(uint256 => uint16)) public roundRbtsMeanScoreBps;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundThresholdReachedBlock;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedUpBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsWeight;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRbtsScoreBps;
@@ -1320,8 +1321,8 @@ contract RoundVotingEngine is
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
-        bool thresholdAlreadyReached = round.thresholdReachedAt != 0;
-        bool countForSettlement = !thresholdAlreadyReached;
+        uint256 thresholdBlock = roundThresholdReachedBlock[contentId][roundId];
+        bool countForSettlement = thresholdBlock == 0 || thresholdBlock != block.number;
         (
             uint256 eligibleFrontendStake,
             uint256 eligibleFrontendCount,
@@ -1352,13 +1353,14 @@ contract RoundVotingEngine is
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
-        if (!thresholdAlreadyReached && round.thresholdReachedAt != 0) {
+        if (thresholdBlock == 0 && round.thresholdReachedAt != 0) {
+            roundThresholdReachedBlock[contentId][roundId] = block.number;
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         }
         commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
-        // L-Vote-B / H-Vote-1: settlement pools and RBTS scoring use the same transaction-state
-        // predicate. Reveals after the quorum-closing transaction, including same-block
-        // backruns, remain stake-return-only and cannot move settlement.
+        // L-Vote-B / H-Vote-1: settlement pools and RBTS scoring use the same cutoff for
+        // same-block post-quorum reveals. Later blocks still count under the existing round
+        // economics, but backruns in the quorum-closing block are stake-return-only.
         if (countForSettlement) {
             commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
         }

@@ -152,6 +152,9 @@ contract GameTheoryImprovementsTest is VotingTestBase {
 
         vm.prank(voter);
         engine.revealVoteByCommitKey(contentId, roundId, ck, isUp, 5_000, salt);
+        if (engine.roundThresholdReachedBlock(contentId, roundId) == block.number) {
+            vm.roll(block.number + 1);
+        }
     }
 
     /// @dev Settle the round. Caller must ensure minVoters have been revealed.
