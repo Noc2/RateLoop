@@ -2,7 +2,7 @@ import { questionImageAttachments } from "../db/schema";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { type Abi, encodeAbiParameters, encodeEventTopics, encodeFunctionData, parseAbiItem } from "viem";
+import { type Abi, encodeAbiParameters, encodeEventTopics, encodeFunctionData, parseAbi, parseAbiItem } from "viem";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAppEnv = env.APP_ENV;
@@ -55,6 +55,10 @@ const raterRegistryContract = contractsForChain.RaterRegistry;
 const rewardEscrowContract = contractsForChain.QuestionRewardPoolEscrow;
 const rewardDistributorContract = contractsForChain.RoundRewardDistributor;
 const votingEngineContract = contractsForChain.RoundVotingEngine;
+const arbitraryTokenContract = {
+  address: "0x9999999999999999999999999999999999999999" as const,
+  abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
+};
 const APPROVED_IMAGE_ID = "att_sponsoredimage01";
 const APPROVED_IMAGE_URL = `https://www.curyo.xyz/api/attachments/images/${APPROVED_IMAGE_ID}.webp`;
 const submitQuestionWithRewardAndRoundConfigAbi = [
@@ -672,6 +676,16 @@ test("rejects token approvals to unsupported spenders", async () => {
   assert.equal(decision.isAllowed, false);
   if (decision.isAllowed) return;
   assert.equal(decision.debugCode, "unsupported_operation");
+});
+
+test("rejects approvals from arbitrary token contracts to supported spenders", async () => {
+  const decision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([encodeCall(arbitraryTokenContract, "approve", [rewardEscrowContract.address, 10n])]) as never,
+  );
+
+  assert.equal(decision.isAllowed, false);
+  if (decision.isAllowed) return;
+  assert.equal(decision.debugCode, "target_not_allowlisted");
 });
 
 test("rejects arbitrary token methods even on allowlisted contracts", async () => {

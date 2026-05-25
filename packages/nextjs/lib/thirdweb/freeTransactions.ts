@@ -139,7 +139,6 @@ const USER_OPERATION_RECEIPT_EVENT_ABI = parseAbi([
 const EXECUTED_RECEIPT_EVENT_ABI = parseAbi([
   "event Executed(address indexed user, address indexed signer, address indexed executor, uint256 batchSize)",
 ]);
-const ERC20_APPROVAL_ABI = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
 const CONTENT_REGISTRY_SUBMISSION_ABI = [
   {
     type: "function",
@@ -694,19 +693,6 @@ function normalizeAddressArg(value: unknown): `0x${string}` | null {
   return normalizeAddress(value);
 }
 
-function isApprovalToAllowedSpender(callData: Hex, allowedSpenders: ReadonlySet<string>) {
-  try {
-    const decoded = decodeFunctionData({
-      abi: ERC20_APPROVAL_ABI,
-      data: callData,
-    }) as { functionName: string; args: readonly unknown[] | undefined };
-    const spender = normalizeAddressArg(decoded.args?.[0]);
-    return decoded.functionName === "approve" && Boolean(spender && allowedSpenders.has(spender.toLowerCase()));
-  } catch {
-    return false;
-  }
-}
-
 type SponsoredSubmissionQuestion = {
   contextUrl: string;
   description: string;
@@ -871,6 +857,7 @@ async function validateSponsoredCalls(
       .filter((value): value is Address => Boolean(value))
       .map(value => value.toLowerCase()),
   );
+  const allowedApproveTokenNames = new Set(["LoopReputation", "MockERC20"]);
 
   for (const call of calls) {
     if (!isZeroCallValue(call.value)) {
@@ -879,9 +866,6 @@ async function validateSponsoredCalls(
 
     const contract = contractsByAddress.get(call.to.toLowerCase());
     if (!contract) {
-      if (isApprovalToAllowedSpender(call.data, allowedApproveSpenders)) {
-        continue;
-      }
       return { ok: false, debugCode: "target_not_allowlisted" };
     }
 
@@ -907,7 +891,7 @@ async function validateSponsoredCalls(
     const functionName = decoded.functionName;
     if (functionName === "approve") {
       const spender = normalizeAddressArg(args[0]);
-      if (spender && allowedApproveSpenders.has(spender.toLowerCase())) {
+      if (allowedApproveTokenNames.has(contract.name) && spender && allowedApproveSpenders.has(spender.toLowerCase())) {
         continue;
       }
     }
