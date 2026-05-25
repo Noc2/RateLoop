@@ -133,7 +133,7 @@ To deploy to ${network}, please follow these steps:
 
 The default account (scaffold-eth-default) can only be used for localhost deployments.
 `);
-  process.exit(0);
+  process.exit(1);
 }
 
 // Set environment variables for the make command
