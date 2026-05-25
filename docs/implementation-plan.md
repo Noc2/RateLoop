@@ -1,8 +1,10 @@
 # RateLoop Integration Plan
 
-This is the canonical implementation plan for the fresh RateLoop deployment.
-Nothing is deployed yet, so the protocol does not preserve legacy compatibility
-for the older optional identity and cluster-discount drafts.
+This is the canonical implementation plan for the current RateLoop deployment
+line. Shared deployment metadata now includes World Chain Sepolia (`4801`), so
+future contract changes must preserve upgrade and storage compatibility while
+still treating the older optional identity and cluster-discount drafts as
+non-legacy design history.
 
 ## Final Policy
 
@@ -158,13 +160,13 @@ without a human credential. The launch pool only credits ratings from rounds
 that satisfy the verified-human anchor policy.
 
 Earned-rater caps are assigned as a full cohort cap plus an active payable cap.
-The default unverified cap share is `10,000` bps so the first deployment starts
-with the same economic behavior as the full cap schedule. Governance can later
-lower the unverified share without changing the rest of the anchor policy. If an
-open-lane rater later attaches an active human credential to the same wallet,
-the rater can unlock the full snapshotted cap and receive any catch-up payment
-for already earned reward slots. Each human nullifier can unlock the full
-earned-rater cap for only one rater address.
+The default unverified cap share is `2,500` bps, so open-lane raters start with
+a partial payable cap until verification unlocks the full snapshotted cap.
+Governance can later tune the unverified share without changing the rest of the
+anchor policy. If an open-lane rater later attaches an active human credential
+to the same wallet, the rater can unlock the full snapshotted cap and receive
+any catch-up payment for already earned reward slots. Each human nullifier can
+unlock the full earned-rater cap for only one rater address.
 
 Initial policy:
 
@@ -175,7 +177,7 @@ Initial policy:
 - Minimum qualifying score: 7,000 bps.
 - Eligibility starts after 5 qualifying ratings.
 - Launch credits are capped by the existing cohort schedule.
-- Default unverified earned-rater cap share: 10,000 bps.
+- Default unverified earned-rater cap share: 2,500 bps.
 
 The previous verified-human metrics are preserved in naming and behavior:
 `minVerifiedHumanUnits`/`minVerifiedHumans`, verified-human round units, distinct
