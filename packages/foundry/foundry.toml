@@ -15,7 +15,7 @@ via_ir = true
 optimizer = true
 optimizer_runs = 100
 build_info = true
-extra_output = ['abi', 'evm.bytecode', 'evm.deployedBytecode']
+extra_output = ['abi', 'evm.bytecode', 'evm.deployedBytecode', 'storageLayout']
 
 [profile.deploy]
 optimizer_runs = 0

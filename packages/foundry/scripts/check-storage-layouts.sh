@@ -50,10 +50,25 @@ for contract in "${CONTRACTS[@]}"; do
     continue
   fi
 
-  current=$(
-    forge inspect "contracts/$contract.sol:$contract" storageLayout --json 2>/dev/null \
-      | python3 "$CANONICALIZE_SCRIPT"
-  )
+  inspect_stdout="$(mktemp)"
+  inspect_stderr="$(mktemp)"
+  canonicalize_stderr="$(mktemp)"
+  if ! forge inspect "contracts/$contract.sol:$contract" storageLayout --json >"$inspect_stdout" 2>"$inspect_stderr"; then
+    echo "::error file=contracts/$contract.sol,title=Storage layout inspect failed::$contract storage layout could not be read"
+    cat "$inspect_stderr"
+    rm -f "$inspect_stdout" "$inspect_stderr" "$canonicalize_stderr"
+    mismatch=$((mismatch + 1))
+    continue
+  fi
+
+  if ! current="$(python3 "$CANONICALIZE_SCRIPT" <"$inspect_stdout" 2>"$canonicalize_stderr")"; then
+    echo "::error file=contracts/$contract.sol,title=Storage layout canonicalization failed::$contract storage layout output was not valid JSON"
+    cat "$canonicalize_stderr"
+    rm -f "$inspect_stdout" "$inspect_stderr" "$canonicalize_stderr"
+    mismatch=$((mismatch + 1))
+    continue
+  fi
+  rm -f "$inspect_stdout" "$inspect_stderr" "$canonicalize_stderr"
 
   if ! diff -u "$expected" <(echo "$current") > /tmp/storage-diff-$$.txt; then
     echo "::error file=$expected,title=Storage layout drift detected in $contract"
