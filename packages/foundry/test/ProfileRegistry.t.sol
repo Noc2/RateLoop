@@ -356,6 +356,31 @@ contract ProfileRegistryTest is Test {
         assertEq(rgb, 0xF26426);
     }
 
+    function test_ReboundIdentityOldWalletCanCreateFreshProfileWithoutDuplicatePagination() public {
+        vm.prank(user1);
+        registry.setProfile("alice", "");
+
+        bytes32 anchor = bytes32(uint256(uint160(user1)));
+        address remintedUser = address(9);
+        vm.startPrank(admin);
+        raterRegistry.revokeHumanCredential(user1);
+        raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, anchor);
+        _seedIdentity(remintedUser, anchor);
+        vm.stopPrank();
+
+        vm.prank(remintedUser);
+        registry.setProfile("alice", "");
+
+        vm.prank(user1);
+        registry.setProfile("alice_old_wallet", "");
+
+        (address[] memory addresses, uint256 total) = registry.getRegisteredAddressesPaginated(0, 10);
+        assertEq(total, 2);
+        assertEq(addresses.length, 2);
+        assertEq(addresses[0], user1);
+        assertEq(addresses[1], remintedUser);
+    }
+
     function test_DifferentIdentityCannotReclaimProfileName() public {
         vm.prank(user1);
         registry.setProfile("alice", "");

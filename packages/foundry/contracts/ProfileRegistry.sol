@@ -34,12 +34,13 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
     mapping(address => uint32) private _avatarAccents;
     mapping(bytes32 => address) private _nameToAddress; // lowercase name hash => owner
     address[] private _registeredAddresses;
+    mapping(address => bool) private _registeredAddressSeen;
     IRaterIdentityRegistry public raterRegistry;
     mapping(address => bytes32) private _profileIdentityKeys;
     mapping(bytes32 => address) private _profileOwnerByIdentityKey;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[47] private __gap;
+    uint256[46] private __gap;
 
     // --- Events ---
     event ProfileCreated(address indexed user, string name, string selfReport);
@@ -159,7 +160,7 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
 
         if (isNewProfile) {
             profile.createdAt = block.timestamp;
-            _registeredAddresses.push(msg.sender);
+            _trackRegisteredAddress(msg.sender);
             emit ProfileCreated(msg.sender, name, selfReport);
         } else {
             emit ProfileUpdated(msg.sender, name, selfReport);
@@ -305,7 +306,7 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
                 _avatarAccents[user] = accent;
                 delete _avatarAccents[previousOwner];
             }
-            _registeredAddresses.push(user);
+            _trackRegisteredAddress(user);
             if (previousNameHash != bytes32(0)) {
                 _nameToAddress[previousNameHash] = user;
             }
@@ -316,6 +317,12 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
         delete _profiles[previousOwner];
         delete _profileIdentityKeys[previousOwner];
         _profileOwnerByIdentityKey[identityKey] = user;
+    }
+
+    function _trackRegisteredAddress(address user) internal {
+        if (_registeredAddressSeen[user]) return;
+        _registeredAddressSeen[user] = true;
+        _registeredAddresses.push(user);
     }
 
     /// @notice Validate name format (alphanumeric and underscore only)
