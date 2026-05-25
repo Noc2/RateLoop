@@ -7,7 +7,7 @@
     "dev": "node ./scripts/devWithRecovery.mjs",
     "dev:raw": "ponder dev --disable-ui",
     "dev:ui": "ponder dev",
-    "start": "ponder start",
+    "start": "node ./scripts/start.mjs",
     "codegen": "ponder codegen",
     "serve": "ponder serve",
     "check-types": "tsc --noEmit",
