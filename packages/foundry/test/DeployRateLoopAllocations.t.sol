@@ -17,6 +17,26 @@ contract DeployRateLoopHarness is DeployRateLoop {
     function validateUsdcToken(address token) external view {
         _validateUsdcToken(token);
     }
+
+    function buildQuorumExcludedHolders(
+        address launchDistribution,
+        address rewardDistributor,
+        address votingEngine,
+        address treasury,
+        address contentRegistry,
+        address frontendRegistry,
+        address questionRewardPoolEscrow
+    ) external pure returns (address[] memory) {
+        return _buildQuorumExcludedHolders(
+            launchDistribution,
+            rewardDistributor,
+            votingEngine,
+            treasury,
+            contentRegistry,
+            frontendRegistry,
+            questionRewardPoolEscrow
+        );
+    }
 }
 
 contract RevertingDecimalsToken {
@@ -75,5 +95,43 @@ contract DeployRateLoopAllocationsTest is Test {
         RevertingDecimalsToken broken = new RevertingDecimalsToken();
         vm.expectRevert(bytes("USDC decimals probe failed"));
         deployScript.validateUsdcToken(address(broken));
+    }
+
+    function test_BuildQuorumExcludedHoldersIncludesQuestionRewardEscrow() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+
+        address[] memory holders = deployScript.buildQuorumExcludedHolders(
+            address(0x1001),
+            address(0x1002),
+            address(0x1003),
+            address(0x1004),
+            address(0x1005),
+            address(0x1006),
+            address(0x1007)
+        );
+
+        assertEq(holders.length, 7);
+        assertEq(holders[0], address(0x1001));
+        assertEq(holders[5], address(0x1006));
+        assertEq(holders[6], address(0x1007));
+    }
+
+    function test_BuildQuorumExcludedHoldersCompactsDuplicatesAndZeroes() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+
+        address[] memory holders = deployScript.buildQuorumExcludedHolders(
+            address(0x1001),
+            address(0),
+            address(0x1001),
+            address(0x1004),
+            address(0),
+            address(0x1004),
+            address(0x1007)
+        );
+
+        assertEq(holders.length, 3);
+        assertEq(holders[0], address(0x1001));
+        assertEq(holders[1], address(0x1004));
+        assertEq(holders[2], address(0x1007));
     }
 }
