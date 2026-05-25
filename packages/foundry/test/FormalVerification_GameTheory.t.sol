@@ -523,7 +523,11 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             _forceSettle(cid);
             uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
             if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
-                assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool should equal forfeitures");
+                uint256 voterPool = engine.roundVoterPool(cid, rid);
+                assertLe(voterPool, forfeitedPool, "Voter pool cannot exceed forfeitures");
+                if (forfeitedPool > 0) {
+                    assertGt(voterPool, 0, "Forfeitures should fund voters after protocol share");
+                }
             }
         }
 

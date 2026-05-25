@@ -952,6 +952,20 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 voterPool = votingEngine.roundVoterPool(contentId, roundId);
         uint256 treasuryBefore = lrepToken.balanceOf(treasury);
 
+        uint256 weightedWinningStake = votingEngine.roundRbtsRewardWeight(contentId, roundId);
+        uint256 expectedTotal;
+        for (uint256 i = 0; i < winners.length; i++) {
+            bytes32 commitKey = _commitKeyForVoter(contentId, roundId, winners[i]);
+            expectedTotal += RewardMath.calculateVoterReward(
+                votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey), weightedWinningStake, voterPool
+            );
+        }
+        if (expectedTotal >= voterPool) {
+            vm.expectRevert(RoundRewardDistributor.NoRewardDust.selector);
+            rewardDistributor.finalizeVoterRewardDust(contentId, roundId, winners);
+            return;
+        }
+
         uint256 releasedDust = rewardDistributor.finalizeVoterRewardDust(contentId, roundId, winners);
 
         assertGt(releasedDust, 0, "only mathematical voter reward dust should be finalized");
@@ -1465,6 +1479,9 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 holderBalanceBefore = lrepToken.balanceOf(voter1);
         uint256 stakePayerBalanceBefore = lrepToken.balanceOf(delegate1);
         uint256 expectedReturnedStake = _expectedRbtsReturnedStake(contentId, roundId, delegate1);
+        uint256 expectedClaim =
+            _expectedRbtsClaimValue(contentId, roundId, _commitKeyForVoter(contentId, roundId, delegate1));
+        uint256 expectedHolderReward = expectedClaim - expectedReturnedStake;
         vm.prank(delegate1);
         rewardDistributor.claimReward(contentId, roundId);
 
@@ -1473,7 +1490,11 @@ contract RoundIntegrationTest is VotingTestBase {
             stakePayerBalanceBefore + expectedReturnedStake,
             "old delegate receives its RBTS stake return"
         );
-        assertGt(lrepToken.balanceOf(voter1), holderBalanceBefore, "holder receives voter-pool reward");
+        assertEq(
+            lrepToken.balanceOf(voter1),
+            holderBalanceBefore + expectedHolderReward,
+            "holder receives voter-pool reward"
+        );
     }
 
     function test_SettledRound_RevokedIdentityCanClaimEarnedRewardFromSnapshot() public {
@@ -1560,10 +1581,12 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
 
         uint256 expectedReturnedStake = _expectedRbtsReturnedStake(contentId, roundId, delegate1);
+        uint256 expectedClaim =
+            _expectedRbtsClaimValue(contentId, roundId, _commitKeyForVoter(contentId, roundId, delegate1));
+        uint256 expectedReward = expectedClaim - expectedReturnedStake;
 
         // Expect the event to carry voter=voter1 (current holder) and stakePayer=delegate1,
-        // with the RBTS stake return and reward > 0. Match topics + data; allow the reward amount
-        // to be any positive value (computed from voter pool).
+        // with the RBTS stake return split from any voter-pool reward.
         vm.recordLogs();
 
         vm.prank(voter1);
@@ -1582,7 +1605,7 @@ contract RoundIntegrationTest is VotingTestBase {
                     abi.decode(logs[i].data, (address, uint256, uint256));
                 assertEq(stakePayer, delegate1, "stakePayer in event should be the delegate");
                 assertEq(stakeReturned, expectedReturnedStake, "stakeReturned should equal RBTS stake return");
-                assertGt(reward, 0, "voter-pool reward should be positive for winner");
+                assertEq(reward, expectedReward, "reward should equal the voter-pool share");
                 found = true;
                 break;
             }
@@ -1613,6 +1636,9 @@ contract RoundIntegrationTest is VotingTestBase {
 
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
         uint256 expectedReturnedStake = _expectedRbtsReturnedStake(contentId, roundId, delegate1);
+        uint256 expectedClaim =
+            _expectedRbtsClaimValue(contentId, roundId, _commitKeyForVoter(contentId, roundId, delegate1));
+        uint256 expectedHolderReward = expectedClaim - expectedReturnedStake;
         // Delegate funded the stake; holder is unchanged so far.
         assertEq(lrepToken.balanceOf(delegate1), delegateBalanceBefore - STAKE, "delegate paid stake");
         assertEq(lrepToken.balanceOf(voter1), holderBalanceBefore, "holder unchanged after vote");
@@ -1626,7 +1652,11 @@ contract RoundIntegrationTest is VotingTestBase {
             delegateBalanceBefore - STAKE + expectedReturnedStake,
             "delegate receives its RBTS stake return"
         );
-        assertGt(lrepToken.balanceOf(voter1), holderBalanceBefore, "holder receives voter-pool reward");
+        assertEq(
+            lrepToken.balanceOf(voter1),
+            holderBalanceBefore + expectedHolderReward,
+            "holder receives voter-pool reward"
+        );
     }
 
     /// @dev After rotating the delegate, claiming via the new delegate routes the voter-pool
@@ -1652,6 +1682,9 @@ contract RoundIntegrationTest is VotingTestBase {
 
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
         uint256 expectedReturnedStake = _expectedRbtsReturnedStake(contentId, roundId, delegate1);
+        uint256 expectedClaim =
+            _expectedRbtsClaimValue(contentId, roundId, _commitKeyForVoter(contentId, roundId, delegate1));
+        uint256 expectedHolderReward = expectedClaim - expectedReturnedStake;
 
         // Holder rotates: removes voter4, sets voter5 as the new delegate.
         vm.prank(voter1);
@@ -1667,7 +1700,11 @@ contract RoundIntegrationTest is VotingTestBase {
             oldDelegateBalanceBefore - STAKE + expectedReturnedStake,
             "rotated delegate receives its RBTS stake return"
         );
-        assertGt(lrepToken.balanceOf(voter1), holderBalanceBefore, "holder receives voter-pool reward post-rotation");
+        assertEq(
+            lrepToken.balanceOf(voter1),
+            holderBalanceBefore + expectedHolderReward,
+            "holder receives voter-pool reward post-rotation"
+        );
         assertEq(lrepToken.balanceOf(delegate2), newDelegateBalanceBefore, "new delegate is a relay, not a recipient");
     }
 
@@ -1693,6 +1730,9 @@ contract RoundIntegrationTest is VotingTestBase {
 
         uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
         uint256 expectedReturnedStake = _expectedRbtsReturnedStake(contentId, roundId, delegate1);
+        uint256 expectedClaim =
+            _expectedRbtsClaimValue(contentId, roundId, _commitKeyForVoter(contentId, roundId, delegate1));
+        uint256 expectedHolderReward = expectedClaim - expectedReturnedStake;
         assertNotEq(votingEngine.holderCommitKey(contentId, roundId, voter1), bytes32(0));
 
         vm.prank(voter1);
@@ -1711,7 +1751,11 @@ contract RoundIntegrationTest is VotingTestBase {
             oldDelegateBalanceBefore - STAKE + expectedReturnedStake,
             "old delegate receives its RBTS stake return"
         );
-        assertGt(lrepToken.balanceOf(voter1), holderBalanceBefore, "holder receives reward after identity churn");
+        assertEq(
+            lrepToken.balanceOf(voter1),
+            holderBalanceBefore + expectedHolderReward,
+            "holder receives reward after identity churn"
+        );
         assertEq(lrepToken.balanceOf(delegate2), newDelegateBalanceBefore, "new delegate is only a relay");
     }
 
