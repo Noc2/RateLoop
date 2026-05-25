@@ -155,6 +155,22 @@ describe("keeper config", () => {
     ).rejects.toThrow("PONDER_BASE_URL must be a valid URL when provided");
   });
 
+  it("rejects local or non-HTTPS Ponder API base URLs in production", async () => {
+    await expect(
+      loadKeeperConfig({
+        NODE_ENV: "production",
+        PONDER_BASE_URL: "http://localhost:42069",
+      }),
+    ).rejects.toThrow("PONDER_BASE_URL must not point to localhost in production");
+
+    await expect(
+      loadKeeperConfig({
+        NODE_ENV: "production",
+        PONDER_BASE_URL: "http://ponder.example.com",
+      }),
+    ).rejects.toThrow("PONDER_BASE_URL must be an HTTPS URL in production");
+  });
+
   it.each([
     ["CHAIN_ID", "4801abc", "CHAIN_ID must be a positive integer"],
     ["KEEPER_INTERVAL_MS", "30000ms", "KEEPER_INTERVAL_MS must be a positive integer"],

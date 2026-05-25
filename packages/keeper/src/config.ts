@@ -62,12 +62,29 @@ function requireUrlEnv(name: string, errors: string[]): string {
   return value;
 }
 
-function readOptionalUrlEnv(name: string, errors: string[]): string | undefined {
+function readOptionalUrlEnv(
+  name: string,
+  errors: string[],
+  options: {
+    rejectLocalhostInProduction?: boolean;
+    requireHttpsInProduction?: boolean;
+  } = {},
+): string | undefined {
   const value = readEnv(name);
   if (!value) return undefined;
 
   try {
-    new URL(value);
+    const url = new URL(value);
+    const isLocalhost =
+      url.hostname === "localhost" ||
+      url.hostname === "127.0.0.1" ||
+      url.hostname === "::1";
+    if (isProduction && options.rejectLocalhostInProduction && isLocalhost) {
+      errors.push(`${name} must not point to localhost in production`);
+    }
+    if (isProduction && options.requireHttpsInProduction && url.protocol !== "https:") {
+      errors.push(`${name} must be an HTTPS URL in production`);
+    }
   } catch {
     errors.push(`${name} must be a valid URL when provided`);
     return undefined;
@@ -426,7 +443,10 @@ function loadConfig() {
 
     // Keeper behavior
     intervalMs: readPositiveIntEnv("KEEPER_INTERVAL_MS", "30000", errors),
-    ponderBaseUrl: readOptionalUrlEnv("PONDER_BASE_URL", errors),
+    ponderBaseUrl: readOptionalUrlEnv("PONDER_BASE_URL", errors, {
+      rejectLocalhostInProduction: true,
+      requireHttpsInProduction: true,
+    }),
     startupJitterMs: readNonNegativeIntEnv(
       "KEEPER_STARTUP_JITTER_MS",
       "0",
