@@ -929,6 +929,7 @@ export function registerDataRoutes(app: ApiApp) {
         totalClaimWeight: questionRewardPoolRound.totalClaimWeight,
         correlationWeightRoot: questionRewardPoolRound.correlationWeightRoot,
         payoutWeightRoot: roundPayoutSnapshot.weightRoot,
+        payoutArtifactHash: roundPayoutSnapshot.artifactHash,
         payoutArtifactUri: roundPayoutSnapshot.artifactUri,
         commitKey: vote.commitKey,
         identityKey: vote.identityKey,
@@ -994,6 +995,7 @@ export function registerDataRoutes(app: ApiApp) {
             item.payoutArtifactUri != null);
         const payoutProof = requiresPayoutProof
           ? await resolveQuestionPayoutProof({
+              artifactHash: item.payoutArtifactHash,
               artifactUri: item.payoutArtifactUri,
               domain: PAYOUT_DOMAIN_QUESTION_REWARD,
               rewardPoolId: item.rewardPoolId,

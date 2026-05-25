@@ -1,5 +1,5 @@
 import { merkleProof } from "@rateloop/node-utils/correlationScoring";
-import type { Hex } from "viem";
+import { keccak256, toBytes, type Hex } from "viem";
 
 export interface PayoutWeightProof {
   payoutWeight: {
@@ -19,6 +19,7 @@ export interface PayoutWeightProof {
 }
 
 interface ResolveQuestionPayoutProofParams {
+  artifactHash?: Hex | null | undefined;
   artifactUri: string | null | undefined;
   domain: number;
   rewardPoolId: bigint;
@@ -90,6 +91,7 @@ export async function resolveQuestionPayoutProof(
 
   const artifact = await fetchArtifactJson(params.artifactUri);
   if (!artifact) return null;
+  if (!artifactHashMatches(artifact, params.artifactHash)) return null;
 
   const payoutWeights = collectPayoutWeights(artifact);
   const candidate = payoutWeights.find((payoutWeight) =>
@@ -251,6 +253,35 @@ function readDataUri(uri: string) {
     return Buffer.from(payload, "base64").toString("utf8");
   }
   return decodeURIComponent(payload);
+}
+
+function artifactHashMatches(artifact: unknown, expectedHash: Hex | null | undefined) {
+  const normalizedExpectedHash = normalizeHex(expectedHash);
+  if (!normalizedExpectedHash) return true;
+  const actualHash = keccak256(toBytes(canonicalJson(artifact)));
+  return actualHash.toLowerCase() === normalizedExpectedHash.toLowerCase();
+}
+
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(sortJson(value), (_key, current) =>
+    typeof current === "bigint" ? current.toString() : current,
+  );
+}
+
+function sortJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJson);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.keys(record)
+      .sort()
+      .map((key) => [key, sortJson(record[key])]),
+  );
 }
 
 function collectPayoutWeights(artifact: unknown): CandidatePayoutWeight[] {

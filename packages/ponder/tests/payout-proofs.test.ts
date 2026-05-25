@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { keccak256, toBytes } from "viem";
 
 const proofParams = {
   domain: 1,
@@ -27,6 +28,30 @@ const artifact = {
     },
   ],
 };
+
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(sortJson(value));
+}
+
+function sortJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJson);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.keys(record)
+      .sort()
+      .map((key) => [key, sortJson(record[key])]),
+  );
+}
+
+function artifactHash(value: unknown) {
+  return keccak256(toBytes(canonicalJson(value)));
+}
 
 async function loadResolver(allowlist = "") {
   vi.resetModules();
@@ -58,6 +83,27 @@ describe("payout artifact proof resolution", () => {
     await expect(resolveQuestionPayoutProof({ ...proofParams, artifactUri })).resolves.toEqual(
       expect.objectContaining({ proof: [] }),
     );
+  });
+
+  it("verifies fetched artifacts against the expected on-chain hash", async () => {
+    const { resolveQuestionPayoutProof } = await loadResolver();
+    const artifactUri = `data:application/json;base64,${Buffer.from(JSON.stringify(artifact), "utf8").toString("base64")}`;
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactHash: artifactHash(artifact),
+        artifactUri,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ proof: [] }));
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactHash: `0x${"ff".repeat(32)}`,
+        artifactUri,
+      }),
+    ).resolves.toBeNull();
   });
 
   it("fetches HTTPS artifacts from an allowed base URL", async () => {
