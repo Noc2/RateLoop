@@ -183,7 +183,7 @@ yarn keeper:start
 
 ```bash
 docker build -f packages/keeper/Dockerfile -t rateloop-keeper .
-docker run --env-file packages/keeper/.env.local -p 9090:9090 rateloop-keeper
+docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0 -e METRICS_AUTH_TOKEN=<token> -p 9090:9090 rateloop-keeper
 ```
 
 **Monitoring:**
