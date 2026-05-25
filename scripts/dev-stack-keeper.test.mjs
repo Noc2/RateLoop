@@ -84,6 +84,24 @@ test("requires a public artifact base URL when automatic snapshots use file stor
   );
 });
 
+test("requires a valid HTTPS public artifact base URL when automatic snapshots use file storage", () => {
+  for (const publicBaseUrl of ["http://artifacts.example.com/rateloop", "not a url"]) {
+    assert.deepEqual(
+      getMissingKeeperEnvVars({
+        RPC_URL: "http://localhost:8545",
+        CHAIN_ID: "31337",
+        KEEPER_PRIVATE_KEY: "0xabc",
+        PONDER_BASE_URL: "http://localhost:42069",
+        KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+        KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+        KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+        KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: publicBaseUrl,
+      }),
+      ["KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid HTTPS URL"],
+    );
+  }
+});
+
 test("defaults non-local automatic correlation snapshots to file artifacts", () => {
   assert.deepEqual(
     getMissingKeeperEnvVars({

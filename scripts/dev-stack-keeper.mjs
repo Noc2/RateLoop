@@ -39,6 +39,14 @@ export function getMissingKeeperEnvVars(env) {
     ) {
       missing.push("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL");
     }
+    if (
+      mode === "auto" &&
+      artifactStorage === "file" &&
+      env.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL?.trim() &&
+      !isHttpsUrl(env.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL)
+    ) {
+      missing.push("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid HTTPS URL");
+    }
   }
 
   return missing;
@@ -50,4 +58,12 @@ function defaultCorrelationArtifactStorage(chainId) {
 
 function isTruthy(value) {
   return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
+}
+
+function isHttpsUrl(value) {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
