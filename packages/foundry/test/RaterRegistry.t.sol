@@ -39,6 +39,14 @@ contract RaterRegistryTest is Test {
         );
     }
 
+    function _credentialKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
+        internal
+        view
+        returns (bytes32)
+    {
+        return registry.credentialIdentityKey(provider, nullifierHash);
+    }
+
     function test_ConstructorGrantsGovernanceAndAdminRoles() public view {
         assertTrue(registry.hasRole(registry.DEFAULT_ADMIN_ROLE(), governance));
         assertTrue(registry.hasRole(registry.ADMIN_ROLE(), governance));
@@ -371,12 +379,36 @@ contract RaterRegistryTest is Test {
         );
     }
 
+    function test_CredentialIdentityKeysAreProviderNamespaced() public {
+        uint256[8] memory proof;
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+
+        vm.prank(admin);
+        registry.seedHumanCredential(otherRater, uint64(block.timestamp + 30 days), NULLIFIER_HASH, EVIDENCE_HASH);
+
+        IRaterIdentityRegistry.ResolvedRater memory worldIdRater = registry.resolveRater(rater);
+        IRaterIdentityRegistry.ResolvedRater memory seededRater = registry.resolveRater(otherRater);
+
+        assertEq(worldIdRater.humanNullifier, NULLIFIER_HASH);
+        assertEq(seededRater.humanNullifier, NULLIFIER_HASH);
+        assertEq(
+            worldIdRater.identityKey,
+            _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
+        );
+        assertEq(
+            seededRater.identityKey,
+            _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH)
+        );
+        assertTrue(worldIdRater.identityKey != seededRater.identityKey);
+    }
+
     function test_CredentialRefreshKeepsCanonicalIdentityKey() public {
         vm.prank(admin);
         registry.seedHumanCredential(rater, uint64(block.timestamp + 1), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
         IRaterIdentityRegistry.ResolvedRater memory first = registry.resolveRater(rater);
-        assertEq(first.identityKey, SEEDED_ANCHOR_ID);
+        assertEq(first.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID));
 
         vm.warp(block.timestamp + 2);
         uint256[8] memory proof;
@@ -385,7 +417,10 @@ contract RaterRegistryTest is Test {
 
         IRaterIdentityRegistry.ResolvedRater memory refreshed = registry.resolveRater(rater);
         assertEq(refreshed.humanNullifier, NULLIFIER_HASH);
-        assertEq(refreshed.identityKey, SEEDED_ANCHOR_ID);
+        assertEq(
+            refreshed.identityKey,
+            _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID)
+        );
     }
 
     /// @notice RR-1 (2026-05-20 follow-up audit): the M-Identity-2 sticky-canonical fix preserved
@@ -398,13 +433,14 @@ contract RaterRegistryTest is Test {
         // 1. Seed rater A with anchorId N; canonical = N.
         vm.prank(admin);
         registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
-        assertEq(registry.resolveRater(rater).identityKey, SEEDED_ANCHOR_ID);
+        bytes32 seededKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        assertEq(registry.resolveRater(rater).identityKey, seededKey);
 
         // 2. Revoke A. Canonical must be cleared.
         vm.prank(admin);
         registry.revokeHumanCredential(rater);
         IRaterIdentityRegistry.ResolvedRater memory revokedA = registry.resolveRater(rater);
-        assertTrue(revokedA.identityKey != SEEDED_ANCHOR_ID, "canonical not cleared on revoke");
+        assertTrue(revokedA.identityKey != seededKey, "canonical not cleared on revoke");
         // Post-revoke, identityKey falls back to the address-derived key.
         assertEq(revokedA.identityKey, registry.addressIdentityKey(rater));
 
@@ -413,7 +449,7 @@ contract RaterRegistryTest is Test {
         registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
         registry.seedHumanCredential(otherRater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
         vm.stopPrank();
-        assertEq(registry.resolveRater(otherRater).identityKey, SEEDED_ANCHOR_ID);
+        assertEq(registry.resolveRater(otherRater).identityKey, seededKey);
 
         // 4. Re-seed rater A with a DIFFERENT anchor. A's canonical must be the NEW anchor,
         //    not the recycled N still held by otherRater.
@@ -421,7 +457,11 @@ contract RaterRegistryTest is Test {
         vm.prank(admin);
         registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), freshAnchor, EVIDENCE_HASH);
         IRaterIdentityRegistry.ResolvedRater memory reseededA = registry.resolveRater(rater);
-        assertEq(reseededA.identityKey, freshAnchor, "A's canonical didn't re-seed to new anchor");
+        assertEq(
+            reseededA.identityKey,
+            _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, freshAnchor),
+            "A's canonical didn't re-seed to new anchor"
+        );
 
         // 5. The two raters must NOT share an identityKey.
         assertTrue(
@@ -505,7 +545,7 @@ contract RaterRegistryTest is Test {
 
         IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
         assertEq(resolved.holder, rater);
-        assertEq(resolved.identityKey, SEEDED_ANCHOR_ID);
+        assertEq(resolved.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID));
         assertEq(resolved.humanNullifier, SEEDED_ANCHOR_ID);
         assertFalse(resolved.hasActiveHumanCredential);
         assertFalse(resolved.delegated);
@@ -528,7 +568,7 @@ contract RaterRegistryTest is Test {
         IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
 
         assertEq(resolved.holder, rater);
-        assertEq(resolved.identityKey, SEEDED_ANCHOR_ID);
+        assertEq(resolved.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID));
         assertEq(resolved.humanNullifier, SEEDED_ANCHOR_ID);
         assertTrue(resolved.hasActiveHumanCredential);
         assertFalse(resolved.delegated);
@@ -602,7 +642,7 @@ contract RaterRegistryTest is Test {
 
         IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(otherRater);
         assertEq(resolved.holder, otherRater);
-        assertEq(resolved.identityKey, SEEDED_ANCHOR_ID);
+        assertEq(resolved.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID));
         assertFalse(resolved.delegated);
     }
 }

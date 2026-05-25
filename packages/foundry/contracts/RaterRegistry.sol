@@ -412,10 +412,11 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         ) {
             revert InvalidCredential();
         }
+        bytes32 newKey = credentialIdentityKey(credential.provider, credential.nullifierHash);
         bytes32 previousKey = _canonicalHumanIdentityKey[rater];
-        if (previousKey == credential.nullifierHash) return;
-        _canonicalHumanIdentityKey[rater] = credential.nullifierHash;
-        emit CanonicalHumanIdentityKeyRotated(rater, previousKey, credential.nullifierHash, credential.provider);
+        if (previousKey == newKey) return;
+        _canonicalHumanIdentityKey[rater] = newKey;
+        emit CanonicalHumanIdentityKeyRotated(rater, previousKey, newKey, credential.provider);
     }
 
     function getProfile(address rater) external view returns (RaterProfile memory) {
@@ -492,6 +493,15 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
     }
 
+    function credentialIdentityKey(HumanCredentialProvider provider, bytes32 nullifierHash)
+        public
+        pure
+        returns (bytes32)
+    {
+        if (provider == HumanCredentialProvider.None || nullifierHash == bytes32(0)) return bytes32(0);
+        return keccak256(abi.encode("rateloop.human-identity-v1", provider, nullifierHash));
+    }
+
     function hasActiveHumanCredential(address rater) public view returns (bool) {
         HumanCredential storage credential = _humanCredentials[rater];
         return credential.verified && !credential.revoked && credential.expiresAt > block.timestamp;
@@ -549,7 +559,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         // `rotateCanonicalIdentityKey` governance call that emits a migration event so
         // downstream consumers can re-map.
         if (_canonicalHumanIdentityKey[rater] == bytes32(0)) {
-            _canonicalHumanIdentityKey[rater] = nullifierHash;
+            _canonicalHumanIdentityKey[rater] = credentialIdentityKey(provider, nullifierHash);
         }
         _clearInboundDelegation(rater);
 
@@ -594,7 +604,9 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         if (credential.verified && !credential.revoked && credential.nullifierHash != bytes32(0)) {
             humanNullifier = credential.nullifierHash;
             identityKey = _canonicalHumanIdentityKey[holder];
-            if (identityKey == bytes32(0)) identityKey = humanNullifier;
+            if (identityKey == bytes32(0)) {
+                identityKey = credentialIdentityKey(credential.provider, humanNullifier);
+            }
             hasActiveCredential = credential.expiresAt > block.timestamp;
         } else {
             identityKey = addressIdentityKey(holder);

@@ -79,10 +79,18 @@ library LaunchRaterRewardLib {
             ) {
                 return bytes32(0);
             }
-            return credential.nullifierHash;
+            return launchRewardCredentialAnchorId(credential.provider, credential.nullifierHash);
         } catch {
             return bytes32(0);
         }
+    }
+
+    function launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(provider, nullifierHash));
     }
 
     function launchRewardAnchorSeen(bytes32[] memory anchors, uint256 anchorCount, bytes32 anchorId)

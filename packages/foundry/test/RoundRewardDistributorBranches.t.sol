@@ -322,6 +322,14 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         _ageLaunchAnchorCredential();
     }
 
+    function _credentialKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifier)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(provider, nullifier));
+    }
+
     function _ageLaunchAnchorCredential() internal {
         vm.warp(block.timestamp + launchPool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS());
     }
@@ -433,7 +441,12 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
-        assertEq(launchPool.verifiedAnchorDistinctRaterCount(anchorId), 1);
+        assertEq(
+            launchPool.verifiedAnchorDistinctRaterCount(
+                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, anchorId)
+            ),
+            1
+        );
     }
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshVerifiedHumanAnchor() public {
@@ -458,6 +471,25 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 1);
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
+    }
+
+    function test_ClaimReward_NamespacesLaunchAnchorsByProvider() public {
+        bytes32 sharedAnchor = bytes32("shared-launch-anchor");
+        _verifyHuman(voter2, sharedAnchor);
+        _seedRateLoopHuman(voter3, sharedAnchor);
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        bytes32 worldIdAnchor = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, sharedAnchor);
+        bytes32 seededAnchor = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, sharedAnchor);
+        assertEq(launchPool.qualifyingRatingCount(voter1), 1);
+        assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 2);
+        assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
+        assertEq(launchPool.verifiedAnchorDistinctRaterCount(worldIdAnchor), 1);
+        assertEq(launchPool.verifiedAnchorDistinctRaterCount(seededAnchor), 1);
+        assertEq(launchPool.verifiedAnchorDistinctRaterCount(sharedAnchor), 0);
     }
 
     function test_ClaimReward_RecordsLaunchCreditWhenAnchorExpiresAfterRoundStartBeforeClaim() public {
