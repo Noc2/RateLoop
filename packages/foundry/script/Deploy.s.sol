@@ -3,6 +3,7 @@ pragma solidity ^0.8.34;
 
 import { ScaffoldETHDeploy } from "./DeployHelpers.s.sol";
 import { console } from "forge-std/console.sol";
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
@@ -206,6 +207,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             console.log("Mock USDC deployed at:", usdcTokenAddress);
         } else {
             usdcTokenAddress = _resolveWorldChainUsdcAddress();
+            _validateUsdcToken(usdcTokenAddress);
             console.log("Circle USDC resolved at:", usdcTokenAddress);
         }
 
@@ -419,6 +421,15 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         if (block.chainid == 480) return WORLD_CHAIN_MAINNET_USDC;
         if (block.chainid == 4801) return WORLD_CHAIN_SEPOLIA_USDC;
         revert UnsupportedWorldChain(block.chainid);
+    }
+
+    function _validateUsdcToken(address token) internal view {
+        require(token.code.length > 0, "USDC has no code on this chain");
+        try IERC20Metadata(token).decimals() returns (uint8 decimals_) {
+            require(decimals_ == 6, "USDC must use 6 decimals");
+        } catch {
+            revert("USDC decimals probe failed");
+        }
     }
 
     function _resolveWorldIdRouterAddress(bool isLocalDev) internal view returns (address) {

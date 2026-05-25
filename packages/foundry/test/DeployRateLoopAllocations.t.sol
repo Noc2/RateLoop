@@ -6,11 +6,22 @@ import { DeployRateLoop } from "../script/Deploy.s.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract DeployRateLoopHarness is DeployRateLoop {
     function worldIdExternalNullifierHash(string memory appId, string memory action) external pure returns (uint256) {
         return _worldIdExternalNullifierHash(appId, action);
+    }
+
+    function validateUsdcToken(address token) external view {
+        _validateUsdcToken(token);
+    }
+}
+
+contract RevertingDecimalsToken {
+    function decimals() external pure returns (uint8) {
+        revert("no decimals");
     }
 }
 
@@ -47,5 +58,22 @@ contract DeployRateLoopAllocationsTest is Test {
             deployScript.worldIdExternalNullifierHash("app_staging_rateloop_local", "rateloop-human-credential-v1"),
             253743144824180352641159477734894791954336336003057463640256567965128781153
         );
+    }
+
+    function test_ValidateUsdcTokenRequiresCodeAndSixDecimals() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        deployScript.validateUsdcToken(address(usdc));
+
+        vm.expectRevert(bytes("USDC has no code on this chain"));
+        deployScript.validateUsdcToken(address(0xBEEF));
+
+        MockERC20 wrongDecimals = new MockERC20("Wrong USD", "USDC18", 18);
+        vm.expectRevert(bytes("USDC must use 6 decimals"));
+        deployScript.validateUsdcToken(address(wrongDecimals));
+
+        RevertingDecimalsToken broken = new RevertingDecimalsToken();
+        vm.expectRevert(bytes("USDC decimals probe failed"));
+        deployScript.validateUsdcToken(address(broken));
     }
 }
