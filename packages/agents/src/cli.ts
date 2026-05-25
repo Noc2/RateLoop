@@ -127,9 +127,10 @@ async function listExampleQuestionFiles() {
 function usage() {
   return `Usage:
   yarn workspace @rateloop/agents templates
-  yarn workspace @rateloop/agents lint --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents lint:questions --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents quote --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents ask --file packages/agents/examples/questions/landing-pitch-review.json
+  export CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>
   yarn workspace @rateloop/agents wallet --generate --keystore ~/.curyo/local-signer.json
   yarn workspace @rateloop/agents wallet
   yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
@@ -138,6 +139,7 @@ function usage() {
 
 Environment:
   CURYO_API_BASE_URL     Hosted RateLoop origin for HTTP and MCP flows
+  CURYO_AGENT_WALLET_ADDRESS  Funded wallet address for tokenless public asks
   CURYO_MCP_TOKEN        Optional managed agent bearer token
   CURYO_MCP_API_URL      Optional MCP endpoint override
   CURYO_RPC_URL          RPC URL used by local-ask to send wallet transactions
@@ -155,6 +157,16 @@ function createAgentClient() {
     mcpApiUrl: config.mcpApiUrl,
     mcpProtocolVersion: config.mcpProtocolVersion,
   });
+}
+
+function withConfiguredWalletAddress(payload: unknown, walletAddress: string | undefined) {
+  if (!walletAddress || !payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return payload;
+  }
+  const record = payload as Record<string, unknown>;
+  return typeof record.walletAddress === "string" && record.walletAddress.trim()
+    ? payload
+    : { ...record, walletAddress };
 }
 
 async function main() {
@@ -199,15 +211,17 @@ async function main() {
     }
 
     case "quote": {
+      const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
-      const payload = await readJsonFile(requireString(options, "file"));
+      const payload = withConfiguredWalletAddress(await readJsonFile(requireString(options, "file")), config.agentWalletAddress);
       printJson(await agent.quoteQuestion(payload as never));
       return;
     }
 
     case "ask": {
+      const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
-      const payload = await readJsonFile(requireString(options, "file"));
+      const payload = withConfiguredWalletAddress(await readJsonFile(requireString(options, "file")), config.agentWalletAddress);
       const findings = lintAgentAskRequest(payload);
       if (findings.some(finding => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });
@@ -278,19 +292,21 @@ async function main() {
     }
 
     case "status": {
+      const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
       printJson(
         await agent.getQuestionStatus({
           chainId: typeof options["chain-id"] === "string" ? Number(options["chain-id"]) : undefined,
           clientRequestId: typeof options["client-request-id"] === "string" ? options["client-request-id"] : undefined,
           operationKey: typeof options["operation-key"] === "string" ? options["operation-key"] : undefined,
-          walletAddress: typeof options["wallet-address"] === "string" ? options["wallet-address"] : undefined,
+          walletAddress: typeof options["wallet-address"] === "string" ? options["wallet-address"] : config.agentWalletAddress,
         }),
       );
       return;
     }
 
     case "result": {
+      const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
       printJson(
         await agent.getResult({
@@ -298,7 +314,7 @@ async function main() {
           clientRequestId: typeof options["client-request-id"] === "string" ? options["client-request-id"] : undefined,
           contentId: typeof options["content-id"] === "string" ? options["content-id"] : undefined,
           operationKey: typeof options["operation-key"] === "string" ? options["operation-key"] : undefined,
-          walletAddress: typeof options["wallet-address"] === "string" ? options["wallet-address"] : undefined,
+          walletAddress: typeof options["wallet-address"] === "string" ? options["wallet-address"] : config.agentWalletAddress,
         }),
       );
       return;

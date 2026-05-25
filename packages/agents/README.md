@@ -41,10 +41,12 @@ yarn agents:templates
 yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.json
 
 # Quote, prepare wallet calls, then confirm submitted transactions.
+export CURYO_AGENT_WALLET_ADDRESS=0x...
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
 yarn agents:ask --file packages/agents/examples/questions/landing-pitch-review.json
 
 # Local signer path for Codex-like agents that can hold an encrypted keystore.
+export CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a curyo-local-signer -w)"
 yarn workspace @rateloop/agents wallet --generate --keystore ~/.curyo/local-signer.json
 yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
@@ -54,12 +56,12 @@ yarn agents:status --operation-key 0x...
 yarn agents:result --operation-key 0x...
 ```
 
-The CLI reads `.env` from the current process environment. For the default wallet-direct path, set `CURYO_API_BASE_URL` and include a funded `walletAddress` in the ask payload. `CURYO_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps, balance tooling, callbacks, or audit exports.
+The CLI reads `.env` from the current process environment. For the default wallet-direct path, set `CURYO_API_BASE_URL` and either set `CURYO_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in the ask payload. `CURYO_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps, balance tooling, callbacks, or audit exports.
 
 ## First Funded Ask
 
 1. Fund the signer wallet with World Chain USDC. On the Next.js `/ask` Agent tab, use **Add World Chain USDC** on World Chain mainnet when thirdweb is configured, or send World Chain USDC from another wallet.
-2. Pass that address as `walletAddress` when quoting or asking. For public MCP, use `/api/mcp/public`; for direct HTTP, use `/api/agent`.
+2. Pass that address as `walletAddress` when quoting or asking, or set `CURYO_AGENT_WALLET_ADDRESS` for the CLI. For public MCP, use `/api/mcp/public`; for direct HTTP, use `/api/agent`.
 3. Quote with `curyo_quote_question` before reserving spend.
 4. Call `curyo_ask_humans` to prepare the ask, execute the returned `transactionPlan.calls` in order, and keep every transaction hash.
 5. Confirm those hashes with `curyo_confirm_ask_transactions`.

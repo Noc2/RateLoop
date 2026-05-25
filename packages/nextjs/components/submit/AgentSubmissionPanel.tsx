@@ -533,6 +533,7 @@ export function AgentSubmissionPanel() {
     "export CURYO_RPC_URL=https://worldchain-mainnet.g.alchemy.com/public",
     "export CURYO_CHAIN_ID=480",
     "export CURYO_LOCAL_SIGNER_KEYSTORE_PATH=$HOME/.curyo/local-signer.json",
+    "export CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>",
     "yarn workspace @rateloop/agents wallet --generate",
     "yarn workspace @rateloop/agents local-ask --file ./ask.json",
   ].join("\n");
