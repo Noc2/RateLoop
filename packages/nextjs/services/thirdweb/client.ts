@@ -14,6 +14,7 @@ const THIRDWEB_EXECUTION_CHAIN_IDS = new Set([480, 4801]);
 const THIRDWEB_ACTIVE_CHAIN_KEY = "thirdweb:active-chain";
 const THIRDWEB_SPONSORSHIP_MODE_KEY = "thirdweb:sponsorship-mode";
 const RATELOOP_THIRDWEB_ICON = "/rateloop-logo.svg";
+const RATELOOP_THIRDWEB_LOGIN_HERO = "/thirdweb-login-hero.svg";
 
 type ThirdwebWalletExecutionMode =
   | {
@@ -167,10 +168,10 @@ export function createThirdwebInAppWallet(chainId: number, options?: CreateThird
     executionMode: getThirdwebWalletExecutionMode(chainId, options),
     metadata: {
       image: {
-        alt: "RateLoop orbit logo",
-        height: 128,
-        src: RATELOOP_THIRDWEB_ICON,
-        width: 128,
+        alt: "Level Up Your Agent",
+        height: 160,
+        src: RATELOOP_THIRDWEB_LOGIN_HERO,
+        width: 288,
       },
       name: "RateLoop Wallet",
     },
