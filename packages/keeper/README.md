@@ -5,11 +5,10 @@ Stateless service that reveals committed RBTS votes via `revealVoteByCommitKey()
 ## Quick Start
 
 ```bash
-# Copy and configure environment:
-cp .env.example .env.local
-# Edit .env.local with your RPC URL, chain, and wallet
-
 # From the monorepo root:
+cp packages/keeper/.env.example packages/keeper/.env.local
+# Edit packages/keeper/.env.local with your RPC URL, chain, and wallet
+
 yarn keeper:dev    # Development mode (with file watching)
 yarn keeper:start  # Production mode (long-running service)
 ```
@@ -71,7 +70,7 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 ```bash
 # From the monorepo root (the image needs the shared @rateloop/contracts workspace)
 docker build -f packages/keeper/Dockerfile -t rateloop-keeper .
-docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0 -p 9090:9090 rateloop-keeper
+docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0 -e METRICS_AUTH_TOKEN=<token> -p 9090:9090 rateloop-keeper
 ```
 
 ## Monitoring
