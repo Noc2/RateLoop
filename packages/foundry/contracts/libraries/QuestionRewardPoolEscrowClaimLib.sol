@@ -489,6 +489,7 @@ library QuestionRewardPoolEscrowClaimLib {
     function _canPreviewNewQualification(RewardPool storage rewardPool, uint256 roundId) private view returns (bool) {
         if (
             rewardPool.refunded || rewardPool.unallocatedRefunded
+                || rewardPool.pendingRecoveredRounds != 0
                 || rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds
         ) return false;
         return roundId >= rewardPool.startRoundId && roundId == rewardPool.nextRoundToEvaluate;
