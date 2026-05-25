@@ -92,8 +92,8 @@ function hasOpenAiModerationKey() {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
-function isModerationExplicitlyDisabled() {
-  return process.env.CURYO_IMAGE_MODERATION_MODE === "disabled";
+function isDevelopmentModerationExplicitlyDisabled() {
+  return process.env.NODE_ENV !== "production" && process.env.CURYO_IMAGE_MODERATION_MODE === "disabled";
 }
 
 function isDevModerationSkipAllowed() {
@@ -262,7 +262,7 @@ async function putLocalNormalizedImage(attachmentId: string, buffer: Buffer) {
 }
 
 async function moderateImage(buffer: Buffer): Promise<ModerationDecision> {
-  if (isModerationExplicitlyDisabled()) {
+  if (isDevelopmentModerationExplicitlyDisabled()) {
     return { provider: "disabled", status: "approved", result: { skipped: true, reason: "explicitly_disabled" } };
   }
 

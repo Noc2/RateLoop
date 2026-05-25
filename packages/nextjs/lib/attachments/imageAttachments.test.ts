@@ -140,6 +140,69 @@ test("processes local development image uploads without Vercel Blob", async () =
   }
 });
 
+test("does not honor disabled image moderation mode in production", async () => {
+  const originalNodeEnv = process.env["NODE_ENV"];
+  const originalLocalImageDir = process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR;
+  const originalOpenAiKey = process.env.OPENAI_API_KEY;
+  const originalModerationMode = process.env.CURYO_IMAGE_MODERATION_MODE;
+  const tempDir = await mkdtemp(path.join(tmpdir(), "rateloop-prod-images-"));
+  const attachmentId = "att_prodmoderation01";
+
+  try {
+    Reflect.set(process.env, "NODE_ENV", "production");
+    process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
+    delete process.env.OPENAI_API_KEY;
+    process.env.CURYO_IMAGE_MODERATION_MODE = "disabled";
+
+    await createPendingImageAttachment({
+      attachmentId,
+      filename: "mockup.png",
+      mimeType: "image/png",
+      sha256: createHash("sha256").update(ONE_PIXEL_PNG).digest("hex"),
+      sizeBytes: ONE_PIXEL_PNG.length,
+      uploader: {
+        kind: "wallet",
+        ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+      },
+    });
+
+    await processCompletedLocalImageUpload({
+      attachmentId,
+      buffer: ONE_PIXEL_PNG,
+      contentType: "image/png",
+    });
+
+    const attachment = await getImageAttachment(attachmentId);
+    assert.equal(attachment?.status, "blocked");
+    assert.equal(attachment?.moderationStatus, "review_required");
+    assert.equal(attachment?.moderationProvider, "openai");
+    assert.match(attachment?.error ?? "", /moderation review/i);
+    assert.match(String(attachment?.moderationResult), /OPENAI_API_KEY/);
+  } finally {
+    if (originalNodeEnv === undefined) {
+      Reflect.deleteProperty(process.env, "NODE_ENV");
+    } else {
+      Reflect.set(process.env, "NODE_ENV", originalNodeEnv);
+    }
+    if (originalLocalImageDir === undefined) {
+      delete process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR;
+    } else {
+      process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR = originalLocalImageDir;
+    }
+    if (originalOpenAiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiKey;
+    }
+    if (originalModerationMode === undefined) {
+      delete process.env.CURYO_IMAGE_MODERATION_MODE;
+    } else {
+      process.env.CURYO_IMAGE_MODERATION_MODE = originalModerationMode;
+    }
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("processes Vercel Blob image uploads without deleting duplicate completions", async () => {
   const originalOpenAiKey = process.env.OPENAI_API_KEY;
   const originalModerationMode = process.env.CURYO_IMAGE_MODERATION_MODE;
