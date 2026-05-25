@@ -1,4 +1,5 @@
 import { listMissingRequiredTargetContracts } from "./requiredDeployments";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -55,5 +56,23 @@ test("default required deployment list fails closed for core app contracts", () 
     },
   });
 
-  assert.deepEqual(missingContracts, ["480:LoopReputation", "480:AdvisoryVoteRecorder"]);
+  assert.deepEqual(missingContracts, [
+    "480:LoopReputation",
+    "480:AdvisoryVoteRecorder",
+    "480:QuestionRewardPoolEscrow",
+    "480:ClusterPayoutOracle",
+    "480:X402QuestionSubmitter",
+  ]);
+});
+
+test("World Chain Sepolia deployment metadata includes production-required contracts", () => {
+  const missingContracts = listMissingRequiredTargetContracts([4801], deployedContracts);
+
+  assert.deepEqual(missingContracts, []);
+});
+
+test("production env defaults do not bypass deployment metadata checks", () => {
+  const source = readFileSync(new URL("../../.env.production", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /^NEXT_PUBLIC_ALLOW_UNDEPLOYED_TARGET_NETWORKS=true$/m);
 });
