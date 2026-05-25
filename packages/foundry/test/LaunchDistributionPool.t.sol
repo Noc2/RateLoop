@@ -356,6 +356,31 @@ contract LaunchDistributionPoolTest is Test {
         pool.setLegacyContributorRoot(replacementRoot, allocation);
     }
 
+    function test_SetLegacyContributorRootCannotResetAfterExpiredWindowBeforeSweep() public {
+        uint256 allocation = 1_000e6;
+        bytes32 root = pool.legacyContributorLeaf(alice, allocation);
+        pool.setLegacyContributorRoot(root, allocation);
+
+        vm.warp(uint256(pool.legacyContributorVestingStart()) + pool.LEGACY_CLAIM_DURATION());
+
+        bytes32 replacementRoot = pool.legacyContributorLeaf(bob, allocation);
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.setLegacyContributorRoot(replacementRoot, allocation);
+    }
+
+    function test_SetLegacyContributorRootCannotResetAfterZeroClaimSweep() public {
+        uint256 allocation = 1_000e6;
+        bytes32 root = pool.legacyContributorLeaf(alice, allocation);
+        pool.setLegacyContributorRoot(root, allocation);
+
+        vm.warp(uint256(pool.legacyContributorVestingStart()) + pool.LEGACY_CLAIM_DURATION());
+        assertEq(pool.sweepExpiredLegacyContributorAllocationToTreasury(), allocation);
+
+        bytes32 replacementRoot = pool.legacyContributorLeaf(bob, allocation);
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.setLegacyContributorRoot(replacementRoot, allocation);
+    }
+
     function test_SetLaunchRewardPolicyUpdatesRewardMath() public {
         ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
         policy.minQualifyingScoreBps = 8_500;

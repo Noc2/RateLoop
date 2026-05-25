@@ -317,7 +317,8 @@ contract LaunchDistributionPool is
     function setLegacyContributorRoot(bytes32 root, uint256 allocationTotal) external onlyOwner {
         if (root == bytes32(0)) revert InvalidProof();
         if (allocationTotal == 0 || allocationTotal > LEGACY_CONTRIBUTOR_POOL_AMOUNT) revert InvalidAmount();
-        if (legacyContributorDistributed != 0) revert AlreadyClaimed();
+        if (legacyContributorDistributed != 0 || legacyContributorTreasuryRecovered != 0) revert AlreadyClaimed();
+        if (_legacyContributorClaimWindowClosed()) revert AlreadyClaimed();
         legacyContributorRoot = root;
         legacyContributorAllocationTotal = allocationTotal;
         legacyContributorVestingStart = uint64(block.timestamp);
