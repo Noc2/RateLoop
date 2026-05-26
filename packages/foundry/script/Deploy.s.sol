@@ -81,8 +81,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             governorAddr = deployer;
             console.log("Local dev: deployer is governance + treasury");
         } else {
-            address[] memory proposers = new address[](1);
-            proposers[0] = deployer;
+            address[] memory proposers = new address[](0);
             address[] memory executors = new address[](1);
             // L-Gov-A: open-executor pattern (`address(0)` in the executors set) lets anyone
             // call `execute` once the timelock delay elapses. Documented as a deliberate trade-off
@@ -110,8 +109,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             TimelockController tc = TimelockController(payable(governance));
             tc.grantRole(tc.PROPOSER_ROLE(), governorAddr);
             tc.grantRole(tc.CANCELLER_ROLE(), governorAddr);
-            tc.grantRole(tc.CANCELLER_ROLE(), deployer);
+            tc.renounceRole(tc.DEFAULT_ADMIN_ROLE(), deployer);
             lrepToken.setGovernor(governorAddr);
+            lrepToken.renounceRole(lrepToken.CONFIG_ROLE(), deployer);
         }
 
         ContentRegistry registryImpl = new ContentRegistry();
@@ -212,8 +212,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
 
         CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
-        ClusterPayoutOracle clusterPayoutOracle =
-            new ClusterPayoutOracle(deployer, address(frontendRegistry), usdcTokenAddress);
         RaterRegistry raterRegistry = new RaterRegistry(
             deployer,
             governance,
@@ -222,6 +220,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             worldIdExternalNullifierHash,
             WORLD_ID_CREDENTIAL_TTL_SECONDS
         );
+        if (!isLocalDev) {
+            raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
+            raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
+        }
         TransparentUpgradeableProxy questionRewardPoolEscrowProxy = new TransparentUpgradeableProxy(
             address(questionRewardPoolEscrowImpl),
             governance,
@@ -268,17 +270,26 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setRaterRegistry(address(raterRegistry));
-        protocolConfig.setClusterPayoutOracle(address(clusterPayoutOracle));
-        clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
-            clusterPayoutOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(questionRewardPoolEscrow)
-        );
+        if (!isLocalDev) {
+            registry.renounceRole(registry.CONFIG_ROLE(), deployer);
+            registry.renounceRole(registry.PAUSER_ROLE(), deployer);
+        }
 
         profileRegistry.setRaterRegistry(address(raterRegistry));
+        if (!isLocalDev) {
+            profileRegistry.renounceRole(profileRegistry.ADMIN_ROLE(), deployer);
+        }
 
         frontendRegistry.setVotingEngine(address(votingEngine));
         frontendRegistry.initializeFeeCreditor(address(rewardDistributor));
+        if (!isLocalDev) {
+            frontendRegistry.renounceRole(frontendRegistry.ADMIN_ROLE(), deployer);
+        }
 
         _seedCategories(categoryRegistry);
+        if (!isLocalDev) {
+            categoryRegistry.renounceRole(categoryRegistry.ADMIN_ROLE(), deployer);
+        }
         protocolConfig.setConfig(20 minutes, 20 minutes, 3, 200);
 
         lrepToken.mint(governance, TREASURY_AMOUNT);
@@ -286,6 +297,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
+        ClusterPayoutOracle clusterPayoutOracle =
+            new ClusterPayoutOracle(deployer, address(frontendRegistry), usdcTokenAddress);
         // M-Oracle-1 (PR #20): the launch-credit consumer pin on the oracle MUST be set BEFORE
         // `setClusterPayoutOracle` because `_validateClusterPayoutOracle` now verifies the new
         // oracle routes the launch-credit domain back to this pool. Bootstrap order:
@@ -294,8 +307,23 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         //   3. setClusterPayoutOracle on the launch pool
         //   4. setRoundClusterReadyAtSource on the launch pool
         clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
+            clusterPayoutOracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(questionRewardPoolEscrow)
+        );
+        clusterPayoutOracle.setRoundPayoutSnapshotConsumer(
             clusterPayoutOracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(launchDistributionPool)
         );
+        if (!isLocalDev) {
+            clusterPayoutOracle.grantRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), governance);
+            clusterPayoutOracle.grantRole(clusterPayoutOracle.CONFIG_ROLE(), governance);
+            clusterPayoutOracle.grantRole(clusterPayoutOracle.ARBITER_ROLE(), governance);
+            clusterPayoutOracle.setOracleConfig(
+                clusterPayoutOracle.challengeWindow(), clusterPayoutOracle.challengeBond(), governance
+            );
+            clusterPayoutOracle.renounceRole(clusterPayoutOracle.ARBITER_ROLE(), deployer);
+            clusterPayoutOracle.renounceRole(clusterPayoutOracle.CONFIG_ROLE(), deployer);
+            clusterPayoutOracle.renounceRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), deployer);
+        }
+        protocolConfig.setClusterPayoutOracle(address(clusterPayoutOracle));
         launchDistributionPool.setClusterPayoutOracle(address(clusterPayoutOracle));
         // M-Oracle-1: wire the launch pool to the voting engine so its
         // `roundPayoutSnapshotSourceReadyAt` view can authoritatively reject pre-source proposals
@@ -324,7 +352,13 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         lrepToken.mint(deployer, LAUNCH_DISTRIBUTION_AMOUNT);
         lrepToken.approve(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
         launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
+        if (!isLocalDev) {
+            lrepToken.renounceRole(lrepToken.MINTER_ROLE(), deployer);
+        }
         protocolConfig.setLaunchDistributionPool(address(launchDistributionPool));
+        if (!isLocalDev) {
+            protocolConfig.renounceRole(protocolConfig.CONFIG_ROLE(), deployer);
+        }
         console.log("LaunchDistributionPool deployed and funded with 75M LREP");
         console.log("ClusterPayoutOracle deployed at:", address(clusterPayoutOracle));
         console.log("AdvisoryVoteRecorder deployed at:", address(advisoryVoteRecorder));
@@ -363,32 +397,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("AdvisoryVoteRecorder", address(advisoryVoteRecorder)));
         if (isLocalDev) deployments.push(Deployment("MockERC20", usdcTokenAddress));
 
-        if (!isLocalDev) {
-            lrepToken.renounceRole(lrepToken.MINTER_ROLE(), deployer);
-            lrepToken.renounceRole(lrepToken.CONFIG_ROLE(), deployer);
-            registry.renounceRole(registry.CONFIG_ROLE(), deployer);
-            registry.renounceRole(registry.PAUSER_ROLE(), deployer);
-            protocolConfig.renounceRole(protocolConfig.CONFIG_ROLE(), deployer);
-            frontendRegistry.renounceRole(frontendRegistry.ADMIN_ROLE(), deployer);
-            profileRegistry.renounceRole(profileRegistry.ADMIN_ROLE(), deployer);
-            categoryRegistry.renounceRole(categoryRegistry.ADMIN_ROLE(), deployer);
-            raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
-            raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
-            clusterPayoutOracle.grantRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), governance);
-            clusterPayoutOracle.grantRole(clusterPayoutOracle.CONFIG_ROLE(), governance);
-            clusterPayoutOracle.grantRole(clusterPayoutOracle.ARBITER_ROLE(), governance);
-            clusterPayoutOracle.setOracleConfig(
-                clusterPayoutOracle.challengeWindow(), clusterPayoutOracle.challengeBond(), governance
-            );
-            clusterPayoutOracle.renounceRole(clusterPayoutOracle.ARBITER_ROLE(), deployer);
-            clusterPayoutOracle.renounceRole(clusterPayoutOracle.CONFIG_ROLE(), deployer);
-            clusterPayoutOracle.renounceRole(clusterPayoutOracle.DEFAULT_ADMIN_ROLE(), deployer);
-
-            TimelockController tc = TimelockController(payable(governance));
-            tc.revokeRole(tc.PROPOSER_ROLE(), deployer);
-            tc.revokeRole(tc.CANCELLER_ROLE(), deployer);
-            tc.renounceRole(tc.DEFAULT_ADMIN_ROLE(), deployer);
-        } else {
+        if (isLocalDev) {
             lrepToken.revokeRole(lrepToken.MINTER_ROLE(), deployer);
         }
 
