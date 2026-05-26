@@ -965,12 +965,21 @@ export function registerDataRoutes(app: ApiApp) {
           eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_FINALIZED),
         ),
       )
+      .leftJoin(
+        questionRewardPoolClaim,
+        and(
+          eq(questionRewardPoolClaim.rewardPoolId, questionRewardPool.id),
+          eq(questionRewardPoolClaim.roundId, vote.roundId),
+          eq(questionRewardPoolClaim.identityKey, vote.identityKey),
+        ),
+      )
       .where(
         and(
           voteMatchesAnyVoter(voterAddrs),
           eq(vote.revealed, true),
           eq(round.state, ROUND_STATE.Settled),
           sql`${vote.roundId} >= ${questionRewardPool.startRoundId}`,
+          sql`${questionRewardPoolClaim.id} is null`,
           or(
             sql`${questionRewardPoolRound.rewardPoolId} is not null`,
             and(

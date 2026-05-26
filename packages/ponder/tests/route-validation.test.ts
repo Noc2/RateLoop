@@ -282,6 +282,10 @@ function mockPonderModules<T>(result: T) {
       amount: "questionRewardPoolClaim.amount",
       frontendFee: "questionRewardPoolClaim.frontendFee",
       grossAmount: "questionRewardPoolClaim.grossAmount",
+      id: "questionRewardPoolClaim.id",
+      identityKey: "questionRewardPoolClaim.identityKey",
+      rewardPoolId: "questionRewardPoolClaim.rewardPoolId",
+      roundId: "questionRewardPoolClaim.roundId",
     },
     questionRewardPoolRound: {
       allocation: "questionRewardPoolRound.allocation",
@@ -1570,6 +1574,11 @@ describe("registerDataRoutes", () => {
     expect(serialized).toContain("vote.revealed");
     expect(serialized).toContain("round.state");
     expect(serialized).toContain("questionRewardPool.startRoundId");
+    expect(serialized).toContain("questionRewardPoolClaim.id");
+    const joinExpressions = queryBuilder.leftJoin.mock.calls.map((call) =>
+      serializeExpression(call),
+    );
+    expect(joinExpressions.some((join) => join.includes("questionRewardPoolClaim.identityKey"))).toBe(true);
   });
 
   it("attaches payout proofs for finalized USDC bounty candidates", async () => {
