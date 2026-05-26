@@ -71,13 +71,14 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     mapping(address => address) public pendingDelegateTo;
     mapping(address => address) public pendingDelegateOf;
 
-    IWorldIDRouter public immutable worldIdRouter;
-    bytes32 public immutable worldIdScope;
-    uint256 public immutable worldIdExternalNullifierHash;
-    uint64 public immutable worldIdCredentialTtl;
+    IWorldIDRouter public worldIdRouter;
+    bytes32 public worldIdScope;
+    uint256 public worldIdExternalNullifierHash;
+    uint64 public worldIdCredentialTtl;
+    bool public worldIdVerifierConfigFrozen;
     /// @dev RR-4 (2026-05-20 follow-up audit): governance-tunable upper bound on the TTL
     ///      SEEDER_ROLE can grant via `seedHumanCredential`. WorldID credentials are already
-    ///      clamped via the immutable `worldIdCredentialTtl`; this is the symmetric clamp for
+    ///      clamped via the configured `worldIdCredentialTtl`; this is the symmetric clamp for
     ///      SEEDER-seeded credentials. 0 means "no governance-imposed cap" (i.e., the prior
     ///      behavior in which SEEDER could pass `type(uint64).max`).
     uint64 public maxSeededCredentialTtl;
@@ -118,6 +119,10 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     /// @notice RR-4 (2026-05-20 follow-up audit): governance updated the SEEDER-seeded credential
     ///         TTL cap. `newCap = 0` removes the cap entirely.
     event MaxSeededCredentialTtlUpdated(uint64 previousCap, uint64 newCap);
+    event WorldIdVerifierConfigUpdated(
+        address indexed router, bytes32 indexed scope, uint256 externalNullifierHash, uint64 credentialTtl
+    );
+    event WorldIdVerifierConfigLocked(address indexed account);
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
     event DelegateRequested(address indexed holder, address indexed delegate);
@@ -135,6 +140,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     error NoDelegateSet();
     error NoPendingDelegate();
     error ActiveHumanCredentialRequiresHumanProfile();
+    error WorldIdVerifierConfigFrozen();
 
     constructor(
         address admin,
@@ -144,17 +150,12 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         uint256 _worldIdExternalNullifierHash,
         uint64 _worldIdCredentialTtl
     ) {
-        if (admin == address(0) || governance == address(0) || _worldIdRouter == address(0)) {
+        if (admin == address(0) || governance == address(0)) {
             revert InvalidAddress();
         }
-        if (_worldIdScope == bytes32(0) || _worldIdExternalNullifierHash == 0 || _worldIdCredentialTtl == 0) {
-            revert InvalidCredential();
-        }
-
-        worldIdRouter = IWorldIDRouter(_worldIdRouter);
-        worldIdScope = _worldIdScope;
-        worldIdExternalNullifierHash = _worldIdExternalNullifierHash;
-        worldIdCredentialTtl = _worldIdCredentialTtl;
+        _setWorldIdVerifierConfig(
+            _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl, false
+        );
 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
         _grantRole(ADMIN_ROLE, governance);
@@ -164,6 +165,45 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
             _grantRole(ADMIN_ROLE, admin);
             _grantRole(SEEDER_ROLE, admin);
         }
+    }
+
+    function setWorldIdVerifierConfig(
+        address _worldIdRouter,
+        bytes32 _worldIdScope,
+        uint256 _worldIdExternalNullifierHash,
+        uint64 _worldIdCredentialTtl
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (worldIdVerifierConfigFrozen) revert WorldIdVerifierConfigFrozen();
+        _setWorldIdVerifierConfig(
+            _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl, true
+        );
+    }
+
+    function freezeWorldIdVerifierConfig() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        worldIdVerifierConfigFrozen = true;
+        emit WorldIdVerifierConfigLocked(msg.sender);
+    }
+
+    function _setWorldIdVerifierConfig(
+        address _worldIdRouter,
+        bytes32 _worldIdScope,
+        uint256 _worldIdExternalNullifierHash,
+        uint64 _worldIdCredentialTtl,
+        bool requireCode
+    ) private {
+        if (_worldIdRouter == address(0)) revert InvalidAddress();
+        if (requireCode && _worldIdRouter.code.length == 0) revert InvalidAddress();
+        if (_worldIdScope == bytes32(0) || _worldIdExternalNullifierHash == 0 || _worldIdCredentialTtl == 0) {
+            revert InvalidCredential();
+        }
+
+        worldIdRouter = IWorldIDRouter(_worldIdRouter);
+        worldIdScope = _worldIdScope;
+        worldIdExternalNullifierHash = _worldIdExternalNullifierHash;
+        worldIdCredentialTtl = _worldIdCredentialTtl;
+        emit WorldIdVerifierConfigUpdated(
+            _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl
+        );
     }
 
     /// @notice Self-report the account type and a metadata hash.
@@ -327,7 +367,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         onlyRole(SEEDER_ROLE)
     {
         // RR-4 (2026-05-20 follow-up audit): clamp SEEDER-seeded TTL to the governance-tunable
-        // upper bound. Mirrors the immutable `worldIdCredentialTtl` clamp on the WorldID path.
+        // upper bound. Mirrors the configured `worldIdCredentialTtl` clamp on the WorldID path.
         uint64 cap = maxSeededCredentialTtl;
         if (cap != 0 && expiresAt > uint256(block.timestamp) + uint256(cap)) {
             revert InvalidCredential();
@@ -431,7 +471,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     ///         `bytes32(0)` if no verified credential exists.
     /// @dev RR-5 (2026-05-20 follow-up audit): convenience accessor for cross-protocol consumers.
     ///      Today the only valid scopes are `SEEDED_HUMAN_SCOPE` (for SEEDER-seeded credentials)
-    ///      and the immutable `worldIdScope` (for self-attested WorldID credentials). If this
+    ///      and the configured `worldIdScope` (for self-attested WorldID credentials). If this
     ///      registry is ever shared with a sibling protocol, that protocol's consumers MUST
     ///      verify the returned scope against their own expected value before honoring the
     ///      identity -- a credential issued for one scope must not silently authorize another.
