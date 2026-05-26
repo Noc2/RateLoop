@@ -809,6 +809,7 @@ contract LaunchDistributionPool is
         for (uint256 i = 0; i < anchorCount; i++) {
             bytes32 anchorId = verifiedAnchorIds[i];
             if (anchorId == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
+            if (!_reservePendingVerifiedAnchor(policy, rater, anchorId)) continue;
             pendingAnchors.push(anchorId);
         }
         emit EarnedRaterRewardCreditPending(rater, contentId, roundId, commitKey, scoreBps);
@@ -1145,15 +1146,7 @@ contract LaunchDistributionPool is
         for (uint256 i = 0; i < anchorCount; i++) {
             bytes32 anchorId = verifiedAnchorIds[i];
             if (anchorId == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
-            if (raterVerifiedAnchorSeen[rater][anchorId]) continue;
-            if (verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor) continue;
-
-            raterVerifiedAnchorSeen[rater][anchorId] = true;
-            if (!verifiedAnchorRaterSeen[anchorId][rater]) {
-                verifiedAnchorRaterSeen[anchorId][rater] = true;
-                verifiedAnchorDistinctRaterCount[anchorId] += 1;
-            }
-            raterDistinctVerifiedAnchorCount[rater] += 1;
+            _recordVerifiedAnchor(policy, rater, anchorId);
         }
     }
 
@@ -1166,16 +1159,39 @@ contract LaunchDistributionPool is
         for (uint256 i = 0; i < anchorCount; i++) {
             bytes32 anchorId = verifiedAnchorIds[i];
             if (anchorId == bytes32(0) || _isDuplicatePendingAnchor(verifiedAnchorIds, i)) continue;
-            if (raterVerifiedAnchorSeen[rater][anchorId]) continue;
-            if (verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor) continue;
-
-            raterVerifiedAnchorSeen[rater][anchorId] = true;
-            if (!verifiedAnchorRaterSeen[anchorId][rater]) {
-                verifiedAnchorRaterSeen[anchorId][rater] = true;
-                verifiedAnchorDistinctRaterCount[anchorId] += 1;
-            }
-            raterDistinctVerifiedAnchorCount[rater] += 1;
+            _recordVerifiedAnchor(policy, rater, anchorId);
         }
+    }
+
+    function _recordVerifiedAnchor(LaunchRewardPolicy memory policy, address rater, bytes32 anchorId)
+        internal
+        returns (bool recorded)
+    {
+        if (raterVerifiedAnchorSeen[rater][anchorId]) return true;
+        bool reservedOrSeen = verifiedAnchorRaterSeen[anchorId][rater];
+        if (!reservedOrSeen && verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor) {
+            return false;
+        }
+
+        raterVerifiedAnchorSeen[rater][anchorId] = true;
+        if (!reservedOrSeen) {
+            verifiedAnchorRaterSeen[anchorId][rater] = true;
+            verifiedAnchorDistinctRaterCount[anchorId] += 1;
+        }
+        raterDistinctVerifiedAnchorCount[rater] += 1;
+        return true;
+    }
+
+    function _reservePendingVerifiedAnchor(LaunchRewardPolicy memory policy, address rater, bytes32 anchorId)
+        internal
+        returns (bool reserved)
+    {
+        if (raterVerifiedAnchorSeen[rater][anchorId] || verifiedAnchorRaterSeen[anchorId][rater]) return true;
+        if (verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor) return false;
+
+        verifiedAnchorRaterSeen[anchorId][rater] = true;
+        verifiedAnchorDistinctRaterCount[anchorId] += 1;
+        return true;
     }
 
     function _countDistinctAvailableAnchors(
@@ -1188,7 +1204,7 @@ contract LaunchDistributionPool is
             bytes32 anchorId = verifiedAnchorIds[i];
             if (anchorId == bytes32(0) || _isDuplicateAnchor(verifiedAnchorIds, i)) continue;
             if (
-                !raterVerifiedAnchorSeen[rater][anchorId]
+                !raterVerifiedAnchorSeen[rater][anchorId] && !verifiedAnchorRaterSeen[anchorId][rater]
                     && verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor
             ) {
                 continue;
