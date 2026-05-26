@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { type HandleUploadBody, handleUpload } from "@vercel/blob/client";
 import {
+  ImageUploadQuotaError,
   createPendingImageAttachment,
   getAttachmentImageUrl,
   getImageAttachment,
   getImageAttachmentUploadMode,
   processCompletedImageUpload,
   processCompletedLocalImageUpload,
+  reserveImageUploadDailyQuotas,
 } from "~~/lib/attachments/imageAttachments";
 import {
   UPLOAD_IMAGE_ACTION,
@@ -128,6 +130,41 @@ async function authorizeUploadRequest(request: NextRequest, payload: UploadClien
   };
 }
 
+async function checkAuthorizedUploadRateLimit(
+  request: NextRequest,
+  authorization: Awaited<ReturnType<typeof authorizeUploadRequest>>,
+) {
+  const walletLimited = await checkRateLimit(request, RATE_LIMIT, {
+    extraKeyParts: [authorization.normalized.payload.normalizedAddress],
+  });
+  if (walletLimited) return walletLimited;
+
+  if (authorization.identity.kind === "agent") {
+    return checkRateLimit(request, RATE_LIMIT, {
+      extraKeyParts: [`agent:${authorization.identity.agentId}`],
+    });
+  }
+
+  return null;
+}
+
+async function reserveAuthorizedUploadQuota(authorization: Awaited<ReturnType<typeof authorizeUploadRequest>>) {
+  const normalized = authorization.normalized.payload;
+  await reserveImageUploadDailyQuotas({
+    sizeBytes: normalized.sizeBytes,
+    subjects: [
+      ...(authorization.identity.kind === "agent"
+        ? [{ subjectId: authorization.identity.agentId, subjectKind: "agent" as const }]
+        : []),
+      { subjectId: normalized.normalizedAddress, subjectKind: "wallet" },
+    ],
+  });
+}
+
+function getUploadErrorStatus(error: unknown) {
+  return error instanceof ImageUploadQuotaError ? error.status : 400;
+}
+
 async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
   if (getImageAttachmentUploadMode() !== "local") {
     return NextResponse.json({ error: "Direct local image uploads are not enabled." }, { status: 400 });
@@ -143,21 +180,19 @@ async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
     }
 
     const payload = parseClientPayload(clientPayload);
-    const limited = await checkRateLimit(request, RATE_LIMIT, {
-      extraKeyParts: [
-        typeof payload.address === "string" ? payload.address : undefined,
-        typeof payload.attachmentId === "string" ? payload.attachmentId : undefined,
-      ],
-    });
+    const limited = await checkRateLimit(request, RATE_LIMIT);
     if (limited) return limited;
 
     const authorization = await authorizeUploadRequest(request, payload);
+    const authorizedLimited = await checkAuthorizedUploadRateLimit(request, authorization);
+    if (authorizedLimited) return authorizedLimited;
     const normalized = authorization.normalized.payload;
     const fileContentType = file.type.trim().toLowerCase();
     if (fileContentType !== normalized.mimeType || file.size !== normalized.sizeBytes) {
       throw new Error("Uploaded image does not match the signed upload metadata.");
     }
 
+    await reserveAuthorizedUploadQuota(authorization);
     await createPendingImageAttachment({
       attachmentId: normalized.attachmentId,
       clientRequestId: typeof payload.clientRequestId === "string" ? payload.clientRequestId : null,
@@ -181,7 +216,10 @@ async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
       status: attachment?.status ?? "processing",
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Upload failed." }, { status: 400 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Upload failed." },
+      { status: getUploadErrorStatus(error) },
+    );
   }
 }
 
@@ -204,17 +242,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       request,
       onBeforeGenerateToken: async (_pathname, clientPayload) => {
         const payload = parseClientPayload(clientPayload);
-        const limited = await checkRateLimit(request, RATE_LIMIT, {
-          extraKeyParts: [
-            typeof payload.address === "string" ? payload.address : undefined,
-            typeof payload.attachmentId === "string" ? payload.attachmentId : undefined,
-          ],
-        });
+        const limited = await checkRateLimit(request, RATE_LIMIT);
         if (limited) {
           throw new Error("Upload rate limit exceeded.");
         }
 
         const authorization = await authorizeUploadRequest(request, payload);
+        const authorizedLimited = await checkAuthorizedUploadRateLimit(request, authorization);
+        if (authorizedLimited) {
+          throw new Error("Upload rate limit exceeded.");
+        }
+
+        await reserveAuthorizedUploadQuota(authorization);
         await createPendingImageAttachment({
           attachmentId: authorization.normalized.payload.attachmentId,
           clientRequestId: typeof payload.clientRequestId === "string" ? payload.clientRequestId : null,
@@ -261,6 +300,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       status: "uploading",
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Upload failed." }, { status: 400 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Upload failed." },
+      { status: getUploadErrorStatus(error) },
+    );
   }
 }

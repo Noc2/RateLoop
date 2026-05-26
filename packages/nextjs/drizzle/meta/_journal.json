@@ -8,6 +8,13 @@
       "when": 1779778239173,
       "tag": "0000_lively_rick_jones",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779780000000,
+      "tag": "0001_image_upload_daily_quotas",
+      "breakpoints": true
     }
   ]
 }

@@ -16,8 +16,9 @@ import {
   processCompletedImageUpload,
   processCompletedLocalImageUpload,
   readLocalImageAttachment,
+  reserveImageUploadDailyQuota,
 } from "~~/lib/attachments/imageAttachments";
-import { __setDatabaseResourcesForTests, db } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, db, dbClient } from "~~/lib/db";
 import { questionImageAttachments } from "~~/lib/db/schema";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 
@@ -352,6 +353,84 @@ test("rejects reused pending image attachment ids", async () => {
 
   await createPendingImageAttachment(params);
   await assert.rejects(() => createPendingImageAttachment(params), /Image attachment already exists/);
+});
+
+test("limits daily image upload quota by subject count", async () => {
+  const originalLimit = process.env.RATELOOP_IMAGE_UPLOAD_DAILY_LIMIT;
+
+  try {
+    process.env.RATELOOP_IMAGE_UPLOAD_DAILY_LIMIT = "2";
+
+    await reserveImageUploadDailyQuota({
+      now: new Date("2026-05-26T12:00:00Z"),
+      sizeBytes: 100,
+      subjectId: "0x00000000000000000000000000000000000000aa",
+      subjectKind: "wallet",
+    });
+    await reserveImageUploadDailyQuota({
+      now: new Date("2026-05-26T13:00:00Z"),
+      sizeBytes: 100,
+      subjectId: "0x00000000000000000000000000000000000000AA",
+      subjectKind: "wallet",
+    });
+
+    await assert.rejects(
+      () =>
+        reserveImageUploadDailyQuota({
+          now: new Date("2026-05-26T14:00:00Z"),
+          sizeBytes: 100,
+          subjectId: "0x00000000000000000000000000000000000000aa",
+          subjectKind: "wallet",
+        }),
+      /Daily image upload quota exceeded/,
+    );
+
+    const rows = await dbClient.execute("SELECT image_count, byte_count FROM image_upload_daily_quotas");
+    assert.equal(Number(rows.rows[0]?.image_count), 2);
+    assert.equal(String(rows.rows[0]?.byte_count), "200");
+  } finally {
+    if (originalLimit === undefined) {
+      delete process.env.RATELOOP_IMAGE_UPLOAD_DAILY_LIMIT;
+    } else {
+      process.env.RATELOOP_IMAGE_UPLOAD_DAILY_LIMIT = originalLimit;
+    }
+  }
+});
+
+test("limits daily image upload quota by byte count", async () => {
+  const originalLimit = process.env.RATELOOP_MCP_IMAGE_UPLOAD_DAILY_BYTES;
+
+  try {
+    process.env.RATELOOP_MCP_IMAGE_UPLOAD_DAILY_BYTES = "150";
+
+    await reserveImageUploadDailyQuota({
+      now: new Date("2026-05-26T12:00:00Z"),
+      sizeBytes: 100,
+      subjectId: "agent-123",
+      subjectKind: "agent",
+    });
+
+    await assert.rejects(
+      () =>
+        reserveImageUploadDailyQuota({
+          now: new Date("2026-05-26T13:00:00Z"),
+          sizeBytes: 100,
+          subjectId: "agent-123",
+          subjectKind: "agent",
+        }),
+      /Daily image upload quota exceeded/,
+    );
+
+    const rows = await dbClient.execute("SELECT image_count, byte_count FROM image_upload_daily_quotas");
+    assert.equal(Number(rows.rows[0]?.image_count), 1);
+    assert.equal(String(rows.rows[0]?.byte_count), "100");
+  } finally {
+    if (originalLimit === undefined) {
+      delete process.env.RATELOOP_MCP_IMAGE_UPLOAD_DAILY_BYTES;
+    } else {
+      process.env.RATELOOP_MCP_IMAGE_UPLOAD_DAILY_BYTES = originalLimit;
+    }
+  }
 });
 
 test("validates approved RateLoop-hosted image ownership before submission", async () => {

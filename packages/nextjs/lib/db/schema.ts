@@ -348,6 +348,30 @@ export const questionImageAttachments = pgTable(
 export type QuestionImageAttachment = typeof questionImageAttachments.$inferSelect;
 export type NewQuestionImageAttachment = typeof questionImageAttachments.$inferInsert;
 
+export const imageUploadDailyQuotas = pgTable(
+  "image_upload_daily_quotas",
+  {
+    quotaKey: text("quota_key").primaryKey(),
+    subjectKind: text("subject_kind").notNull(),
+    subjectId: text("subject_id").notNull(),
+    quotaDate: text("quota_date").notNull(),
+    imageCount: integer("image_count").notNull().default(0),
+    byteCount: numeric("byte_count", { precision: 78, scale: 0 }).default("0").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    subjectDayIdx: index("image_upload_daily_quotas_subject_day_idx").on(
+      table.subjectKind,
+      table.subjectId,
+      table.quotaDate,
+    ),
+  }),
+);
+
+export type ImageUploadDailyQuota = typeof imageUploadDailyQuotas.$inferSelect;
+export type NewImageUploadDailyQuota = typeof imageUploadDailyQuotas.$inferInsert;
+
 export const agentSigningIntents = pgTable(
   "agent_signing_intents",
   {
