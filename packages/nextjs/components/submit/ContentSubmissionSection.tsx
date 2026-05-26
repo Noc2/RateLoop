@@ -2872,14 +2872,10 @@ export function ContentSubmissionSection() {
 
   const feedbackBonusDetailsCard = (
     <div className="space-y-5">
-      <div className="space-y-2">
+      <div>
         <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
           Feedback Bonus <span className="text-base-content/55">(optional)</span>
           <InfoTooltip text="Optional USDC pool for useful hidden feedback from revealed raters. The awarder pays selected feedback after settlement, with the default frontend fee reserved when eligible." />
-        </p>
-        <p className="text-sm leading-relaxed text-base-content/65">
-          Keep this off when you only need a score. Turn it on when written notes, objections, or bug reports should be
-          worth extra USDC.
         </p>
       </div>
 
@@ -2971,14 +2967,7 @@ export function ContentSubmissionSection() {
             </p>
           ) : null}
         </div>
-      ) : (
-        <div className="surface-card-nested rounded-lg p-4">
-          <p className="text-base text-base-content/70">
-            The question will still accept optional rater feedback after votes. There just will not be a separate USDC
-            pool for awarding notes.
-          </p>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 
