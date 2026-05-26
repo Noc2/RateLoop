@@ -79,7 +79,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
           ),
         ),
       )
-      .orderBy(desc(round.settledAt), asc(questionRewardPool.id))
+      .orderBy(desc(round.roundId), asc(questionRewardPool.id))
       .limit(limit)
       .offset(offset);
 

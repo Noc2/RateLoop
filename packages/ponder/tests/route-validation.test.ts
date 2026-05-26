@@ -1690,6 +1690,9 @@ describe("registerCorrelationRoutes", () => {
     expect(queryBuilder.innerJoin).toHaveBeenCalled();
     expect(queryBuilder.leftJoin).toHaveBeenCalled();
     expect(queryBuilder.limit).toHaveBeenCalledWith(25);
+    const orderByArgs = queryBuilder.orderBy.mock.calls[0] ?? [];
+    expect(serializeExpression(orderByArgs[0])).toContain("round.roundId");
+    expect(serializeExpression(orderByArgs[1])).toContain("questionRewardPool.id");
     const body = await response.json();
     expect(body.items[0]).toMatchObject({
       rewardPoolId: "7",
