@@ -1,6 +1,6 @@
 "use client";
 
-import { ContentRegistryAbi, QuestionRewardPoolEscrowAbi } from "@rateloop/contracts/abis";
+import { ContentRegistryAbi, FeedbackBonusEscrowAbi, QuestionRewardPoolEscrowAbi } from "@rateloop/contracts/abis";
 import { isAddress, parseUnits } from "viem";
 import { contracts } from "~~/utils/scaffold-eth/contract";
 
@@ -17,6 +17,7 @@ export type SubmissionRewardAsset = "lrep" | "usdc";
 
 export const QUESTION_SUBMISSION_ABI = ContentRegistryAbi;
 export const QUESTION_REWARD_POOL_ESCROW_ABI = QuestionRewardPoolEscrowAbi;
+export const FEEDBACK_BONUS_ESCROW_ABI = FeedbackBonusEscrowAbi;
 export const ERC20_APPROVAL_ABI = [
   {
     type: "function",
@@ -93,6 +94,10 @@ export function getConfiguredQuestionRewardPoolEscrowAddress(chainId: number): `
   }
 
   return deployedAddress;
+}
+
+export function getConfiguredFeedbackBonusEscrowAddress(chainId: number): `0x${string}` | undefined {
+  return getDeployedContractAddress(chainId, "FeedbackBonusEscrow");
 }
 
 export function getDefaultUsdcAddress(chainId: number): `0x${string}` | undefined {
