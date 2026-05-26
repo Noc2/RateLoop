@@ -16,6 +16,23 @@ import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotC
 ///      cluster snapshot proposal. Avoids a heavy import dependency.
 interface IRoundClusterReadyAtSource {
     function roundClusterPayoutReadyAt(uint256 contentId, uint256 roundId) external view returns (uint48);
+    function roundCore(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            uint48 startTime,
+            uint8 state,
+            uint16 voteCount,
+            uint16 revealedCount,
+            uint64 totalStake,
+            uint48 thresholdReachedAt,
+            uint48 settledAt
+        );
+    function protocolConfig() external view returns (IRevealGraceConfig);
+}
+
+interface IRevealGraceConfig {
+    function revealGracePeriod() external view returns (uint256);
 }
 
 /// @title LaunchDistributionPool
@@ -767,15 +784,19 @@ contract LaunchDistributionPool is
     ) internal {
         address oracle = address(clusterPayoutOracle);
         if (oracle == address(0) || sourceReadyAt == 0) revert SnapshotNotFinalized();
+        uint64 creditReadyAt = uint64(block.timestamp);
+        if (sourceReadyAt > creditReadyAt) {
+            creditReadyAt = sourceReadyAt;
+        }
         pendingEarnedRaterCredits[contentId][roundId][commitKey] = PendingEarnedRaterCredit({
             rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
         });
-        pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = sourceReadyAt;
+        pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = creditReadyAt;
         // M-Oracle-1: record the earliest sourceReadyAt for this round so the cluster oracle can
         // reject snapshot proposals submitted before any credit has been recorded.
         uint64 existing = launchRoundSourceReadyAt[contentId][roundId];
-        if (existing == 0 || sourceReadyAt < existing) {
-            launchRoundSourceReadyAt[contentId][roundId] = sourceReadyAt;
+        if (existing == 0 || creditReadyAt < existing) {
+            launchRoundSourceReadyAt[contentId][roundId] = creditReadyAt;
         }
 
         delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
@@ -862,10 +883,10 @@ contract LaunchDistributionPool is
 
     /// @notice M-Oracle-1: source-readiness timestamp for the launch-credit domain. Prefers the
     ///         configured RoundVotingEngine view (set via {setRoundClusterReadyAtSource}) so a
-    ///         proposer can front-run a snapshot as soon as the round is settled, even before
-    ///         the first rater claim records a pending credit. Falls back to the per-record
-    ///         `launchRoundSourceReadyAt` so existing deployments without the source wired up
-    ///         still get the gate once at least one credit lands.
+    ///         proposer can front-run a snapshot as soon as the advisory reveal grace has
+    ///         elapsed. Falls back to the per-record `launchRoundSourceReadyAt` so existing
+    ///         deployments without the source wired up still get the gate once at least one
+    ///         credit lands.
     function roundPayoutSnapshotSourceReadyAt(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view
@@ -875,10 +896,36 @@ contract LaunchDistributionPool is
         IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
         if (address(source) != address(0)) {
             try source.roundClusterPayoutReadyAt(contentId, roundId) returns (uint48 readyAt) {
-                if (readyAt != 0) return uint64(readyAt);
+                if (readyAt != 0) return _launchSnapshotReadyAtAfterAdvisoryGrace(source, contentId, roundId, readyAt);
             } catch { }
         }
         return launchRoundSourceReadyAt[contentId][roundId];
+    }
+
+    function _launchSnapshotReadyAtAfterAdvisoryGrace(
+        IRoundClusterReadyAtSource source,
+        uint256 contentId,
+        uint256 roundId,
+        uint48 readyAt
+    ) private view returns (uint64) {
+        uint64 sourceReadyAt = uint64(readyAt);
+        try source.roundCore(contentId, roundId) returns (
+            uint48,
+            uint8,
+            uint16,
+            uint16,
+            uint64,
+            uint48,
+            uint48 settledAt
+        ) {
+            if (settledAt == 0) return sourceReadyAt;
+            try source.protocolConfig() returns (IRevealGraceConfig protocolConfig) {
+                uint256 graceReadyAt = uint256(settledAt) + protocolConfig.revealGracePeriod();
+                if (graceReadyAt > type(uint64).max) return type(uint64).max;
+                if (graceReadyAt > sourceReadyAt) return uint64(graceReadyAt);
+            } catch { }
+        } catch { }
+        return sourceReadyAt;
     }
 
     function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)

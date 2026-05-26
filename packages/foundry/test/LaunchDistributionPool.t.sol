@@ -660,7 +660,7 @@ contract LaunchDistributionPoolTest is Test {
         pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
     }
 
-    function test_LaunchCreditAcceptsSnapshotProposedAfterSourceReadyBeforeRecord() public {
+    function test_LaunchCreditRejectsSnapshotProposedBeforeRecordEvenWhenSourceReady() public {
         ClusterPayoutOracle oracle = _configureLaunchOracle(1);
         uint64 sourceReadyAt = uint64(block.timestamp);
 
@@ -670,6 +670,7 @@ contract LaunchDistributionPoolTest is Test {
         _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
 
         vm.warp(block.timestamp + 30);
+        uint64 creditReadyAt = uint64(block.timestamp);
         assertEq(
             pool.recordEarnedRaterRewardWithSourceReady(
                 alice,
@@ -685,12 +686,53 @@ contract LaunchDistributionPoolTest is Test {
             ),
             0
         );
-        assertEq(pool.pendingEarnedRaterCreditReadyAt(1, 1, _commitKey(1)), sourceReadyAt);
+        assertEq(creditReadyAt, uint64(block.timestamp));
+        assertGt(pool.pendingEarnedRaterCreditReadyAt(1, 1, _commitKey(1)), sourceReadyAt);
 
-        uint256 paidAfterSnapshot = pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
-        assertEq(paidAfterSnapshot, 0);
-        assertEq(pool.qualifyingCreditBps(alice), 2_500);
-        assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
+        vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
+        pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+        assertEq(pool.qualifyingCreditBps(alice), 0);
+        assertFalse(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
+    }
+
+    function test_LaunchSnapshotSourceWaitsForAdvisoryRevealGrace() public {
+        ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+        uint48 settledAt = uint48(block.timestamp);
+        uint256 revealGrace = 60 minutes;
+        pool.setRoundClusterReadyAtSource(address(new MockGraceClusterSource(settledAt, revealGrace)));
+
+        uint64 expectedReadyAt = uint64(uint256(settledAt) + revealGrace);
+        assertEq(
+            pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1),
+            expectedReadyAt
+        );
+
+        IClusterPayoutOracle.PayoutWeight memory payout =
+            _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
+        uint8 launchDomain = pool.PAYOUT_DOMAIN_LAUNCH_CREDIT();
+        bytes32 weightRoot = oracle.payoutWeightLeaf(payout);
+
+        vm.warp(uint256(expectedReadyAt) - 1);
+        vm.expectRevert(ClusterPayoutOracle.SourceNotReady.selector);
+        oracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: launchDomain,
+                rewardPoolId: 0,
+                contentId: 1,
+                roundId: 1,
+                correlationEpochId: 1,
+                rawEligibleVoters: 1,
+                effectiveParticipantUnits: uint32(payout.effectiveWeight),
+                totalClaimWeight: payout.effectiveWeight,
+                weightRoot: weightRoot,
+                reasonRoot: keccak256("reason-root"),
+                artifactHash: keccak256("epoch-artifact"),
+                artifactURI: "ipfs://round"
+            })
+        );
+
+        vm.warp(expectedReadyAt);
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
     }
 
     function test_PendingLaunchOracleCreditsReserveUnverifiedRoundSlotsAtRecordTime() public {
@@ -1958,5 +2000,35 @@ contract MockLaunchOracleFrontendRegistry {
 contract MockAlwaysReadyClusterSource {
     function roundClusterPayoutReadyAt(uint256, uint256) external pure returns (uint48) {
         return 1;
+    }
+}
+
+contract MockGraceClusterSource {
+    uint48 internal immutable settledAt;
+    uint256 internal immutable gracePeriod;
+
+    constructor(uint48 _settledAt, uint256 _gracePeriod) {
+        settledAt = _settledAt;
+        gracePeriod = _gracePeriod;
+    }
+
+    function roundClusterPayoutReadyAt(uint256, uint256) external view returns (uint48) {
+        return settledAt;
+    }
+
+    function roundCore(uint256, uint256)
+        external
+        view
+        returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48)
+    {
+        return (1, 1, 0, 0, 0, 0, settledAt);
+    }
+
+    function protocolConfig() external view returns (address) {
+        return address(this);
+    }
+
+    function revealGracePeriod() external view returns (uint256) {
+        return gracePeriod;
     }
 }
