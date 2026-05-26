@@ -44,7 +44,7 @@ Within the package directory, additional scripts are available:
 | `PONDER_ADVISORY_VOTE_RECORDER_ADDRESS`    | Advisory zero-stake vote recorder address; local override only once deployments are refreshed                               |
 | `PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS`     | Correlation payout oracle address; local override only once deployments are refreshed                                       |
 | `PONDER_CONTENT_REGISTRY_START_BLOCK` etc. | Optional fallback start blocks when the active chain has no shared deployment metadata                                      |
-| `RATELOOP_PONDER_DATABASE_SCHEMA`          | Optional production schema override for Ponder tables; `yarn ponder:start` defaults to a RateLoop-owned, network-specific schema |
+| `RATELOOP_PONDER_DATABASE_SCHEMA`          | Optional production schema override for Ponder tables; `yarn ponder:start` defaults to a Railway deployment schema on Railway, otherwise a RateLoop-owned network schema |
 | `CORS_ORIGIN`                              | Allowed origins (comma-separated; required in production)                                                                   |
 | `RATE_LIMIT_TRUSTED_IP_HEADERS`            | Comma-separated proxy IP headers to trust for API rate limiting in production                                               |
 | `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST`          | Comma-separated HTTPS URL prefixes Ponder may fetch for keeper-published payout artifacts                                  |
@@ -56,12 +56,12 @@ the Foundry deployment script refreshes `packages/ponder/.env.local` to match th
 `PONDER_NETWORK=hardhat`; live deploys such as
 `yarn deploy --network worldchainSepolia --keystore <name>` set the matching live network.
 
-In production, `yarn ponder:start` launches Ponder with a RateLoop-owned Postgres schema. If
-`DATABASE_SCHEMA` is unset or still set to the generic legacy `ponder` value, the launcher uses
-network-specific defaults such as `rateloop_ponder_worldchain_sepolia` so the app does not collide
-with metadata from a different Ponder deployment. To run multiple RateLoop Ponder services for the
-same network against the same Postgres database, set `RATELOOP_PONDER_DATABASE_SCHEMA` to a unique
-value such as `rateloop_ponder_worldchain_sepolia_v2`.
+In production, `yarn ponder:start` launches Ponder with an explicit Postgres schema. On Railway, the
+launcher uses `RAILWAY_DEPLOYMENT_ID` to derive a deployment-scoped schema, matching Ponder's
+zero-downtime deployment model. Outside Railway, if `DATABASE_SCHEMA` is unset or still set to the
+generic legacy `ponder` value, the launcher uses network-specific defaults such as
+`rateloop_ponder_worldchain_sepolia`. To force a specific schema, set
+`RATELOOP_PONDER_DATABASE_SCHEMA` to a unique value such as `rateloop_ponder_worldchain_sepolia_v2`.
 
 When the keeper publishes correlation payout artifacts with `KEEPER_CORRELATION_ARTIFACT_STORAGE=file`, set
 `PAYOUT_ARTIFACT_HTTPS_ALLOWLIST` to the same public HTTPS prefix as the keeper's
@@ -118,10 +118,10 @@ Routes `/health` and `/status` are reserved by Ponder.
 **Local chain rewind / reset:** `yarn ponder:dev` now auto-recovers once if the local hardhat/anvil chain was reset and the persisted Ponder checkpoint points at a block that no longer exists. It clears `packages/ponder/.ponder/pglite` and retries automatically.
 
 **Production schema collision:** If Railway logs `Schema '<name>' was previously used by a different
-Ponder app`, redeploy with this package's `yarn ponder:start` command so it can choose the
-network-specific RateLoop schema, or set `RATELOOP_PONDER_DATABASE_SCHEMA` to a fresh value such as
-`rateloop_ponder_worldchain_sepolia_v2`. Only drop the old schema if you are certain it contains no
-data you need.
+Ponder app`, redeploy with this package's `yarn ponder:start` command so it can choose a
+Railway deployment-scoped schema from `RAILWAY_DEPLOYMENT_ID`. For non-Railway deployments, set
+`RATELOOP_PONDER_DATABASE_SCHEMA` to a fresh value such as `rateloop_ponder_worldchain_sepolia_v2`.
+Only drop the old schema if you are certain it contains no data you need.
 
 **PGlite corruption or unrecoverable local state:** If Ponder still crashes or behaves unexpectedly after the retry, clear the local state manually:
 

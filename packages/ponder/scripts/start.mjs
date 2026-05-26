@@ -8,6 +8,10 @@ if (schemaInfo?.ignoredLegacyDatabaseSchema) {
     `[ponder:start] Ignoring DATABASE_SCHEMA=ponder to avoid colliding with legacy Ponder app metadata; using ${schemaInfo.schema}.`,
   );
   console.warn("[ponder:start] Set RATELOOP_PONDER_DATABASE_SCHEMA to choose a different Ponder schema.");
+} else if (schemaInfo?.source === "RAILWAY_DEPLOYMENT_ID") {
+  console.warn(
+    `[ponder:start] Using Railway deployment-scoped Ponder schema ${schemaInfo.schema}.`,
+  );
 } else if (schemaInfo?.source === "default") {
   console.warn(
     `[ponder:start] DATABASE_SCHEMA is not set; using RateLoop's production default schema ${schemaInfo.schema}.`,

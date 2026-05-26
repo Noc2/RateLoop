@@ -3,6 +3,7 @@ import {
   buildPonderStartArgs,
   hasSchemaFlag,
   resolvePonderDatabaseSchema,
+  schemaFromRailwayDeploymentId,
 } from "./databaseSchema.mjs";
 
 describe("Ponder database schema launcher", () => {
@@ -27,8 +28,32 @@ describe("Ponder database schema launcher", () => {
     expect(result.ignoredLegacyDatabaseSchema).toBe(true);
   });
 
+  test("uses Railway deployment IDs for production deployment schemas", () => {
+    const result = resolvePonderDatabaseSchema({
+      RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
+    });
+
+    expect(result.schema).toBe("railway_123e4567_e89b_12d3_a456_426614174000");
+    expect(result.source).toBe("RAILWAY_DEPLOYMENT_ID");
+  });
+
+  test("uses Railway deployment IDs instead of the legacy generic ponder schema", () => {
+    const result = resolvePonderDatabaseSchema({
+      DATABASE_SCHEMA: "ponder",
+      PONDER_NETWORK: "worldchainSepolia",
+      RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
+    });
+
+    expect(result.schema).toBe("railway_123e4567_e89b_12d3_a456_426614174000");
+    expect(result.source).toBe("RAILWAY_DEPLOYMENT_ID");
+    expect(result.ignoredLegacyDatabaseSchema).toBe(true);
+  });
+
   test("honors a custom DATABASE_SCHEMA", () => {
-    const result = resolvePonderDatabaseSchema({ DATABASE_SCHEMA: "rateloop_ponder_preview" });
+    const result = resolvePonderDatabaseSchema({
+      DATABASE_SCHEMA: "rateloop_ponder_preview",
+      RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
+    });
 
     expect(result.schema).toBe("rateloop_ponder_preview");
     expect(result.source).toBe("DATABASE_SCHEMA");
@@ -51,6 +76,13 @@ describe("Ponder database schema launcher", () => {
     );
   });
 
+  test("sanitizes long Railway deployment IDs into Ponder-compatible schema names", () => {
+    const schema = schemaFromRailwayDeploymentId("deploy/with a very very long id that needs shortening");
+
+    expect(schema).toMatch(/^railway_deploy_with_a_very_very_long_[a-f0-9]{8}$/);
+    expect(schema?.length).toBeLessThanOrEqual(45);
+  });
+
   test("detects explicit schema flags", () => {
     expect(hasSchemaFlag(["--schema", "custom"])).toBe(true);
     expect(hasSchemaFlag(["--schema=custom"])).toBe(true);
@@ -61,10 +93,17 @@ describe("Ponder database schema launcher", () => {
     const result = buildPonderStartArgs(["--port", "42069"], {
       DATABASE_SCHEMA: "ponder",
       PONDER_NETWORK: "worldchainSepolia",
+      RAILWAY_DEPLOYMENT_ID: "123e4567-e89b-12d3-a456-426614174000",
     });
 
-    expect(result.args).toEqual(["start", "--schema", "rateloop_ponder_worldchain_sepolia", "--port", "42069"]);
-    expect(result.env.DATABASE_SCHEMA).toBe("rateloop_ponder_worldchain_sepolia");
+    expect(result.args).toEqual([
+      "start",
+      "--schema",
+      "railway_123e4567_e89b_12d3_a456_426614174000",
+      "--port",
+      "42069",
+    ]);
+    expect(result.env.DATABASE_SCHEMA).toBe("railway_123e4567_e89b_12d3_a456_426614174000");
   });
 
   test("leaves explicit CLI schema arguments alone", () => {
