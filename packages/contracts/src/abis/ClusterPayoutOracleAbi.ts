@@ -126,6 +126,19 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_CHALLENGE_BOND",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_CHALLENGE_WINDOW",
     "inputs": [],
     "outputs": [
@@ -880,6 +893,24 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "rejectFinalizedCorrelationEpoch",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "reasonHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "rejectFinalizedRoundPayoutSnapshot",
     "inputs": [
       {
@@ -898,7 +929,43 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "rejectFinalizedRoundPayoutSnapshotRoot",
+    "inputs": [
+      {
+        "name": "snapshotKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "reasonHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "rejectRoundPayoutSnapshot",
+    "inputs": [
+      {
+        "name": "snapshotKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "reasonHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "rejectRoundPayoutSnapshotRoot",
     "inputs": [
       {
         "name": "snapshotKey",
@@ -942,6 +1009,30 @@ export const ClusterPayoutOracleAbi = [
     "type": "function",
     "name": "rejectedRoundPayoutSnapshotConsumed",
     "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "rejectedRoundPayoutSnapshotDigests",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
       {
         "name": "",
         "type": "bytes32",
@@ -1236,6 +1327,25 @@ export const ClusterPayoutOracleAbi = [
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "roundPayoutSnapshotProposalDigest",
+    "inputs": [
+      {
+        "name": "snapshotKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",

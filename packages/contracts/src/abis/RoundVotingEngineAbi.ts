@@ -19,6 +19,25 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "activeRoundId",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "cancelExpiredRound",
     "inputs": [
       {
@@ -506,74 +525,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "commitVoteWithPermit",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundContext",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "targetRound",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "drandChainHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "commitHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "ciphertext",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "stakeAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "frontend",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "permitDeadline",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "v",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "r",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "s",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "currentRoundId",
     "inputs": [
       {
@@ -898,6 +849,25 @@ export const RoundVotingEngineAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "isDormancyBlocked",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1800,40 +1770,6 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
-    "name": "roundRbtsStats",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "scored",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "rewardWeight",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "forfeitedPool",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "roundReferenceRatingBpsForRound",
     "inputs": [
       {
@@ -1883,6 +1819,30 @@ export const RoundVotingEngineAbi = [
   {
     "type": "function",
     "name": "roundStakeWithEligibleFrontend",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "roundThresholdReachedBlock",
     "inputs": [
       {
         "name": "",
@@ -3025,11 +2985,6 @@ export const RoundVotingEngineAbi = [
   {
     "type": "error",
     "name": "NothingProcessed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "RbtsSeedRefreshCapped",
     "inputs": []
   },
   {

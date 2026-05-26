@@ -169,6 +169,30 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "credentialIdentityKey",
+    "inputs": [
+      {
+        "name": "provider",
+        "type": "uint8",
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "credentialScope",
     "inputs": [
       {
@@ -274,6 +298,13 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "freezeWorldIdVerifierConfig",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -783,6 +814,34 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "setWorldIdVerifierConfig",
+    "inputs": [
+      {
+        "name": "_worldIdRouter",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_worldIdScope",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_worldIdExternalNullifierHash",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_worldIdCredentialTtl",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "supportsInterface",
     "inputs": [
       {
@@ -883,6 +942,19 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "worldIdVerifierConfigFrozen",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "event",
@@ -1285,6 +1357,50 @@ export const RaterRegistryAbi = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "WorldIdVerifierConfigLocked",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WorldIdVerifierConfigUpdated",
+    "inputs": [
+      {
+        "name": "router",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "scope",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "externalNullifierHash",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "credentialTtl",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
     "type": "error",
     "name": "AccessControlBadConfirmation",
     "inputs": []
@@ -1353,6 +1469,11 @@ export const RaterRegistryAbi = [
   {
     "type": "error",
     "name": "NullifierAlreadyAssigned",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WorldIdVerifierConfigFrozen",
     "inputs": []
   }
 ] as const;

@@ -57,8 +57,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     uint8 internal constant COMMIT_STATUS_ROUND_FULL = 2;
     uint8 internal constant COMMIT_STATUS_WAITING_FOR_SETTLEMENT = 3;
     uint8 internal constant COMMIT_STATUS_WAITING_FOR_REVEAL_GRACE = 4;
-    bytes32 internal constant PERMIT_TYPEHASH =
-        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
     function _tlockDrandChainHash() internal pure override returns (bytes32) {
         return DEFAULT_DRAND_CHAIN_HASH;
@@ -482,49 +480,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
-    function _signPermit(uint256 privateKey, address tokenOwner, uint256 value, uint256 deadline)
-        internal
-        view
-        returns (uint8 v, bytes32 r, bytes32 s)
-    {
-        bytes32 structHash = keccak256(
-            abi.encode(PERMIT_TYPEHASH, tokenOwner, address(engine), value, lrepToken.nonces(tokenOwner), deadline)
-        );
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", lrepToken.DOMAIN_SEPARATOR(), structHash));
-        return vm.sign(privateKey, digest);
-    }
-
-    function _commitWithPermit(uint256 privateKey, uint256 contentId, bool isUp, uint256 stake)
-        internal
-        returns (bytes32 commitKey, bytes32 salt)
-    {
-        address permitVoter = vm.addr(privateKey);
-        salt = keccak256(abi.encodePacked(permitVoter, block.timestamp, "permit"));
-        _openRoundForTest(engine, contentId, permitVoter);
-        TestCommitArtifacts memory artifacts =
-            _buildTestCommitArtifacts(address(engine), permitVoter, isUp, salt, contentId);
-        uint256 deadline = block.timestamp + 1 hours;
-        (uint8 v, bytes32 r, bytes32 s) = _signPermit(privateKey, permitVoter, stake, deadline);
-
-        vm.prank(permitVoter);
-        engine.commitVoteWithPermit(
-            contentId,
-            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            stake,
-            address(0),
-            deadline,
-            v,
-            r,
-            s
-        );
-
-        return (artifacts.commitKey, salt);
-    }
-
     function _maxAgeCiphertext() internal view returns (bytes memory ciphertext) {
         uint256 totalLength = 2_048;
         uint64 targetRound = _tlockCommitTargetRound();
@@ -798,85 +753,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertFalse(willStartNewRound);
     }
 
-    function test_CommitVoteWithPermit_Succeeds() public {
-        uint256 permitVoterKey = 0xA11CE;
-        address permitVoter = vm.addr(permitVoterKey);
-        vm.prank(owner);
-        lrepToken.mint(permitVoter, 10_000e6);
-
-        uint256 contentId = _submitContent();
-        (bytes32 commitKey,) = _commitWithPermit(permitVoterKey, contentId, true, STAKE);
-
-        RoundLib.Commit memory commit = RoundEngineReadHelpers.commit(engine, contentId, 1, commitKey);
-        assertEq(commit.stakeAmount, STAKE);
-        assertEq(lrepToken.nonces(permitVoter), 1);
-        assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
-        assertEq(lrepToken.balanceOf(address(engine)), STAKE);
-    }
-
-    function test_CommitVoteWithPermit_InvalidSignerReverts() public {
-        uint256 permitVoterKey = 0xB0B;
-        uint256 wrongKey = 0xCAFE;
-        address permitVoter = vm.addr(permitVoterKey);
-        vm.prank(owner);
-        lrepToken.mint(permitVoter, 10_000e6);
-
-        uint256 contentId = _submitContent();
-        bytes32 salt = keccak256(abi.encodePacked(permitVoter, block.timestamp, "invalid-permit"));
-        TestCommitArtifacts memory artifacts =
-            _buildTestCommitArtifacts(address(engine), permitVoter, true, salt, contentId);
-        uint256 deadline = block.timestamp + 1 hours;
-        (uint8 v, bytes32 r, bytes32 s) = _signPermit(wrongKey, permitVoter, STAKE, deadline);
-
-        vm.prank(permitVoter);
-        vm.expectRevert();
-        engine.commitVoteWithPermit(
-            contentId,
-            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            STAKE,
-            address(0),
-            deadline,
-            v,
-            r,
-            s
-        );
-    }
-
-    function test_CommitVoteWithPermit_ExpiredPermitReverts() public {
-        uint256 permitVoterKey = 0xC0FFEE;
-        address permitVoter = vm.addr(permitVoterKey);
-        vm.prank(owner);
-        lrepToken.mint(permitVoter, 10_000e6);
-
-        uint256 contentId = _submitContent();
-        bytes32 salt = keccak256(abi.encodePacked(permitVoter, block.timestamp, "expired-permit"));
-        TestCommitArtifacts memory artifacts =
-            _buildTestCommitArtifacts(address(engine), permitVoter, true, salt, contentId);
-        uint256 deadline = block.timestamp - 1;
-        (uint8 v, bytes32 r, bytes32 s) = _signPermit(permitVoterKey, permitVoter, STAKE, deadline);
-
-        vm.prank(permitVoter);
-        vm.expectRevert();
-        engine.commitVoteWithPermit(
-            contentId,
-            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            STAKE,
-            address(0),
-            deadline,
-            v,
-            r,
-            s
-        );
-    }
-
     function test_BasicLifecycle_ThreeVoters_UpWins() public {
         (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
 
@@ -931,7 +807,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             engine.roundRatingDownEvidence(contentId, roundId), 1_300_000, "rating uses bounded down signal evidence"
         );
 
-        (bool scored, uint256 rewardWeight, uint256 forfeitedPool) = engine.roundRbtsStats(contentId, roundId);
+        bool scored = engine.roundRbtsScored(contentId, roundId);
+        uint256 rewardWeight = engine.roundRbtsRewardWeight(contentId, roundId);
+        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
         assertFalse(scored, "RBTS scores are stored at settlement");
         assertEq(rewardWeight, 0, "reward weight starts empty");
         assertEq(forfeitedPool, 0, "forfeited pool starts empty");
@@ -939,7 +817,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
         assertGt(registry.getRating(contentId), 5_000, "binary up majority moves rating up");
-        (scored, rewardWeight, forfeitedPool) = engine.roundRbtsStats(contentId, roundId);
+        scored = engine.roundRbtsScored(contentId, roundId);
+        rewardWeight = engine.roundRbtsRewardWeight(contentId, roundId);
+        forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
         assertTrue(scored, "RBTS scored");
         assertGt(rewardWeight, 0, "positive RBTS reward weight");
         assertGt(forfeitedPool, 0, "imperfect scores forfeit some stake");

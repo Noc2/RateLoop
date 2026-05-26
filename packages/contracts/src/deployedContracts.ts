@@ -6846,6 +6846,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "activeRoundId",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "cancelExpiredRound",
           inputs: [
             {
@@ -7333,74 +7352,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "commitVoteWithPermit",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundContext",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "targetRound",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "drandChainHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "commitHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "ciphertext",
-              type: "bytes",
-              internalType: "bytes",
-            },
-            {
-              name: "stakeAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "frontend",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "permitDeadline",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "v",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "r",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "s",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "currentRoundId",
           inputs: [
             {
@@ -7725,6 +7676,25 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "isDormancyBlocked",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -8627,40 +8597,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundRbtsStats",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "scored",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "rewardWeight",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "forfeitedPool",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "roundReferenceRatingBpsForRound",
           inputs: [
             {
@@ -8710,6 +8646,30 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "roundStakeWithEligibleFrontend",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundThresholdReachedBlock",
           inputs: [
             {
               name: "",
@@ -9856,11 +9816,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "RbtsSeedRefreshCapped",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "ReentrancyGuardReentrantCall",
           inputs: [],
         },
@@ -9953,8 +9908,10 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {
+        activeRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         currentRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         hasCommits: "contracts/interfaces/IRoundVotingEngine.sol",
+        isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
         rounds: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         DEFAULT_ADMIN_ROLE:
@@ -16287,6 +16244,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   type: "bytes32",
                   internalType: "bytes32",
                 },
+                {
+                  name: "clusterSnapshotDigest",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
               ],
             },
           ],
@@ -19654,6 +19616,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "MAX_CHALLENGE_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "MAX_CHALLENGE_WINDOW",
           inputs: [],
           outputs: [
@@ -20410,6 +20385,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectFinalizedCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "rejectFinalizedRoundPayoutSnapshot",
           inputs: [
             {
@@ -20428,7 +20421,43 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectFinalizedRoundPayoutSnapshotRoot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "rejectRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectRoundPayoutSnapshotRoot",
           inputs: [
             {
               name: "snapshotKey",
@@ -20472,6 +20501,30 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "function",
           name: "rejectedRoundPayoutSnapshotConsumed",
           inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rejectedRoundPayoutSnapshotDigests",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
             {
               name: "",
               type: "bytes32",
@@ -20767,6 +20820,25 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "roundPayoutSnapshotProposalDigest",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -21671,6 +21743,10 @@ const deployedContracts: GenericContractsDeclaration = {
         getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
         isRoundPayoutSnapshotFinalized:
           "contracts/interfaces/IClusterPayoutOracle.sol",
+        rejectFinalizedCorrelationEpoch:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        rejectedRoundPayoutSnapshotDigests:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
         rejectedRoundPayoutSnapshotRoots:
           "contracts/interfaces/IClusterPayoutOracle.sol",
         roundPayoutSnapshotConsumer:
@@ -21678,6 +21754,8 @@ const deployedContracts: GenericContractsDeclaration = {
         roundPayoutSnapshotConsumerFor:
           "contracts/interfaces/IClusterPayoutOracle.sol",
         roundPayoutSnapshotKey: "contracts/interfaces/IClusterPayoutOracle.sol",
+        roundPayoutSnapshotProposalDigest:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
         roundPayoutSnapshotProposedAt:
           "contracts/interfaces/IClusterPayoutOracle.sol",
         verifyPayoutWeight: "contracts/interfaces/IClusterPayoutOracle.sol",
@@ -21871,6 +21949,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "credentialIdentityKey",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "credentialScope",
           inputs: [
             {
@@ -21976,6 +22078,13 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "freezeWorldIdVerifierConfig",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -22485,6 +22594,34 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setWorldIdVerifierConfig",
+          inputs: [
+            {
+              name: "_worldIdRouter",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_worldIdScope",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "_worldIdExternalNullifierHash",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "_worldIdCredentialTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "supportsInterface",
           inputs: [
             {
@@ -22585,6 +22722,19 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "worldIdVerifierConfigFrozen",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "event",
@@ -22987,6 +23137,50 @@ const deployedContracts: GenericContractsDeclaration = {
           anonymous: false,
         },
         {
+          type: "event",
+          name: "WorldIdVerifierConfigLocked",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WorldIdVerifierConfigUpdated",
+          inputs: [
+            {
+              name: "router",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "scope",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "externalNullifierHash",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "credentialTtl",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
           type: "error",
           name: "AccessControlBadConfirmation",
           inputs: [],
@@ -23055,6 +23249,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "NullifierAlreadyAssigned",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "WorldIdVerifierConfigFrozen",
           inputs: [],
         },
       ],
@@ -31255,6 +31454,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "activeRoundId",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "cancelExpiredRound",
           inputs: [
             {
@@ -31742,74 +31960,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "commitVoteWithPermit",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundContext",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "targetRound",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "drandChainHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "commitHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "ciphertext",
-              type: "bytes",
-              internalType: "bytes",
-            },
-            {
-              name: "stakeAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "frontend",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "permitDeadline",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "v",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "r",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "s",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "currentRoundId",
           inputs: [
             {
@@ -32134,6 +32284,25 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "isDormancyBlocked",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -33036,40 +33205,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundRbtsStats",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "scored",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "rewardWeight",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "forfeitedPool",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "roundReferenceRatingBpsForRound",
           inputs: [
             {
@@ -33119,6 +33254,30 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "roundStakeWithEligibleFrontend",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundThresholdReachedBlock",
           inputs: [
             {
               name: "",
@@ -34265,11 +34424,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "RbtsSeedRefreshCapped",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "ReentrancyGuardReentrantCall",
           inputs: [],
         },
@@ -34362,8 +34516,10 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {
+        activeRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         currentRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         hasCommits: "contracts/interfaces/IRoundVotingEngine.sol",
+        isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
         rounds: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         DEFAULT_ADMIN_ROLE:
@@ -40696,6 +40852,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   type: "bytes32",
                   internalType: "bytes32",
                 },
+                {
+                  name: "clusterSnapshotDigest",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
               ],
             },
           ],
@@ -44673,6 +44834,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "MAX_CHALLENGE_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "MAX_CHALLENGE_WINDOW",
           inputs: [],
           outputs: [
@@ -45429,6 +45603,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectFinalizedCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "rejectFinalizedRoundPayoutSnapshot",
           inputs: [
             {
@@ -45447,7 +45639,43 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectFinalizedRoundPayoutSnapshotRoot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "rejectRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectRoundPayoutSnapshotRoot",
           inputs: [
             {
               name: "snapshotKey",
@@ -45491,6 +45719,30 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "function",
           name: "rejectedRoundPayoutSnapshotConsumed",
           inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rejectedRoundPayoutSnapshotDigests",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
             {
               name: "",
               type: "bytes32",
@@ -45786,6 +46038,25 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "roundPayoutSnapshotProposalDigest",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -46690,6 +46961,10 @@ const deployedContracts: GenericContractsDeclaration = {
         getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
         isRoundPayoutSnapshotFinalized:
           "contracts/interfaces/IClusterPayoutOracle.sol",
+        rejectFinalizedCorrelationEpoch:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        rejectedRoundPayoutSnapshotDigests:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
         rejectedRoundPayoutSnapshotRoots:
           "contracts/interfaces/IClusterPayoutOracle.sol",
         roundPayoutSnapshotConsumer:
@@ -46697,6 +46972,8 @@ const deployedContracts: GenericContractsDeclaration = {
         roundPayoutSnapshotConsumerFor:
           "contracts/interfaces/IClusterPayoutOracle.sol",
         roundPayoutSnapshotKey: "contracts/interfaces/IClusterPayoutOracle.sol",
+        roundPayoutSnapshotProposalDigest:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
         roundPayoutSnapshotProposedAt:
           "contracts/interfaces/IClusterPayoutOracle.sol",
         verifyPayoutWeight: "contracts/interfaces/IClusterPayoutOracle.sol",
@@ -46890,6 +47167,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "credentialIdentityKey",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "credentialScope",
           inputs: [
             {
@@ -46995,6 +47296,13 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "freezeWorldIdVerifierConfig",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -47504,6 +47812,34 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setWorldIdVerifierConfig",
+          inputs: [
+            {
+              name: "_worldIdRouter",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_worldIdScope",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "_worldIdExternalNullifierHash",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "_worldIdCredentialTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "supportsInterface",
           inputs: [
             {
@@ -47604,6 +47940,19 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "worldIdVerifierConfigFrozen",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "event",
@@ -48006,6 +48355,50 @@ const deployedContracts: GenericContractsDeclaration = {
           anonymous: false,
         },
         {
+          type: "event",
+          name: "WorldIdVerifierConfigLocked",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WorldIdVerifierConfigUpdated",
+          inputs: [
+            {
+              name: "router",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "scope",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "externalNullifierHash",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "credentialTtl",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
           type: "error",
           name: "AccessControlBadConfirmation",
           inputs: [],
@@ -48074,6 +48467,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "NullifierAlreadyAssigned",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "WorldIdVerifierConfigFrozen",
           inputs: [],
         },
       ],

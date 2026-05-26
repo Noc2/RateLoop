@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCommitVoteWithPermitCall, buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
+import { buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
 
 const addresses = {
   advisoryVoteRecorder: "0x0000000000000000000000000000000000000003",
@@ -75,30 +75,4 @@ test("buildRoundVoteTransactionPlan skips approval when allowance covers the sta
   assert.equal(plan.needsApproval, false);
   assert.equal(plan.calls.length, 1);
   assert.equal(plan.calls[0].kind, "commitVote");
-});
-
-test("buildCommitVoteWithPermitCall reuses the commit payload with permit fields", () => {
-  const plan = buildRoundVoteTransactionPlan({
-    ...baseParams,
-    currentAllowance: 0n,
-    stakeWei: 10n,
-  });
-
-  const call = buildCommitVoteWithPermitCall(plan, {
-    deadline: 123n,
-    r: "0x00000000000000000000000000000000000000000000000000000000000000cc",
-    s: "0x00000000000000000000000000000000000000000000000000000000000000dd",
-    v: 27,
-    votingEngineAddress: addresses.votingEngine,
-  });
-
-  assert.equal(call.kind, "commitVoteWithPermit");
-  assert.equal(call.functionName, "commitVoteWithPermit");
-  assert.deepEqual(call.args, [
-    ...plan.commitVoteArgs,
-    123n,
-    27,
-    "0x00000000000000000000000000000000000000000000000000000000000000cc",
-    "0x00000000000000000000000000000000000000000000000000000000000000dd",
-  ]);
 });

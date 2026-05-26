@@ -1044,6 +1044,11 @@ export const QuestionRewardPoolEscrowAbi = [
             "name": "clusterWeightRoot",
             "type": "bytes32",
             "internalType": "bytes32"
+          },
+          {
+            "name": "clusterSnapshotDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }

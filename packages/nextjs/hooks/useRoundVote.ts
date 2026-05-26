@@ -5,8 +5,8 @@ import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
 import { AdvisoryVoteRecorderAbi, ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { buildCommitVoteParams, buildStakeAmountWei } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
-import { type Address, parseSignature } from "viem";
-import { useAccount, usePublicClient, useSignTypedData, useWriteContract } from "wagmi";
+import { type Address } from "viem";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-eth";
@@ -33,14 +33,9 @@ import {
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
-import {
-  type RoundVoteContractCall,
-  buildCommitVoteWithPermitCall,
-  buildRoundVoteTransactionPlan,
-} from "~~/lib/vote/roundVoteTransactionPlan";
+import { type RoundVoteContractCall, buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
 import scaffoldConfig from "~~/scaffold.config";
 import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
-import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 type RoundVoteCommitRuntime = Awaited<ReturnType<typeof resolveRoundVoteRuntime>> & {
   targetRound?: bigint | number;
@@ -77,7 +72,6 @@ export function useRoundVote() {
   const queryClient = useQueryClient();
   const writeTx = useTransactor();
   const wagmiTokenWrite = useWriteContract();
-  const { signTypedDataAsync } = useSignTypedData();
   const {
     canUseSelfFundedBatchCalls,
     canUseSponsoredBatchCalls,
@@ -430,111 +424,29 @@ export function useRoundVote() {
         });
         submittedVote = freshVote;
       } else {
-        let submittedWithPermit = false;
         const needsApproval = !isZeroStakeVote && currentAllowance < requestedStakeWei;
 
         if (needsApproval) {
-          let permitCall: RoundVoteContractCall | null = null;
-          let permitVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
-
-          try {
-            permitVote = await buildFreshRoundVotePlan(requestedStakeWei);
-            const nonce = (await publicClient.readContract({
-              address: lrepAddress,
-              abi: LoopReputationAbi,
-              functionName: "nonces",
-              args: [address as Address],
-            })) as bigint;
-            let permitTokenName = "Loop Reputation";
-            try {
-              permitTokenName = (await publicClient.readContract({
-                address: lrepAddress,
-                abi: LoopReputationAbi,
-                functionName: "name",
-              })) as string;
-            } catch (permitTokenNameError) {
-              console.warn("[round-vote] token name unavailable; using Loop Reputation permit domain.", {
-                error: permitTokenNameError,
-              });
-            }
-            const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60);
-            const signature = await signTypedDataAsync({
-              domain: {
-                chainId: targetNetwork.id,
-                name: permitTokenName,
-                verifyingContract: lrepAddress,
-                version: "1",
-              },
-              message: {
-                deadline,
-                nonce,
-                owner: address as Address,
-                spender: votingEngineAddress,
-                value: requestedStakeWei,
-              },
-              primaryType: "Permit",
-              types: {
-                Permit: [
-                  { name: "owner", type: "address" },
-                  { name: "spender", type: "address" },
-                  { name: "value", type: "uint256" },
-                  { name: "nonce", type: "uint256" },
-                  { name: "deadline", type: "uint256" },
-                ],
-              },
-            });
-            const parsedSignature = parseSignature(signature);
-            permitCall = buildCommitVoteWithPermitCall(permitVote.plan, {
-              deadline,
-              r: parsedSignature.r,
-              s: parsedSignature.s,
-              v: Number(parsedSignature.v ?? BigInt((parsedSignature.yParity ?? 0) + 27)),
-              votingEngineAddress,
-            });
-          } catch (permitSignatureError) {
-            if (isSignatureRejected(permitSignatureError)) {
-              setError("Signature cancelled. Submit again to continue.");
-              return false;
-            }
-
-            console.warn("[round-vote] permit signing unavailable; falling back to approval then commit.", {
-              error: permitSignatureError,
-            });
+          const approvalPlan = await buildFreshRoundVotePlan(0n);
+          const approvalCall = approvalPlan.plan.calls.find(call => call.kind === "approve");
+          if (!approvalCall) {
+            throw new Error("Preparing approval. Try again in a moment.");
           }
-
-          if (permitCall) {
-            const transactionHash = await writePlannedCall(permitCall, "vote");
-            if (!transactionHash) {
-              return false;
-            }
-            submittedWithPermit = true;
-            submittedVote = permitVote;
+          const transactionHash = await writePlannedCall(approvalCall, "approve");
+          if (!transactionHash) {
+            return false;
           }
+          currentAllowance = requestedStakeWei;
         }
 
-        if (!submittedWithPermit) {
-          if (needsApproval) {
-            const approvalPlan = await buildFreshRoundVotePlan(0n);
-            const approvalCall = approvalPlan.plan.calls.find(call => call.kind === "approve");
-            if (!approvalCall) {
-              throw new Error("Preparing approval. Try again in a moment.");
-            }
-            const transactionHash = await writePlannedCall(approvalCall, "approve");
-            if (!transactionHash) {
-              return false;
-            }
-            currentAllowance = requestedStakeWei;
+        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+        for (const call of freshVote.plan.calls) {
+          const transactionHash = await writePlannedCall(call, call.kind === "approve" ? "approve" : "vote");
+          if (!transactionHash) {
+            return false;
           }
-
-          const freshVote = await buildFreshRoundVotePlan(currentAllowance);
-          for (const call of freshVote.plan.calls) {
-            const transactionHash = await writePlannedCall(call, call.kind === "approve" ? "approve" : "vote");
-            if (!transactionHash) {
-              return false;
-            }
-          }
-          submittedVote = freshVote;
         }
+        submittedVote = freshVote;
       }
 
       if (!submittedVote) {

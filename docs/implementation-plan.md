@@ -71,10 +71,8 @@ it:
 - RateLoop Wallet after sponsored quota is exhausted switches to the same
   thirdweb batch in self-funded mode.
 - Direct wallets with enough existing allowance submit one `commitVote`.
-- Direct wallets without allowance first try ERC-2612 permit signing and then
-  submit one `commitVoteWithPermit` transaction.
-- If permit signing is unsupported, direct wallets fall back to the explicit
-  two-step `approve` then `commitVote` flow.
+- Direct wallets without allowance use the explicit two-step `approve` then
+  `commitVote` flow.
 
 Zero-stake advisory votes use the same execution ladder but submit
 `recordAdvisoryVote` instead of a staked commit. They are only available in

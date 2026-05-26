@@ -552,31 +552,15 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bytes32 bundleHash = _computeQuestionBundleHash(metadataList, mediaHashes, resolvedCategoryIds, questions);
         bytes32 revealCommitment =
             _computeBundleRevealCommitment(bundleHash, msg.sender, rewardTerms, validatedRoundConfig);
-        bytes32 reservationKey = _reservationKey(revealCommitment, msg.sender);
-        PendingSubmission memory pending = pendingSubmissions[reservationKey];
-        require(pending.submitter == msg.sender, "Reservation not found");
-        require(block.timestamp <= pending.expiresAt, "Reservation expired");
-        require(block.timestamp >= pending.reservedAt + RESERVED_SUBMISSION_MIN_AGE, "Reservation too new");
-        delete pendingSubmissions[reservationKey];
+        PendingSubmission memory pending = _consumeReservedSubmission(revealCommitment, msg.sender);
 
         bundleId = nextQuestionBundleId++;
         contentIds = new uint256[](questions.length);
         for (uint256 i = 0; i < questions.length; i++) {
             // submissionKeyUsed is already set in the preparation loop above to catch
             // duplicates within the same bundle.
-            bytes32 contentHash = keccak256(
-                abi.encode(
-                    "rateloop-question-context-v2",
-                    metadataList[i].url,
-                    questions[i].imageUrls,
-                    questions[i].videoUrl,
-                    metadataList[i].title,
-                    metadataList[i].description,
-                    metadataList[i].tags,
-                    resolvedCategoryIds[i],
-                    questions[i].spec.questionMetadataHash,
-                    questions[i].spec.resultSpecHash
-                )
+            bytes32 contentHash = _questionContentHash(
+                metadataList[i], questions[i].imageUrls, questions[i].videoUrl, resolvedCategoryIds[i], questions[i].spec
             );
             (address submitterIdentity, bytes32 submitterIdentityKey) = _pendingSubmitterIdentity(pending);
             uint256 contentId = _storeSubmittedContent(

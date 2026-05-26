@@ -82,8 +82,6 @@ contract RoundVotingEngine is
     error IndexOutOfBounds();
     error UnrevealedPastEpochVotes();
     error NothingProcessed();
-    /// @notice M-Vote-2: refreshRbtsSeed has hit the per-round cap.
-    error RbtsSeedRefreshCapped();
 
     // --- Access Control Roles ---
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -382,38 +380,6 @@ contract RoundVotingEngine is
         uint256 stakeAmount,
         address frontend
     ) external nonReentrant whenNotPaused {
-        _commitVote(
-            msg.sender,
-            contentId,
-            roundContext,
-            targetRound,
-            drandChainHash,
-            commitHash,
-            ciphertext,
-            stakeAmount,
-            frontend
-        );
-    }
-
-    /// @notice Commit a blind vote using an ERC-2612 permit for the stake allowance.
-    /// @dev This gives wallets without atomic batching a one-transaction counted-vote path.
-    function commitVoteWithPermit(
-        uint256 contentId,
-        uint256 roundContext,
-        uint64 targetRound,
-        bytes32 drandChainHash,
-        bytes32 commitHash,
-        bytes calldata ciphertext,
-        uint256 stakeAmount,
-        address frontend,
-        uint256 permitDeadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external nonReentrant whenNotPaused {
-        VotePreflightLib.permitStake(
-            address(lrepToken), msg.sender, address(this), stakeAmount, permitDeadline, v, r, s
-        );
         _commitVote(
             msg.sender,
             contentId,
@@ -886,7 +852,7 @@ contract RoundVotingEngine is
         uint8 refreshCount = _roundRbtsSeedRefreshCount[contentId][roundId];
         if (refreshCount >= MAX_RBTS_SEED_REFRESHES) {
             if (!RoundRevealLib.isExpiredRbtsSeed(roundRbtsSeedEntropy, contentId, roundId)) {
-                revert RbtsSeedRefreshCapped();
+                revert RevealGraceActive();
             }
             _markRoundCancelled(contentId, roundId, round);
             return;
@@ -1474,16 +1440,6 @@ contract RoundVotingEngine is
 
     function identityLastVoteTimestamp(uint256 contentId, bytes32 identityKey) external view returns (uint256) {
         return lastVoteTimestampByIdentity[contentId][identityKey];
-    }
-
-    function roundRbtsStats(uint256 contentId, uint256 roundId)
-        external
-        view
-        returns (bool scored, uint256 rewardWeight, uint256 forfeitedPool)
-    {
-        scored = roundRbtsScored[contentId][roundId];
-        rewardWeight = roundRbtsRewardWeight[contentId][roundId];
-        forfeitedPool = roundRbtsForfeitedPool[contentId][roundId];
     }
 
     function commitRbtsScoringWeight(uint256 contentId, uint256 roundId, bytes32 commitKey)

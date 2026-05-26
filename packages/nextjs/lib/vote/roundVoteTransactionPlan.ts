@@ -4,7 +4,7 @@ import type { Abi, Hex } from "viem";
 
 type EvmAddress = `0x${string}`;
 
-export type RoundVoteCallKind = "approve" | "commitVote" | "commitVoteWithPermit" | "openRound" | "recordAdvisoryVote";
+export type RoundVoteCallKind = "approve" | "commitVote" | "openRound" | "recordAdvisoryVote";
 
 export type RoundVoteContractCall = {
   abi: Abi;
@@ -34,8 +34,6 @@ type AdvisoryVoteArgs = readonly [
   commitHash: Hex,
   ciphertext: Hex,
 ];
-
-type CommitVoteWithPermitArgs = readonly [...CommitVoteArgs, permitDeadline: bigint, v: number, r: Hex, s: Hex];
 
 type RoundVoteTransactionPlan = {
   advisoryVoteArgs: AdvisoryVoteArgs;
@@ -120,35 +118,5 @@ export function buildRoundVoteTransactionPlan(params: {
     isAdvisoryVote: false,
     needsApproval,
     stakeWei: params.stakeWei,
-  };
-}
-
-export function buildCommitVoteWithPermitCall(
-  plan: RoundVoteTransactionPlan,
-  params: {
-    deadline: bigint;
-    r: Hex;
-    s: Hex;
-    v: number;
-    votingEngineAddress: EvmAddress;
-  },
-): RoundVoteContractCall {
-  if (plan.isAdvisoryVote || plan.stakeWei === 0n) {
-    throw new Error("Permit commits are only available for staked votes.");
-  }
-
-  const args = [
-    ...plan.commitVoteArgs,
-    params.deadline,
-    params.v,
-    params.r,
-    params.s,
-  ] as const satisfies CommitVoteWithPermitArgs;
-  return {
-    abi: RoundVotingEngineAbi as Abi,
-    address: params.votingEngineAddress,
-    args,
-    functionName: "commitVoteWithPermit",
-    kind: "commitVoteWithPermit",
   };
 }
