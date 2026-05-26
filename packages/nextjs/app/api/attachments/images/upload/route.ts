@@ -257,10 +257,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({
       ...jsonResponse,
       attachmentId: parsedPayload?.attachmentId,
-      imageUrl:
-        typeof parsedPayload?.attachmentId === "string"
-          ? getAttachmentImageUrl(request.url, parsedPayload.attachmentId)
-          : null,
+      imageUrl: null,
+      status: "uploading",
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Upload failed." }, { status: 400 });
