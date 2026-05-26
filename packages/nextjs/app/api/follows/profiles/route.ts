@@ -4,9 +4,6 @@ import { ponderApi } from "~~/services/ponder/client";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
-const MUTATION_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
-const ONCHAIN_FOLLOW_ERROR =
-  "Profile follows are public and on-chain. Read them here and submit follow transactions through RaterRegistry.";
 
 function parseLimit(value: string | null, fallback: number, max: number) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -18,17 +15,6 @@ function parseOffset(value: string | null) {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(parsed, 0);
-}
-
-function buildOnchainFollowResponse() {
-  return NextResponse.json(
-    {
-      error: ONCHAIN_FOLLOW_ERROR,
-      followAction: "RaterRegistry.followProfile(address)",
-      unfollowAction: "RaterRegistry.unfollowProfile(address)",
-    },
-    { status: 410 },
-  );
 }
 
 export async function GET(request: NextRequest) {
@@ -62,31 +48,4 @@ export async function GET(request: NextRequest) {
       { status: 503 },
     );
   }
-}
-
-export async function POST(request: NextRequest) {
-  const limited = await checkRateLimit(request, MUTATION_RATE_LIMIT, {
-    allowOnStoreUnavailable: true,
-  });
-  if (limited) return limited;
-
-  return buildOnchainFollowResponse();
-}
-
-export async function PUT(request: NextRequest) {
-  const limited = await checkRateLimit(request, MUTATION_RATE_LIMIT, {
-    allowOnStoreUnavailable: true,
-  });
-  if (limited) return limited;
-
-  return buildOnchainFollowResponse();
-}
-
-export async function DELETE(request: NextRequest) {
-  const limited = await checkRateLimit(request, MUTATION_RATE_LIMIT, {
-    allowOnStoreUnavailable: true,
-  });
-  if (limited) return limited;
-
-  return buildOnchainFollowResponse();
 }

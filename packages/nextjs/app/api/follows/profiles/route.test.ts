@@ -4,7 +4,6 @@ import { after, before, beforeEach, test } from "node:test";
 import { ponderApi } from "~~/services/ponder/client";
 
 const TEST_ADDRESS = "0x63cada40e8acf7a1d47229af5be35b78b16035fa";
-const TARGET_ADDRESS = "0x1111111111111111111111111111111111111111";
 const originalGetFollows = ponderApi.getFollows;
 
 type RateLimitModule = typeof import("~~/utils/rateLimit");
@@ -88,27 +87,4 @@ test("public follow reads proxy normalized addresses to Ponder", async () => {
   });
   assert.equal(requestedAddress, TEST_ADDRESS);
   assert.deepEqual(requestedParams, { limit: "25", offset: "5" });
-});
-
-test("follow mutations are retired in favor of on-chain writes", async () => {
-  for (const method of ["POST", "PUT", "DELETE"] as const) {
-    const response = await route[method](
-      makeRequest("/api/follows/profiles", {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: TEST_ADDRESS,
-          targetAddress: TARGET_ADDRESS,
-        }),
-      }),
-    );
-
-    assert.equal(response.status, 410);
-    assert.deepEqual(await response.json(), {
-      error:
-        "Profile follows are public and on-chain. Read them here and submit follow transactions through RaterRegistry.",
-      followAction: "RaterRegistry.followProfile(address)",
-      unfollowAction: "RaterRegistry.unfollowProfile(address)",
-    });
-  }
 });

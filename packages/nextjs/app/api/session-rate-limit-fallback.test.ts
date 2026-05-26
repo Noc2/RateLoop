@@ -19,7 +19,6 @@ env.RATE_LIMIT_TRUSTED_IP_HEADERS = "x-forwarded-for";
 type RateLimitModule = typeof import("../../utils/rateLimit");
 type FreeTransactionsModule = typeof import("../../lib/thirdweb/freeTransactions");
 type WatchlistSessionRoute = typeof import("./watchlist/content/session/route");
-type FollowsSessionRoute = typeof import("./follows/profiles/session/route");
 type NotificationPreferencesSessionRoute = typeof import("./notifications/preferences/session/route");
 type NotificationEmailSessionRoute = typeof import("./notifications/email/session/route");
 type FreeTransactionSessionRoute = typeof import("./transactions/free/session/route");
@@ -32,7 +31,6 @@ type FeedbackCountsRoute = typeof import("./feedback/counts/route");
 let rateLimit: RateLimitModule;
 let freeTransactions: FreeTransactionsModule;
 let watchlistSessionRoute: WatchlistSessionRoute;
-let followsSessionRoute: FollowsSessionRoute;
 let notificationPreferencesSessionRoute: NotificationPreferencesSessionRoute;
 let notificationEmailSessionRoute: NotificationEmailSessionRoute;
 let freeTransactionSessionRoute: FreeTransactionSessionRoute;
@@ -54,7 +52,6 @@ before(async () => {
   rateLimit = await import("../../utils/rateLimit");
   freeTransactions = await import("../../lib/thirdweb/freeTransactions");
   watchlistSessionRoute = await import("./watchlist/content/session/route");
-  followsSessionRoute = await import("./follows/profiles/session/route");
   notificationPreferencesSessionRoute = await import("./notifications/preferences/session/route");
   notificationEmailSessionRoute = await import("./notifications/email/session/route");
   freeTransactionSessionRoute = await import("./transactions/free/session/route");
@@ -115,20 +112,6 @@ test("watchlist session route fails open when the rate limit store is unavailabl
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
-    hasSession: false,
-    hasReadSession: false,
-    hasWriteSession: false,
-  });
-});
-
-test("profile follows session route reports deprecation even when the rate limit store is unavailable", async () => {
-  const response = await followsSessionRoute.GET(
-    makeRequest(`/api/follows/profiles/session?address=${encodeURIComponent(TEST_ADDRESS)}`),
-  );
-
-  assert.equal(response.status, 410);
-  assert.deepEqual(await response.json(), {
-    error: "Profile follows are public and no longer use signed read or write sessions.",
     hasSession: false,
     hasReadSession: false,
     hasWriteSession: false,
