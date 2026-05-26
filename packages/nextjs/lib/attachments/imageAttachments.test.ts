@@ -339,6 +339,22 @@ test("rejects arbitrary HTTPS image URLs before submission", async () => {
   );
 });
 
+test("rejects too many image URLs before submission", async () => {
+  assert.equal(
+    await getImageAttachmentSubmissionValidationError({
+      imageUrls: [
+        "https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp",
+        "https://www.rateloop.xyz/api/attachments/images/att_bcdefghijklmnopq.webp",
+        "https://www.rateloop.xyz/api/attachments/images/att_cdefghijklmnopqr.webp",
+        "https://www.rateloop.xyz/api/attachments/images/att_defghijklmnopqrs.webp",
+        "https://www.rateloop.xyz/api/attachments/images/att_efghijklmnopqrst.webp",
+      ],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    "imageUrls supports at most 4 images.",
+  );
+});
+
 test("rejects reused pending image attachment ids", async () => {
   const params = {
     attachmentId: "att_uniqueuploadid01",

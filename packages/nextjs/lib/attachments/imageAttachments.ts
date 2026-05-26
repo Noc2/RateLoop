@@ -6,6 +6,7 @@ import path from "path";
 import "server-only";
 import sharp from "sharp";
 import { parseAttachmentIdFromUploadedImageUrl } from "~~/lib/attachments/imageAttachmentUrls";
+import { MAX_SUBMISSION_IMAGE_URLS } from "~~/lib/contentMedia";
 import { db, dbPool } from "~~/lib/db";
 import { type QuestionImageAttachment, questionImageAttachments } from "~~/lib/db/schema";
 
@@ -798,6 +799,9 @@ export async function getImageAttachmentSubmissionValidationError(params: {
   ownerWalletAddress?: string | null;
 }): Promise<string | null> {
   if (params.imageUrls.length === 0) return null;
+  if (params.imageUrls.length > MAX_SUBMISSION_IMAGE_URLS) {
+    return `imageUrls supports at most ${MAX_SUBMISSION_IMAGE_URLS} images.`;
+  }
 
   const parsedAttachmentIds = params.imageUrls.map(parseAttachmentIdFromImageUrl);
   if (parsedAttachmentIds.some(id => !id)) {
