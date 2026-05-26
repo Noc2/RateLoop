@@ -657,6 +657,8 @@ contract LaunchDistributionPoolTest is Test {
 
     function test_LaunchCreditRejectsSnapshotProposedBeforePendingCredit() public {
         ClusterPayoutOracle oracle = _configureLaunchOracle(1);
+        pool.setRoundClusterReadyAtSource(address(0));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(this));
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
@@ -685,13 +687,14 @@ contract LaunchDistributionPoolTest is Test {
         pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
     }
 
-    function test_LaunchCreditRejectsSnapshotProposedBeforeRecordEvenWhenSourceReady() public {
+    function test_LaunchCreditAcceptsSourceReadySnapshotProposedBeforeRecord() public {
         ClusterPayoutOracle oracle = _configureLaunchOracle(1);
-        uint64 sourceReadyAt = uint64(block.timestamp);
+        uint64 sourceReadyAt =
+            pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
+        assertGt(sourceReadyAt, 0);
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
-        vm.warp(uint256(sourceReadyAt) + 1);
         _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
 
         vm.warp(block.timestamp + 30);
@@ -712,12 +715,11 @@ contract LaunchDistributionPoolTest is Test {
             0
         );
         assertEq(creditReadyAt, uint64(block.timestamp));
-        assertGt(pool.pendingEarnedRaterCreditReadyAt(1, 1, _commitKey(1)), sourceReadyAt);
+        assertEq(pool.pendingEarnedRaterCreditReadyAt(1, 1, _commitKey(1)), sourceReadyAt);
 
-        vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
-        pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
-        assertEq(pool.qualifyingCreditBps(alice), 0);
-        assertFalse(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0)), 0);
+        assertEq(pool.qualifyingCreditBps(alice), 2_500);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
     }
 
     function test_LaunchSnapshotSourceWaitsForAdvisoryRevealGrace() public {

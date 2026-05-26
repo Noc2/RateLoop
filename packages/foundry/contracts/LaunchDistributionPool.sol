@@ -785,9 +785,12 @@ contract LaunchDistributionPool is
     ) internal {
         address oracle = address(clusterPayoutOracle);
         if (oracle == address(0) || sourceReadyAt == 0) revert SnapshotNotFinalized();
-        uint64 creditReadyAt = uint64(block.timestamp);
-        if (sourceReadyAt > creditReadyAt) {
-            creditReadyAt = sourceReadyAt;
+        uint64 creditReadyAt = _roundClusterSourceReadyAt(contentId, roundId);
+        if (creditReadyAt == 0) {
+            creditReadyAt = uint64(block.timestamp);
+            if (sourceReadyAt > creditReadyAt) {
+                creditReadyAt = sourceReadyAt;
+            }
         }
         pendingEarnedRaterCredits[contentId][roundId][commitKey] = PendingEarnedRaterCredit({
             rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
@@ -894,13 +897,19 @@ contract LaunchDistributionPool is
         returns (uint64)
     {
         if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return 0;
+        uint64 sourceReadyAt = _roundClusterSourceReadyAt(contentId, roundId);
+        if (sourceReadyAt != 0) return sourceReadyAt;
+        return launchRoundSourceReadyAt[contentId][roundId];
+    }
+
+    function _roundClusterSourceReadyAt(uint256 contentId, uint256 roundId) private view returns (uint64) {
         IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
         if (address(source) != address(0)) {
             try source.roundClusterPayoutReadyAt(contentId, roundId) returns (uint48 readyAt) {
                 if (readyAt != 0) return _launchSnapshotReadyAtAfterAdvisoryGrace(source, contentId, roundId, readyAt);
             } catch { }
         }
-        return launchRoundSourceReadyAt[contentId][roundId];
+        return 0;
     }
 
     function _launchSnapshotReadyAtAfterAdvisoryGrace(
