@@ -87,5 +87,7 @@ interface IClusterPayoutOracle {
 
     function rejectedRoundPayoutSnapshotRoots(bytes32 snapshotKey, bytes32 weightRoot) external view returns (bool);
 
+    function rejectFinalizedCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external;
+
     function verifyPayoutWeight(PayoutWeight calldata payout, bytes32[] calldata proof) external view returns (bool);
 }
