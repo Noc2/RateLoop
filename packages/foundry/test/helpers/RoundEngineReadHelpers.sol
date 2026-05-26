@@ -7,13 +7,7 @@ import { RoundLib } from "../../contracts/libraries/RoundLib.sol";
 
 library RoundEngineReadHelpers {
     function activeRoundId(RoundVotingEngine engine, uint256 contentId) internal view returns (uint256 roundId) {
-        roundId = engine.currentRoundId(contentId);
-        if (roundId == 0) return 0;
-
-        RoundLib.Round memory r = round(engine, contentId, roundId);
-        if (r.state != RoundLib.RoundState.Open) {
-            return 0;
-        }
+        return engine.activeRoundId(contentId);
     }
 
     function latestRoundId(RoundVotingEngine engine, uint256 contentId) internal view returns (uint256 roundId) {

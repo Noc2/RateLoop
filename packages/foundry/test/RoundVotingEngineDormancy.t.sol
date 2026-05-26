@@ -169,6 +169,46 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         assertEq(openRound.voteCount, 1);
     }
 
+    function test_MarkDormant_IgnoresRefundableSubQuorumRound() public {
+        uint256 contentId = _submitContent();
+
+        _commit(voter1, contentId, true);
+        assertFalse(engine.isDormancyBlocked(contentId), "single sub-quorum vote should not preserve active status");
+
+        vm.warp(T0 + 31 days);
+        registry.markDormant(contentId);
+
+        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(contentId);
+        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
+    }
+
+    function test_ReviveAfterEmptyOpenRound_StartsFreshRound() public {
+        uint256 contentId = _submitContent();
+
+        _openRoundForTest(engine, contentId, voter1);
+        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), 1);
+
+        vm.warp(T0 + 31 days);
+        registry.markDormant(contentId);
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 5e6);
+        registry.reviveContent(contentId);
+        vm.stopPrank();
+
+        assertEq(engine.currentRoundId(contentId), 1, "latest slot keeps the stale empty round");
+        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), 0, "stale empty round is no longer usable");
+
+        _commit(voter2, contentId, true);
+
+        assertEq(RoundEngineReadHelpers.activeRoundId(engine, contentId), 2);
+        RoundLib.Round memory staleRound = RoundEngineReadHelpers.round(engine, contentId, 1);
+        assertEq(uint256(staleRound.state), uint256(RoundLib.RoundState.Cancelled));
+        RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, contentId, 2);
+        assertEq(uint256(openRound.state), uint256(RoundLib.RoundState.Open));
+        assertEq(openRound.voteCount, 1);
+    }
+
     function _submitContent() internal returns (uint256 contentId) {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);

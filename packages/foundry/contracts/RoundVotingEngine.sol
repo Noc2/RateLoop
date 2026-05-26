@@ -131,7 +131,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => RoundLib.Round)) public rounds;
 
     // Per-content round tracking
-    mapping(uint256 => uint256) public currentRoundId; // contentId => active round ID (0 = none)
+    mapping(uint256 => uint256) public currentRoundId; // contentId => latest current-round slot (0 = none)
     mapping(uint256 => uint256) internal nextRoundId; // contentId => next round ID to create
 
     // Commits: contentId => roundId => commitKey => Commit
@@ -734,7 +734,9 @@ contract RoundVotingEngine is
         if (roundId > 0 && !RoundLib.isTerminal(rounds[contentId][roundId])) {
             RoundLib.Round storage round = rounds[contentId][roundId];
             RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-            if (_canCancelExpiredRound(contentId, roundId, round, roundCfg)) {
+            if (_isEmptyRoundStaleSinceActivity(contentId, round)) {
+                _markRoundCancelled(contentId, roundId, round);
+            } else if (_canCancelExpiredRound(contentId, roundId, round, roundCfg)) {
                 _markRoundCancelled(contentId, roundId, round);
             } else if (_canFinalizeRevealFailedRound(contentId, roundId, round)) {
                 _markRoundRevealFailed(contentId, roundId, round);
@@ -1172,7 +1174,8 @@ contract RoundVotingEngine is
             RoundLib.Round storage round = rounds[contentId][openRoundId];
             RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, openRoundId);
             if (
-                !RoundLib.isTerminal(round) && !_canCancelExpiredRound(contentId, openRoundId, round, roundCfg)
+                !RoundLib.isTerminal(round) && !_isEmptyRoundStaleSinceActivity(contentId, round)
+                    && !_canCancelExpiredRound(contentId, openRoundId, round, roundCfg)
                     && !_canFinalizeRevealFailedRound(contentId, openRoundId, round)
             ) {
                 return openRoundId;
@@ -1270,6 +1273,21 @@ contract RoundVotingEngine is
         RoundLib.RoundConfig memory roundCfg
     ) internal view returns (uint256 total) {
         return RoundCleanupLib.pastEpochUnrevealedCount(epochUnrevealedCount[contentId][roundId], round, roundCfg);
+    }
+
+    function _isEmptyRoundStaleSinceActivity(uint256 contentId, RoundLib.Round storage round)
+        internal
+        view
+        returns (bool)
+    {
+        if (round.state != RoundLib.RoundState.Open || round.voteCount != 0 || round.totalStake != 0) {
+            return false;
+        }
+        return _contentLastActivityAt(contentId) > round.startTime;
+    }
+
+    function _contentLastActivityAt(uint256 contentId) internal view returns (uint48 lastActivityAt) {
+        (,,,, lastActivityAt,,,,,) = registry.contents(contentId);
     }
 
     function _scoreRbtsRewards(uint256 contentId, uint256 roundId, uint256 revealedCount, uint48 thresholdReachedAt)
@@ -1473,6 +1491,31 @@ contract RoundVotingEngine is
         returns (uint256)
     {
         return commitRbtsWeight[contentId][roundId][commitKey];
+    }
+
+    function activeRoundId(uint256 contentId) external view returns (uint256 roundId) {
+        roundId = currentRoundId[contentId];
+        if (roundId == 0) return 0;
+        RoundLib.Round storage round = rounds[contentId][roundId];
+        if (round.state != RoundLib.RoundState.Open || _isEmptyRoundStaleSinceActivity(contentId, round)) return 0;
+    }
+
+    function isDormancyBlocked(uint256 contentId) external view returns (bool) {
+        uint256 roundId = currentRoundId[contentId];
+        if (roundId == 0) return false;
+
+        RoundLib.Round storage round = rounds[contentId][roundId];
+        if (round.state != RoundLib.RoundState.Open || round.voteCount == 0 || round.totalStake == 0) return false;
+        if (_isEmptyRoundStaleSinceActivity(contentId, round)) return false;
+
+        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters);
+        if (round.revealedCount >= rbtsRevealQuorum) return true;
+        if (round.voteCount < rbtsRevealQuorum) return false;
+        if (!roundHasHumanVerifiedCommit[contentId][roundId]) return false;
+        if (_canCancelExpiredRound(contentId, roundId, round, roundCfg)) return false;
+        if (_canFinalizeRevealFailedRound(contentId, roundId, round)) return false;
+        return true;
     }
 
     // --- Admin ---

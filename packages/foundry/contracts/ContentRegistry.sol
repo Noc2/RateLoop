@@ -1483,6 +1483,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _engineHasOpenRound(address engine, uint256 contentId) internal view returns (bool) {
+        try IRoundVotingEngine(engine).isDormancyBlocked(contentId) returns (bool blocked) {
+            return blocked;
+        } catch { }
+
         uint256 activeRoundId = IRoundVotingEngine(engine).currentRoundId(contentId);
         if (activeRoundId == 0) return false;
 

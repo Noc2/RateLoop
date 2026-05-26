@@ -25,6 +25,14 @@ contract MockVotingEngine is IRoundVotingEngine {
         return 0;
     }
 
+    function activeRoundId(uint256) external pure override returns (uint256) {
+        return 0;
+    }
+
+    function isDormancyBlocked(uint256) external pure override returns (bool) {
+        return false;
+    }
+
     function rounds(uint256, uint256)
         external
         pure

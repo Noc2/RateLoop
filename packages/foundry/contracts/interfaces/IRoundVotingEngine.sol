@@ -9,10 +9,18 @@ interface IRoundVotingEngine {
     /// @notice Whether the content item has ever received at least one vote commit.
     function hasCommits(uint256 contentId) external view returns (bool);
 
-    /// @notice Get the current active round ID for a content item.
+    /// @notice Get the latest current-round slot for a content item.
     /// @param contentId The content ID to query.
-    /// @return Active round ID, or 0 if there is no open round.
+    /// @return Latest current-round ID, or 0 if no round has been opened.
     function currentRoundId(uint256 contentId) external view returns (uint256);
+
+    /// @notice Get the active, non-terminal round ID for a content item.
+    /// @param contentId The content ID to query.
+    /// @return Active round ID, or 0 if there is no usable open round.
+    function activeRoundId(uint256 contentId) external view returns (uint256);
+
+    /// @notice Whether the current round should block dormancy for a content item.
+    function isDormancyBlocked(uint256 contentId) external view returns (bool);
 
     function rounds(uint256 contentId, uint256 roundId)
         external
