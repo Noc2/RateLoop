@@ -2641,7 +2641,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(nextRoundToEvaluate, roundId);
     }
 
-    function testClusterRewardPoolRejectsSnapshotForDifferentConsumer() public {
+    function testClusterRewardPoolRejectsOracleWithDifferentConsumer() public {
         ClusterPayoutOracle oracle = _newEligibleClusterPayoutOracle();
         oracle.setOracleConfig(1 hours, 5e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(this));
@@ -2649,20 +2649,14 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         protocolConfig.setClusterPayoutOracle(address(oracle));
 
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
-
-        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
-        _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 30_000, 10_000);
-
-        vm.expectRevert("Cluster consumer mismatch");
-        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
-
-        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
-        assertEq(skipped, 0);
-        assertEq(nextRoundToEvaluate, roundId);
+        vm.prank(funder);
+        usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
+        vm.expectRevert("Oracle consumer mismatch");
+        vm.prank(funder);
+        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 0);
     }
 
-    function testClusterRewardPoolDoesNotSkipBelowFloorSnapshotForDifferentConsumer() public {
+    function testClusterRewardPoolDoesNotSnapshotBelowFloorOracleWithDifferentConsumer() public {
         ClusterPayoutOracle oracle = _newEligibleClusterPayoutOracle();
         oracle.setOracleConfig(1 hours, 5e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(this));
@@ -2670,14 +2664,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         protocolConfig.setClusterPayoutOracle(address(oracle));
 
         uint256 contentId = _submitQuestion("");
-        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
-
-        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
-        _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 20_000, 1);
-
-        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
-        assertEq(skipped, 0);
-        assertEq(nextRoundToEvaluate, roundId);
+        vm.prank(funder);
+        usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
+        vm.expectRevert("Oracle consumer mismatch");
+        vm.prank(funder);
+        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 0);
     }
 
     function testClusterRewardPoolRejectsSnapshotProposedBeforeCleanupComplete() public {

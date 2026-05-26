@@ -5,6 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { ContentRegistry } from "../ContentRegistry.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
@@ -27,6 +28,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     uint256 internal constant BPS_SCALE = 10_000;
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
+    uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
@@ -93,11 +95,20 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
         RoundVotingEngine votingEngine,
         uint256 rewardPoolId,
-        uint8 asset
+        uint8 asset,
+        address expectedConsumer
     ) external {
         if (asset != REWARD_ASSET_USDC) return;
         address clusterPayoutOracle = votingEngine.protocolConfig().clusterPayoutOracle();
         if (clusterPayoutOracle == address(0)) return;
+        try IClusterPayoutOracle(clusterPayoutOracle).roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_QUESTION_REWARD)
+        returns (
+            address consumer
+        ) {
+            require(consumer == expectedConsumer, "Oracle consumer mismatch");
+        } catch {
+            revert("Invalid oracle");
+        }
         rewardPoolClusterPayoutOracle[rewardPoolId] = clusterPayoutOracle;
         emit RewardPoolClusterPayoutOracleSnapshotted(rewardPoolId, clusterPayoutOracle);
     }

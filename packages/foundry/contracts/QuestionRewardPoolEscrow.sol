@@ -645,7 +645,7 @@ contract QuestionRewardPoolEscrow is
 
     function _snapshotRewardPoolClusterPayoutOracle(uint256 rewardPoolId, uint8 asset) private {
         QuestionRewardPoolEscrowPoolActionsLib.snapshotRewardPoolClusterPayoutOracle(
-            rewardPoolClusterPayoutOracle, votingEngine, rewardPoolId, asset
+            rewardPoolClusterPayoutOracle, votingEngine, rewardPoolId, asset, address(this)
         );
     }
 
