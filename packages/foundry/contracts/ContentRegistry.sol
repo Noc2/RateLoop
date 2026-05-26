@@ -1037,7 +1037,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(c.id != 0, "Content does not exist");
         require(c.status == ContentStatus.Active, "Not active");
         require(block.timestamp > dormancyAnchorAt[contentId] + DORMANCY_PERIOD, "Dormancy period not elapsed");
-        require(!_hasOpenRound(contentId), "Content has active round");
+        require(!_hasDormancyBlockingRound(contentId), "Content has active round");
         require(contentBundleId[contentId] == 0, "Bundled content");
 
         c.status = ContentStatus.Dormant;
@@ -1209,7 +1209,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         Content storage c = contents[contentId];
         if (c.id == 0 || c.status != ContentStatus.Active) return false;
         if (block.timestamp <= dormancyAnchorAt[contentId] + DORMANCY_PERIOD) return false;
-        return !_hasOpenRound(contentId);
+        return !_hasDormancyBlockingRound(contentId);
     }
 
     /// @notice Preview the resolved category and question-level submission key for a future multi-media reveal.
@@ -1482,11 +1482,22 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         return currentEngine != trackedEngine && _engineHasOpenRound(currentEngine, contentId);
     }
 
-    function _engineHasOpenRound(address engine, uint256 contentId) internal view returns (bool) {
+    function _hasDormancyBlockingRound(uint256 contentId) internal view returns (bool) {
+        address trackedEngine = contentRoundTrackingEngine[contentId];
+        if (trackedEngine != address(0) && _engineHasDormancyBlockingRound(trackedEngine, contentId)) return true;
+        address currentEngine = votingEngine;
+        return currentEngine != trackedEngine && _engineHasDormancyBlockingRound(currentEngine, contentId);
+    }
+
+    function _engineHasDormancyBlockingRound(address engine, uint256 contentId) internal view returns (bool) {
         try IRoundVotingEngine(engine).isDormancyBlocked(contentId) returns (bool blocked) {
             return blocked;
         } catch { }
 
+        return _engineHasOpenRound(engine, contentId);
+    }
+
+    function _engineHasOpenRound(address engine, uint256 contentId) internal view returns (bool) {
         uint256 activeRoundId = IRoundVotingEngine(engine).currentRoundId(contentId);
         if (activeRoundId == 0) return false;
 

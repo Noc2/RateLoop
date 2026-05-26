@@ -2642,13 +2642,14 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testClusterRewardPoolRejectsOracleWithDifferentConsumer() public {
+        uint256 contentId = _submitQuestion("");
+
         ClusterPayoutOracle oracle = _newEligibleClusterPayoutOracle();
         oracle.setOracleConfig(1 hours, 5e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(this));
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(oracle));
 
-        uint256 contentId = _submitQuestion("");
         vm.prank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.expectRevert("Oracle consumer mismatch");
@@ -2657,13 +2658,14 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testClusterRewardPoolDoesNotSnapshotBelowFloorOracleWithDifferentConsumer() public {
+        uint256 contentId = _submitQuestion("");
+
         ClusterPayoutOracle oracle = _newEligibleClusterPayoutOracle();
         oracle.setOracleConfig(1 hours, 5e6, address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), address(this));
         vm.prank(owner);
         protocolConfig.setClusterPayoutOracle(address(oracle));
 
-        uint256 contentId = _submitQuestion("");
         vm.prank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.expectRevert("Oracle consumer mismatch");

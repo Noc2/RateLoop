@@ -1283,7 +1283,8 @@ contract RoundVotingEngine is
         if (round.state != RoundLib.RoundState.Open || round.voteCount != 0 || round.totalStake != 0) {
             return false;
         }
-        return _contentLastActivityAt(contentId) > round.startTime;
+        uint48 lastActivityAt = _contentLastActivityAt(contentId);
+        return lastActivityAt > round.startTime && lastActivityAt <= block.timestamp;
     }
 
     function _contentLastActivityAt(uint256 contentId) internal view returns (uint48 lastActivityAt) {
@@ -1514,7 +1515,6 @@ contract RoundVotingEngine is
         if (round.voteCount < rbtsRevealQuorum) return false;
         if (!roundHasHumanVerifiedCommit[contentId][roundId]) return false;
         if (_canCancelExpiredRound(contentId, roundId, round, roundCfg)) return false;
-        if (_canFinalizeRevealFailedRound(contentId, roundId, round)) return false;
         return true;
     }
 

@@ -756,6 +756,27 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(
             address(request.engine), request.voter, request.isUp, request.salt, request.contentId
         );
+        uint256 currentRoundId = request.engine.currentRoundId(request.contentId);
+        if (currentRoundId != 0 && currentRoundId != artifacts.roundId) {
+            artifacts.roundId = currentRoundId;
+            uint16 roundReferenceRatingBps =
+                request.engine.roundReferenceRatingBpsForRound(request.contentId, currentRoundId);
+            if (roundReferenceRatingBps != 0) {
+                artifacts.roundReferenceRatingBps = roundReferenceRatingBps;
+            }
+            artifacts.commitHash = _commitHash(
+                request.isUp,
+                request.salt,
+                request.voter,
+                request.contentId,
+                artifacts.roundId,
+                artifacts.roundReferenceRatingBps,
+                artifacts.targetRound,
+                artifacts.drandChainHash,
+                artifacts.ciphertext
+            );
+            artifacts.commitKey = _commitKey(request.voter, artifacts.commitHash);
+        }
 
         vm.startPrank(request.voter);
         request.lrepToken.approve(address(request.engine), request.stake);

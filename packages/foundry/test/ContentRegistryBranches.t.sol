@@ -207,6 +207,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     ) internal returns (bytes32 commitKey, bytes32 salt) {
         salt = keccak256(abi.encodePacked(voter, block.timestamp));
         _openRoundForTest(engine, contentId, voter);
+        uint256 roundId = engine.previewCommitRoundId(contentId);
         uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
         bytes32 commitHash = _commitHash(
@@ -214,6 +215,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             salt,
             voter,
             contentId,
+            roundId,
             referenceRatingBps,
             _tlockCommitTargetRound(),
             _tlockDrandChainHash(),
@@ -221,7 +223,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         vm.startPrank(voter);
         lrepToken.approve(address(engine), stake);
-        uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(contentId), referenceRatingBps);
+        uint256 cachedRoundContext1 = _roundContext(roundId, referenceRatingBps);
         engine.commitVote(
             contentId,
             cachedRoundContext1,
@@ -2257,6 +2259,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
         vm.startPrank(owner);
         _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 7 days, 3, 200);
+        ProtocolConfig(address(replacementEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
         registry.pause();
         registry.setVotingEngine(address(replacementEngine));
         registry.unpause();
@@ -2635,7 +2638,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(lastActivityAt, block.timestamp, "Commit should refresh lastActivityAt");
     }
 
-    function test_MarkDormant_ActiveRound_AllVotesRevealed_Reverts() public {
+    function test_MarkDormant_SubQuorumRound_AllVotesRevealed_AllowsDormant() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/open-round", "goal", "goal", "tags", 0);
@@ -2652,11 +2655,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(round.voteCount, round.revealedCount, "All votes are revealed");
 
         vm.warp(T0 + 31 days);
-        vm.expectRevert("Content has active round");
         registry.markDormant(1);
+
+        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
     }
 
-    function test_IsDormancyEligible_ActiveRound_AllVotesRevealed_ReturnsFalse() public {
+    function test_IsDormancyEligible_SubQuorumRound_AllVotesRevealed_ReturnsTrue() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/open-round-eligible", "goal", "goal", "tags", 0);
@@ -2669,10 +2674,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(1, roundId, commitKey, true, 5_000, salt);
 
         vm.warp(T0 + 31 days);
-        assertFalse(registry.isDormancyEligible(1), "open rounds should block dormancy eligibility");
+        assertTrue(registry.isDormancyEligible(1), "sub-quorum refundable rounds should not block dormancy");
     }
 
-    function test_MarkDormant_AfterEngineRotationWithHistoricalVotes_Reverts() public {
+    function test_MarkDormant_AfterEngineRotationWithSubQuorumHistoricalVotes_AllowsDormant() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(registry, "https://example.com/rotated-open-round", "goal", "goal", "tags", 0);
@@ -2688,8 +2693,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.warp(T0 + 31 days);
-        vm.expectRevert("Content has active round");
         registry.markDormant(1);
+
+        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
     }
 
     function test_MarkDormant_AfterRotatedOldRoundCancelled_AllowsDormant() public {
@@ -2735,6 +2742,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
         vm.startPrank(owner);
         _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 7 days, 3, 200);
+        ProtocolConfig(address(replacementEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
         registry.pause();
         registry.setVotingEngine(address(replacementEngine));
         registry.unpause();
@@ -2743,9 +2751,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.warp(T0 + 7 days + 1);
         votingEngine.cancelExpiredRound(1, oldRoundId);
         _commitWithStakeToEngine(replacementEngine, voter2, 1, true, STAKE);
+        _commitWithStakeToEngine(replacementEngine, voter3, 1, true, STAKE);
+        _commitWithStakeToEngine(replacementEngine, voter4, 1, false, STAKE);
 
         vm.warp(T0 + 31 days);
-        assertFalse(registry.isDormancyEligible(1), "current replacement round should block dormancy");
+        assertFalse(registry.isDormancyEligible(1), "current replacement quorum round should block dormancy");
         vm.expectRevert("Content has active round");
         registry.markDormant(1);
     }
