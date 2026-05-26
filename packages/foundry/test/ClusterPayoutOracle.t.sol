@@ -106,6 +106,15 @@ contract ClusterPayoutOracleTest is Test {
         oracle.setOracleConfig(maxChallengeWindow + 1, CHALLENGE_BOND, address(this));
     }
 
+    function test_ChallengeBondCannotExceedAntiSpamCap() public {
+        uint256 maxChallengeBond = oracle.MAX_CHALLENGE_BOND();
+        oracle.setOracleConfig(1 hours, maxChallengeBond, address(this));
+        assertEq(oracle.challengeBond(), maxChallengeBond);
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
+        oracle.setOracleConfig(1 hours, maxChallengeBond + 1, address(this));
+    }
+
     function test_RoundPayoutSnapshotConsumersMustBeConfigured() public {
         ClusterPayoutOracle unconfiguredOracle =
             new ClusterPayoutOracle(address(this), address(frontendRegistry), address(usdc));
@@ -362,6 +371,37 @@ contract ClusterPayoutOracleTest is Test {
         // L-Oracle-A: a challenge-then-reject DOES still blacklist the root so identical
         // re-proposal is blocked. Only pre-challenge (Proposed-state) rejections skip blacklisting.
         assertTrue(oracle.rejectedCorrelationEpochRoots(1, keccak256("cluster-root")));
+    }
+
+    function test_FinalizedCorrelationEpochCanBeVetoedBeforeFutureChildProposals() public {
+        bytes32 clusterRoot = keccak256("cluster-root");
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, clusterRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        oracle.rejectCorrelationEpoch(1, keccak256("late-bad-root"));
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
+        assertTrue(oracle.rejectedCorrelationEpochRoots(1, clusterRoot));
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
+    function test_FinalizedCorrelationEpochVetoWindowExpires() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        oracle.rejectCorrelationEpoch(1, keccak256("too-late"));
     }
 
     // L-Oracle-A: the arbiter rejecting a Proposed (pre-challenge) correlation epoch must NOT

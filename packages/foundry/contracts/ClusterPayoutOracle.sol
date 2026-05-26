@@ -36,6 +36,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
     uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
     uint256 public constant MIN_CHALLENGE_BOND = 1e6;
+    uint256 public constant MAX_CHALLENGE_BOND = 100e6;
     /// @dev Window after a round payout snapshot is finalized during which the arbiter can still
     ///      reject it, even if a consumer has already paid one or more claims against the cached
     ///      merkle root. Existing paid leaves stay paid (the consumer flips a `qualified` /
@@ -190,7 +191,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     {
         if (newChallengeWindow == 0 || newChallengeWindow > MAX_CHALLENGE_WINDOW) revert InvalidSnapshot();
         if (newBondRecipient == address(0)) revert InvalidAddress();
-        if (newChallengeBond < MIN_CHALLENGE_BOND) revert InvalidBond();
+        if (newChallengeBond < MIN_CHALLENGE_BOND || newChallengeBond > MAX_CHALLENGE_BOND) revert InvalidBond();
         challengeWindow = newChallengeWindow;
         challengeBond = newChallengeBond;
         bondRecipient = newBondRecipient;
@@ -303,7 +304,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function rejectCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
-        if (snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
+        bool wasFinalized = snapshot.status == SnapshotStatus.Finalized;
+        if (wasFinalized && block.timestamp > uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW)) {
+            revert SnapshotConsumed();
+        }
         bool wasChallenged = snapshot.status == SnapshotStatus.Challenged;
         snapshot.status = SnapshotStatus.Rejected;
         // L-Oracle-A: only blacklist the clusterRoot when the rejection comes from a `Challenged`
@@ -311,7 +315,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // path) can be cleared by the arbiter without permanently banning the honest correct
         // root from re-proposal — the deterministic scorer pipeline cannot produce a different
         // root for the same epoch, so blacklisting would otherwise strand the epoch.
-        if (wasChallenged) {
+        if (wasChallenged || wasFinalized) {
             rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
         }
         address challenger = snapshot.challenger;
