@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       handler: () =>
         callPublicRateLoopMcpTool({
           arguments: {},
-          name: "curyo_list_result_templates",
+          name: "rateloop_list_result_templates",
         }),
       rateLimit: AGENT_READ_RATE_LIMIT,
       request,
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       callRateLoopMcpTool({
         agent,
         arguments: {},
-        name: "curyo_list_result_templates",
+        name: "rateloop_list_result_templates",
       }),
     rateLimit: AGENT_READ_RATE_LIMIT,
     request,

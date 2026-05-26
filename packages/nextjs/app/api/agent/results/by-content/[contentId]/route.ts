@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ con
       handler: () =>
         callPublicRateLoopMcpTool({
           arguments: { contentId },
-          name: "curyo_get_result",
+          name: "rateloop_get_result",
         }),
       rateLimit: AGENT_READ_RATE_LIMIT,
       request,
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ con
       callRateLoopMcpTool({
         agent,
         arguments: { contentId },
-        name: "curyo_get_result",
+        name: "rateloop_get_result",
       }),
     rateLimit: AGENT_READ_RATE_LIMIT,
     request,

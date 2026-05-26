@@ -50,7 +50,7 @@ type HeaderNavLinkProps = {
 const navIndicatorClassName =
   "absolute right-2 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-[var(--rateloop-blue)] via-[var(--rateloop-green)] to-[var(--rateloop-pink)] animate-header-nav-indicator-in";
 const headerChromeSurfaceClassName = "bg-base-200";
-const headerChromeBorderClassName = "border-[color:var(--curyo-shell-border-strong)]";
+const headerChromeBorderClassName = "border-[color:var(--rateloop-shell-border-strong)]";
 const desktopSidebarSurfaceClassName = "border-r bg-black";
 
 const HeaderNavLink = ({ className, compact = false, href, icon: Icon, isActive, label }: HeaderNavLinkProps) => {
@@ -803,7 +803,7 @@ export const Header = () => {
                       </Suspense>
                     </ul>
                   </details>
-                  <HeaderBrand brandIdPrefix="curyo-mobile-header-logo" compact />
+                  <HeaderBrand brandIdPrefix="rateloop-mobile-header-logo" compact />
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
@@ -845,7 +845,7 @@ export const Header = () => {
       <aside
         className={`fixed left-0 top-0 z-20 hidden h-screen w-52 shrink-0 flex-col items-stretch py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] xl:flex ${desktopSidebarSurfaceClassName} ${headerChromeBorderClassName}`}
       >
-        <HeaderBrand brandIdPrefix="curyo-sidebar-logo" className="mb-4 shrink-0 px-4" />
+        <HeaderBrand brandIdPrefix="rateloop-sidebar-logo" className="mb-4 shrink-0 px-4" />
         <div className="mb-4 w-full min-w-0 px-2.5">
           <Suspense>
             <HeaderSearchBar className="sidebar" />

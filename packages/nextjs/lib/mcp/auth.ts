@@ -2,10 +2,10 @@ import { createHash } from "crypto";
 import { getMcpAgentFromPolicyTokenHash, hashMcpBearerToken } from "~~/lib/agent/policies";
 
 export const MCP_SCOPES = {
-  ask: "curyo:ask",
-  balance: "curyo:balance",
-  quote: "curyo:quote",
-  read: "curyo:read",
+  ask: "rateloop:ask",
+  balance: "rateloop:balance",
+  quote: "rateloop:quote",
+  read: "rateloop:read",
 } as const;
 
 export type McpScope = (typeof MCP_SCOPES)[keyof typeof MCP_SCOPES];
@@ -79,7 +79,7 @@ function normalizeConfiguredAgent(value: unknown): McpAgentAuth | null {
 }
 
 export function getConfiguredMcpAgents(): McpAgentAuth[] {
-  const rawConfig = process.env.CURYO_MCP_AGENTS?.trim();
+  const rawConfig = process.env.RATELOOP_MCP_AGENTS?.trim();
   if (rawConfig) {
     try {
       const parsed = JSON.parse(rawConfig);
@@ -91,26 +91,26 @@ export function getConfiguredMcpAgents(): McpAgentAuth[] {
     }
   }
 
-  const token = process.env.CURYO_MCP_BEARER_TOKEN?.trim();
+  const token = process.env.RATELOOP_MCP_BEARER_TOKEN?.trim();
   if (!token) return [];
 
-  const scopes = process.env.CURYO_MCP_BEARER_SCOPES?.split(",")
+  const scopes = process.env.RATELOOP_MCP_BEARER_SCOPES?.split(",")
     .map(scope => scope.trim())
     .filter(Boolean) ?? [MCP_SCOPES.ask, MCP_SCOPES.balance, MCP_SCOPES.quote, MCP_SCOPES.read];
   const dailyBudgetAtomic = parseAtomicAmount(
-    process.env.CURYO_MCP_DAILY_BUDGET_USDC ?? "0",
-    "CURYO_MCP_DAILY_BUDGET_USDC",
+    process.env.RATELOOP_MCP_DAILY_BUDGET_USDC ?? "0",
+    "RATELOOP_MCP_DAILY_BUDGET_USDC",
   );
   const perAskLimitAtomic = parseAtomicAmount(
-    process.env.CURYO_MCP_PER_ASK_LIMIT_USDC ?? "0",
-    "CURYO_MCP_PER_ASK_LIMIT_USDC",
+    process.env.RATELOOP_MCP_PER_ASK_LIMIT_USDC ?? "0",
+    "RATELOOP_MCP_PER_ASK_LIMIT_USDC",
   );
-  const allowUnlimitedBudget = parseBooleanEnv(process.env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET);
+  const allowUnlimitedBudget = parseBooleanEnv(process.env.RATELOOP_MCP_ALLOW_UNLIMITED_BUDGET);
 
   if (scopes.includes(MCP_SCOPES.ask) && !allowUnlimitedBudget) {
     if (dailyBudgetAtomic <= 0n || perAskLimitAtomic <= 0n) {
       throw new Error(
-        "CURYO_MCP_DAILY_BUDGET_USDC and CURYO_MCP_PER_ASK_LIMIT_USDC must be positive for static curyo:ask tokens, or set CURYO_MCP_ALLOW_UNLIMITED_BUDGET=true.",
+        "RATELOOP_MCP_DAILY_BUDGET_USDC and RATELOOP_MCP_PER_ASK_LIMIT_USDC must be positive for static rateloop:ask tokens, or set RATELOOP_MCP_ALLOW_UNLIMITED_BUDGET=true.",
       );
     }
   }
@@ -119,11 +119,11 @@ export function getConfiguredMcpAgents(): McpAgentAuth[] {
     {
       allowedCategoryIds: null,
       dailyBudgetAtomic,
-      id: process.env.CURYO_MCP_AGENT_ID?.trim() || "default",
+      id: process.env.RATELOOP_MCP_AGENT_ID?.trim() || "default",
       perAskLimitAtomic,
       scopes: new Set(scopes),
       tokenHash: sha256(token),
-      walletAddress: process.env.CURYO_MCP_WALLET_ADDRESS?.trim() || null,
+      walletAddress: process.env.RATELOOP_MCP_WALLET_ADDRESS?.trim() || null,
     },
   ];
 }
@@ -136,7 +136,7 @@ function readBearerToken(request: Request): string | null {
 
 export function buildMcpAuthChallenge(params: { metadataUrl: string; scope?: string }) {
   const scope = params.scope ? `, scope="${params.scope}"` : "";
-  return `Bearer realm="curyo-mcp", resource_metadata="${params.metadataUrl}"${scope}`;
+  return `Bearer realm="rateloop-mcp", resource_metadata="${params.metadataUrl}"${scope}`;
 }
 
 function assertRequiredScope(agent: McpAgentAuth, requiredScope?: string) {

@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 
 const env = process.env as Record<string, string | undefined>;
-const originalAgents = env.CURYO_MCP_AGENTS;
-const originalAllowedOrigins = env.CURYO_MCP_ALLOWED_ORIGINS;
-const originalAuthServer = env.CURYO_MCP_AUTHORIZATION_SERVER_URL;
+const originalAgents = env.RATELOOP_MCP_AGENTS;
+const originalAllowedOrigins = env.RATELOOP_MCP_ALLOWED_ORIGINS;
+const originalAuthServer = env.RATELOOP_MCP_AUTHORIZATION_SERVER_URL;
 const originalDatabaseUrl = env.DATABASE_URL;
 const originalNodeEnv = env.NODE_ENV;
 const originalRateLimitHeaders = env.RATE_LIMIT_TRUSTED_IP_HEADERS;
@@ -37,19 +37,19 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
 }
 
 function configureAgent() {
-  env.CURYO_MCP_AGENTS = JSON.stringify([
+  env.RATELOOP_MCP_AGENTS = JSON.stringify([
     {
       dailyBudgetAtomic: "5000000",
       id: "route-agent",
       perAskLimitAtomic: "1000000",
-      scopes: ["curyo:ask", "curyo:balance", "curyo:quote", "curyo:read"],
+      scopes: ["rateloop:ask", "rateloop:balance", "rateloop:quote", "rateloop:read"],
       token: "secret-token",
     },
   ]);
 }
 
 function makePost(body: unknown, headers: Record<string, string> = {}) {
-  return new NextRequest("https://curyo.xyz/api/mcp", {
+  return new NextRequest("https://rateloop.xyz/api/mcp", {
     body: JSON.stringify(body),
     headers: new Headers({
       authorization: "Bearer secret-token",
@@ -61,7 +61,7 @@ function makePost(body: unknown, headers: Record<string, string> = {}) {
 }
 
 function makePublicPost(body: unknown, headers: Record<string, string> = {}) {
-  return new NextRequest("https://curyo.xyz/api/mcp/public", {
+  return new NextRequest("https://rateloop.xyz/api/mcp/public", {
     body: JSON.stringify(body),
     headers: new Headers({
       "content-type": "application/json",
@@ -88,7 +88,7 @@ async function postPublicJson(body: unknown, headers: Record<string, string> = {
 }
 
 function makeGet(headers: Record<string, string> = {}) {
-  return new NextRequest("https://curyo.xyz/api/mcp", {
+  return new NextRequest("https://rateloop.xyz/api/mcp", {
     headers: new Headers(headers),
     method: "GET",
   });
@@ -108,8 +108,8 @@ before(async () => {
 
 beforeEach(async () => {
   env.NODE_ENV = "development";
-  delete env.CURYO_MCP_ALLOWED_ORIGINS;
-  delete env.CURYO_MCP_AUTHORIZATION_SERVER_URL;
+  delete env.RATELOOP_MCP_ALLOWED_ORIGINS;
+  delete env.RATELOOP_MCP_AUTHORIZATION_SERVER_URL;
   delete env.RATE_LIMIT_TRUSTED_IP_HEADERS;
   delete env.VERCEL;
   configureAgent();
@@ -121,9 +121,9 @@ beforeEach(async () => {
 after(() => {
   mcpToolsModule.__setMcpToolTestOverridesForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
-  restoreEnv("CURYO_MCP_AGENTS", originalAgents);
-  restoreEnv("CURYO_MCP_ALLOWED_ORIGINS", originalAllowedOrigins);
-  restoreEnv("CURYO_MCP_AUTHORIZATION_SERVER_URL", originalAuthServer);
+  restoreEnv("RATELOOP_MCP_AGENTS", originalAgents);
+  restoreEnv("RATELOOP_MCP_ALLOWED_ORIGINS", originalAllowedOrigins);
+  restoreEnv("RATELOOP_MCP_AUTHORIZATION_SERVER_URL", originalAuthServer);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("NODE_ENV", originalNodeEnv);
   restoreEnv("RATE_LIMIT_TRUSTED_IP_HEADERS", originalRateLimitHeaders);
@@ -150,7 +150,7 @@ test("initialize succeeds without MCP-Protocol-Version and defaults to the lates
       },
       protocolVersion: "2025-11-25",
       serverInfo: {
-        name: "curyo",
+        name: "rateloop",
         version: "0.1.0",
       },
     },
@@ -172,7 +172,7 @@ test("initialize honors a supported older protocol version", async () => {
 
 test("missing bearer tokens receive an MCP auth challenge with resource metadata", async () => {
   const response = await route.POST(
-    new NextRequest("https://curyo.xyz/api/mcp", {
+    new NextRequest("https://rateloop.xyz/api/mcp", {
       body: JSON.stringify({
         id: 1,
         jsonrpc: "2.0",
@@ -187,7 +187,7 @@ test("missing bearer tokens receive an MCP auth challenge with resource metadata
   assert.equal(response.status, 401);
   assert.match(
     response.headers.get("www-authenticate") ?? "",
-    /resource_metadata="https:\/\/curyo\.xyz\/\.well-known\/oauth-protected-resource"/,
+    /resource_metadata="https:\/\/rateloop\.xyz\/\.well-known\/oauth-protected-resource"/,
   );
 });
 
@@ -242,32 +242,32 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   };
   const toolByName = new Map(result.tools.map(tool => [tool.name, tool]));
   assert.equal(response.status, 200);
-  assert.deepEqual(toolByName.get("curyo_quote_question")?.annotations, {
+  assert.deepEqual(toolByName.get("rateloop_quote_question")?.annotations, {
     idempotentHint: true,
     openWorldHint: true,
     readOnlyHint: true,
   });
-  assert.deepEqual(toolByName.get("curyo_ask_humans")?.annotations, {
+  assert.deepEqual(toolByName.get("rateloop_ask_humans")?.annotations, {
     destructiveHint: true,
     idempotentHint: false,
     openWorldHint: true,
     readOnlyHint: false,
   });
-  assert.ok(toolByName.get("curyo_quote_question")?.inputSchema);
-  assert.ok(toolByName.get("curyo_quote_question")?.outputSchema);
-  assert.ok(toolByName.get("curyo_ask_humans")?.inputSchema);
-  assert.ok(toolByName.get("curyo_ask_humans")?.outputSchema);
-  assert.ok(toolByName.get("curyo_get_question_status")?.outputSchema);
-  assert.ok(toolByName.get("curyo_get_result")?.outputSchema);
-  assert.ok(toolByName.get("curyo_get_agent_balance")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_quote_question")?.inputSchema);
+  assert.ok(toolByName.get("rateloop_quote_question")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_ask_humans")?.inputSchema);
+  assert.ok(toolByName.get("rateloop_ask_humans")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_get_question_status")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_get_result")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_get_agent_balance")?.outputSchema);
 
-  const quoteSchema = toolByName.get("curyo_quote_question")?.inputSchema as {
+  const quoteSchema = toolByName.get("rateloop_quote_question")?.inputSchema as {
     properties?: Record<string, unknown>;
   };
-  const statusSchema = toolByName.get("curyo_get_question_status")?.inputSchema as {
+  const statusSchema = toolByName.get("rateloop_get_question_status")?.inputSchema as {
     properties?: Record<string, unknown>;
   };
-  const resultSchema = toolByName.get("curyo_get_result")?.inputSchema as {
+  const resultSchema = toolByName.get("rateloop_get_result")?.inputSchema as {
     properties?: Record<string, unknown>;
   };
   assert.ok(quoteSchema.properties?.walletAddress);
@@ -289,8 +289,8 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
   const result = body.result as { tools: Array<{ name: string }> };
   const names = result.tools.map(tool => tool.name);
   assert.equal(response.status, 200);
-  assert.equal(names.includes("curyo_ask_humans"), true);
-  assert.equal(names.includes("curyo_get_agent_balance"), false);
+  assert.equal(names.includes("rateloop_ask_humans"), true);
+  assert.equal(names.includes("rateloop_get_agent_balance"), false);
 });
 
 test("public MCP ask returns a tokenless wallet-call plan", async () => {
@@ -357,7 +357,7 @@ test("public MCP ask returns a tokenless wallet-call plan", async () => {
           },
           walletAddress: "0x00000000000000000000000000000000000000aa",
         },
-        name: "curyo_ask_humans",
+        name: "rateloop_ask_humans",
       },
     },
     { "mcp-protocol-version": "2025-11-25" },
@@ -431,7 +431,7 @@ test("invalid media returns a stable MCP tool error code", async () => {
             title: "Invalid media",
           },
         },
-        name: "curyo_quote_question",
+        name: "rateloop_quote_question",
       },
     },
     { "mcp-protocol-version": "2025-11-25" },
@@ -446,13 +446,13 @@ test("invalid media returns a stable MCP tool error code", async () => {
 });
 
 test("category disallowed returns a stable MCP tool error code", async () => {
-  env.CURYO_MCP_AGENTS = JSON.stringify([
+  env.RATELOOP_MCP_AGENTS = JSON.stringify([
     {
       categories: ["6"],
       dailyBudgetAtomic: "5000000",
       id: "route-agent",
       perAskLimitAtomic: "1000000",
-      scopes: ["curyo:ask", "curyo:balance", "curyo:quote", "curyo:read"],
+      scopes: ["rateloop:ask", "rateloop:balance", "rateloop:quote", "rateloop:read"],
       token: "secret-token",
     },
   ]);
@@ -499,7 +499,7 @@ test("category disallowed returns a stable MCP tool error code", async () => {
             title: "Category mismatch",
           },
         },
-        name: "curyo_ask_humans",
+        name: "rateloop_ask_humans",
       },
     },
     { "mcp-protocol-version": "2025-11-25" },
@@ -523,7 +523,7 @@ test("pending result returns a full pending result package", async () => {
           chainId: 480,
           clientRequestId: "missing-result",
         },
-        name: "curyo_get_result",
+        name: "rateloop_get_result",
       },
     },
     { "mcp-protocol-version": "2025-11-25" },
@@ -537,7 +537,7 @@ test("pending result returns a full pending result package", async () => {
   assert.equal(structured.recommendedNextAction, "wait_for_settlement");
   assert.deepEqual(structured.wait, {
     code: "still_settling",
-    recoverWith: "curyo_get_question_status",
+    recoverWith: "rateloop_get_question_status",
   });
 });
 
@@ -623,7 +623,7 @@ test("failed submissions return a terminal pending result package without a retr
           chainId: 480,
           clientRequestId: "failed-result",
         },
-        name: "curyo_get_result",
+        name: "rateloop_get_result",
       },
     },
     { "mcp-protocol-version": "2025-11-25" },
@@ -750,7 +750,7 @@ test("submitted status stays non-terminal until the latest round reaches a final
           chainId: 480,
           clientRequestId: "open-status",
         },
-        name: "curyo_get_question_status",
+        name: "rateloop_get_question_status",
       },
     },
     { "mcp-protocol-version": "2025-11-25" },
@@ -763,5 +763,5 @@ test("submitted status stays non-terminal until the latest round reaches a final
   assert.equal(structured.terminal, false);
   assert.equal(structured.pollAfterMs, 5_000);
   assert.equal(structured.resultTool, null);
-  assert.equal(structured.nextAction, "poll_curyo_get_question_status");
+  assert.equal(structured.nextAction, "poll_rateloop_get_question_status");
 });

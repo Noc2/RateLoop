@@ -12,7 +12,7 @@ const originalConsoleWarn = console.warn;
 const allowanceSummary = {} as never;
 
 function makeRequest(body: string | Record<string, unknown>, secret = "server-secret") {
-  return new NextRequest("https://curyo.xyz/api/thirdweb/verify-transaction", {
+  return new NextRequest("https://rateloop.xyz/api/thirdweb/verify-transaction", {
     method: "POST",
     headers: {
       "content-type": "application/json",

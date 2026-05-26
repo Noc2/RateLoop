@@ -14,9 +14,9 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 
 - The agent host supports remote MCP.
 - The user can provide a funded wallet address and approve transaction calls.
-- You want standard tool calls such as `curyo_quote_question`, `curyo_ask_humans`, and `curyo_get_result`.
+- You want standard tool calls such as `rateloop_quote_question`, `rateloop_ask_humans`, and `rateloop_get_result`.
 
-The exported TypeScript helpers use the RateLoop namespace. MCP tool names currently retain the legacy `curyo_`
+The exported TypeScript helpers use the RateLoop namespace. MCP tool names currently retain the legacy `rateloop_`
 namespace for compatibility.
 
 Public MCP endpoint:

@@ -58,8 +58,8 @@ contract SubmissionMediaValidator {
     function _isSupportedImageUrl(string memory url) internal pure returns (bool) {
         return _hasUploadedImagePath(url, "https://www.rateloop.xyz/api/attachments/images/att_")
             || _hasUploadedImagePath(url, "https://rateloop.xyz/api/attachments/images/att_")
-            || _hasUploadedImagePath(url, "https://www.curyo.xyz/api/attachments/images/att_")
-            || _hasUploadedImagePath(url, "https://curyo.xyz/api/attachments/images/att_");
+            || _hasUploadedImagePath(url, "https://www.rateloop.xyz/api/attachments/images/att_")
+            || _hasUploadedImagePath(url, "https://rateloop.xyz/api/attachments/images/att_");
     }
 
     function _isSupportedVideoUrl(string memory url) internal pure returns (bool) {

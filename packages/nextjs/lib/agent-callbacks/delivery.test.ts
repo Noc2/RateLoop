@@ -194,7 +194,7 @@ test("buildCallbackDeliveryRequest signs leased event payload", async () => {
 
   assert.equal(request.method, "POST");
   assert.equal(request.url, "https://agent.example/sub-a");
-  assert.match(request.headers["x-curyo-callback-signature"], /^v1=[a-f0-9]{64}$/);
+  assert.match(request.headers["x-rateloop-callback-signature"], /^v1=[a-f0-9]{64}$/);
 });
 
 test("deliverLeasedAgentCallbackEvent disables redirects and sets a timeout", async () => {

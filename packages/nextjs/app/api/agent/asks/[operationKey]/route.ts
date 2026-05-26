@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ope
       handler: () =>
         callPublicRateLoopMcpTool({
           arguments: { operationKey },
-          name: "curyo_get_question_status",
+          name: "rateloop_get_question_status",
         }),
       rateLimit: AGENT_READ_RATE_LIMIT,
       request,
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ope
       callRateLoopMcpTool({
         agent,
         arguments: { operationKey },
-        name: "curyo_get_question_status",
+        name: "rateloop_get_question_status",
       }),
     rateLimit: AGENT_READ_RATE_LIMIT,
     request,

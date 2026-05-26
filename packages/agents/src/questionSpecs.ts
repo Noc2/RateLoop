@@ -98,7 +98,7 @@ export function buildQuestionMetadata(
     roundConfig: input.roundConfig
       ? serializeRoundConfig(input.roundConfig)
       : null,
-    schemaVersion: "curyo.question.v1",
+    schemaVersion: "rateloop.question.v1",
     study: input.study ?? null,
     targetAudience: input.targetAudience ?? null,
     tags: [...input.tags],
@@ -137,7 +137,7 @@ export function buildDefaultResultSpec(
       unit: "predicted share of up votes",
     },
     ratingSystem: PREDICTED_RATING_SYSTEM,
-    schemaVersion: "curyo.result_spec.v1",
+    schemaVersion: "rateloop.result_spec.v1",
     templateId,
     templateVersion,
     voteSemantics,

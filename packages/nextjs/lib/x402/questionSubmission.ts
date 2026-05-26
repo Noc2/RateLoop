@@ -200,7 +200,7 @@ function buildQuestionContentHash(question: X402QuestionPayload["questions"][num
         { type: "bytes32" },
       ],
       [
-        "curyo-question-context-v2",
+        "rateloop-question-context-v2",
         question.contextUrl,
         question.imageUrls,
         question.videoUrl,
@@ -817,7 +817,7 @@ function buildDeterministicQuestionSalt(params: {
   return `0x${createHash("sha256")
     .update(
       [
-        "curyo",
+        "rateloop",
         "agent-wallet-question-salt",
         params.operationKey,
         params.payloadHash,
@@ -1856,7 +1856,7 @@ function nativeX402QuestionSubmissionPlanBody(params: {
         chainId: params.plan.chainId,
         tokenAddress: params.plan.payment.tokenAddress,
       }),
-      submitTool: "curyo_ask_humans",
+      submitTool: "rateloop_ask_humans",
     },
   };
 }

@@ -127,10 +127,10 @@ function getComposeCommand() {
 function getComposeEnv(config = resolveNextDatabaseConfig()) {
   return {
     ...process.env,
-    CURYO_LOCAL_DB_NAME: config.databaseName,
-    CURYO_LOCAL_DB_USER: config.user,
-    CURYO_LOCAL_DB_PASSWORD: config.password,
-    CURYO_LOCAL_DB_PORT: String(config.port),
+    RATELOOP_LOCAL_DB_NAME: config.databaseName,
+    RATELOOP_LOCAL_DB_USER: config.user,
+    RATELOOP_LOCAL_DB_PASSWORD: config.password,
+    RATELOOP_LOCAL_DB_PORT: String(config.port),
   };
 }
 

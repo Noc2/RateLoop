@@ -139,7 +139,7 @@ export const agentOperationLookupInputSchema = {
   additionalProperties: false,
   properties: {
     chainId: { description: "Chain id used with clientRequestId lookup.", type: "integer" },
-    clientRequestId: { description: "Client idempotency key returned by curyo_ask_humans.", type: "string" },
+    clientRequestId: { description: "Client idempotency key returned by rateloop_ask_humans.", type: "string" },
     operationKey: { description: "RateLoop operation key returned by quote or ask.", type: "string" },
     walletAddress: {
       ...agentWalletAddressSchema,
@@ -193,7 +193,7 @@ export const agentAskHumansInputSchema = {
     },
     mode: {
       default: "sync",
-      description: "Use async to return after payment settlement and poll with curyo_get_question_status.",
+      description: "Use async to return after payment settlement and poll with rateloop_get_question_status.",
       enum: ["sync", "async"],
       type: "string",
     },
@@ -241,7 +241,7 @@ export const agentAskHumansInputSchema = {
 export const agentConfirmAskTransactionsInputSchema = {
   additionalProperties: false,
   properties: {
-    operationKey: { description: "RateLoop operation key returned by curyo_ask_humans.", type: "string" },
+    operationKey: { description: "RateLoop operation key returned by rateloop_ask_humans.", type: "string" },
     transactionHashes: {
       description: "Transaction hashes produced by executing the wallet transaction plan.",
       items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },

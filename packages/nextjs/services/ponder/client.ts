@@ -3,7 +3,7 @@ import type { ProfileSelfReportAudienceContext } from "@rateloop/node-utils/prof
 import { resolvePonderUrlValue } from "~~/utils/env/ponderUrl";
 
 const isProduction = process.env.NODE_ENV === "production";
-const allowLocalE2EProductionBuild = process.env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD === "true";
+const allowLocalE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
 const NEXT_PUBLIC_PONDER_URL = process.env.NEXT_PUBLIC_PONDER_URL?.trim() || undefined;
 
 export function resolvePonderUrl(

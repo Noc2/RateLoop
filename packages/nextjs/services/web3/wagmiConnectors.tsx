@@ -15,7 +15,7 @@ import {
 } from "~~/services/web3/wagmiConnectorTargets";
 import type { InjectedWalletProvider } from "~~/services/web3/wagmiConnectorTargets";
 
-const CURYO_THIRDWEB_ICON = "/favicon.png";
+const RATELOOP_THIRDWEB_ICON = "/favicon.png";
 
 function createTargetedInjectedConnector(
   id: string,
@@ -54,7 +54,7 @@ export const wagmiConnectors = () => {
         client: thirdwebClient,
         executionMode: getThirdwebWalletExecutionMode(preferredChainId),
         metadata: {
-          icon: CURYO_THIRDWEB_ICON,
+          icon: RATELOOP_THIRDWEB_ICON,
           name: "RateLoop Wallet",
         },
         onConnect: wallet => {

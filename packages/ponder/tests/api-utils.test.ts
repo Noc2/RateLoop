@@ -168,7 +168,7 @@ describe("isLikelyUrlSearchQuery", () => {
   });
 
   it("rejects plain text", () => {
-    expect(isLikelyUrlSearchQuery("curyo")).toBe(false);
+    expect(isLikelyUrlSearchQuery("rateloop")).toBe(false);
   });
 });
 

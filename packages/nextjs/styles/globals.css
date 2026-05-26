@@ -76,42 +76,42 @@
 
 :root {
   background: #000000;
-  --curyo-ember: #f5f5f5;
-  --curyo-ember-hover: #d4d4d4;
-  --curyo-ember-deep: #737373;
-  --curyo-action-orange: #f5f5f5;
-  --curyo-action-orange-hover: #d4d4d4;
-  --curyo-action-content: #050505;
-  --curyo-warm-white: #f5f5f5;
-  --curyo-steel: #a3a3a3;
-  --curyo-surface: #000000;
-  --curyo-surface-elevated: #121212;
-  --curyo-surface-elevated-hover: #1a1a1a;
-  --curyo-surface-mobile-vote: #121212;
-  --curyo-surface-nested: #202020;
-  --curyo-field: #1d1d1d;
-  --curyo-field-hover: #222222;
-  --curyo-control-idle: rgb(245 245 245 / 0.11);
-  --curyo-control-idle-hover: rgb(245 245 245 / 0.18);
-  --curyo-control-idle-muted: rgb(245 245 245 / 0.075);
-  --curyo-control-idle-muted-hover: rgb(245 245 245 / 0.13);
-  --curyo-ember-rgb: 245 245 245;
-  --curyo-ember-hover-rgb: 212 212 212;
-  --curyo-ember-deep-rgb: 115 115 115;
-  --curyo-warm-white-rgb: 245 245 245;
-  --curyo-steel-rgb: 163 163 163;
-  --curyo-surface-rgb: 0 0 0;
-  --curyo-surface-elevated-rgb: 18 18 18;
-  --curyo-surface-nested-rgb: 32 32 32;
-  --curyo-field-rgb: 29 29 29;
-  --curyo-field-hover-rgb: 34 34 34;
-  --curyo-radius-card: 0.5rem;
-  --curyo-radius-control: var(--curyo-radius-card);
-  --curyo-radius-pill: 9999px;
-  --curyo-card-radius: var(--curyo-radius-card);
-  --curyo-shell-border: rgb(245 245 245 / 0.1);
-  --curyo-shell-border-strong: rgb(245 245 245 / 0.14);
-  --curyo-panel-shadow: 0 24px 56px rgb(0 0 0 / 0.56);
+  --rateloop-ember: #f5f5f5;
+  --rateloop-ember-hover: #d4d4d4;
+  --rateloop-ember-deep: #737373;
+  --rateloop-action-orange: #f5f5f5;
+  --rateloop-action-orange-hover: #d4d4d4;
+  --rateloop-action-content: #050505;
+  --rateloop-warm-white: #f5f5f5;
+  --rateloop-steel: #a3a3a3;
+  --rateloop-surface: #000000;
+  --rateloop-surface-elevated: #121212;
+  --rateloop-surface-elevated-hover: #1a1a1a;
+  --rateloop-surface-mobile-vote: #121212;
+  --rateloop-surface-nested: #202020;
+  --rateloop-field: #1d1d1d;
+  --rateloop-field-hover: #222222;
+  --rateloop-control-idle: rgb(245 245 245 / 0.11);
+  --rateloop-control-idle-hover: rgb(245 245 245 / 0.18);
+  --rateloop-control-idle-muted: rgb(245 245 245 / 0.075);
+  --rateloop-control-idle-muted-hover: rgb(245 245 245 / 0.13);
+  --rateloop-ember-rgb: 245 245 245;
+  --rateloop-ember-hover-rgb: 212 212 212;
+  --rateloop-ember-deep-rgb: 115 115 115;
+  --rateloop-warm-white-rgb: 245 245 245;
+  --rateloop-steel-rgb: 163 163 163;
+  --rateloop-surface-rgb: 0 0 0;
+  --rateloop-surface-elevated-rgb: 18 18 18;
+  --rateloop-surface-nested-rgb: 32 32 32;
+  --rateloop-field-rgb: 29 29 29;
+  --rateloop-field-hover-rgb: 34 34 34;
+  --rateloop-radius-card: 0.5rem;
+  --rateloop-radius-control: var(--rateloop-radius-card);
+  --rateloop-radius-pill: 9999px;
+  --rateloop-card-radius: var(--rateloop-radius-card);
+  --rateloop-shell-border: rgb(245 245 245 / 0.1);
+  --rateloop-shell-border-strong: rgb(245 245 245 / 0.14);
+  --rateloop-panel-shadow: 0 24px 56px rgb(0 0 0 / 0.56);
   --rateloop-pink: #ef476f;
   --rateloop-blue: #359eee;
   --rateloop-green: #03cea4;
@@ -185,11 +185,11 @@ body {
 }
 
 .btn:not(.btn-circle) {
-  border-radius: var(--curyo-radius-control);
+  border-radius: var(--rateloop-radius-control);
 }
 
 .btn.btn-circle {
-  border-radius: var(--curyo-radius-pill);
+  border-radius: var(--rateloop-radius-pill);
 }
 
 /* Override DaisyUI small button font size */
@@ -228,10 +228,10 @@ body {
 /* Override DaisyUI dropdown content */
 .dropdown-content {
   font-size: 1rem !important; /* Enforce minimum 16px */
-  background: rgb(var(--curyo-surface-elevated-rgb) / 0.98);
+  background: rgb(var(--rateloop-surface-elevated-rgb) / 0.98);
   border: none;
-  border-radius: var(--curyo-card-radius);
-  box-shadow: var(--curyo-panel-shadow);
+  border-radius: var(--rateloop-card-radius);
+  box-shadow: var(--rateloop-panel-shadow);
   backdrop-filter: blur(18px);
 }
 
@@ -244,9 +244,9 @@ body {
 .input,
 .select,
 .textarea {
-  border-radius: var(--curyo-radius-control);
+  border-radius: var(--rateloop-radius-control);
   border-color: transparent !important;
-  background: var(--curyo-field) !important;
+  background: var(--rateloop-field) !important;
   box-shadow: inset 0 1px 0 rgb(245 245 245 / 0.025);
 }
 
@@ -254,7 +254,7 @@ body {
 .select:hover,
 .textarea:hover {
   border-color: transparent !important;
-  background: var(--curyo-field-hover) !important;
+  background: var(--rateloop-field-hover) !important;
   box-shadow:
     inset 0 1px 0 rgb(245 245 245 / 0.035),
     0 0 0 1px rgb(245 245 245 / 0.16);
@@ -268,14 +268,14 @@ body {
 .textarea:focus-within {
   outline: none;
   border-color: transparent !important;
-  background: var(--curyo-field-hover) !important;
+  background: var(--rateloop-field-hover) !important;
   box-shadow:
     inset 0 1px 0 rgb(245 245 245 / 0.04),
-    0 0 0 2px rgb(var(--curyo-ember-rgb) / 0.9);
+    0 0 0 2px rgb(var(--rateloop-ember-rgb) / 0.9);
 }
 
 .header-search-input {
-  background: var(--curyo-field) !important;
+  background: var(--rateloop-field) !important;
   box-shadow:
     inset 0 1px 0 rgb(245 245 245 / 0.025),
     0 10px 24px rgb(0 0 0 / 0.18);
@@ -286,7 +286,7 @@ body {
 }
 
 .header-search-input:hover {
-  background: var(--curyo-field-hover) !important;
+  background: var(--rateloop-field-hover) !important;
   box-shadow:
     inset 0 1px 0 rgb(245 245 245 / 0.035),
     0 0 0 1px rgb(245 245 245 / 0.16),
@@ -295,10 +295,10 @@ body {
 
 .header-search-input:focus,
 .header-search-input:focus-within {
-  background: var(--curyo-field-hover) !important;
+  background: var(--rateloop-field-hover) !important;
   box-shadow:
     inset 0 1px 0 rgb(245 245 245 / 0.04),
-    0 0 0 2px rgb(var(--curyo-ember-rgb) / 0.9),
+    0 0 0 2px rgb(var(--rateloop-ember-rgb) / 0.9),
     0 14px 28px rgb(0 0 0 / 0.22);
 }
 
@@ -309,47 +309,47 @@ body {
 .select-error,
 .textarea-error {
   border-color: transparent !important;
-  background: var(--curyo-field-hover) !important;
+  background: var(--rateloop-field-hover) !important;
   box-shadow:
     inset 0 1px 0 rgb(245 245 245 / 0.03),
     0 0 0 2px rgb(239 71 111 / 0.88);
 }
 
 .btn-primary {
-  color: var(--curyo-action-content) !important;
-  background: var(--curyo-action-orange);
+  color: var(--rateloop-action-content) !important;
+  background: var(--rateloop-action-orange);
   border: none;
   box-shadow: none;
 }
 
 .btn-primary:hover {
-  color: var(--curyo-action-content) !important;
-  background: var(--curyo-action-orange-hover);
+  color: var(--rateloop-action-content) !important;
+  background: var(--rateloop-action-orange-hover);
   box-shadow: none;
 }
 
 .btn-submit {
-  color: var(--curyo-action-content) !important;
-  background: var(--curyo-action-orange);
+  color: var(--rateloop-action-content) !important;
+  background: var(--rateloop-action-orange);
   border: none;
   box-shadow: none;
 }
 
 .btn-submit:hover {
-  color: var(--curyo-action-content) !important;
-  background: var(--curyo-action-orange-hover);
+  color: var(--rateloop-action-content) !important;
+  background: var(--rateloop-action-orange-hover);
   box-shadow: none;
 }
 
 .action-orange-control {
-  color: var(--curyo-action-content) !important;
-  background: var(--curyo-action-orange) !important;
+  color: var(--rateloop-action-content) !important;
+  background: var(--rateloop-action-orange) !important;
   border-color: transparent !important;
 }
 
 .action-orange-control:hover:not(:disabled) {
-  color: var(--curyo-action-content) !important;
-  background: var(--curyo-action-orange-hover) !important;
+  color: var(--rateloop-action-content) !important;
+  background: var(--rateloop-action-orange-hover) !important;
   border-color: transparent !important;
 }
 
@@ -359,30 +359,30 @@ body {
 .btn-submit.btn-disabled,
 .action-orange-control:disabled,
 .action-orange-control.btn-disabled,
-.btn-curyo:disabled,
-.btn-curyo.btn-disabled {
-  color: var(--curyo-action-content) !important;
+.btn-rateloop:disabled,
+.btn-rateloop.btn-disabled {
+  color: var(--rateloop-action-content) !important;
 }
 
 .btn-primary :where(*),
 .btn-submit :where(*),
 .action-orange-control :where(*),
-.btn-curyo :where(*) {
+.btn-rateloop :where(*) {
   color: inherit !important;
 }
 
-.btn-curyo {
+.btn-rateloop {
   @apply shadow-sm;
-  color: var(--curyo-action-content) !important;
-  background: var(--curyo-warm-white);
+  color: var(--rateloop-action-content) !important;
+  background: var(--rateloop-warm-white);
   border: none;
-  box-shadow: 0 12px 26px rgb(var(--curyo-warm-white-rgb) / 0.14);
+  box-shadow: 0 12px 26px rgb(var(--rateloop-warm-white-rgb) / 0.14);
 }
 
-.btn-curyo:hover {
-  color: var(--curyo-action-content) !important;
-  background: var(--curyo-warm-white);
-  box-shadow: 0 16px 30px rgb(var(--curyo-warm-white-rgb) / 0.18);
+.btn-rateloop:hover {
+  color: var(--rateloop-action-content) !important;
+  background: var(--rateloop-warm-white);
+  box-shadow: 0 16px 30px rgb(var(--rateloop-warm-white-rgb) / 0.18);
 }
 
 .btn.btn-ghost {
@@ -395,14 +395,14 @@ body {
 
 .btn.btn-outline {
   color: var(--color-base-content);
-  background: var(--curyo-control-idle);
+  background: var(--rateloop-control-idle);
   border-color: transparent;
   box-shadow: none;
 }
 
 .btn.btn-outline:hover {
   color: var(--color-base-content);
-  background: var(--curyo-control-idle-hover);
+  background: var(--rateloop-control-idle-hover);
   border-color: transparent;
   box-shadow: none;
 }
@@ -410,14 +410,14 @@ body {
 .btn.btn-outline:disabled,
 .btn.btn-outline.btn-disabled {
   color: rgb(245 245 245 / 0.36);
-  background: var(--curyo-control-idle-muted);
+  background: var(--rateloop-control-idle-muted);
   border-color: transparent;
   box-shadow: none;
 }
 
 @layer utilities {
   .text-white {
-    color: var(--curyo-warm-white) !important;
+    color: var(--rateloop-warm-white) !important;
   }
 
   .text-white\/60 {
@@ -433,35 +433,35 @@ body {
   }
 
   .text-black {
-    color: var(--curyo-surface) !important;
+    color: var(--rateloop-surface) !important;
   }
 
   .bg-black {
-    background-color: var(--curyo-surface) !important;
+    background-color: var(--rateloop-surface) !important;
   }
 
   .bg-black\/40 {
-    background-color: rgb(var(--curyo-surface-rgb) / 0.4) !important;
+    background-color: rgb(var(--rateloop-surface-rgb) / 0.4) !important;
   }
 
   .bg-black\/45 {
-    background-color: rgb(var(--curyo-surface-rgb) / 0.45) !important;
+    background-color: rgb(var(--rateloop-surface-rgb) / 0.45) !important;
   }
 
   .bg-black\/60 {
-    background-color: rgb(var(--curyo-surface-rgb) / 0.6) !important;
+    background-color: rgb(var(--rateloop-surface-rgb) / 0.6) !important;
   }
 
   .bg-black\/70 {
-    background-color: rgb(var(--curyo-surface-rgb) / 0.7) !important;
+    background-color: rgb(var(--rateloop-surface-rgb) / 0.7) !important;
   }
 
   .bg-black\/80 {
-    background-color: rgb(var(--curyo-surface-rgb) / 0.8) !important;
+    background-color: rgb(var(--rateloop-surface-rgb) / 0.8) !important;
   }
 
   .bg-white {
-    background-color: var(--curyo-warm-white) !important;
+    background-color: var(--rateloop-warm-white) !important;
   }
 
   .bg-white\/5 {
@@ -485,19 +485,19 @@ body {
   }
 
   .hover\:text-white:hover {
-    color: var(--curyo-warm-white) !important;
+    color: var(--rateloop-warm-white) !important;
   }
 
   .text-yellow-500 {
-    color: var(--curyo-ember) !important;
+    color: var(--rateloop-ember) !important;
   }
 
   .text-gray-400 {
-    color: var(--curyo-steel) !important;
+    color: var(--rateloop-steel) !important;
   }
 
   .text-amber-600 {
-    color: var(--curyo-ember-deep) !important;
+    color: var(--rateloop-ember-deep) !important;
   }
 }
 
@@ -506,7 +506,7 @@ body {
 }
 
 .link:hover {
-  color: var(--curyo-ember-hover);
+  color: var(--rateloop-ember-hover);
   opacity: 1;
 }
 
@@ -514,8 +514,8 @@ body {
 .surface-card {
   position: relative;
   overflow: hidden;
-  border-radius: var(--curyo-card-radius);
-  background: var(--curyo-surface-elevated);
+  border-radius: var(--rateloop-card-radius);
+  background: var(--rateloop-surface-elevated);
   border: none;
   box-shadow: none;
 }
@@ -525,31 +525,31 @@ body {
 }
 
 .surface-card-nested {
-  border-radius: var(--curyo-card-radius);
-  background: var(--curyo-surface-nested);
+  border-radius: var(--rateloop-card-radius);
+  background: var(--rateloop-surface-nested);
   border: none;
   box-shadow: none;
 }
 
 .surface-card .surface-card {
-  border-radius: var(--curyo-card-radius);
-  background: var(--curyo-surface-nested);
+  border-radius: var(--rateloop-card-radius);
+  background: var(--rateloop-surface-nested);
   border: none;
   box-shadow: none;
 }
 
 .embed-surface {
-  background: var(--curyo-surface-elevated) !important;
+  background: var(--rateloop-surface-elevated) !important;
 }
 
 .embed-surface-hover:hover {
-  background: var(--curyo-surface-elevated-hover) !important;
+  background: var(--rateloop-surface-elevated-hover) !important;
 }
 
 .card.bg-base-200,
 .modal-box.bg-base-200 {
-  border-radius: var(--curyo-card-radius) !important;
-  background: var(--curyo-surface-elevated) !important;
+  border-radius: var(--rateloop-card-radius) !important;
+  background: var(--rateloop-surface-elevated) !important;
   border: 1px solid rgb(245 245 245 / 0.1) !important;
 }
 
@@ -570,7 +570,7 @@ body {
 .vote-btn.vote-no {
   width: 5.25rem;
   height: 2.5rem;
-  border-radius: var(--curyo-radius-control);
+  border-radius: var(--rateloop-radius-control);
 }
 
 .vote-btn.vote-btn-sm {
@@ -580,7 +580,7 @@ body {
 
 .vote-btn.vote-btn-sm.vote-yes,
 .vote-btn.vote-btn-sm.vote-no {
-  border-radius: var(--curyo-radius-control);
+  border-radius: var(--rateloop-radius-control);
 }
 
 @media (max-width: 767px) {
@@ -622,21 +622,21 @@ body {
 }
 
 .vote-btn.vote-feedback .vote-bg {
-  background: var(--curyo-ember);
+  background: var(--rateloop-ember);
   box-shadow: none;
 }
 
 .vote-btn.vote-light .vote-bg {
-  background: rgb(var(--curyo-steel-rgb) / 0.42);
+  background: rgb(var(--rateloop-steel-rgb) / 0.42);
   box-shadow: none;
 }
 
 .vote-btn.vote-feedback .vote-symbol {
-  color: var(--curyo-action-content);
+  color: var(--rateloop-action-content);
 }
 
 .vote-btn.vote-light .vote-symbol {
-  color: var(--curyo-warm-white);
+  color: var(--rateloop-warm-white);
 }
 
 .vote-btn.vote-yes .vote-symbol {
@@ -648,7 +648,7 @@ body {
 }
 
 .vote-btn.vote-feedback:disabled .vote-bg {
-  background: var(--curyo-ember);
+  background: var(--rateloop-ember);
   box-shadow: none;
 }
 
@@ -663,7 +663,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  color: var(--curyo-action-content);
+  color: var(--rateloop-action-content);
   font-size: 1rem;
   font-weight: 700;
   line-height: 1;
@@ -693,15 +693,15 @@ body {
 
 @keyframes vote-surface-attention {
   0% {
-    box-shadow: var(--curyo-panel-shadow);
+    box-shadow: var(--rateloop-panel-shadow);
   }
 
   35% {
-    box-shadow: var(--curyo-panel-shadow);
+    box-shadow: var(--rateloop-panel-shadow);
   }
 
   100% {
-    box-shadow: var(--curyo-panel-shadow);
+    box-shadow: var(--rateloop-panel-shadow);
   }
 }
 
@@ -724,11 +724,11 @@ body {
 @keyframes vote-surface-attention-reduced {
   0%,
   100% {
-    box-shadow: var(--curyo-panel-shadow);
+    box-shadow: var(--rateloop-panel-shadow);
   }
 
   50% {
-    box-shadow: var(--curyo-panel-shadow);
+    box-shadow: var(--rateloop-panel-shadow);
   }
 }
 
@@ -1002,7 +1002,7 @@ body {
 }
 
 .prose a:hover {
-  color: var(--curyo-ember-hover);
+  color: var(--rateloop-ember-hover);
   opacity: 1;
 }
 
@@ -1025,7 +1025,7 @@ body {
     var(--rateloop-green),
     var(--rateloop-blue)
   );
-  color: var(--curyo-warm-white);
+  color: var(--rateloop-warm-white);
 }
 
 .crowd-forecast-range::-webkit-slider-runnable-track {
@@ -1039,25 +1039,25 @@ body {
 /* Selected pills and tabs */
 .pill-active,
 .pill-filter-active {
-  border-radius: var(--curyo-radius-control);
-  background: var(--curyo-action-orange);
+  border-radius: var(--rateloop-radius-control);
+  background: var(--rateloop-action-orange);
   background-image: none;
-  color: var(--curyo-action-content);
+  color: var(--rateloop-action-content);
   box-shadow: none;
 }
 
 .pill-category {
-  border-radius: var(--curyo-radius-control);
-  background: var(--curyo-action-orange);
+  border-radius: var(--rateloop-radius-control);
+  background: var(--rateloop-action-orange);
   background-image: none;
-  color: var(--curyo-action-content);
+  color: var(--rateloop-action-content);
   box-shadow: none;
 }
 
 .pill-inactive,
 .pill-filter {
-  border-radius: var(--curyo-radius-control);
-  background: var(--curyo-control-idle);
+  border-radius: var(--rateloop-radius-control);
+  background: var(--rateloop-control-idle);
   color: var(--color-base-content);
   border: 1px solid transparent;
   box-shadow: none;
@@ -1065,47 +1065,47 @@ body {
 
 .pill-inactive:hover,
 .pill-filter:hover {
-  background: var(--curyo-control-idle-hover);
+  background: var(--rateloop-control-idle-hover);
   border-color: transparent;
 }
 
 .tab-control.pill-inactive,
 .tab-control.pill-filter {
-  background: rgb(var(--curyo-surface-elevated-rgb) / 0.96);
+  background: rgb(var(--rateloop-surface-elevated-rgb) / 0.96);
   border-color: transparent;
   box-shadow: none;
 }
 
 .tab-control.pill-inactive:hover,
 .tab-control.pill-filter:hover {
-  background: var(--curyo-surface-elevated-hover);
+  background: var(--rateloop-surface-elevated-hover);
   border-color: transparent;
 }
 
 .pill-inactive-muted {
-  border-radius: var(--curyo-radius-control);
-  background: var(--curyo-control-idle-muted);
+  border-radius: var(--rateloop-radius-control);
+  background: var(--rateloop-control-idle-muted);
   color: rgb(245 245 245 / 0.72);
   border: 1px solid transparent;
   box-shadow: none;
 }
 
 .pill-inactive-muted:hover {
-  background: var(--curyo-control-idle-muted-hover);
+  background: var(--rateloop-control-idle-muted-hover);
   border-color: transparent;
   color: rgb(245 245 245 / 0.86);
 }
 
 .choice-row-active {
-  background: rgb(var(--curyo-ember-rgb) / 0.1);
+  background: rgb(var(--rateloop-ember-rgb) / 0.1);
   color: var(--color-primary);
-  border: 1px solid rgb(var(--curyo-ember-rgb) / 0.18);
-  box-shadow: inset 0 1px 0 rgb(var(--curyo-ember-rgb) / 0.06);
+  border: 1px solid rgb(var(--rateloop-ember-rgb) / 0.18);
+  box-shadow: inset 0 1px 0 rgb(var(--rateloop-ember-rgb) / 0.06);
 }
 
 .choice-row-inactive,
 .step-control-inactive {
-  background: var(--curyo-control-idle-muted);
+  background: var(--rateloop-control-idle-muted);
   color: rgb(245 245 245 / 0.78);
   border: 1px solid transparent;
   box-shadow: none;
@@ -1113,23 +1113,23 @@ body {
 
 .choice-row-inactive:hover,
 .step-control-inactive:hover {
-  background: var(--curyo-control-idle-muted-hover);
+  background: var(--rateloop-control-idle-muted-hover);
   border-color: transparent;
   color: rgb(245 245 245 / 0.9);
 }
 
 .tab-control {
-  border-radius: var(--curyo-radius-control);
+  border-radius: var(--rateloop-radius-control);
 }
 
 .reward-chip {
-  border-radius: var(--curyo-radius-control);
+  border-radius: var(--rateloop-radius-control);
   border: none;
   box-shadow: none;
 }
 
 .reward-chip-primary {
-  background: rgb(var(--curyo-ember-rgb) / 0.12);
+  background: rgb(var(--rateloop-ember-rgb) / 0.12);
   color: var(--color-primary);
 }
 
@@ -1149,7 +1149,7 @@ body {
 }
 
 .reward-chip-muted {
-  background: var(--curyo-control-idle-muted);
+  background: var(--rateloop-control-idle-muted);
   color: rgb(245 245 245 / 0.72);
 }
 
@@ -1166,7 +1166,7 @@ body {
 .scrollbar-subtle {
   scrollbar-gutter: stable;
   scrollbar-width: auto;
-  scrollbar-color: rgb(var(--curyo-ember-rgb) / 0.88) rgb(255 255 255 / 0.08);
+  scrollbar-color: rgb(var(--rateloop-ember-rgb) / 0.88) rgb(255 255 255 / 0.08);
 }
 
 .scrollbar-subtle::-webkit-scrollbar {
@@ -1182,12 +1182,12 @@ body {
   min-height: 3rem;
   border: 3px solid transparent;
   border-radius: 9999px;
-  background: rgb(var(--curyo-ember-rgb) / 0.88);
+  background: rgb(var(--rateloop-ember-rgb) / 0.88);
   background-clip: padding-box;
 }
 
 .scrollbar-subtle::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--curyo-ember-hover-rgb) / 0.98);
+  background: rgb(var(--rateloop-ember-hover-rgb) / 0.98);
   background-clip: padding-box;
 }
 

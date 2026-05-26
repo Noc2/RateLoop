@@ -10,7 +10,7 @@ import {
 } from "~~/lib/questionRoundConfig";
 import { buildQuestionSubmissionRevealCommitment } from "~~/lib/questionSubmissionCommitment";
 
-const RESERVED_SUBMISSION_STORAGE_PREFIX = "curyo:reserved-submission:";
+const RESERVED_SUBMISSION_STORAGE_PREFIX = "rateloop:reserved-submission:";
 const RESERVED_SUBMISSION_SECRET_STORAGE_KEY = `${RESERVED_SUBMISSION_STORAGE_PREFIX}secret`;
 
 type SubmissionDraft = {

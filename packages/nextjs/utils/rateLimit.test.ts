@@ -7,8 +7,8 @@ const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalTrustedHeaders = process.env.RATE_LIMIT_TRUSTED_IP_HEADERS;
 const originalVercel = process.env.VERCEL;
-const originalRateLoopE2EProductionBuild = process.env.CURYO_E2E_PRODUCTION_BUILD;
-const originalNextPublicRateLoopE2EProductionBuild = process.env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD;
+const originalRateLoopE2EProductionBuild = process.env.RATELOOP_E2E_PRODUCTION_BUILD;
+const originalNextPublicRateLoopE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
 
 env.DATABASE_URL = "memory:";
 
@@ -52,8 +52,8 @@ beforeEach(async () => {
   env.NODE_ENV = "production";
   delete env.RATE_LIMIT_TRUSTED_IP_HEADERS;
   delete env.VERCEL;
-  delete env.CURYO_E2E_PRODUCTION_BUILD;
-  delete env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD;
+  delete env.RATELOOP_E2E_PRODUCTION_BUILD;
+  delete env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
   rateLimit.__setRateLimitStoreForTests(null);
   await dbModule.dbClient.execute("DELETE FROM api_rate_limits");
   await dbModule.dbClient.execute("DELETE FROM api_rate_limit_maintenance");
@@ -87,15 +87,15 @@ after(() => {
   }
 
   if (originalRateLoopE2EProductionBuild === undefined) {
-    delete env.CURYO_E2E_PRODUCTION_BUILD;
+    delete env.RATELOOP_E2E_PRODUCTION_BUILD;
   } else {
-    env.CURYO_E2E_PRODUCTION_BUILD = originalRateLoopE2EProductionBuild;
+    env.RATELOOP_E2E_PRODUCTION_BUILD = originalRateLoopE2EProductionBuild;
   }
 
   if (originalNextPublicRateLoopE2EProductionBuild === undefined) {
-    delete env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD;
+    delete env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD;
   } else {
-    env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD = originalNextPublicRateLoopE2EProductionBuild;
+    env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD = originalNextPublicRateLoopE2EProductionBuild;
   }
 });
 
@@ -136,7 +136,7 @@ test("resolveRateLimitSubject falls back to a request fingerprint when no truste
         "accept-language": "en-US",
         cookie: "session=abc123",
       },
-      "https://curyo.xyz",
+      "https://rateloop.xyz",
     ),
     { extraKeyParts: ["0xAbC", "watch"] },
   );
@@ -154,7 +154,7 @@ test("checkRateLimit fails closed in production when no trusted client IP can be
         "user-agent": "test-agent",
         "accept-language": "en-US",
       },
-      "https://curyo.xyz",
+      "https://rateloop.xyz",
     ),
     { limit: 10, windowMs: 60_000 },
   );
@@ -177,7 +177,7 @@ test("checkRateLimit fails closed for localhost production requests without expl
 });
 
 test("checkRateLimit accepts localhost production requests in explicit local-e2e mode", async () => {
-  env.CURYO_E2E_PRODUCTION_BUILD = "true";
+  env.RATELOOP_E2E_PRODUCTION_BUILD = "true";
 
   const response = await rateLimit.checkRateLimit(
     makeRequest("/api/watchlist/content", "GET", {

@@ -1,4 +1,4 @@
-import { CURYO_E2E_WORLD_ID_MOCK_STORAGE_KEY, type LocalE2EWorldIdMock } from "../../lib/world-id/e2eMock";
+import { RATELOOP_E2E_WORLD_ID_MOCK_STORAGE_KEY, type LocalE2EWorldIdMock } from "../../lib/world-id/e2eMock";
 import { E2E_RPC_URL } from "./service-urls";
 import type { Page } from "@playwright/test";
 import type { IDKitResult, RpContext } from "@worldcoin/idkit";
@@ -50,7 +50,7 @@ export async function installLocalE2EWorldIdMock(page: Page, address: string): P
       window.localStorage.setItem(key, value);
     },
     {
-      key: CURYO_E2E_WORLD_ID_MOCK_STORAGE_KEY,
+      key: RATELOOP_E2E_WORLD_ID_MOCK_STORAGE_KEY,
       value: JSON.stringify(mock),
     },
   );
@@ -61,7 +61,7 @@ export async function installLocalE2EWorldIdMock(page: Page, address: string): P
         window.localStorage.setItem(key, value);
       },
       {
-        key: CURYO_E2E_WORLD_ID_MOCK_STORAGE_KEY,
+        key: RATELOOP_E2E_WORLD_ID_MOCK_STORAGE_KEY,
         value: JSON.stringify(mock),
       },
     );

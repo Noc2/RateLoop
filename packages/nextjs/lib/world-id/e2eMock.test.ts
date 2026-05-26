@@ -1,4 +1,8 @@
-import { CURYO_E2E_WORLD_ID_MOCK_STORAGE_KEY, buildE2EWorldIdLegacyResult, readLocalE2EWorldIdMock } from "./e2eMock";
+import {
+  RATELOOP_E2E_WORLD_ID_MOCK_STORAGE_KEY,
+  buildE2EWorldIdLegacyResult,
+  readLocalE2EWorldIdMock,
+} from "./e2eMock";
 import { parseWorldIdLegacyProof } from "./onchainProof";
 import { hashSignal } from "@worldcoin/idkit/hashing";
 import assert from "node:assert/strict";
@@ -6,7 +10,7 @@ import { afterEach } from "node:test";
 import test from "node:test";
 
 const TEST_SIGNAL = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
-const TEST_WALLET_KEY = "curyo:e2e-test-wallet-private-key";
+const TEST_WALLET_KEY = "rateloop:e2e-test-wallet-private-key";
 const originalWindow = globalThis.window;
 const mutableGlobal = globalThis as unknown as { window: unknown };
 
@@ -15,7 +19,7 @@ function installMockWindow(params: { hostname: string; mockValue: string | null;
     location: { hostname: params.hostname },
     localStorage: {
       getItem: (key: string) => {
-        if (key === CURYO_E2E_WORLD_ID_MOCK_STORAGE_KEY) return params.mockValue;
+        if (key === RATELOOP_E2E_WORLD_ID_MOCK_STORAGE_KEY) return params.mockValue;
         if (key === TEST_WALLET_KEY) return params.walletKey ?? "0xabc";
         return null;
       },

@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       if (format === "csv") {
         return new Response(toCsv(rows), {
           headers: {
-            "content-disposition": 'attachment; filename="curyo-agent-audits.csv"',
+            "content-disposition": 'attachment; filename="rateloop-agent-audits.csv"',
             "content-type": "text/csv; charset=utf-8",
           },
           status: 200,

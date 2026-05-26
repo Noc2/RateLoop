@@ -5,8 +5,8 @@ import { type Address, type WalletClient, createWalletClient, http } from "viem"
 import { privateKeyToAccount } from "viem/accounts";
 import { hardhat } from "viem/chains";
 import {
-  CURYO_E2E_RPC_URL_STORAGE_KEY,
-  CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
+  RATELOOP_E2E_RPC_URL_STORAGE_KEY,
+  RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
 } from "~~/services/thirdweb/testWalletStorage";
 
 const DEFAULT_LOCAL_TEST_RPC_URL = "http://127.0.0.1:8545";
@@ -17,7 +17,7 @@ function getStoredLocalE2EPrivateKey(): `0x${string}` | undefined {
     return undefined;
   }
 
-  const value = window.localStorage.getItem(CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim();
+  const value = window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim();
   if (!value || !PRIVATE_KEY_PATTERN.test(value)) {
     return undefined;
   }
@@ -44,7 +44,7 @@ export function getStoredLocalE2ETestWalletRpcUrl(
     return undefined;
   }
 
-  const storedValue = storage.getItem(CURYO_E2E_RPC_URL_STORAGE_KEY);
+  const storedValue = storage.getItem(RATELOOP_E2E_RPC_URL_STORAGE_KEY);
   if (!storedValue) {
     return DEFAULT_LOCAL_TEST_RPC_URL;
   }

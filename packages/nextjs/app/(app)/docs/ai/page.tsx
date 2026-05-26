@@ -7,7 +7,7 @@ import { listAgentResultTemplates } from "~~/lib/agent/templates";
 
 const genericMcpConfig = `{
   "mcpServers": {
-    "curyo": {
+    "rateloop": {
       "transport": "streamable-http",
       "url": "https://www.rateloop.xyz/api/mcp/public",
       "headers": {
@@ -255,7 +255,8 @@ const AIPage = async () => {
         <Link href="/api/agent/templates">
           <code>GET /api/agent/templates</code>
         </Link>{" "}
-        or through <Link href="#mcp">MCP</Link> with <code>curyo_list_result_templates</code>. The canonical source is{" "}
+        or through <Link href="#mcp">MCP</Link> with <code>rateloop_list_result_templates</code>. The canonical source
+        is{" "}
         <a href={agentsTemplatesSourceHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           <code>packages/agents/src/templates.ts</code>
         </a>
@@ -425,9 +426,10 @@ const AIPage = async () => {
         <code>{genericMcpConfig}</code>
       </pre>
       <p>
-        Main tools: <code>curyo_list_categories</code>, <code>curyo_list_result_templates</code>,{" "}
-        <code>curyo_quote_question</code>, <code>curyo_ask_humans</code>, <code>curyo_confirm_ask_transactions</code>,{" "}
-        <code>curyo_get_question_status</code>, and <code>curyo_get_result</code>.
+        Main tools: <code>rateloop_list_categories</code>, <code>rateloop_list_result_templates</code>,{" "}
+        <code>rateloop_quote_question</code>, <code>rateloop_ask_humans</code>,{" "}
+        <code>rateloop_confirm_ask_transactions</code>, <code>rateloop_get_question_status</code>, and{" "}
+        <code>rateloop_get_result</code>.
       </p>
 
       <h2 id="http">JSON Routes</h2>
@@ -477,8 +479,8 @@ const AIPage = async () => {
 
       <h2 id="payload">Minimal Ask Payload</h2>
       <p>
-        Send this shape to <code>curyo_ask_humans</code> or <code>POST /api/agent/asks</code> after a successful quote.
-        Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the example wallet and set{" "}
+        Send this shape to <code>rateloop_ask_humans</code> or <code>POST /api/agent/asks</code> after a successful
+        quote. Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the example wallet and set{" "}
         <code>rewardPoolExpiresAt</code> to a future Unix timestamp appropriate for the review window. Add{" "}
         <code>imageUrls</code> only after the RateLoop upload flow returns approved public URLs.{" "}
         <code>bountyEligibility</code> defaults to everyone; use 1 for verified humans. Show or log the returned{" "}
@@ -503,10 +505,10 @@ const AIPage = async () => {
 
       <h2 id="results">Polling Results</h2>
       <p>
-        After confirmation, poll <code>curyo_get_question_status</code> or{" "}
+        After confirmation, poll <code>rateloop_get_question_status</code> or{" "}
         <code>GET /api/agent/asks/{"{operationKey}"}</code> until the ask settles. Then call{" "}
-        <code>curyo_get_result</code> or <code>GET /api/agent/results/{"{operationKey}"}</code> and persist the result
-        package plus the public URL. Results include <code>answerScopes.allAnswers</code> for the open result and{" "}
+        <code>rateloop_get_result</code> or <code>GET /api/agent/results/{"{operationKey}"}</code> and persist the
+        result package plus the public URL. Results include <code>answerScopes.allAnswers</code> for the open result and{" "}
         <code>answerScopes.bountyEligibleAnswers</code> for the payout-scoped view.
       </p>
 

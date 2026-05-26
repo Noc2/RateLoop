@@ -41,7 +41,7 @@ let feedbackSessionRoute: FeedbackSessionRoute;
 let feedbackCountsRoute: FeedbackCountsRoute;
 
 function makeRequest(pathname: string) {
-  return new NextRequest(`https://curyo.xyz${pathname}`, {
+  return new NextRequest(`https://rateloop.xyz${pathname}`, {
     headers: new Headers({
       "x-forwarded-for": TEST_IP,
     }),
@@ -164,7 +164,7 @@ test("feedback challenge route fails closed when rate limit store is unavailable
   // unbounded challenge-creation traffic through during the outage masked a real outage
   // without any operational benefit.
   const response = await feedbackChallengeRoute.POST(
-    new NextRequest("https://curyo.xyz/api/feedback/challenge", {
+    new NextRequest("https://rateloop.xyz/api/feedback/challenge", {
       method: "POST",
       headers: new Headers({
         "content-type": "application/json",
@@ -179,7 +179,7 @@ test("feedback challenge route fails closed when rate limit store is unavailable
 
 test("feedback submit route continues past rate limit store outages", async () => {
   const response = await feedbackRoute.POST(
-    new NextRequest("https://curyo.xyz/api/feedback", {
+    new NextRequest("https://rateloop.xyz/api/feedback", {
       method: "POST",
       headers: new Headers({
         "content-type": "application/json",
@@ -194,7 +194,7 @@ test("feedback submit route continues past rate limit store outages", async () =
 
 test("feedback read route continues past rate limit store outages", async () => {
   const response = await feedbackReadRoute.POST(
-    new NextRequest("https://curyo.xyz/api/feedback/read", {
+    new NextRequest("https://rateloop.xyz/api/feedback/read", {
       method: "POST",
       headers: new Headers({
         "content-type": "application/json",

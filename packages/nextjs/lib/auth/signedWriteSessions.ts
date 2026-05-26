@@ -2,7 +2,7 @@ import type { NextResponse } from "next/server";
 import "server-only";
 import { createSignedSessionStore } from "~~/lib/auth/signedSessionStore";
 
-export const WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME = "curyo_watchlist_write_session";
+export const WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME = "rateloop_watchlist_write_session";
 const SIGNED_WRITE_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const SIGNED_WRITE_SESSION_SCOPES = ["watchlist"] as const;

@@ -232,18 +232,18 @@ test.describe("Mobile viewport (phone)", () => {
       page.evaluate(() => {
         type ChromeChange = { target: "header" | "tabs"; visible: string; at: number };
         type ChromeCaptureWindow = Window & {
-          __curyoMobileChromeChanges?: ChromeChange[];
-          __curyoMobileChromeObservers?: MutationObserver[];
+          __rateloopMobileChromeChanges?: ChromeChange[];
+          __rateloopMobileChromeObservers?: MutationObserver[];
         };
         const captureWindow = window as ChromeCaptureWindow;
-        captureWindow.__curyoMobileChromeObservers?.forEach(observer => observer.disconnect());
-        captureWindow.__curyoMobileChromeChanges = [];
+        captureWindow.__rateloopMobileChromeObservers?.forEach(observer => observer.disconnect());
+        captureWindow.__rateloopMobileChromeChanges = [];
 
         const observeVisibility = (target: "header" | "tabs", node: HTMLElement | null) => {
           if (!node) return null;
 
           const observer = new MutationObserver(() => {
-            captureWindow.__curyoMobileChromeChanges?.push({
+            captureWindow.__rateloopMobileChromeChanges?.push({
               target,
               visible: node.getAttribute("data-visible") ?? "",
               at: Math.round(performance.now()),
@@ -253,7 +253,7 @@ test.describe("Mobile viewport (phone)", () => {
           return observer;
         };
 
-        captureWindow.__curyoMobileChromeObservers = [
+        captureWindow.__rateloopMobileChromeObservers = [
           observeVisibility("header", document.querySelector<HTMLElement>('[data-mobile-header="true"]')),
           observeVisibility("tabs", document.querySelector<HTMLElement>('[data-vote-mobile-top-chrome="true"]')),
         ].filter((observer): observer is MutationObserver => observer !== null);
@@ -262,14 +262,14 @@ test.describe("Mobile viewport (phone)", () => {
       page.evaluate(() => {
         type ChromeChange = { target: "header" | "tabs"; visible: string; at: number };
         type ChromeCaptureWindow = Window & {
-          __curyoMobileChromeChanges?: ChromeChange[];
-          __curyoMobileChromeObservers?: MutationObserver[];
+          __rateloopMobileChromeChanges?: ChromeChange[];
+          __rateloopMobileChromeObservers?: MutationObserver[];
         };
         const captureWindow = window as ChromeCaptureWindow;
-        const changes = captureWindow.__curyoMobileChromeChanges ?? [];
-        captureWindow.__curyoMobileChromeObservers?.forEach(observer => observer.disconnect());
-        captureWindow.__curyoMobileChromeObservers = [];
-        captureWindow.__curyoMobileChromeChanges = [];
+        const changes = captureWindow.__rateloopMobileChromeChanges ?? [];
+        captureWindow.__rateloopMobileChromeObservers?.forEach(observer => observer.disconnect());
+        captureWindow.__rateloopMobileChromeObservers = [];
+        captureWindow.__rateloopMobileChromeChanges = [];
         return changes;
       });
 

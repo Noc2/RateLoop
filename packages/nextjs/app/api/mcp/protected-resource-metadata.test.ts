@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 
 const env = process.env as Record<string, string | undefined>;
-const originalAuthorizationServer = env.CURYO_MCP_AUTHORIZATION_SERVER_URL;
+const originalAuthorizationServer = env.RATELOOP_MCP_AUTHORIZATION_SERVER_URL;
 
 type ProtectedResourceRouteModule = typeof import("../../.well-known/oauth-protected-resource/[[...resource]]/route");
 
@@ -22,14 +22,14 @@ before(async () => {
 });
 
 beforeEach(() => {
-  delete env.CURYO_MCP_AUTHORIZATION_SERVER_URL;
+  delete env.RATELOOP_MCP_AUTHORIZATION_SERVER_URL;
 });
 
 after(() => {
-  restoreEnv("CURYO_MCP_AUTHORIZATION_SERVER_URL", originalAuthorizationServer);
+  restoreEnv("RATELOOP_MCP_AUTHORIZATION_SERVER_URL", originalAuthorizationServer);
 });
 
-function makeRequest(url = "https://curyo.xyz/.well-known/oauth-protected-resource") {
+function makeRequest(url = "https://rateloop.xyz/.well-known/oauth-protected-resource") {
   return new NextRequest(url, { method: "GET" });
 }
 
@@ -39,18 +39,18 @@ test("serves root MCP protected-resource metadata for static bearer-token agents
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
-  assert.equal(body.resource, "https://curyo.xyz/api/mcp");
+  assert.equal(body.resource, "https://rateloop.xyz/api/mcp");
   assert.equal(body.resource_name, "RateLoop MCP");
   assert.deepEqual(body.bearer_methods_supported, ["header"]);
-  assert.deepEqual(body.scopes_supported, ["curyo:quote", "curyo:ask", "curyo:read", "curyo:balance"]);
+  assert.deepEqual(body.scopes_supported, ["rateloop:quote", "rateloop:ask", "rateloop:read", "rateloop:balance"]);
   assert.equal("authorization_servers" in body, false);
 });
 
 test("includes configured authorization server in protected-resource metadata", async () => {
-  env.CURYO_MCP_AUTHORIZATION_SERVER_URL = "https://auth.curyo.xyz/";
+  env.RATELOOP_MCP_AUTHORIZATION_SERVER_URL = "https://auth.rateloop.xyz/";
 
   const response = await protectedResourceRoute.GET(
-    makeRequest("https://curyo.xyz/.well-known/oauth-protected-resource/api/mcp"),
+    makeRequest("https://rateloop.xyz/.well-known/oauth-protected-resource/api/mcp"),
     {
       params: Promise.resolve({ resource: ["api", "mcp"] }),
     },
@@ -58,13 +58,13 @@ test("includes configured authorization server in protected-resource metadata", 
   const body = (await response.json()) as Record<string, unknown>;
 
   assert.equal(response.status, 200);
-  assert.equal(body.resource, "https://curyo.xyz/api/mcp");
-  assert.deepEqual(body.authorization_servers, ["https://auth.curyo.xyz"]);
+  assert.equal(body.resource, "https://rateloop.xyz/api/mcp");
+  assert.deepEqual(body.authorization_servers, ["https://auth.rateloop.xyz"]);
 });
 
 test("rejects protected-resource metadata for unrelated paths", async () => {
   const response = await protectedResourceRoute.GET(
-    makeRequest("https://curyo.xyz/.well-known/oauth-protected-resource/api/other"),
+    makeRequest("https://rateloop.xyz/.well-known/oauth-protected-resource/api/other"),
     {
       params: Promise.resolve({ resource: ["api", "other"] }),
     },

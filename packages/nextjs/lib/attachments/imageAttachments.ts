@@ -93,7 +93,7 @@ function hasOpenAiModerationKey() {
 }
 
 function isDevelopmentModerationExplicitlyDisabled() {
-  return process.env.NODE_ENV !== "production" && process.env.CURYO_IMAGE_MODERATION_MODE === "disabled";
+  return process.env.NODE_ENV !== "production" && process.env.RATELOOP_IMAGE_MODERATION_MODE === "disabled";
 }
 
 function isDevModerationSkipAllowed() {
@@ -138,7 +138,7 @@ function hasBlobReadWriteToken(env: ImageAttachmentUploadModeEnv = process.env) 
 
 function getLocalImageAttachmentStorageRoot() {
   return path.resolve(
-    process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR?.trim() || path.join(process.cwd(), ".local", "image-attachments"),
+    process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR?.trim() || path.join(process.cwd(), ".local", "image-attachments"),
   );
 }
 

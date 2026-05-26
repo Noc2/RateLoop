@@ -1,9 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 const CALLBACK_SIGNATURE_VERSION = "v1";
-export const CALLBACK_ID_HEADER = "x-curyo-callback-id";
-export const CALLBACK_TIMESTAMP_HEADER = "x-curyo-callback-timestamp";
-export const CALLBACK_SIGNATURE_HEADER = "x-curyo-callback-signature";
+export const CALLBACK_ID_HEADER = "x-rateloop-callback-id";
+export const CALLBACK_TIMESTAMP_HEADER = "x-rateloop-callback-timestamp";
+export const CALLBACK_SIGNATURE_HEADER = "x-rateloop-callback-signature";
 
 type CallbackSignatureInput = {
   body: string;

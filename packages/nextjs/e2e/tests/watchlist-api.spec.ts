@@ -4,8 +4,8 @@ import { E2E_BASE_URL } from "../helpers/service-urls";
 import { expect, test } from "@playwright/test";
 
 const BASE_URL = E2E_BASE_URL;
-const WATCHLIST_READ_COOKIE = "curyo_watchlist_read_session";
-const WATCHLIST_WRITE_COOKIE = "curyo_watchlist_write_session";
+const WATCHLIST_READ_COOKIE = "rateloop_watchlist_read_session";
+const WATCHLIST_WRITE_COOKIE = "rateloop_watchlist_write_session";
 
 test.describe("Watchlist API routes", () => {
   async function getReadSessionStatus(address: string, cookie?: string) {

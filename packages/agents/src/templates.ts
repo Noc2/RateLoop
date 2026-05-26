@@ -478,7 +478,7 @@ const TEMPLATE_DEFINITIONS = [
     },
     templateInputsExample: {
       decisionStage: "pre-vote review",
-      proposalId: "curyo-governance-12",
+      proposalId: "rateloop-governance-12",
       riskFocus: "deployment safety and treasury impact",
       successCriteria:
         "Clear scope, credible plan, and acceptable downside risk.",

@@ -12,11 +12,11 @@ import test from "node:test";
 test("resolveNotificationEmailAppUrl prefers the configured app URL in production", () => {
   assert.equal(
     resolveNotificationEmailAppUrl({
-      requestOrigin: "https://www.curyo.xyz",
-      fallbackAppUrl: "https://info.curyo.xyz",
+      requestOrigin: "https://www.rateloop.xyz",
+      fallbackAppUrl: "https://info.rateloop.xyz",
       production: true,
     }),
-    "https://info.curyo.xyz",
+    "https://info.rateloop.xyz",
   );
 });
 
@@ -24,17 +24,17 @@ test("resolveNotificationEmailAppUrl falls back to the configured app URL when r
   assert.equal(
     resolveNotificationEmailAppUrl({
       requestOrigin: "http://localhost:3000",
-      fallbackAppUrl: "https://www.curyo.xyz",
+      fallbackAppUrl: "https://www.rateloop.xyz",
       production: true,
     }),
-    "https://www.curyo.xyz",
+    "https://www.rateloop.xyz",
   );
 });
 
 test("resolveNotificationEmailAppUrl rejects request origins in production without a configured app URL", () => {
   assert.equal(
     resolveNotificationEmailAppUrl({
-      requestOrigin: "https://www.curyo.xyz",
+      requestOrigin: "https://www.rateloop.xyz",
       fallbackAppUrl: undefined,
       production: true,
     }),
@@ -79,22 +79,22 @@ test("resolveNotificationEmailAppUrl still allows configured HTTPS URLs in produ
   assert.equal(
     resolveNotificationEmailAppUrl({
       requestOrigin: "https://evil.example",
-      fallbackAppUrl: "https://www.curyo.xyz",
+      fallbackAppUrl: "https://www.rateloop.xyz",
       production: true,
     }),
-    "https://www.curyo.xyz",
+    "https://www.rateloop.xyz",
   );
 });
 
 test("buildNotificationSettingsRedirectUrl returns the configured app URL in production", () => {
   const url = buildNotificationSettingsRedirectUrl({
     requestOrigin: "https://evil.example",
-    fallbackAppUrl: "https://www.curyo.xyz",
+    fallbackAppUrl: "https://www.rateloop.xyz",
     production: true,
     status: "verified",
   });
 
-  assert.equal(url?.toString(), "https://www.curyo.xyz/settings?tab=notifications&email=verified");
+  assert.equal(url?.toString(), "https://www.rateloop.xyz/settings?tab=notifications&email=verified");
 });
 
 test("buildNotificationSettingsRedirectUrl returns null when no safe base URL is available", () => {
@@ -152,14 +152,14 @@ test("notification email unsubscribe tokens reject signed payloads with invalid 
 
 test("buildNotificationEmailUnsubscribeUrl includes the signed token", () => {
   const url = buildNotificationEmailUnsubscribeUrl({
-    appUrl: "https://www.curyo.xyz",
+    appUrl: "https://www.rateloop.xyz",
     walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
     email: "alice@example.com",
     secret: "notification-secret",
   });
 
   const parsed = new URL(url);
-  assert.equal(parsed.origin + parsed.pathname, "https://www.curyo.xyz/api/notifications/email/unsubscribe");
+  assert.equal(parsed.origin + parsed.pathname, "https://www.rateloop.xyz/api/notifications/email/unsubscribe");
   const token = parsed.searchParams.get("token");
   assert.ok(token);
   assert.deepEqual(verifyNotificationEmailUnsubscribeToken(token!, "notification-secret"), {

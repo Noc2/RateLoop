@@ -12,11 +12,11 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 test("RatingOrb uses a white score over the neutral center", () => {
   const html = renderToStaticMarkup(<RatingOrb rating={0} size={96} />).replace(/\s+/g, " ");
 
-  assert.match(html, /--curyo-warm-white/);
+  assert.match(html, /--rateloop-warm-white/);
   assert.doesNotMatch(html, /text-black/);
   assert.doesNotMatch(html, /text-base-content/);
   assert.doesNotMatch(html, /text-primary/);
-  assert.match(html, /stop-color="var\(--curyo-surface-nested\)"/);
+  assert.match(html, /stop-color="var\(--rateloop-surface-nested\)"/);
 });
 
 test("RatingOrb defines the RateLoop gradient for the progress flare", () => {

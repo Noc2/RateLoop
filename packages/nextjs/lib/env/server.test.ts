@@ -42,7 +42,7 @@ test("resolveAppUrl rejects localhost in production", () => {
 });
 
 test("resolveAppUrl normalizes valid public app URLs", () => {
-  assert.equal(resolveAppUrl("https://curyo.xyz/", true), "https://curyo.xyz");
+  assert.equal(resolveAppUrl("https://rateloop.xyz/", true), "https://rateloop.xyz");
 });
 
 test("resolveServerPonderUrl keeps the local default outside production", () => {
@@ -100,22 +100,22 @@ test("getDatabaseConfig preserves explicit in-memory urls", () => {
 });
 
 test("getDatabaseConfig preserves explicit postgres urls", () => {
-  env.DATABASE_URL = "postgresql://alice:secret@127.0.0.1:5432/curyo_app";
+  env.DATABASE_URL = "postgresql://alice:secret@127.0.0.1:5432/rateloop_app";
   assert.deepEqual(getDatabaseConfig(), {
-    url: "postgresql://alice:secret@127.0.0.1:5432/curyo_app",
+    url: "postgresql://alice:secret@127.0.0.1:5432/rateloop_app",
   });
 });
 
 test("getDatabaseConfig upgrades legacy sslmode values to verify-full", () => {
-  env.DATABASE_URL = "postgresql://alice:secret@db.example.com:5432/curyo_app?sslmode=require&pool_max=1";
+  env.DATABASE_URL = "postgresql://alice:secret@db.example.com:5432/rateloop_app?sslmode=require&pool_max=1";
   assert.deepEqual(getDatabaseConfig(), {
-    url: "postgresql://alice:secret@db.example.com:5432/curyo_app?sslmode=verify-full&pool_max=1",
+    url: "postgresql://alice:secret@db.example.com:5432/rateloop_app?sslmode=verify-full&pool_max=1",
   });
 });
 
 test("getDatabaseConfig preserves libpq-compatible sslmode urls", () => {
-  env.DATABASE_URL = "postgresql://alice:secret@db.example.com:5432/curyo_app?uselibpqcompat=true&sslmode=require";
+  env.DATABASE_URL = "postgresql://alice:secret@db.example.com:5432/rateloop_app?uselibpqcompat=true&sslmode=require";
   assert.deepEqual(getDatabaseConfig(), {
-    url: "postgresql://alice:secret@db.example.com:5432/curyo_app?uselibpqcompat=true&sslmode=require",
+    url: "postgresql://alice:secret@db.example.com:5432/rateloop_app?uselibpqcompat=true&sslmode=require",
   });
 });

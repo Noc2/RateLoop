@@ -2,7 +2,7 @@
 
 import { VOTE_COOLDOWN_SECONDS, getVoteCooldownRemainingSeconds } from "./cooldown";
 
-const LOCAL_VOTE_COOLDOWN_KEY = "curyo:voteCooldowns:v1";
+const LOCAL_VOTE_COOLDOWN_KEY = "rateloop:voteCooldowns:v1";
 const MAX_LOCAL_VOTE_COOLDOWNS = 500;
 
 interface StorageLike {

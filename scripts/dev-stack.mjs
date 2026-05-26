@@ -307,7 +307,7 @@ export function getDbPushPlan(databaseConfig, options = {}) {
       reason: `DATABASE_URL points to non-local ${formatDatabaseTarget(databaseConfig)}`,
       help:
         "Run `yarn workspace @rateloop/nextjs db:push` manually when you intend to migrate this database, " +
-        `or rerun dev-stack with ${allowRemoteDbPushFlag} / CURYO_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1.`,
+        `or rerun dev-stack with ${allowRemoteDbPushFlag} / RATELOOP_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1.`,
     };
   }
 
@@ -441,17 +441,17 @@ Options:
   --allow-remote-db-push    Allow dev-stack to run db:push against a non-local DATABASE_URL
 
 Environment:
-  CURYO_DEV_STACK_SKIP_DB_PUSH=1
-  CURYO_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1
+  RATELOOP_DEV_STACK_SKIP_DB_PUSH=1
+  RATELOOP_DEV_STACK_ALLOW_REMOTE_DB_PUSH=1
 `);
     return;
   }
 
   const databaseConfig = resolveNextDatabaseConfig();
   const skipDb = process.argv.includes("--skip-db");
-  const skipDbPush = process.argv.includes(skipDbPushFlag) || envFlagIsEnabled("CURYO_DEV_STACK_SKIP_DB_PUSH");
+  const skipDbPush = process.argv.includes(skipDbPushFlag) || envFlagIsEnabled("RATELOOP_DEV_STACK_SKIP_DB_PUSH");
   const allowRemoteDbPush =
-    process.argv.includes(allowRemoteDbPushFlag) || envFlagIsEnabled("CURYO_DEV_STACK_ALLOW_REMOTE_DB_PUSH");
+    process.argv.includes(allowRemoteDbPushFlag) || envFlagIsEnabled("RATELOOP_DEV_STACK_ALLOW_REMOTE_DB_PUSH");
   const activeNextDevLock = readActiveNextDevLock();
   const keeperStartup = resolveKeeperStartupStatus();
 

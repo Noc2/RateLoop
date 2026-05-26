@@ -43,7 +43,7 @@ import { notification } from "~~/utils/scaffold-eth";
 const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
 const DEFAULT_FUNDING_AMOUNT_USDC = "10";
 const DEFAULT_PER_ASK_CAP_ATOMIC = 2_000_000n;
-const DEFAULT_AGENT_SCOPES = ["curyo:ask", "curyo:read", "curyo:quote", "curyo:balance"];
+const DEFAULT_AGENT_SCOPES = ["rateloop:ask", "rateloop:read", "rateloop:quote", "rateloop:balance"];
 const MANAGED_SETUP_STEP_ORDER = ["wallet", "fund", "policy", "mcp"] as const;
 const WALLET_DIRECT_SETUP_STEP_ORDER = ["wallet", "fund", "mcp"] as const;
 const AGENT_WALLET_HELP_TEXT =
@@ -524,16 +524,16 @@ export function AgentSubmissionPanel() {
     [address, agentPolicies, selectedPolicy],
   );
 
-  const publicAgentOrigin = publicAgentApiBaseUrl || "https://curyo.example";
+  const publicAgentOrigin = publicAgentApiBaseUrl || "https://rateloop.example";
   const publicMcpUrl = `${publicAgentOrigin}/api/mcp/public`;
   const publicAgentHttpUrl = `${publicAgentOrigin}/api/agent`;
   const publicSigningIntentUrl = `${publicAgentHttpUrl}/signing-intents`;
   const localSignerSnippet = [
-    "export CURYO_API_BASE_URL=" + publicAgentOrigin,
-    "export CURYO_RPC_URL=https://worldchain-mainnet.g.alchemy.com/public",
-    "export CURYO_CHAIN_ID=480",
-    "export CURYO_LOCAL_SIGNER_KEYSTORE_PATH=$HOME/.curyo/local-signer.json",
-    "export CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>",
+    "export RATELOOP_API_BASE_URL=" + publicAgentOrigin,
+    "export RATELOOP_RPC_URL=https://worldchain-mainnet.g.alchemy.com/public",
+    "export RATELOOP_CHAIN_ID=480",
+    "export RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH=$HOME/.rateloop/local-signer.json",
+    "export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>",
     "yarn workspace @rateloop/agents wallet --generate",
     "yarn workspace @rateloop/agents local-ask --file ./ask.json",
   ].join("\n");
@@ -561,7 +561,7 @@ export function AgentSubmissionPanel() {
     return JSON.stringify(
       {
         mcpServers: {
-          curyo: {
+          rateloop: {
             transport: "streamable-http",
             headers: {
               "MCP-Protocol-Version": "2025-11-25",

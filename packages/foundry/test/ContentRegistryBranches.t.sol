@@ -390,7 +390,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             );
             questionHashes[i] = keccak256(
                 abi.encode(
-                    "curyo-question-bundle-item-v2",
+                    "rateloop-question-bundle-item-v2",
                     questions[i].contextUrl,
                     keccak256(abi.encode(questions[i].imageUrls, questions[i].videoUrl)),
                     questions[i].title,
@@ -405,10 +405,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             );
         }
 
-        bytes32 bundleHash = keccak256(abi.encode("curyo-question-bundle-v2", questionHashes));
+        bytes32 bundleHash = keccak256(abi.encode("rateloop-question-bundle-v2", questionHashes));
         return keccak256(
             abi.encode(
-                "curyo-question-bundle-reveal-v3",
+                "rateloop-question-bundle-reveal-v3",
                 bundleHash,
                 submitterAddress,
                 rewardTerms.asset,
@@ -1902,7 +1902,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitContent_UrlTooLong_Reverts() public {
         string memory longUrl =
-            _validLengthUrl(2049, bytes("https://www.curyo.xyz/api/attachments/images/att_"), bytes(".webp"));
+            _validLengthUrl(2049, bytes("https://www.rateloop.xyz/api/attachments/images/att_"), bytes(".webp"));
 
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);

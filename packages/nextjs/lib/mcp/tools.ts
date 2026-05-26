@@ -165,7 +165,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {},
       type: "object",
     },
-    name: "curyo_list_categories",
+    name: "rateloop_list_categories",
     requiredScope: MCP_SCOPES.read,
     title: "List RateLoop Categories",
   },
@@ -181,7 +181,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {},
       type: "object",
     },
-    name: "curyo_list_result_templates",
+    name: "rateloop_list_result_templates",
     outputSchema: templateListOutputSchema,
     requiredScope: MCP_SCOPES.read,
     title: "List Result Templates",
@@ -195,7 +195,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     description:
       "Preflight and price a paid question before reserving spend. Returns Terms and Privacy Notice links for low-friction operator review.",
     inputSchema: agentQuoteInputSchema,
-    name: "curyo_quote_question",
+    name: "rateloop_quote_question",
     outputSchema: agentQuoteOutputSchema,
     requiredScope: MCP_SCOPES.quote,
     title: "Quote Human Ask",
@@ -210,7 +210,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     description:
       "Prepare a paid human-feedback ask and return either wallet transaction calls or a native x402 USDC authorization request, plus Terms and Privacy Notice links. Public wallet-mode asks are not submitted until the wallet signs and the hashes are confirmed.",
     inputSchema: agentAskHumansInputSchema,
-    name: "curyo_ask_humans",
+    name: "rateloop_ask_humans",
     outputSchema: agentAskHumansOutputSchema,
     requiredScope: MCP_SCOPES.ask,
     title: "Ask Humans",
@@ -224,7 +224,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     description: "Confirm wallet-executed RateLoop ask transactions and attach the submitted content ids to the ask.",
     inputSchema: agentConfirmAskTransactionsInputSchema,
-    name: "curyo_confirm_ask_transactions",
+    name: "rateloop_confirm_ask_transactions",
     outputSchema: agentQuestionStatusOutputSchema,
     requiredScope: MCP_SCOPES.ask,
     title: "Confirm Ask Transactions",
@@ -237,7 +237,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     description: "Get paid ask operation status by operationKey or chainId plus clientRequestId.",
     inputSchema: agentOperationLookupInputSchema,
-    name: "curyo_get_question_status",
+    name: "rateloop_get_question_status",
     outputSchema: agentQuestionStatusOutputSchema,
     requiredScope: MCP_SCOPES.read,
     title: "Get Question Status",
@@ -253,7 +253,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       additionalProperties: false,
       properties: {
         chainId: { description: "Chain id used with clientRequestId lookup.", type: "integer" },
-        clientRequestId: { description: "Client idempotency key returned by curyo_ask_humans.", type: "string" },
+        clientRequestId: { description: "Client idempotency key returned by rateloop_ask_humans.", type: "string" },
         contentId: { description: "RateLoop content id.", type: "string" },
         operationKey: { description: "RateLoop operation key returned by quote or ask.", type: "string" },
         walletAddress: {
@@ -265,7 +265,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
       type: "object",
     },
-    name: "curyo_get_result",
+    name: "rateloop_get_result",
     outputSchema: resultPackageOutputSchema,
     requiredScope: MCP_SCOPES.read,
     title: "Get Human Result",
@@ -282,7 +282,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       properties: {},
       type: "object",
     },
-    name: "curyo_get_agent_balance",
+    name: "rateloop_get_agent_balance",
     outputSchema: agentBalanceOutputSchema,
     requiredScope: MCP_SCOPES.balance,
     title: "Get Agent Balance",
@@ -290,13 +290,13 @@ export const MCP_TOOLS: McpToolDefinition[] = [
 ];
 
 const PUBLIC_MCP_TOOL_NAMES = new Set([
-  "curyo_list_categories",
-  "curyo_list_result_templates",
-  "curyo_quote_question",
-  "curyo_ask_humans",
-  "curyo_confirm_ask_transactions",
-  "curyo_get_question_status",
-  "curyo_get_result",
+  "rateloop_list_categories",
+  "rateloop_list_result_templates",
+  "rateloop_quote_question",
+  "rateloop_ask_humans",
+  "rateloop_confirm_ask_transactions",
+  "rateloop_get_question_status",
+  "rateloop_get_result",
 ]);
 
 export const PUBLIC_MCP_TOOLS = MCP_TOOLS.filter(tool => PUBLIC_MCP_TOOL_NAMES.has(tool.name));
@@ -475,10 +475,10 @@ function agentStatusHints(body: JsonObject, latestRoundState: number | null = nu
 
   return {
     nextAction:
-      status === "failed" ? "manual_review" : ready ? "call_curyo_get_result" : "poll_curyo_get_question_status",
+      status === "failed" ? "manual_review" : ready ? "call_rateloop_get_result" : "poll_rateloop_get_question_status",
     pollAfterMs: terminal ? null : 5_000,
     ready,
-    resultTool: ready ? "curyo_get_result" : null,
+    resultTool: ready ? "rateloop_get_result" : null,
     terminal,
   };
 }
@@ -753,7 +753,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
     majorObjections: [],
     methodology: {
       ratingSystem: template.ratingSystem,
-      sources: ["curyo.agent_question_submission"],
+      sources: ["rateloop.agent_question_submission"],
       templateId: template.id,
       templateVersion: template.version,
     },
@@ -768,7 +768,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
     result: null,
     wait: {
       code: params.failed ? "failed_submission" : "still_settling",
-      recoverWith: params.failed ? "inspect_status_error" : "curyo_get_question_status",
+      recoverWith: params.failed ? "inspect_status_error" : "rateloop_get_question_status",
     },
     recommendedNextAction: params.failed ? "manual_review" : "wait_for_settlement",
     rationaleSummary: params.failed
@@ -907,16 +907,16 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
   const args = asObject(params.arguments ?? {});
 
   switch (params.name) {
-    case "curyo_list_categories":
+    case "rateloop_list_categories":
       return ponderApi.getCategories();
 
-    case "curyo_list_result_templates":
+    case "rateloop_list_result_templates":
       return { templates: listAgentResultTemplates() };
 
-    case "curyo_quote_question":
+    case "rateloop_quote_question":
       return quotePublicQuestion(args);
 
-    case "curyo_ask_humans": {
+    case "rateloop_ask_humans": {
       parseAskHumansMode(args.mode);
       assertNoPublicWebhook(args);
       const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
@@ -965,7 +965,7 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
       return {
         ...body,
         clientRequestId: payload.clientRequestId,
-        confirmTool: "curyo_confirm_ask_transactions",
+        confirmTool: "rateloop_confirm_ask_transactions",
         fastLane: buildAgentFastLaneGuidance({
           bounty: payload.bounty,
           questionCount: payload.questions.length,
@@ -975,14 +975,14 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
         managedBudget: null,
         pollAfterMs: 5_000,
         publicUrl: null,
-        statusTool: "curyo_get_question_status",
+        statusTool: "rateloop_get_question_status",
         walletPolicyRequired: false,
         webhook: null,
         warnings,
       };
     }
 
-    case "curyo_confirm_ask_transactions": {
+    case "rateloop_confirm_ask_transactions": {
       const operationKey = await resolvePublicOperationKey(args);
       if (!operationKey) {
         throw new McpToolError("Provide operationKey for the ask to confirm.");
@@ -1002,7 +1002,7 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
       };
     }
 
-    case "curyo_get_question_status": {
+    case "rateloop_get_question_status": {
       const operationKey = await resolvePublicOperationKey(args);
       const record = operationKey ? await getX402QuestionSubmissionByOperationKey(operationKey) : null;
       let liveAskGuidance: ReturnType<typeof buildAgentLiveAskGuidance> = null;
@@ -1032,7 +1032,7 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
       };
     }
 
-    case "curyo_get_result":
+    case "rateloop_get_result":
       return buildPublicQuestionResult(args);
 
     default:
@@ -1050,16 +1050,16 @@ export async function callRateLoopMcpTool(params: {
   const args = asObject(params.arguments ?? {});
 
   switch (params.name) {
-    case "curyo_list_categories":
+    case "rateloop_list_categories":
       return ponderApi.getCategories();
 
-    case "curyo_list_result_templates":
+    case "rateloop_list_result_templates":
       return { templates: listAgentResultTemplates() };
 
-    case "curyo_quote_question":
+    case "rateloop_quote_question":
       return quoteQuestion(args, params.agent);
 
-    case "curyo_ask_humans": {
+    case "rateloop_ask_humans": {
       parseAskHumansMode(args.mode);
       const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
       const payload = parseX402QuestionRequest(args);
@@ -1130,7 +1130,11 @@ export async function callRateLoopMcpTool(params: {
             delivery: "signed_hmac_sha256",
             events: webhook.events,
             registered: true,
-            signatureHeaders: ["x-curyo-callback-id", "x-curyo-callback-timestamp", "x-curyo-callback-signature"],
+            signatureHeaders: [
+              "x-rateloop-callback-id",
+              "x-rateloop-callback-timestamp",
+              "x-rateloop-callback-signature",
+            ],
           }
         : null;
 
@@ -1194,19 +1198,19 @@ export async function callRateLoopMcpTool(params: {
       return {
         ...(normalizeMcpQuestionBody(body) as JsonObject),
         clientRequestId: payload.clientRequestId,
-        confirmTool: "curyo_confirm_ask_transactions",
+        confirmTool: "rateloop_confirm_ask_transactions",
         fastLane,
         legalNotice: buildAgentLegalNotice(),
         managedBudget,
         pollAfterMs: 5_000,
         publicUrl: null,
-        statusTool: "curyo_get_question_status",
+        statusTool: "rateloop_get_question_status",
         webhook: webhookInfo,
         warnings: [...warnings, ...callbackWarnings],
       };
     }
 
-    case "curyo_confirm_ask_transactions": {
+    case "rateloop_confirm_ask_transactions": {
       const operationKey = await resolveManagedOperationKey(args, params.agent);
       if (!operationKey) {
         throw new McpToolError("Provide operationKey for the ask to confirm.");
@@ -1255,7 +1259,7 @@ export async function callRateLoopMcpTool(params: {
       };
     }
 
-    case "curyo_get_question_status": {
+    case "rateloop_get_question_status": {
       const operationKey = await resolveManagedOperationKey(args, params.agent);
       const record = await lookupQuestionOperation(args, params.agent);
       let liveAskGuidance: ReturnType<typeof buildAgentLiveAskGuidance> = null;
@@ -1285,10 +1289,10 @@ export async function callRateLoopMcpTool(params: {
       };
     }
 
-    case "curyo_get_result":
+    case "rateloop_get_result":
       return buildQuestionResult(args, params.agent);
 
-    case "curyo_get_agent_balance":
+    case "rateloop_get_agent_balance":
       return getMcpAgentBudgetSummary(params.agent);
 
     default:
@@ -1328,7 +1332,7 @@ function classifyToolError(error: unknown): {
       return { code: "invalid_media", recoverWith: "fix_media_urls", retryable: false };
     }
     if (message.includes("template")) {
-      return { code: "unsupported_template", recoverWith: "call_curyo_list_result_templates", retryable: false };
+      return { code: "unsupported_template", recoverWith: "call_rateloop_list_result_templates", retryable: false };
     }
     return { code: "invalid_arguments", recoverWith: "fix_tool_arguments", retryable: false };
   }

@@ -54,7 +54,7 @@ function createStoreUnavailableResources(base: DatabaseResources): DatabaseResou
 }
 
 function makeRequest(body: Record<string, unknown>): NextRequest {
-  return new NextRequest("https://curyo.xyz/api/transactions/free/confirm", {
+  return new NextRequest("https://rateloop.xyz/api/transactions/free/confirm", {
     method: "POST",
     headers: new Headers({
       "content-type": "application/json",

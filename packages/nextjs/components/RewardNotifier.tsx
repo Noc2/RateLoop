@@ -11,7 +11,7 @@ import {
 } from "~~/lib/notifications/claimRewards";
 import { notification } from "~~/utils/scaffold-eth";
 
-const CLAIMABLE_TOTAL_STORAGE_PREFIX = "curyo_last_notified_claimable_total";
+const CLAIMABLE_TOTAL_STORAGE_PREFIX = "rateloop_last_notified_claimable_total";
 
 function getClaimableTotalStorageKey(address: string) {
   return `${CLAIMABLE_TOTAL_STORAGE_PREFIX}:${address.toLowerCase()}`;

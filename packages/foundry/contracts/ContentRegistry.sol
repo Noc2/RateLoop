@@ -566,7 +566,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             // duplicates within the same bundle.
             bytes32 contentHash = keccak256(
                 abi.encode(
-                    "curyo-question-context-v2",
+                    "rateloop-question-context-v2",
                     metadataList[i].url,
                     questions[i].imageUrls,
                     questions[i].videoUrl,
@@ -865,7 +865,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "curyo-question-context-v2",
+                "rateloop-question-context-v2",
                 metadata.url,
                 imageUrls,
                 videoUrl,
@@ -901,7 +901,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     {
         return keccak256(
             abi.encode(
-                "curyo-question-context-v1",
+                "rateloop-question-context-v1",
                 resolvedCategoryId,
                 metadata.url,
                 metadata.title,
@@ -1244,7 +1244,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "curyo-question-reveal-v3",
+                "rateloop-question-reveal-v3",
                 submissionKey,
                 mediaHash,
                 keccak256(abi.encode(title, description, tags)),
@@ -1273,7 +1273,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         for (uint256 i = 0; i < metadataList.length; i++) {
             questionHashes[i] = keccak256(
                 abi.encode(
-                    "curyo-question-bundle-item-v2",
+                    "rateloop-question-bundle-item-v2",
                     metadataList[i].url,
                     mediaHashes[i],
                     metadataList[i].title,
@@ -1287,7 +1287,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 )
             );
         }
-        return keccak256(abi.encode("curyo-question-bundle-v2", questionHashes));
+        return keccak256(abi.encode("rateloop-question-bundle-v2", questionHashes));
     }
 
     function _computeBundleRevealCommitment(
@@ -1298,7 +1298,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "curyo-question-bundle-reveal-v3",
+                "rateloop-question-bundle-reveal-v3",
                 bundleHash,
                 submitter,
                 rewardTerms.asset,

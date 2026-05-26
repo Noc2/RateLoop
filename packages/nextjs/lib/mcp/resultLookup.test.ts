@@ -13,7 +13,7 @@ const AGENT: McpAgentAuth = {
   dailyBudgetAtomic: 5_000_000n,
   id: "agent-read",
   perAskLimitAtomic: 2_000_000n,
-  scopes: new Set(["curyo:read"]),
+  scopes: new Set(["rateloop:read"]),
   tokenHash: "a".repeat(64),
   walletAddress: null,
 };
@@ -39,7 +39,7 @@ after(() => {
   }
 });
 
-test("curyo_get_result requires contentId when an operation maps to multiple bundle questions", async () => {
+test("rateloop_get_result requires contentId when an operation maps to multiple bundle questions", async () => {
   const operationKey = `0x${"6".repeat(64)}` as const;
   const now = new Date("2026-04-23T12:00:00.000Z");
 
@@ -129,13 +129,13 @@ test("curyo_get_result requires contentId when an operation maps to multiple bun
           chainId: 480,
           clientRequestId: "bundle-result",
         },
-        name: "curyo_get_result",
+        name: "rateloop_get_result",
       }),
     /provide contentid/i,
   );
 });
 
-test("curyo_get_result accepts an explicit bundle contentId without bypassing operation lookup", async () => {
+test("rateloop_get_result accepts an explicit bundle contentId without bypassing operation lookup", async () => {
   const operationKey = `0x${"7".repeat(64)}` as const;
   const now = new Date("2026-04-23T12:00:00.000Z");
 
@@ -248,7 +248,7 @@ test("curyo_get_result accepts an explicit bundle contentId without bypassing op
       clientRequestId: "bundle-result-selected",
       contentId: "456",
     },
-    name: "curyo_get_result",
+    name: "rateloop_get_result",
   })) as {
     operation: {
       contentIds: string[];
@@ -260,7 +260,7 @@ test("curyo_get_result accepts an explicit bundle contentId without bypassing op
   assert.deepEqual(result.operation?.contentIds, ["123", "456"]);
 });
 
-test("curyo_get_result returns schema-shaped pending packages before content exists", async () => {
+test("rateloop_get_result returns schema-shaped pending packages before content exists", async () => {
   const operationKey = `0x${"8".repeat(64)}` as const;
   const now = new Date("2026-04-23T12:00:00.000Z");
 
@@ -308,7 +308,7 @@ test("curyo_get_result returns schema-shaped pending packages before content exi
       chainId: 480,
       clientRequestId: "pending-result",
     },
-    name: "curyo_get_result",
+    name: "rateloop_get_result",
   })) as {
     answerScopes?: {
       allAnswers?: unknown;
@@ -332,7 +332,7 @@ test("curyo_get_result returns schema-shaped pending packages before content exi
   assert.equal(result.methodology?.ratingSystem, "rateloop.robust_bts_binary.v1");
 });
 
-test("curyo_get_result applies bundle bounty eligibility when loading eligible answers", async () => {
+test("rateloop_get_result applies bundle bounty eligibility when loading eligible answers", async () => {
   let voteQuery: unknown;
 
   __setMcpToolTestOverridesForTests({
@@ -438,7 +438,7 @@ test("curyo_get_result applies bundle bounty eligibility when loading eligible a
     arguments: {
       contentId: "789",
     },
-    name: "curyo_get_result",
+    name: "rateloop_get_result",
   })) as {
     answerScopes?: {
       bountyEligibleAnswers?: {

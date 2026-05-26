@@ -11,13 +11,13 @@ import scaffoldConfig from "~~/scaffold.config";
 import { useGlobalState } from "~~/services/store/store";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 import { createLocalTestWallet } from "~~/services/thirdweb/localTestWallet";
-import { CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY } from "~~/services/thirdweb/testWalletStorage";
+import { RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY } from "~~/services/thirdweb/testWalletStorage";
 import { isLocalE2EWalletBridgeEnabled } from "~~/utils/env/e2eProduction";
 import { publicEnv } from "~~/utils/env/public";
 import { NETWORKS_EXTRA_DATA } from "~~/utils/scaffold-eth";
 
 const LOCAL_TEST_CHAIN_ID = 31337;
-const allowLocalE2EProductionBuild = process.env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD === "true";
+const allowLocalE2EProductionBuild = process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
 
 function isLocalTestWalletEnabled() {
   if (typeof window === "undefined") {
@@ -46,7 +46,7 @@ export function LocalTestWalletBridge() {
       return;
     }
 
-    const privateKey = window.localStorage.getItem(CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim();
+    const privateKey = window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim();
     if (!privateKey) {
       return;
     }

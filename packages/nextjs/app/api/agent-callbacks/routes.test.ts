@@ -14,7 +14,7 @@ let deliverRoute: DeliverRouteModule;
 let sweepRoute: SweepRouteModule;
 
 const env = process.env as Record<string, string | undefined>;
-const originalSecret = env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET;
+const originalSecret = env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET;
 const routeWorkerId = "00000000-0000-4000-8000-000000000000";
 const deliveryResult = { dead: 0, delivered: 1, leased: 0, released: 0, retrying: 0 };
 const sweepResult = {
@@ -30,7 +30,7 @@ const sweepResult = {
 };
 
 function makeRequest(path: string, headers: Record<string, string> = {}) {
-  return new NextRequest(`https://curyo.xyz${path}`, {
+  return new NextRequest(`https://rateloop.xyz${path}`, {
     method: "POST",
     headers,
   });
@@ -51,7 +51,7 @@ before(async () => {
 });
 
 beforeEach(() => {
-  env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
+  env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
   setAgentCallbackDeliverRouteTestOverrides({
     randomUUID: () => routeWorkerId,
     processDueAgentCallbackDeliveries: async () => deliveryResult,
@@ -66,21 +66,21 @@ after(() => {
   setAgentCallbackSweepRouteTestOverrides(null);
   __setRateLimitStoreForTests(null);
   if (originalSecret === undefined) {
-    delete env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET;
+    delete env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET;
   } else {
-    env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET = originalSecret;
+    env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET = originalSecret;
   }
 });
 
 test("agent callback deliver route rejects unconfigured and unauthorized requests", async () => {
-  delete env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET;
+  delete env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET;
   const missing = await deliverRoute.POST(makeRequest("/api/agent-callbacks/deliver"));
   assert.equal(missing.status, 503);
 
-  env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
+  env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
   const unauthorized = await deliverRoute.POST(
     makeRequest("/api/agent-callbacks/deliver", {
-      "x-curyo-agent-callback-secret": "wrong-secret",
+      "x-rateloop-agent-callback-secret": "wrong-secret",
     }),
   );
 
@@ -109,11 +109,11 @@ test("agent callback deliver route accepts bearer auth, clamps limit, and passes
 });
 
 test("agent callback sweep route rejects unconfigured and unauthorized requests", async () => {
-  delete env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET;
+  delete env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET;
   const missing = await sweepRoute.POST(makeRequest("/api/agent-callbacks/sweep"));
   assert.equal(missing.status, 503);
 
-  env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
+  env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET = "callback-secret";
   const unauthorized = await sweepRoute.POST(
     makeRequest("/api/agent-callbacks/sweep", {
       authorization: "Bearer wrong-secret",
@@ -134,7 +134,7 @@ test("agent callback sweep route accepts header auth and defaults invalid limits
 
   const response = await sweepRoute.POST(
     makeRequest("/api/agent-callbacks/sweep?limit=bogus", {
-      "x-curyo-agent-callback-secret": "callback-secret",
+      "x-rateloop-agent-callback-secret": "callback-secret",
     }),
   );
 

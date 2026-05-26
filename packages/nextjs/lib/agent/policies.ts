@@ -7,9 +7,9 @@ import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/c
 export const AGENT_POLICY_STATUSES = ["active", "paused", "revoked"] as const;
 export type AgentPolicyStatus = (typeof AGENT_POLICY_STATUSES)[number];
 
-const MCP_SCOPE_VALUES = ["curyo:ask", "curyo:balance", "curyo:quote", "curyo:read"] as const;
+const MCP_SCOPE_VALUES = ["rateloop:ask", "rateloop:balance", "rateloop:quote", "rateloop:read"] as const;
 const DEFAULT_AGENT_SCOPES = MCP_SCOPE_VALUES;
-const TOKEN_PREFIX = "curyo_mcp_";
+const TOKEN_PREFIX = "rateloop_mcp_";
 
 type AgentPolicyRecord = {
   agentId: string;

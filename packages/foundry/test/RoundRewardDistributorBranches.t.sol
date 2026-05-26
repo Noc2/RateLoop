@@ -308,7 +308,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     function _seedRateLoopHumanFresh(address account, bytes32 anchorId) internal {
         vm.prank(owner);
         raterRegistry.seedHumanCredential(
-            account, uint64(block.timestamp + 365 days), anchorId, keccak256("curyo-seed")
+            account, uint64(block.timestamp + 365 days), anchorId, keccak256("rateloop-seed")
         );
     }
 
@@ -462,7 +462,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     }
 
     function test_ClaimReward_RecordsLaunchCreditWithRateLoopSeededHumanAnchor() public {
-        _seedRateLoopHuman(voter2, bytes32("curyo-anchor-voter-2"));
+        _seedRateLoopHuman(voter2, bytes32("rateloop-anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
 
         vm.prank(voter1);
@@ -493,7 +493,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     }
 
     function test_ClaimReward_RecordsLaunchCreditWhenAnchorExpiresAfterRoundStartBeforeClaim() public {
-        uint64 expiresAt = _seedRateLoopHumanExpiringAfterMinAge(voter2, bytes32("expiring-curyo-anchor"));
+        uint64 expiresAt = _seedRateLoopHumanExpiringAfterMinAge(voter2, bytes32("expiring-rateloop-anchor"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
 
@@ -509,7 +509,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     }
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithFreshRateLoopSeededHumanAnchor() public {
-        _seedRateLoopHumanFresh(voter2, bytes32("fresh-curyo-anchor-voter-2"));
+        _seedRateLoopHumanFresh(voter2, bytes32("fresh-rateloop-anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
 
         vm.prank(voter1);

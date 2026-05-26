@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const SNAPSHOT_MAX_AGE_MS = 120_000;
-const STORAGE_KEY_PREFIX = "curyo:wallet-display-summary:";
+const STORAGE_KEY_PREFIX = "rateloop:wallet-display-summary:";
 
 export interface WalletDisplaySummary {
   liquidMicro: bigint;

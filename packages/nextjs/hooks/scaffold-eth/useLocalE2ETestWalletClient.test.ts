@@ -1,12 +1,12 @@
 import { getStoredLocalE2ETestWalletRpcUrl } from "./useLocalE2ETestWalletClient";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CURYO_E2E_RPC_URL_STORAGE_KEY } from "~~/services/thirdweb/testWalletStorage";
+import { RATELOOP_E2E_RPC_URL_STORAGE_KEY } from "~~/services/thirdweb/testWalletStorage";
 
 function createStorage(value: string | null) {
   return {
     getItem(key: string) {
-      return key === CURYO_E2E_RPC_URL_STORAGE_KEY ? value : null;
+      return key === RATELOOP_E2E_RPC_URL_STORAGE_KEY ? value : null;
     },
   } as Pick<Storage, "getItem">;
 }

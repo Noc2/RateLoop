@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { useSyncExternalStore } from "react";
 
-const STORAGE_KEY = "curyo_onboarding";
+const STORAGE_KEY = "rateloop_onboarding";
 
 interface OnboardingState {
   firstVoteCompleted: boolean;

@@ -5,8 +5,8 @@ import test from "node:test";
 test("enables local production-style E2E from the server-only flag", () => {
   assert.equal(
     isLocalE2EProductionBuildEnabled({
-      CURYO_E2E_PRODUCTION_BUILD: "true",
-      NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: undefined,
+      RATELOOP_E2E_PRODUCTION_BUILD: "true",
+      NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: undefined,
     }),
     true,
   );
@@ -15,8 +15,8 @@ test("enables local production-style E2E from the server-only flag", () => {
 test("enables local production-style E2E from the public client flag", () => {
   assert.equal(
     isLocalE2EProductionBuildEnabled({
-      CURYO_E2E_PRODUCTION_BUILD: undefined,
-      NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: "true",
+      RATELOOP_E2E_PRODUCTION_BUILD: undefined,
+      NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true",
     }),
     true,
   );
@@ -25,8 +25,8 @@ test("enables local production-style E2E from the public client flag", () => {
 test("stays disabled when neither E2E opt-in flag is set", () => {
   assert.equal(
     isLocalE2EProductionBuildEnabled({
-      CURYO_E2E_PRODUCTION_BUILD: undefined,
-      NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: undefined,
+      RATELOOP_E2E_PRODUCTION_BUILD: undefined,
+      NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: undefined,
     }),
     false,
   );
@@ -57,7 +57,7 @@ test("enables the local test wallet bridge for local production-style E2E", () =
 test("disables the local test wallet bridge for non-local production traffic", () => {
   assert.equal(
     isLocalE2EWalletBridgeEnabled({
-      hostname: "curyo.xyz",
+      hostname: "rateloop.xyz",
       isProduction: true,
       localE2EProductionBuild: true,
     }),

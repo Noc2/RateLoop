@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       handler: () =>
         callPublicRateLoopMcpTool({
           arguments: body,
-          name: "curyo_ask_humans",
+          name: "rateloop_ask_humans",
         }),
       rateLimit: AGENT_WRITE_RATE_LIMIT,
       request,
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       callRateLoopMcpTool({
         agent,
         arguments: body,
-        name: "curyo_ask_humans",
+        name: "rateloop_ask_humans",
         scheduleBackgroundTask,
       }),
     rateLimit: AGENT_WRITE_RATE_LIMIT,

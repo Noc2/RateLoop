@@ -309,7 +309,7 @@ export async function prepareAgentSigningIntent(params: {
         paymentMode: intent.paymentMode,
         walletAddress,
       },
-      name: "curyo_ask_humans",
+      name: "rateloop_ask_humans",
     })) as JsonObject;
 
     const operationKey = typeof body.operationKey === "string" ? (body.operationKey as `0x${string}`) : null;
@@ -365,7 +365,7 @@ export async function completeAgentSigningIntent(params: {
   assertFresh(intent);
   // M-2 (2026-05-22 audit): refuse to re-complete an already-submitted intent so a
   // replayed HTTP call (client retry loop, MitM replay, browser back-forward) cannot
-  // re-invoke curyo_confirm_ask_transactions with the same (operationKey,
+  // re-invoke rateloop_confirm_ask_transactions with the same (operationKey,
   // transactionHashes). Returning the existing record is idempotent and matches the
   // shape the caller saw on the first successful completion.
   if (intent.status === "submitted") {
@@ -382,7 +382,7 @@ export async function completeAgentSigningIntent(params: {
         operationKey: intent.operationKey,
         transactionHashes,
       },
-      name: "curyo_confirm_ask_transactions",
+      name: "rateloop_confirm_ask_transactions",
     })) as JsonObject;
     const status = body.status === "submitted" ? "submitted" : "prepared";
     const now = nowDate();

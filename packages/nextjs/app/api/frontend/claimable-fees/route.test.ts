@@ -18,7 +18,7 @@ let rateLimit: RateLimitModule;
 let route: RouteModule;
 
 function makeRequest(pathname: string): NextRequest {
-  return new NextRequest(`https://curyo.xyz${pathname}`, {
+  return new NextRequest(`https://rateloop.xyz${pathname}`, {
     headers: new Headers({
       "x-forwarded-for": "203.0.113.77",
     }),

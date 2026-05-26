@@ -1,4 +1,4 @@
-export const NAVIGATION_PROGRESS_DEBUG_STORAGE_KEY = "curyo:debug-navigation";
+export const NAVIGATION_PROGRESS_DEBUG_STORAGE_KEY = "rateloop:debug-navigation";
 export const NAVIGATION_PROGRESS_TIMEOUT_MS = 15_000;
 
 interface NavigationProgressCandidateInput {

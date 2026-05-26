@@ -38,7 +38,7 @@ export function buildRateLoopEmailHtml(params: RateLoopEmailTemplateParams) {
   const safeBody = escapeHtml(params.body);
   const safeCtaLabel = escapeHtml(params.ctaLabel);
   const safeCtaHref = escapeHtml(params.ctaHref);
-  const safeEyebrow = escapeHtml(params.eyebrow ?? "CURYO NOTIFICATIONS");
+  const safeEyebrow = escapeHtml(params.eyebrow ?? "RATELOOP NOTIFICATIONS");
   const safeFooterNote = escapeHtml(
     params.footerNote ?? "You are receiving this email because you signed up for RateLoop email notifications.",
   );

@@ -59,21 +59,21 @@ import { buildCommitVoteParams } from "@rateloop/sdk/vote";`}</code>
       <h2>Quickstart</h2>
       <p>Create a client once, then use its hosted read surface wherever your app needs indexed protocol data.</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`const curyo = createRateLoopClient({
+        <code>{`const rateloop = createRateLoopClient({
   apiBaseUrl: "https://www.rateloop.xyz",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 
-const stats = await curyo.read.getStats();
-const { items: contentItems } = await curyo.read.searchContent({
+const stats = await rateloop.read.getStats();
+const { items: contentItems } = await rateloop.read.searchContent({
   sortBy: "most_votes",
   limit: 12,
 });
 
-const { frontend } = await curyo.read.getFrontend(
+const { frontend } = await rateloop.read.getFrontend(
   "0x1234567890123456789012345678901234567890",
 );
-const participationStatus = await curyo.read.getRaterParticipationStatus(
+const participationStatus = await rateloop.read.getRaterParticipationStatus(
   "0xAgentOrRaterWallet",
 );`}</code>
       </pre>
@@ -89,7 +89,7 @@ const participationStatus = await curyo.read.getRaterParticipationStatus(
         contracts can enforce the metadata bindings on-chain.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`const { content } = await curyo.read.getContent("42");
+        <code>{`const { content } = await rateloop.read.getContent("42");
 const epochDuration =
   content.openRound?.epochDuration ?? content.roundConfig?.epochDuration ?? 20 * 60;
 
@@ -102,7 +102,7 @@ const commit = await buildCommitVoteParams({
   stakeAmount: 2.5,
   epochDuration,
   roundReferenceRatingBps: content.openRound?.referenceRatingBps ?? content.ratingBps ?? 5000,
-  defaultFrontendCode: curyo.config.frontendCode,
+  defaultFrontendCode: rateloop.config.frontendCode,
 });
 const roundContext = packVoteRoundContext(commit.roundId, commit.roundReferenceRatingBps);
 

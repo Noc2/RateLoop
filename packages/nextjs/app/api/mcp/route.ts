@@ -24,7 +24,7 @@ function metadataUrl(request: Request) {
 
 function corsHeaders(request: Request) {
   const origin = request.headers.get("origin");
-  const allowedOrigins = (process.env.CURYO_MCP_ALLOWED_ORIGINS ?? "")
+  const allowedOrigins = (process.env.RATELOOP_MCP_ALLOWED_ORIGINS ?? "")
     .split(",")
     .map(value => value.trim())
     .filter(Boolean);
@@ -45,7 +45,7 @@ function corsHeaders(request: Request) {
 function originAllowed(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return true;
-  const allowedOrigins = (process.env.CURYO_MCP_ALLOWED_ORIGINS ?? "")
+  const allowedOrigins = (process.env.RATELOOP_MCP_ALLOWED_ORIGINS ?? "")
     .split(",")
     .map(value => value.trim())
     .filter(Boolean);
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
           },
           protocolVersion: negotiateProtocolVersion(body),
           serverInfo: {
-            name: "curyo",
+            name: "rateloop",
             version: "0.1.0",
           },
         },

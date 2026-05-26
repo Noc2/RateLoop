@@ -42,7 +42,7 @@ test.describe("Next.js API routes", () => {
 
     expect(res.status).toBe(200);
     const cookie = res.headers.get("set-cookie");
-    expect(cookie).toContain("curyo_notification_preferences_read_session=");
+    expect(cookie).toContain("rateloop_notification_preferences_read_session=");
 
     return {
       cookie: cookie!.split(";")[0],
@@ -104,7 +104,7 @@ test.describe("Next.js API routes", () => {
 
     expect(res.status).toBe(200);
     const cookie = res.headers.get("set-cookie");
-    expect(cookie).toContain("curyo_notification_email_read_session=");
+    expect(cookie).toContain("rateloop_notification_email_read_session=");
 
     return {
       cookie: cookie!.split(";")[0],

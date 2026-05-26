@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ARTIFACTS_DIR = path.resolve(__dirname, "../artifacts/demo");
 const VIEWPORT = { width: 1280, height: 800 };
-const CAPTION_ID = "curyo-demo-caption";
+const CAPTION_ID = "rateloop-demo-caption";
 const VERIFIED_DEMO_WALLETS = [
   ANVIL_ACCOUNTS.account3,
   ANVIL_ACCOUNTS.account4,
@@ -125,7 +125,7 @@ async function prepareDemoContent(): Promise<{ searchQuery: string }> {
   const submitter = ANVIL_ACCOUNTS.account10;
   const uniqueId = Date.now();
   const title = `RateLoop Demo ${uniqueId}`;
-  const demoUrl = `https://www.youtube.com/watch?v=curyo_demo_${uniqueId}`;
+  const demoUrl = `https://www.youtube.com/watch?v=rateloop_demo_${uniqueId}`;
 
   const submitted = await submitContentDirect(
     demoUrl,
@@ -270,9 +270,9 @@ async function main(): Promise<void> {
   await mkdir(ARTIFACTS_DIR, { recursive: true });
 
   const outputPath =
-    process.env.CURYO_DEMO_VIDEO_PATH?.trim() || path.join(ARTIFACTS_DIR, `curyo-demo-${timestampSlug()}.webm`);
-  const headless = process.env.CURYO_DEMO_HEADLESS !== "false";
-  const mode = process.env.CURYO_DEMO_MODE?.trim() === "intro" ? "intro" : "full";
+    process.env.RATELOOP_DEMO_VIDEO_PATH?.trim() || path.join(ARTIFACTS_DIR, `rateloop-demo-${timestampSlug()}.webm`);
+  const headless = process.env.RATELOOP_DEMO_HEADLESS !== "false";
+  const mode = process.env.RATELOOP_DEMO_MODE?.trim() === "intro" ? "intro" : "full";
 
   console.log(`Recording ${mode} demo against ${E2E_BASE_URL}...`);
   const prepared = mode === "full" ? await prepareDemoContent() : null;

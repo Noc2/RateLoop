@@ -92,7 +92,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     uint256 public constant STAKE = 5e6;
     uint256 public constant EPOCH_DURATION = 10 minutes;
     uint256 public constant BONUS_AMOUNT = 100e6;
-    bytes32 public constant FEEDBACK_HASH = keccak256("curyo-feedback-v1:test");
+    bytes32 public constant FEEDBACK_HASH = keccak256("rateloop-feedback-v1:test");
 
     string internal constant QUESTION = "Would you recommend this hotel?";
     string internal constant DESCRIPTION = "Vote based on the overall stay quality.";

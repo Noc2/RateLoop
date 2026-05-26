@@ -458,7 +458,7 @@ function normalizeQuestion(
  * WS-4 (2026-05-21 repo audit): every legitimate top-level field accepted by
  * `parseX402QuestionRequest` AND its known direct callers — `lib/agent/signingIntents.ts`
  * (which persists the requestBody verbatim and spreads it into the MCP tool call) and the
- * MCP tool flows in `lib/mcp/tools.ts` (`curyo_quote_question`, `curyo_ask_humans`, both
+ * MCP tool flows in `lib/mcp/tools.ts` (`rateloop_quote_question`, `rateloop_ask_humans`, both
  * managed and public variants). Reading only known fields here while persisting / forwarding
  * unknown ones is a mass-assignment hazard for any field a downstream consumer reads.
  *
@@ -632,7 +632,8 @@ export function buildX402QuestionOperation(payload: X402QuestionPayload): X402Qu
   assertSupportedX402BundleBounty(payload.bounty);
   const canonicalPayload = toCanonicalQuestionPayload(payload);
   const payloadHash = createHash("sha256").update(JSON.stringify(canonicalPayload)).digest("hex");
-  const operationKey = `0x${createHash("sha256").update(`curyo:x402-question:${payloadHash}`).digest("hex")}` as const;
+  const operationKey =
+    `0x${createHash("sha256").update(`rateloop:x402-question:${payloadHash}`).digest("hex")}` as const;
 
   return {
     canonicalPayload,

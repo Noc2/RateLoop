@@ -431,43 +431,43 @@ async function decryptLocalKeystore(path: string, password: string): Promise<Hex
 }
 
 export function loadLocalSignerConfig(options: CliOptions = {}, env: NodeJS.ProcessEnv = process.env): LocalSignerConfig {
-  const passwordEnvName = optionString(options, "password-env") ?? envString(env, "CURYO_LOCAL_SIGNER_PASSWORD_ENV");
+  const passwordEnvName = optionString(options, "password-env") ?? envString(env, "RATELOOP_LOCAL_SIGNER_PASSWORD_ENV");
   const keystorePassword =
     optionString(options, "keystore-password") ??
     (passwordEnvName ? envString(env, passwordEnvName) : undefined) ??
-    envString(env, "CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD");
+    envString(env, "RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD");
 
   return {
-    chainId: parsePositiveInteger(optionString(options, "chain-id") ?? envString(env, "CURYO_CHAIN_ID"), "CURYO_CHAIN_ID"),
-    chainName: optionString(options, "chain-name") ?? envString(env, "CURYO_CHAIN_NAME") ?? "RateLoop local signer chain",
+    chainId: parsePositiveInteger(optionString(options, "chain-id") ?? envString(env, "RATELOOP_CHAIN_ID"), "RATELOOP_CHAIN_ID"),
+    chainName: optionString(options, "chain-name") ?? envString(env, "RATELOOP_CHAIN_NAME") ?? "RateLoop local signer chain",
     keystorePassword,
-    keystorePath: optionString(options, "keystore") ?? envString(env, "CURYO_LOCAL_SIGNER_KEYSTORE_PATH"),
+    keystorePath: optionString(options, "keystore") ?? envString(env, "RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH"),
     pollingIntervalMs:
       parsePositiveInteger(
-        optionString(options, "polling-interval-ms") ?? envString(env, "CURYO_LOCAL_SIGNER_POLLING_INTERVAL_MS"),
-        "CURYO_LOCAL_SIGNER_POLLING_INTERVAL_MS",
+        optionString(options, "polling-interval-ms") ?? envString(env, "RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS"),
+        "RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS",
       ) ?? 2_000,
     privateKey: parsePrivateKey(
-      optionString(options, "private-key") ?? envString(env, "CURYO_LOCAL_SIGNER_PRIVATE_KEY"),
-      "CURYO_LOCAL_SIGNER_PRIVATE_KEY",
+      optionString(options, "private-key") ?? envString(env, "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY"),
+      "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY",
     ),
     receiptTimeoutMs:
       parsePositiveInteger(
-        optionString(options, "receipt-timeout-ms") ?? envString(env, "CURYO_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS"),
-        "CURYO_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS",
+        optionString(options, "receipt-timeout-ms") ?? envString(env, "RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS"),
+        "RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS",
       ) ?? 120_000,
-    rpcUrl: optionString(options, "rpc-url") ?? envString(env, "CURYO_RPC_URL"),
+    rpcUrl: optionString(options, "rpc-url") ?? envString(env, "RATELOOP_RPC_URL"),
   };
 }
 
 export async function loadLocalSignerWallet(config: LocalSignerConfig): Promise<LoadedLocalSignerWallet> {
   if (config.keystorePath && config.privateKey) {
-    throw new Error("Set either CURYO_LOCAL_SIGNER_KEYSTORE_PATH or CURYO_LOCAL_SIGNER_PRIVATE_KEY, not both.");
+    throw new Error("Set either RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH or RATELOOP_LOCAL_SIGNER_PRIVATE_KEY, not both.");
   }
 
   if (config.keystorePath) {
     if (!config.keystorePassword) {
-      throw new Error("Set CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD to unlock the local signer keystore.");
+      throw new Error("Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD to unlock the local signer keystore.");
     }
     const privateKey = await decryptLocalKeystore(resolve(config.keystorePath), config.keystorePassword);
     return { account: privateKeyToAccount(privateKey), source: "keystore" };
@@ -477,7 +477,7 @@ export async function loadLocalSignerWallet(config: LocalSignerConfig): Promise<
     return { account: privateKeyToAccount(config.privateKey), source: "private-key" };
   }
 
-  throw new Error("No local signer wallet configured. Set CURYO_LOCAL_SIGNER_KEYSTORE_PATH or generate one with `wallet --generate`.");
+  throw new Error("No local signer wallet configured. Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH or generate one with `wallet --generate`.");
 }
 
 export async function generateLocalSignerWallet(
@@ -485,13 +485,13 @@ export async function generateLocalSignerWallet(
   options: { overwrite?: boolean } = {},
 ): Promise<GeneratedLocalSignerWallet> {
   if (!config.keystorePath) {
-    throw new Error("Set CURYO_LOCAL_SIGNER_KEYSTORE_PATH or pass --keystore before generating a wallet.");
+    throw new Error("Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH or pass --keystore before generating a wallet.");
   }
   if (!config.keystorePassword) {
-    throw new Error("Set CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD before generating a wallet.");
+    throw new Error("Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD before generating a wallet.");
   }
   if (config.privateKey) {
-    throw new Error("Refusing to generate a keystore while CURYO_LOCAL_SIGNER_PRIVATE_KEY is set.");
+    throw new Error("Refusing to generate a keystore while RATELOOP_LOCAL_SIGNER_PRIVATE_KEY is set.");
   }
 
   const keystorePath = resolve(config.keystorePath);
@@ -559,13 +559,13 @@ export async function signX402AuthorizationRequest(
 
 async function resolveChain(config: LocalSignerConfig) {
   if (!config.rpcUrl) {
-    throw new Error("Set CURYO_RPC_URL before executing local signer transaction plans.");
+    throw new Error("Set RATELOOP_RPC_URL before executing local signer transaction plans.");
   }
 
   const probeClient = createPublicClient({ transport: http(config.rpcUrl) });
   const rpcChainId = await probeClient.getChainId();
   if (config.chainId !== undefined && rpcChainId !== config.chainId) {
-    throw new Error(`CURYO_CHAIN_ID is ${config.chainId}, but CURYO_RPC_URL reports ${rpcChainId}.`);
+    throw new Error(`RATELOOP_CHAIN_ID is ${config.chainId}, but RATELOOP_RPC_URL reports ${rpcChainId}.`);
   }
 
   return defineChain({

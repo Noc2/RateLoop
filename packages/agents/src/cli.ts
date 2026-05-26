@@ -130,23 +130,23 @@ function usage() {
   yarn workspace @rateloop/agents lint:questions --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents quote --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents ask --file packages/agents/examples/questions/landing-pitch-review.json
-  export CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>
-  yarn workspace @rateloop/agents wallet --generate --keystore ~/.curyo/local-signer.json
+  export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>
+  yarn workspace @rateloop/agents wallet --generate --keystore ~/.rateloop/local-signer.json
   yarn workspace @rateloop/agents wallet
   yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents status --operation-key 0x...
   yarn workspace @rateloop/agents result --operation-key 0x...
 
 Environment:
-  CURYO_API_BASE_URL     Hosted RateLoop origin for HTTP and MCP flows
-  CURYO_AGENT_WALLET_ADDRESS  Funded wallet address for tokenless public asks
-  CURYO_MCP_TOKEN        Optional managed agent bearer token
-  CURYO_MCP_API_URL      Optional MCP endpoint override
-  CURYO_RPC_URL          RPC URL used by local-ask to send wallet transactions
-  CURYO_CHAIN_ID         Optional chain guard for CURYO_RPC_URL
-  CURYO_LOCAL_SIGNER_KEYSTORE_PATH      Encrypted local signer keystore path
-  CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD  Keystore password from a secret source
-  CURYO_LOCAL_SIGNER_PRIVATE_KEY        Escape hatch for ephemeral CI only`;
+  RATELOOP_API_BASE_URL     Hosted RateLoop origin for HTTP and MCP flows
+  RATELOOP_AGENT_WALLET_ADDRESS  Funded wallet address for tokenless public asks
+  RATELOOP_MCP_TOKEN        Optional managed agent bearer token
+  RATELOOP_MCP_API_URL      Optional MCP endpoint override
+  RATELOOP_RPC_URL          RPC URL used by local-ask to send wallet transactions
+  RATELOOP_CHAIN_ID         Optional chain guard for RATELOOP_RPC_URL
+  RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH      Encrypted local signer keystore path
+  RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD  Keystore password from a secret source
+  RATELOOP_LOCAL_SIGNER_PRIVATE_KEY        Escape hatch for ephemeral CI only`;
 }
 
 function createAgentClient() {
@@ -250,7 +250,7 @@ async function main() {
         source: wallet.source,
         warnings:
           wallet.source === "private-key"
-            ? ["Loaded CURYO_LOCAL_SIGNER_PRIVATE_KEY. Prefer an encrypted keystore for persistent agent wallets."]
+            ? ["Loaded RATELOOP_LOCAL_SIGNER_PRIVATE_KEY. Prefer an encrypted keystore for persistent agent wallets."]
             : [],
       });
       return;
@@ -284,7 +284,7 @@ async function main() {
           walletSource: wallet.source,
           warnings:
             wallet.source === "private-key"
-              ? ["Loaded CURYO_LOCAL_SIGNER_PRIVATE_KEY. Prefer an encrypted keystore for persistent agent wallets."]
+              ? ["Loaded RATELOOP_LOCAL_SIGNER_PRIVATE_KEY. Prefer an encrypted keystore for persistent agent wallets."]
               : [],
         }),
       );

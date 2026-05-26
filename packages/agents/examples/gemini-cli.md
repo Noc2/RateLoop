@@ -9,11 +9,11 @@ Start from `generic-public-mcp.json` when the local agent controls a funded wall
 ```json
 {
   "mcpServers": {
-    "curyo": {
-      "url": "https://curyo.example/api/mcp",
+    "rateloop": {
+      "url": "https://rateloop.example/api/mcp",
       "transport": "streamable-http",
       "headers": {
-        "Authorization": "Bearer ${CURYO_MCP_TOKEN}",
+        "Authorization": "Bearer ${RATELOOP_MCP_TOKEN}",
         "X-Agent-Name": "gemini-cli"
       }
     }

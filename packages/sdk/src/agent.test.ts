@@ -10,7 +10,7 @@ import {
   type QuestionStatusResponse,
 } from "./agent";
 
-const API_BASE_URL = "https://curyo.example";
+const API_BASE_URL = "https://rateloop.example";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -43,7 +43,7 @@ test("agent MCP helpers call tools/call with protocol and bearer headers", async
         },
       });
     },
-    mcpApiUrl: "https://curyo.example/api/mcp",
+    mcpApiUrl: "https://rateloop.example/api/mcp",
     mcpAccessToken: "agent-token",
     timeoutMs: 5_000,
   });
@@ -61,11 +61,11 @@ test("agent MCP helpers call tools/call with protocol and bearer headers", async
     },
   });
 
-  assert.equal(requestedUrl, "https://curyo.example/api/mcp");
+  assert.equal(requestedUrl, "https://rateloop.example/api/mcp");
   assert.equal(requestedHeaders?.get("authorization"), "Bearer agent-token");
   assert.equal(requestedHeaders?.get("mcp-protocol-version"), "2025-11-25");
   assert.equal(requestedBody.method, "tools/call");
-  assert.equal(requestedBody.params.name, "curyo_quote_question");
+  assert.equal(requestedBody.params.name, "rateloop_quote_question");
   assert.equal(requestedBody.params.arguments.bounty.amount, "1000000");
   assert.equal(quote.canSubmit, true);
   assert.equal(quote.clientRequestId, "ask-1");
@@ -109,7 +109,7 @@ test("quoteQuestion uses direct authenticated agent HTTP when apiBaseUrl and tok
     },
   });
 
-  assert.equal(requestedUrl, "https://curyo.example/api/agent/quote");
+  assert.equal(requestedUrl, "https://rateloop.example/api/agent/quote");
   assert.equal(requestedHeaders?.get("authorization"), "Bearer agent-token");
   assert.equal(requestedBody.clientRequestId, "ask-direct");
   assert.equal(response.operationKey, `0x${"55".repeat(32)}`);
@@ -151,7 +151,7 @@ test("quoteQuestion supports tokenless direct agent HTTP with a wallet address",
     walletAddress: "0x00000000000000000000000000000000000000aa",
   });
 
-  assert.equal(requestedUrl, "https://curyo.example/api/agent/quote");
+  assert.equal(requestedUrl, "https://rateloop.example/api/agent/quote");
   assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(requestedBody.bounty.amount, "1000000");
   assert.equal(requestedBody.walletAddress, "0x00000000000000000000000000000000000000aa");
@@ -195,7 +195,7 @@ test("askHumans supports tokenless direct agent HTTP with a wallet address", asy
 
   const response = await agent.askHumans(request);
 
-  assert.equal(requestedUrl, "https://curyo.example/api/agent/asks");
+  assert.equal(requestedUrl, "https://rateloop.example/api/agent/asks");
   assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(requestedBody.maxPaymentAmount, "1250000");
   assert.equal(requestedBody.walletAddress, "0x00000000000000000000000000000000000000aa");
@@ -216,7 +216,7 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
         return jsonResponse({
           expiresAt: "2026-04-30T12:00:00.000Z",
           id: "asi_test",
-          signingUrl: "https://curyo.example/agent/sign/asi_test?token=secret",
+          signingUrl: "https://rateloop.example/agent/sign/asi_test?token=secret",
           status: "pending",
         });
       }
@@ -272,15 +272,15 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
     transactionHashes: [`0x${"68".repeat(32)}`],
   });
 
-  assert.equal(requestedUrls[0], "https://curyo.example/api/agent/signing-intents");
-  assert.equal(requestedUrls[1], "https://curyo.example/api/agent/signing-intents/asi_test?token=secret");
-  assert.equal(requestedUrls[2], "https://curyo.example/api/agent/signing-intents/asi_test/prepare");
-  assert.equal(requestedUrls[3], "https://curyo.example/api/agent/signing-intents/asi_test/complete");
+  assert.equal(requestedUrls[0], "https://rateloop.example/api/agent/signing-intents");
+  assert.equal(requestedUrls[1], "https://rateloop.example/api/agent/signing-intents/asi_test?token=secret");
+  assert.equal(requestedUrls[2], "https://rateloop.example/api/agent/signing-intents/asi_test/prepare");
+  assert.equal(requestedUrls[3], "https://rateloop.example/api/agent/signing-intents/asi_test/complete");
   assert.equal(requestedBodies[0].request.bounty.amount, "1000000");
   assert.equal(requestedBodies[0].request.signatureMode, "browser_link");
   assert.equal(requestedBodies[2].walletAddress, "0x00000000000000000000000000000000000000aa");
   assert.deepEqual(requestedBodies[3].transactionHashes, [`0x${"68".repeat(32)}`]);
-  assert.equal(createResponse.signingUrl, "https://curyo.example/agent/sign/asi_test?token=secret");
+  assert.equal(createResponse.signingUrl, "https://rateloop.example/agent/sign/asi_test?token=secret");
   assert.equal(readResponse.id, "asi_test");
   assert.equal(prepareResponse.operationKey, `0x${"67".repeat(32)}`);
   assert.equal(completeResponse.status, "submitted");
@@ -319,7 +319,7 @@ test("askHumans prefers direct authenticated agent HTTP before MCP framing", asy
     },
   });
 
-  assert.equal(requestedUrl, "https://curyo.example/api/agent/asks");
+  assert.equal(requestedUrl, "https://rateloop.example/api/agent/asks");
   assert.equal(requestedHeaders?.get("authorization"), "Bearer agent-token");
   assert.equal(requestedBody.maxPaymentAmount, "1250000");
 });
@@ -349,7 +349,7 @@ test("confirmAskTransactions uses direct authenticated agent HTTP", async () => 
     transactionHashes: [`0x${"88".repeat(32)}`],
   });
 
-  assert.equal(requestedUrl, `https://curyo.example/api/agent/asks/${operationKey}/confirm`);
+  assert.equal(requestedUrl, `https://rateloop.example/api/agent/asks/${operationKey}/confirm`);
   assert.equal(requestedHeaders?.get("authorization"), "Bearer agent-token");
   assert.deepEqual(requestedBody.transactionHashes, [`0x${"88".repeat(32)}`]);
   assert.equal(response.contentId, "42");
@@ -359,7 +359,7 @@ test("confirmAskTransactions can use MCP framing", async () => {
   let requestedBody: any;
   const operationKey = `0x${"99".repeat(32)}`;
   const agent = createRateLoopAgentClient({
-    mcpApiUrl: "https://curyo.example/api/mcp",
+    mcpApiUrl: "https://rateloop.example/api/mcp",
     fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
       requestedBody = JSON.parse(String(init?.body));
       return jsonResponse({
@@ -376,7 +376,7 @@ test("confirmAskTransactions can use MCP framing", async () => {
     transactionHashes: [`0x${"aa".repeat(32)}`],
   });
 
-  assert.equal(requestedBody.params.name, "curyo_confirm_ask_transactions");
+  assert.equal(requestedBody.params.name, "rateloop_confirm_ask_transactions");
   assert.equal(requestedBody.params.arguments.operationKey, operationKey);
   assert.deepEqual(requestedBody.params.arguments.transactionHashes, [`0x${"aa".repeat(32)}`]);
   assert.equal(response.status, "submitted");
@@ -409,8 +409,8 @@ test("getQuestionStatus supports tokenless direct operation and wallet client lo
   });
 
   assert.deepEqual(requestedUrls, [
-    `https://curyo.example/api/agent/asks/0x${"33".repeat(32)}`,
-    "https://curyo.example/api/agent/asks/by-client-request?chainId=480&clientRequestId=ask-3&walletAddress=0x00000000000000000000000000000000000000aa",
+    `https://rateloop.example/api/agent/asks/0x${"33".repeat(32)}`,
+    "https://rateloop.example/api/agent/asks/by-client-request?chainId=480&clientRequestId=ask-3&walletAddress=0x00000000000000000000000000000000000000aa",
   ]);
   assert.equal(byOperation.status, "awaiting_wallet_signature");
   assert.equal(byClient.terminal, false);
@@ -442,7 +442,7 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
         callbackDeliveries: [
           {
             attemptCount: 1,
-            callbackUrl: "https://agent.example/curyo",
+            callbackUrl: "https://agent.example/rateloop",
             eventId: "event-1",
             eventType: "question.submitted",
             nextAttemptAt: "2026-04-23T12:00:03.000Z",
@@ -451,7 +451,7 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
           },
         ],
         ready: false,
-        resultTool: "curyo_get_result",
+        resultTool: "rateloop_get_result",
         status: "submitted",
         terminal: false,
       });
@@ -475,19 +475,19 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
 
   assert.equal(
     requestedUrls[0],
-    `https://curyo.example/api/agent/asks/0x${"77".repeat(32)}`,
+    `https://rateloop.example/api/agent/asks/0x${"77".repeat(32)}`,
   );
   assert.equal(
     requestedUrls[1],
-    "https://curyo.example/api/agent/results/by-client-request?chainId=480&clientRequestId=ask-http",
+    "https://rateloop.example/api/agent/results/by-client-request?chainId=480&clientRequestId=ask-http",
   );
   assert.equal(
     requestedUrls[2],
-    "https://curyo.example/api/agent/results/by-content/123",
+    "https://rateloop.example/api/agent/results/by-content/123",
   );
-  assert.equal(requestedUrls[3], "https://curyo.example/api/agent/templates");
+  assert.equal(requestedUrls[3], "https://rateloop.example/api/agent/templates");
   assert.equal(callbackStatus, "retrying");
-  assert.equal(status.resultTool, "curyo_get_result");
+  assert.equal(status.resultTool, "rateloop_get_result");
   assert.equal(status.terminal, false);
   assert.equal(templateMode, "single_question");
   assert.equal(templates.templates[0]?.bundleStrategy, "independent");
@@ -511,7 +511,7 @@ test("getResult uses tokenless public result packages when contentId is known", 
           },
         },
         methodology: { templateId: "generic_rating" },
-        publicUrl: "https://curyo.example/rate?content=42",
+        publicUrl: "https://rateloop.example/rate?content=42",
         ready: true,
         recommendedNextAction: "proceed",
       });
@@ -520,7 +520,7 @@ test("getResult uses tokenless public result packages when contentId is known", 
 
   const result = await agent.getResult({ contentId: "42" });
 
-  assert.equal(requestedUrl, "https://curyo.example/api/agent/results/by-content/42");
+  assert.equal(requestedUrl, "https://rateloop.example/api/agent/results/by-content/42");
   assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(result.ready, true);
   assert.equal(result.answer, "proceed");
@@ -549,7 +549,7 @@ test("getResult supports tokenless direct operation lookups", async () => {
     operationKey: `0x${"99".repeat(32)}`,
   });
 
-  assert.equal(requestedUrl, `https://curyo.example/api/agent/results/0x${"99".repeat(32)}`);
+  assert.equal(requestedUrl, `https://rateloop.example/api/agent/results/0x${"99".repeat(32)}`);
   assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(result.ready, false);
   assert.equal(result.answer, "pending");
@@ -590,9 +590,9 @@ test("buildWebhookVerifier validates timestamped HMAC signatures", async () => {
     await verifier.verify({
       body,
       headers: {
-        "x-curyo-callback-id": eventId,
-        "x-curyo-callback-signature": `v1=${signature}`,
-        "x-curyo-callback-timestamp": timestamp,
+        "x-rateloop-callback-id": eventId,
+        "x-rateloop-callback-signature": `v1=${signature}`,
+        "x-rateloop-callback-timestamp": timestamp,
       },
       now: new Date("2026-04-23T12:04:00.000Z"),
     }),
@@ -603,9 +603,9 @@ test("buildWebhookVerifier validates timestamped HMAC signatures", async () => {
     await verifier.verify({
       body,
       headers: {
-        "x-curyo-callback-id": eventId,
-        "x-curyo-callback-signature": `v1=${signature}`,
-        "x-curyo-callback-timestamp": timestamp,
+        "x-rateloop-callback-id": eventId,
+        "x-rateloop-callback-signature": `v1=${signature}`,
+        "x-rateloop-callback-timestamp": timestamp,
       },
       now: new Date("2026-04-23T12:06:01.000Z"),
     }),

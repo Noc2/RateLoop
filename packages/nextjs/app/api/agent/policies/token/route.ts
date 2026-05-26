@@ -16,7 +16,7 @@ const WRITE_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 function buildMcpConfig(token: string, request: NextRequest, agentWalletAddress: string) {
   return {
     mcpServers: {
-      curyo: {
+      rateloop: {
         headers: {
           Authorization: `Bearer ${token}`,
           "MCP-Protocol-Version": "2025-11-25",

@@ -12,13 +12,13 @@ import {
 } from "~~/lib/agent/policies";
 
 const env = process.env as Record<string, string | undefined>;
-const originalAgents = env.CURYO_MCP_AGENTS;
-const originalAllowUnlimitedBudget = env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET;
-const originalBearerScopes = env.CURYO_MCP_BEARER_SCOPES;
-const originalBearerToken = env.CURYO_MCP_BEARER_TOKEN;
-const originalDailyBudget = env.CURYO_MCP_DAILY_BUDGET_USDC;
+const originalAgents = env.RATELOOP_MCP_AGENTS;
+const originalAllowUnlimitedBudget = env.RATELOOP_MCP_ALLOW_UNLIMITED_BUDGET;
+const originalBearerScopes = env.RATELOOP_MCP_BEARER_SCOPES;
+const originalBearerToken = env.RATELOOP_MCP_BEARER_TOKEN;
+const originalDailyBudget = env.RATELOOP_MCP_DAILY_BUDGET_USDC;
 const originalDatabaseUrl = env.DATABASE_URL;
-const originalPerAskLimit = env.CURYO_MCP_PER_ASK_LIMIT_USDC;
+const originalPerAskLimit = env.RATELOOP_MCP_PER_ASK_LIMIT_USDC;
 let dbModule: typeof import("../db");
 let dbTestMemory: typeof import("../db/testMemory");
 
@@ -29,7 +29,7 @@ function sha256(value: string) {
 function requestWithToken(token?: string) {
   const headers = new Headers();
   if (token) headers.set("authorization", `Bearer ${token}`);
-  return new Request("https://curyo.xyz/api/mcp", { headers });
+  return new Request("https://rateloop.xyz/api/mcp", { headers });
 }
 
 before(async () => {
@@ -40,12 +40,12 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  delete env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET;
-  delete env.CURYO_MCP_BEARER_SCOPES;
-  delete env.CURYO_MCP_BEARER_TOKEN;
-  delete env.CURYO_MCP_DAILY_BUDGET_USDC;
-  delete env.CURYO_MCP_PER_ASK_LIMIT_USDC;
-  env.CURYO_MCP_AGENTS = JSON.stringify([
+  delete env.RATELOOP_MCP_ALLOW_UNLIMITED_BUDGET;
+  delete env.RATELOOP_MCP_BEARER_SCOPES;
+  delete env.RATELOOP_MCP_BEARER_TOKEN;
+  delete env.RATELOOP_MCP_DAILY_BUDGET_USDC;
+  delete env.RATELOOP_MCP_PER_ASK_LIMIT_USDC;
+  env.RATELOOP_MCP_AGENTS = JSON.stringify([
     {
       dailyBudgetAtomic: "5000000",
       id: "agent-a",
@@ -61,33 +61,33 @@ beforeEach(async () => {
 after(() => {
   dbModule.__setDatabaseResourcesForTests(null);
   if (originalAgents === undefined) {
-    delete env.CURYO_MCP_AGENTS;
+    delete env.RATELOOP_MCP_AGENTS;
   } else {
-    env.CURYO_MCP_AGENTS = originalAgents;
+    env.RATELOOP_MCP_AGENTS = originalAgents;
   }
 
   if (originalAllowUnlimitedBudget === undefined) {
-    delete env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET;
+    delete env.RATELOOP_MCP_ALLOW_UNLIMITED_BUDGET;
   } else {
-    env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET = originalAllowUnlimitedBudget;
+    env.RATELOOP_MCP_ALLOW_UNLIMITED_BUDGET = originalAllowUnlimitedBudget;
   }
 
   if (originalBearerScopes === undefined) {
-    delete env.CURYO_MCP_BEARER_SCOPES;
+    delete env.RATELOOP_MCP_BEARER_SCOPES;
   } else {
-    env.CURYO_MCP_BEARER_SCOPES = originalBearerScopes;
+    env.RATELOOP_MCP_BEARER_SCOPES = originalBearerScopes;
   }
 
   if (originalBearerToken === undefined) {
-    delete env.CURYO_MCP_BEARER_TOKEN;
+    delete env.RATELOOP_MCP_BEARER_TOKEN;
   } else {
-    env.CURYO_MCP_BEARER_TOKEN = originalBearerToken;
+    env.RATELOOP_MCP_BEARER_TOKEN = originalBearerToken;
   }
 
   if (originalDailyBudget === undefined) {
-    delete env.CURYO_MCP_DAILY_BUDGET_USDC;
+    delete env.RATELOOP_MCP_DAILY_BUDGET_USDC;
   } else {
-    env.CURYO_MCP_DAILY_BUDGET_USDC = originalDailyBudget;
+    env.RATELOOP_MCP_DAILY_BUDGET_USDC = originalDailyBudget;
   }
 
   if (originalDatabaseUrl === undefined) {
@@ -97,9 +97,9 @@ after(() => {
   }
 
   if (originalPerAskLimit === undefined) {
-    delete env.CURYO_MCP_PER_ASK_LIMIT_USDC;
+    delete env.RATELOOP_MCP_PER_ASK_LIMIT_USDC;
   } else {
-    env.CURYO_MCP_PER_ASK_LIMIT_USDC = originalPerAskLimit;
+    env.RATELOOP_MCP_PER_ASK_LIMIT_USDC = originalPerAskLimit;
   }
 });
 
@@ -113,13 +113,13 @@ test("getConfiguredMcpAgents loads hashed bearer agents", () => {
 });
 
 test("getConfiguredMcpAgents requires positive budgets for static ask tokens", () => {
-  delete env.CURYO_MCP_AGENTS;
-  env.CURYO_MCP_BEARER_TOKEN = "static-token";
+  delete env.RATELOOP_MCP_AGENTS;
+  env.RATELOOP_MCP_BEARER_TOKEN = "static-token";
 
-  assert.throws(() => getConfiguredMcpAgents(), /must be positive for static curyo:ask tokens/);
+  assert.throws(() => getConfiguredMcpAgents(), /must be positive for static rateloop:ask tokens/);
 
-  env.CURYO_MCP_DAILY_BUDGET_USDC = "5000000";
-  env.CURYO_MCP_PER_ASK_LIMIT_USDC = "1000000";
+  env.RATELOOP_MCP_DAILY_BUDGET_USDC = "5000000";
+  env.RATELOOP_MCP_PER_ASK_LIMIT_USDC = "1000000";
 
   const [agent] = getConfiguredMcpAgents();
   assert.equal(agent.dailyBudgetAtomic, 5_000_000n);
@@ -127,16 +127,16 @@ test("getConfiguredMcpAgents requires positive budgets for static ask tokens", (
 });
 
 test("getConfiguredMcpAgents permits static read-only and explicit unlimited tokens", () => {
-  delete env.CURYO_MCP_AGENTS;
-  env.CURYO_MCP_BEARER_TOKEN = "static-token";
-  env.CURYO_MCP_BEARER_SCOPES = MCP_SCOPES.read;
+  delete env.RATELOOP_MCP_AGENTS;
+  env.RATELOOP_MCP_BEARER_TOKEN = "static-token";
+  env.RATELOOP_MCP_BEARER_SCOPES = MCP_SCOPES.read;
 
   let [agent] = getConfiguredMcpAgents();
   assert.equal(agent.dailyBudgetAtomic, 0n);
   assert.equal(agent.perAskLimitAtomic, 0n);
 
-  env.CURYO_MCP_BEARER_SCOPES = MCP_SCOPES.ask;
-  env.CURYO_MCP_ALLOW_UNLIMITED_BUDGET = "true";
+  env.RATELOOP_MCP_BEARER_SCOPES = MCP_SCOPES.ask;
+  env.RATELOOP_MCP_ALLOW_UNLIMITED_BUDGET = "true";
 
   [agent] = getConfiguredMcpAgents();
   assert.equal(agent.scopes.has(MCP_SCOPES.ask), true);
@@ -165,7 +165,7 @@ test("authenticateMcpRequest rejects invalid bearer tokens", async () => {
 });
 
 test("authenticateMcpRequest accepts active DB-backed policy tokens", async () => {
-  delete env.CURYO_MCP_AGENTS;
+  delete env.RATELOOP_MCP_AGENTS;
   await dbModule.dbClient.execute({
     sql: `
       INSERT INTO agent_wallet_policies (

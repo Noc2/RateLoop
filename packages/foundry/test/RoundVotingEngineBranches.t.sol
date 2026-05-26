@@ -893,7 +893,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         vm.prank(owner);
         raterRegistry.seedHumanCredential(
-            voter1, uint64(block.timestamp + 30 days), keccak256("curyo-voter-1"), keccak256("curyo-evidence")
+            voter1, uint64(block.timestamp + 30 days), keccak256("rateloop-voter-1"), keccak256("rateloop-evidence")
         );
 
         uint256 contentId = _submitContent();

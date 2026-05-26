@@ -5,7 +5,7 @@ const POSITIVE_INTEGER_PATTERN = /^[0-9]+$/;
 const QUESTION_REFERENCE_ALLOWED_HOSTS = new Set([
   "rateloop.xyz",
   "www.rateloop.xyz",
-  "curyo.xyz",
+  "rateloop.xyz",
   "localhost",
   "127.0.0.1",
 ]);
@@ -114,7 +114,7 @@ export function parseQuestionReferenceInput(value: string): string | null {
 
   try {
     const isAbsoluteUrl = /^[a-z][a-z\d+\-.]*:/i.test(trimmedValue);
-    const url = new URL(trimmedValue, "https://curyo.local");
+    const url = new URL(trimmedValue, "https://rateloop.local");
     if (isAbsoluteUrl && url.protocol !== "https:" && url.protocol !== "http:") {
       return null;
     }

@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 test("resolveContentMetadata returns uploaded image URLs without fetching metadata", async () => {
-  const uploadedImageUrl = "https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
+  const uploadedImageUrl = "https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
 
   assert.deepEqual(await resolveContentMetadata(uploadedImageUrl), {
     thumbnailUrl: uploadedImageUrl,

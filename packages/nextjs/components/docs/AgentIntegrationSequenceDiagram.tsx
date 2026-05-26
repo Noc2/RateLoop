@@ -5,13 +5,13 @@ const steps = [
     number: "01",
     title: "Quote",
     body: "Choose template, category, bounty terms, and public context.",
-    tool: "curyo_quote_question",
+    tool: "rateloop_quote_question",
   },
   {
     number: "02",
     title: "Prepare ask",
     body: "Submit wallet address, stable clientRequestId, and bounded question.",
-    tool: "curyo_ask_humans",
+    tool: "rateloop_ask_humans",
   },
   {
     number: "03",
@@ -23,19 +23,19 @@ const steps = [
     number: "04",
     title: "Confirm transaction hashes",
     body: "Report executed transaction hashes so RateLoop can link chain state to the operation.",
-    tool: "curyo_confirm_ask_transactions",
+    tool: "rateloop_confirm_ask_transactions",
   },
   {
     number: "05",
     title: "Poll status",
     body: "Wait while raters commit hidden reports, reveal, and settle the public result.",
-    tool: "curyo_get_question_status",
+    tool: "rateloop_get_question_status",
   },
   {
     number: "06",
     title: "Read result",
     body: "Persist answer, confidence, objections, limitations, source URLs, and public result URL.",
-    tool: "curyo_get_result",
+    tool: "rateloop_get_result",
   },
 ];
 

@@ -134,9 +134,9 @@ test("whitepaper surfaces the agent integration path", () => {
   assert.match(whitepaperText, /x402_authorization/i);
   assert.match(whitepaperText, /browser signing/i);
   assert.match(whitepaperText, /local signer CLI/i);
-  assert.match(whitepaperText, /curyo_quote_question/i);
-  assert.match(whitepaperText, /curyo_confirm_ask_transactions/i);
-  assert.match(whitepaperText, /curyo_get_result/i);
+  assert.match(whitepaperText, /rateloop_quote_question/i);
+  assert.match(whitepaperText, /rateloop_confirm_ask_transactions/i);
+  assert.match(whitepaperText, /rateloop_get_result/i);
   assert.match(whitepaperText, /\/api\/agent\/signing-intents/i);
   assert.match(whitepaperText, /Feedback Bonuses/i);
 });

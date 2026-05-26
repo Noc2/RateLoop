@@ -1,4 +1,4 @@
-import { CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY } from "../../services/thirdweb/testWalletStorage";
+import { RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY } from "../../services/thirdweb/testWalletStorage";
 import type { Locator, Page } from "@playwright/test";
 
 const VOTE_UP_BUTTON_NAME = /^Vote up\b/i;
@@ -54,7 +54,7 @@ async function hasInjectedLocalTestWallet(page: Page): Promise<boolean> {
   try {
     return await page.evaluate(
       storageKey => Boolean(window.localStorage.getItem(storageKey)),
-      CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
+      RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
     );
   } catch {
     return false;

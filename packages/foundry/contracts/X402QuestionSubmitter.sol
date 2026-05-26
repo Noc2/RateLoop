@@ -38,7 +38,7 @@ contract X402QuestionSubmitter is Ownable {
     using SafeERC20 for IERC20;
 
     uint8 internal constant REWARD_ASSET_USDC = 1;
-    bytes32 internal constant X402_QUESTION_PAYMENT_DOMAIN = keccak256("curyo-x402-question-payment-v2");
+    bytes32 internal constant X402_QUESTION_PAYMENT_DOMAIN = keccak256("rateloop-x402-question-payment-v2");
 
     ContentRegistry public immutable registry;
     IERC20 public immutable usdcToken;

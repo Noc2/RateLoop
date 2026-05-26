@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 import { E2E_RPC_URL } from "./service-urls";
 import {
-  CURYO_E2E_RPC_URL_STORAGE_KEY,
-  CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
+  RATELOOP_E2E_RPC_URL_STORAGE_KEY,
+  RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
 } from "../../services/thirdweb/testWalletStorage";
 import { WALLET_STATE_EXACT_KEYS, WALLET_STATE_PREFIXES } from "../../services/thirdweb/walletStateCleanup";
 
@@ -10,11 +10,11 @@ type WalletSessionStorageEntry = readonly [string, string];
 
 function getWalletSessionStorageEntries(privateKey: string, rpcUrl: string): WalletSessionStorageEntry[] {
   return [
-    [CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY, privateKey],
-    [CURYO_E2E_RPC_URL_STORAGE_KEY, rpcUrl],
+    [RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY, privateKey],
+    [RATELOOP_E2E_RPC_URL_STORAGE_KEY, rpcUrl],
     ["thirdweb:active-chain", JSON.stringify({ id: 31337 })],
     [
-      "curyo_terms_accepted",
+      "rateloop_terms_accepted",
       JSON.stringify({
         version: "3.0",
         timestamp: Date.now(),
@@ -23,7 +23,7 @@ function getWalletSessionStorageEntries(privateKey: string, rpcUrl: string): Wal
       }),
     ],
     [
-      "curyo_onboarding",
+      "rateloop_onboarding",
       JSON.stringify({
         firstVoteCompleted: true,
         guideShown: true,

@@ -128,7 +128,7 @@ export function NavigationProgressDiagnostics() {
         }
 
         console.warn("[navigation-progress] timed out; forced progress bar cleanup", detail);
-        window.dispatchEvent(new CustomEvent("curyo:navigation-progress-timeout", { detail }));
+        window.dispatchEvent(new CustomEvent("rateloop:navigation-progress-timeout", { detail }));
       }, NAVIGATION_PROGRESS_TIMEOUT_MS);
 
       pendingNavigationRef.current = {

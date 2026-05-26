@@ -29,7 +29,7 @@ function isAuthorizedCallbackRequest(token: string, secret: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.CURYO_AGENT_CALLBACK_DELIVERY_SECRET?.trim() ?? "";
+  const secret = process.env.RATELOOP_AGENT_CALLBACK_DELIVERY_SECRET?.trim() ?? "";
   if (!secret) {
     return NextResponse.json({ error: "Callback delivery is not configured." }, { status: 503 });
   }
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   });
   if (rateLimitResponse) return rateLimitResponse;
 
-  const token = request.headers.get("x-curyo-agent-callback-secret")?.trim() || readBearerToken(request);
+  const token = request.headers.get("x-rateloop-agent-callback-secret")?.trim() || readBearerToken(request);
   if (!isAuthorizedCallbackRequest(token, secret)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }

@@ -26,11 +26,11 @@ function readCssVar(name: string) {
 test("primary action neutral stays aligned across DaisyUI and custom tokens", () => {
   assert.equal(readCssVar("--color-primary"), ACTION_NEUTRAL);
   assert.equal(readCssVar("--color-primary-content"), ACTION_CONTENT);
-  assert.equal(readCssVar("--curyo-ember"), ACTION_NEUTRAL);
-  assert.equal(readCssVar("--curyo-action-orange"), ACTION_NEUTRAL);
-  assert.equal(readCssVar("--curyo-action-orange-hover"), ACTION_NEUTRAL_HOVER);
-  assert.equal(readCssVar("--curyo-action-content"), ACTION_CONTENT);
-  assert.equal(readCssVar("--curyo-ember-rgb"), "245 245 245");
+  assert.equal(readCssVar("--rateloop-ember"), ACTION_NEUTRAL);
+  assert.equal(readCssVar("--rateloop-action-orange"), ACTION_NEUTRAL);
+  assert.equal(readCssVar("--rateloop-action-orange-hover"), ACTION_NEUTRAL_HOVER);
+  assert.equal(readCssVar("--rateloop-action-content"), ACTION_CONTENT);
+  assert.equal(readCssVar("--rateloop-ember-rgb"), "245 245 245");
 });
 
 test("secondary neutral and error accents stay distinct", () => {
@@ -38,6 +38,6 @@ test("secondary neutral and error accents stay distinct", () => {
   assert.equal(readCssVar("--color-accent-content"), ACTION_CONTENT);
   assert.equal(readCssVar("--color-error"), ERROR);
   assert.equal(readCssVar("--color-error-content"), ERROR_CONTENT);
-  assert.equal(readCssVar("--curyo-ember-deep"), SECONDARY_NEUTRAL_DEEP);
-  assert.equal(readCssVar("--curyo-ember-deep-rgb"), "115 115 115");
+  assert.equal(readCssVar("--rateloop-ember-deep"), SECONDARY_NEUTRAL_DEEP);
+  assert.equal(readCssVar("--rateloop-ember-deep-rgb"), "115 115 115");
 });

@@ -1,7 +1,7 @@
 import { isAddress } from "viem";
 
 const REFERRAL_QUERY_PARAM = "ref";
-export const REFERRAL_ATTRIBUTION_STORAGE_KEY = "curyo_referral_attribution";
+export const REFERRAL_ATTRIBUTION_STORAGE_KEY = "rateloop_referral_attribution";
 export const REFERRAL_ATTRIBUTION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 type ReferralAttributionSource = "url" | "manual";

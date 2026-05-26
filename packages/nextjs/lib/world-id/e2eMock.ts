@@ -2,9 +2,9 @@ import type { IDKitResult, RpContext } from "@worldcoin/idkit";
 import { hashSignal } from "@worldcoin/idkit/hashing";
 import { encodeAbiParameters, keccak256, stringToHex, toHex } from "viem";
 
-export const CURYO_E2E_WORLD_ID_MOCK_STORAGE_KEY = "curyo:e2e-world-id-mock";
+export const RATELOOP_E2E_WORLD_ID_MOCK_STORAGE_KEY = "rateloop:e2e-world-id-mock";
 
-const CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY = "curyo:e2e-test-wallet-private-key";
+const RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY = "rateloop:e2e-test-wallet-private-key";
 const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
 const E2E_WORLD_ID_PROOF = [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n] as const;
@@ -29,7 +29,7 @@ function isLocalE2EHost() {
 }
 
 function isLocalE2EWalletSessionPresent() {
-  return Boolean(window.localStorage.getItem(CURYO_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim());
+  return Boolean(window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim());
 }
 
 function isLocalE2EWorldIdMock(value: unknown): value is LocalE2EWorldIdMock {
@@ -55,7 +55,7 @@ export function readLocalE2EWorldIdMock(): LocalE2EWorldIdMock | null {
   }
 
   try {
-    const storedValue = window.localStorage.getItem(CURYO_E2E_WORLD_ID_MOCK_STORAGE_KEY);
+    const storedValue = window.localStorage.getItem(RATELOOP_E2E_WORLD_ID_MOCK_STORAGE_KEY);
     if (!storedValue) {
       return null;
     }

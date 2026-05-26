@@ -79,7 +79,7 @@ export function buildQuestionSubmissionKey(
         { type: "string" },
       ],
       [
-        "curyo-question-context-v1",
+        "rateloop-question-context-v1",
         params.categoryId,
         params.contextUrl,
         params.title,
@@ -147,7 +147,7 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
         { type: "bytes32" },
       ],
       [
-        "curyo-question-reveal-v3",
+        "rateloop-question-reveal-v3",
         params.submissionKey,
         mediaHash,
         textHash,
@@ -181,7 +181,7 @@ function buildQuestionBundleHash(questions: readonly QuestionBundleSubmissionIte
           { type: "bytes32" },
         ],
         [
-          "curyo-question-bundle-item-v2",
+          "rateloop-question-bundle-item-v2",
           question.contextUrl,
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
           question.title,
@@ -198,7 +198,7 @@ function buildQuestionBundleHash(questions: readonly QuestionBundleSubmissionIte
   );
 
   return keccak256(
-    encodeAbiParameters([{ type: "string" }, { type: "bytes32[]" }], ["curyo-question-bundle-v2", questionHashes]),
+    encodeAbiParameters([{ type: "string" }, { type: "bytes32[]" }], ["rateloop-question-bundle-v2", questionHashes]),
   );
 }
 
@@ -222,7 +222,7 @@ function buildQuestionBundleRevealCommitment(params: QuestionBundleRevealCommitm
         { type: "uint16" },
       ],
       [
-        "curyo-question-bundle-reveal-v3",
+        "rateloop-question-bundle-reveal-v3",
         params.bundleHash,
         params.submitter,
         params.rewardAsset,

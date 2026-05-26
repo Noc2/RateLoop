@@ -252,7 +252,7 @@ function buildQuestionBundleHash(questions) {
           { type: "bytes32" },
         ],
         [
-          "curyo-question-bundle-item-v2",
+          "rateloop-question-bundle-item-v2",
           question.contextUrl,
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
           question.title,
@@ -271,7 +271,7 @@ function buildQuestionBundleHash(questions) {
   return keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "bytes32[]" }],
-      ["curyo-question-bundle-v2", questionHashes]
+      ["rateloop-question-bundle-v2", questionHashes]
     )
   );
 }
@@ -301,7 +301,7 @@ function buildQuestionBundleRevealCommitment({
         { type: "uint16" },
       ],
       [
-        "curyo-question-bundle-reveal-v3",
+        "rateloop-question-bundle-reveal-v3",
         bundleHash,
         submitter,
         rewardTerms.asset,

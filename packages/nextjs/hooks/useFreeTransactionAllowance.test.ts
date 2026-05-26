@@ -12,9 +12,9 @@ test("buildFreeTransactionAllowanceSnapshotKey scopes cached summaries by enviro
     buildFreeTransactionAllowanceSnapshotKey(
       "0xAbCdEf0000000000000000000000000000000000",
       4801,
-      "https://preview.curyo.example",
+      "https://preview.rateloop.example",
     ),
-    "curyo-free-transactions-summary:https://preview.curyo.example:0xabcdef0000000000000000000000000000000000:4801",
+    "rateloop-free-transactions-summary:https://preview.rateloop.example:0xabcdef0000000000000000000000000000000000:4801",
   );
 });
 
@@ -22,10 +22,10 @@ test("buildExhaustionToastKey scopes exhaustion notifications by environment", (
   assert.equal(
     buildExhaustionToastKey({
       chainId: 4801,
-      environmentScope: "https://curyo.example",
+      environmentScope: "https://rateloop.example",
       raterIdentityKey: "0x1111111111111111111111111111111111111111111111111111111111111111",
     }),
-    "curyo-free-transactions-exhausted:https://curyo.example:4801:0x1111111111111111111111111111111111111111111111111111111111111111",
+    "rateloop-free-transactions-exhausted:https://rateloop.example:4801:0x1111111111111111111111111111111111111111111111111111111111111111",
   );
 });
 

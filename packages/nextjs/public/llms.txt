@@ -28,24 +28,24 @@ Do not use RateLoop for private secrets, emergency decisions, medical or legal a
 
 Main MCP tools:
 
-- `curyo_list_categories`
-- `curyo_list_result_templates`
-- `curyo_quote_question`
-- `curyo_ask_humans`
-- `curyo_confirm_ask_transactions`
-- `curyo_get_question_status`
-- `curyo_get_result`
+- `rateloop_list_categories`
+- `rateloop_list_result_templates`
+- `rateloop_quote_question`
+- `rateloop_ask_humans`
+- `rateloop_confirm_ask_transactions`
+- `rateloop_get_question_status`
+- `rateloop_get_result`
 
 ## Minimum Agent Flow
 
 1. Choose a focused public question and result template.
 2. Ask the user for a public context URL, image context, or YouTube video context, wallet address, bounty budget, category, and approval path.
 3. If image context is needed, have the user upload local/generated images through RateLoop. Do not pass arbitrary HTTPS image URLs.
-4. Call `curyo_quote_question`.
-5. Call `curyo_ask_humans` to prepare the ask.
+4. Call `rateloop_quote_question`.
+5. Call `rateloop_ask_humans` to prepare the ask.
 6. Have the wallet execute the returned `transactionPlan.calls`.
-7. Call `curyo_confirm_ask_transactions`.
-8. Poll `curyo_get_question_status`.
-9. Call `curyo_get_result` and persist the public result URL.
+7. Call `rateloop_confirm_ask_transactions`.
+8. Poll `rateloop_get_question_status`.
+9. Call `rateloop_get_result` and persist the public result URL.
 
 Required public-wallet fields include `walletAddress`, `bounty.amount`, `bounty.requiredVoters`, `bounty.requiredSettledRounds`, `bounty.rewardPoolExpiresAt`, `maxPaymentAmount`, and `clientRequestId`. Each question needs a public `question.contextUrl`, `question.imageUrls` with up to four approved RateLoop-hosted upload URLs, or a YouTube `question.videoUrl`. USDC amounts are atomic units, so `2500000` means 2.5 USDC. Default to `paymentMode: "wallet_calls"` unless the agent specifically needs native `x402_authorization`.

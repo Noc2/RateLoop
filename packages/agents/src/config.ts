@@ -36,10 +36,10 @@ function readOptionalAddress(name: string): Address | undefined {
 
 export function loadAgentsRuntimeConfig(): AgentsRuntimeConfig {
   return {
-    agentWalletAddress: readOptionalAddress("CURYO_AGENT_WALLET_ADDRESS"),
-    apiBaseUrl: readOptionalUrl("CURYO_API_BASE_URL"),
-    mcpAccessToken: readEnv("CURYO_MCP_TOKEN"),
-    mcpApiUrl: readOptionalUrl("CURYO_MCP_API_URL"),
-    mcpProtocolVersion: readEnv("CURYO_MCP_PROTOCOL_VERSION"),
+    agentWalletAddress: readOptionalAddress("RATELOOP_AGENT_WALLET_ADDRESS"),
+    apiBaseUrl: readOptionalUrl("RATELOOP_API_BASE_URL"),
+    mcpAccessToken: readEnv("RATELOOP_MCP_TOKEN"),
+    mcpApiUrl: readOptionalUrl("RATELOOP_MCP_API_URL"),
+    mcpProtocolVersion: readEnv("RATELOOP_MCP_PROTOCOL_VERSION"),
   };
 }

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       handler: () =>
         callPublicRateLoopMcpTool({
           arguments: { chainId, clientRequestId, walletAddress },
-          name: "curyo_get_question_status",
+          name: "rateloop_get_question_status",
         }),
       rateLimit: AGENT_READ_RATE_LIMIT,
       request,
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       callRateLoopMcpTool({
         agent,
         arguments: { chainId, clientRequestId },
-        name: "curyo_get_question_status",
+        name: "rateloop_get_question_status",
       }),
     rateLimit: AGENT_READ_RATE_LIMIT,
     request,

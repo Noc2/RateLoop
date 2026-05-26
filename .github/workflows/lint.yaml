@@ -57,15 +57,15 @@ jobs:
 
       - name: Check typings on nextjs
         env:
-          CURYO_E2E_PRODUCTION_BUILD: "true"
-          NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: "true"
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
         run: yarn next:check-types
 
       - name: Verify production Next.js build
         env:
-          CURYO_E2E_PRODUCTION_BUILD: "true"
-          NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: "true"
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
           DATABASE_URL: "memory:"
           NEXT_PUBLIC_PONDER_URL: https://ponder.example.com
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"

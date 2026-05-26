@@ -1,9 +1,9 @@
 import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { pathToFileURL } from "node:url";
 
-const apiBaseUrl = process.env.CURYO_API_BASE_URL ?? "https://curyo.example";
-const mcpAccessToken = process.env.CURYO_MCP_TOKEN;
-const walletAddress = process.env.CURYO_AGENT_WALLET_ADDRESS;
+const apiBaseUrl = process.env.RATELOOP_API_BASE_URL ?? "https://rateloop.example";
+const mcpAccessToken = process.env.RATELOOP_MCP_TOKEN;
+const walletAddress = process.env.RATELOOP_AGENT_WALLET_ADDRESS;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,7 +21,7 @@ async function writeResultToMemory(memory: {
 
 export async function main() {
   if (!mcpAccessToken && !walletAddress) {
-    throw new Error("Set CURYO_AGENT_WALLET_ADDRESS for wallet-direct asks, or CURYO_MCP_TOKEN for a managed agent.");
+    throw new Error("Set RATELOOP_AGENT_WALLET_ADDRESS for wallet-direct asks, or RATELOOP_MCP_TOKEN for a managed agent.");
   }
 
   const agent = createRateLoopAgentClient({
@@ -30,9 +30,9 @@ export async function main() {
   });
 
   const clientRequestId = `landing-pitch-${Date.now()}`;
-  const pitchUrl = process.env.CURYO_PITCH_URL ?? "https://example.com/landing-page";
-  const bountyAmount = process.env.CURYO_BOUNTY_AMOUNT ?? "1000000";
-  const rewardPoolExpiresAt = process.env.CURYO_REWARD_POOL_EXPIRES_AT ?? "1893456000";
+  const pitchUrl = process.env.RATELOOP_PITCH_URL ?? "https://example.com/landing-page";
+  const bountyAmount = process.env.RATELOOP_BOUNTY_AMOUNT ?? "1000000";
+  const rewardPoolExpiresAt = process.env.RATELOOP_REWARD_POOL_EXPIRES_AT ?? "1893456000";
 
   const question = {
     templateId: "generic_rating",
@@ -77,12 +77,12 @@ export async function main() {
   console.log("Prepared ask:", JSON.stringify(ask, null, 2));
 
   if (ask.transactionPlan?.calls?.length) {
-    const hashes = (process.env.CURYO_CONFIRM_TX_HASHES ?? "")
+    const hashes = (process.env.RATELOOP_CONFIRM_TX_HASHES ?? "")
       .split(",")
       .map(hash => hash.trim())
       .filter(Boolean);
     if (hashes.length === 0) {
-      console.log("Execute transactionPlan.calls from walletAddress, then rerun with CURYO_CONFIRM_TX_HASHES.");
+      console.log("Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES.");
       return;
     }
 

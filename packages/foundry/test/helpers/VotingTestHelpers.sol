@@ -39,8 +39,8 @@ abstract contract ContentSubmissionTestBase {
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT = 0;
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT = 0;
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_EXPIRES_AT = DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT;
-    bytes32 internal constant DEFAULT_QUESTION_METADATA_HASH = keccak256("curyo.generic.question.metadata.v1");
-    bytes32 internal constant DEFAULT_RESULT_SPEC_HASH = keccak256("curyo.generic.result.spec.v1");
+    bytes32 internal constant DEFAULT_QUESTION_METADATA_HASH = keccak256("rateloop.generic.question.metadata.v1");
+    bytes32 internal constant DEFAULT_RESULT_SPEC_HASH = keccak256("rateloop.generic.result.spec.v1");
 
     struct NoMediaQuestionText {
         string url;
@@ -279,7 +279,7 @@ abstract contract ContentSubmissionTestBase {
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "curyo-question-reveal-v3",
+                "rateloop-question-reveal-v3",
                 submissionKey,
                 mediaHash,
                 keccak256(abi.encode(title, description, tags)),
@@ -482,7 +482,7 @@ abstract contract ContentSubmissionTestBase {
 
     function _uploadedImageUrl(string memory seed) internal pure returns (string memory) {
         return string.concat(
-            "https://www.curyo.xyz/api/attachments/images/att_",
+            "https://www.rateloop.xyz/api/attachments/images/att_",
             Strings.toHexString(uint256(keccak256(bytes(seed)))),
             ".webp"
         );

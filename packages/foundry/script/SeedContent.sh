@@ -174,22 +174,22 @@ KEYS=(
 # 1=Products, 2=Places & Travel, 3=Software, 4=Media, 5=Design,
 # 6=AI Answers, 7=Text, 8=General
 CONTEXT_URLS=(
-  "https://example.com/curyo-refund-policy"
-  "https://example.com/curyo-workspace-listing"
+  "https://example.com/rateloop-refund-policy"
+  "https://example.com/rateloop-workspace-listing"
   "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch"
-  "https://example.com/curyo-product-label"
-  "https://example.com/curyo-cafe-review"
-  "https://example.com/curyo-hotel-room"
+  "https://example.com/rateloop-product-label"
+  "https://example.com/rateloop-cafe-review"
+  "https://example.com/rateloop-hotel-room"
   "https://www.youtube.com/watch?v=jNQXAC9IVRw"
   "https://docs.worldchain.org/build"
-  "https://example.com/curyo-launch-poster"
-  "https://example.com/curyo-weeknight-dinner"
-  "https://example.com/curyo-landing-gallery"
+  "https://example.com/rateloop-launch-poster"
+  "https://example.com/rateloop-weeknight-dinner"
+  "https://example.com/rateloop-landing-gallery"
   "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
-  "https://example.com/curyo-neighborhood-guide"
+  "https://example.com/rateloop-neighborhood-guide"
   "https://www.w3.org/WAI/standards-guidelines/wcag/"
-  "https://example.com/curyo-moderation-rules"
-  "https://example.com/curyo-product-offer"
+  "https://example.com/rateloop-moderation-rules"
+  "https://example.com/rateloop-product-offer"
   "https://www.qualtrics.com/articles/strategy-research/synthetic-data-market-research/"
 )
 
@@ -347,9 +347,9 @@ CATEGORY_SLUGS=(
 )
 
 BUNDLE_CONTEXT_URLS=(
-  "https://example.com/curyo-bundled-agent-answer-review"
-  "https://example.com/curyo-bundled-agent-answer-review"
-  "https://example.com/curyo-bundled-agent-answer-review"
+  "https://example.com/rateloop-bundled-agent-answer-review"
+  "https://example.com/rateloop-bundled-agent-answer-review"
+  "https://example.com/rateloop-bundled-agent-answer-review"
 )
 
 BUNDLE_IMAGE_URLS=(

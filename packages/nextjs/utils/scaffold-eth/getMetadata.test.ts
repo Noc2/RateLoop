@@ -189,8 +189,8 @@ test("getMetadata prefers the production hostname for social metadata", () => {
   const metadata = loadMetadataWithEnv(
     {
       PORT: "4321",
-      VERCEL_PROJECT_PRODUCTION_URL: "curyo.app",
-      VERCEL_URL: "curyo-preview.vercel.app",
+      VERCEL_PROJECT_PRODUCTION_URL: "rateloop.app",
+      VERCEL_URL: "rateloop-preview.vercel.app",
     },
     {
       title: "RateLoop — AI Asks, Humans Earn",
@@ -198,9 +198,9 @@ test("getMetadata prefers the production hostname for social metadata", () => {
     },
   );
 
-  assert.equal(metadata.metadataBase, "https://curyo.app/");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://curyo.app/og-image.jpg");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "https://curyo.app/twitter-image.jpg");
+  assert.equal(metadata.metadataBase, "https://rateloop.app/");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop.app/og-image.jpg");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop.app/twitter-image.jpg");
   assert.deepEqual(metadata.title, {
     default: "RateLoop — AI Asks, Humans Earn",
     template: "%s | RateLoop",
@@ -212,7 +212,7 @@ test("getMetadata uses the preview hostname when production metadata is unavaila
     {
       PORT: "4321",
       VERCEL_PROJECT_PRODUCTION_URL: undefined,
-      VERCEL_URL: "curyo-preview.vercel.app",
+      VERCEL_URL: "rateloop-preview.vercel.app",
     },
     {
       title: "RateLoop — AI Asks, Humans Earn",
@@ -220,7 +220,7 @@ test("getMetadata uses the preview hostname when production metadata is unavaila
     },
   );
 
-  assert.equal(metadata.metadataBase, "https://curyo-preview.vercel.app/");
-  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://curyo-preview.vercel.app/og-image.jpg");
-  assert.equal(metadata.twitter?.images?.[0]?.url, "https://curyo-preview.vercel.app/twitter-image.jpg");
+  assert.equal(metadata.metadataBase, "https://rateloop-preview.vercel.app/");
+  assert.equal(metadata.openGraph?.images?.[0]?.url, "https://rateloop-preview.vercel.app/og-image.jpg");
+  assert.equal(metadata.twitter?.images?.[0]?.url, "https://rateloop-preview.vercel.app/twitter-image.jpg");
 });

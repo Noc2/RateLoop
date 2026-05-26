@@ -52,7 +52,7 @@ async function localFetch(input: FetchInput, init?: FetchInit): Promise<Response
 
 const originalFetch = globalThis.fetch.bind(globalThis);
 
-if (!(globalThis as typeof globalThis & { __curyoE2EFetchShimInstalled?: boolean }).__curyoE2EFetchShimInstalled) {
+if (!(globalThis as typeof globalThis & { __rateloopE2EFetchShimInstalled?: boolean }).__rateloopE2EFetchShimInstalled) {
   globalThis.fetch = ((input: FetchInput, init?: FetchInit) => {
     const url = new URL(typeof input === "string" || input instanceof URL ? input.toString() : input.url);
     if (LOCAL_HOSTS.has(url.hostname)) {
@@ -61,6 +61,6 @@ if (!(globalThis as typeof globalThis & { __curyoE2EFetchShimInstalled?: boolean
     return originalFetch(input, init);
   }) as typeof fetch;
 
-  (globalThis as typeof globalThis & { __curyoE2EFetchShimInstalled?: boolean }).__curyoE2EFetchShimInstalled =
+  (globalThis as typeof globalThis & { __rateloopE2EFetchShimInstalled?: boolean }).__rateloopE2EFetchShimInstalled =
     true;
 }

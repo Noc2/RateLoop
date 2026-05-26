@@ -3,7 +3,7 @@
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { type PlatformType, detectPlatform } from "~~/utils/platforms";
 
-const RECOMMENDATION_SIGNAL_STORAGE_KEY = "curyo_recommendation_signals";
+const RECOMMENDATION_SIGNAL_STORAGE_KEY = "rateloop_recommendation_signals";
 const MAX_RECOMMENDATION_SIGNALS = 800;
 
 export type RecommendationSignalType =

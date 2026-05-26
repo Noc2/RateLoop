@@ -205,7 +205,7 @@ test("clears referral attribution from current storage keys", () => {
 
 test("builds landing-page referral links with landing override", () => {
   assert.equal(
-    buildReferralLandingUrl("https://www.curyo.xyz/governance", REFERRER.toUpperCase()),
-    `https://www.curyo.xyz/?ref=${REFERRER}&landing=1`,
+    buildReferralLandingUrl("https://www.rateloop.xyz/governance", REFERRER.toUpperCase()),
+    `https://www.rateloop.xyz/?ref=${REFERRER}&landing=1`,
   );
 });

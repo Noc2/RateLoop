@@ -182,7 +182,7 @@ function compactError(error) {
 
 async function installPerformanceObservers(page) {
   await page.addInitScript(() => {
-    window.__curyoPagePerformance = {
+    window.__rateloopPagePerformance = {
       cumulativeLayoutShift: 0,
       largestContentfulPaint: null,
       layoutShifts: [],
@@ -191,13 +191,13 @@ async function installPerformanceObservers(page) {
     };
 
     const recordObserverError = error => {
-      window.__curyoPagePerformance.observerErrors.push(String(error?.message || error));
+      window.__rateloopPagePerformance.observerErrors.push(String(error?.message || error));
     };
 
     try {
       new PerformanceObserver(entryList => {
         for (const entry of entryList.getEntries()) {
-          window.__curyoPagePerformance.largestContentfulPaint = {
+          window.__rateloopPagePerformance.largestContentfulPaint = {
             startTime: entry.startTime,
             renderTime: entry.renderTime,
             loadTime: entry.loadTime,
@@ -215,8 +215,8 @@ async function installPerformanceObservers(page) {
       new PerformanceObserver(entryList => {
         for (const entry of entryList.getEntries()) {
           if (entry.hadRecentInput) continue;
-          window.__curyoPagePerformance.cumulativeLayoutShift += entry.value;
-          window.__curyoPagePerformance.layoutShifts.push({
+          window.__rateloopPagePerformance.cumulativeLayoutShift += entry.value;
+          window.__rateloopPagePerformance.layoutShifts.push({
             startTime: entry.startTime,
             value: entry.value,
           });
@@ -229,7 +229,7 @@ async function installPerformanceObservers(page) {
     try {
       new PerformanceObserver(entryList => {
         for (const entry of entryList.getEntries()) {
-          window.__curyoPagePerformance.longTasks.push({
+          window.__rateloopPagePerformance.longTasks.push({
             startTime: entry.startTime,
             duration: entry.duration,
             name: entry.name,
@@ -246,7 +246,7 @@ async function collectBrowserMetrics(page) {
   return page.evaluate(() => {
     const navigation = performance.getEntriesByType("navigation")[0] || null;
     const resources = performance.getEntriesByType("resource");
-    const observed = window.__curyoPagePerformance || {};
+    const observed = window.__rateloopPagePerformance || {};
 
     const sizeFor = entry => {
       if (entry.transferSize && entry.transferSize > 0) return entry.transferSize;

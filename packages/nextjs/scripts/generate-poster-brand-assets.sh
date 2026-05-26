@@ -5,8 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 PUBLIC_DIR="$REPO_ROOT/packages/nextjs/public"
-HERO_SOURCE="$PUBLIC_DIR/launch/curyo-human-loop-orange-orbits-neutral-ai.png"
-HERO_WEBP="$PUBLIC_DIR/launch/curyo-human-loop-orange-orbits-neutral-ai.webp"
+HERO_SOURCE="$PUBLIC_DIR/launch/rateloop-human-loop-orange-orbits-neutral-ai.png"
+HERO_WEBP="$PUBLIC_DIR/launch/rateloop-human-loop-orange-orbits-neutral-ai.webp"
 FAVICON_SVG="$PUBLIC_DIR/favicon.svg"
 TMP_DIR="$(mktemp -d)"
 

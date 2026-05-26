@@ -30,13 +30,13 @@ If the user wants feedback on a local mockup, screenshot, generated image, or de
 
 1. Ask the user for a public preview URL, image context, or YouTube video context, wallet address, bounty budget, and approval path.
 2. Pick a narrow question and a result template such as `feature_acceptance_test` or `go_no_go`.
-3. Call `curyo_quote_question` to price the ask before spending.
-4. Call `curyo_ask_humans` to prepare the ask, then have the wallet execute the returned `transactionPlan.calls`.
-5. Confirm transaction hashes, poll status, then read `curyo_get_result`.
+3. Call `rateloop_quote_question` to price the ask before spending.
+4. Call `rateloop_ask_humans` to prepare the ask, then have the wallet execute the returned `transactionPlan.calls`.
+5. Confirm transaction hashes, poll status, then read `rateloop_get_result`.
 
 ## Website Feedback Payload
 
-Send this shape to `curyo_ask_humans` after a successful quote. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, add a context URL, image URLs, or a YouTube `videoUrl`, and set `rewardPoolExpiresAt`. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
+Send this shape to `rateloop_ask_humans` after a successful quote. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, add a context URL, image URLs, or a YouTube `videoUrl`, and set `rewardPoolExpiresAt`. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
 
 ```json
 {

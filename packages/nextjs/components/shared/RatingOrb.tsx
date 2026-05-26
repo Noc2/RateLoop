@@ -12,8 +12,8 @@ import {
 const START_ANGLE = 0;
 const MIN_ANIMATION_MS = 500;
 const MAX_ANIMATION_MS = 1200;
-const INNER_SURFACE = "var(--curyo-surface-nested)";
-const INNER_SURFACE_EDGE = "var(--curyo-surface-elevated-hover)";
+const INNER_SURFACE = "var(--rateloop-surface-nested)";
+const INNER_SURFACE_EDGE = "var(--rateloop-surface-elevated-hover)";
 
 function easeOutCubic(progress: number) {
   return 1 - Math.pow(1 - progress, 3);
@@ -208,7 +208,7 @@ export function RatingOrb({ rating, size = 196, className = "" }: RatingOrbProps
       <div className="relative z-10 flex flex-col items-center justify-center text-center">
         <span
           className="display-metric inline-flex items-end justify-center tabular-nums"
-          style={{ color: "var(--curyo-warm-white)", maxWidth: scoreMaxWidth }}
+          style={{ color: "var(--rateloop-warm-white)", maxWidth: scoreMaxWidth }}
         >
           <span className="font-semibold tracking-normal" style={{ fontSize: ratingFontSize }}>
             {displayedScore}

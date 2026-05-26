@@ -213,7 +213,7 @@ export function StakeSelector({
   const phaseHeadline = effectiveIsBlind ? "Private round" : "Post-epoch reveal";
   const phaseHeadlineClassName = effectiveIsBlind ? "text-primary" : "text-warning";
   const sliderClassName = "range range-primary range-sm w-full";
-  const sliderStyle = { "--range-thumb": "var(--curyo-warm-white)" } as CSSProperties;
+  const sliderStyle = { "--range-thumb": "var(--rateloop-warm-white)" } as CSSProperties;
   const weightPercent = Math.round(
     (effectiveIsBlind ? EPOCH_WEIGHT_BPS.blind : EPOCH_WEIGHT_BPS.informed) / 100,
   ).toLocaleString();

@@ -2,11 +2,12 @@ import type { NextResponse } from "next/server";
 import "server-only";
 import { createSignedSessionStore } from "~~/lib/auth/signedSessionStore";
 
-export const WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME = "curyo_watchlist_read_session";
-export const NOTIFICATION_PREFERENCES_SIGNED_READ_SESSION_COOKIE_NAME = "curyo_notification_preferences_read_session";
-export const NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME = "curyo_notification_email_read_session";
-export const CONTENT_FEEDBACK_SIGNED_READ_SESSION_COOKIE_NAME = "curyo_content_feedback_read_session";
-export const AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME = "curyo_agent_policies_read_session";
+export const WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_watchlist_read_session";
+export const NOTIFICATION_PREFERENCES_SIGNED_READ_SESSION_COOKIE_NAME =
+  "rateloop_notification_preferences_read_session";
+export const NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_notification_email_read_session";
+export const CONTENT_FEEDBACK_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_content_feedback_read_session";
+export const AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_agent_policies_read_session";
 const SIGNED_READ_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const SIGNED_READ_SESSION_SCOPES = [

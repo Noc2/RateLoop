@@ -54,7 +54,7 @@ export function buildFreeTransactionAllowanceSnapshotKey(
     return null;
   }
 
-  return `curyo-free-transactions-summary:${environmentScope ?? "unknown"}:${address.toLowerCase()}:${chainId}`;
+  return `rateloop-free-transactions-summary:${environmentScope ?? "unknown"}:${address.toLowerCase()}:${chainId}`;
 }
 
 function readStoredFreeTransactionAllowanceSummary(address?: string, chainId?: number) {
@@ -109,7 +109,7 @@ export function buildExhaustionToastKey(params: {
   environmentScope?: string;
   raterIdentityKey: string;
 }) {
-  return `curyo-free-transactions-exhausted:${params.environmentScope ?? "unknown"}:${params.chainId}:${params.raterIdentityKey}`;
+  return `rateloop-free-transactions-exhausted:${params.environmentScope ?? "unknown"}:${params.chainId}:${params.raterIdentityKey}`;
 }
 
 function hasShownExhaustionToast(params: { chainId: number; raterIdentityKey: string }) {

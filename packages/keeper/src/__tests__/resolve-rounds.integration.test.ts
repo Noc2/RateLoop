@@ -129,10 +129,10 @@ const ACCOUNTS = {
 const STAKE = 1n * 10n ** 6n;
 const DEFAULT_SUBMISSION_REWARD_AMOUNT = 1_000_000n;
 const DEFAULT_QUESTION_METADATA_HASH = keccak256(
-  stringToHex("curyo.generic.question.metadata.v1"),
+  stringToHex("rateloop.generic.question.metadata.v1"),
 );
 const DEFAULT_RESULT_SPEC_HASH = keccak256(
-  stringToHex("curyo.generic.result.spec.v1"),
+  stringToHex("rateloop.generic.result.spec.v1"),
 );
 
 function makeLogger() {
@@ -431,7 +431,7 @@ describe("resolveRounds integration", () => {
           { type: "bytes32" },
         ],
         [
-          "curyo-question-reveal-v3",
+          "rateloop-question-reveal-v3",
           submissionKey,
           submissionMediaHash,
           submissionTextHash,

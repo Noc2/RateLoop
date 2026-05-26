@@ -9,11 +9,11 @@ Start from `generic-public-mcp.json` when OpenClaw already controls a funded wal
 ```json
 {
   "mcpServers": {
-    "curyo": {
-      "url": "https://curyo.example/api/mcp",
+    "rateloop": {
+      "url": "https://rateloop.example/api/mcp",
       "transport": "streamable-http",
       "headers": {
-        "Authorization": "Bearer ${CURYO_MCP_TOKEN}",
+        "Authorization": "Bearer ${RATELOOP_MCP_TOKEN}",
         "X-Agent-Name": "openclaw"
       }
     }

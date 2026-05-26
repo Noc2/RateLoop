@@ -29,14 +29,14 @@
 
 .secondary {
   color: var(--color-base-content);
-  background: var(--curyo-control-idle);
+  background: var(--rateloop-control-idle);
   border-color: transparent;
   box-shadow: none;
 }
 
 .secondary:hover {
   color: var(--color-base-content);
-  background: var(--curyo-control-idle-hover);
+  background: var(--rateloop-control-idle-hover);
   border-color: transparent;
   box-shadow: none;
 }

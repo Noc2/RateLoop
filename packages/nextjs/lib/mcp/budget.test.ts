@@ -17,7 +17,7 @@ const AGENT: McpAgentAuth = {
   dailyBudgetAtomic: 3_000_000n,
   id: "agent-a",
   perAskLimitAtomic: 2_000_000n,
-  scopes: new Set(["curyo:ask"]),
+  scopes: new Set(["rateloop:ask"]),
   tokenHash: "a".repeat(64),
   walletAddress: null,
 };

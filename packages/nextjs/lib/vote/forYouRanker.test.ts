@@ -41,7 +41,7 @@ function setStoredSignals(signals: unknown[]) {
     configurable: true,
     value: { localStorage },
   });
-  localStorage.setItem("curyo_recommendation_signals", JSON.stringify(signals));
+  localStorage.setItem("rateloop_recommendation_signals", JSON.stringify(signals));
 }
 
 const localStorage = (() => {

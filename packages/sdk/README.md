@@ -35,13 +35,13 @@ import { packVoteRoundContext } from "@rateloop/contracts";
 import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
-const curyo = createRateLoopClient({
+const rateloop = createRateLoopClient({
   apiBaseUrl: "https://www.rateloop.xyz",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 
-const { content } = await curyo.read.getContent("42");
-const participationStatus = await curyo.read.getRaterParticipationStatus(
+const { content } = await rateloop.read.getContent("42");
+const participationStatus = await rateloop.read.getRaterParticipationStatus(
   "0xAgentOrRaterWallet",
 );
 
@@ -55,7 +55,7 @@ const commit = await buildCommitVoteParams({
   epochDuration: 20 * 60,
   roundReferenceRatingBps:
     content.openRound?.referenceRatingBps ?? content.ratingBps ?? 5000,
-  defaultFrontendCode: curyo.config.frontendCode,
+  defaultFrontendCode: rateloop.config.frontendCode,
 });
 
 const commitVoteArgs = [
@@ -81,9 +81,9 @@ import {
 } from "@rateloop/sdk/agent";
 
 const agent = createRateLoopAgentClient({
-  apiBaseUrl: "https://curyo.example",
+  apiBaseUrl: "https://rateloop.example",
   // Optional. Add only when using a saved managed policy.
-  mcpAccessToken: process.env.CURYO_MCP_TOKEN,
+  mcpAccessToken: process.env.RATELOOP_MCP_TOKEN,
 });
 
 const walletAddress = "0xYourFundedAgentWallet";
@@ -135,7 +135,7 @@ const status = await agent.getQuestionStatus({
 const result = await agent.getResult({ operationKey: status.operationKey });
 
 const verifier = buildWebhookVerifier({
-  secret: process.env.CURYO_WEBHOOK_SECRET ?? "",
+  secret: process.env.RATELOOP_WEBHOOK_SECRET ?? "",
 });
 await verifier.assertValid({ body: webhookBody, headers: webhookHeaders });
 ```

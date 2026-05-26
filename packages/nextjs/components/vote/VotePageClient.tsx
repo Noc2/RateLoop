@@ -123,7 +123,7 @@ const FEED_PREFETCH_BUFFER = 6;
 const MOBILE_VOTE_DOCK_RESERVED_SPACE_PX = 152;
 const CONTENT_INTENT_PROMPT_MS = 1_400;
 const MIN_COUNTED_STAKE_MICRO = 1_000_000n;
-const INTERNAL_CONTENT_PIN_STORAGE_KEY = "curyo_internal_vote_content_pin";
+const INTERNAL_CONTENT_PIN_STORAGE_KEY = "rateloop_internal_vote_content_pin";
 const INTERNAL_CONTENT_PIN_TTL_MS = 6 * 60 * 60 * 1000;
 
 interface InternalContentPinMarker {

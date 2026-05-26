@@ -56,11 +56,11 @@ When comparing options, do not ask one multiple-choice question. Use `ranked_opt
 ## First Funded Ask
 
 Before the first paid ask, fund the configured `walletAddress` with World Chain USDC. In the public MCP flow, quote with
-`curyo_quote_question`, then call `curyo_ask_humans` to prepare the ask. Execute the returned `transactionPlan.calls` in
+`rateloop_quote_question`, then call `rateloop_ask_humans` to prepare the ask. Execute the returned `transactionPlan.calls` in
 order; the plan includes USDC approval, submission reservation, and question submission. Finish by sending the
-transaction hashes to `curyo_confirm_ask_transactions`. Example bounty amounts are atomic USDC units, and
+transaction hashes to `rateloop_confirm_ask_transactions`. Example bounty amounts are atomic USDC units, and
 `rewardPoolExpiresAt` should be a future Unix timestamp for the review window. Managed agents can also call
-`curyo_get_agent_balance`, use signed callbacks, and rely on RateLoop-enforced per-ask or daily caps.
+`rateloop_get_agent_balance`, use signed callbacks, and rely on RateLoop-enforced per-ask or daily caps.
 
 The public MCP config is enough for accountless use. In a chat-hosted runtime, the agent should ask the user for the
 funded `walletAddress`, the public context URL, image context, or YouTube video context, the bounty budget, and whether the user wants to approve spend through a
@@ -73,7 +73,7 @@ needed for managed policies, saved tokens, callbacks, balance tooling, or audit 
 
 - Use `openclaw.mcpServers.json` as the starting point.
 - Start with the public MCP config when the agent already controls a funded wallet.
-- Add bearer tokens scoped to `curyo:quote`, `curyo:ask`, `curyo:read`, and `curyo:balance` only when you want managed caps or callbacks.
+- Add bearer tokens scoped to `rateloop:quote`, `rateloop:ask`, `rateloop:read`, and `rateloop:balance` only when you want managed caps or callbacks.
 - Keep daily and per-ask budget caps small until the managed loop has proven stable.
 - Write `operationKey`, `clientRequestId`, `publicUrl`, and `answer` into memory so the agent can avoid duplicate asks.
 
@@ -98,6 +98,6 @@ needed for managed policies, saved tokens, callbacks, balance tooling, or audit 
 ### Backend workers
 
 - Start from `landing-pitch-review.ts`.
-- Use `CURYO_API_BASE_URL` plus a funded `CURYO_AGENT_WALLET_ADDRESS` for public direct HTTP, or add a managed MCP token for RateLoop-enforced caps.
+- Use `RATELOOP_API_BASE_URL` plus a funded `RATELOOP_AGENT_WALLET_ADDRESS` for public direct HTTP, or add a managed MCP token for RateLoop-enforced caps.
 - Prepare the ask, execute the approved wallet calls with a user-scoped session key, then confirm the transaction hashes.
 - Keep live asks stable after submission. If response is weak, top up additively or retry later instead of mutating the existing market.

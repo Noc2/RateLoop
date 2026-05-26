@@ -3,8 +3,8 @@ const IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/(att_[A-Za-z
 const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = [
   "https://www.rateloop.xyz",
   "https://rateloop.xyz",
-  "https://www.curyo.xyz",
-  "https://curyo.xyz",
+  "https://www.rateloop.xyz",
+  "https://rateloop.xyz",
 ] as const;
 
 type UploadedImageAttachmentUrlOptions = {
@@ -46,7 +46,7 @@ function getBrowserOrigin() {
 function shouldAllowLocalhostOrigins(options: UploadedImageAttachmentUrlOptions) {
   return (
     options.allowLocalhostOrigins ??
-    (process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD === "true")
+    (process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true")
   );
 }
 

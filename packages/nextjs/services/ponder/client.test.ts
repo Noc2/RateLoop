@@ -11,7 +11,7 @@ test("resolvePonderUrl allows missing config in production until runtime use", (
 });
 
 test("resolvePonderUrl normalizes valid production URLs", () => {
-  assert.equal(resolvePonderUrl("https://ponder.curyo.xyz/", true), "https://ponder.curyo.xyz");
+  assert.equal(resolvePonderUrl("https://ponder.rateloop.xyz/", true), "https://ponder.rateloop.xyz");
 });
 
 test("resolvePonderUrl rejects invalid production URLs", () => {
@@ -32,7 +32,11 @@ test("fetchPonderJson returns parsed json responses", async () => {
     headers: { "content-type": "application/json" },
   });
 
-  const result = await fetchPonderJson<{ ok: boolean }>("https://ponder.curyo.xyz/content", 1000, async () => response);
+  const result = await fetchPonderJson<{ ok: boolean }>(
+    "https://ponder.rateloop.xyz/content",
+    1000,
+    async () => response,
+  );
 
   assert.deepEqual(result, { ok: true });
 });
@@ -42,7 +46,7 @@ test("fetchPonderJson surfaces request timeouts clearly", async () => {
 
   await assert.rejects(
     () =>
-      fetchPonderJson("https://ponder.curyo.xyz/content", 1234, async () => {
+      fetchPonderJson("https://ponder.rateloop.xyz/content", 1234, async () => {
         throw abortError;
       }),
     /Ponder request timed out after 1234ms/,
@@ -52,7 +56,7 @@ test("fetchPonderJson surfaces request timeouts clearly", async () => {
 test("fetchPonderJson wraps fetch failures", async () => {
   await assert.rejects(
     () =>
-      fetchPonderJson("https://ponder.curyo.xyz/content", 1000, async () => {
+      fetchPonderJson("https://ponder.rateloop.xyz/content", 1000, async () => {
         throw new Error("socket hang up");
       }),
     /Ponder request failed: socket hang up/,
@@ -64,7 +68,7 @@ test("fetchPonderJson retries rate-limited responses using Retry-After", async (
   let calls = 0;
 
   const result = await fetchPonderJson<{ ok: boolean }>(
-    "https://ponder.curyo.xyz/content",
+    "https://ponder.rateloop.xyz/content",
     1000,
     async () => {
       calls += 1;
@@ -99,7 +103,7 @@ test("fetchPonderJson stops retrying rate limits after the configured attempts",
   await assert.rejects(
     () =>
       fetchPonderJson(
-        "https://ponder.curyo.xyz/content",
+        "https://ponder.rateloop.xyz/content",
         1000,
         async () => {
           calls += 1;
@@ -128,10 +132,10 @@ test("fetchPonderJson dedupes in-flight identical requests", async () => {
     return fetchPromise;
   };
 
-  const first = fetchPonderJson<{ ok: boolean }>("https://ponder.curyo.xyz/content", 1000, fetchImpl, {
+  const first = fetchPonderJson<{ ok: boolean }>("https://ponder.rateloop.xyz/content", 1000, fetchImpl, {
     queue: false,
   });
-  const second = fetchPonderJson<{ ok: boolean }>("https://ponder.curyo.xyz/content", 1000, fetchImpl, {
+  const second = fetchPonderJson<{ ok: boolean }>("https://ponder.rateloop.xyz/content", 1000, fetchImpl, {
     queue: false,
   });
 
@@ -173,7 +177,7 @@ test("ponderApi.getContentWindow respects hasMore when search totals are omitted
   };
 
   try {
-    const response = await ponderApi.getContentWindow({ limit: "250", search: "curyo" });
+    const response = await ponderApi.getContentWindow({ limit: "250", search: "rateloop" });
 
     assert.equal(response.items.length, 250);
     assert.equal(response.total, null);

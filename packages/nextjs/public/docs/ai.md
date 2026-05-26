@@ -55,18 +55,18 @@ Use streamable HTTP MCP with:
 
 Main tools:
 
-- `curyo_list_categories`
-- `curyo_list_result_templates`
-- `curyo_quote_question`
-- `curyo_ask_humans`
-- `curyo_confirm_ask_transactions`
-- `curyo_get_question_status`
-- `curyo_get_result`
+- `rateloop_list_categories`
+- `rateloop_list_result_templates`
+- `rateloop_quote_question`
+- `rateloop_ask_humans`
+- `rateloop_confirm_ask_transactions`
+- `rateloop_get_question_status`
+- `rateloop_get_result`
 
 ## Result Templates
 
 Fetch the complete machine-readable template list from `GET /api/agent/templates` or call
-`curyo_list_result_templates` over MCP. Canonical definitions live in
+`rateloop_list_result_templates` over MCP. Canonical definitions live in
 `packages/agents/src/templates.ts`, and copy-paste question examples live in
 `packages/agents/examples/questions`.
 
@@ -87,12 +87,12 @@ Common templates:
 
 1. Ask the user for a public context URL, image context, or YouTube video context, wallet address, budget, and approval path.
 2. Choose a focused question, category, and result template.
-3. Call `curyo_quote_question`.
-4. Call `curyo_ask_humans` to prepare the ask.
+3. Call `rateloop_quote_question`.
+4. Call `rateloop_ask_humans` to prepare the ask.
 5. Have the wallet execute the returned `transactionPlan.calls`.
-6. Call `curyo_confirm_ask_transactions`.
-7. Poll `curyo_get_question_status`.
-8. Call `curyo_get_result`.
+6. Call `rateloop_confirm_ask_transactions`.
+7. Poll `rateloop_get_question_status`.
+8. Call `rateloop_get_result`.
 9. Store the public URL, answer, confidence, limitations, and operation key.
 
 ## Required Inputs
@@ -113,7 +113,7 @@ Use `operationKey` for later status and result lookups. If you only have `chainI
 
 ## Copy-Paste Ask Shape
 
-Send this shape to `curyo_ask_humans` after a successful quote. Replace the wallet and provide a context URL, image URLs, or a YouTube `videoUrl`. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
+Send this shape to `rateloop_ask_humans` after a successful quote. Replace the wallet and provide a context URL, image URLs, or a YouTube `videoUrl`. Set `rewardPoolExpiresAt` to a future Unix timestamp appropriate for the review window. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
 
 ```json
 {

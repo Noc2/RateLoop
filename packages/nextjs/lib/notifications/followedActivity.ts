@@ -5,7 +5,7 @@ import type {
 
 export const FOLLOWED_CURATOR_TOAST_ID = "followed-curator-feedback";
 
-const FOLLOWED_ACTIVITY_SEEN_STORAGE_PREFIX = "curyo_seen_followed_activity_notifications";
+const FOLLOWED_ACTIVITY_SEEN_STORAGE_PREFIX = "rateloop_seen_followed_activity_notifications";
 const MAX_STORED_FOLLOWED_ACTIVITY_KEYS = 100;
 
 type FollowedActivityNotification =

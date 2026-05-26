@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ res
   const resource = new URL(resourcePath, request.url);
   resource.hash = "";
   resource.search = "";
-  const authorizationServer = normalizeUrl(process.env.CURYO_MCP_AUTHORIZATION_SERVER_URL);
+  const authorizationServer = normalizeUrl(process.env.RATELOOP_MCP_AUTHORIZATION_SERVER_URL);
 
   return NextResponse.json(
     {

@@ -425,7 +425,7 @@ export function quoteQuestion(
 
   return callMcpTool<QuoteQuestionResponse>(
     config,
-    "curyo_quote_question",
+    "rateloop_quote_question",
     params,
   );
 }
@@ -449,7 +449,7 @@ export async function askHumans(
   }
 
   if (transport === "mcp" || config.mcpApiUrl) {
-    return callMcpTool<AskHumansResponse>(config, "curyo_ask_humans", body);
+    return callMcpTool<AskHumansResponse>(config, "rateloop_ask_humans", body);
   }
 
   throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
@@ -539,7 +539,7 @@ export async function confirmAskTransactions(
   }
 
   if (config.mcpApiUrl) {
-    return callMcpTool<QuestionStatusResponse>(config, "curyo_confirm_ask_transactions", { ...params });
+    return callMcpTool<QuestionStatusResponse>(config, "rateloop_confirm_ask_transactions", { ...params });
   }
 
   throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
@@ -564,7 +564,7 @@ export async function getQuestionStatus(
   if (config.mcpApiUrl) {
     return callMcpTool<QuestionStatusResponse>(
       config,
-      "curyo_get_question_status",
+      "rateloop_get_question_status",
       { ...params },
     );
   }
@@ -589,7 +589,7 @@ export async function getResult(
   }
 
   if (config.mcpApiUrl) {
-    const result = await callMcpTool<unknown>(config, "curyo_get_result", {
+    const result = await callMcpTool<unknown>(config, "rateloop_get_result", {
       ...params,
       contentId:
         params.contentId === undefined ? undefined : String(params.contentId),
@@ -617,7 +617,7 @@ export async function listResultTemplates(
 
   return callMcpTool<ListResultTemplatesResponse>(
     config,
-    "curyo_list_result_templates",
+    "rateloop_list_result_templates",
     {},
   );
 }
@@ -647,13 +647,13 @@ export function buildWebhookVerifier(
   }
 
   const eventIdHeader = (
-    options.eventIdHeader ?? "x-curyo-callback-id"
+    options.eventIdHeader ?? "x-rateloop-callback-id"
   ).toLowerCase();
   const signatureHeader = (
-    options.signatureHeader ?? "x-curyo-callback-signature"
+    options.signatureHeader ?? "x-rateloop-callback-signature"
   ).toLowerCase();
   const timestampHeader = (
-    options.timestampHeader ?? "x-curyo-callback-timestamp"
+    options.timestampHeader ?? "x-rateloop-callback-timestamp"
   ).toLowerCase();
   const toleranceSeconds = options.toleranceSeconds ?? 300;
 
@@ -700,7 +700,7 @@ async function callMcpTool<T>(
     );
   }
 
-  const id = `curyo-sdk-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const id = `rateloop-sdk-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const body = {
     id,
     jsonrpc: "2.0",

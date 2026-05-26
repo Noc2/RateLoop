@@ -11,7 +11,7 @@ const AGENT: McpAgentAuth = {
   dailyBudgetAtomic: 5_000_000n,
   id: "agent-a",
   perAskLimitAtomic: 2_000_000n,
-  scopes: new Set(["curyo:ask"]),
+  scopes: new Set(["rateloop:ask"]),
   tokenHash: "a".repeat(64),
   walletAddress: "0x00000000000000000000000000000000000000aa",
 };
@@ -106,7 +106,7 @@ afterEach(() => {
   __setMcpToolTestOverridesForTests(null);
 });
 
-test("curyo_ask_humans returns a wallet transaction plan without submitting from the server", async () => {
+test("rateloop_ask_humans returns a wallet transaction plan without submitting from the server", async () => {
   mock.method(console, "error", () => {});
   const prepared: unknown[] = [];
 
@@ -142,7 +142,7 @@ test("curyo_ask_humans returns a wallet transaction plan without submitting from
   const result = await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments(),
-    name: "curyo_ask_humans",
+    name: "rateloop_ask_humans",
   });
 
   const body = result as unknown as {
@@ -155,7 +155,7 @@ test("curyo_ask_humans returns a wallet transaction plan without submitting from
   };
 
   assert.equal(body.status, "awaiting_wallet_signature");
-  assert.equal(body.confirmTool, "curyo_confirm_ask_transactions");
+  assert.equal(body.confirmTool, "rateloop_confirm_ask_transactions");
   assert.equal(body.wallet.address, AGENT.walletAddress);
   assert.equal(body.transactionPlan.calls.length, 1);
   assert.match(body.legalNotice.termsUrl, /\/legal\/terms$/);
@@ -164,7 +164,7 @@ test("curyo_ask_humans returns a wallet transaction plan without submitting from
   assert.equal(prepared.length, 1);
 });
 
-test("curyo_ask_humans can return a native x402 authorization request", async () => {
+test("rateloop_ask_humans can return a native x402 authorization request", async () => {
   const prepared: unknown[] = [];
 
   __setMcpToolTestOverridesForTests({
@@ -200,7 +200,7 @@ test("curyo_ask_humans can return a native x402 authorization request", async ()
   const result = await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments({ paymentMode: "x402_authorization" }),
-    name: "curyo_ask_humans",
+    name: "rateloop_ask_humans",
   });
 
   const body = result as unknown as {
@@ -215,7 +215,7 @@ test("curyo_ask_humans can return a native x402 authorization request", async ()
   assert.equal(body.paymentMode, "x402_authorization");
   assert.equal(body.nextAction, "sign_x402_authorization");
   assert.equal(body.transactionPlan, null);
-  assert.equal(body.confirmTool, "curyo_confirm_ask_transactions");
+  assert.equal(body.confirmTool, "rateloop_confirm_ask_transactions");
   assert.equal(body.wallet.address, AGENT.walletAddress);
   assert.equal(body.wallet.fundingMode, "x402_authorization");
   assert.equal(body.x402AuthorizationRequest.authorization.nonce, `0x${"4".repeat(64)}`);
@@ -290,19 +290,19 @@ test("quote and ask flows pass submission identity into image preflight", async 
   await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments(),
-    name: "curyo_quote_question",
+    name: "rateloop_quote_question",
   });
   await callRateLoopMcpTool({
     agent: AGENT,
     arguments: askArguments(),
-    name: "curyo_ask_humans",
+    name: "rateloop_ask_humans",
   });
   await callPublicRateLoopMcpTool({
     arguments: {
       ...askArguments(),
       walletAddress: AGENT.walletAddress,
     },
-    name: "curyo_ask_humans",
+    name: "rateloop_ask_humans",
   });
 
   assert.equal(preflightCalls.length, 3);
@@ -330,7 +330,7 @@ test("managed quote and ask reject wallet overrides outside the scoped agent wal
       callRateLoopMcpTool({
         agent: AGENT,
         arguments: argumentsWithOverride,
-        name: "curyo_quote_question",
+        name: "rateloop_quote_question",
       }),
     /does not match the scoped MCP agent wallet/i,
   );
@@ -339,13 +339,13 @@ test("managed quote and ask reject wallet overrides outside the scoped agent wal
       callRateLoopMcpTool({
         agent: AGENT,
         arguments: argumentsWithOverride,
-        name: "curyo_ask_humans",
+        name: "rateloop_ask_humans",
       }),
     /does not match the scoped MCP agent wallet/i,
   );
 });
 
-test("curyo_ask_humans rejects bundle members outside the agent category allowlist", async () => {
+test("rateloop_ask_humans rejects bundle members outside the agent category allowlist", async () => {
   await assert.rejects(
     () =>
       callRateLoopMcpTool({
@@ -369,13 +369,13 @@ test("curyo_ask_humans rejects bundle members outside the agent category allowli
           ],
           question: undefined,
         }),
-        name: "curyo_ask_humans",
+        name: "rateloop_ask_humans",
       }),
     /not allowed to ask in category 6/i,
   );
 });
 
-test("curyo_ask_humans registers webhooks and enqueues the awaiting-signature callback", async () => {
+test("rateloop_ask_humans registers webhooks and enqueues the awaiting-signature callback", async () => {
   const registered: unknown[] = [];
   const enqueued: unknown[] = [];
 
@@ -405,9 +405,9 @@ test("curyo_ask_humans registers webhooks and enqueues the awaiting-signature ca
     arguments: askArguments({
       webhookEvents: ["question.submitting"],
       webhookSecret: "webhook-secret",
-      webhookUrl: "https://agent.example/curyo",
+      webhookUrl: "https://agent.example/rateloop",
     }),
-    name: "curyo_ask_humans",
+    name: "rateloop_ask_humans",
   });
 
   const body = result as unknown as {
@@ -416,11 +416,11 @@ test("curyo_ask_humans registers webhooks and enqueues the awaiting-signature ca
 
   assert.equal(body.webhook.registered, true);
   assert.deepEqual(body.webhook.events, ["question.submitting"]);
-  assert.ok(body.webhook.signatureHeaders.includes("x-curyo-callback-signature"));
+  assert.ok(body.webhook.signatureHeaders.includes("x-rateloop-callback-signature"));
   assert.equal(registered.length, 1);
   assert.deepEqual(registered[0], {
     agentId: AGENT.id,
-    callbackUrl: "https://agent.example/curyo",
+    callbackUrl: "https://agent.example/rateloop",
     eventTypes: ["question.submitting"],
     secret: "webhook-secret",
   });
@@ -443,7 +443,7 @@ test("curyo_ask_humans registers webhooks and enqueues the awaiting-signature ca
   });
 });
 
-test("curyo_ask_humans registers the default lifecycle webhook events", async () => {
+test("rateloop_ask_humans registers the default lifecycle webhook events", async () => {
   const registered: unknown[] = [];
 
   __setMcpToolTestOverridesForTests({
@@ -467,14 +467,14 @@ test("curyo_ask_humans registers the default lifecycle webhook events", async ()
     agent: AGENT,
     arguments: askArguments({
       webhookSecret: "webhook-secret",
-      webhookUrl: "https://agent.example/curyo",
+      webhookUrl: "https://agent.example/rateloop",
     }),
-    name: "curyo_ask_humans",
+    name: "rateloop_ask_humans",
   });
 
   assert.deepEqual(registered[0], {
     agentId: AGENT.id,
-    callbackUrl: "https://agent.example/curyo",
+    callbackUrl: "https://agent.example/rateloop",
     eventTypes: [
       "question.submitting",
       "question.submitted",
@@ -489,7 +489,7 @@ test("curyo_ask_humans registers the default lifecycle webhook events", async ()
   });
 });
 
-test("curyo_confirm_ask_transactions marks budget submitted and enqueues submitted callbacks", async () => {
+test("rateloop_confirm_ask_transactions marks budget submitted and enqueues submitted callbacks", async () => {
   const enqueued: unknown[] = [];
   const reservationUpdates: unknown[] = [];
 
@@ -521,7 +521,7 @@ test("curyo_confirm_ask_transactions marks budget submitted and enqueues submitt
       operationKey: OPERATION_KEY,
       transactionHashes: [`0x${"4".repeat(64)}`],
     },
-    name: "curyo_confirm_ask_transactions",
+    name: "rateloop_confirm_ask_transactions",
   });
 
   const body = result as unknown as { contentId: string; publicUrl: string; status: string };
@@ -548,7 +548,7 @@ test("curyo_confirm_ask_transactions marks budget submitted and enqueues submitt
   });
 });
 
-test("curyo_ask_humans rejects unsafe webhook URLs before reservation or wallet planning", async () => {
+test("rateloop_ask_humans rejects unsafe webhook URLs before reservation or wallet planning", async () => {
   let prepared = false;
   let budgetReserved = false;
 
@@ -571,9 +571,9 @@ test("curyo_ask_humans rejects unsafe webhook URLs before reservation or wallet 
         agent: AGENT,
         arguments: askArguments({
           webhookSecret: "webhook-secret",
-          webhookUrl: "http://127.0.0.1:3000/curyo",
+          webhookUrl: "http://127.0.0.1:3000/rateloop",
         }),
-        name: "curyo_ask_humans",
+        name: "rateloop_ask_humans",
       }),
     /webhookUrl must be a public HTTPS URL/,
   );

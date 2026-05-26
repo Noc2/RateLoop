@@ -24,13 +24,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: curyo_app
+          POSTGRES_DB: rateloop_app
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d curyo_app"
+          --health-cmd "pg_isready -U postgres -d rateloop_app"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 12
@@ -128,8 +128,8 @@ jobs:
 
       - name: Build Next.js
         env:
-          CURYO_E2E_PRODUCTION_BUILD: "true"
-          NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: "true"
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
           DATABASE_URL: "memory:"
           NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
@@ -139,9 +139,9 @@ jobs:
 
       - name: Start Next.js (production)
         env:
-          CURYO_E2E_PRODUCTION_BUILD: "true"
-          NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: "true"
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/curyo_app
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
           NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
@@ -187,9 +187,9 @@ jobs:
         run: ${{ matrix.command }}
         env:
           CI: true
-          CURYO_E2E_PRODUCTION_BUILD: "true"
-          NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: "true"
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/curyo_app
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
           NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
@@ -217,13 +217,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: curyo_app
+          POSTGRES_DB: rateloop_app
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d curyo_app"
+          --health-cmd "pg_isready -U postgres -d rateloop_app"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 12
@@ -287,8 +287,8 @@ jobs:
 
       - name: Build Next.js
         env:
-          CURYO_E2E_PRODUCTION_BUILD: "true"
-          NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: "true"
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
           DATABASE_URL: "memory:"
           NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
@@ -298,9 +298,9 @@ jobs:
 
       - name: Start Next.js (production)
         env:
-          CURYO_E2E_PRODUCTION_BUILD: "true"
-          NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: "true"
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/curyo_app
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
           NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693
@@ -329,9 +329,9 @@ jobs:
         run: ${{ matrix.command }}
         env:
           CI: true
-          CURYO_E2E_PRODUCTION_BUILD: "true"
-          NEXT_PUBLIC_CURYO_E2E_PRODUCTION_BUILD: "true"
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/curyo_app
+          RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD: "true"
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
           NEXT_PUBLIC_PONDER_URL: http://127.0.0.1:42069
           NEXT_PUBLIC_TARGET_NETWORKS: "31337"
           NEXT_PUBLIC_THIRDWEB_CLIENT_ID: 124332de491a2aa8b7ba8ea6db1ce693

@@ -503,7 +503,7 @@ describe("registerContentRoutes", () => {
     registerContentRoutes(app);
 
     const response = await app.request(
-      "http://localhost/content?search=curyo&limit=5&offset=10",
+      "http://localhost/content?search=rateloop&limit=5&offset=10",
     );
     const body = await response.json();
 

@@ -50,7 +50,7 @@ async function resolveCategoryIdBySlug(slug: string): Promise<bigint> {
 
 const BASELINE_CONTENT = [
   {
-    url: "https://example.com/curyo-refund-policy",
+    url: "https://example.com/rateloop-refund-policy",
     title: "Should this support agent approve the refund?",
     description:
       "Use the policy summary to judge whether an automated support agent should approve the request without escalation.",
@@ -60,7 +60,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account2.address,
   },
   {
-    url: "https://example.com/curyo-workspace-listing",
+    url: "https://example.com/rateloop-workspace-listing",
     title: "Can an agent trust this workspace listing?",
     description:
       "Judge whether the listing gives enough public evidence for an agent to rate a remote-work offer as calm and credible.",
@@ -80,7 +80,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account4.address,
   },
   {
-    url: "https://example.com/curyo-product-label",
+    url: "https://example.com/rateloop-product-label",
     title: "Would an agent overrate this product page on mobile?",
     description:
       "Focus on whether hierarchy, contrast, and key details stay readable enough for a shopping agent to recommend the item on mobile.",
@@ -90,7 +90,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account5.address,
   },
   {
-    url: "https://example.com/curyo-cafe-review",
+    url: "https://example.com/rateloop-cafe-review",
     title: "Would this review help a travel agent recommend the cafe?",
     description:
       "Judge whether the evidence about noise, service, seating, and price is specific enough for a local recommendation agent.",
@@ -100,7 +100,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account6.address,
   },
   {
-    url: "https://example.com/curyo-hotel-room",
+    url: "https://example.com/rateloop-hotel-room",
     title: "Does this hotel listing look trustworthy enough to book?",
     description:
       "Use the listing details and context to judge whether a booking agent should treat this stay as clean, credible, and comfortable.",
@@ -130,7 +130,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account9.address,
   },
   {
-    url: "https://example.com/curyo-launch-poster",
+    url: "https://example.com/rateloop-launch-poster",
     title: "Would founders understand this launch poster at a glance?",
     description:
       "Judge whether the headline, date, and purpose are clear enough for rapid launch-page or event validation.",
@@ -140,7 +140,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account10.address,
   },
   {
-    url: "https://example.com/curyo-weeknight-dinner",
+    url: "https://example.com/rateloop-weeknight-dinner",
     title: "Is this answer actually useful for a busy household?",
     description:
       "Treat the plan like an AI-generated recommendation and judge whether it balances prep time, nutrition, cleanup, and ingredient availability.",
@@ -150,7 +150,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account2.address,
   },
   {
-    url: "https://example.com/curyo-landing-gallery",
+    url: "https://example.com/rateloop-landing-gallery",
     title: "Does this landing page make the offer feel credible?",
     description:
       "Judge whether the landing page gives a product agent enough focus, contrast, and detail to support a trustworthy launch.",
@@ -170,7 +170,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account4.address,
   },
   {
-    url: "https://example.com/curyo-neighborhood-guide",
+    url: "https://example.com/rateloop-neighborhood-guide",
     title: "Does this neighborhood guide help an agent judge the area?",
     description:
       "Use the local context and judge whether it makes a neighborhood guide feel welcoming, safe, and credible.",
@@ -190,7 +190,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account6.address,
   },
   {
-    url: "https://example.com/curyo-moderation-rules",
+    url: "https://example.com/rateloop-moderation-rules",
     title: "Should this moderation policy block agent-submitted spam?",
     description:
       "Judge whether the rule gives clear guidance for unsafe, misleading, mismatched, or synthetic spammy submissions.",
@@ -200,7 +200,7 @@ const BASELINE_CONTENT = [
     submitter: ANVIL_ACCOUNTS.account7.address,
   },
   {
-    url: "https://example.com/curyo-product-offer",
+    url: "https://example.com/rateloop-product-offer",
     title: "Does this product offer page feel trustworthy?",
     description:
       "Focus on specifications, scale cues, evidence quality, and whether the page gives a shopping or research agent enough signal to compare the offer.",

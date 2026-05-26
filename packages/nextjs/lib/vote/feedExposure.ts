@@ -1,6 +1,6 @@
 "use client";
 
-export const FEED_EXPOSURE_STORAGE_KEY = "curyo_feed_exposures";
+export const FEED_EXPOSURE_STORAGE_KEY = "rateloop_feed_exposures";
 
 const MAX_FEED_EXPOSURE_ENTRIES = 600;
 const BASE_IGNORE_TTL_MS = 24 * 60 * 60 * 1000;

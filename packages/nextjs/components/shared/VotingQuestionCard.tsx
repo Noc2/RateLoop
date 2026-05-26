@@ -61,7 +61,7 @@ const MIXED_REWARD_POOL_TOOLTIP_TEXT =
   "This question's bounty includes multiple assets on World Chain. Eligible revealed raters can claim from qualified rounds, with 3% reserved for the eligible frontend operator.";
 const FEEDBACK_BONUS_TOOLTIP_TEXT =
   "Feedback Bonuses are optional USDC rewards for useful rater feedback. Awarded feedback pays raters after settlement, with 3% reserved for the eligible frontend operator.";
-export const VOTING_SURFACE_BACKGROUND = "var(--curyo-surface-elevated)";
+export const VOTING_SURFACE_BACKGROUND = "var(--rateloop-surface-elevated)";
 const STATUS_PILL_CLASS_NAME = "reward-chip reward-chip-muted inline-flex items-center gap-2 px-4 py-2";
 const DOCK_STATUS_TEXT_CLASS_NAME =
   "inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 py-0.5 text-left leading-none";
@@ -624,7 +624,7 @@ export function VotingQuestionCard({
       maskRepeat: "no-repeat",
     };
     const dockSurfaceStyle = {
-      background: compact ? "var(--curyo-surface-mobile-vote)" : VOTING_SURFACE_BACKGROUND,
+      background: compact ? "var(--rateloop-surface-mobile-vote)" : VOTING_SURFACE_BACKGROUND,
     };
     const dockContentStyle = compact ? { paddingBottom: "env(safe-area-inset-bottom)" } : undefined;
     const dockShellClassName = compact ? "rounded-none" : "rounded-[2rem]";
@@ -638,7 +638,7 @@ export function VotingQuestionCard({
     const dockTopBorderSegmentStyle = compact
       ? {
           width: `calc(50% - ${dockTopBorderArcRadius}px)`,
-          borderColor: "var(--curyo-shell-border-strong)",
+          borderColor: "var(--rateloop-shell-border-strong)",
         }
       : undefined;
     const dockTopBorderArcStyle = compact
@@ -646,7 +646,7 @@ export function VotingQuestionCard({
           top: `${-dockTopBorderArcRadius}px`,
           width: `${dockTopBorderArcRadius * 2}px`,
           height: `${dockTopBorderArcRadius * 2}px`,
-          borderColor: "var(--curyo-shell-border-strong)",
+          borderColor: "var(--rateloop-shell-border-strong)",
         }
       : undefined;
     const mobileOrbClassName = compact ? "drop-shadow-[0_14px_28px_rgba(9,10,12,0.7)]" : "";
@@ -806,7 +806,7 @@ export function VotingQuestionCard({
 
                 {isDetailsOpen ? (
                   <div id={detailsId} className="relative z-10 pb-3 pt-1">
-                    <div aria-hidden="true" className="mx-4 mb-3 h-px bg-[color:var(--curyo-shell-border-strong)]" />
+                    <div aria-hidden="true" className="mx-4 mb-3 h-px bg-[color:var(--rateloop-shell-border-strong)]" />
                     <div className="px-4">
                       <div className="max-h-[34svh] overflow-y-auto [scrollbar-gutter:stable]">
                         <div className="flex flex-col gap-2.5 pb-1">{renderRewardPoolDetailsRow()}</div>
@@ -837,7 +837,7 @@ export function VotingQuestionCard({
           isAttentionActive ? "vote-surface-attention" : ""
         } ${shellClassName}`}
         data-vote-attention={isAttentionActive ? "true" : undefined}
-        style={embedded ? {} : { background: "var(--curyo-surface-elevated)" }}
+        style={embedded ? {} : { background: "var(--rateloop-surface-elevated)" }}
       >
         {!hideEmbeddedSignalSurface ? (
           <div

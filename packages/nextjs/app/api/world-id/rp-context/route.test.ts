@@ -18,7 +18,7 @@ const TEST_SIGNING_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae78
 // the store with an always-allow in-memory implementation so this test continues
 // to exercise the rp-context signing path rather than the rate-limit path.
 function makeRequest() {
-  return new NextRequest("https://curyo.xyz/api/world-id/rp-context", {
+  return new NextRequest("https://rateloop.xyz/api/world-id/rp-context", {
     method: "POST",
     headers: new Headers({ "x-forwarded-for": "203.0.113.77" }),
   });

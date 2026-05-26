@@ -41,13 +41,13 @@ yarn agents:templates
 yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.json
 
 # Quote, prepare wallet calls, then confirm submitted transactions.
-export CURYO_AGENT_WALLET_ADDRESS=0x...
+export RATELOOP_AGENT_WALLET_ADDRESS=0x...
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
 yarn agents:ask --file packages/agents/examples/questions/landing-pitch-review.json
 
 # Local signer path for Codex-like agents that can hold an encrypted keystore.
-export CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a curyo-local-signer -w)"
-yarn workspace @rateloop/agents wallet --generate --keystore ~/.curyo/local-signer.json
+export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a rateloop-local-signer -w)"
+yarn workspace @rateloop/agents wallet --generate --keystore ~/.rateloop/local-signer.json
 yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 
@@ -56,18 +56,18 @@ yarn agents:status --operation-key 0x...
 yarn agents:result --operation-key 0x...
 ```
 
-The CLI reads `.env` from the current process environment. For the default wallet-direct path, set `CURYO_API_BASE_URL` and either set `CURYO_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in the ask payload. `CURYO_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps, balance tooling, callbacks, or audit exports.
+The CLI reads `.env` from the current process environment. For the default wallet-direct path, set `RATELOOP_API_BASE_URL` and either set `RATELOOP_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in the ask payload. `RATELOOP_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps, balance tooling, callbacks, or audit exports.
 
 ## First Funded Ask
 
 1. Fund the signer wallet with World Chain USDC. On the Next.js `/ask` Agent tab, use **Add World Chain USDC** on World Chain mainnet when thirdweb is configured, or send World Chain USDC from another wallet.
-2. Pass that address as `walletAddress` when quoting or asking, or set `CURYO_AGENT_WALLET_ADDRESS` for the CLI. For public MCP, use `/api/mcp/public`; for direct HTTP, use `/api/agent`.
-3. Quote with `curyo_quote_question` before reserving spend.
-4. Call `curyo_ask_humans` to prepare the ask, execute the returned `transactionPlan.calls` in order, and keep every transaction hash.
-5. Confirm those hashes with `curyo_confirm_ask_transactions`.
-6. Poll `curyo_get_question_status` or read `curyo_get_result` after settlement.
+2. Pass that address as `walletAddress` when quoting or asking, or set `RATELOOP_AGENT_WALLET_ADDRESS` for the CLI. For public MCP, use `/api/mcp/public`; for direct HTTP, use `/api/agent`.
+3. Quote with `rateloop_quote_question` before reserving spend.
+4. Call `rateloop_ask_humans` to prepare the ask, execute the returned `transactionPlan.calls` in order, and keep every transaction hash.
+5. Confirm those hashes with `rateloop_confirm_ask_transactions`.
+6. Poll `rateloop_get_question_status` or read `rateloop_get_result` after settlement.
 
-Managed agents can also call `curyo_get_agent_balance` and can attach signed callbacks, but those controls require a saved policy and bearer token.
+Managed agents can also call `rateloop_get_agent_balance` and can attach signed callbacks, but those controls require a saved policy and bearer token.
 
 ## Image Context
 
@@ -92,17 +92,17 @@ confirms the hashes with RateLoop.
 Use an encrypted keystore for persistent wallets:
 
 ```bash
-export CURYO_LOCAL_SIGNER_KEYSTORE_PATH="$HOME/.curyo/local-signer.json"
-export CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a curyo-local-signer -w)"
-export CURYO_RPC_URL="https://worldchain-mainnet.g.alchemy.com/public"
-export CURYO_CHAIN_ID=480
+export RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH="$HOME/.rateloop/local-signer.json"
+export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a rateloop-local-signer -w)"
+export RATELOOP_RPC_URL="https://worldchain-mainnet.g.alchemy.com/public"
+export RATELOOP_CHAIN_ID=480
 
 yarn workspace @rateloop/agents wallet --generate
 yarn workspace @rateloop/agents wallet
 yarn workspace @rateloop/agents local-ask --file packages/agents/examples/questions/landing-pitch-review.json
 ```
 
-The local signer never prints the private key. `CURYO_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
+The local signer never prints the private key. `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY` exists only for short-lived CI or
 ephemeral test wallets; avoid putting long-lived funded keys in shell history, committed `.env` files, or shared logs.
 If the ask payload already contains `walletAddress`, `local-ask` refuses to continue unless it matches the loaded signer.
 
@@ -114,19 +114,19 @@ cp packages/agents/.env.example packages/agents/.env
 
 | Variable                                 | Description                                                                                                           |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `CURYO_API_BASE_URL`                     | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                                        |
-| `CURYO_AGENT_WALLET_ADDRESS`             | Funded wallet address for tokenless public asks                                                                       |
-| `CURYO_RPC_URL`                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                   |
-| `CURYO_CHAIN_ID`                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                             |
-| `CURYO_LOCAL_SIGNER_KEYSTORE_PATH`       | Encrypted local signer keystore path                                                                                  |
-| `CURYO_LOCAL_SIGNER_KEYSTORE_PASSWORD`   | Password for the local signer keystore; load from a secret source                                                     |
-| `CURYO_LOCAL_SIGNER_PASSWORD_ENV`        | Name of an alternate environment variable that holds the keystore password                                            |
-| `CURYO_LOCAL_SIGNER_PRIVATE_KEY`         | Ephemeral CI/test-wallet fallback; prefer a keystore for persistent funded wallets                                    |
-| `CURYO_LOCAL_SIGNER_POLLING_INTERVAL_MS` | Optional receipt polling interval for local signer transaction waits                                                  |
-| `CURYO_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS`  | Optional local signer transaction receipt timeout                                                                     |
-| `CURYO_MCP_TOKEN`                        | Optional managed agent bearer token with quote, ask, read, and balance scopes                                         |
-| `CURYO_MCP_API_URL`                      | Optional MCP endpoint override; with `CURYO_MCP_TOKEN` SDK clients default to `/api/mcp`, otherwise `/api/mcp/public` |
-| `CURYO_MCP_PROTOCOL_VERSION`             | Optional MCP protocol version override                                                                                |
+| `RATELOOP_API_BASE_URL`                     | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                                        |
+| `RATELOOP_AGENT_WALLET_ADDRESS`             | Funded wallet address for tokenless public asks                                                                       |
+| `RATELOOP_RPC_URL`                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                   |
+| `RATELOOP_CHAIN_ID`                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                             |
+| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`       | Encrypted local signer keystore path                                                                                  |
+| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD`   | Password for the local signer keystore; load from a secret source                                                     |
+| `RATELOOP_LOCAL_SIGNER_PASSWORD_ENV`        | Name of an alternate environment variable that holds the keystore password                                            |
+| `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY`         | Ephemeral CI/test-wallet fallback; prefer a keystore for persistent funded wallets                                    |
+| `RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS` | Optional receipt polling interval for local signer transaction waits                                                  |
+| `RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS`  | Optional local signer transaction receipt timeout                                                                     |
+| `RATELOOP_MCP_TOKEN`                        | Optional managed agent bearer token with quote, ask, read, and balance scopes                                         |
+| `RATELOOP_MCP_API_URL`                      | Optional MCP endpoint override; with `RATELOOP_MCP_TOKEN` SDK clients default to `/api/mcp`, otherwise `/api/mcp/public` |
+| `RATELOOP_MCP_PROTOCOL_VERSION`             | Optional MCP protocol version override                                                                                |
 
 ## Examples
 

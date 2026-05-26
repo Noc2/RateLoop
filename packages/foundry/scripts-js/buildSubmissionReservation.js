@@ -415,7 +415,7 @@ const revealCommitment = keccak256(
       { type: "bytes32" },
     ],
     [
-      "curyo-question-reveal-v3",
+      "rateloop-question-reveal-v3",
       submissionKey,
       mediaHash,
       textHash,

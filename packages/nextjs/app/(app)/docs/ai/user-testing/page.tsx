@@ -48,9 +48,9 @@ const agentRules = [
 const agentSteps = [
   "Ask the user for a public preview URL, wallet address, bounty budget, and approval path.",
   "Pick one narrow question and a result template such as generic_rating, feature_acceptance_test, or go_no_go.",
-  "Call curyo_quote_question to price the ask before spending.",
-  "Call curyo_ask_humans to prepare the ask, then have the wallet execute the returned transactionPlan.calls.",
-  "Confirm transaction hashes, poll status, then read curyo_get_result.",
+  "Call rateloop_quote_question to price the ask before spending.",
+  "Call rateloop_ask_humans to prepare the ask, then have the wallet execute the returned transactionPlan.calls.",
+  "Confirm transaction hashes, poll status, then read rateloop_get_result.",
 ] as const;
 
 export const metadata = {
@@ -118,7 +118,7 @@ export default function AgentUserTestingPage() {
 
       <h2>Website Feedback Payload</h2>
       <p>
-        Send this shape to <code>curyo_ask_humans</code> after a successful quote. Keep the title focused on one user
+        Send this shape to <code>rateloop_ask_humans</code> after a successful quote. Keep the title focused on one user
         judgment. Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the wallet, context
         URL, and <code>rewardPoolExpiresAt</code>. Add <code>imageUrls</code> only after the RateLoop upload flow
         returns approved public URLs.

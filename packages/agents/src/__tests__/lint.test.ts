@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { lintAgentAskRequest, summarizeLintFindings } from "../questions/lint.js";
 
-const UPLOADED_IMAGE_URL = "https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
+const UPLOADED_IMAGE_URL = "https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
 
 const VALID_REQUEST = {
   bounty: {

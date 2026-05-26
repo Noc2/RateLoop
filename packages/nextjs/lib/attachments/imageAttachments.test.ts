@@ -53,17 +53,17 @@ function missingBlobGetResult() {
 
 test("builds RateLoop upload image URLs with a webp extension", () => {
   assert.equal(
-    getAttachmentImageUrl("https://www.curyo.xyz/ask", "att_abcdefghijklmnop"),
-    "https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp",
+    getAttachmentImageUrl("https://www.rateloop.xyz/ask", "att_abcdefghijklmnop"),
+    "https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp",
   );
 });
 
 test("parses RateLoop attachment ids from public upload image URLs", () => {
   assert.equal(
-    parseAttachmentIdFromImageUrl("https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp"),
+    parseAttachmentIdFromImageUrl("https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp"),
     "att_abcdefghijklmnop",
   );
-  assert.equal(parseAttachmentIdFromImageUrl("https://www.curyo.xyz/api/attachments/images/nope.png"), null);
+  assert.equal(parseAttachmentIdFromImageUrl("https://www.rateloop.xyz/api/attachments/images/nope.png"), null);
   assert.equal(
     parseAttachmentIdFromImageUrl("https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp"),
     null,
@@ -83,16 +83,16 @@ test("uses local image upload mode in development when Vercel Blob is not config
 });
 
 test("processes local development image uploads without Vercel Blob", async () => {
-  const originalLocalImageDir = process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR;
+  const originalLocalImageDir = process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR;
   const originalOpenAiKey = process.env.OPENAI_API_KEY;
-  const originalModerationMode = process.env.CURYO_IMAGE_MODERATION_MODE;
+  const originalModerationMode = process.env.RATELOOP_IMAGE_MODERATION_MODE;
   const tempDir = await mkdtemp(path.join(tmpdir(), "rateloop-local-images-"));
   const attachmentId = "att_localuploadimage01";
 
   try {
-    process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
+    process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
     delete process.env.OPENAI_API_KEY;
-    process.env.CURYO_IMAGE_MODERATION_MODE = "disabled";
+    process.env.RATELOOP_IMAGE_MODERATION_MODE = "disabled";
 
     await createPendingImageAttachment({
       attachmentId,
@@ -122,9 +122,9 @@ test("processes local development image uploads without Vercel Blob", async () =
     assert.match(stored?.etag ?? "", /^[a-f0-9]{64}$/);
   } finally {
     if (originalLocalImageDir === undefined) {
-      delete process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR;
+      delete process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR;
     } else {
-      process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR = originalLocalImageDir;
+      process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = originalLocalImageDir;
     }
     if (originalOpenAiKey === undefined) {
       delete process.env.OPENAI_API_KEY;
@@ -132,9 +132,9 @@ test("processes local development image uploads without Vercel Blob", async () =
       process.env.OPENAI_API_KEY = originalOpenAiKey;
     }
     if (originalModerationMode === undefined) {
-      delete process.env.CURYO_IMAGE_MODERATION_MODE;
+      delete process.env.RATELOOP_IMAGE_MODERATION_MODE;
     } else {
-      process.env.CURYO_IMAGE_MODERATION_MODE = originalModerationMode;
+      process.env.RATELOOP_IMAGE_MODERATION_MODE = originalModerationMode;
     }
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -142,17 +142,17 @@ test("processes local development image uploads without Vercel Blob", async () =
 
 test("does not honor disabled image moderation mode in production", async () => {
   const originalNodeEnv = process.env["NODE_ENV"];
-  const originalLocalImageDir = process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR;
+  const originalLocalImageDir = process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR;
   const originalOpenAiKey = process.env.OPENAI_API_KEY;
-  const originalModerationMode = process.env.CURYO_IMAGE_MODERATION_MODE;
+  const originalModerationMode = process.env.RATELOOP_IMAGE_MODERATION_MODE;
   const tempDir = await mkdtemp(path.join(tmpdir(), "rateloop-prod-images-"));
   const attachmentId = "att_prodmoderation01";
 
   try {
     Reflect.set(process.env, "NODE_ENV", "production");
-    process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
+    process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
     delete process.env.OPENAI_API_KEY;
-    process.env.CURYO_IMAGE_MODERATION_MODE = "disabled";
+    process.env.RATELOOP_IMAGE_MODERATION_MODE = "disabled";
 
     await createPendingImageAttachment({
       attachmentId,
@@ -185,9 +185,9 @@ test("does not honor disabled image moderation mode in production", async () => 
       Reflect.set(process.env, "NODE_ENV", originalNodeEnv);
     }
     if (originalLocalImageDir === undefined) {
-      delete process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR;
+      delete process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR;
     } else {
-      process.env.CURYO_LOCAL_IMAGE_ATTACHMENT_DIR = originalLocalImageDir;
+      process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = originalLocalImageDir;
     }
     if (originalOpenAiKey === undefined) {
       delete process.env.OPENAI_API_KEY;
@@ -195,9 +195,9 @@ test("does not honor disabled image moderation mode in production", async () => 
       process.env.OPENAI_API_KEY = originalOpenAiKey;
     }
     if (originalModerationMode === undefined) {
-      delete process.env.CURYO_IMAGE_MODERATION_MODE;
+      delete process.env.RATELOOP_IMAGE_MODERATION_MODE;
     } else {
-      process.env.CURYO_IMAGE_MODERATION_MODE = originalModerationMode;
+      process.env.RATELOOP_IMAGE_MODERATION_MODE = originalModerationMode;
     }
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -205,7 +205,7 @@ test("does not honor disabled image moderation mode in production", async () => 
 
 test("processes Vercel Blob image uploads without deleting duplicate completions", async () => {
   const originalOpenAiKey = process.env.OPENAI_API_KEY;
-  const originalModerationMode = process.env.CURYO_IMAGE_MODERATION_MODE;
+  const originalModerationMode = process.env.RATELOOP_IMAGE_MODERATION_MODE;
   const attachmentId = "att_blobuploadimage001";
   const originalPathname = `question-attachments/${attachmentId}/original.png`;
   const normalizedPathname = `question-attachments/${attachmentId}/image.webp`;
@@ -232,7 +232,7 @@ test("processes Vercel Blob image uploads without deleting duplicate completions
 
   try {
     delete process.env.OPENAI_API_KEY;
-    process.env.CURYO_IMAGE_MODERATION_MODE = "disabled";
+    process.env.RATELOOP_IMAGE_MODERATION_MODE = "disabled";
 
     await createPendingImageAttachment({
       attachmentId,
@@ -273,9 +273,9 @@ test("processes Vercel Blob image uploads without deleting duplicate completions
       process.env.OPENAI_API_KEY = originalOpenAiKey;
     }
     if (originalModerationMode === undefined) {
-      delete process.env.CURYO_IMAGE_MODERATION_MODE;
+      delete process.env.RATELOOP_IMAGE_MODERATION_MODE;
     } else {
-      process.env.CURYO_IMAGE_MODERATION_MODE = originalModerationMode;
+      process.env.RATELOOP_IMAGE_MODERATION_MODE = originalModerationMode;
     }
   }
 });
@@ -371,7 +371,7 @@ test("validates approved RateLoop-hosted image ownership before submission", asy
 
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
-      imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp"],
+      imageUrls: ["https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp"],
       ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
     }),
     null,
@@ -385,7 +385,7 @@ test("validates approved RateLoop-hosted image ownership before submission", asy
   );
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
-      imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_abcdefghijklmnop.webp"],
+      imageUrls: ["https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp"],
       ownerWalletAddress: "0x00000000000000000000000000000000000000bb",
     }),
     "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
@@ -411,14 +411,14 @@ test("allows approved RateLoop-hosted images owned by the submitting agent", asy
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
       agentId: "agent-123",
-      imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_agentownedupload.webp"],
+      imageUrls: ["https://www.rateloop.xyz/api/attachments/images/att_agentownedupload.webp"],
     }),
     null,
   );
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
       agentId: "agent-456",
-      imageUrls: ["https://www.curyo.xyz/api/attachments/images/att_agentownedupload.webp"],
+      imageUrls: ["https://www.rateloop.xyz/api/attachments/images/att_agentownedupload.webp"],
     }),
     "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
   );
