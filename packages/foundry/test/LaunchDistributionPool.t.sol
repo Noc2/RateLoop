@@ -8,7 +8,28 @@ import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+
+contract WeakLaunchRaterRegistry {
+    function getHumanCredential(address) external pure returns (RaterRegistry.HumanCredential memory credential) {
+        return credential;
+    }
+
+    function addressIdentityKey(address account) external pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return bytes32(uint256(1));
+    }
+
+    function resolveRater(address actor) external pure returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
+        resolved.holder = actor;
+        resolved.identityKey = bytes32(uint256(1));
+    }
+
+    function hasActiveHumanCredential(address) external pure returns (bool) {
+        return false;
+    }
+}
 
 contract LaunchDistributionPoolTest is Test {
     using stdStorage for StdStorage;
@@ -91,6 +112,10 @@ contract LaunchDistributionPoolTest is Test {
         MockLaunchOracleFrontendRegistry incompatible = new MockLaunchOracleFrontendRegistry();
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         pool.setRaterRegistry(address(incompatible));
+
+        WeakLaunchRaterRegistry weakRegistry = new WeakLaunchRaterRegistry();
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setRaterRegistry(address(weakRegistry));
 
         RaterRegistry replacementRegistry = new RaterRegistry(
             address(this), address(this), address(worldIdRouter), bytes32("replacement"), 2, 365 days

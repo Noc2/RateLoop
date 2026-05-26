@@ -124,6 +124,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         usdcToken = IERC20(usdcToken_);
         registry = ContentRegistry(registry_);
         votingEngine = RoundVotingEngine(votingEngine_);
+        _validateRaterRegistry(raterRegistry_);
         raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         nextFeedbackBonusPoolId = 1;
         defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
@@ -282,7 +283,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     }
 
     function setRaterRegistry(address raterRegistry_) external onlyRole(CONFIG_ROLE) {
-        require(raterRegistry_ != address(0), "Invalid registry");
+        _validateRaterRegistry(raterRegistry_);
         raterRegistry = IRaterIdentityRegistry(raterRegistry_);
         emit RaterRegistryUpdated(raterRegistry_);
     }
@@ -573,6 +574,38 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     function _addressIdentityKey(address account) internal pure returns (bytes32) {
         if (account == address(0)) return bytes32(0);
         return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
+    }
+
+    function _validateRaterRegistry(address registryAddress) private view {
+        require(registryAddress != address(0) && registryAddress.code.length != 0, "Invalid registry");
+        IRaterIdentityRegistry identityRegistry = IRaterIdentityRegistry(registryAddress);
+        address sample = address(uint160(uint256(keccak256("rateloop.rater-registry.validation"))));
+        bytes32 expectedSampleKey = _addressIdentityKey(sample);
+
+        try identityRegistry.addressIdentityKey(address(0)) returns (bytes32 zeroKey) {
+            require(zeroKey == bytes32(0), "Invalid registry");
+        } catch {
+            revert("Invalid registry");
+        }
+        try identityRegistry.addressIdentityKey(sample) returns (bytes32 sampleKey) {
+            require(sampleKey == expectedSampleKey, "Invalid registry");
+        } catch {
+            revert("Invalid registry");
+        }
+        try identityRegistry.resolveRater(sample) returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
+            require(resolved.holder == sample, "Invalid registry");
+            require(resolved.identityKey == expectedSampleKey, "Invalid registry");
+            require(resolved.humanNullifier == bytes32(0), "Invalid registry");
+            require(!resolved.hasActiveHumanCredential, "Invalid registry");
+            require(!resolved.delegated, "Invalid registry");
+        } catch {
+            revert("Invalid registry");
+        }
+        try identityRegistry.hasActiveHumanCredential(sample) returns (bool active) {
+            require(!active, "Invalid registry");
+        } catch {
+            revert("Invalid registry");
+        }
     }
 
     function _protocolTreasury() internal view returns (address treasury) {

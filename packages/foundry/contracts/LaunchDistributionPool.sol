@@ -9,6 +9,7 @@ import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/Reentran
 import { RaterRegistry } from "./RaterRegistry.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @dev M-Oracle-1: minimal view shape on RoundVotingEngine that LaunchDistributionPool needs to
@@ -1233,8 +1234,36 @@ contract LaunchDistributionPool is
 
     function _validateRaterRegistry(address newRegistry) private view {
         if (newRegistry == address(0) || newRegistry.code.length == 0) revert InvalidAddress();
-        try RaterRegistry(newRegistry).getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) { }
+        RaterRegistry registry = RaterRegistry(newRegistry);
+        address sample = address(uint160(uint256(keccak256("rateloop.rater-registry.validation"))));
+        bytes32 expectedSampleKey = keccak256(abi.encodePacked("rateloop.address-identity-v1", sample));
+        try registry.getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) { }
         catch {
+            revert InvalidAddress();
+        }
+        try registry.addressIdentityKey(address(0)) returns (bytes32 zeroKey) {
+            if (zeroKey != bytes32(0)) revert InvalidAddress();
+        } catch {
+            revert InvalidAddress();
+        }
+        try registry.addressIdentityKey(sample) returns (bytes32 sampleKey) {
+            if (sampleKey != expectedSampleKey) revert InvalidAddress();
+        } catch {
+            revert InvalidAddress();
+        }
+        try registry.resolveRater(sample) returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
+            if (
+                resolved.holder != sample || resolved.identityKey != expectedSampleKey
+                    || resolved.humanNullifier != bytes32(0) || resolved.hasActiveHumanCredential || resolved.delegated
+            ) {
+                revert InvalidAddress();
+            }
+        } catch {
+            revert InvalidAddress();
+        }
+        try registry.hasActiveHumanCredential(sample) returns (bool active) {
+            if (active) revert InvalidAddress();
+        } catch {
             revert InvalidAddress();
         }
     }

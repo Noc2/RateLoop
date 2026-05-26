@@ -59,6 +59,13 @@ contract SlashedFrontendRegistryMock is IFrontendRegistry {
     }
 }
 
+contract WeakFeedbackRaterRegistry {
+    function addressIdentityKey(address account) external pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return bytes32(uint256(1));
+    }
+}
+
 contract FeedbackBonusEscrowTest is VotingTestBase {
     LoopReputation public lrepToken;
     ContentRegistry public registry;
@@ -454,6 +461,14 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.prank(owner);
         vm.expectRevert("Invalid registry");
         feedbackBonusEscrow.setRaterRegistry(address(0));
+    }
+
+    function testSetRaterRegistryRejectsWeakAbiShape() public {
+        WeakFeedbackRaterRegistry weakRegistry = new WeakFeedbackRaterRegistry();
+
+        vm.prank(owner);
+        vm.expectRevert("Invalid registry");
+        feedbackBonusEscrow.setRaterRegistry(address(weakRegistry));
     }
 
     function testAwardRequiresRevealedVote() public {

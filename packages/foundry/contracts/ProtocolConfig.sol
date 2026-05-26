@@ -471,8 +471,32 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function _validateRaterRegistry(address value) internal view {
         if (value.code.length == 0) revert InvalidAddress();
-        try IRaterIdentityRegistry(value).addressIdentityKey(address(0)) returns (bytes32) { }
-        catch {
+        IRaterIdentityRegistry registry = IRaterIdentityRegistry(value);
+        address sample = address(uint160(uint256(keccak256("rateloop.rater-registry.validation"))));
+        bytes32 expectedSampleKey = keccak256(abi.encodePacked("rateloop.address-identity-v1", sample));
+        try registry.addressIdentityKey(address(0)) returns (bytes32 zeroKey) {
+            if (zeroKey != bytes32(0)) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+        try registry.addressIdentityKey(sample) returns (bytes32 sampleKey) {
+            if (sampleKey != expectedSampleKey) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+        try registry.resolveRater(sample) returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
+            if (
+                resolved.holder != sample || resolved.identityKey != expectedSampleKey
+                    || resolved.humanNullifier != bytes32(0) || resolved.hasActiveHumanCredential || resolved.delegated
+            ) {
+                revert InvalidConfig();
+            }
+        } catch {
+            revert InvalidConfig();
+        }
+        try registry.hasActiveHumanCredential(sample) returns (bool active) {
+            if (active) revert InvalidConfig();
+        } catch {
             revert InvalidConfig();
         }
     }

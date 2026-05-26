@@ -31,6 +31,13 @@ contract MockFrontendRegistryForConfig {
     }
 }
 
+contract WeakRaterRegistryForConfig {
+    function addressIdentityKey(address account) external pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return bytes32(uint256(1));
+    }
+}
+
 contract MockAdvisoryVoteRecorderForConfig {
     address internal recorderProtocolConfig;
     bool internal revertProtocolConfig;
@@ -165,6 +172,14 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
         config.setRaterRegistry(address(0));
+    }
+
+    function test_SetRaterRegistry_RejectsWeakAbiShape() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        WeakRaterRegistryForConfig weakRegistry = new WeakRaterRegistryForConfig();
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRaterRegistry(address(weakRegistry));
     }
 
     function test_SetFrontendRegistry_ValidatesIntegration() public {
