@@ -381,7 +381,7 @@ contract ClusterPayoutOracleTest is Test {
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
-        oracle.rejectCorrelationEpoch(1, keccak256("late-bad-root"));
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("late-bad-root"));
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
         assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
@@ -400,8 +400,132 @@ contract ClusterPayoutOracleTest is Test {
         oracle.finalizeCorrelationEpoch(1);
 
         vm.warp(block.timestamp + oracle.FINALIZATION_VETO_WINDOW() + 1);
-        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
-        oracle.rejectCorrelationEpoch(1, keccak256("too-late"));
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("too-late"));
+    }
+
+    function test_RejectedFinalizedCorrelationEpochBlocksChildFinalization() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+        );
+
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
+
+        vm.warp(block.timestamp + 1 hours + 1);
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+    }
+
+    function test_RejectedFinalizedCorrelationEpochBlocksChallengedChildFinalization() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+        );
+        oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-child"));
+
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
+
+        vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
+        oracle.finalizeChallengedRoundPayoutSnapshot(snapshotKey, keccak256("dismiss-child-challenge"));
+    }
+
+    function test_RejectedFinalizedCorrelationEpochBlocksFuturePayoutVerification() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.PayoutWeight memory payout = IClusterPayoutOracle.PayoutWeight({
+            domain: oracle.PAYOUT_DOMAIN_QUESTION_REWARD(),
+            rewardPoolId: 7,
+            contentId: 42,
+            roundId: 3,
+            commitKey: keccak256("commit"),
+            identityKey: keccak256("identity"),
+            account: address(0xBEEF),
+            baseWeight: 10_000,
+            independenceBps: 2_500,
+            effectiveWeight: 2_500,
+            reasonHash: keccak256("reason")
+        });
+        bytes32 leaf = oracle.payoutWeightLeaf(payout);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = IClusterPayoutOracle.RoundPayoutSnapshotInput({
+            domain: oracle.PAYOUT_DOMAIN_QUESTION_REWARD(),
+            rewardPoolId: 7,
+            contentId: 42,
+            roundId: 3,
+            correlationEpochId: 1,
+            rawEligibleVoters: 4,
+            effectiveParticipantUnits: 25_000,
+            totalClaimWeight: 2_500,
+            weightRoot: leaf,
+            reasonRoot: keccak256("reason-root"),
+            artifactHash: keccak256("epoch-artifact"),
+            artifactURI: "ipfs://round"
+        });
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+        );
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        bytes32[] memory proof = new bytes32[](0);
+        vm.prank(address(questionConsumer));
+        assertTrue(oracle.verifyPayoutWeight(payout, proof));
+
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
+
+        vm.prank(address(questionConsumer));
+        assertFalse(oracle.verifyPayoutWeight(payout, proof));
+    }
+
+    function test_RejectedFinalizedCorrelationEpochCanBeReplacedWithDifferentRoot() public {
+        bytes32 badRoot = keccak256("bad-cluster-root");
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, badRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-root"));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, badRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("replacement-cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch-replacement"
+        );
+        vm.warp(block.timestamp + 1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(snapshot.clusterRoot, keccak256("replacement-cluster-root"));
     }
 
     // L-Oracle-A: the arbiter rejecting a Proposed (pre-challenge) correlation epoch must NOT

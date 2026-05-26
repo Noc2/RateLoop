@@ -36,6 +36,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     uint64 public constant MAX_CHALLENGE_WINDOW = 3 days;
     uint256 public constant DEFAULT_CHALLENGE_BOND = 5e6;
     uint256 public constant MIN_CHALLENGE_BOND = 1e6;
+    /// @dev Challenge bonds are anti-spam only, not payout-value coverage. Keep governance
+    ///      rotations bounded so a bad config cannot price honest challengers out.
     uint256 public constant MAX_CHALLENGE_BOND = 100e6;
     /// @dev Window after a round payout snapshot is finalized during which the arbiter can still
     ///      reject it, even if a consumer has already paid one or more claims against the cached
@@ -304,10 +306,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function rejectCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
-        bool wasFinalized = snapshot.status == SnapshotStatus.Finalized;
-        if (wasFinalized && block.timestamp > uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW)) {
-            revert SnapshotConsumed();
-        }
+        if (snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
         bool wasChallenged = snapshot.status == SnapshotStatus.Challenged;
         snapshot.status = SnapshotStatus.Rejected;
         // L-Oracle-A: only blacklist the clusterRoot when the rejection comes from a `Challenged`
@@ -315,13 +314,26 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // path) can be cleared by the arbiter without permanently banning the honest correct
         // root from re-proposal — the deterministic scorer pipeline cannot produce a different
         // root for the same epoch, so blacklisting would otherwise strand the epoch.
-        if (wasChallenged || wasFinalized) {
+        if (wasChallenged) {
             rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
         }
         address challenger = snapshot.challenger;
         uint256 bond = snapshot.bond;
         snapshot.bond = 0;
         if (bond > 0) _creditBond(challenger == address(0) ? bondRecipient : challenger, bond);
+        emit CorrelationEpochRejected(epochId, msg.sender, reasonHash);
+    }
+
+    function rejectFinalizedCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
+        CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
+        if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
+        if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
+        if (block.timestamp > uint256(snapshot.finalizedAt) + uint256(FINALIZATION_VETO_WINDOW)) {
+            revert SnapshotNotFinalizable();
+        }
+
+        snapshot.status = SnapshotStatus.Rejected;
+        rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
         emit CorrelationEpochRejected(epochId, msg.sender, reasonHash);
     }
 
@@ -434,6 +446,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         ) {
             revert SnapshotNotFinalizable();
         }
+        _requireCorrelationEpochFinalized(proposal.snapshot.correlationEpochId);
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
         // Return the proposer's own bond plus any challenge bonds awarded to them on finalization.
@@ -458,6 +471,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (proposal.snapshot.status != SnapshotStatus.Challenged) revert SnapshotNotFinalizable();
+        _requireCorrelationEpochFinalized(proposal.snapshot.correlationEpochId);
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
         // See finalizeRoundPayoutSnapshot for the proposerBond rationale (L-Integrations-1).
@@ -649,6 +663,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (msg.sender != proposal.consumer) return false;
         RoundPayoutSnapshot memory snapshot = proposal.snapshot;
         if (snapshot.status != SnapshotStatus.Finalized) return false;
+        if (!_isCorrelationEpochFinalized(snapshot.correlationEpochId)) return false;
         if (snapshot.totalClaimWeight == 0 || snapshot.weightRoot == bytes32(0)) return false;
         if (payout.independenceBps > BPS_DENOMINATOR) return false;
         if (payout.effectiveWeight > payout.baseWeight) return false;
@@ -702,6 +717,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
     function _isPayoutDomain(uint8 domain) private pure returns (bool) {
         return domain == PAYOUT_DOMAIN_QUESTION_REWARD || domain == PAYOUT_DOMAIN_LAUNCH_CREDIT;
+    }
+
+    function _requireCorrelationEpochFinalized(uint64 epochId) private view {
+        if (!_isCorrelationEpochFinalized(epochId)) revert SnapshotNotFinalizable();
+    }
+
+    function _isCorrelationEpochFinalized(uint64 epochId) private view returns (bool) {
+        return correlationEpochSnapshots[epochId].status == SnapshotStatus.Finalized;
     }
 
     function _creditBond(address to, uint256 amount) private {
