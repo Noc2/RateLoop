@@ -217,6 +217,7 @@ library QuestionRewardPoolEscrowClaimLib {
             proof,
             params.payoutDomain,
             snapshot.clusterWeightRoot,
+            snapshot.clusterSnapshotDigest,
             snapshot.totalClaimWeight
         );
         if (claimWeight == 0) return 0;
@@ -281,6 +282,7 @@ library QuestionRewardPoolEscrowClaimLib {
         bytes32[] memory proof,
         uint8 payoutDomain,
         bytes32 expectedWeightRoot,
+        bytes32 expectedSnapshotDigest,
         uint256 expectedTotalClaimWeight
     ) external view returns (uint256) {
         return _effectiveClusterQuestionClaimWeight(
@@ -296,6 +298,7 @@ library QuestionRewardPoolEscrowClaimLib {
             proof,
             payoutDomain,
             expectedWeightRoot,
+            expectedSnapshotDigest,
             expectedTotalClaimWeight
         );
     }
@@ -572,6 +575,7 @@ library QuestionRewardPoolEscrowClaimLib {
         bytes32[] memory proof,
         uint8 payoutDomain,
         bytes32 expectedWeightRoot,
+        bytes32 expectedSnapshotDigest,
         uint256 expectedTotalClaimWeight
     ) private view returns (uint256) {
         require(
@@ -587,10 +591,16 @@ library QuestionRewardPoolEscrowClaimLib {
         if (expectedWeightRoot != bytes32(0)) {
             IClusterPayoutOracle.RoundPayoutSnapshot memory currentSnapshot = IClusterPayoutOracle(oracle)
                 .getRoundPayoutSnapshot(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
+            bytes32 currentDigest =
+                IClusterPayoutOracle(oracle).roundPayoutSnapshotProposalDigest(currentSnapshot.snapshotKey);
             require(
                 currentSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Finalized
                     && currentSnapshot.weightRoot == expectedWeightRoot
-                    && currentSnapshot.totalClaimWeight == expectedTotalClaimWeight,
+                    && currentSnapshot.totalClaimWeight == expectedTotalClaimWeight
+                    && currentDigest == expectedSnapshotDigest
+                    && !IClusterPayoutOracle(oracle).rejectedRoundPayoutSnapshotDigests(
+                        currentSnapshot.snapshotKey, expectedSnapshotDigest
+                    ),
                 "Cluster snapshot changed"
             );
         }

@@ -1415,6 +1415,7 @@ contract QuestionRewardPoolEscrow is
             proof,
             PAYOUT_DOMAIN_QUESTION_REWARD,
             roundSnapshots[rewardPoolId][roundId].clusterWeightRoot,
+            roundSnapshots[rewardPoolId][roundId].clusterSnapshotDigest,
             roundSnapshots[rewardPoolId][roundId].totalClaimWeight
         );
     }

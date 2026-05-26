@@ -2907,6 +2907,59 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertFalse(recovered.qualified);
     }
 
+    function testQualifiedClusterSnapshotRejectsSameRootMetadataReplacementClaims() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(snapshot.clusterWeightRoot, originalRoot);
+        assertTrue(snapshot.clusterSnapshotDigest != bytes32(0));
+
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("same-root-bad-metadata"));
+        assertTrue(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, snapshot.clusterSnapshotDigest));
+
+        oracle.proposeRoundPayoutSnapshot(
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: 1,
+                rewardPoolId: rewardPoolId,
+                contentId: contentId,
+                roundId: roundId,
+                correlationEpochId: uint64(roundId),
+                rawEligibleVoters: 3,
+                effectiveParticipantUnits: 30_000,
+                totalClaimWeight: payoutWeight.effectiveWeight,
+                weightRoot: originalRoot,
+                reasonRoot: keccak256("same-root-corrected-reason-root"),
+                artifactHash: keccak256("epoch-artifact"),
+                artifactURI: "ipfs://round-same-root-corrected"
+            })
+        );
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        bytes32[] memory proof = new bytes32[](0);
+        vm.prank(voter1);
+        vm.expectRevert("Cluster snapshot changed");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof);
+
+        vm.prank(owner);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+        RoundSnapshot memory recovered = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertFalse(recovered.qualified);
+    }
+
     function testRecoveredClusterSnapshotCanReopenWithCorrectedSameRootMetadata() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
