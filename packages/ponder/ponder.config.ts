@@ -1,6 +1,5 @@
 import { createConfig } from "ponder";
 import { isAddress } from "viem";
-import { http } from "viem";
 
 import {
   AdvisoryVoteRecorderAbi,
@@ -21,6 +20,7 @@ import {
   getSharedDeploymentAddress as getSharedArtifactAddress,
   getSharedDeploymentStartBlock as getSharedArtifactStartBlock,
 } from "@rateloop/contracts/deployments";
+import { httpWithGetLogsBlockRange } from "./src/rpcTransport";
 
 type PonderNetworkName = "worldchainSepolia" | "hardhat" | "worldchain";
 
@@ -31,12 +31,14 @@ const NETWORKS: Record<
   {
     chainId: number;
     defaultRpcUrl: string;
+    maxGetLogsBlockRange?: number;
     pollingInterval: number;
   }
 > = {
   worldchainSepolia: {
     chainId: 4801,
     defaultRpcUrl: "https://worldchain-sepolia.g.alchemy.com/public",
+    maxGetLogsBlockRange: 1_000,
     pollingInterval: 5_000,
   },
   hardhat: {
@@ -47,6 +49,7 @@ const NETWORKS: Record<
   worldchain: {
     chainId: 480,
     defaultRpcUrl: "https://worldchain-mainnet.g.alchemy.com/public",
+    maxGetLogsBlockRange: 1_000,
     pollingInterval: 5_000,
   },
 };
@@ -418,7 +421,10 @@ export default createConfig({
   networks: {
     [activeNetwork]: {
       chainId: NETWORKS[activeNetwork].chainId,
-      transport: http(getRpcUrl(activeNetwork)),
+      transport: httpWithGetLogsBlockRange(
+        getRpcUrl(activeNetwork),
+        NETWORKS[activeNetwork].maxGetLogsBlockRange,
+      ),
       pollingInterval: NETWORKS[activeNetwork].pollingInterval,
     },
   },
