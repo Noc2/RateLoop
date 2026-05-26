@@ -20,6 +20,10 @@ export function isUploadedImageUrl(url: string): boolean {
   return Boolean(normalizeUploadedImageUrl(url));
 }
 
+export function isContractSubmissionImageUrl(url: string): boolean {
+  return Boolean(normalizeUploadedImageAttachmentUrl(url, { allowLocalhostOrigins: false }));
+}
+
 export function isYouTubeVideoUrl(url: string): boolean {
   return detectPlatform(url).type === "youtube";
 }

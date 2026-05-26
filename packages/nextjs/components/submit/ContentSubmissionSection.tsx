@@ -41,6 +41,7 @@ import { MAX_CONTENT_DESCRIPTION_LENGTH } from "~~/lib/contentDescription";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
   MAX_SUBMISSION_URL_LENGTH,
+  isContractSubmissionImageUrl,
   isDirectImageUrl,
   isUploadedImageUrl,
   isYouTubeVideoUrl,
@@ -621,6 +622,10 @@ export function ContentSubmissionSection() {
 
     if (expectedType === "images" && !isUploadedImageUrl(normalizedUrl)) {
       return "Use an approved RateLoop image upload.";
+    }
+
+    if (expectedType === "images" && !isContractSubmissionImageUrl(normalizedUrl)) {
+      return "Local image uploads must be served from an HTTPS RateLoop URL before submitting.";
     }
 
     if (expectedType === "video" && !isYouTubeVideoUrl(normalizedUrl)) {
