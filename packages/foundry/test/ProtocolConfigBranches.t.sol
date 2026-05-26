@@ -44,6 +44,10 @@ contract MockClusterPayoutOracleForConfig {
         launchConsumer = launchConsumer_;
     }
 
+    function setLaunchConsumer(address launchConsumer_) external {
+        launchConsumer = launchConsumer_;
+    }
+
     function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         pure
@@ -257,6 +261,38 @@ contract ProtocolConfigBranchesTest is Test {
 
         config.setClusterPayoutOracle(address(pinnedOracle));
         assertEq(config.clusterPayoutOracle(), address(pinnedOracle));
+    }
+
+    function test_SetLaunchDistributionPool_RequiresPinnedLaunchConsumerAfterOracleConfigured() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        config.setClusterPayoutOracle(address(oracle));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setLaunchDistributionPool(address(launchPool));
+
+        oracle.setLaunchConsumer(address(launchPool));
+        config.setLaunchDistributionPool(address(launchPool));
+        assertEq(config.launchDistributionPool(), address(launchPool));
+    }
+
+    function test_SetLaunchDistributionPool_RejectsRotationUntilOracleConsumerMoves() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+        MockLaunchDistributionPoolForConfig replacementLaunchPool = new MockLaunchDistributionPoolForConfig();
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(launchPool));
+
+        config.setClusterPayoutOracle(address(oracle));
+        config.setLaunchDistributionPool(address(launchPool));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setLaunchDistributionPool(address(replacementLaunchPool));
+
+        oracle.setLaunchConsumer(address(replacementLaunchPool));
+        config.setLaunchDistributionPool(address(replacementLaunchPool));
+        assertEq(config.launchDistributionPool(), address(replacementLaunchPool));
     }
 
     function test_SetAdvisoryVoteRecorder_UpdatesAddressAndEmits() public {
