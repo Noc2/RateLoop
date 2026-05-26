@@ -221,6 +221,11 @@ contract AdversarialTests is VotingTestBase {
 
     /// @notice With 4 winners and 1 loser, total claimed must not exceed pool bounds
     function test_RewardExhaustion_MultipleWinners_CantExceedPool() public {
+        ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
+        vm.startPrank(owner);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 5, 200);
+        vm.stopPrank();
+
         uint256 contentId = _submitContent();
 
         // 4 UP voters (winners — total weighted UP = 15e6 > DOWN), 1 DOWN voter (loser)

@@ -2190,6 +2190,7 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.startPrank(owner);
         registry.setTreasury(treasury);
         protocolConfig.setSlashConfig(4_000, 1, 2 days, 1e6);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 6, 200);
         vm.stopPrank();
 
         uint256 contentId = _submitContentWithoutOpeningRound();

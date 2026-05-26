@@ -126,6 +126,13 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         return id;
     }
 
+    function _setRoundMinVoters(uint16 minVoters) internal {
+        ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
+        vm.startPrank(owner);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, MAX_DURATION, minVoters, 200);
+        vm.stopPrank();
+    }
+
     /// @dev Commit a vote for a voter in the current round. Approves and calls commitVote.
     function _commit(address voter, uint256 contentId, bool isUp, uint256 stake) internal {
         bytes32 salt = bytes32(uint256(uint160(voter)) ^ uint256(contentId));
@@ -174,6 +181,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     ///
     ///   weightedDownPool = 10, weightedUpPool = 7.5 -> DOWN wins.
     function test_EpochWeightWinCondition() public {
+        _setRoundMinVoters(4);
         uint256 cid = _submit();
         uint256 roundStart = block.timestamp;
 
@@ -207,7 +215,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertEq(round.weightedDownPool, 10e6, "weighted DOWN pool = 10 LREP (epoch-1 full weight)");
         assertEq(round.weightedUpPool, 7_500_000, "weighted UP pool = 7.5 LREP (3x epoch-2 at 25% each)");
 
-        // thresholdReachedAt was set when 3rd vote was revealed (minVoters = 3)
+        // thresholdReachedAt was set when the 4th vote was revealed (minVoters = 4)
         assertGt(round.thresholdReachedAt, 0, "threshold reached");
 
         _settle(cid, roundId);

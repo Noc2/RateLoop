@@ -117,6 +117,13 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         return id;
     }
 
+    function _setRoundMinVoters(uint16 minVoters) internal {
+        ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
+        vm.startPrank(owner);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, MAX_DURATION, minVoters, 200);
+        vm.stopPrank();
+    }
+
     struct _VoteCtx {
         uint16 referenceRatingBps;
         uint64 targetRound;
@@ -407,6 +414,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
 
     /// @notice When UP and DOWN weighted stakes are exactly equal, settlement produces a Tied round.
     function test_RoundTransition_OpenToTied() public {
+        _setRoundMinVoters(4);
         uint256 cid = _submit();
 
         // Equal stakes on both sides (same epoch = same weight)

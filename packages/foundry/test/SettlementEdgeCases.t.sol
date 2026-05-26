@@ -391,6 +391,11 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     // =========================================================================
 
     function test_Settle_TiedRound_Reverts() public {
+        ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
+        vm.startPrank(owner);
+        _setTlockRoundConfig(protocolConfig, 1 hours, 7 days, 4, 200);
+        vm.stopPrank();
+
         // Create a tied round: equal weighted pools
         uint256 contentId = _submitContent();
 
@@ -874,6 +879,11 @@ contract SettlementEdgeCasesTest is VotingTestBase {
     // =========================================================================
 
     function test_Refund_TiedRound_ReturnsStake() public {
+        ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
+        vm.startPrank(owner);
+        _setTlockRoundConfig(protocolConfig, 1 hours, 7 days, 4, 200);
+        vm.stopPrank();
+
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);

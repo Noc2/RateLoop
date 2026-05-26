@@ -116,6 +116,13 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         return id;
     }
 
+    function _setRoundMinVoters(uint16 minVoters) internal {
+        ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
+        vm.startPrank(owner);
+        _setTlockRoundConfig(protocolConfig, 1 hours, MAX_DURATION, minVoters, 200);
+        vm.stopPrank();
+    }
+
     function _vote(address voter, uint256 cid, bool up, uint256 stake)
         internal
         returns (bytes32 commitKey, bytes32 salt)
@@ -268,6 +275,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
     /// @notice 4 UP (1 each = 4 total) vs 1 DOWN (10). DOWN wins because stake > voter count.
     function test_StakeWeight_DeterminesOutcome() public {
+        _setRoundMinVoters(5);
         uint256 cid = _submit();
 
         _vote(v[0], cid, true, 1e6);
@@ -357,6 +365,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     /// @dev Same-epoch votes retain full raw stake in the weighted signal. RBTS scores
     ///      determine individual reward returns after settlement.
     function test_StakeAsymmetry_WeightedPoolsTrackSameEpochStake() public {
+        _setRoundMinVoters(10);
         uint256 cid = _submit();
 
         // UP side: whale first, then minnows (all in epoch-1)
@@ -413,6 +422,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
     /// @notice 1 whale DOWN (100) vs 9 minnows UP (50 each). Minnows win.
     function test_StakeAsymmetry_MinnowsDefeatWhale() public {
+        _setRoundMinVoters(10);
         uint256 cid = _submit();
 
         (bytes32 whaleKey,) = _vote(v[0], cid, false, 10e6); // whale DOWN
@@ -606,6 +616,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
     /// @notice 5 UP (50 each) vs 5 DOWN (50 each). Equal pools -> Tied -> full refund.
     function test_TiedRound_FullRefund() public {
+        _setRoundMinVoters(10);
         uint256 cid = _submit();
 
         // Record starting balances
