@@ -74,10 +74,10 @@ function AgentIcon({ name }: { name: string }) {
 }
 
 const RATELOOP_AGENT_PROMPT =
-  "Read RateLoop's agent docs: https://rateloop.ai/docs/ai and https://rateloop.ai/docs/how-it-works. Explain how you can use RateLoop for me: turn a public URL, image, or YouTube video into paid open-rater ratings and written feedback you can cite. Cover the flow: choose a template, quote, fund a World Chain USDC bounty, get reputation-qualified commit-reveal ratings/feedback, then fetch results via MCP/API: https://rateloop.ai/api/mcp/public. Give one workflow to try with you.";
+  "Read RateLoop's agent docs: https://www.rateloop.xyz/docs/ai and https://www.rateloop.xyz/docs/how-it-works. Explain how you can use RateLoop for me: turn a public URL, image, or YouTube video into paid open-rater ratings and written feedback you can cite. Cover the flow: choose a template, quote, fund a World Chain USDC bounty, get reputation-qualified commit-reveal ratings/feedback, then fetch results via MCP/API: https://www.rateloop.xyz/api/mcp/public. Give one workflow to try with you.";
 
 const LOVABLE_AGENT_PROMPT =
-  "Build a concise interactive page showing how someone can use RateLoop with the AI agent they already use. Use https://rateloop.ai/docs/ai and https://rateloop.ai/docs/how-it-works as source links. Explain the benefit: paid open-rater ratings and written feedback from public URLs, images, or YouTube videos, funded with World Chain USDC and fetched through MCP/API at https://rateloop.ai/api/mcp/public.";
+  "Build a concise interactive page showing how someone can use RateLoop with the AI agent they already use. Use https://www.rateloop.xyz/docs/ai and https://www.rateloop.xyz/docs/how-it-works as source links. Explain the benefit: paid open-rater ratings and written feedback from public URLs, images, or YouTube videos, funded with World Chain USDC and fetched through MCP/API at https://www.rateloop.xyz/api/mcp/public.";
 
 type AgentLaunch = {
   name: string;

@@ -36,7 +36,7 @@ import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const curyo = createRateLoopClient({
-  apiBaseUrl: "https://api.rateloop.xyz",
+  apiBaseUrl: "https://www.rateloop.xyz",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 
