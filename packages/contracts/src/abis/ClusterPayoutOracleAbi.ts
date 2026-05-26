@@ -1235,6 +1235,11 @@ export const ClusterPayoutOracleAbi = [
             "name": "proposerBond",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "correlationEpochDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }

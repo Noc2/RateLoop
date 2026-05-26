@@ -20729,6 +20729,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   type: "uint256",
                   internalType: "uint256",
                 },
+                {
+                  name: "correlationEpochDigest",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
               ],
             },
           ],
@@ -45946,6 +45951,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   name: "proposerBond",
                   type: "uint256",
                   internalType: "uint256",
+                },
+                {
+                  name: "correlationEpochDigest",
+                  type: "bytes32",
+                  internalType: "bytes32",
                 },
               ],
             },

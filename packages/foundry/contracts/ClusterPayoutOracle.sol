@@ -95,6 +95,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // mitigation) is auditable and clawback-able via rejectFinalizedRoundPayoutSnapshot.
         // L-Integrations-1 from 2026-05-16 audit.
         uint256 proposerBond;
+        bytes32 correlationEpochDigest;
     }
 
     uint64 public challengeWindow;
@@ -351,7 +352,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
         bytes32 snapshotKey = roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         if (rejectedRoundPayoutSnapshotRoots[snapshotKey][input.weightRoot]) revert InvalidSnapshot();
-        if (rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotInputDigest(snapshotKey, input)]) {
+        bytes32 correlationEpochDigest = _correlationEpochDigest(epoch);
+        if (
+            rejectedRoundPayoutSnapshotDigests[snapshotKey][
+                _roundPayoutSnapshotInputDigest(snapshotKey, input, correlationEpochDigest)
+            ]
+        ) {
             revert InvalidSnapshot();
         }
         RoundPayoutProposal storage existing = roundPayoutProposals[snapshotKey];
@@ -403,7 +409,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             artifactHash: input.artifactHash,
             artifactURI: input.artifactURI,
             bond: 0,
-            proposerBond: 0
+            proposerBond: 0,
+            correlationEpochDigest: correlationEpochDigest
         });
 
         emit RoundPayoutSnapshotProposed(
@@ -452,7 +459,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         ) {
             revert SnapshotNotFinalizable();
         }
-        _requireCorrelationEpochFinalized(proposal.snapshot.correlationEpochId);
+        _requireCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId);
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
         // Return the proposer's own bond plus any challenge bonds awarded to them on finalization.
@@ -477,7 +484,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (proposal.snapshot.status != SnapshotStatus.Challenged) revert SnapshotNotFinalizable();
-        _requireCorrelationEpochFinalized(proposal.snapshot.correlationEpochId);
+        _requireCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId);
         proposal.snapshot.status = SnapshotStatus.Finalized;
         proposal.snapshot.finalizedAt = block.timestamp.toUint64();
         // See finalizeRoundPayoutSnapshot for the proposerBond rationale (L-Integrations-1).
@@ -659,7 +666,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         returns (bool)
     {
         bytes32 snapshotKey = roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId);
-        return roundPayoutProposals[snapshotKey].snapshot.status == SnapshotStatus.Finalized;
+        RoundPayoutProposal memory proposal = roundPayoutProposals[snapshotKey];
+        return proposal.snapshot.status == SnapshotStatus.Finalized
+            && _isCurrentCorrelationEpoch(proposal.correlationEpochDigest, proposal.snapshot.correlationEpochId);
     }
 
     function getRoundPayoutSnapshot(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
@@ -668,8 +677,15 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         returns (RoundPayoutSnapshot memory)
     {
         bytes32 snapshotKey = roundPayoutSnapshotKey(domain, rewardPoolId, contentId, roundId);
-        RoundPayoutSnapshot memory snapshot = roundPayoutProposals[snapshotKey].snapshot;
+        RoundPayoutProposal memory proposal = roundPayoutProposals[snapshotKey];
+        RoundPayoutSnapshot memory snapshot = proposal.snapshot;
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
+        if (
+            snapshot.status == SnapshotStatus.Finalized
+                && !_isCurrentCorrelationEpoch(proposal.correlationEpochDigest, snapshot.correlationEpochId)
+        ) {
+            snapshot.status = SnapshotStatus.Rejected;
+        }
         return snapshot;
     }
 
@@ -708,7 +724,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (msg.sender != proposal.consumer) return false;
         RoundPayoutSnapshot memory snapshot = proposal.snapshot;
         if (snapshot.status != SnapshotStatus.Finalized) return false;
-        if (!_isCorrelationEpochFinalized(snapshot.correlationEpochId)) return false;
+        if (!_isCurrentCorrelationEpoch(proposal.correlationEpochDigest, snapshot.correlationEpochId)) return false;
         if (snapshot.totalClaimWeight == 0 || snapshot.weightRoot == bytes32(0)) return false;
         if (payout.independenceBps > BPS_DENOMINATOR) return false;
         if (payout.effectiveWeight > payout.baseWeight) return false;
@@ -742,7 +758,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         );
     }
 
-    function _roundPayoutSnapshotInputDigest(bytes32 snapshotKey, RoundPayoutSnapshotInput calldata input)
+    function _roundPayoutSnapshotInputDigest(
+        bytes32 snapshotKey,
+        RoundPayoutSnapshotInput calldata input,
+        bytes32 correlationEpochDigest
+    )
         private
         pure
         returns (bytes32)
@@ -760,7 +780,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             input.weightRoot,
             input.reasonRoot,
             input.artifactHash,
-            keccak256(bytes(input.artifactURI))
+            keccak256(bytes(input.artifactURI)),
+            correlationEpochDigest
         );
     }
 
@@ -779,7 +800,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             snapshot.weightRoot,
             snapshot.reasonRoot,
             proposal.artifactHash,
-            keccak256(bytes(proposal.artifactURI))
+            keccak256(bytes(proposal.artifactURI)),
+            proposal.correlationEpochDigest
         );
     }
 
@@ -796,7 +818,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         bytes32 weightRoot,
         bytes32 reasonRoot,
         bytes32 artifactHash,
-        bytes32 artifactUriHash
+        bytes32 artifactUriHash,
+        bytes32 correlationEpochDigest
     ) private pure returns (bytes32) {
         return keccak256(
             abi.encode(
@@ -813,7 +836,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                 weightRoot,
                 reasonRoot,
                 artifactHash,
-                artifactUriHash
+                artifactUriHash,
+                correlationEpochDigest
             )
         );
     }
@@ -840,12 +864,27 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         return domain == PAYOUT_DOMAIN_QUESTION_REWARD || domain == PAYOUT_DOMAIN_LAUNCH_CREDIT;
     }
 
-    function _requireCorrelationEpochFinalized(uint64 epochId) private view {
-        if (!_isCorrelationEpochFinalized(epochId)) revert SnapshotNotFinalizable();
+    function _requireCurrentCorrelationEpoch(bytes32 expectedDigest, uint64 epochId) private view {
+        if (!_isCurrentCorrelationEpoch(expectedDigest, epochId)) revert SnapshotNotFinalizable();
     }
 
-    function _isCorrelationEpochFinalized(uint64 epochId) private view returns (bool) {
-        return correlationEpochSnapshots[epochId].status == SnapshotStatus.Finalized;
+    function _isCurrentCorrelationEpoch(bytes32 expectedDigest, uint64 epochId) private view returns (bool) {
+        CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
+        return snapshot.status == SnapshotStatus.Finalized && _correlationEpochDigest(snapshot) == expectedDigest;
+    }
+
+    function _correlationEpochDigest(CorrelationEpochSnapshot storage snapshot) private view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                CORRELATION_EPOCH_DOMAIN,
+                snapshot.epochId,
+                snapshot.fromRoundId,
+                snapshot.toRoundId,
+                snapshot.clusterRoot,
+                snapshot.parameterHash,
+                snapshot.artifactHash
+            )
+        );
     }
 
     function _creditBond(address to, uint256 amount) private {

@@ -419,6 +419,18 @@ contract ClusterPayoutOracleTest is Test {
 
         oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
 
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("replacement-cluster-root"),
+            keccak256("params"),
+            keccak256("replacement-epoch-artifact"),
+            "ipfs://epoch-replacement"
+        );
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.finalizeCorrelationEpoch(1);
+
         vm.warp(block.timestamp + 1 hours + 1);
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
@@ -439,6 +451,18 @@ contract ClusterPayoutOracleTest is Test {
         oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("bad-child"));
 
         oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("replacement-cluster-root"),
+            keccak256("params"),
+            keccak256("replacement-epoch-artifact"),
+            "ipfs://epoch-replacement"
+        );
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.finalizeCorrelationEpoch(1);
 
         vm.expectRevert(ClusterPayoutOracle.SnapshotNotFinalizable.selector);
         oracle.finalizeChallengedRoundPayoutSnapshot(snapshotKey, keccak256("dismiss-child-challenge"));
@@ -492,6 +516,31 @@ contract ClusterPayoutOracleTest is Test {
         assertTrue(oracle.verifyPayoutWeight(payout, proof));
 
         oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
+
+        vm.prank(address(questionConsumer));
+        assertFalse(oracle.verifyPayoutWeight(payout, proof));
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("replacement-cluster-root"),
+            keccak256("params"),
+            keccak256("replacement-epoch-artifact"),
+            "ipfs://epoch-replacement"
+        );
+        vm.warp(3 hours + 4);
+        oracle.finalizeCorrelationEpoch(1);
+
+        assertFalse(
+            oracle.isRoundPayoutSnapshotFinalized(
+                oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+            )
+        );
+        IClusterPayoutOracle.RoundPayoutSnapshot memory staleSnapshot = oracle.getRoundPayoutSnapshot(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+        );
+        assertEq(uint8(staleSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
 
         vm.prank(address(questionConsumer));
         assertFalse(oracle.verifyPayoutWeight(payout, proof));
@@ -1075,8 +1124,7 @@ contract ClusterPayoutOracleProposerBondTest is Test {
         oracle.setProposerBondForTest(snapshotKey, 12_345);
         assertEq(oracle.readProposerBond(snapshotKey), 12_345);
 
-        // Verify other proposal fields are still intact (the slot calc only touched the trailing
-        // uint256 of the struct).
+        // Verify other proposal fields are still intact (the slot calc only touched proposerBond).
         ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
         assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
         assertEq(proposal.proposer, proposer);
@@ -1262,10 +1310,11 @@ contract TestableClusterPayoutOracle is ClusterPayoutOracle {
         //   slot 4: frontendRegistry (address; challengeBondToken is immutable, no slot)
         //   slot 5: correlationEpochSnapshots (mapping)
         //   slot 6: roundPayoutProposals (mapping)
-        // proposerBond is the last uint256 of RoundPayoutProposal at offset 15 within the struct
+        // proposerBond sits at offset 15 within RoundPayoutProposal
         // (RoundPayoutSnapshot packs into slots 0-8, then proposedAt+consumer=9, proposer=10,
-        // challenger=11, artifactHash=12, artifactURI=13, bond=14, proposerBond=15). This layout
-        // is asserted by test_ProposerBondSlotMatchesBondField below.
+        // challenger=11, artifactHash=12, artifactURI=13, bond=14, proposerBond=15,
+        // correlationEpochDigest=16). This layout is asserted by
+        // test_ProposerBondSlotMatchesBondField below.
         uint256 BASE_SLOT_ROUND_PAYOUT_PROPOSALS = 6;
         uint256 PROPOSER_BOND_OFFSET = 15;
         bytes32 structRoot = keccak256(abi.encode(snapshotKey, BASE_SLOT_ROUND_PAYOUT_PROPOSALS));
