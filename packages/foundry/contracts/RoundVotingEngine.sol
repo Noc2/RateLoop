@@ -1322,7 +1322,7 @@ contract RoundVotingEngine is
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
         uint256 thresholdBlock = roundThresholdReachedBlock[contentId][roundId];
-        bool countForSettlement = thresholdBlock == 0 || thresholdBlock != block.number;
+        bool countForSettlement = thresholdBlock == 0;
         (
             uint256 eligibleFrontendStake,
             uint256 eligibleFrontendCount,
@@ -1358,9 +1358,9 @@ contract RoundVotingEngine is
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         }
         commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
-        // L-Vote-B / H-Vote-1: settlement pools and RBTS scoring use the same cutoff for
-        // same-block post-quorum reveals. Later blocks still count under the existing round
-        // economics, but backruns in the quorum-closing block are stake-return-only.
+        // L-Vote-B / H-Vote-1: settlement pools and RBTS scoring use the same cutoff for all
+        // post-quorum reveals. The delayed RBTS seed makes settlement impossible in the
+        // quorum-closing block, so later-block reveals must be stake-return-only as well.
         if (countForSettlement) {
             commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
         }
