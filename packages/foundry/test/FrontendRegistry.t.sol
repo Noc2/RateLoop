@@ -809,9 +809,8 @@ contract FrontendRegistryTest is Test {
         registry.setVotingEngine(address(0));
     }
 
-    function test_SlashFrontendRequiresVotingEngine() public {
-        // L-05: slashFrontend should revert if votingEngine is not set
-        // Deploy a fresh registry without setting voting engine
+    function test_SlashFrontendWithoutVotingEngine() public {
+        // Deploy a fresh registry without setting voting engine.
         vm.startPrank(admin);
         FrontendRegistry impl2 = new FrontendRegistry();
         FrontendRegistry noEngineRegistry = FrontendRegistry(
@@ -832,10 +831,13 @@ contract FrontendRegistryTest is Test {
         noEngineRegistry.register();
         vm.stopPrank();
 
-        // Try to slash — should revert
+        uint256 adminBalanceBefore = lrepToken.balanceOf(admin);
+
         vm.prank(admin);
-        vm.expectRevert("VotingEngine not set");
         noEngineRegistry.slashFrontend(frontend1, STAKE / 2, "Test");
+
+        assertFalse(noEngineRegistry.isEligible(frontend1));
+        assertEq(lrepToken.balanceOf(admin), adminBalanceBefore + STAKE / 2);
     }
 
     function test_AddAndRemoveFeeCreditor() public {

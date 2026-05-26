@@ -317,7 +317,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         onlyRole(GOVERNANCE_ROLE)
     {
         require(bytes(reason).length <= MAX_SLASH_REASON_LENGTH, "Slash reason too long");
-        require(address(votingEngine) != address(0), "VotingEngine not set");
         Frontend storage f = frontends[frontend];
         require(f.operator != address(0), "Frontend not registered");
         require(uint256(f.stakedAmount) >= amount, "Slash exceeds stake");
