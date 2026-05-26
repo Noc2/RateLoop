@@ -17,7 +17,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
-  const requestBody = "request" in body ? (body as { request?: unknown }).request : body;
+  const hasWrappedRequest = "request" in body;
+  const requestBody = hasWrappedRequest
+    ? (body as { request?: unknown }).request
+    : Object.fromEntries(Object.entries(body).filter(([key]) => key !== "ttlMs"));
   const origin = new URL(request.url).origin;
 
   return handlePublicAgentRoute({

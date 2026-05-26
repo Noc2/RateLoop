@@ -662,6 +662,25 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal((prepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
 });
 
+test("agent signing intent route accepts ttlMs on direct ask bodies without persisting it", async () => {
+  installAskOverrides();
+
+  const response = await signingIntentsRoute.POST(
+    makePublicPost("https://curyo.xyz/api/agent/signing-intents", {
+      ...questionPayload("direct-ttl"),
+      maxPaymentAmount: "1500000",
+      signatureMode: "browser_link",
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.clientRequestId, "direct-ttl");
+  assert.equal((body.requestBody as Record<string, unknown>).ttlMs, undefined);
+  assert.equal(new Date(String(body.expiresAt)).getTime() - new Date(String(body.createdAt)).getTime(), 300000);
+});
+
 test("agent signing intent read requires a private token outside the request URL", async () => {
   const response = await signingIntentRoute.GET(
     makePublicGet("https://curyo.xyz/api/agent/signing-intents/asi_missing"),
