@@ -79,6 +79,27 @@ contract ClusterPayoutOracleTest is Test {
         );
     }
 
+    function test_ProposeCorrelationEpochRejectsZeroArtifactHash() public {
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), bytes32(0), "ipfs://epoch"
+        );
+    }
+
+    function test_ProposeRoundPayoutSnapshotRejectsZeroArtifactHash() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        input.artifactHash = bytes32(0);
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
     function test_ChallengeWindowCannotOutliveFrontendUnbondingBuffer() public {
         uint64 maxChallengeWindow = oracle.MAX_CHALLENGE_WINDOW();
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
@@ -125,7 +146,13 @@ contract ClusterPayoutOracleTest is Test {
         oracle.setFrontendRegistry(address(replacement));
 
         oracle.proposeCorrelationEpoch(
-            100, 1, 20, keccak256("replacement-cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://ok"
+            100,
+            1,
+            20,
+            keccak256("replacement-cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://ok"
         );
     }
 

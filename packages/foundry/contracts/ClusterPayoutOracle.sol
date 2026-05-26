@@ -217,7 +217,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         bytes32 artifactHash,
         string calldata artifactURI
     ) external payable {
-        if (epochId == 0 || toRoundId < fromRoundId || clusterRoot == bytes32(0) || parameterHash == bytes32(0)) {
+        if (
+            epochId == 0 || toRoundId < fromRoundId || clusterRoot == bytes32(0) || parameterHash == bytes32(0)
+                || artifactHash == bytes32(0)
+        ) {
             revert InvalidSnapshot();
         }
         if (msg.value != 0) revert InvalidBond();
@@ -678,7 +681,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function _validateRoundPayoutInput(RoundPayoutSnapshotInput calldata input) private pure {
         if (
             !_isPayoutDomain(input.domain) || input.contentId == 0 || input.roundId == 0
-                || input.correlationEpochId == 0
+                || input.correlationEpochId == 0 || input.artifactHash == bytes32(0)
                 || input.effectiveParticipantUnits > uint256(input.rawEligibleVoters) * BPS_DENOMINATOR
         ) {
             revert InvalidSnapshot();
