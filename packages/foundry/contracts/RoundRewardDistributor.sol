@@ -53,6 +53,12 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         Protocol
     }
 
+    enum LaunchCreditAttempt {
+        Recorded,
+        RetryableFailure,
+        DeterministicNoop
+    }
+
     uint256 public constant STALE_REWARD_FINALIZATION_DELAY = 30 days;
 
     // --- State ---
@@ -280,10 +286,10 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (launchPool == address(0)) return;
         uint16 scoreBps = votingEngine.commitRbtsScoreBps(contentId, roundId, commitKey);
         if (scoreBps == 0) return;
-        bool ok = _tryRecordLaunchRaterCredit(
+        LaunchCreditAttempt attempt = _tryRecordLaunchRaterCredit(
             config, launchPool, contentId, roundId, commitKey, rewardRecipient, scoreBps, stakeAmount
         );
-        if (!ok) {
+        if (attempt == LaunchCreditAttempt.RetryableFailure) {
             // L-Funds-B: persist the recipient + stake so a permissionless retry can re-attempt
             // once the failure cause (oracle rotation race, transient gas spike, anchor lookup
             // glitch) has cleared. Without this the credit is permanently stranded because
@@ -302,7 +308,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         address rewardRecipient,
         uint16 scoreBps,
         uint256 stakeAmount
-    ) internal returns (bool ok) {
+    ) internal returns (LaunchCreditAttempt attempt) {
         RoundLib.Round memory round = _readRound(contentId, roundId);
         uint32 minAnchorCredentialAgeSeconds = _launchAnchorCredentialAgeSeconds(launchPool);
 
@@ -338,22 +344,22 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 // advanced its state. `_recordEarnedRaterRewardCredit` returns 0 silently when
                 // the policy gate fails (anchors expired / saturated, stake under floor,
                 // unverified-cap exceeded). Require the pool to flag the commit as recorded
-                // before reporting success; otherwise the retry path would clear the pending
-                // entry against a no-op and strand the credit permanently.
+                // before reporting success. A successful no-op is deterministic under the
+                // current policy, so do not persist it as retryable work.
                 if (!ILaunchDistributionPool(launchPool).earnedRewardCreditRecorded(contentId, roundId, commitKey)) {
                     emit LaunchRaterRewardCreditFailed(
                         contentId, roundId, commitKey, rewardRecipient, launchPool, bytes("policy-gate")
                     );
-                    return false;
+                    return LaunchCreditAttempt.DeterministicNoop;
                 }
-                return true;
+                return LaunchCreditAttempt.Recorded;
             } catch (bytes memory reason) {
                 emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
-                return false;
+                return LaunchCreditAttempt.RetryableFailure;
             }
         } catch (bytes memory reason) {
             emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
-            return false;
+            return LaunchCreditAttempt.RetryableFailure;
         }
     }
 
@@ -378,10 +384,10 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
 
         delete pendingLaunchCreditRetry[contentId][roundId][commitKey];
 
-        bool ok = _tryRecordLaunchRaterCredit(
+        LaunchCreditAttempt attempt = _tryRecordLaunchRaterCredit(
             config, launchPool, contentId, roundId, commitKey, pending.recipient, scoreBps, pending.stakeAmount
         );
-        require(ok, "Retry failed");
+        require(attempt == LaunchCreditAttempt.Recorded, "Retry failed");
         emit LaunchRaterRewardCreditRetried(contentId, roundId, commitKey, pending.recipient, launchPool);
     }
 

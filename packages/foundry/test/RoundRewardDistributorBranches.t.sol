@@ -586,6 +586,30 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
+
+        (address pendingRecipient, uint96 pendingStake) =
+            rewardDistributor.pendingLaunchCreditRetry(contentId, roundId, voter1CommitKey);
+        assertEq(pendingRecipient, voter1, "external failure remains retryable");
+        assertEq(pendingStake, STAKE, "retry captures stake");
+    }
+
+    function test_ClaimReward_DoesNotRetryDeterministicLaunchPolicyNoop() public {
+        _verifyHuman(voter2, bytes32("anchor-voter-2"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+        bytes32 voter1CommitKey =
+            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+
+        stdstore.target(address(votingEngine)).sig("commitRbtsScoreBps(uint256,uint256,bytes32)").with_key(contentId)
+            .with_key(roundId).with_key(voter1CommitKey).checked_write(launchPool.MIN_QUALIFYING_SCORE_BPS() - 1);
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertFalse(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
+        (address pendingRecipient, uint96 pendingStake) =
+            rewardDistributor.pendingLaunchCreditRetry(contentId, roundId, voter1CommitKey);
+        assertEq(pendingRecipient, address(0), "policy no-op should not be retryable");
+        assertEq(pendingStake, 0, "policy no-op stores no retry stake");
     }
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithoutIndependentVerifiedAnchor() public {
