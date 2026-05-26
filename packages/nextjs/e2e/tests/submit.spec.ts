@@ -1,6 +1,7 @@
 import { expect, test } from "../fixtures/wallet";
 import {
   continueToBountyStep,
+  continueToFeedbackBonusStep,
   selectAskCategory,
   selectAskSubcategory,
   selectBountyRewardAsset,
@@ -42,11 +43,14 @@ test.describe("Ask page", () => {
     const hasSubcategory = await selectAskSubcategory(page);
     test.skip(!hasSubcategory, "No seeded subcategory available for ask submission");
 
-    // 5. Continue to bounty details, then ask
+    // 5. Continue to bounty details, skip the optional Feedback Bonus, then ask
     await continueToBountyStep(page);
     await expect(page.getByRole("heading", { name: "Bounty" })).toBeVisible({ timeout: 5_000 });
     await expect(page.getByPlaceholder("Write a subjective question voters can rate")).toBeHidden();
     await selectBountyRewardAsset(page, "lrep");
+    await continueToFeedbackBonusStep(page);
+    await expect(page.getByRole("heading", { name: "Feedback Bonus" })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: /^No bonus$/i })).toHaveAttribute("aria-pressed", "true");
 
     const submitBtn = page.getByRole("button", { name: /^Submit/i });
     await expect(submitBtn).toBeVisible({ timeout: 5_000 });

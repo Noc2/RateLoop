@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery } from "@tanstack/react-query";
 import { decodeEventLog, encodeFunctionData, toHex } from "viem";
 import { useAccount, useConfig } from "wagmi";
@@ -59,6 +60,7 @@ import {
   DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS,
   DEFAULT_SUBMISSION_REWARD_POOL,
   ERC20_APPROVAL_ABI,
+  FEEDBACK_BONUS_ESCROW_ABI,
   MAX_REWARD_POOL_SETTLED_ROUNDS,
   MIN_REWARD_POOL_REQUIRED_VOTERS,
   MIN_REWARD_POOL_SETTLED_ROUNDS,
@@ -67,8 +69,11 @@ import {
   SUBMISSION_REWARD_ASSET_USDC,
   type SubmissionRewardAsset,
   formatSubmissionRewardAmount,
+  formatUsdAmount,
+  getConfiguredFeedbackBonusEscrowAddress,
   getDefaultUsdcAddress,
   parseSubmissionRewardAmount,
+  parseUsdRewardPoolAmount,
 } from "~~/lib/questionRewardPools";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
@@ -106,8 +111,9 @@ const MEDIA_URL_CONFIG = {
   videoHint: "Add one YouTube link as public video context. Standard landscape videos fit the content area best.",
 };
 
-type SubmissionStep = "question" | "bounty";
+type SubmissionStep = "question" | "bounty" | "feedbackBonus";
 type BountyEligibilitySelection = "everyone" | "verified_humans";
+type FeedbackBonusSelection = "none" | "enabled";
 
 const BOUNTY_ELIGIBILITY_OPTIONS: Array<{
   id: BountyEligibilitySelection;
@@ -424,6 +430,9 @@ export function ContentSubmissionSection() {
   );
   const [bountyWindowOverridden, setBountyWindowOverridden] = useState(false);
   const [bountyExpiryReferenceTimeMs, setBountyExpiryReferenceTimeMs] = useState<number | null>(null);
+  const [feedbackBonusMode, setFeedbackBonusMode] = useState<FeedbackBonusSelection>("none");
+  const [feedbackBonusAmount, setFeedbackBonusAmount] = useState("2");
+  const [feedbackBonusStepAttempted, setFeedbackBonusStepAttempted] = useState(false);
   const [roundBlindMinutes, setRoundBlindMinutes] = useState(
     String(Number(DEFAULT_QUESTION_ROUND_CONFIG.epochDuration / 60n)),
   );
@@ -1079,6 +1088,14 @@ export function ContentSubmissionSection() {
           : null;
   const rewardExpiryError = bountyStepAttempted ? rewardExpiryValidationError : null;
   const selectedBountyEligibility = BOUNTY_ELIGIBILITY_OPTIONS.find(option => option.id === bountyEligibility)!;
+  const selectedFeedbackBonusAmount = parseUsdRewardPoolAmount(feedbackBonusAmount);
+  const feedbackBonusUnavailableForBundle = questionCount > 1 && feedbackBonusMode === "enabled";
+  const feedbackBonusAmountError =
+    feedbackBonusStepAttempted && feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount === null
+      ? "Enter a positive USDC feedback bonus amount."
+      : null;
+  const feedbackBonusSettingsValid =
+    feedbackBonusMode === "none" || (!feedbackBonusUnavailableForBundle && selectedFeedbackBonusAmount !== null);
   const bountySettingsValid =
     rewardRequiredVotersValidationError === null &&
     rewardRequiredRoundsValidationError === null &&
@@ -1121,6 +1138,13 @@ export function ContentSubmissionSection() {
             ? "A high max voters per round can dilute the per-voter payout if participation is high; use it when broader input matters more than payout density."
             : "These settings give a clear payout target for a small qualifying round.";
   const rewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : getDefaultUsdcAddress(targetNetwork.id);
+  const feedbackBonusUsdcAddress = getDefaultUsdcAddress(targetNetwork.id);
+  const feedbackBonusEscrowAddress = getConfiguredFeedbackBonusEscrowAddress(targetNetwork.id);
+  const estimatedFeedbackBonusRecipientAmount =
+    feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount
+      ? applyEstimatedFrontendFee(selectedFeedbackBonusAmount, frontendFeeBps)
+      : 0n;
+  const feedbackBonusWindowLabel = estimatedBountyExpiresAtLabel;
   const { refetch: refetchNextContentId } = useScaffoldReadContract({
     contractName: "ContentRegistry",
     functionName: "nextContentId",
@@ -1294,6 +1318,39 @@ export function ContentSubmissionSection() {
     setBountyStepAttempted(false);
   };
 
+  const handleGoToFeedbackBonusStep = () => {
+    const syncedDrafts = questionDrafts
+      .map((draft, index) => (index === activeQuestionIndex ? getActiveQuestionDraft() : draft))
+      .slice(0, questionCount);
+    const validatedQuestions = syncedDrafts.map(draft => validateQuestionSection(draft, false));
+    const firstInvalidQuestionIndex = validatedQuestions.findIndex(question => question.hasQuestionErrors);
+    if (firstInvalidQuestionIndex >= 0) {
+      const invalidDraft = syncedDrafts[firstInvalidQuestionIndex] ?? createEmptyQuestionDraft();
+      setQuestionDrafts(syncedDrafts);
+      setActiveQuestionIndex(firstInvalidQuestionIndex);
+      loadQuestionDraft(invalidDraft);
+      setQuestionStepAttempted(true);
+      validateQuestionSection(invalidDraft, true);
+      setSubmissionStep("question");
+      notification.warning("Fill in every question page before opening feedback bonus details.");
+      return;
+    }
+
+    setQuestionDrafts(syncedDrafts);
+    setBountyStepAttempted(true);
+    if (!bountySettingsValid) {
+      setSubmissionStep("bounty");
+      if (roundConfigValidationError) {
+        setShowAdvancedRoundSettings(true);
+      }
+      notification.warning("Please fix the bounty details before continuing.");
+      return;
+    }
+
+    setSubmissionStep("feedbackBonus");
+    setFeedbackBonusStepAttempted(false);
+  };
+
   const handleQuestionCountChange = (value: string) => {
     const nextCount = Math.max(1, Math.min(MAX_QUESTION_BUNDLE_COUNT, parseWholeNumberInput(value)));
     const nextVoterCapMax =
@@ -1334,10 +1391,24 @@ export function ContentSubmissionSection() {
     syncSettlementVotersToPaidCompleters(clampedPaidCompleters);
     setSubmissionStep("question");
     setBountyStepAttempted(false);
+    if (nextCount > 1) {
+      setFeedbackBonusMode("none");
+    }
+    setFeedbackBonusStepAttempted(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (submissionStep === "question") {
+      handleContinueToBounty();
+      return;
+    }
+
+    if (submissionStep === "bounty") {
+      handleGoToFeedbackBonusStep();
+      return;
+    }
 
     if (isRegistryLoading || isLrepLoading || isRewardEscrowLoading) {
       notification.warning("Submission is still loading. Try again in a moment.");
@@ -1385,6 +1456,7 @@ export function ContentSubmissionSection() {
 
     setQuestionDrafts(syncedDrafts);
     setBountyStepAttempted(true);
+    setFeedbackBonusStepAttempted(true);
     if (!selectedRewardAmount) {
       notification.warning("Please fix the highlighted fields before submitting.");
       return;
@@ -1399,7 +1471,14 @@ export function ContentSubmissionSection() {
       return;
     }
 
+    if (!feedbackBonusSettingsValid) {
+      setSubmissionStep("feedbackBonus");
+      notification.warning("Please fix the feedback bonus details before submitting.");
+      return;
+    }
+
     let verifiedRewardTokenAddress = rewardTokenAddress;
+    let verifiedVotingEngineAddress: `0x${string}` | null = null;
     try {
       const [activeRewardEscrowAddress, registryLrepAddress, registryVotingEngineAddress] = (await Promise.all([
         readContract(wagmiConfig, {
@@ -1432,6 +1511,7 @@ export function ContentSubmissionSection() {
         return;
       }
 
+      verifiedVotingEngineAddress = registryVotingEngineAddress;
       verifiedRewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : rewardTokenAddress;
     } catch {
       notification.error("Could not verify bounty escrow wiring.");
@@ -1441,6 +1521,23 @@ export function ContentSubmissionSection() {
     if (!verifiedRewardTokenAddress) {
       notification.error(`${rewardAsset === "lrep" ? "LREP" : "USDC"} funding is unavailable right now.`);
       return;
+    }
+
+    const shouldFundFeedbackBonus = feedbackBonusMode === "enabled";
+    if (shouldFundFeedbackBonus) {
+      if (!feedbackBonusEscrowAddress) {
+        notification.error("Feedback Bonus escrow is not deployed on this network yet.");
+        return;
+      }
+      if (!feedbackBonusUsdcAddress) {
+        notification.error("World Chain USDC is not configured for Feedback Bonuses on this network.");
+        return;
+      }
+      if (!selectedFeedbackBonusAmount) {
+        setSubmissionStep("feedbackBonus");
+        notification.warning("Enter a feedback bonus amount before submitting.");
+        return;
+      }
     }
 
     const submitterAddress = connectedAddress as `0x${string}` | undefined;
@@ -1470,6 +1567,32 @@ export function ContentSubmissionSection() {
     } catch {
       notification.error(`Could not verify your ${rewardAsset === "lrep" ? "LREP" : "USDC"} balance.`);
       return;
+    }
+
+    if (shouldFundFeedbackBonus && selectedFeedbackBonusAmount && feedbackBonusUsdcAddress) {
+      try {
+        const feedbackBonusBalance = (await readContract(wagmiConfig, {
+          address: feedbackBonusUsdcAddress,
+          abi: ERC20_APPROVAL_ABI,
+          functionName: "balanceOf",
+          args: [submitterAddress],
+        })) as bigint;
+        const requiredUsdcBalance =
+          rewardAsset === "usdc" && verifiedRewardTokenAddress.toLowerCase() === feedbackBonusUsdcAddress.toLowerCase()
+            ? selectedRewardAmount + selectedFeedbackBonusAmount
+            : selectedFeedbackBonusAmount;
+
+        if (feedbackBonusBalance < requiredUsdcBalance) {
+          setSubmissionStep("feedbackBonus");
+          notification.error(
+            `You need ${formatUsdAmount(requiredUsdcBalance)} USDC to fund the selected bounty and Feedback Bonus.`,
+          );
+          return;
+        }
+      } catch {
+        notification.error("Could not verify your USDC balance for the Feedback Bonus.");
+        return;
+      }
     }
 
     const accepted = await requireAcceptance("submit");
@@ -1859,6 +1982,79 @@ export function ContentSubmissionSection() {
         }
       }
 
+      reservedRevealCommitment = null;
+      let feedbackBonusFunded = false;
+      let feedbackBonusFundingError: string | null = null;
+      const primarySubmittedContentId = submittedContentIds[0] ?? null;
+
+      if (
+        shouldFundFeedbackBonus &&
+        selectedFeedbackBonusAmount &&
+        feedbackBonusEscrowAddress &&
+        feedbackBonusUsdcAddress &&
+        verifiedVotingEngineAddress &&
+        primarySubmittedContentId !== null
+      ) {
+        try {
+          const feedbackRoundId = (await readContract(wagmiConfig, {
+            address: verifiedVotingEngineAddress,
+            abi: RoundVotingEngineAbi,
+            functionName: "currentRoundId",
+            args: [primarySubmittedContentId],
+          })) as bigint;
+
+          if (feedbackRoundId <= 0n) {
+            throw new Error("Could not find the open round for the submitted question.");
+          }
+
+          const feedbackApproveWrite = {
+            address: feedbackBonusUsdcAddress,
+            abi: ERC20_APPROVAL_ABI,
+            functionName: "approve",
+            args: [feedbackBonusEscrowAddress, selectedFeedbackBonusAmount],
+          } as const;
+          const feedbackApproveTxHash = localE2ETestWalletClient
+            ? await localE2ETestWalletClient.writeContract(feedbackApproveWrite as any)
+            : await writeContract(wagmiConfig, await prepareDirectWalletWrite(feedbackApproveWrite));
+
+          if (feedbackApproveTxHash) {
+            await waitForTransactionReceipt(wagmiConfig, { hash: feedbackApproveTxHash });
+          }
+          const feedbackApproveNonce = await getSubmittedTransactionNonce(feedbackApproveTxHash);
+
+          const feedbackPoolWrite = {
+            address: feedbackBonusEscrowAddress,
+            abi: FEEDBACK_BONUS_ESCROW_ABI,
+            functionName: "createFeedbackBonusPool",
+            args: [
+              primarySubmittedContentId,
+              feedbackRoundId,
+              selectedFeedbackBonusAmount,
+              rewardPoolExpiresAt,
+              submitterAddress,
+            ],
+          } as const;
+          const feedbackPoolTxHash = localE2ETestWalletClient
+            ? await localE2ETestWalletClient.writeContract(feedbackPoolWrite as any)
+            : await writeContract(
+                wagmiConfig,
+                (await prepareDirectWalletWrite(feedbackPoolWrite, {
+                  minimumNonce: feedbackApproveNonce === undefined ? undefined : feedbackApproveNonce + 1,
+                })) as any,
+              );
+
+          if (feedbackPoolTxHash) {
+            await waitForTransactionReceipt(wagmiConfig, { hash: feedbackPoolTxHash });
+          }
+          feedbackBonusFunded = true;
+        } catch (feedbackBonusError) {
+          feedbackBonusFundingError =
+            getSubmissionErrorMessage(feedbackBonusError) || "Feedback Bonus funding transaction failed.";
+        }
+      } else if (shouldFundFeedbackBonus) {
+        feedbackBonusFundingError = "Question submitted, but the Feedback Bonus could not be prepared.";
+      }
+
       await refetchNextContentId();
 
       statusToast.dismiss();
@@ -1866,10 +2062,13 @@ export function ContentSubmissionSection() {
         `${questionCount === 1 ? "Question" : "Question bundle"} submitted with a ${formatSubmissionRewardAmount(
           selectedRewardAmount,
           rewardAsset,
-        )} voter bounty.`,
+        )} voter bounty${feedbackBonusFunded ? ` and a ${formatUsdAmount(selectedFeedbackBonusAmount)} Feedback Bonus` : ""}.`,
       );
+      if (feedbackBonusFundingError) {
+        notification.error(`Question submitted, but Feedback Bonus funding failed: ${feedbackBonusFundingError}`);
+      }
       const primarySubmittedQuestion = validatedQuestions[0];
-      const primaryContentId = submittedContentIds[0] ?? null;
+      const primaryContentId = primarySubmittedContentId;
       const submittedQuestion =
         primaryContentId !== null && primarySubmittedQuestion
           ? {
@@ -1908,6 +2107,8 @@ export function ContentSubmissionSection() {
       setCustomBountyWindowAmount(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
       setCustomBountyWindowUnit(DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT);
       setBountyWindowOverridden(false);
+      setFeedbackBonusMode("none");
+      setFeedbackBonusAmount("2");
       setRoundBlindMinutes(String(Math.max(1, Math.round(roundConfigDefaults.epochDuration / SECONDS_PER_MINUTE))));
       setRoundMaxDurationMinutes(String(Math.max(1, Math.round(roundConfigDefaults.maxDuration / SECONDS_PER_MINUTE))));
       setRoundMinVoters(
@@ -1924,6 +2125,7 @@ export function ContentSubmissionSection() {
       setShowAdvancedRoundSettings(false);
       setQuestionStepAttempted(false);
       setBountyStepAttempted(false);
+      setFeedbackBonusStepAttempted(false);
       setSubmissionStep("question");
     } catch (e: unknown) {
       console.error("Submit failed:", e);
@@ -1973,13 +2175,18 @@ export function ContentSubmissionSection() {
     !hasVideoInput;
   const imageMediaMissing = contextOrMediaMissing && mediaMode === "images";
   const videoMediaMissing = contextOrMediaMissing && mediaMode === "video";
-  const pageHeading = submissionStep === "question" ? "Submit Question" : "Bounty";
+  const pageHeading =
+    submissionStep === "question" ? "Submit Question" : submissionStep === "bounty" ? "Bounty" : "Feedback Bonus";
   const pageContext =
     submissionStep === "question"
       ? `Question ${activeQuestionIndex + 1} of ${questionCount}`
-      : questionCount > 1
-        ? `${questionCount} question bundle`
-        : "Single question bounty";
+      : submissionStep === "bounty"
+        ? questionCount > 1
+          ? `${questionCount} question bundle`
+          : "Single question bounty"
+        : questionCount > 1
+          ? "Optional feedback bonus unavailable for bundles"
+          : "Optional feedback bonus";
 
   const submissionStepIndicator = (
     <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-base-content/55">
@@ -2014,6 +2221,21 @@ export function ContentSubmissionSection() {
         }`}
       >
         Bounty
+      </button>
+      <span aria-hidden="true">→</span>
+      <button
+        type="button"
+        aria-current={submissionStep === "feedbackBonus" ? "step" : undefined}
+        aria-label="Go to optional feedback bonus details"
+        onClick={handleGoToFeedbackBonusStep}
+        title="Go to optional feedback bonus details"
+        className={`cursor-pointer rounded-md border px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 ${
+          submissionStep === "feedbackBonus"
+            ? "border-primary bg-primary text-primary-content hover:bg-primary/90"
+            : "step-control-inactive"
+        }`}
+      >
+        Feedback Bonus
       </button>
     </div>
   );
@@ -2638,6 +2860,197 @@ export function ContentSubmissionSection() {
         Back
       </button>
       <button
+        type="button"
+        onClick={handleGoToFeedbackBonusStep}
+        className="btn btn-submit w-full sm:flex-1"
+        disabled={isSubmitting}
+      >
+        Continue
+      </button>
+    </div>
+  );
+
+  const feedbackBonusDetailsCard = (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
+          Feedback Bonus <span className="text-base-content/55">(optional)</span>
+          <InfoTooltip text="Optional USDC pool for useful hidden feedback from revealed raters. The awarder pays selected feedback after settlement, with the default frontend fee reserved when eligible." />
+        </p>
+        <p className="text-sm leading-relaxed text-base-content/65">
+          Keep this off when you only need a score. Turn it on when written notes, objections, or bug reports should be
+          worth extra USDC.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:max-w-md">
+        <button
+          type="button"
+          aria-pressed={feedbackBonusMode === "none"}
+          onClick={() => {
+            setFeedbackBonusMode("none");
+            setFeedbackBonusStepAttempted(false);
+          }}
+          className={`btn btn-sm ${feedbackBonusMode === "none" ? "btn-primary" : "btn-outline"}`}
+        >
+          No bonus
+        </button>
+        <button
+          type="button"
+          aria-pressed={feedbackBonusMode === "enabled"}
+          onClick={() => {
+            if (questionCount > 1) {
+              notification.info("Feedback Bonuses can be added to single-question submissions in this flow.");
+              return;
+            }
+            setFeedbackBonusMode("enabled");
+          }}
+          className={`btn btn-sm ${feedbackBonusMode === "enabled" ? "btn-primary" : "btn-outline"}`}
+          disabled={questionCount > 1}
+        >
+          Add bonus
+        </button>
+      </div>
+
+      {questionCount > 1 ? (
+        <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
+          Feedback Bonuses are per question and round. This submit flow supports them for single-question bounties
+          first.
+        </p>
+      ) : null}
+
+      {feedbackBonusMode === "enabled" ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <label
+              className={`input input-bordered flex min-w-0 flex-1 items-center gap-2 bg-base-100 ${
+                feedbackBonusAmountError ? "input-error" : ""
+              }`}
+            >
+              <span className="shrink-0 text-base-content/50">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={feedbackBonusAmount}
+                onChange={e => setFeedbackBonusAmount(e.target.value)}
+                className="grow bg-transparent"
+                aria-label="Feedback Bonus amount"
+              />
+              <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-base-content/50">USDC</span>
+            </label>
+            <InfoTooltip text="Feedback Bonuses use World Chain USDC. The selected awarder later chooses which eligible feedback to pay." />
+          </div>
+          {feedbackBonusAmountError ? <p className="text-base text-error">{feedbackBonusAmountError}</p> : null}
+
+          <div className="surface-card-nested rounded-lg p-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="flex items-center gap-1.5 text-base text-base-content/70">
+                  Feedback window
+                  <InfoTooltip text="For now, the feedback bonus closes with the bounty window selected in the previous step." />
+                </p>
+                <p className="mt-1 text-base font-medium text-base-content">{feedbackBonusWindowLabel}</p>
+              </div>
+              <div>
+                <p className="flex items-center gap-1.5 text-base text-base-content/70">
+                  Awarder
+                  <InfoTooltip text="The connected wallet funds the bonus and is allowed to award it after settlement." />
+                </p>
+                <p className="mt-1 break-all text-base font-medium text-base-content">
+                  {connectedAddress
+                    ? `${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`
+                    : "Connect wallet"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {!feedbackBonusEscrowAddress ? (
+            <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
+              Feedback Bonus funding is not available on this network yet.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="surface-card-nested rounded-lg p-4">
+          <p className="text-base text-base-content/70">
+            The question will still accept optional rater feedback after votes. There just will not be a separate USDC
+            pool for awarding notes.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  const feedbackBonusInsightsCard = (
+    <div className="space-y-4">
+      <div className="surface-card-nested rounded-lg p-4">
+        <p className="mb-4 flex items-center gap-1.5 text-base font-medium text-primary">
+          Feedback Bonus estimate
+          <InfoTooltip
+            text={`${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator on each award.`}
+          />
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <p className="flex items-center gap-1.5 text-base text-base-content/70">
+              Available to award
+              <InfoTooltip text="The gross amount funded into the optional feedback pool." />
+            </p>
+            <p className="mt-1 text-base font-medium text-base-content">
+              {feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount
+                ? `${formatUsdAmount(selectedFeedbackBonusAmount)} USDC`
+                : "$0 USDC"}
+            </p>
+          </div>
+
+          <div>
+            <p className="flex items-center gap-1.5 text-base text-base-content/70">
+              After frontend fee
+              <InfoTooltip text="Estimated recipient amount if the whole bonus is paid in one award and the default frontend fee applies." />
+            </p>
+            <p className="mt-1 text-base font-medium text-base-content">
+              {feedbackBonusMode === "enabled"
+                ? `${formatUsdAmount(estimatedFeedbackBonusRecipientAmount)} USDC`
+                : "$0 USDC"}
+            </p>
+          </div>
+
+          <div>
+            <p className="flex items-center gap-1.5 text-base text-base-content/70">
+              Feedback closes
+              <InfoTooltip text="Matches the bounty expiration for this first version of the creation flow." />
+            </p>
+            <p className="mt-1 text-base font-medium text-base-content">{feedbackBonusWindowLabel}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="surface-card-nested rounded-lg p-4">
+        <p className="mb-2 text-base font-medium text-primary">Recommendation</p>
+        <p className="text-base text-base-content/70">
+          {feedbackBonusMode === "enabled"
+            ? "Use a Feedback Bonus when written rationale matters. The bounty still pays revealed votes; this pool is for notes worth calling out after settlement."
+            : "Skip this for simple rating asks. Add a Feedback Bonus when you want raters to spend extra effort on useful written feedback."}
+        </p>
+      </div>
+    </div>
+  );
+
+  const feedbackBonusActions = (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+      <button
+        type="button"
+        onClick={() => {
+          setSubmissionStep("bounty");
+          setFeedbackBonusStepAttempted(false);
+        }}
+        className="btn btn-ghost w-full sm:w-auto"
+      >
+        Back
+      </button>
+      <button
         type="submit"
         className="btn btn-submit w-full sm:flex-1"
         disabled={isSubmitting || isAwaitingSponsoredSubmitCalls || isMissingGasBalance}
@@ -3079,13 +3492,22 @@ export function ContentSubmissionSection() {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : submissionStep === "bounty" ? (
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.9fr)] xl:items-start">
               <div className="space-y-4">{bountyDetailsCard}</div>
               <div className="space-y-4 xl:sticky xl:top-24">
                 {bountyInsightsCard}
                 {isMissingGasBalance ? <GasBalanceWarning nativeTokenSymbol={nativeTokenSymbol} /> : null}
                 {bountyActions}
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.9fr)] xl:items-start">
+              <div className="space-y-4">{feedbackBonusDetailsCard}</div>
+              <div className="space-y-4 xl:sticky xl:top-24">
+                {feedbackBonusInsightsCard}
+                {isMissingGasBalance ? <GasBalanceWarning nativeTokenSymbol={nativeTokenSymbol} /> : null}
+                {feedbackBonusActions}
               </div>
             </div>
           )}
