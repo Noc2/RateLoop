@@ -98,6 +98,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
 
+    const currentUnixSeconds = BigInt(Math.floor(Date.now() / 1000));
     const rows = await db
       .select({
         account: vote.identityHolder,
@@ -135,7 +136,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
           eq(raterHumanCredential.rater, vote.identityHolder),
           eq(raterHumanCredential.verified, true),
           eq(raterHumanCredential.revoked, false),
-          sql`(${raterHumanCredential.expiresAt} = 0 or ${raterHumanCredential.expiresAt} > ${round.settledAt})`,
+          sql`(${raterHumanCredential.expiresAt} = 0 or ${raterHumanCredential.expiresAt} > ${currentUnixSeconds})`,
         ),
       )
       .where(

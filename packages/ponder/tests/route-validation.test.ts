@@ -1753,6 +1753,14 @@ describe("registerCorrelationRoutes", () => {
     expect(serialized).toContain("vote.revealed");
     expect(serialized).toContain("questionRewardPool.bountyEligibility");
     expect(serialized).toContain("raterHumanCredential.rater");
+    expect(serialized).not.toContain("round.settledAt");
+    const serializedJoins = queryBuilder.leftJoin.mock.calls.map((call) =>
+      serializeExpression(call),
+    );
+    expect(serializedJoins.some((join) => join.includes("raterHumanCredential.expiresAt"))).toBe(
+      true,
+    );
+    expect(serializedJoins.every((join) => !join.includes("round.settledAt"))).toBe(true);
   });
 
   it("validates correlation round-vote identifiers", async () => {
