@@ -68,6 +68,8 @@ const MAX_CLEANUP_BATCHES_PER_TICK = 4;
 const MAX_CLEANUP_COMPLETED = 5000;
 const MAX_CLEANUP_QUEUE = 2000;
 const PONDER_FETCH_TIMEOUT_MS = 5_000;
+const INDEXED_CIPHERTEXT_PAGE_SIZE = 200;
+const MAX_INDEXED_CIPHERTEXT_PAGES = 6;
 const cleanupQueue = new Map<string, CleanupCursor>();
 const cleanupCompletedRounds = new Set<string>();
 const cleanupDiscoveryRoundByContent = new Map<bigint, bigint>();
@@ -398,51 +400,57 @@ async function fetchIndexedCiphertext(params: {
     return null;
   }
 
-  const path = params.kind === "vote" ? "/votes" : "/advisory-votes";
-  const url = new URL(path, config.ponderBaseUrl);
-  url.searchParams.set("contentId", params.contentId.toString());
-  url.searchParams.set("roundId", params.roundId.toString());
-  url.searchParams.set("limit", "200");
-
   try {
-    // H-4 (2026-05-22 audit): previously fetched without any timeout, so a slow Ponder
-    // response could stall the whole reveal loop. 5s is well above Ponder's normal
-    // p99; anything beyond is unhealthy and the keeper retries on the next tick.
-    const response = await fetch(url, { signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS) });
-    if (!response.ok) {
-      params.logger.warn("Failed to fetch indexed vote ciphertext", {
-        kind: params.kind,
-        status: response.status,
-        url: url.toString(),
-      });
-      return null;
-    }
+    const path = params.kind === "vote" ? "/votes" : "/advisory-votes";
+    for (let page = 0; page < MAX_INDEXED_CIPHERTEXT_PAGES; page++) {
+      const url = new URL(path, config.ponderBaseUrl);
+      url.searchParams.set("contentId", params.contentId.toString());
+      url.searchParams.set("roundId", params.roundId.toString());
+      url.searchParams.set("limit", String(INDEXED_CIPHERTEXT_PAGE_SIZE));
+      url.searchParams.set("offset", String(page * INDEXED_CIPHERTEXT_PAGE_SIZE));
 
-    const body = (await response.json()) as { items?: IndexedCiphertextRecord[] };
-    const record = body.items?.find(
-      item => item.commitKey?.toLowerCase() === params.commitKey.toLowerCase(),
-    );
-    if (!record?.ciphertext || !record.ciphertextHash) {
-      return null;
+      // H-4 (2026-05-22 audit): previously fetched without any timeout, so a slow Ponder
+      // response could stall the whole reveal loop. 5s is well above Ponder's normal
+      // p99; anything beyond is unhealthy and the keeper retries on the next tick.
+      const response = await fetch(url, { signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS) });
+      if (!response.ok) {
+        params.logger.warn("Failed to fetch indexed vote ciphertext", {
+          kind: params.kind,
+          status: response.status,
+          url: url.toString(),
+        });
+        return null;
+      }
+
+      const body = (await response.json()) as { items?: IndexedCiphertextRecord[] };
+      const items = body.items ?? [];
+      const record = items.find(
+        item => item.commitKey?.toLowerCase() === params.commitKey.toLowerCase(),
+      );
+      if (!record?.ciphertext || !record.ciphertextHash) {
+        if (items.length < INDEXED_CIPHERTEXT_PAGE_SIZE) return null;
+        continue;
+      }
+      if (record.ciphertextHash.toLowerCase() !== params.expectedCiphertextHash.toLowerCase()) {
+        params.logger.error("Indexed ciphertext hash does not match on-chain commit hash", {
+          kind: params.kind,
+          commitKey: params.commitKey,
+          indexedCiphertextHash: record.ciphertextHash,
+          expectedCiphertextHash: params.expectedCiphertextHash,
+        });
+        return null;
+      }
+      if (keccak256(record.ciphertext) !== params.expectedCiphertextHash) {
+        params.logger.error("Indexed ciphertext bytes do not hash to on-chain ciphertext hash", {
+          kind: params.kind,
+          commitKey: params.commitKey,
+          expectedCiphertextHash: params.expectedCiphertextHash,
+        });
+        return null;
+      }
+      return record.ciphertext;
     }
-    if (record.ciphertextHash.toLowerCase() !== params.expectedCiphertextHash.toLowerCase()) {
-      params.logger.error("Indexed ciphertext hash does not match on-chain commit hash", {
-        kind: params.kind,
-        commitKey: params.commitKey,
-        indexedCiphertextHash: record.ciphertextHash,
-        expectedCiphertextHash: params.expectedCiphertextHash,
-      });
-      return null;
-    }
-    if (keccak256(record.ciphertext) !== params.expectedCiphertextHash) {
-      params.logger.error("Indexed ciphertext bytes do not hash to on-chain ciphertext hash", {
-        kind: params.kind,
-        commitKey: params.commitKey,
-        expectedCiphertextHash: params.expectedCiphertextHash,
-      });
-      return null;
-    }
-    return record.ciphertext;
+    return null;
   } catch (err: unknown) {
     params.logger.warn("Failed to resolve indexed vote ciphertext", {
       kind: params.kind,

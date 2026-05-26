@@ -573,6 +573,68 @@ describe("resolveRounds", () => {
     expect(round.state).toBe(1);
   });
 
+  it("paginates indexed vote ciphertexts beyond the first Ponder page", async () => {
+    timelockDecrypt.mockResolvedValueOnce(makePlaintext(true, 1));
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 1n,
+      revealedCount: 0n,
+    });
+    const commit = makeCommit({ revealableAfter: 100n });
+    const { publicClient, walletClient, commits } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: commit,
+      },
+      now: 1_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      const offset = url.searchParams.get("offset");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items:
+            offset === "0"
+              ? Array.from({ length: 200 }, (_, index) => ({
+                  commitKey: `0x${index.toString(16).padStart(64, "0")}`,
+                }))
+              : [
+                  {
+                    commitKey: COMMIT_KEY_1,
+                    ciphertextHash: commit.ciphertextHash,
+                    ciphertext: commit.ciphertext,
+                  },
+                ],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.votesRevealed).toBe(1);
+    expect(commits[COMMIT_KEY_1].revealed).toBe(true);
+    expect(
+      fetchMock.mock.calls.map(([input]) => new URL(input.toString()).searchParams.get("offset")),
+    ).toEqual(["0", "200"]);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
+    );
+  });
+
   it("syncs bundle question terminal after settling a round", async () => {
     const round = makeRound({
       state: 0,
