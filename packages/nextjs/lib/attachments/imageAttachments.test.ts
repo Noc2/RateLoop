@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -17,6 +17,7 @@ import {
   processCompletedLocalImageUpload,
   readLocalImageAttachment,
   reserveImageUploadDailyQuota,
+  sweepOrphanedImageAttachments,
 } from "~~/lib/attachments/imageAttachments";
 import { __setDatabaseResourcesForTests, db, dbClient } from "~~/lib/db";
 import { questionImageAttachments } from "~~/lib/db/schema";
@@ -501,4 +502,90 @@ test("allows approved RateLoop-hosted images owned by the submitting agent", asy
     }),
     "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
   );
+});
+
+test("sweeps expired unattached image uploads and deletes stored files", async () => {
+  const originalLocalImageDir = process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR;
+  const tempDir = await mkdtemp(path.join(tmpdir(), "rateloop-orphan-images-"));
+  const oldDate = new Date("2026-05-25T10:00:00Z");
+  const recentDate = new Date("2026-05-26T09:30:00Z");
+  const sweepDate = new Date("2026-05-26T12:00:00Z");
+  const expiredPathname = "local://question-attachments/att_expiredorphan001/image.webp";
+  const retainedPathname = "local://question-attachments/att_retainedorphan01/image.webp";
+
+  try {
+    process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
+    await mkdir(path.join(tempDir, "question-attachments", "att_expiredorphan001"), { recursive: true });
+    await mkdir(path.join(tempDir, "question-attachments", "att_retainedorphan01"), { recursive: true });
+    await writeFile(path.join(tempDir, "question-attachments", "att_expiredorphan001", "image.webp"), "expired");
+    await writeFile(path.join(tempDir, "question-attachments", "att_retainedorphan01", "image.webp"), "retained");
+
+    await db.insert(questionImageAttachments).values([
+      {
+        id: "att_expiredorphan001",
+        uploaderKind: "wallet",
+        ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+        normalizedBlobPathname: expiredPathname,
+        originalFilename: "expired.png",
+        mimeType: "image/webp",
+        sizeBytes: 1024,
+        status: "approved",
+        moderationStatus: "approved",
+        createdAt: oldDate,
+        updatedAt: oldDate,
+      },
+      {
+        id: "att_retainedorphan01",
+        uploaderKind: "wallet",
+        ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+        normalizedBlobPathname: retainedPathname,
+        originalFilename: "retained.png",
+        mimeType: "image/webp",
+        sizeBytes: 1024,
+        status: "approved",
+        moderationStatus: "approved",
+        createdAt: recentDate,
+        updatedAt: recentDate,
+      },
+      {
+        id: "att_attachedorphan01",
+        uploaderKind: "wallet",
+        ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+        operationKey: `0x${"1".repeat(64)}`,
+        originalFilename: "attached.png",
+        mimeType: "image/webp",
+        sizeBytes: 1024,
+        status: "approved",
+        moderationStatus: "approved",
+        createdAt: oldDate,
+        updatedAt: oldDate,
+      },
+    ]);
+
+    assert.deepEqual(
+      await sweepOrphanedImageAttachments({
+        now: sweepDate,
+        pendingTtlMs: 60 * 60 * 1000,
+        unattachedTtlMs: 24 * 60 * 60 * 1000,
+      }),
+      { deleted: 1, scanned: 1 },
+    );
+
+    const deleted = await getImageAttachment("att_expiredorphan001");
+    const retained = await getImageAttachment("att_retainedorphan01");
+    const attached = await getImageAttachment("att_attachedorphan01");
+    assert.equal(deleted?.status, "deleted");
+    assert.ok(deleted?.deletedAt);
+    assert.equal(retained?.status, "approved");
+    assert.equal(attached?.status, "approved");
+    assert.equal(await readLocalImageAttachment(expiredPathname), null);
+    assert.ok(await readLocalImageAttachment(retainedPathname));
+  } finally {
+    if (originalLocalImageDir === undefined) {
+      delete process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR;
+    } else {
+      process.env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = originalLocalImageDir;
+    }
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });

@@ -17,6 +17,9 @@ const DEFAULT_WALLET_DAILY_IMAGE_UPLOAD_LIMIT = 40;
 const DEFAULT_AGENT_DAILY_IMAGE_UPLOAD_LIMIT = 20;
 const DEFAULT_WALLET_DAILY_IMAGE_UPLOAD_BYTES = 200 * 1024 * 1024;
 const DEFAULT_AGENT_DAILY_IMAGE_UPLOAD_BYTES = 100 * 1024 * 1024;
+const DEFAULT_PENDING_ORPHAN_TTL_MS = 60 * 60 * 1000;
+const DEFAULT_UNATTACHED_ORPHAN_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_ORPHAN_SWEEP_LIMIT = 100;
 
 type ImageAttachmentStatus = "uploading" | "processing" | "approved" | "blocked" | "failed" | "deleted";
 
@@ -621,6 +624,86 @@ async function deleteStoredImage(pathname: string) {
 
   const { deleteBlob: removeBlob } = getImageAttachmentBlobDependencies();
   await removeBlob(pathname).catch(() => undefined);
+}
+
+export async function sweepOrphanedImageAttachments(
+  params: {
+    limit?: number;
+    now?: Date;
+    pendingTtlMs?: number;
+    unattachedTtlMs?: number;
+  } = {},
+) {
+  const now = params.now ?? nowDate();
+  const limit = Math.max(1, Math.min(Math.floor(params.limit ?? DEFAULT_ORPHAN_SWEEP_LIMIT), 500));
+  const pendingTtlMs = Math.max(1, params.pendingTtlMs ?? DEFAULT_PENDING_ORPHAN_TTL_MS);
+  const unattachedTtlMs = Math.max(1, params.unattachedTtlMs ?? DEFAULT_UNATTACHED_ORPHAN_TTL_MS);
+  const pendingExpiresBefore = new Date(now.getTime() - pendingTtlMs);
+  const unattachedExpiresBefore = new Date(now.getTime() - unattachedTtlMs);
+
+  const candidates = await dbPool.query<{
+    id: string;
+    status: ImageAttachmentStatus;
+  }>(
+    `
+      SELECT id, status
+      FROM question_image_attachments
+      WHERE deleted_at IS NULL
+        AND operation_key IS NULL
+        AND content_id IS NULL
+        AND published_at IS NULL
+        AND (
+          (status IN ('uploading', 'processing') AND created_at <= $1)
+          OR (status IN ('approved', 'blocked', 'failed') AND created_at <= $2)
+        )
+      ORDER BY created_at ASC
+      LIMIT $3
+    `,
+    [pendingExpiresBefore, unattachedExpiresBefore, limit],
+  );
+
+  let deleted = 0;
+  for (const candidate of candidates.rows) {
+    const claimed = await dbPool.query<{
+      normalized_blob_pathname: string | null;
+      original_blob_pathname: string | null;
+    }>(
+      `
+        UPDATE question_image_attachments
+        SET status = 'deleted',
+            deleted_at = $2,
+            updated_at = $2,
+            error = COALESCE(error, 'Expired unattached image upload.')
+        WHERE id = $1
+          AND status = $3
+          AND deleted_at IS NULL
+          AND operation_key IS NULL
+          AND content_id IS NULL
+          AND published_at IS NULL
+        RETURNING original_blob_pathname, normalized_blob_pathname
+      `,
+      [candidate.id, now, candidate.status],
+    );
+    const row = claimed.rows[0];
+    if (!row) continue;
+
+    const pathnames = [
+      ...new Set(
+        [row.original_blob_pathname, row.normalized_blob_pathname].filter((pathname): pathname is string =>
+          Boolean(pathname),
+        ),
+      ),
+    ];
+    for (const pathname of pathnames) {
+      await deleteStoredImage(pathname);
+    }
+    deleted += 1;
+  }
+
+  return {
+    deleted,
+    scanned: candidates.rows.length,
+  };
 }
 
 export async function processCompletedImageUpload(params: {
