@@ -148,7 +148,7 @@ test.describe("Settlement lifecycle", () => {
     expect(settledIndexed, "Ponder did not index settlement + rating for the fresh content").toBe(true);
 
     // Step 8: Verify RatingUpdated
-    const { content: settledContent, ratings } = await getContentById(newContentId!);
+    const { ratings } = await getContentById(newContentId!);
     expect(ratings.length).toBeGreaterThanOrEqual(1);
     expect(ratings[0]).toHaveProperty("oldRating");
     expect(ratings[0]).toHaveProperty("newRating");

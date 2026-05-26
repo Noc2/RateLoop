@@ -283,8 +283,7 @@ function makeHarness(options: {
 
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: string | URL) => {
-      const url = new URL(String(input));
+    vi.fn(async () => {
       const items = Object.entries(commits).map(([commitKey, commit]) => ({
         commitKey,
         ciphertextHash: commit.ciphertextHash,

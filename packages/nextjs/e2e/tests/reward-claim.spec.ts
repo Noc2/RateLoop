@@ -40,7 +40,6 @@ test.describe("Reward claim lifecycle", () => {
   test.describe.configure({ mode: "serial" });
 
   const VOTING_ENGINE = CONTRACT_ADDRESSES.RoundVotingEngine;
-  const REWARD_DISTRIBUTOR = CONTRACT_ADDRESSES.RoundRewardDistributor;
   const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
   const STAKE = BigInt(10e6); // 10 LREP (above MIN_STAKE_FOR_RATING threshold)

@@ -5,7 +5,6 @@ type DeploymentChain = Record<string, { address: `0x${string}` }>;
 
 const sharedDeployments = deployedContracts as Record<number, DeploymentChain | undefined>;
 const chain480 = sharedDeployments[480];
-const chain4801 = sharedDeployments[4801];
 const chain31337 = sharedDeployments[31337];
 const itWithWorldChainArtifacts = chain480 ? it : it.skip;
 const ORIGINAL_ENV = { ...process.env };

@@ -49,7 +49,6 @@ test.describe("Multi-round succession", () => {
   let contentId: string | null = null;
   let round1Id: bigint = 0n;
   let round2Id: bigint = 0n;
-  let ratingAfterRound1: string | null = null;
 
   test("submit fresh content for multi-round test", async () => {
     test.setTimeout(60_000);
@@ -149,10 +148,6 @@ test.describe("Multi-round succession", () => {
       return data.rounds.some(r => String(r.roundId) === String(round1Id) && (r.state === 1 || r.state === 3));
     }, 30_000);
     expect(settledIndexed, "Round 1 not indexed by Ponder").toBe(true);
-
-    // Record rating after round 1
-    const data = await getContentById(contentId!);
-    ratingAfterRound1 = data.content.rating;
   });
 
   test("round 2: new votes on same content after cooldown", async () => {

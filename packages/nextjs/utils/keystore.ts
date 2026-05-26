@@ -26,7 +26,6 @@ export function getKeystoreAccount(): PrivateKeyAccount | null {
 
   try {
     cachedAccount = getKeystoreAccountFromCredentials(name, password);
-    console.debug(`[Keystore] Decrypted account ${cachedAccount.address} from keystore "${name}"`);
     return cachedAccount;
   } catch (err: any) {
     console.error(`[Keystore] Failed to decrypt "${name}": ${err.message}`);
