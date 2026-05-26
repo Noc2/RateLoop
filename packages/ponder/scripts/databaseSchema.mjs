@@ -2,21 +2,32 @@ export const DEFAULT_PONDER_DATABASE_SCHEMA = "rateloop_ponder";
 export const LEGACY_PONDER_DATABASE_SCHEMA = "ponder";
 
 const SCHEMA_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK = {
+  hardhat: "rateloop_ponder_hardhat",
+  worldchainSepolia: "rateloop_ponder_worldchain_sepolia",
+  worldchain: "rateloop_ponder_worldchain",
+};
 
 function readEnv(env, key) {
   const value = env[key]?.trim();
   return value ? value : undefined;
 }
 
+function resolveDefaultPonderDatabaseSchema(env) {
+  const ponderNetwork = readEnv(env, "PONDER_NETWORK");
+  return DEFAULT_PONDER_DATABASE_SCHEMA_BY_NETWORK[ponderNetwork] ?? DEFAULT_PONDER_DATABASE_SCHEMA;
+}
+
 export function resolvePonderDatabaseSchema(env = process.env) {
   const rateloopSchema = readEnv(env, "RATELOOP_PONDER_DATABASE_SCHEMA");
   const databaseSchema = readEnv(env, "DATABASE_SCHEMA");
+  const defaultSchema = resolveDefaultPonderDatabaseSchema(env);
   const isLegacyDatabaseSchema =
     rateloopSchema === undefined && databaseSchema === LEGACY_PONDER_DATABASE_SCHEMA;
   const schema =
     rateloopSchema ??
-    (isLegacyDatabaseSchema ? DEFAULT_PONDER_DATABASE_SCHEMA : databaseSchema) ??
-    DEFAULT_PONDER_DATABASE_SCHEMA;
+    (isLegacyDatabaseSchema ? defaultSchema : databaseSchema) ??
+    defaultSchema;
 
   if (!SCHEMA_NAME_PATTERN.test(schema)) {
     throw new Error(

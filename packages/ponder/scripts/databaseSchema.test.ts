@@ -6,14 +6,24 @@ import {
 } from "./databaseSchema.mjs";
 
 describe("Ponder database schema launcher", () => {
-  test("uses a RateLoop-specific default schema", () => {
+  test("uses a RateLoop-specific fallback schema", () => {
     expect(resolvePonderDatabaseSchema({}).schema).toBe(DEFAULT_PONDER_DATABASE_SCHEMA);
   });
 
-  test("avoids the legacy generic ponder schema", () => {
-    const result = resolvePonderDatabaseSchema({ DATABASE_SCHEMA: "ponder" });
+  test("uses a network-specific default schema when possible", () => {
+    const result = resolvePonderDatabaseSchema({ PONDER_NETWORK: "worldchainSepolia" });
 
-    expect(result.schema).toBe(DEFAULT_PONDER_DATABASE_SCHEMA);
+    expect(result.schema).toBe("rateloop_ponder_worldchain_sepolia");
+    expect(result.source).toBe("default");
+  });
+
+  test("avoids the legacy generic ponder schema with a network-specific schema", () => {
+    const result = resolvePonderDatabaseSchema({
+      DATABASE_SCHEMA: "ponder",
+      PONDER_NETWORK: "worldchainSepolia",
+    });
+
+    expect(result.schema).toBe("rateloop_ponder_worldchain_sepolia");
     expect(result.ignoredLegacyDatabaseSchema).toBe(true);
   });
 
@@ -48,10 +58,13 @@ describe("Ponder database schema launcher", () => {
   });
 
   test("injects the resolved schema into production start arguments", () => {
-    const result = buildPonderStartArgs(["--port", "42069"], { DATABASE_SCHEMA: "ponder" });
+    const result = buildPonderStartArgs(["--port", "42069"], {
+      DATABASE_SCHEMA: "ponder",
+      PONDER_NETWORK: "worldchainSepolia",
+    });
 
-    expect(result.args).toEqual(["start", "--schema", DEFAULT_PONDER_DATABASE_SCHEMA, "--port", "42069"]);
-    expect(result.env.DATABASE_SCHEMA).toBe(DEFAULT_PONDER_DATABASE_SCHEMA);
+    expect(result.args).toEqual(["start", "--schema", "rateloop_ponder_worldchain_sepolia", "--port", "42069"]);
+    expect(result.env.DATABASE_SCHEMA).toBe("rateloop_ponder_worldchain_sepolia");
   });
 
   test("leaves explicit CLI schema arguments alone", () => {
