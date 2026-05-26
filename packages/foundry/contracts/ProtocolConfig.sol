@@ -25,6 +25,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint16 internal constant MAX_DEFAULT_ROUND_VOTERS = 200;
     uint16 internal constant MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP = 100;
     uint16 internal constant MAX_CREATOR_ROUND_VOTERS = 1_000;
+    uint8 internal constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
 
     /// @notice drand `quicknet` (mainnet) chain hash. Used by the legacy `initialize` / `initializeWithTreasury`
     ///         paths for back-compat with existing tests and mainnet (chainId 480) deployments.
@@ -518,6 +519,16 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         try IClusterPayoutOracle(value).roundPayoutSnapshotProposedAt(0, 0, 0, 0) returns (uint64) { }
         catch {
             revert InvalidConfig();
+        }
+        address launchPool = launchDistributionPool;
+        if (launchPool != address(0)) {
+            try IClusterPayoutOracle(value).roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_LAUNCH_CREDIT) returns (
+                address consumer
+            ) {
+                if (consumer != launchPool) revert InvalidConfig();
+            } catch {
+                revert InvalidConfig();
+            }
         }
     }
 

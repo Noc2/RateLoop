@@ -31,6 +31,37 @@ contract MockFrontendRegistryForConfig {
     }
 }
 
+contract MockLaunchDistributionPoolForConfig {
+    function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
+        return 1 days;
+    }
+}
+
+contract MockClusterPayoutOracleForConfig {
+    address internal launchConsumer;
+
+    constructor(address launchConsumer_) {
+        launchConsumer = launchConsumer_;
+    }
+
+    function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        external
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(domain, rewardPoolId, contentId, roundId));
+    }
+
+    function roundPayoutSnapshotProposedAt(uint8, uint256, uint256, uint256) external pure returns (uint64) {
+        return 0;
+    }
+
+    function roundPayoutSnapshotConsumer(uint8 domain) external view returns (address) {
+        if (domain == 2) return launchConsumer;
+        return address(0);
+    }
+}
+
 contract WeakRaterRegistryForConfig {
     function addressIdentityKey(address account) external pure returns (bytes32) {
         if (account == address(0)) return bytes32(0);
@@ -200,6 +231,32 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setFrontendRegistry(invalidRegistry);
+    }
+
+    function test_SetClusterPayoutOracle_AllowsBootstrapBeforeLaunchPool() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(0));
+
+        config.setClusterPayoutOracle(address(oracle));
+
+        assertEq(config.clusterPayoutOracle(), address(oracle));
+    }
+
+    function test_SetClusterPayoutOracle_RequiresPinnedLaunchConsumerAfterLaunchPoolConfigured() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+        MockClusterPayoutOracleForConfig mismatchedOracle =
+            new MockClusterPayoutOracleForConfig(address(0xBEEF));
+        MockClusterPayoutOracleForConfig pinnedOracle =
+            new MockClusterPayoutOracleForConfig(address(launchPool));
+
+        config.setLaunchDistributionPool(address(launchPool));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setClusterPayoutOracle(address(mismatchedOracle));
+
+        config.setClusterPayoutOracle(address(pinnedOracle));
+        assertEq(config.clusterPayoutOracle(), address(pinnedOracle));
     }
 
     function test_SetAdvisoryVoteRecorder_UpdatesAddressAndEmits() public {
