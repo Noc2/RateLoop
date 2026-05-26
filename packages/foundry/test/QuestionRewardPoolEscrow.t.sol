@@ -2872,11 +2872,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
         RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
         assertEq(snapshot.clusterWeightRoot, originalRoot);
+        assertTrue(snapshot.clusterSnapshotDigest != bytes32(0));
         assertFalse(rewardPoolEscrow.isRoundPayoutSnapshotConsumed(1, rewardPoolId, contentId, roundId));
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
         oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("replace-qualified-root"));
-        assertTrue(oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, originalRoot));
+        assertFalse(oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, originalRoot));
+        assertTrue(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, snapshot.clusterSnapshotDigest));
 
         IClusterPayoutOracle.PayoutWeight memory replacementWeight = payoutWeight;
         replacementWeight.effectiveWeight = payoutWeight.effectiveWeight / 2;
@@ -2903,6 +2905,57 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
         RoundSnapshot memory recovered = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
         assertFalse(recovered.qualified);
+    }
+
+    function testRecoveredClusterSnapshotCanReopenWithCorrectedSameRootMetadata() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        bytes32 originalRoot = oracle.payoutWeightLeaf(payoutWeight);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle, rewardPoolId, contentId, roundId, 3, 30_000, payoutWeight.effectiveWeight, originalRoot
+        );
+
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+        RoundSnapshot memory rejectedSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(1, rewardPoolId, contentId, roundId);
+        oracle.rejectFinalizedRoundPayoutSnapshot(snapshotKey, keccak256("bad-metadata"));
+
+        vm.prank(owner);
+        rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory correctedInput =
+            IClusterPayoutOracle.RoundPayoutSnapshotInput({
+                domain: 1,
+                rewardPoolId: rewardPoolId,
+                contentId: contentId,
+                roundId: roundId,
+                correlationEpochId: uint64(roundId),
+                rawEligibleVoters: 3,
+                effectiveParticipantUnits: 30_000,
+                totalClaimWeight: payoutWeight.effectiveWeight + 1,
+                weightRoot: originalRoot,
+                reasonRoot: keccak256("corrected-reason-root"),
+                artifactHash: keccak256("epoch-artifact"),
+                artifactURI: "ipfs://round-corrected"
+            });
+        oracle.proposeRoundPayoutSnapshot(correctedInput);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        vm.warp(uint256(proposal.proposedAt) + uint256(oracle.challengeWindow()) + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        vm.prank(owner);
+        rewardPoolEscrow.reopenRecoveredSnapshotRound(rewardPoolId, roundId);
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory replacementSnapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(replacementSnapshot.clusterWeightRoot, originalRoot);
+        assertTrue(replacementSnapshot.clusterSnapshotDigest != rejectedSnapshot.clusterSnapshotDigest);
+        assertEq(replacementSnapshot.totalClaimWeight, payoutWeight.effectiveWeight + 1);
     }
 
     // FE-1 (audit 2026-05-20-followup): regression test. Confirms that after a
@@ -3292,7 +3345,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
     }
 
-    function testRoundSnapshotStorageLayoutAppendsFirstClaimPaidAndClusterRoot() public {
+    function testRoundSnapshotStorageLayoutAppendsFirstClaimPaidClusterRootAndDigest() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
@@ -3307,10 +3360,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(uint256(vm.load(address(rewardPoolEscrow), firstClaimPaidSlot)), 0);
         bytes32 clusterWeightRootSlot = bytes32(uint256(snapshotSlot) + 9);
         assertEq(uint256(vm.load(address(rewardPoolEscrow), clusterWeightRootSlot)), 0);
+        bytes32 clusterSnapshotDigestSlot = bytes32(uint256(snapshotSlot) + 10);
+        assertEq(uint256(vm.load(address(rewardPoolEscrow), clusterSnapshotDigestSlot)), 0);
 
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
         assertEq(uint256(vm.load(address(rewardPoolEscrow), firstClaimPaidSlot)), 1);
         assertEq(uint256(vm.load(address(rewardPoolEscrow), clusterWeightRootSlot)), 0);
+        assertEq(uint256(vm.load(address(rewardPoolEscrow), clusterSnapshotDigestSlot)), 0);
     }
 
     function testRewardPoolCreatedBeforeClusterOracleKeepsStandardClaims() public {

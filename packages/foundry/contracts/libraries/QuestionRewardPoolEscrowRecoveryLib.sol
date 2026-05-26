@@ -37,12 +37,22 @@ library QuestionRewardPoolEscrowRecoveryLib {
         IClusterPayoutOracle.RoundPayoutSnapshot memory oracleSnapshot =
             oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
-        bool cachedRootRejected = oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected
-            && oracleSnapshot.weightRoot == snapshot.clusterWeightRoot;
-        if (!cachedRootRejected) {
-            cachedRootRejected = oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, snapshot.clusterWeightRoot);
+        bool cachedSnapshotRejected;
+        if (snapshot.clusterSnapshotDigest != bytes32(0)) {
+            cachedSnapshotRejected =
+                oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, snapshot.clusterSnapshotDigest);
+            if (
+                !cachedSnapshotRejected && oracleSnapshot.status == IClusterPayoutOracle.SnapshotStatus.Rejected
+                    && oracleSnapshot.weightRoot == snapshot.clusterWeightRoot
+            ) {
+                cachedSnapshotRejected =
+                    oracle.roundPayoutSnapshotProposalDigest(snapshotKey) == snapshot.clusterSnapshotDigest;
+            }
         }
-        require(cachedRootRejected, "Snapshot not rejected");
+        if (!cachedSnapshotRejected) {
+            cachedSnapshotRejected = oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, snapshot.clusterWeightRoot);
+        }
+        require(cachedSnapshotRejected, "Snapshot not rejected");
 
         uint256 allocationToReturn = snapshot.allocation;
         rewardPool.unallocatedAmount += allocationToReturn;
@@ -87,6 +97,8 @@ library QuestionRewardPoolEscrowRecoveryLib {
         IClusterPayoutOracle.RoundPayoutSnapshot memory newSnapshot =
             oracle.getRoundPayoutSnapshot(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(payoutDomain, rewardPoolId, rewardPool.contentId, roundId);
+        bytes32 newSnapshotDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+        require(!oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, newSnapshotDigest), "Snapshot payload rejected");
         require(!oracle.rejectedRoundPayoutSnapshotRoots(snapshotKey, newSnapshot.weightRoot), "Snapshot root rejected");
 
         if (roundId + 1 == rewardPool.nextRoundToEvaluate) {

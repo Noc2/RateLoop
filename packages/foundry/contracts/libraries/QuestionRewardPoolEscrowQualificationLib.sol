@@ -224,7 +224,8 @@ library QuestionRewardPoolEscrowQualificationLib {
             claimedAmount: 0,
             frontendFeeClaimedAmount: 0,
             firstClaimPaid: false,
-            clusterWeightRoot: bytes32(0)
+            clusterWeightRoot: bytes32(0),
+            clusterSnapshotDigest: bytes32(0)
         });
 
         effectiveParticipantUnits = effectiveUnits;
@@ -276,6 +277,9 @@ library QuestionRewardPoolEscrowQualificationLib {
             rewardPoolClusterPayoutOracle, votingEngine, rewardPoolId, rewardPool.contentId, roundId, payoutDomain
         );
         require(payoutSnapshot.rawEligibleVoters == baseRawEligibleVoters, "Cluster snapshot mismatch");
+        bytes32 clusterSnapshotDigest = IClusterPayoutOracle(
+            _clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPoolId)
+        ).roundPayoutSnapshotProposalDigest(payoutSnapshot.snapshotKey);
 
         uint256 effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
         uint256 totalClaimWeight = payoutSnapshot.totalClaimWeight;
@@ -321,7 +325,8 @@ library QuestionRewardPoolEscrowQualificationLib {
             claimedAmount: 0,
             frontendFeeClaimedAmount: 0,
             firstClaimPaid: false,
-            clusterWeightRoot: payoutSnapshot.weightRoot
+            clusterWeightRoot: payoutSnapshot.weightRoot,
+            clusterSnapshotDigest: clusterSnapshotDigest
         });
 
         emit RewardPoolRoundQualified(

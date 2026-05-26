@@ -108,6 +108,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(uint8 => address) public roundPayoutSnapshotConsumer;
     mapping(address => uint256) public pendingBondWithdrawals;
     mapping(bytes32 => bool) public rejectedRoundPayoutSnapshotConsumed;
+    /// @notice Exact rejected round-payout proposal payloads. Used when the arbiter rejects bad
+    ///         metadata around a deterministic weightRoot without burning the root itself.
+    mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotDigests;
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotRoots;
     /// @notice Tracks rejected correlation-epoch clusterRoots so an identical re-proposal
     ///         is blocked at proposeCorrelationEpoch — mirrors rejectedRoundPayoutSnapshotRoots
@@ -348,6 +351,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
         bytes32 snapshotKey = roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         if (rejectedRoundPayoutSnapshotRoots[snapshotKey][input.weightRoot]) revert InvalidSnapshot();
+        if (rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotInputDigest(snapshotKey, input)]) {
+            revert InvalidSnapshot();
+        }
         RoundPayoutProposal storage existing = roundPayoutProposals[snapshotKey];
         if (existing.snapshot.status != SnapshotStatus.None && existing.snapshot.status != SnapshotStatus.Rejected) {
             revert SnapshotExists();
@@ -489,11 +495,26 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     }
 
     function rejectRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
+        _rejectRoundPayoutSnapshot(snapshotKey, reasonHash, false);
+    }
+
+    /// @notice Reject a pre-finalized round payout snapshot and explicitly blacklist its weightRoot.
+    /// @dev Use only when the root itself is invalid. Metadata-only rejections should use
+    ///      `rejectRoundPayoutSnapshot` so the deterministic root can be re-proposed with corrected
+    ///      surrounding fields.
+    function rejectRoundPayoutSnapshotRoot(bytes32 snapshotKey, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
+        _rejectRoundPayoutSnapshot(snapshotKey, reasonHash, true);
+    }
+
+    function _rejectRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash, bool rejectRoot) private {
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (proposal.snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
         proposal.snapshot.status = SnapshotStatus.Rejected;
-        rejectedRoundPayoutSnapshotRoots[snapshotKey][proposal.snapshot.weightRoot] = true;
+        rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
+        if (rejectRoot) {
+            rejectedRoundPayoutSnapshotRoots[snapshotKey][proposal.snapshot.weightRoot] = true;
+        }
         address challenger = proposal.challenger;
         uint256 bond = proposal.bond;
         proposal.bond = 0;
@@ -519,6 +540,21 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         external
         onlyRole(ARBITER_ROLE)
     {
+        _rejectFinalizedRoundPayoutSnapshot(snapshotKey, reasonHash, false);
+    }
+
+    /// @notice Reject a finalized round payout snapshot and explicitly blacklist its weightRoot.
+    /// @dev Use only when the finalized root itself is invalid. Metadata-only rejections should use
+    ///      `rejectFinalizedRoundPayoutSnapshot` so the deterministic root can be re-proposed with
+    ///      corrected surrounding fields when the consumer has not consumed it.
+    function rejectFinalizedRoundPayoutSnapshotRoot(bytes32 snapshotKey, bytes32 reasonHash)
+        external
+        onlyRole(ARBITER_ROLE)
+    {
+        _rejectFinalizedRoundPayoutSnapshot(snapshotKey, reasonHash, true);
+    }
+
+    function _rejectFinalizedRoundPayoutSnapshot(bytes32 snapshotKey, bytes32 reasonHash, bool rejectRoot) private {
         RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
         RoundPayoutSnapshot memory snapshot = proposal.snapshot;
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
@@ -555,7 +591,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
 
         proposal.snapshot.status = SnapshotStatus.Rejected;
-        rejectedRoundPayoutSnapshotRoots[snapshotKey][snapshot.weightRoot] = true;
+        rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(proposal)] = true;
+        if (rejectRoot) {
+            rejectedRoundPayoutSnapshotRoots[snapshotKey][snapshot.weightRoot] = true;
+        }
         // L-Oracle-2: only mark the slot as permanently consumed-rejected when the consumer
         // call SUCCEEDED and returned true. The catch path's defensive default must not flag
         // the slot as dead.
@@ -652,6 +691,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         return roundPayoutProposals[snapshotKey].proposedAt;
     }
 
+    function roundPayoutSnapshotProposalDigest(bytes32 snapshotKey) external view returns (bytes32) {
+        RoundPayoutProposal storage proposal = roundPayoutProposals[snapshotKey];
+        if (proposal.snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
+        return _roundPayoutSnapshotProposalDigest(proposal);
+    }
+
     function roundPayoutProposal(bytes32 snapshotKey) external view returns (RoundPayoutProposal memory) {
         return roundPayoutProposals[snapshotKey];
     }
@@ -693,6 +738,82 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                         payout.reasonHash
                     )
                 )
+            )
+        );
+    }
+
+    function _roundPayoutSnapshotInputDigest(bytes32 snapshotKey, RoundPayoutSnapshotInput calldata input)
+        private
+        pure
+        returns (bytes32)
+    {
+        return _roundPayoutSnapshotDigest(
+            snapshotKey,
+            input.domain,
+            input.correlationEpochId,
+            input.rawEligibleVoters,
+            input.effectiveParticipantUnits,
+            input.rewardPoolId,
+            input.contentId,
+            input.roundId,
+            input.totalClaimWeight,
+            input.weightRoot,
+            input.reasonRoot,
+            input.artifactHash,
+            keccak256(bytes(input.artifactURI))
+        );
+    }
+
+    function _roundPayoutSnapshotProposalDigest(RoundPayoutProposal storage proposal) private view returns (bytes32) {
+        RoundPayoutSnapshot storage snapshot = proposal.snapshot;
+        return _roundPayoutSnapshotDigest(
+            snapshot.snapshotKey,
+            snapshot.domain,
+            snapshot.correlationEpochId,
+            snapshot.rawEligibleVoters,
+            snapshot.effectiveParticipantUnits,
+            snapshot.rewardPoolId,
+            snapshot.contentId,
+            snapshot.roundId,
+            snapshot.totalClaimWeight,
+            snapshot.weightRoot,
+            snapshot.reasonRoot,
+            proposal.artifactHash,
+            keccak256(bytes(proposal.artifactURI))
+        );
+    }
+
+    function _roundPayoutSnapshotDigest(
+        bytes32 snapshotKey,
+        uint8 domain,
+        uint64 correlationEpochId,
+        uint32 rawEligibleVoters,
+        uint32 effectiveParticipantUnits,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId,
+        uint256 totalClaimWeight,
+        bytes32 weightRoot,
+        bytes32 reasonRoot,
+        bytes32 artifactHash,
+        bytes32 artifactUriHash
+    ) private pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                ROUND_SNAPSHOT_DOMAIN,
+                snapshotKey,
+                domain,
+                correlationEpochId,
+                rawEligibleVoters,
+                effectiveParticipantUnits,
+                rewardPoolId,
+                contentId,
+                roundId,
+                totalClaimWeight,
+                weightRoot,
+                reasonRoot,
+                artifactHash,
+                artifactUriHash
             )
         );
     }

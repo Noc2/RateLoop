@@ -85,6 +85,10 @@ interface IClusterPayoutOracle {
         view
         returns (uint64);
 
+    function roundPayoutSnapshotProposalDigest(bytes32 snapshotKey) external view returns (bytes32);
+
+    function rejectedRoundPayoutSnapshotDigests(bytes32 snapshotKey, bytes32 digest) external view returns (bool);
+
     function rejectedRoundPayoutSnapshotRoots(bytes32 snapshotKey, bytes32 weightRoot) external view returns (bool);
 
     function rejectFinalizedCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external;

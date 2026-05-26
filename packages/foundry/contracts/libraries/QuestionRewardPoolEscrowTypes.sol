@@ -55,6 +55,9 @@ struct RoundSnapshot {
     // M-Oracle-3 (audit 2026-05-17): cluster-qualified snapshots bind to the finalized payout
     // root used at qualification time so later replacement roots cannot satisfy old snapshots.
     bytes32 clusterWeightRoot;
+    // Exact oracle proposal payload qualified into this snapshot. This preserves recovery proof
+    // when metadata around a deterministic root is rejected, then replaced with the same root.
+    bytes32 clusterSnapshotDigest;
 }
 
 struct BundleReward {

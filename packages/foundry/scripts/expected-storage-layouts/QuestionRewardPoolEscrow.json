@@ -754,7 +754,7 @@
       "id": "t_struct(RoundSnapshot)",
       "encoding": "inplace",
       "label": "struct RoundSnapshot",
-      "numberOfBytes": "320",
+      "numberOfBytes": "352",
       "members": [
         {
           "slot": 0,
@@ -826,6 +826,12 @@
           "slot": 9,
           "offset": 0,
           "label": "clusterWeightRoot",
+          "type": "t_bytes32"
+        },
+        {
+          "slot": 10,
+          "offset": 0,
+          "label": "clusterSnapshotDigest",
           "type": "t_bytes32"
         }
       ]
