@@ -154,7 +154,10 @@ test("quoteQuestion supports tokenless direct agent HTTP with a wallet address",
   assert.equal(requestedUrl, "https://rateloop.example/api/agent/quote");
   assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(requestedBody.bounty.amount, "1000000");
-  assert.equal(requestedBody.walletAddress, "0x00000000000000000000000000000000000000aa");
+  assert.equal(
+    requestedBody.walletAddress,
+    "0x00000000000000000000000000000000000000aa",
+  );
   assert.equal(response.walletPolicyRequired, false);
   assert.equal(response.operationKey, `0x${"56".repeat(32)}`);
 });
@@ -198,7 +201,10 @@ test("askHumans supports tokenless direct agent HTTP with a wallet address", asy
   assert.equal(requestedUrl, "https://rateloop.example/api/agent/asks");
   assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(requestedBody.maxPaymentAmount, "1250000");
-  assert.equal(requestedBody.walletAddress, "0x00000000000000000000000000000000000000aa");
+  assert.equal(
+    requestedBody.walletAddress,
+    "0x00000000000000000000000000000000000000aa",
+  );
   assert.equal(response.walletPolicyRequired, false);
   assert.equal(response.status, "awaiting_wallet_signature");
 });
@@ -216,7 +222,8 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
         return jsonResponse({
           expiresAt: "2026-04-30T12:00:00.000Z",
           id: "asi_test",
-          signingUrl: "https://rateloop.example/agent/sign/asi_test?token=secret",
+          signingUrl:
+            "https://rateloop.example/agent/sign/asi_test?token=secret",
           status: "pending",
         });
       }
@@ -260,7 +267,10 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
     },
     ttlMs: 300_000,
   });
-  const readResponse = await agent.getSigningIntent({ intentId: "asi_test", token: "secret" });
+  const readResponse = await agent.getSigningIntent({
+    intentId: "asi_test",
+    token: "secret",
+  });
   const prepareResponse = await agent.prepareSigningIntent({
     intentId: "asi_test",
     token: "secret",
@@ -272,15 +282,35 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
     transactionHashes: [`0x${"68".repeat(32)}`],
   });
 
-  assert.equal(requestedUrls[0], "https://rateloop.example/api/agent/signing-intents");
-  assert.equal(requestedUrls[1], "https://rateloop.example/api/agent/signing-intents/asi_test?token=secret");
-  assert.equal(requestedUrls[2], "https://rateloop.example/api/agent/signing-intents/asi_test/prepare");
-  assert.equal(requestedUrls[3], "https://rateloop.example/api/agent/signing-intents/asi_test/complete");
+  assert.equal(
+    requestedUrls[0],
+    "https://rateloop.example/api/agent/signing-intents",
+  );
+  assert.equal(
+    requestedUrls[1],
+    "https://rateloop.example/api/agent/signing-intents/asi_test?token=secret",
+  );
+  assert.equal(
+    requestedUrls[2],
+    "https://rateloop.example/api/agent/signing-intents/asi_test/prepare",
+  );
+  assert.equal(
+    requestedUrls[3],
+    "https://rateloop.example/api/agent/signing-intents/asi_test/complete",
+  );
   assert.equal(requestedBodies[0].request.bounty.amount, "1000000");
   assert.equal(requestedBodies[0].request.signatureMode, "browser_link");
-  assert.equal(requestedBodies[2].walletAddress, "0x00000000000000000000000000000000000000aa");
-  assert.deepEqual(requestedBodies[3].transactionHashes, [`0x${"68".repeat(32)}`]);
-  assert.equal(createResponse.signingUrl, "https://rateloop.example/agent/sign/asi_test?token=secret");
+  assert.equal(
+    requestedBodies[2].walletAddress,
+    "0x00000000000000000000000000000000000000aa",
+  );
+  assert.deepEqual(requestedBodies[3].transactionHashes, [
+    `0x${"68".repeat(32)}`,
+  ]);
+  assert.equal(
+    createResponse.signingUrl,
+    "https://rateloop.example/agent/sign/asi_test?token=secret",
+  );
   assert.equal(readResponse.id, "asi_test");
   assert.equal(prepareResponse.operationKey, `0x${"67".repeat(32)}`);
   assert.equal(completeResponse.status, "submitted");
@@ -324,6 +354,59 @@ test("askHumans prefers direct authenticated agent HTTP before MCP framing", asy
   assert.equal(requestedBody.maxPaymentAmount, "1250000");
 });
 
+test("askHumans routes feedback bonus asks through MCP", async () => {
+  let requestedUrl = "";
+  let requestedBody: any;
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+      requestedUrl = String(input);
+      requestedBody = JSON.parse(String(init?.body));
+      return jsonResponse({
+        result: {
+          structuredContent: {
+            feedbackBonus: {
+              amount: "2000000",
+              status: "pending_question_confirmation",
+            },
+            operationKey: `0x${"69".repeat(32)}`,
+            payment: {
+              amount: "3000000",
+              bountyAmount: "1000000",
+              feedbackBonusAmount: "2000000",
+              totalAmount: "3000000",
+            },
+            status: "awaiting_wallet_signature",
+          },
+        },
+      });
+    },
+    mcpAccessToken: "agent-token",
+  });
+
+  const response = await agent.askHumans({
+    bounty: { amount: 1_000_000n, rewardPoolExpiresAt: 1_762_000_000n },
+    chainId: 480,
+    clientRequestId: "ask-feedback-bonus",
+    feedbackBonus: { amount: 2_000_000n },
+    maxPaymentAmount: 3_000_000n,
+    question: {
+      categoryId: 5n,
+      contextUrl: "https://example.com/context",
+      description: "Would this answer be useful?",
+      tags: ["agent", "feedback"],
+      title: "Answer usefulness",
+    },
+  });
+
+  assert.equal(requestedUrl, "https://rateloop.example/api/mcp");
+  assert.equal(requestedBody.params.name, "rateloop_ask_humans");
+  assert.equal(requestedBody.params.arguments.feedbackBonus.amount, "2000000");
+  assert.equal(requestedBody.params.arguments.maxPaymentAmount, "3000000");
+  assert.equal(response.feedbackBonus?.status, "pending_question_confirmation");
+  assert.equal(response.payment?.totalAmount, "3000000");
+});
+
 test("confirmAskTransactions uses direct authenticated agent HTTP", async () => {
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;
@@ -349,7 +432,10 @@ test("confirmAskTransactions uses direct authenticated agent HTTP", async () => 
     transactionHashes: [`0x${"88".repeat(32)}`],
   });
 
-  assert.equal(requestedUrl, `https://rateloop.example/api/agent/asks/${operationKey}/confirm`);
+  assert.equal(
+    requestedUrl,
+    `https://rateloop.example/api/agent/asks/${operationKey}/confirm`,
+  );
   assert.equal(requestedHeaders?.get("authorization"), "Bearer agent-token");
   assert.deepEqual(requestedBody.transactionHashes, [`0x${"88".repeat(32)}`]);
   assert.equal(response.contentId, "42");
@@ -378,8 +464,47 @@ test("confirmAskTransactions can use MCP framing", async () => {
 
   assert.equal(requestedBody.params.name, "rateloop_confirm_ask_transactions");
   assert.equal(requestedBody.params.arguments.operationKey, operationKey);
-  assert.deepEqual(requestedBody.params.arguments.transactionHashes, [`0x${"aa".repeat(32)}`]);
+  assert.deepEqual(requestedBody.params.arguments.transactionHashes, [
+    `0x${"aa".repeat(32)}`,
+  ]);
   assert.equal(response.status, "submitted");
+});
+
+test("confirmFeedbackBonusTransactions uses MCP framing", async () => {
+  let requestedBody: any;
+  const operationKey = `0x${"89".repeat(32)}`;
+  const agent = createRateLoopAgentClient({
+    mcpApiUrl: "https://rateloop.example/api/mcp",
+    fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
+      requestedBody = JSON.parse(String(init?.body));
+      return jsonResponse({
+        result: {
+          structuredContent: {
+            feedbackBonus: { poolId: "7", status: "funded" },
+            operationKey,
+            status: "submitted",
+          },
+        },
+      });
+    },
+    mcpAccessToken: "agent-token",
+  });
+
+  const response = await agent.confirmFeedbackBonusTransactions({
+    operationKey,
+    transactionHashes: [`0x${"ab".repeat(32)}`],
+  });
+
+  assert.equal(
+    requestedBody.params.name,
+    "rateloop_confirm_feedback_bonus_transactions",
+  );
+  assert.equal(requestedBody.params.arguments.operationKey, operationKey);
+  assert.deepEqual(requestedBody.params.arguments.transactionHashes, [
+    `0x${"ab".repeat(32)}`,
+  ]);
+  assert.equal(response.feedbackBonus?.status, "funded");
+  assert.equal(response.feedbackBonus?.poolId, "7");
 });
 
 test("getQuestionStatus supports tokenless direct operation and wallet client lookups", async () => {
@@ -467,10 +592,14 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
   const templates = await agent.listResultTemplates();
 
   const callbackStatus:
-    | NonNullable<QuestionStatusResponse["callbackDeliveries"]>[number]["status"]
+    | NonNullable<
+        QuestionStatusResponse["callbackDeliveries"]
+      >[number]["status"]
     | undefined = status.callbackDeliveries?.[0]?.status;
   const templateMode:
-    | NonNullable<ListResultTemplatesResponse["templates"]>[number]["submissionPattern"]
+    | NonNullable<
+        ListResultTemplatesResponse["templates"]
+      >[number]["submissionPattern"]
     | undefined = templates.templates[0]?.submissionPattern;
 
   assert.equal(
@@ -485,7 +614,10 @@ test("authenticated status, result, and templates use direct agent HTTP endpoint
     requestedUrls[2],
     "https://rateloop.example/api/agent/results/by-content/123",
   );
-  assert.equal(requestedUrls[3], "https://rateloop.example/api/agent/templates");
+  assert.equal(
+    requestedUrls[3],
+    "https://rateloop.example/api/agent/templates",
+  );
   assert.equal(callbackStatus, "retrying");
   assert.equal(status.resultTool, "rateloop_get_result");
   assert.equal(status.terminal, false);
@@ -520,12 +652,18 @@ test("getResult uses tokenless public result packages when contentId is known", 
 
   const result = await agent.getResult({ contentId: "42" });
 
-  assert.equal(requestedUrl, "https://rateloop.example/api/agent/results/by-content/42");
+  assert.equal(
+    requestedUrl,
+    "https://rateloop.example/api/agent/results/by-content/42",
+  );
   assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(result.ready, true);
   assert.equal(result.answer, "proceed");
   assert.equal(result.methodology?.templateId, "generic_rating");
-  assert.equal((result.answerScopes as any).allAnswers.distribution.up.share, 0.7);
+  assert.equal(
+    (result.answerScopes as any).allAnswers.distribution.up.share,
+    0.7,
+  );
 });
 
 test("getResult supports tokenless direct operation lookups", async () => {
@@ -549,7 +687,10 @@ test("getResult supports tokenless direct operation lookups", async () => {
     operationKey: `0x${"99".repeat(32)}`,
   });
 
-  assert.equal(requestedUrl, `https://rateloop.example/api/agent/results/0x${"99".repeat(32)}`);
+  assert.equal(
+    requestedUrl,
+    `https://rateloop.example/api/agent/results/0x${"99".repeat(32)}`,
+  );
   assert.equal(requestedHeaders?.get("authorization"), null);
   assert.equal(result.ready, false);
   assert.equal(result.answer, "pending");

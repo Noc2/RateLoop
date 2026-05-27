@@ -46,6 +46,14 @@ export interface RateLoopAgentBounty {
   [key: string]: unknown;
 }
 
+export interface RateLoopAgentFeedbackBonus {
+  amount: string | number | bigint;
+  asset?: "USDC" | string;
+  awarder?: `0x${string}` | string;
+  feedbackClosesAt?: string | number | bigint;
+  [key: string]: unknown;
+}
+
 export interface RateLoopAgentRoundConfig {
   epochDuration?: string | number | bigint;
   blindPhaseSeconds?: string | number | bigint;
@@ -64,6 +72,7 @@ export interface RateLoopAgentQuestionRequest {
   question?: RateLoopAgentQuestionItem;
   questions?: RateLoopAgentQuestionItem[];
   bounty: RateLoopAgentBounty;
+  feedbackBonus?: RateLoopAgentFeedbackBonus;
   roundConfig?: RateLoopAgentRoundConfig;
   walletAddress?: `0x${string}` | string;
   [key: string]: unknown;
@@ -93,6 +102,9 @@ export interface ConfirmAskTransactionsRequest {
   operationKey: `0x${string}` | string;
   transactionHashes: (`0x${string}` | string)[];
 }
+
+export interface ConfirmFeedbackBonusTransactionsRequest
+  extends ConfirmAskTransactionsRequest {}
 
 export interface QuestionStatusLookup {
   operationKey?: `0x${string}` | string;
@@ -125,8 +137,10 @@ export interface RateLoopAgentPayment {
   asset?: string;
   bountyAmount?: string;
   decimals?: number;
+  feedbackBonusAmount?: string;
   spender?: string;
   tokenAddress?: string;
+  totalAmount?: string;
   [key: string]: unknown;
 }
 
@@ -135,7 +149,12 @@ export interface RateLoopAgentWalletTransactionCall {
   description?: string;
   functionName?: string;
   id?: string;
-  phase?: "approve_usdc" | "reserve_submission" | "submit_question" | "submit_x402_question" | string;
+  phase?:
+    | "approve_usdc"
+    | "reserve_submission"
+    | "submit_question"
+    | "submit_x402_question"
+    | string;
   to?: `0x${string}` | string;
   value?: string;
   waitAfterMs?: number;
@@ -155,6 +174,24 @@ export interface RateLoopAgentWalletInfo {
   [key: string]: unknown;
 }
 
+export interface RateLoopAgentFeedbackBonusState {
+  amount?: string;
+  asset?: string;
+  awarder?: string;
+  confirmTool?: string;
+  feedbackClosesAt?: string;
+  poolId?: string | null;
+  status?:
+    | "pending_question_confirmation"
+    | "awaiting_wallet_signature"
+    | "funded"
+    | "failed"
+    | string;
+  transactionHashes?: string[];
+  transactionPlan?: RateLoopAgentWalletTransactionPlan;
+  [key: string]: unknown;
+}
+
 export interface RateLoopAgentFastLaneGuidance {
   conservativeStartingBountyAtomic?: string;
   estimatedResultAt?: number;
@@ -169,7 +206,11 @@ export interface RateLoopAgentFastLaneGuidance {
   minimumViableQuorum?: string;
   perRequiredSignalUnitAtomic?: string;
   pricingConfidence?: "low" | "medium" | "high" | string;
-  recommendedAction?: "start_small" | "raise_before_submit" | "adjust_round_window" | string;
+  recommendedAction?:
+    | "start_small"
+    | "raise_before_submit"
+    | "adjust_round_window"
+    | string;
   requiredSignalUnits?: string;
   speed?: "fast" | "standard" | "slow" | string;
   stretchBountyAmountAtomic?: string;
@@ -190,6 +231,8 @@ export interface QuoteQuestionResponse {
   canSubmit?: boolean;
   clientRequestId?: string;
   fastLane?: RateLoopAgentFastLaneGuidance;
+  feedbackBonus?: RateLoopAgentFeedbackBonusState;
+  feedbackBonusGuidance?: JsonRecord;
   operationKey?: `0x${string}` | string;
   payloadHash?: string;
   payment?: RateLoopAgentPayment;
@@ -205,6 +248,8 @@ export interface AskHumansResponse {
   contentId?: string | null;
   contentIds?: string[];
   fastLane?: RateLoopAgentFastLaneGuidance;
+  feedbackBonus?: RateLoopAgentFeedbackBonusState;
+  feedbackBonusGuidance?: JsonRecord;
   managedBudget?: JsonRecord | null;
   nextAction?: string | null;
   pollAfterMs?: number | null;
@@ -256,6 +301,7 @@ export interface QuestionStatusResponse {
   contentId?: string | null;
   contentIds?: string[];
   error?: string | null;
+  feedbackBonus?: RateLoopAgentFeedbackBonusState;
   nextAction?: string | null;
   operationKey?: `0x${string}` | string;
   payerAddress?: string;
@@ -353,6 +399,9 @@ export interface RateLoopAgentClient {
   confirmAskTransactions(
     params: ConfirmAskTransactionsRequest,
   ): Promise<QuestionStatusResponse>;
+  confirmFeedbackBonusTransactions(
+    params: ConfirmFeedbackBonusTransactionsRequest,
+  ): Promise<QuestionStatusResponse>;
   getQuestionStatus(
     params: QuestionStatusLookup,
   ): Promise<QuestionStatusResponse>;
@@ -404,6 +453,8 @@ export function createRateLoopAgentClient(
     prepareSigningIntent: (params) => prepareSigningIntent(params, config),
     completeSigningIntent: (params) => completeSigningIntent(params, config),
     confirmAskTransactions: (params) => confirmAskTransactions(params, config),
+    confirmFeedbackBonusTransactions: (params) =>
+      confirmFeedbackBonusTransactions(params, config),
     getQuestionStatus: (params) => getQuestionStatus(params, config),
     getResult: (params) => getResult(params, config),
     listResultTemplates: () => listResultTemplates(config),
@@ -415,7 +466,7 @@ export function quoteQuestion(
   options: RateLoopAgentClientOptions = {},
 ): Promise<QuoteQuestionResponse> {
   const config = normalizeAgentConfig(options);
-  if (hasDirectAgentHttp(config)) {
+  if (hasDirectAgentHttp(config) && !hasFeedbackBonus(params)) {
     return requestJson<QuoteQuestionResponse>(config, agentQuoteUrl(config), {
       body: stringifyJson(params),
       headers: jsonAgentHeaders(config),
@@ -437,9 +488,23 @@ export async function askHumans(
   const config = normalizeAgentConfig(options);
   const { transport, ...body } = params;
 
+  if (transport === "http") {
+    if (hasFeedbackBonus(params)) {
+      throw new RateLoopSdkError(
+        'feedbackBonus is currently supported through MCP transport. Set transport: "mcp" or call with mcpApiUrl.',
+      );
+    }
+    return requestJson<AskHumansResponse>(config, agentAsksUrl(config), {
+      body: stringifyJson(body),
+      headers: jsonAgentHeaders(config),
+      method: "POST",
+    });
+  }
+
   if (
-    transport === "http" ||
-    (transport !== "mcp" && hasDirectAgentHttp(config))
+    transport !== "mcp" &&
+    hasDirectAgentHttp(config) &&
+    !hasFeedbackBonus(params)
   ) {
     return requestJson<AskHumansResponse>(config, agentAsksUrl(config), {
       body: stringifyJson(body),
@@ -461,14 +526,20 @@ export async function createSigningIntent(
 ): Promise<SigningIntentResponse> {
   const config = normalizeAgentConfig(options);
   if (!hasDirectAgentHttp(config)) {
-    throw new RateLoopSdkError("apiBaseUrl is required to create browser signing links");
+    throw new RateLoopSdkError(
+      "apiBaseUrl is required to create browser signing links",
+    );
   }
 
-  return requestJson<SigningIntentResponse>(config, agentSigningIntentsUrl(config), {
-    body: stringifyJson(params),
-    headers: jsonAgentHeaders(config),
-    method: "POST",
-  });
+  return requestJson<SigningIntentResponse>(
+    config,
+    agentSigningIntentsUrl(config),
+    {
+      body: stringifyJson(params),
+      headers: jsonAgentHeaders(config),
+      method: "POST",
+    },
+  );
 }
 
 export async function getSigningIntent(
@@ -477,13 +548,19 @@ export async function getSigningIntent(
 ): Promise<SigningIntentResponse> {
   const config = normalizeAgentConfig(options);
   if (!hasDirectAgentHttp(config)) {
-    throw new RateLoopSdkError("apiBaseUrl is required to read browser signing links");
+    throw new RateLoopSdkError(
+      "apiBaseUrl is required to read browser signing links",
+    );
   }
 
-  return requestJson<SigningIntentResponse>(config, agentSigningIntentUrl(config, params), {
-    headers: agentHeaders(config),
-    method: "GET",
-  });
+  return requestJson<SigningIntentResponse>(
+    config,
+    agentSigningIntentUrl(config, params),
+    {
+      headers: agentHeaders(config),
+      method: "GET",
+    },
+  );
 }
 
 export async function prepareSigningIntent(
@@ -492,18 +569,24 @@ export async function prepareSigningIntent(
 ): Promise<SigningIntentResponse> {
   const config = normalizeAgentConfig(options);
   if (!hasDirectAgentHttp(config)) {
-    throw new RateLoopSdkError("apiBaseUrl is required to prepare browser signing links");
+    throw new RateLoopSdkError(
+      "apiBaseUrl is required to prepare browser signing links",
+    );
   }
 
-  return requestJson<SigningIntentResponse>(config, agentSigningIntentActionUrl(config, params, "prepare"), {
-    body: stringifyJson({
-      paymentAuthorization: params.paymentAuthorization,
-      token: params.token,
-      walletAddress: params.walletAddress,
-    }),
-    headers: jsonAgentHeaders(config),
-    method: "POST",
-  });
+  return requestJson<SigningIntentResponse>(
+    config,
+    agentSigningIntentActionUrl(config, params, "prepare"),
+    {
+      body: stringifyJson({
+        paymentAuthorization: params.paymentAuthorization,
+        token: params.token,
+        walletAddress: params.walletAddress,
+      }),
+      headers: jsonAgentHeaders(config),
+      method: "POST",
+    },
+  );
 }
 
 export async function completeSigningIntent(
@@ -512,17 +595,23 @@ export async function completeSigningIntent(
 ): Promise<SigningIntentResponse> {
   const config = normalizeAgentConfig(options);
   if (!hasDirectAgentHttp(config)) {
-    throw new RateLoopSdkError("apiBaseUrl is required to complete browser signing links");
+    throw new RateLoopSdkError(
+      "apiBaseUrl is required to complete browser signing links",
+    );
   }
 
-  return requestJson<SigningIntentResponse>(config, agentSigningIntentActionUrl(config, params, "complete"), {
-    body: stringifyJson({
-      token: params.token,
-      transactionHashes: params.transactionHashes,
-    }),
-    headers: jsonAgentHeaders(config),
-    method: "POST",
-  });
+  return requestJson<SigningIntentResponse>(
+    config,
+    agentSigningIntentActionUrl(config, params, "complete"),
+    {
+      body: stringifyJson({
+        token: params.token,
+        transactionHashes: params.transactionHashes,
+      }),
+      headers: jsonAgentHeaders(config),
+      method: "POST",
+    },
+  );
 }
 
 export async function confirmAskTransactions(
@@ -531,18 +620,44 @@ export async function confirmAskTransactions(
 ): Promise<QuestionStatusResponse> {
   const config = normalizeAgentConfig(options);
   if (hasDirectAgentHttp(config)) {
-    return requestJson<QuestionStatusResponse>(config, agentConfirmAskUrl(config, params.operationKey), {
-      body: stringifyJson({ transactionHashes: params.transactionHashes }),
-      headers: jsonAgentHeaders(config),
-      method: "POST",
-    });
+    return requestJson<QuestionStatusResponse>(
+      config,
+      agentConfirmAskUrl(config, params.operationKey),
+      {
+        body: stringifyJson({ transactionHashes: params.transactionHashes }),
+        headers: jsonAgentHeaders(config),
+        method: "POST",
+      },
+    );
   }
 
   if (config.mcpApiUrl) {
-    return callMcpTool<QuestionStatusResponse>(config, "rateloop_confirm_ask_transactions", { ...params });
+    return callMcpTool<QuestionStatusResponse>(
+      config,
+      "rateloop_confirm_ask_transactions",
+      { ...params },
+    );
   }
 
   throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
+}
+
+export async function confirmFeedbackBonusTransactions(
+  params: ConfirmFeedbackBonusTransactionsRequest,
+  options: RateLoopAgentClientOptions = {},
+): Promise<QuestionStatusResponse> {
+  const config = normalizeAgentConfig(options);
+  if (config.mcpApiUrl) {
+    return callMcpTool<QuestionStatusResponse>(
+      config,
+      "rateloop_confirm_feedback_bonus_transactions",
+      { ...params },
+    );
+  }
+
+  throw new RateLoopSdkError(
+    "mcpApiUrl is required to confirm feedback bonus transactions",
+  );
 }
 
 export async function getQuestionStatus(
@@ -807,10 +922,14 @@ async function fetchWithTimeout(
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new RateLoopApiError(`RateLoop request timed out after ${timeoutMs}ms`, 504);
+      throw new RateLoopApiError(
+        `RateLoop request timed out after ${timeoutMs}ms`,
+        504,
+      );
     }
 
-    const message = error instanceof Error ? error.message : "Unknown fetch error";
+    const message =
+      error instanceof Error ? error.message : "Unknown fetch error";
     throw new RateLoopApiError(`RateLoop request failed: ${message}`, 502);
   } finally {
     clearTimeout(timeoutHandle);
@@ -876,14 +995,20 @@ function agentSigningIntentsUrl(config: NormalizedAgentConfig) {
   return new URL("./signing-intents", `${agentBaseUrl(config)}/`).toString();
 }
 
-function agentSigningIntentUrl(config: NormalizedAgentConfig, params: SigningIntentLookup) {
+function agentSigningIntentUrl(
+  config: NormalizedAgentConfig,
+  params: SigningIntentLookup,
+) {
   if (!params.intentId.trim()) {
     throw new RateLoopSdkError("intentId is required");
   }
   if (!params.token.trim()) {
     throw new RateLoopSdkError("token is required");
   }
-  const url = new URL(`./signing-intents/${params.intentId.trim()}`, `${agentBaseUrl(config)}/`);
+  const url = new URL(
+    `./signing-intents/${params.intentId.trim()}`,
+    `${agentBaseUrl(config)}/`,
+  );
   url.searchParams.set("token", params.token);
   return url.toString();
 }
@@ -896,15 +1021,26 @@ function agentSigningIntentActionUrl(
   if (!params.intentId.trim()) {
     throw new RateLoopSdkError("intentId is required");
   }
-  return new URL(`./signing-intents/${params.intentId.trim()}/${action}`, `${agentBaseUrl(config)}/`).toString();
+  return new URL(
+    `./signing-intents/${params.intentId.trim()}/${action}`,
+    `${agentBaseUrl(config)}/`,
+  ).toString();
 }
 
-function agentConfirmAskUrl(config: NormalizedAgentConfig, operationKey: string) {
+function agentConfirmAskUrl(
+  config: NormalizedAgentConfig,
+  operationKey: string,
+) {
   const trimmed = operationKey.trim();
   if (!trimmed) {
-    throw new RateLoopSdkError("operationKey is required to confirm ask transactions");
+    throw new RateLoopSdkError(
+      "operationKey is required to confirm ask transactions",
+    );
   }
-  return new URL(`./asks/${trimmed}/confirm`, `${agentBaseUrl(config)}/`).toString();
+  return new URL(
+    `./asks/${trimmed}/confirm`,
+    `${agentBaseUrl(config)}/`,
+  ).toString();
 }
 
 function agentStatusUrl(
@@ -983,6 +1119,10 @@ function hasDirectAgentHttp(config: NormalizedAgentConfig) {
   return Boolean(config.apiBaseUrl);
 }
 
+function hasFeedbackBonus(params: { feedbackBonus?: unknown }) {
+  return params.feedbackBonus !== undefined && params.feedbackBonus !== null;
+}
+
 function agentHeaders(config: NormalizedAgentConfig) {
   const headers: Record<string, string> = {
     accept: "application/json",
@@ -1008,7 +1148,10 @@ function parseJson(body: string): unknown {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown parse error";
-    throw new RateLoopApiError(`RateLoop returned invalid JSON: ${message}`, 502);
+    throw new RateLoopApiError(
+      `RateLoop returned invalid JSON: ${message}`,
+      502,
+    );
   }
 }
 
