@@ -19,6 +19,7 @@ import {
   agentAskHumansOutputSchema,
   agentBalanceOutputSchema,
   agentConfirmAskTransactionsInputSchema,
+  agentConfirmFeedbackBonusTransactionsInputSchema,
   agentOperationLookupInputSchema,
   agentQuestionStatusOutputSchema,
   agentQuoteInputSchema,
@@ -45,14 +46,17 @@ import {
   parseX402QuestionRequest,
 } from "~~/lib/x402/questionPayload";
 import {
+  type X402FeedbackBonusRequest,
   X402QuestionConfigError,
   X402QuestionConflictError,
   buildPermissionlessWalletClientRequestId,
   confirmAgentWalletQuestionSubmissionRequest,
+  confirmFeedbackBonusQuestionSubmissionRequest,
   getX402QuestionSubmissionByClientRequest,
   getX402QuestionSubmissionByOperationKey,
   preflightX402QuestionSubmission,
   prepareAgentWalletQuestionSubmissionRequest,
+  prepareFeedbackBonusQuestionSubmissionRequest,
   prepareNativeX402QuestionSubmissionRequest,
   preparePermissionlessNativeX402QuestionSubmissionRequest,
   preparePermissionlessWalletQuestionSubmissionRequest,
@@ -90,12 +94,14 @@ type BackgroundTaskScheduler = (task: () => Promise<void> | void) => void;
 
 type McpToolDependencies = {
   confirmAgentWalletQuestionSubmissionRequest: typeof confirmAgentWalletQuestionSubmissionRequest;
+  confirmFeedbackBonusQuestionSubmissionRequest: typeof confirmFeedbackBonusQuestionSubmissionRequest;
   enqueueAgentCallbackEvent: typeof enqueueAgentCallbackEvent;
   getAllVotes: typeof ponderApi.getAllVotes;
   getContentById: typeof ponderApi.getContentById;
   getRaterParticipationStatus: typeof ponderApi.getRaterParticipationStatus;
   getMcpAgentBudgetSummary: typeof getMcpAgentBudgetSummary;
   prepareAgentWalletQuestionSubmissionRequest: typeof prepareAgentWalletQuestionSubmissionRequest;
+  prepareFeedbackBonusQuestionSubmissionRequest: typeof prepareFeedbackBonusQuestionSubmissionRequest;
   prepareNativeX402QuestionSubmissionRequest: typeof prepareNativeX402QuestionSubmissionRequest;
   preparePermissionlessNativeX402QuestionSubmissionRequest: typeof preparePermissionlessNativeX402QuestionSubmissionRequest;
   preparePermissionlessWalletQuestionSubmissionRequest: typeof preparePermissionlessWalletQuestionSubmissionRequest;
@@ -112,6 +118,9 @@ function getMcpToolDependencies(): McpToolDependencies {
   return {
     confirmAgentWalletQuestionSubmissionRequest:
       mcpToolTestOverrides?.confirmAgentWalletQuestionSubmissionRequest ?? confirmAgentWalletQuestionSubmissionRequest,
+    confirmFeedbackBonusQuestionSubmissionRequest:
+      mcpToolTestOverrides?.confirmFeedbackBonusQuestionSubmissionRequest ??
+      confirmFeedbackBonusQuestionSubmissionRequest,
     enqueueAgentCallbackEvent: mcpToolTestOverrides?.enqueueAgentCallbackEvent ?? enqueueAgentCallbackEvent,
     getAllVotes: mcpToolTestOverrides?.getAllVotes ?? (params => ponderApi.getAllVotes(params)),
     getContentById: mcpToolTestOverrides?.getContentById ?? ponderApi.getContentById,
@@ -120,6 +129,9 @@ function getMcpToolDependencies(): McpToolDependencies {
     getMcpAgentBudgetSummary: mcpToolTestOverrides?.getMcpAgentBudgetSummary ?? getMcpAgentBudgetSummary,
     prepareAgentWalletQuestionSubmissionRequest:
       mcpToolTestOverrides?.prepareAgentWalletQuestionSubmissionRequest ?? prepareAgentWalletQuestionSubmissionRequest,
+    prepareFeedbackBonusQuestionSubmissionRequest:
+      mcpToolTestOverrides?.prepareFeedbackBonusQuestionSubmissionRequest ??
+      prepareFeedbackBonusQuestionSubmissionRequest,
     prepareNativeX402QuestionSubmissionRequest:
       mcpToolTestOverrides?.prepareNativeX402QuestionSubmissionRequest ?? prepareNativeX402QuestionSubmissionRequest,
     preparePermissionlessNativeX402QuestionSubmissionRequest:
@@ -231,6 +243,20 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     annotations: {
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+      readOnlyHint: false,
+    },
+    description: "Confirm wallet-executed Feedback Bonus transactions and attach the funded bonus pool to the ask.",
+    inputSchema: agentConfirmFeedbackBonusTransactionsInputSchema,
+    name: "rateloop_confirm_feedback_bonus_transactions",
+    outputSchema: agentQuestionStatusOutputSchema,
+    requiredScope: MCP_SCOPES.ask,
+    title: "Confirm Feedback Bonus Transactions",
+  },
+  {
+    annotations: {
       idempotentHint: true,
       openWorldHint: true,
       readOnlyHint: true,
@@ -295,6 +321,7 @@ const PUBLIC_MCP_TOOL_NAMES = new Set([
   "rateloop_quote_question",
   "rateloop_ask_humans",
   "rateloop_confirm_ask_transactions",
+  "rateloop_confirm_feedback_bonus_transactions",
   "rateloop_get_question_status",
   "rateloop_get_result",
 ]);
@@ -308,6 +335,12 @@ function asObject(value: unknown): JsonObject {
   return value as JsonObject;
 }
 
+function questionPayloadArgs(args: JsonObject): JsonObject {
+  const payloadArgs = { ...args };
+  delete payloadArgs.feedbackBonus;
+  return payloadArgs;
+}
+
 function parseMaxPaymentAmount(value: unknown): bigint {
   const rawValue =
     typeof value === "number" || typeof value === "bigint" || typeof value === "string" ? String(value) : "";
@@ -315,6 +348,111 @@ function parseMaxPaymentAmount(value: unknown): bigint {
     throw new McpToolError("maxPaymentAmount must be a non-negative integer string.");
   }
   return BigInt(rawValue);
+}
+
+function parseAtomicAmount(value: unknown, fieldName: string): bigint {
+  const rawValue =
+    typeof value === "number" || typeof value === "bigint" || typeof value === "string" ? String(value).trim() : "";
+  if (!/^\d+$/.test(rawValue)) {
+    throw new McpToolError(`${fieldName} must be a non-negative integer string.`);
+  }
+  return BigInt(rawValue);
+}
+
+function parseOptionalFeedbackBonus(
+  args: JsonObject,
+  payload: X402QuestionPayload,
+  walletAddress: Address,
+): X402FeedbackBonusRequest | null {
+  const raw = args.feedbackBonus;
+  if (raw === undefined || raw === null || raw === false) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new McpToolError("feedbackBonus must be an object when provided.");
+  }
+  if (payload.questions.length !== 1) {
+    throw new McpToolError("Feedback Bonuses are currently supported for single-question asks only.");
+  }
+
+  const value = raw as JsonObject;
+  const asset = typeof value.asset === "string" ? value.asset.trim().toUpperCase() : "USDC";
+  if (asset !== "USDC") {
+    throw new McpToolError("feedbackBonus.asset must be USDC.");
+  }
+  const amount = parseAtomicAmount(value.amount, "feedbackBonus.amount");
+  if (amount <= 0n) {
+    throw new McpToolError("feedbackBonus.amount must be greater than zero.");
+  }
+  const feedbackClosesAt = parseAtomicAmount(
+    value.feedbackClosesAt ?? payload.bounty.rewardPoolExpiresAt,
+    "feedbackBonus.feedbackClosesAt",
+  );
+  if (feedbackClosesAt <= 0n) {
+    throw new McpToolError("feedbackBonus.feedbackClosesAt must be greater than zero.");
+  }
+  if (payload.bounty.rewardPoolExpiresAt > 0n && feedbackClosesAt > payload.bounty.rewardPoolExpiresAt) {
+    throw new McpToolError("feedbackBonus.feedbackClosesAt cannot be after bounty.rewardPoolExpiresAt.");
+  }
+
+  const awarder = typeof value.awarder === "string" && value.awarder.trim() ? value.awarder.trim() : walletAddress;
+  if (!isAddress(awarder)) {
+    throw new McpToolError("feedbackBonus.awarder must be an EVM address.");
+  }
+
+  return {
+    amount,
+    asset: "USDC",
+    awarder,
+    feedbackClosesAt,
+  };
+}
+
+function feedbackBonusAmount(feedbackBonus: X402FeedbackBonusRequest | null) {
+  return feedbackBonus?.amount ?? 0n;
+}
+
+function buildFeedbackBonusGuidance(feedbackBonus: X402FeedbackBonusRequest | null, payload: X402QuestionPayload) {
+  return {
+    included: Boolean(feedbackBonus),
+    note: feedbackBonus
+      ? "The Feedback Bonus is funded after the question transaction confirms and rewards useful hidden rater feedback."
+      : "Consider adding a small Feedback Bonus for qualitative AI review questions where written rationale is valuable.",
+    recommended: payload.questions.length === 1,
+    suggestedAmountAtomic: feedbackBonus ? feedbackBonus.amount.toString() : "2000000",
+  };
+}
+
+function buildPendingFeedbackBonusBody(feedbackBonus: X402FeedbackBonusRequest | null) {
+  if (!feedbackBonus) {
+    return {
+      enabled: false,
+      status: "not_requested",
+    };
+  }
+
+  return {
+    amount: feedbackBonus.amount.toString(),
+    asset: "USDC",
+    awarder: feedbackBonus.awarder,
+    enabled: true,
+    feedbackClosesAt: feedbackBonus.feedbackClosesAt.toString(),
+    nextTool: "rateloop_confirm_ask_transactions",
+    status: "pending_question_confirmation",
+  };
+}
+
+function applyFeedbackBonusPaymentFields(body: JsonObject, feedbackBonus: X402FeedbackBonusRequest | null): JsonObject {
+  if (!feedbackBonus || !body.payment || typeof body.payment !== "object" || Array.isArray(body.payment)) return body;
+  const payment = body.payment as JsonObject;
+  const bountyAmount = parseAtomicAmount(payment.bountyAmount ?? payment.amount, "payment.amount");
+  const feedbackAmount = feedbackBonusAmount(feedbackBonus);
+  return {
+    ...body,
+    payment: {
+      ...payment,
+      feedbackBonusAmount: feedbackAmount.toString(),
+      totalAmount: (bountyAmount + feedbackAmount).toString(),
+    },
+  };
 }
 
 function parseAgentWalletAddress(args: JsonObject, agent: McpAgentAuth): Address {
@@ -483,6 +621,47 @@ function agentStatusHints(body: JsonObject, latestRoundState: number | null = nu
   };
 }
 
+async function attachFeedbackBonusPlan(
+  body: JsonObject,
+  dependencies: McpToolDependencies,
+  warnings: string[],
+): Promise<JsonObject> {
+  const feedbackBonus = body.feedbackBonus;
+  const enabled =
+    feedbackBonus &&
+    typeof feedbackBonus === "object" &&
+    !Array.isArray(feedbackBonus) &&
+    (feedbackBonus as JsonObject).enabled === true;
+  const status = enabled ? String((feedbackBonus as JsonObject).status ?? "") : "";
+  const operationKey = typeof body.operationKey === "string" ? body.operationKey : "";
+  if (!enabled || status !== "awaiting_wallet_signature" || !/^0x[a-fA-F0-9]{64}$/.test(operationKey)) {
+    return body;
+  }
+
+  try {
+    const result = await dependencies.prepareFeedbackBonusQuestionSubmissionRequest({
+      operationKey: operationKey as `0x${string}`,
+    });
+    const planBody = normalizeMcpQuestionBody(result.body) as JsonObject;
+    const planFeedbackBonus =
+      planBody.feedbackBonus && typeof planBody.feedbackBonus === "object" && !Array.isArray(planBody.feedbackBonus)
+        ? (planBody.feedbackBonus as JsonObject)
+        : {};
+    return {
+      ...body,
+      feedbackBonus: {
+        ...(feedbackBonus as JsonObject),
+        ...planFeedbackBonus,
+        confirmTool: "rateloop_confirm_feedback_bonus_transactions",
+      },
+    };
+  } catch (error) {
+    console.error("[mcp] feedback bonus plan unavailable", error);
+    warnings.push("feedback_bonus_plan_unavailable");
+    return body;
+  }
+}
+
 function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -599,8 +778,10 @@ function formatQuoteResult(
   params: Awaited<ReturnType<typeof preflightX402QuestionSubmission>>,
   payload: X402QuestionPayload,
   config: ReturnType<typeof resolveX402QuestionConfig>,
-  options: { walletPolicyRequired?: boolean } = {},
+  options: { feedbackBonus?: X402FeedbackBonusRequest | null; walletPolicyRequired?: boolean } = {},
 ) {
+  const feedbackBonus = options.feedbackBonus ?? null;
+  const totalAmount = params.paymentAmount + feedbackBonusAmount(feedbackBonus);
   return {
     canSubmit: true,
     fastLane: buildAgentFastLaneGuidance({
@@ -608,15 +789,19 @@ function formatQuoteResult(
       questionCount: payload.questions.length,
       roundConfig: payload.roundConfig,
     }),
+    feedbackBonus: buildPendingFeedbackBonusBody(feedbackBonus),
+    feedbackBonusGuidance: buildFeedbackBonusGuidance(feedbackBonus, payload),
     legalNotice: buildAgentLegalNotice(),
     operationKey: params.operation.operationKey,
     payment: {
-      amount: params.paymentAmount.toString(),
+      amount: totalAmount.toString(),
       asset: "USDC",
       bountyAmount: payload.bounty.amount.toString(),
       decimals: X402_USDC_DECIMALS,
+      feedbackBonusAmount: feedbackBonusAmount(feedbackBonus).toString(),
       spender: config.questionRewardPoolEscrowAddress,
       tokenAddress: config.usdcAddress,
+      totalAmount: totalAmount.toString(),
     },
     payloadHash: params.operation.payloadHash,
     questionCount: params.resolvedCategoryIds.length,
@@ -627,11 +812,15 @@ function formatQuoteResult(
 
 async function quoteQuestion(args: JsonObject, agent: McpAgentAuth) {
   const dependencies = getMcpToolDependencies();
-  const payload = parseX402QuestionRequest(args);
+  const payload = parseX402QuestionRequest(questionPayloadArgs(args));
   assertManagedQuestionCategoriesAllowed(agent, payload);
   const walletAddress = parseAgentWalletAddress(args, agent);
+  const feedbackBonus = parseOptionalFeedbackBonus(args, payload, walletAddress);
   const managedPayload = toManagedMcpPayload(agent, payload);
   const config = dependencies.resolveX402QuestionConfig(managedPayload.chainId);
+  if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
+    throw new McpToolError("Feedback Bonus escrow is not deployed for the requested chain.", 503);
+  }
   const quote = await dependencies.preflightX402QuestionSubmission({
     agentId: agent.id,
     config,
@@ -639,24 +828,28 @@ async function quoteQuestion(args: JsonObject, agent: McpAgentAuth) {
     payload: managedPayload,
   });
   return {
-    ...formatQuoteResult(quote, payload, config),
+    ...formatQuoteResult(quote, payload, config, { feedbackBonus }),
     clientRequestId: payload.clientRequestId,
   };
 }
 
 async function quotePublicQuestion(args: JsonObject) {
   const dependencies = getMcpToolDependencies();
-  const payload = parseX402QuestionRequest(args);
+  const payload = parseX402QuestionRequest(questionPayloadArgs(args));
   const walletAddress = parsePublicWalletAddress(args);
+  const feedbackBonus = parseOptionalFeedbackBonus(args, payload, walletAddress);
   const permissionlessPayload = toPermissionlessWalletPayload(payload, walletAddress);
   const config = dependencies.resolveX402QuestionConfig(permissionlessPayload.chainId);
+  if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
+    throw new McpToolError("Feedback Bonus escrow is not deployed for the requested chain.", 503);
+  }
   const quote = await dependencies.preflightX402QuestionSubmission({
     config,
     ownerWalletAddress: walletAddress,
     payload: permissionlessPayload,
   });
   return {
-    ...formatQuoteResult(quote, payload, config, { walletPolicyRequired: false }),
+    ...formatQuoteResult(quote, payload, config, { feedbackBonus, walletPolicyRequired: false }),
     clientRequestId: payload.clientRequestId,
     wallet: {
       address: walletAddress,
@@ -920,23 +1113,29 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
       parseAskHumansMode(args.mode);
       assertNoPublicWebhook(args);
       const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
-      const payload = parseX402QuestionRequest(args);
+      const payload = parseX402QuestionRequest(questionPayloadArgs(args));
       const walletAddress = parsePublicWalletAddress(args);
+      const feedbackBonus = parseOptionalFeedbackBonus(args, payload, walletAddress);
       const permissionlessPayload = toPermissionlessWalletPayload(payload, walletAddress);
       const config = dependencies.resolveX402QuestionConfig(permissionlessPayload.chainId);
+      if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
+        throw new McpToolError("Feedback Bonus escrow is not deployed for the requested chain.", 503);
+      }
       const quote = await dependencies.preflightX402QuestionSubmission({
         config,
         ownerWalletAddress: walletAddress,
         payload: permissionlessPayload,
       });
+      const totalPaymentAmount = quote.paymentAmount + feedbackBonusAmount(feedbackBonus);
       const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
-      if (quote.paymentAmount > maxPaymentAmount) {
+      if (totalPaymentAmount > maxPaymentAmount) {
         throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
       }
 
       const result =
         paymentMode === "x402_authorization"
           ? await dependencies.preparePermissionlessNativeX402QuestionSubmissionRequest({
+              feedbackBonus,
               paymentAuthorization:
                 typeof args.paymentAuthorization === "object" && args.paymentAuthorization
                   ? (args.paymentAuthorization as Record<string, unknown>)
@@ -945,10 +1144,11 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
               walletAddress,
             })
           : await dependencies.preparePermissionlessWalletQuestionSubmissionRequest({
+              feedbackBonus,
               payload,
               walletAddress,
             });
-      const body = normalizeMcpQuestionBody(result.body) as JsonObject;
+      const body = applyFeedbackBonusPaymentFields(normalizeMcpQuestionBody(result.body) as JsonObject, feedbackBonus);
       const warnings: string[] = [];
       try {
         await attachImagesToOperation({
@@ -971,6 +1171,8 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
           questionCount: payload.questions.length,
           roundConfig: payload.roundConfig,
         }),
+        feedbackBonus: buildPendingFeedbackBonusBody(feedbackBonus),
+        feedbackBonusGuidance: buildFeedbackBonusGuidance(feedbackBonus, payload),
         legalNotice: buildAgentLegalNotice(),
         managedBudget: null,
         pollAfterMs: 5_000,
@@ -993,12 +1195,32 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
         operationKey,
         transactionHashes,
       });
-      const body = normalizeMcpQuestionBody(result.body) as JsonObject;
+      let body = normalizeMcpQuestionBody(result.body) as JsonObject;
+      const warnings: string[] = [];
+      body = await attachFeedbackBonusPlan(body, dependencies, warnings);
       return {
         ...body,
         publicUrl: getAgentPublicQuestionUrl(typeof body.contentId === "string" ? body.contentId : null),
-        warnings: [],
+        warnings,
         ...agentStatusHints(body),
+      };
+    }
+
+    case "rateloop_confirm_feedback_bonus_transactions": {
+      const operationKey = await resolvePublicOperationKey(args);
+      if (!operationKey) {
+        throw new McpToolError("Provide operationKey for the Feedback Bonus to confirm.");
+      }
+      const rawHashes = Array.isArray(args.transactionHashes) ? args.transactionHashes : [];
+      const transactionHashes = rawHashes.filter((hash): hash is Hex => typeof hash === "string") as Hex[];
+      const result = await dependencies.confirmFeedbackBonusQuestionSubmissionRequest({
+        operationKey,
+        transactionHashes,
+      });
+      const body = normalizeMcpQuestionBody(result.body) as JsonObject;
+      return {
+        ...body,
+        warnings: [],
       };
     }
 
@@ -1062,12 +1284,16 @@ export async function callRateLoopMcpTool(params: {
     case "rateloop_ask_humans": {
       parseAskHumansMode(args.mode);
       const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
-      const payload = parseX402QuestionRequest(args);
+      const payload = parseX402QuestionRequest(questionPayloadArgs(args));
       assertManagedQuestionCategoriesAllowed(params.agent, payload);
       const webhook = await parseWebhookOptions(args);
       const walletAddress = parseAgentWalletAddress(args, params.agent);
+      const feedbackBonus = parseOptionalFeedbackBonus(args, payload, walletAddress);
       const managedPayload = toManagedMcpPayload(params.agent, payload);
       const config = dependencies.resolveX402QuestionConfig(managedPayload.chainId);
+      if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
+        throw new McpToolError("Feedback Bonus escrow is not deployed for the requested chain.", 503);
+      }
       const quote = await dependencies.preflightX402QuestionSubmission({
         agentId: params.agent.id,
         config,
@@ -1079,14 +1305,15 @@ export async function callRateLoopMcpTool(params: {
         questionCount: payload.questions.length,
         roundConfig: payload.roundConfig,
       });
+      const totalPaymentAmount = quote.paymentAmount + feedbackBonusAmount(feedbackBonus);
       const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
-      if (quote.paymentAmount > maxPaymentAmount) {
+      if (totalPaymentAmount > maxPaymentAmount) {
         throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
       }
 
       await dependencies.reserveMcpAgentBudget({
         agent: params.agent,
-        amount: quote.paymentAmount,
+        amount: totalPaymentAmount,
         categoryId: payload.questions[0]?.categoryId.toString() ?? "0",
         chainId: payload.chainId,
         clientRequestId: payload.clientRequestId,
@@ -1146,6 +1373,7 @@ export async function callRateLoopMcpTool(params: {
           paymentMode === "x402_authorization"
             ? await dependencies.prepareNativeX402QuestionSubmissionRequest({
                 agentId: params.agent.id,
+                feedbackBonus,
                 paymentAuthorization:
                   typeof args.paymentAuthorization === "object" && args.paymentAuthorization
                     ? (args.paymentAuthorization as Record<string, unknown>)
@@ -1155,6 +1383,7 @@ export async function callRateLoopMcpTool(params: {
               })
             : await dependencies.prepareAgentWalletQuestionSubmissionRequest({
                 agentId: params.agent.id,
+                feedbackBonus,
                 payload: managedPayload,
                 walletAddress,
               });
@@ -1171,7 +1400,7 @@ export async function callRateLoopMcpTool(params: {
         throw error;
       }
 
-      const body = result.body as JsonObject;
+      const body = applyFeedbackBonusPaymentFields(result.body as JsonObject, feedbackBonus);
       const warnings: string[] = [];
       try {
         await attachImagesToOperation({
@@ -1200,6 +1429,8 @@ export async function callRateLoopMcpTool(params: {
         clientRequestId: payload.clientRequestId,
         confirmTool: "rateloop_confirm_ask_transactions",
         fastLane,
+        feedbackBonus: buildPendingFeedbackBonusBody(feedbackBonus),
+        feedbackBonusGuidance: buildFeedbackBonusGuidance(feedbackBonus, payload),
         legalNotice: buildAgentLegalNotice(),
         managedBudget,
         pollAfterMs: 5_000,
@@ -1221,8 +1452,9 @@ export async function callRateLoopMcpTool(params: {
         operationKey,
         transactionHashes,
       });
-      const body = normalizeMcpQuestionBody(result.body) as JsonObject;
+      let body = normalizeMcpQuestionBody(result.body) as JsonObject;
       const warnings: string[] = [];
+      body = await attachFeedbackBonusPlan(body, dependencies, warnings);
       try {
         await dependencies.updateMcpBudgetReservation({
           contentId: typeof body.contentId === "string" ? body.contentId : null,
@@ -1256,6 +1488,24 @@ export async function callRateLoopMcpTool(params: {
         publicUrl: getAgentPublicQuestionUrl(typeof body.contentId === "string" ? body.contentId : null),
         warnings,
         ...agentStatusHints(body),
+      };
+    }
+
+    case "rateloop_confirm_feedback_bonus_transactions": {
+      const operationKey = await resolveManagedOperationKey(args, params.agent);
+      if (!operationKey) {
+        throw new McpToolError("Provide operationKey for the Feedback Bonus to confirm.");
+      }
+      const rawHashes = Array.isArray(args.transactionHashes) ? args.transactionHashes : [];
+      const transactionHashes = rawHashes.filter((hash): hash is Hex => typeof hash === "string") as Hex[];
+      const result = await dependencies.confirmFeedbackBonusQuestionSubmissionRequest({
+        operationKey,
+        transactionHashes,
+      });
+      const body = normalizeMcpQuestionBody(result.body) as JsonObject;
+      return {
+        ...body,
+        warnings: [],
       };
     }
 

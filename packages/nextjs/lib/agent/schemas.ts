@@ -124,6 +124,30 @@ const agentBountyInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+const agentFeedbackBonusInputSchema = {
+  additionalProperties: false,
+  properties: {
+    amount: atomicAmountSchema,
+    asset: {
+      default: "USDC",
+      enum: ["USDC", "usdc"],
+      type: "string",
+    },
+    awarder: {
+      ...evmAddressSchema,
+      description:
+        "Wallet allowed to award useful hidden rater feedback after settlement. Defaults to the asking wallet.",
+    },
+    feedbackClosesAt: {
+      description:
+        "Unix timestamp in seconds when feedback bonus awards close. Defaults to bounty.rewardPoolExpiresAt.",
+      type: ["integer", "string"],
+    },
+  },
+  required: ["amount"],
+  type: "object",
+} satisfies JsonSchema;
+
 const agentRoundConfigInputSchema = {
   additionalProperties: false,
   properties: {
@@ -163,6 +187,11 @@ const agentAskInputBaseProperties = {
     description: "Ordered bundle of question payloads. The bounty pays only when every question is answered.",
     items: agentQuestionInputSchema,
     type: "array",
+  },
+  feedbackBonus: {
+    ...agentFeedbackBonusInputSchema,
+    description:
+      "Optional USDC pool for useful hidden feedback from revealed raters. Recommended for many qualitative AI review asks. Currently supported for single-question asks.",
   },
   roundConfig: agentRoundConfigInputSchema,
   ...templateSelectorSchema.properties,
@@ -244,6 +273,21 @@ export const agentConfirmAskTransactionsInputSchema = {
     operationKey: { description: "RateLoop operation key returned by rateloop_ask_humans.", type: "string" },
     transactionHashes: {
       description: "Transaction hashes produced by executing the wallet transaction plan.",
+      items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
+      minItems: 1,
+      type: "array",
+    },
+  },
+  required: ["operationKey", "transactionHashes"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentConfirmFeedbackBonusTransactionsInputSchema = {
+  additionalProperties: false,
+  properties: {
+    operationKey: { description: "RateLoop operation key returned by rateloop_ask_humans.", type: "string" },
+    transactionHashes: {
+      description: "Transaction hashes produced by executing the Feedback Bonus transaction plan.",
       items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
       minItems: 1,
       type: "array",
@@ -367,6 +411,7 @@ export const agentQuestionStatusOutputSchema = {
     contentId: { type: ["string", "null"] },
     contentIds: { items: { type: "string" }, type: "array" },
     error: { type: ["string", "null"] },
+    feedbackBonus: { type: "object" },
     operationKey: { type: "string" },
     payloadHash: { type: "string" },
     payment: agentPaymentOutputSchema,
@@ -395,6 +440,7 @@ export const agentAskHumansOutputSchema = {
     ...agentQuestionStatusOutputSchema.properties,
     bounty: { type: "object" },
     fastLane: { type: "object" },
+    feedbackBonus: { type: "object" },
     legalNotice: agentLegalNoticeOutputSchema,
     managedBudget: { type: ["object", "null"] },
     pollAfterMs: { type: "integer" },

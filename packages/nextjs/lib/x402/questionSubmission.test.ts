@@ -1,4 +1,4 @@
-import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
+import { ContentRegistryAbi, FeedbackBonusEscrowAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import { type Address, type Hex, type TransactionReceipt, encodeAbiParameters, encodeEventTopics } from "viem";
@@ -9,6 +9,7 @@ import {
   __setX402QuestionSubmissionTestOverridesForTests,
   buildPermissionlessWalletClientRequestId,
   confirmAgentWalletQuestionSubmissionRequest,
+  confirmFeedbackBonusQuestionSubmissionRequest,
   getX402QuestionSubmissionByClientRequest,
   prepareAgentWalletQuestionSubmissionRequest,
   prepareNativeX402QuestionSubmissionRequest,
@@ -117,6 +118,7 @@ async function insertQuestionImageAttachment(params: {
 const TEST_CONFIG = {
   chainId: 480,
   contentRegistryAddress: "0x0000000000000000000000000000000000000011" as const,
+  feedbackBonusEscrowAddress: "0x0000000000000000000000000000000000000012" as const,
   questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000013" as const,
   rpcUrl: "http://localhost:8545",
   targetNetwork: { id: 480 } as never,
@@ -297,6 +299,38 @@ function buildReceipt(hash: Hex, logs: unknown[]): TransactionReceipt {
   } as TransactionReceipt;
 }
 
+function buildFeedbackBonusPoolCreatedLog(params: {
+  amount: bigint;
+  awarder: Address;
+  contentId: bigint;
+  feedbackClosesAt: bigint;
+  poolId: bigint;
+  roundId: bigint;
+}) {
+  return {
+    address: TEST_CONFIG.feedbackBonusEscrowAddress,
+    data: encodeAbiParameters(
+      [
+        { name: "funder", type: "address" },
+        { name: "awarder", type: "address" },
+        { name: "amount", type: "uint256" },
+        { name: "feedbackClosesAt", type: "uint256" },
+        { name: "frontendFeeBps", type: "uint256" },
+      ],
+      ["0x00000000000000000000000000000000000000aa", params.awarder, params.amount, params.feedbackClosesAt, 300n],
+    ),
+    topics: encodeEventTopics({
+      abi: FeedbackBonusEscrowAbi,
+      eventName: "FeedbackBonusPoolCreated",
+      args: {
+        contentId: params.contentId,
+        poolId: params.poolId,
+        roundId: params.roundId,
+      },
+    }).filter((topic): topic is Hex => !!topic),
+  };
+}
+
 before(() => {
   env.DATABASE_URL = "memory:";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
@@ -350,6 +384,35 @@ test("prepareAgentWalletQuestionSubmissionRequest stores a direct wallet plan wi
   assert.equal(record?.paymentAmount, payload.bounty.amount.toString());
 });
 
+test("prepareAgentWalletQuestionSubmissionRequest stores optional feedback bonus metadata", async () => {
+  const payload = buildPayload("wallet-plan-feedback-bonus");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    feedbackBonus: {
+      amount: 2_000_000n,
+      asset: "USDC",
+      awarder: walletAddress,
+      feedbackClosesAt: payload.bounty.rewardPoolExpiresAt,
+    },
+    payload,
+    walletAddress,
+  });
+
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  const body = x402QuestionSubmissionRecordBody(record) as {
+    feedbackBonus: { amount: string; enabled: boolean; status: string };
+  };
+
+  assert.equal(body.feedbackBonus.enabled, true);
+  assert.equal(body.feedbackBonus.amount, "2000000");
+  assert.equal(body.feedbackBonus.status, "pending_question_confirmation");
+});
+
 test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission logs", async () => {
   const payload = buildPayload("wallet-confirm-spoof");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
@@ -395,6 +458,71 @@ test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission log
   assert.equal(body.status, "submitted");
   assert.equal(body.contentId, "123");
   assert.deepEqual(body.contentIds, ["123"]);
+});
+
+test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the funded pool", async () => {
+  const payload = buildPayload("wallet-feedback-bonus-confirm");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const submitHash = `0x${"a".repeat(64)}` as const;
+  const feedbackHash = `0x${"b".repeat(64)}` as const;
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    feedbackBonus: {
+      amount: 2_000_000n,
+      asset: "USDC",
+      awarder: walletAddress,
+      feedbackClosesAt: payload.bounty.rewardPoolExpiresAt,
+    },
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const expectedContentHash = getExpectedContentHash(record);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      hash === submitHash
+        ? buildReceipt(
+            hash,
+            buildSubmittedQuestionLogs({
+              address: TEST_CONFIG.contentRegistryAddress,
+              contentHash: expectedContentHash,
+              contentId: 123n,
+              payload,
+              submitter: walletAddress,
+            }),
+          )
+        : buildReceipt(hash, [
+            buildFeedbackBonusPoolCreatedLog({
+              amount: 2_000_000n,
+              awarder: walletAddress,
+              contentId: 123n,
+              feedbackClosesAt: payload.bounty.rewardPoolExpiresAt,
+              poolId: 55n,
+              roundId: 1n,
+            }),
+          ]),
+  });
+
+  await confirmAgentWalletQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [submitHash],
+  });
+  const confirmed = await confirmFeedbackBonusQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [feedbackHash],
+  });
+  const body = confirmed.body as {
+    feedbackBonus: { poolId: string; status: string; transactionHashes: string[] };
+  };
+
+  assert.equal(body.feedbackBonus.status, "funded");
+  assert.equal(body.feedbackBonus.poolId, "55");
+  assert.deepEqual(body.feedbackBonus.transactionHashes, [feedbackHash]);
 });
 
 test("confirmAgentWalletQuestionSubmissionRequest rejects unrelated same-wallet submission logs", async () => {
