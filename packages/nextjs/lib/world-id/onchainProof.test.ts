@@ -1,12 +1,13 @@
-import { parseWorldIdLegacyProof } from "./onchainProof";
+import { parseWorldIdLegacyProof, parseWorldIdProof, parseWorldIdV4Proof } from "./onchainProof";
 import type { IDKitResult } from "@worldcoin/idkit";
 import { hashSignal } from "@worldcoin/idkit/hashing";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { encodeAbiParameters } from "viem";
+import { encodeAbiParameters, toHex } from "viem";
 
 const TEST_SIGNAL = "0x63cada40e8acf7a1d47229af5be35b78b16035fa";
 const TEST_PROOF = [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n] as const;
+const TEST_V4_PROOF = [11n, 12n, 13n, 14n, 42n] as const;
 
 function makeLegacyResult(signal = TEST_SIGNAL): IDKitResult {
   return {
@@ -26,12 +27,32 @@ function makeLegacyResult(signal = TEST_SIGNAL): IDKitResult {
   };
 }
 
+function makeV4Result(signal = TEST_SIGNAL): IDKitResult {
+  return {
+    protocol_version: "4.0",
+    nonce: "0x1234",
+    action: "rateloop-test",
+    environment: "production",
+    responses: [
+      {
+        identifier: "proof_of_human",
+        signal_hash: hashSignal(signal),
+        proof: [...TEST_V4_PROOF].map(value => toHex(value)),
+        nullifier: "0x1234",
+        issuer_schema_id: 1,
+        expires_at_min: 1_800_000_000,
+      },
+    ],
+  };
+}
+
 test("parses World ID legacy proofs for on-chain attestation", () => {
   const parsed = parseWorldIdLegacyProof(makeLegacyResult(), {
     expectedAction: "rateloop-test",
     expectedSignal: TEST_SIGNAL,
   });
 
+  assert.equal(parsed.protocolVersion, "3.0");
   assert.equal(parsed.root, 42n);
   assert.equal(parsed.nullifierHash, 0x1234n);
   assert.deepEqual(parsed.proof, [...TEST_PROOF]);
@@ -52,6 +73,65 @@ test("rejects non-legacy World ID proofs", () => {
         { expectedAction: "rateloop-test", expectedSignal: TEST_SIGNAL },
       ),
     /requires a World ID 3.0 legacy proof/,
+  );
+});
+
+test("parses World ID v4 proofs for future on-chain attestation", () => {
+  const parsed = parseWorldIdV4Proof(makeV4Result(), {
+    expectedAction: "rateloop-test",
+    expectedSignal: TEST_SIGNAL,
+  });
+
+  assert.equal(parsed.protocolVersion, "4.0");
+  assert.equal(parsed.nullifierHash, 0x1234n);
+  assert.deepEqual(parsed.proof, [...TEST_V4_PROOF]);
+  assert.equal(parsed.nonce, 0x1234n);
+  assert.equal(parsed.issuerSchemaId, 1);
+  assert.equal(parsed.expiresAtMin, 1_800_000_000);
+  assert.equal(parsed.signalHash, hashSignal(TEST_SIGNAL));
+});
+
+test("proof mode parser accepts legacy proofs in compat mode", () => {
+  const parsed = parseWorldIdProof(makeLegacyResult(), {
+    expectedAction: "rateloop-test",
+    expectedSignal: TEST_SIGNAL,
+    proofMode: "compat",
+  });
+
+  assert.equal(parsed.protocolVersion, "3.0");
+});
+
+test("proof mode parser accepts v4 proofs in compat mode", () => {
+  const parsed = parseWorldIdProof(makeV4Result(), {
+    expectedAction: "rateloop-test",
+    expectedSignal: TEST_SIGNAL,
+    proofMode: "compat",
+  });
+
+  assert.equal(parsed.protocolVersion, "4.0");
+});
+
+test("proof mode parser rejects legacy proofs in v4-only mode", () => {
+  assert.throws(
+    () =>
+      parseWorldIdProof(makeLegacyResult(), {
+        expectedAction: "rateloop-test",
+        expectedSignal: TEST_SIGNAL,
+        proofMode: "v4",
+      }),
+    /v4-only/,
+  );
+});
+
+test("proof mode parser rejects v4 proofs in legacy mode", () => {
+  assert.throws(
+    () =>
+      parseWorldIdProof(makeV4Result(), {
+        expectedAction: "rateloop-test",
+        expectedSignal: TEST_SIGNAL,
+        proofMode: "legacy",
+      }),
+    /legacy proof mode/,
   );
 });
 

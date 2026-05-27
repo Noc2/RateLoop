@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { IDKit, type IDKitResult, type RpContext, orbLegacy } from "@worldcoin/idkit";
+import { CredentialRequest, IDKit, type IDKitResult, type RpContext, orbLegacy } from "@worldcoin/idkit";
 import { formatUnits, zeroAddress } from "viem";
 import { useAccount } from "wagmi";
 import {
@@ -14,7 +14,12 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { WorldIdQrCode } from "~~/components/settings/WorldIdQrCode";
-import { useCopyToClipboard, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import {
+  useCopyToClipboard,
+  useDeployedContractInfo,
+  useScaffoldReadContract,
+  useScaffoldWriteContract,
+} from "~~/hooks/scaffold-eth";
 import { getLaunchReferralInputState, resolveLaunchClaimReferrer } from "~~/lib/referrals/launchReferral";
 import {
   buildReferralLandingUrl,
@@ -24,19 +29,23 @@ import {
 } from "~~/lib/referrals/referralAttribution";
 import { getWorldIdClientConfig } from "~~/lib/world-id/config";
 import { readLocalE2EWorldIdMock } from "~~/lib/world-id/e2eMock";
-import { parseWorldIdLegacyProof } from "~~/lib/world-id/onchainProof";
+import { parseWorldIdProof } from "~~/lib/world-id/onchainProof";
 import { pollWorldIdRequest } from "~~/lib/world-id/requestPolling";
 import { formatWorldIdError, getWorldIdRequestPanelState } from "~~/lib/world-id/verificationUiState";
 import { notification } from "~~/utils/scaffold-eth";
 
 const LREP_DECIMALS = 6;
 const REFERRAL_BONUS_BPS = 5_000n;
+const WORLD_ID_V4_ATTEST_FUNCTION_NAME = "attestHumanCredentialWithV4Proof";
 
 type RpContextResponse = {
   action: string;
   environment: "production" | "staging";
+  proofMode?: "legacy" | "compat" | "v4";
   rpContext: RpContext;
 };
+
+type ContractAbiItem = { type: string; name?: string };
 
 type VerificationState =
   | { status: "idle" }
@@ -67,6 +76,7 @@ function formatLrepAmount(amount: bigint | undefined) {
 
 export function WorldIdVerificationCard({ address }: { address?: string }) {
   const config = getWorldIdClientConfig();
+  const worldIdProofMode = config.proofMode;
   const { chain } = useAccount();
   const [open, setOpen] = useState(false);
   const [rpContextResponse, setRpContextResponse] = useState<RpContextResponse | null>(null);
@@ -140,6 +150,20 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const { writeContractAsync: attestWorldIdCredential, isMining: isAttestingCredential } = useScaffoldWriteContract({
     contractName: "RaterRegistry",
   });
+  const { data: raterRegistryContractData } = useDeployedContractInfo({
+    contractName: "RaterRegistry",
+  });
+  const hasWorldIdV4AttestFunction = useMemo(
+    () =>
+      Boolean(
+        raterRegistryContractData?.abi.some(
+          item =>
+            (item as ContractAbiItem).type === "function" &&
+            (item as ContractAbiItem).name === WORLD_ID_V4_ATTEST_FUNCTION_NAME,
+        ),
+      ),
+    [raterRegistryContractData],
+  );
   const referralInputState = useMemo(
     () => getLaunchReferralInputState({ connectedAddress: address, inputValue: referralInput }),
     [address, referralInput],
@@ -311,21 +335,42 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       }
 
       try {
-        const parsedProof = parseWorldIdLegacyProof(idkitResponse, {
+        const parsedProof = parseWorldIdProof(idkitResponse, {
           expectedAction: requestContext.action,
           expectedSignal: signal,
+          proofMode: worldIdProofMode,
         });
 
-        const transactionHash = await attestWorldIdCredential(
-          {
-            functionName: "attestHumanCredentialWithProof",
-            args: [parsedProof.root, parsedProof.nullifierHash, parsedProof.proof],
-          },
-          {
-            action: "attest World ID credential",
-            suppressSuccessToast: true,
-          },
-        );
+        let transactionHash;
+        if (parsedProof.protocolVersion === "4.0") {
+          if (!hasWorldIdV4AttestFunction) {
+            throw new Error(
+              `World ID ${worldIdProofMode} proof mode returned a v4 proof, but this RaterRegistry deployment does not expose ${WORLD_ID_V4_ATTEST_FUNCTION_NAME}.`,
+            );
+          }
+
+          transactionHash = await (attestWorldIdCredential as any)(
+            {
+              functionName: WORLD_ID_V4_ATTEST_FUNCTION_NAME,
+              args: [parsedProof.nullifierHash, parsedProof.nonce, BigInt(parsedProof.expiresAtMin), parsedProof.proof],
+            },
+            {
+              action: "attest World ID credential",
+              suppressSuccessToast: true,
+            },
+          );
+        } else {
+          transactionHash = await attestWorldIdCredential(
+            {
+              functionName: "attestHumanCredentialWithProof",
+              args: [parsedProof.root, parsedProof.nullifierHash, parsedProof.proof],
+            },
+            {
+              action: "attest World ID credential",
+              suppressSuccessToast: true,
+            },
+          );
+        }
         if (!transactionHash) {
           throw new Error("World ID credential transaction was not submitted.");
         }
@@ -397,6 +442,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       claimVerifiedBonus,
       currentVerifiedBonus,
       fullEarnedRaterCap,
+      hasWorldIdV4AttestFunction,
       hasInvalidReferral,
       isVerifiedBonusClaimed,
       raterFullLaunchCapUnlocked,
@@ -404,6 +450,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       signal,
       unlockFullEarnedRaterCap,
       walletAddress,
+      worldIdProofMode,
       rpContextResponse,
     ],
   );
@@ -557,13 +604,17 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         return;
       }
 
-      const request = await IDKit.request({
+      const requestBuilder = IDKit.request({
         action: requestContext.action,
-        allow_legacy_proofs: true,
+        allow_legacy_proofs: worldIdProofMode !== "v4",
         app_id: appId,
         environment: requestContext.environment,
         rp_context: requestContext.rpContext,
-      }).preset(orbLegacy({ signal }));
+      });
+      const request =
+        worldIdProofMode === "legacy"
+          ? await requestBuilder.preset(orbLegacy({ signal }))
+          : await requestBuilder.constraints(CredentialRequest("proof_of_human", { signal }));
       if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
         return;
       }
@@ -620,7 +671,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         setIsAwaitingWorldIdApproval(false);
       }
     }
-  }, [address, appId, fetchWorldIdRequestContext, handleSuccess, handleVerify, signal]);
+  }, [address, appId, fetchWorldIdRequestContext, handleSuccess, handleVerify, signal, worldIdProofMode]);
 
   return (
     <section className="surface-card rounded-2xl p-6">

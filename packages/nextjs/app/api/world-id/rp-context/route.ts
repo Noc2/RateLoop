@@ -29,6 +29,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({
       action: config.action,
       environment: config.environment,
+      proofMode: config.proofMode,
       rpContext: {
         rp_id: config.rpId,
         nonce: signature.nonce,
