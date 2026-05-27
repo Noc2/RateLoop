@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 import { ChatBubbleLeftRightIcon, ShareIcon } from "@heroicons/react/24/outline";
+import { FundFeedbackBonusModal } from "~~/components/reward-pool/FundFeedbackBonusModal";
 import { FundQuestionModal } from "~~/components/reward-pool/FundQuestionModal";
 import { MoreToggleButton } from "~~/components/shared/MoreToggleButton";
 import { RateLoopVoteButton } from "~~/components/shared/RateLoopVoteButton";
@@ -338,15 +339,32 @@ function DockCircleIconButton({
   );
 }
 
-function AddRewardPoolLink({ onFundQuestion }: { onFundQuestion: () => void }) {
+function AddRewardActionLinks({
+  onFundQuestion,
+  onFundFeedbackBonus,
+  canFundFeedbackBonus,
+}: {
+  onFundQuestion: () => void;
+  onFundFeedbackBonus: () => void;
+  canFundFeedbackBonus: boolean;
+}) {
   return (
-    <div className="flex justify-start">
+    <div className="flex flex-wrap justify-start gap-x-3 gap-y-1">
       <button
         type="button"
         onClick={onFundQuestion}
         className="font-semibold text-primary underline-offset-4 transition-colors hover:text-primary-focus hover:underline"
       >
         Add bounty
+      </button>
+      <button
+        type="button"
+        onClick={onFundFeedbackBonus}
+        disabled={!canFundFeedbackBonus}
+        title={canFundFeedbackBonus ? "Add Feedback Bonus" : "Feedback Bonuses need an active round"}
+        className="font-semibold text-primary underline-offset-4 transition-colors hover:text-primary-focus hover:underline disabled:cursor-not-allowed disabled:text-base-content/35 disabled:hover:text-base-content/35 disabled:hover:no-underline"
+      >
+        Add feedback bonus
       </button>
     </div>
   );
@@ -435,6 +453,7 @@ export function VotingQuestionCard({
   const [isDetailsOpen, setIsDetailsOpen] = useState(isSignalVariant);
   const [isAttentionActive, setIsAttentionActive] = useState(false);
   const [showFundQuestionModal, setShowFundQuestionModal] = useState(false);
+  const [showFundFeedbackBonusModal, setShowFundFeedbackBonusModal] = useState(false);
   const detailsId = `voting-card-details-${contentId.toString()}`;
 
   // Check if user has committed to this round (direction hidden until reveal)
@@ -581,6 +600,7 @@ export function VotingQuestionCard({
   const showExpandedDetails = isSignalVariant || (isDetailsOpen && !isDockVariant);
   const showVoteAttentionHint = isAttentionActive && !centerStatusContent;
   const fundQuestionTitle = questionTitle?.trim() || `Question #${contentId.toString()}`;
+  const canFundFeedbackBonus = !contentInactive && roundId > 0n;
   const ratingOrb = (
     <TooltipAnchor
       text={RATING_GUIDANCE_TEXT}
@@ -590,8 +610,14 @@ export function VotingQuestionCard({
       <RatingOrb rating={currentRating} size={orbSize} />
     </TooltipAnchor>
   );
-  const addRewardPoolLink = <AddRewardPoolLink onFundQuestion={() => setShowFundQuestionModal(true)} />;
-  const renderRewardPoolDetailsRow = () => <div className="flex min-w-0 flex-col gap-3">{addRewardPoolLink}</div>;
+  const rewardActionLinks = (
+    <AddRewardActionLinks
+      onFundQuestion={() => setShowFundQuestionModal(true)}
+      onFundFeedbackBonus={() => setShowFundFeedbackBonusModal(true)}
+      canFundFeedbackBonus={canFundFeedbackBonus}
+    />
+  );
+  const renderRewardPoolDetailsRow = () => <div className="flex min-w-0 flex-col gap-3">{rewardActionLinks}</div>;
 
   useEffect(() => {
     setIsDetailsOpen(isSignalVariant);
@@ -826,6 +852,14 @@ export function VotingQuestionCard({
             onClose={() => setShowFundQuestionModal(false)}
           />
         ) : null}
+        {showFundFeedbackBonusModal ? (
+          <FundFeedbackBonusModal
+            contentId={contentId}
+            roundId={roundId}
+            title={fundQuestionTitle}
+            onClose={() => setShowFundFeedbackBonusModal(false)}
+          />
+        ) : null}
       </>
     );
   }
@@ -920,6 +954,14 @@ export function VotingQuestionCard({
           contentId={contentId}
           title={fundQuestionTitle}
           onClose={() => setShowFundQuestionModal(false)}
+        />
+      ) : null}
+      {showFundFeedbackBonusModal ? (
+        <FundFeedbackBonusModal
+          contentId={contentId}
+          roundId={roundId}
+          title={fundQuestionTitle}
+          onClose={() => setShowFundFeedbackBonusModal(false)}
         />
       ) : null}
     </>
