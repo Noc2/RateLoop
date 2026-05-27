@@ -138,6 +138,8 @@ const ROUND_RESPONSE_WINDOW_PRESETS = [
   { id: "24h", label: "24h", minutes: 24 * 60 },
   { id: "3d", label: "3d", minutes: 3 * 24 * 60 },
   { id: "7d", label: "7d", minutes: 7 * 24 * 60 },
+  { id: "14d", label: "14d", minutes: 14 * 24 * 60 },
+  { id: "30d", label: "30d", minutes: 30 * 24 * 60 },
 ] as const;
 
 type QuestionDraft = {

@@ -35,9 +35,9 @@ function formatDurationLabel(seconds: number): string {
 
 const ROUND_CONFIG_BOUNDS = {
   minEpochDurationSeconds: 60,
-  maxEpochDurationSeconds: 7 * 24 * 60 * 60,
+  maxEpochDurationSeconds: 30 * 24 * 60 * 60,
   minRoundDurationSeconds: 60,
-  maxRoundDurationSeconds: 30 * 24 * 60 * 60,
+  maxRoundDurationSeconds: 60 * 24 * 60 * 60,
   minSettlementVoters: 3,
   maxSettlementVoters: 100,
   minVoterCap: 3,
