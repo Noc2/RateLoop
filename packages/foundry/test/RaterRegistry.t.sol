@@ -130,6 +130,41 @@ contract RaterRegistryTest is Test {
         );
     }
 
+    function test_ConstructorRejectsNoCodeWorldIdRouter() public {
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        new RaterRegistry(
+            admin, governance, address(0xBEEF), HUMAN_SCOPE, WORLD_ID_EXTERNAL_NULLIFIER_HASH, WORLD_ID_CREDENTIAL_TTL
+        );
+    }
+
+    function test_ProxyInitializeRejectsNoCodeWorldIdRouter() public {
+        RaterRegistry implementation = new RaterRegistry(
+            admin,
+            governance,
+            address(worldIdRouter),
+            HUMAN_SCOPE,
+            WORLD_ID_EXTERNAL_NULLIFIER_HASH,
+            WORLD_ID_CREDENTIAL_TTL
+        );
+
+        vm.expectRevert(RaterRegistry.InvalidAddress.selector);
+        new TransparentUpgradeableProxy(
+            address(implementation),
+            governance,
+            abi.encodeCall(
+                RaterRegistry.initialize,
+                (
+                    admin,
+                    governance,
+                    address(0xBEEF),
+                    HUMAN_SCOPE,
+                    WORLD_ID_EXTERNAL_NULLIFIER_HASH,
+                    WORLD_ID_CREDENTIAL_TTL
+                )
+            )
+        );
+    }
+
     function test_SetProfileStoresSelfReportedRaterType() public {
         vm.prank(rater);
         registry.setProfile(RaterRegistry.RaterType.AI, METADATA_HASH);

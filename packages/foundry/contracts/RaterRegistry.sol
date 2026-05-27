@@ -207,7 +207,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             revert InvalidAddress();
         }
         _setWorldIdVerifierConfig(
-            _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl, false
+            _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl, true
         );
         maxSeededCredentialTtl = _worldIdCredentialTtl;
         emit MaxSeededCredentialTtlUpdated(0, _worldIdCredentialTtl);
