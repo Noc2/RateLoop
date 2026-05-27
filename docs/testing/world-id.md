@@ -6,6 +6,7 @@ RateLoop has two useful World ID test lanes:
 - a manual World Chain Sepolia simulator pass, which uses staging IDKit with Worldcoin's simulator identity picker
 
 Keep the app action aligned across the deploy and frontend/server runtime. The default action is `rateloop-human-credential-v1`.
+The default proof mode is `legacy`, which preserves the current World ID 3.0 on-chain path.
 
 ## Deterministic Local Lane
 
@@ -56,6 +57,7 @@ Notes:
 - The component only reads the local mock on localhost when the local E2E wallet session is present.
 - The mock result still uses a `signal_hash` derived from the connected wallet address and still submits `RaterRegistry.attestHumanCredentialWithProof`.
 - Local deterministic World ID E2E should not require `WORLD_ID_SIGNING_KEY` or the hosted simulator.
+- Keep `NEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy` for this lane until the local `RaterRegistry` deployment exposes a v4 attest method.
 
 Use `app_staging_rateloop_local` and `rateloop-human-credential-v1` unless the local deploy used different values.
 
@@ -78,6 +80,7 @@ NEXT_PUBLIC_TARGET_NETWORKS=4801
 NEXT_PUBLIC_WORLD_ID_APP_ID=<staging app id>
 NEXT_PUBLIC_WORLD_ID_ACTION=rateloop-human-credential-v1
 NEXT_PUBLIC_WORLD_ID_ENVIRONMENT=staging
+NEXT_PUBLIC_WORLD_ID_PROOF_MODE=legacy
 WORLD_ID_RP_ID=<rp id, or the same value as NEXT_PUBLIC_WORLD_ID_APP_ID if that is how the app is configured>
 WORLD_ID_SIGNING_KEY=<staging request signing key>
 NEXT_PUBLIC_PONDER_URL=<reachable Ponder URL for this deployment>
@@ -91,6 +94,12 @@ WORLDCHAIN_SEPOLIA_RPC_URL=<deploy RPC URL>
 ```
 
 If you change `NEXT_PUBLIC_WORLD_ID_ACTION`, redeploy contracts with the same value. `RaterRegistry` stores the action-derived external nullifier hash at deployment time.
+
+Proof mode values:
+
+- `legacy`: current production-safe path; requests World ID 3.0 legacy proofs and submits `RaterRegistry.attestHumanCredentialWithProof`.
+- `compat`: migration path; accepts typed v3 or v4 IDKit responses. A v3 response still uses the current method, while a v4 response is submitted only if the deployed ABI exposes `attestHumanCredentialWithV4Proof`.
+- `v4`: v4-only path; rejects legacy responses and requires a deployment with `attestHumanCredentialWithV4Proof`.
 
 ### 2. Deploy contracts to World Chain Sepolia
 
