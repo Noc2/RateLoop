@@ -560,7 +560,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             // submissionKeyUsed is already set in the preparation loop above to catch
             // duplicates within the same bundle.
             bytes32 contentHash = _questionContentHash(
-                metadataList[i], questions[i].imageUrls, questions[i].videoUrl, resolvedCategoryIds[i], questions[i].spec
+                metadataList[i],
+                questions[i].imageUrls,
+                questions[i].videoUrl,
+                resolvedCategoryIds[i],
+                questions[i].spec
             );
             (address submitterIdentity, bytes32 submitterIdentityKey) = _pendingSubmitterIdentity(pending);
             uint256 contentId = _storeSubmittedContent(

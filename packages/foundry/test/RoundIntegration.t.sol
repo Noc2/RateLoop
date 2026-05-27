@@ -1494,9 +1494,7 @@ contract RoundIntegrationTest is VotingTestBase {
             "old delegate receives its RBTS stake return"
         );
         assertEq(
-            lrepToken.balanceOf(voter1),
-            holderBalanceBefore + expectedHolderReward,
-            "holder receives voter-pool reward"
+            lrepToken.balanceOf(voter1), holderBalanceBefore + expectedHolderReward, "holder receives voter-pool reward"
         );
     }
 
@@ -1545,7 +1543,9 @@ contract RoundIntegrationTest is VotingTestBase {
         lrepToken.mint(reassignedHolder, 10_000e6);
         raterRegistry.revokeHumanCredential(voter1);
         raterRegistry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, identityKey);
-        raterRegistry.seedHumanCredential(reassignedHolder, uint64(block.timestamp + 30 days), identityKey, bytes32("ev"));
+        raterRegistry.seedHumanCredential(
+            reassignedHolder, uint64(block.timestamp + 30 days), identityKey, bytes32("ev")
+        );
         vm.stopPrank();
 
         (bytes32 resolvedCommitKey, address rewardRecipient) =
@@ -1560,7 +1560,9 @@ contract RoundIntegrationTest is VotingTestBase {
         rewardDistributor.claimReward(contentId, roundId);
 
         assertGt(lrepToken.balanceOf(voter1), originalHolderBalanceBefore, "original holder receives reward");
-        assertEq(lrepToken.balanceOf(reassignedHolder), reassignedHolderBalanceBefore, "reassigned holder is relay only");
+        assertEq(
+            lrepToken.balanceOf(reassignedHolder), reassignedHolderBalanceBefore, "reassigned holder is relay only"
+        );
     }
 
     /// @dev Verifies the `RewardClaimed` event correctly attributes stake refund to the
@@ -1656,9 +1658,7 @@ contract RoundIntegrationTest is VotingTestBase {
             "delegate receives its RBTS stake return"
         );
         assertEq(
-            lrepToken.balanceOf(voter1),
-            holderBalanceBefore + expectedHolderReward,
-            "holder receives voter-pool reward"
+            lrepToken.balanceOf(voter1), holderBalanceBefore + expectedHolderReward, "holder receives voter-pool reward"
         );
     }
 

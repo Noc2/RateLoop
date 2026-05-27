@@ -353,11 +353,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         bytes32 snapshotKey = roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         if (rejectedRoundPayoutSnapshotRoots[snapshotKey][input.weightRoot]) revert InvalidSnapshot();
         bytes32 correlationEpochDigest = _correlationEpochDigest(epoch);
-        if (
-            rejectedRoundPayoutSnapshotDigests[snapshotKey][
-                _roundPayoutSnapshotInputDigest(snapshotKey, input, correlationEpochDigest)
-            ]
-        ) {
+        if (rejectedRoundPayoutSnapshotDigests[
+                snapshotKey
+            ][_roundPayoutSnapshotInputDigest(snapshotKey, input, correlationEpochDigest)]) {
             revert InvalidSnapshot();
         }
         RoundPayoutProposal storage existing = roundPayoutProposals[snapshotKey];
@@ -762,11 +760,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         bytes32 snapshotKey,
         RoundPayoutSnapshotInput calldata input,
         bytes32 correlationEpochDigest
-    )
-        private
-        pure
-        returns (bytes32)
-    {
+    ) private pure returns (bytes32) {
         return _roundPayoutSnapshotDigest(
             snapshotKey,
             input.domain,

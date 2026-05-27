@@ -689,8 +689,7 @@ contract LaunchDistributionPoolTest is Test {
 
     function test_LaunchCreditAcceptsSourceReadySnapshotProposedBeforeRecord() public {
         ClusterPayoutOracle oracle = _configureLaunchOracle(1);
-        uint64 sourceReadyAt =
-            pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
+        uint64 sourceReadyAt = pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1);
         assertGt(sourceReadyAt, 0);
 
         IClusterPayoutOracle.PayoutWeight memory payout =
@@ -729,10 +728,7 @@ contract LaunchDistributionPoolTest is Test {
         pool.setRoundClusterReadyAtSource(address(new MockGraceClusterSource(settledAt, revealGrace)));
 
         uint64 expectedReadyAt = uint64(uint256(settledAt) + revealGrace);
-        assertEq(
-            pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1),
-            expectedReadyAt
-        );
+        assertEq(pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1), expectedReadyAt);
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
@@ -2129,11 +2125,7 @@ contract MockGraceClusterSource {
         return settledAt;
     }
 
-    function roundCore(uint256, uint256)
-        external
-        view
-        returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48)
-    {
+    function roundCore(uint256, uint256) external view returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48) {
         return (1, 1, 0, 0, 0, 0, settledAt);
     }
 

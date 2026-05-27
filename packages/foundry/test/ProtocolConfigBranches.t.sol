@@ -249,10 +249,8 @@ contract ProtocolConfigBranchesTest is Test {
     function test_SetClusterPayoutOracle_RequiresPinnedLaunchConsumerAfterLaunchPoolConfigured() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
-        MockClusterPayoutOracleForConfig mismatchedOracle =
-            new MockClusterPayoutOracleForConfig(address(0xBEEF));
-        MockClusterPayoutOracleForConfig pinnedOracle =
-            new MockClusterPayoutOracleForConfig(address(launchPool));
+        MockClusterPayoutOracleForConfig mismatchedOracle = new MockClusterPayoutOracleForConfig(address(0xBEEF));
+        MockClusterPayoutOracleForConfig pinnedOracle = new MockClusterPayoutOracleForConfig(address(launchPool));
 
         config.setLaunchDistributionPool(address(launchPool));
 

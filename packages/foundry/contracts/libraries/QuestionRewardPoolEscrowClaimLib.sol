@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {IFrontendRegistry} from "../interfaces/IFrontendRegistry.sol";
-import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
-import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import {QuestionRewardPoolEscrowQualificationLib} from "./QuestionRewardPoolEscrowQualificationLib.sol";
-import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
+import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 /// @dev Equal-share inputs shared by `RoundSnapshot` (per-round) and
 ///      `BundleRoundSetSnapshot` (per-bundle) callers. Packed into a single struct so
@@ -598,9 +598,8 @@ library QuestionRewardPoolEscrowClaimLib {
                     && currentSnapshot.weightRoot == expectedWeightRoot
                     && currentSnapshot.totalClaimWeight == expectedTotalClaimWeight
                     && currentDigest == expectedSnapshotDigest
-                    && !IClusterPayoutOracle(oracle).rejectedRoundPayoutSnapshotDigests(
-                        currentSnapshot.snapshotKey, expectedSnapshotDigest
-                    ),
+                    && !IClusterPayoutOracle(oracle)
+                        .rejectedRoundPayoutSnapshotDigests(currentSnapshot.snapshotKey, expectedSnapshotDigest),
                 "Cluster snapshot changed"
             );
         }

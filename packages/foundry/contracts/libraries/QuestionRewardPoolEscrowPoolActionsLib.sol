@@ -101,8 +101,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         if (asset != REWARD_ASSET_USDC) return;
         address clusterPayoutOracle = votingEngine.protocolConfig().clusterPayoutOracle();
         if (clusterPayoutOracle == address(0)) return;
-        try IClusterPayoutOracle(clusterPayoutOracle).roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_QUESTION_REWARD)
-        returns (
+        try IClusterPayoutOracle(clusterPayoutOracle)
+            .roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_QUESTION_REWARD) returns (
             address consumer
         ) {
             require(consumer == expectedConsumer, "Oracle consumer mismatch");

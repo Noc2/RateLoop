@@ -120,13 +120,7 @@ contract DeployRateLoopAllocationsTest is Test {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
 
         address[] memory holders = deployScript.buildQuorumExcludedHolders(
-            address(0x1001),
-            address(0),
-            address(0x1001),
-            address(0x1004),
-            address(0),
-            address(0x1004),
-            address(0x1007)
+            address(0x1001), address(0), address(0x1001), address(0x1004), address(0), address(0x1004), address(0x1007)
         );
 
         assertEq(holders.length, 3);

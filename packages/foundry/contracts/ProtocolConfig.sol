@@ -549,9 +549,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         catch {
             revert InvalidConfig();
         }
-        try IFrontendRegistry(value).getFrontendInfo(address(this)) returns (
-            address, uint256, bool, bool
-        ) { }
+        try IFrontendRegistry(value).getFrontendInfo(address(this)) returns (address, uint256, bool, bool) { }
         catch {
             revert InvalidConfig();
         }

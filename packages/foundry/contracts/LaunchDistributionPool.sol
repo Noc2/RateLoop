@@ -921,13 +921,7 @@ contract LaunchDistributionPool is
     ) private view returns (uint64) {
         uint64 sourceReadyAt = uint64(readyAt);
         try source.roundCore(contentId, roundId) returns (
-            uint48,
-            uint8,
-            uint16,
-            uint16,
-            uint64,
-            uint48,
-            uint48 settledAt
+            uint48, uint8, uint16, uint16, uint64, uint48, uint48 settledAt
         ) {
             if (settledAt == 0) return sourceReadyAt;
             try source.protocolConfig() returns (IRevealGraceConfig protocolConfig) {
@@ -1169,7 +1163,8 @@ contract LaunchDistributionPool is
     {
         if (raterVerifiedAnchorSeen[rater][anchorId]) return true;
         bool reservedOrSeen = verifiedAnchorRaterSeen[anchorId][rater];
-        if (!reservedOrSeen && verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor) {
+        if (!reservedOrSeen && verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor)
+        {
             return false;
         }
 
@@ -1222,7 +1217,11 @@ contract LaunchDistributionPool is
         return nullifierHash;
     }
 
-    function _activeHumanCredential(address rater) internal view returns (bytes32 nullifierHash, bytes32 credentialKey) {
+    function _activeHumanCredential(address rater)
+        internal
+        view
+        returns (bytes32 nullifierHash, bytes32 credentialKey)
+    {
         RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(rater);
         if (
             credential.verified && !credential.revoked && credential.expiresAt > block.timestamp

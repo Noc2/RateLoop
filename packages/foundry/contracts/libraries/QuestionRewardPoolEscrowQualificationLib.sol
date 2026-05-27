@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {ProtocolConfig} from "../ProtocolConfig.sol";
-import {RoundVotingEngine} from "../RoundVotingEngine.sol";
-import {IClusterPayoutOracle} from "../interfaces/IClusterPayoutOracle.sol";
-import {RoundLib} from "./RoundLib.sol";
-import {RewardPool, RoundSnapshot} from "./QuestionRewardPoolEscrowTypes.sol";
-import {QuestionRewardPoolEscrowEligibilityLib} from "./QuestionRewardPoolEscrowEligibilityLib.sol";
-import {QuestionRewardPoolEscrowVoterLib} from "./QuestionRewardPoolEscrowVoterLib.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { ProtocolConfig } from "../ProtocolConfig.sol";
+import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
+import { RoundLib } from "./RoundLib.sol";
+import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
+import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     using SafeCast for uint256;
@@ -278,8 +278,8 @@ library QuestionRewardPoolEscrowQualificationLib {
         );
         require(payoutSnapshot.rawEligibleVoters == baseRawEligibleVoters, "Cluster snapshot mismatch");
         bytes32 clusterSnapshotDigest = IClusterPayoutOracle(
-            _clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPoolId)
-        ).roundPayoutSnapshotProposalDigest(payoutSnapshot.snapshotKey);
+                _clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPoolId)
+            ).roundPayoutSnapshotProposalDigest(payoutSnapshot.snapshotKey);
 
         uint256 effectiveParticipantUnits = payoutSnapshot.effectiveParticipantUnits;
         uint256 totalClaimWeight = payoutSnapshot.totalClaimWeight;
