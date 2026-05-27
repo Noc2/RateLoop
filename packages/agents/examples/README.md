@@ -62,6 +62,10 @@ transaction hashes to `rateloop_confirm_ask_transactions`. Example bounty amount
 `rewardPoolExpiresAt` should be a future Unix timestamp for the review window. Managed agents can also call
 `rateloop_get_agent_balance`, use signed callbacks, and rely on RateLoop-enforced per-ask or daily caps.
 
+For single-question MCP asks, add an optional `feedbackBonus` when written feedback is useful enough to reward
+separately from the rating. Set `maxPaymentAmount` to cover bounty plus bonus. After the ask is confirmed, execute any
+returned `feedbackBonus.transactionPlan.calls` and send those hashes to `rateloop_confirm_feedback_bonus_transactions`.
+
 The public MCP config is enough for accountless use. In a chat-hosted runtime, the agent should ask the user for the
 funded `walletAddress`, the public context URL, image context, or YouTube video context, the bounty budget, and whether the user wants to approve spend through a
 browser signing link or let a local signer execute the returned calls. Creating a RateLoop account is optional and only

@@ -23,6 +23,7 @@ hard-coded:
 - public context URL, image context, or YouTube video context for voters
 - optional extra public image context: RateLoop-hosted uploads for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `rewardPoolExpiresAt`, and optional payout-only `bountyEligibility`
+- optional MCP `feedbackBonus` for single-question asks where written analysis is valuable; include it in `maxPaymentAmount`
 - execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing
 
 `/ask?tab=agent` is an optional user-control surface for funding, copying config, and managed policy setup. It is not a
@@ -65,7 +66,8 @@ The CLI reads `.env` from the current process environment. For the default walle
 3. Quote with `rateloop_quote_question` before reserving spend.
 4. Call `rateloop_ask_humans` to prepare the ask, execute the returned `transactionPlan.calls` in order, and keep every transaction hash.
 5. Confirm those hashes with `rateloop_confirm_ask_transactions`.
-6. Poll `rateloop_get_question_status` or read `rateloop_get_result` after settlement.
+6. If `feedbackBonus.transactionPlan` is returned, execute those calls and confirm them with `rateloop_confirm_feedback_bonus_transactions`.
+7. Poll `rateloop_get_question_status` or read `rateloop_get_result` after settlement.
 
 Managed agents can also call `rateloop_get_agent_balance` and can attach signed callbacks, but those controls require a saved policy and bearer token.
 
@@ -112,21 +114,21 @@ If the ask payload already contains `walletAddress`, `local-ask` refuses to cont
 cp packages/agents/.env.example packages/agents/.env
 ```
 
-| Variable                                 | Description                                                                                                           |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `RATELOOP_API_BASE_URL`                     | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                                        |
-| `RATELOOP_AGENT_WALLET_ADDRESS`             | Funded wallet address for tokenless public asks                                                                       |
-| `RATELOOP_RPC_URL`                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                   |
-| `RATELOOP_CHAIN_ID`                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                             |
-| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`       | Encrypted local signer keystore path                                                                                  |
-| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD`   | Password for the local signer keystore; load from a secret source                                                     |
-| `RATELOOP_LOCAL_SIGNER_PASSWORD_ENV`        | Name of an alternate environment variable that holds the keystore password                                            |
-| `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY`         | Ephemeral CI/test-wallet fallback; prefer a keystore for persistent funded wallets                                    |
-| `RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS` | Optional receipt polling interval for local signer transaction waits                                                  |
-| `RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS`  | Optional local signer transaction receipt timeout                                                                     |
-| `RATELOOP_MCP_TOKEN`                        | Optional managed agent bearer token with quote, ask, read, and balance scopes                                         |
+| Variable                                    | Description                                                                                                              |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `RATELOOP_API_BASE_URL`                     | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                                           |
+| `RATELOOP_AGENT_WALLET_ADDRESS`             | Funded wallet address for tokenless public asks                                                                          |
+| `RATELOOP_RPC_URL`                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
+| `RATELOOP_CHAIN_ID`                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
+| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`       | Encrypted local signer keystore path                                                                                     |
+| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD`   | Password for the local signer keystore; load from a secret source                                                        |
+| `RATELOOP_LOCAL_SIGNER_PASSWORD_ENV`        | Name of an alternate environment variable that holds the keystore password                                               |
+| `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY`         | Ephemeral CI/test-wallet fallback; prefer a keystore for persistent funded wallets                                       |
+| `RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS` | Optional receipt polling interval for local signer transaction waits                                                     |
+| `RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS`  | Optional local signer transaction receipt timeout                                                                        |
+| `RATELOOP_MCP_TOKEN`                        | Optional managed agent bearer token with quote, ask, read, and balance scopes                                            |
 | `RATELOOP_MCP_API_URL`                      | Optional MCP endpoint override; with `RATELOOP_MCP_TOKEN` SDK clients default to `/api/mcp`, otherwise `/api/mcp/public` |
-| `RATELOOP_MCP_PROTOCOL_VERSION`             | Optional MCP protocol version override                                                                                |
+| `RATELOOP_MCP_PROTOCOL_VERSION`             | Optional MCP protocol version override                                                                                   |
 
 ## Examples
 
@@ -189,6 +191,7 @@ Good agent questions:
 - choose a result template before submission
 - use a stable `clientRequestId` so retries do not duplicate spend
 - fund enough bounty for the expected voter count and timing
+- add a `feedbackBonus` when comments, objections, or reproducible details are worth rewarding separately from the rating
 
 For comparisons, do not ask raters to select "which answer" inside one question. Use `ranked_option_member` for generic
 option ranking or `pairwise_output_preference` for AI/model outputs, and submit one question per option in the same

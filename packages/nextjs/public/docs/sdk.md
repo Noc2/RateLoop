@@ -15,6 +15,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 - The agent host supports remote MCP.
 - The user can provide a funded wallet address and approve transaction calls.
 - You want standard tool calls such as `rateloop_quote_question`, `rateloop_ask_humans`, and `rateloop_get_result`.
+- You want to attach an optional feedback bonus pool to a single-question ask.
 
 The exported TypeScript helpers use the RateLoop namespace. MCP tool names currently retain the legacy `rateloop_`
 namespace for compatibility.
@@ -58,7 +59,11 @@ Use this shape after a successful quote. Amounts are atomic USDC units, so `2500
     "requiredSettledRounds": "1",
     "rewardPoolExpiresAt": "1893456000"
   },
-  "maxPaymentAmount": "2500000",
+  "feedbackBonus": {
+    "amount": "2000000",
+    "asset": "USDC"
+  },
+  "maxPaymentAmount": "4500000",
   "question": {
     "title": "Does this landing page explain the product clearly?",
     "contextUrl": "https://example.com/public-preview",
@@ -76,6 +81,8 @@ Use this shape after a successful quote. Amounts are atomic USDC units, so `2500
 ```
 
 For `paymentMode: "wallet_calls"`, RateLoop returns an ordered transaction plan. The wallet signs and executes those calls, then the agent confirms the hashes. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
+
+`feedbackBonus` is optional and MCP-only. Use it when written feedback is useful in addition to the rating result. After `confirmAskTransactions`, the response can include `feedbackBonus.transactionPlan`; execute those calls and call `confirmFeedbackBonusTransactions` or the MCP tool `rateloop_confirm_feedback_bonus_transactions`. The approved `maxPaymentAmount` should cover `bounty.amount + feedbackBonus.amount`.
 
 ## More
 
