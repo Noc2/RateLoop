@@ -355,7 +355,8 @@ contract LaunchDistributionPool is
     function withdrawRemaining(address to, uint256 amount) external onlyOwner nonReentrant returns (uint256 withdrawn) {
         if (to == address(0)) revert InvalidAddress();
         if (owner() != governance) revert InvalidAddress();
-        withdrawn = amount > poolBalance ? poolBalance : amount;
+        uint256 withdrawable = _withdrawablePoolSurplus();
+        withdrawn = amount > withdrawable ? withdrawable : amount;
         if (withdrawn == 0) revert InvalidAmount();
         poolBalance -= withdrawn;
         lrepToken.safeTransfer(to, withdrawn);
@@ -1402,6 +1403,12 @@ contract LaunchDistributionPool is
 
     function _remainingLegacyContributorPool() internal view returns (uint256) {
         return LEGACY_CONTRIBUTOR_POOL_AMOUNT - legacyContributorDistributed - legacyContributorTreasuryRecovered;
+    }
+
+    function _withdrawablePoolSurplus() internal view returns (uint256) {
+        uint256 reserved =
+            _remainingEarnedRaterPool() + _remainingVerifiedReferralPool() + _remainingLegacyContributorPool();
+        return poolBalance > reserved ? poolBalance - reserved : 0;
     }
 
     function _pay(address to, uint256 amount) internal returns (uint256 paidAmount) {

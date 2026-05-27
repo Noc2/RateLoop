@@ -170,6 +170,20 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(interruptedLrep.balanceOf(address(interruptedPool)), interruptedPool.TOTAL_POOL_AMOUNT());
     }
 
+    function test_WithdrawRemainingOnlyWithdrawsSurplusAboveReservedLaunchBuckets() public {
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.withdrawRemaining(bob, 1);
+
+        uint256 surplus = 100e6;
+        lrep.mint(address(this), surplus);
+        lrep.approve(address(pool), surplus);
+        pool.depositPool(surplus);
+
+        assertEq(pool.withdrawRemaining(bob, type(uint256).max), surplus);
+        assertEq(lrep.balanceOf(bob), surplus);
+        assertEq(pool.poolBalance(), pool.TOTAL_POOL_AMOUNT());
+    }
+
     function test_DefaultLaunchRewardPolicyUsesAntiFarmDefaults() public view {
         (
             uint16 minQualifyingScoreBps,
