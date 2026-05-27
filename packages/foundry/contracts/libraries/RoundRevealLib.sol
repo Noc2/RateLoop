@@ -267,15 +267,6 @@ library RoundRevealLib {
         _captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
     }
 
-    function refreshRbtsSeed(
-        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
-        uint256 contentId,
-        uint256 roundId
-    ) external {
-        if (!isExpiredRbtsSeed(roundRbtsSeedEntropy, contentId, roundId)) revert RevealGraceActive();
-        _captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
-    }
-
     function isExpiredRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         uint256 contentId,
@@ -299,7 +290,13 @@ library RoundRevealLib {
         uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
         if (block.number <= seedBlock) revert RevealGraceActive();
         bytes32 seedBlockhash = blockhash(seedBlock);
-        if (seedBlockhash == bytes32(0)) revert RevealGraceActive();
+        if (seedBlockhash == bytes32(0)) {
+            seedBlockhash = keccak256(
+                abi.encode(
+                    "rateloop.rbts.expired-seed.v1", block.chainid, address(this), contentId, roundId, settlementEntropy
+                )
+            );
+        }
         settlementEntropy = keccak256(
             abi.encode(
                 "rateloop.rbts.delayed-seed.v1",
