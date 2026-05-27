@@ -703,6 +703,27 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertTrue(registry.submissionKeyUsed(submissionKey));
     }
 
+    function test_SubmitQuestion_AllowsRateloopAiUploadedImages() public view {
+        registry.previewQuestionSubmissionKey(
+            "https://example.com/context",
+            _singleImageUrls("https://www.rateloop.ai/api/attachments/images/att_0123456789abcdef.webp"),
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1
+        );
+        registry.previewQuestionSubmissionKey(
+            "https://example.com/context",
+            _singleImageUrls("https://rateloop.ai/api/attachments/images/att_0123456789abcdef.webp"),
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1
+        );
+    }
+
     function test_SubmitQuestion_RevertsWhenReservedMediaChanges() public {
         string[] memory reservedImageUrls = new string[](2);
         reservedImageUrls[0] = _uploadedImageUrl("reserved-a");

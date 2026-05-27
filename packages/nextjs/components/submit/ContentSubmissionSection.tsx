@@ -41,6 +41,7 @@ import { MAX_CONTENT_DESCRIPTION_LENGTH } from "~~/lib/contentDescription";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
   MAX_SUBMISSION_URL_LENGTH,
+  isContractSubmissionImageUrl,
   isDirectImageUrl,
   isUploadedImageUrl,
   isYouTubeVideoUrl,
@@ -621,6 +622,10 @@ export function ContentSubmissionSection() {
 
     if (expectedType === "images" && !isUploadedImageUrl(normalizedUrl)) {
       return "Use an approved RateLoop image upload.";
+    }
+
+    if (expectedType === "images" && !isContractSubmissionImageUrl(normalizedUrl)) {
+      return "Local image uploads must be served from an HTTPS RateLoop URL before submitting.";
     }
 
     if (expectedType === "video" && !isYouTubeVideoUrl(normalizedUrl)) {
@@ -1397,7 +1402,7 @@ export function ContentSubmissionSection() {
     setFeedbackBonusStepAttempted(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (submissionStep === "question") {
@@ -1407,6 +1412,12 @@ export function ContentSubmissionSection() {
 
     if (submissionStep === "bounty") {
       handleGoToFeedbackBonusStep();
+      return;
+    }
+  };
+
+  const handleFinalSubmit = async () => {
+    if (submissionStep !== "feedbackBonus") {
       return;
     }
 
@@ -2872,14 +2883,10 @@ export function ContentSubmissionSection() {
 
   const feedbackBonusDetailsCard = (
     <div className="space-y-5">
-      <div className="space-y-2">
+      <div>
         <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
           Feedback Bonus <span className="text-base-content/55">(optional)</span>
           <InfoTooltip text="Optional USDC pool for useful hidden feedback from revealed raters. The awarder pays selected feedback after settlement, with the default frontend fee reserved when eligible." />
-        </p>
-        <p className="text-sm leading-relaxed text-base-content/65">
-          Keep this off when you only need a score. Turn it on when written notes, objections, or bug reports should be
-          worth extra USDC.
         </p>
       </div>
 
@@ -2971,14 +2978,7 @@ export function ContentSubmissionSection() {
             </p>
           ) : null}
         </div>
-      ) : (
-        <div className="surface-card-nested rounded-lg p-4">
-          <p className="text-base text-base-content/70">
-            The question will still accept optional rater feedback after votes. There just will not be a separate USDC
-            pool for awarding notes.
-          </p>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 
@@ -3051,7 +3051,8 @@ export function ContentSubmissionSection() {
         Back
       </button>
       <button
-        type="submit"
+        type="button"
+        onClick={handleFinalSubmit}
         className="btn btn-submit w-full sm:flex-1"
         disabled={isSubmitting || isAwaitingSponsoredSubmitCalls || isMissingGasBalance}
       >
@@ -3097,7 +3098,7 @@ export function ContentSubmissionSection() {
       </div>
 
       <div className="surface-card rounded-2xl p-6" style={{ overflow: "visible" }}>
-        <form onSubmit={handleSubmit} noValidate className="space-y-6">
+        <form onSubmit={handleFormSubmit} noValidate className="space-y-6">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">{pageContext}</p>
           </div>

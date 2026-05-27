@@ -50,6 +50,8 @@ test.describe("Ask page", () => {
     await selectBountyRewardAsset(page, "lrep");
     await continueToFeedbackBonusStep(page);
     await expect(page.getByRole("heading", { name: "Feedback Bonus" })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText("Submitting content")).toBeHidden();
+    await expect(page.getByRole("button", { name: /^Submitting/i })).toBeHidden();
     await expect(page.getByRole("button", { name: /^No bonus$/i })).toHaveAttribute("aria-pressed", "true");
 
     const submitBtn = page.getByRole("button", { name: /^Submit/i });

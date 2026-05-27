@@ -1,4 +1,5 @@
 import {
+  isContractSubmissionImageUrl,
   isDirectImageUrl,
   isUploadedImageUrl,
   normalizeSubmissionContextUrl,
@@ -10,12 +11,21 @@ import test from "node:test";
 test("isUploadedImageUrl requires a trusted RateLoop image origin", () => {
   const approvedPath = "/api/attachments/images/att_abcdefghijklmnop.webp";
 
+  assert.equal(isUploadedImageUrl(`https://www.rateloop.ai${approvedPath}`), true);
   assert.equal(isUploadedImageUrl(`https://www.rateloop.xyz${approvedPath}`), true);
   assert.equal(
     normalizeSubmissionMediaUrl(`https://www.rateloop.xyz${approvedPath}`),
     `https://www.rateloop.xyz${approvedPath}`,
   );
   assert.equal(isUploadedImageUrl(`https://evil.example${approvedPath}`), false);
+});
+
+test("isContractSubmissionImageUrl rejects local development attachment URLs", () => {
+  const approvedPath = "/api/attachments/images/att_abcdefghijklmnop.webp";
+
+  assert.equal(isUploadedImageUrl(`http://localhost:3000${approvedPath}`), true);
+  assert.equal(isContractSubmissionImageUrl(`http://localhost:3000${approvedPath}`), false);
+  assert.equal(isContractSubmissionImageUrl(`https://www.rateloop.ai${approvedPath}`), true);
 });
 
 test("normalizeSubmissionContextUrl rejects direct image file URLs", () => {

@@ -6,13 +6,21 @@ import path from "path";
 import "server-only";
 import sharp from "sharp";
 import { parseAttachmentIdFromUploadedImageUrl } from "~~/lib/attachments/imageAttachmentUrls";
-import { db } from "~~/lib/db";
+import { MAX_SUBMISSION_IMAGE_URLS } from "~~/lib/contentMedia";
+import { db, dbPool } from "~~/lib/db";
 import { type QuestionImageAttachment, questionImageAttachments } from "~~/lib/db/schema";
 
 const IMAGE_ATTACHMENT_ROUTE_PREFIX = "/api/attachments/images";
 const IMAGE_ATTACHMENT_PUBLIC_EXTENSION = "webp";
 const LOCAL_IMAGE_ATTACHMENT_URI_PREFIX = "local://";
 const LOCAL_IMAGE_ATTACHMENT_STORAGE_PREFIX = "question-attachments";
+const DEFAULT_WALLET_DAILY_IMAGE_UPLOAD_LIMIT = 40;
+const DEFAULT_AGENT_DAILY_IMAGE_UPLOAD_LIMIT = 20;
+const DEFAULT_WALLET_DAILY_IMAGE_UPLOAD_BYTES = 200 * 1024 * 1024;
+const DEFAULT_AGENT_DAILY_IMAGE_UPLOAD_BYTES = 100 * 1024 * 1024;
+const DEFAULT_PENDING_ORPHAN_TTL_MS = 60 * 60 * 1000;
+const DEFAULT_UNATTACHED_ORPHAN_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_ORPHAN_SWEEP_LIMIT = 100;
 
 type ImageAttachmentStatus = "uploading" | "processing" | "approved" | "blocked" | "failed" | "deleted";
 
@@ -55,6 +63,17 @@ type ImageAttachmentBlobDependencies = {
   putBlob: typeof putBlob;
 };
 
+export type ImageUploadQuotaSubjectKind = "agent" | "wallet";
+
+export class ImageUploadQuotaError extends Error {
+  readonly status = 429;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ImageUploadQuotaError";
+  }
+}
+
 let imageAttachmentBlobTestOverrides: Partial<ImageAttachmentBlobDependencies> | null = null;
 
 function getImageAttachmentBlobDependencies(): ImageAttachmentBlobDependencies {
@@ -86,6 +105,152 @@ const BLOCKED_MODERATION_CATEGORIES = new Set([
 
 function nowDate() {
   return new Date();
+}
+
+function startOfUtcDay(now = nowDate()) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+function quotaDateKey(now = nowDate()) {
+  return startOfUtcDay(now).toISOString().slice(0, 10);
+}
+
+function normalizeQuotaSubjectId(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function quotaKey(subjectKind: ImageUploadQuotaSubjectKind, subjectId: string, quotaDate: string) {
+  return `${subjectKind}:${subjectId}:${quotaDate}`;
+}
+
+function readPositiveIntegerEnv(name: string, fallback: number) {
+  const rawValue = process.env[name]?.trim();
+  if (!rawValue) return fallback;
+
+  const parsed = Number(rawValue);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function getImageUploadDailyQuotaConfig(subjectKind: ImageUploadQuotaSubjectKind) {
+  if (subjectKind === "agent") {
+    return {
+      byteLimit: readPositiveIntegerEnv(
+        "RATELOOP_MCP_IMAGE_UPLOAD_DAILY_BYTES",
+        DEFAULT_AGENT_DAILY_IMAGE_UPLOAD_BYTES,
+      ),
+      imageLimit: readPositiveIntegerEnv(
+        "RATELOOP_MCP_IMAGE_UPLOAD_DAILY_LIMIT",
+        DEFAULT_AGENT_DAILY_IMAGE_UPLOAD_LIMIT,
+      ),
+    };
+  }
+
+  return {
+    byteLimit: readPositiveIntegerEnv("RATELOOP_IMAGE_UPLOAD_DAILY_BYTES", DEFAULT_WALLET_DAILY_IMAGE_UPLOAD_BYTES),
+    imageLimit: readPositiveIntegerEnv("RATELOOP_IMAGE_UPLOAD_DAILY_LIMIT", DEFAULT_WALLET_DAILY_IMAGE_UPLOAD_LIMIT),
+  };
+}
+
+export async function reserveImageUploadDailyQuota(params: {
+  now?: Date;
+  sizeBytes: number;
+  subjectId: string;
+  subjectKind: ImageUploadQuotaSubjectKind;
+}) {
+  await reserveImageUploadDailyQuotas({
+    now: params.now,
+    sizeBytes: params.sizeBytes,
+    subjects: [{ subjectId: params.subjectId, subjectKind: params.subjectKind }],
+  });
+}
+
+export async function reserveImageUploadDailyQuotas(params: {
+  now?: Date;
+  sizeBytes: number;
+  subjects: Array<{
+    subjectId: string;
+    subjectKind: ImageUploadQuotaSubjectKind;
+  }>;
+}) {
+  if (!Number.isSafeInteger(params.sizeBytes) || params.sizeBytes <= 0) {
+    throw new ImageUploadQuotaError("Image upload size is invalid.");
+  }
+  if (params.subjects.length === 0) {
+    throw new ImageUploadQuotaError("Image upload quota subject is invalid.");
+  }
+
+  const now = params.now ?? nowDate();
+  const quotaDate = quotaDateKey(now);
+  const reservations = params.subjects.map(subject => {
+    const subjectId = normalizeQuotaSubjectId(subject.subjectId);
+    if (!subjectId) {
+      throw new ImageUploadQuotaError("Image upload quota subject is invalid.");
+    }
+
+    const config = getImageUploadDailyQuotaConfig(subject.subjectKind);
+    if (params.sizeBytes > config.byteLimit) {
+      throw new ImageUploadQuotaError("Daily image upload byte quota exceeded.");
+    }
+
+    return {
+      config,
+      key: quotaKey(subject.subjectKind, subjectId, quotaDate),
+      subjectId,
+      subjectKind: subject.subjectKind,
+    };
+  });
+
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+
+    for (const reservation of reservations) {
+      const existing = await client.query(
+        `
+          SELECT image_count, byte_count
+          FROM image_upload_daily_quotas
+          WHERE quota_key = $1
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [reservation.key],
+      );
+
+      if (existing.rows.length > 0) {
+        const nextImageCount = Number(existing.rows[0]?.image_count ?? 0) + 1;
+        const nextByteCount = BigInt(String(existing.rows[0]?.byte_count ?? "0")) + BigInt(params.sizeBytes);
+        if (nextImageCount > reservation.config.imageLimit || nextByteCount > BigInt(reservation.config.byteLimit)) {
+          throw new ImageUploadQuotaError("Daily image upload quota exceeded.");
+        }
+
+        await client.query(
+          `
+            UPDATE image_upload_daily_quotas
+            SET image_count = $2, byte_count = $3, updated_at = $4
+            WHERE quota_key = $1
+          `,
+          [reservation.key, nextImageCount, nextByteCount.toString(), now],
+        );
+      } else {
+        await client.query(
+          `
+            INSERT INTO image_upload_daily_quotas (
+              quota_key, subject_kind, subject_id, quota_date, image_count, byte_count, created_at, updated_at
+            )
+            VALUES ($1, $2, $3, $4, 1, $5, $6, $6)
+          `,
+          [reservation.key, reservation.subjectKind, reservation.subjectId, quotaDate, String(params.sizeBytes), now],
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function hasOpenAiModerationKey() {
@@ -462,6 +627,86 @@ async function deleteStoredImage(pathname: string) {
   await removeBlob(pathname).catch(() => undefined);
 }
 
+export async function sweepOrphanedImageAttachments(
+  params: {
+    limit?: number;
+    now?: Date;
+    pendingTtlMs?: number;
+    unattachedTtlMs?: number;
+  } = {},
+) {
+  const now = params.now ?? nowDate();
+  const limit = Math.max(1, Math.min(Math.floor(params.limit ?? DEFAULT_ORPHAN_SWEEP_LIMIT), 500));
+  const pendingTtlMs = Math.max(1, params.pendingTtlMs ?? DEFAULT_PENDING_ORPHAN_TTL_MS);
+  const unattachedTtlMs = Math.max(1, params.unattachedTtlMs ?? DEFAULT_UNATTACHED_ORPHAN_TTL_MS);
+  const pendingExpiresBefore = new Date(now.getTime() - pendingTtlMs);
+  const unattachedExpiresBefore = new Date(now.getTime() - unattachedTtlMs);
+
+  const candidates = await dbPool.query<{
+    id: string;
+    status: ImageAttachmentStatus;
+  }>(
+    `
+      SELECT id, status
+      FROM question_image_attachments
+      WHERE deleted_at IS NULL
+        AND operation_key IS NULL
+        AND content_id IS NULL
+        AND published_at IS NULL
+        AND (
+          (status IN ('uploading', 'processing') AND created_at <= $1)
+          OR (status IN ('approved', 'blocked', 'failed') AND created_at <= $2)
+        )
+      ORDER BY created_at ASC
+      LIMIT $3
+    `,
+    [pendingExpiresBefore, unattachedExpiresBefore, limit],
+  );
+
+  let deleted = 0;
+  for (const candidate of candidates.rows) {
+    const claimed = await dbPool.query<{
+      normalized_blob_pathname: string | null;
+      original_blob_pathname: string | null;
+    }>(
+      `
+        UPDATE question_image_attachments
+        SET status = 'deleted',
+            deleted_at = $2,
+            updated_at = $2,
+            error = COALESCE(error, 'Expired unattached image upload.')
+        WHERE id = $1
+          AND status = $3
+          AND deleted_at IS NULL
+          AND operation_key IS NULL
+          AND content_id IS NULL
+          AND published_at IS NULL
+        RETURNING original_blob_pathname, normalized_blob_pathname
+      `,
+      [candidate.id, now, candidate.status],
+    );
+    const row = claimed.rows[0];
+    if (!row) continue;
+
+    const pathnames = [
+      ...new Set(
+        [row.original_blob_pathname, row.normalized_blob_pathname].filter((pathname): pathname is string =>
+          Boolean(pathname),
+        ),
+      ),
+    ];
+    for (const pathname of pathnames) {
+      await deleteStoredImage(pathname);
+    }
+    deleted += 1;
+  }
+
+  return {
+    deleted,
+    scanned: candidates.rows.length,
+  };
+}
+
 export async function processCompletedImageUpload(params: {
   attachmentId: string;
   blobPathname: string;
@@ -554,6 +799,9 @@ export async function getImageAttachmentSubmissionValidationError(params: {
   ownerWalletAddress?: string | null;
 }): Promise<string | null> {
   if (params.imageUrls.length === 0) return null;
+  if (params.imageUrls.length > MAX_SUBMISSION_IMAGE_URLS) {
+    return `imageUrls supports at most ${MAX_SUBMISSION_IMAGE_URLS} images.`;
+  }
 
   const parsedAttachmentIds = params.imageUrls.map(parseAttachmentIdFromImageUrl);
   if (parsedAttachmentIds.some(id => !id)) {
