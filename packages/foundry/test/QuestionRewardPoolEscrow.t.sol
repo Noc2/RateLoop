@@ -3156,8 +3156,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
 
         vm.warp(expiresAt + 1);
-        vm.expectRevert("Recovered round pending");
-        rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+        uint256 refunded = rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+        assertGt(refunded, 0, "recovered allocation should be refundable without replacement");
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore + refunded);
     }
 
     function testRecoveredSnapshotRoundCanReopenAfterUnallocatedRefund() public {
@@ -3186,7 +3188,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.prank(owner);
         rewardPoolEscrow.recoverRejectedSnapshotRound(rewardPoolId, roundId);
 
-        vm.expectRevert("Recovered round pending");
+        vm.expectRevert("Grace");
         rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
 
         IClusterPayoutOracle.PayoutWeight memory replacementWeight = payoutWeight;
