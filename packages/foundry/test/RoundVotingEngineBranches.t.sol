@@ -21,6 +21,7 @@ import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 // =========================================================================
 // TEST CONTRACT
@@ -268,7 +269,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function _installRaterRegistry() internal returns (RaterRegistry raterRegistry) {
-        raterRegistry = new RaterRegistry(owner, owner, address(0x1234), bytes32("rate-loop"), 1, 365 days);
+        raterRegistry =
+            new RaterRegistry(owner, owner, address(new MockWorldIDRouter()), bytes32("rate-loop"), 1, 365 days);
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(raterRegistry));
     }
