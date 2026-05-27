@@ -158,8 +158,18 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         view
         returns (address author)
     {
-        (author,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
-        require(author == msg.sender, "Only commit voter");
+        (address committedVoter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+        require(committedVoter != address(0), "No commit");
+        if (committedVoter == msg.sender) {
+            return msg.sender;
+        }
+
+        bytes32 commitHash = votingEngine.voterCommitHash(contentId, roundId, msg.sender);
+        require(
+            commitHash != bytes32(0) && keccak256(abi.encodePacked(msg.sender, commitHash)) == commitKey,
+            "Only commit voter"
+        );
+        return msg.sender;
     }
 
     function _requireRevealedCommit(uint256 contentId, uint256 roundId, bytes32 commitKey) internal view {

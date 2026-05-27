@@ -961,6 +961,7 @@ const ABI_TARGETS = [
   { contract: "RoundRewardDistributor", targets: ["contracts/src/abis"] },
   { contract: "QuestionRewardPoolEscrow", targets: ["contracts/src/abis"] },
   { contract: "X402QuestionSubmitter", targets: ["contracts/src/abis"] },
+  { contract: "FeedbackRegistry", targets: ["contracts/src/abis"] },
   { contract: "FeedbackBonusEscrow", targets: ["contracts/src/abis"] },
   { contract: "ProfileRegistry", targets: ["contracts/src/abis"] },
   { contract: "ProtocolConfig", targets: ["contracts/src/abis"] },

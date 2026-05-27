@@ -13,6 +13,7 @@ import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { IFeedbackRegistry } from "./interfaces/IFeedbackRegistry.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
@@ -52,6 +53,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
     IRaterIdentityRegistry public raterRegistry;
+    IFeedbackRegistry public feedbackRegistry;
     uint256 public nextFeedbackBonusPoolId;
     uint16 public defaultFrontendFeeBps;
 
@@ -62,7 +64,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     /// @dev Reserved storage gap for future upgrades. Mirrors the pattern used by every other
     ///      upgradeable contract in this protocol so new state can be added without colliding
     ///      with inherited OpenZeppelin storage.
-    uint256[50] private __gap;
+    uint256[49] private __gap;
 
     event FeedbackBonusPoolCreated(
         uint256 indexed poolId,
@@ -93,6 +95,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     event FeedbackBonusForfeited(uint256 indexed poolId, address indexed treasury, uint256 amount);
     event FeedbackBonusFunderRefunded(uint256 indexed poolId, address indexed funder, uint256 amount);
     event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
+    event FeedbackRegistryUpdated(address feedbackRegistry);
     event RaterRegistryUpdated(address raterRegistry);
     event VotingEngineUpdated(address votingEngine);
     event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
@@ -107,7 +110,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         address usdcToken_,
         address registry_,
         address votingEngine_,
-        address raterRegistry_
+        address raterRegistry_,
+        address feedbackRegistry_
     ) external initializer {
         require(admin != address(0), "Invalid admin");
         require(usdcToken_ != address(0), "Invalid token");
@@ -126,6 +130,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         votingEngine = RoundVotingEngine(votingEngine_);
         _validateRaterRegistry(raterRegistry_);
         raterRegistry = IRaterIdentityRegistry(raterRegistry_);
+        _setFeedbackRegistry(feedbackRegistry_);
         nextFeedbackBonusPoolId = 1;
         defaultFrontendFeeBps = DEFAULT_FRONTEND_FEE_BPS.toUint16();
     }
@@ -199,6 +204,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         require(
             !identityKeyAwarded[poolId][identityKey] && !identityKeyAwarded[poolId][awardIdentityKey],
             "Rater already awarded"
+        );
+        require(
+            feedbackRegistry.isAwardableFeedback(pool.contentId, pool.roundId, commitKey, feedbackHash),
+            "Feedback not revealed"
         );
 
         uint256 frontendFee;
@@ -288,6 +297,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         emit RaterRegistryUpdated(raterRegistry_);
     }
 
+    function setFeedbackRegistry(address feedbackRegistry_) external onlyRole(CONFIG_ROLE) {
+        _setFeedbackRegistry(feedbackRegistry_);
+    }
+
     function setVotingEngine(address) external view onlyRole(CONFIG_ROLE) {
         revert("Invalid engine");
     }
@@ -312,6 +325,12 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         usdcToken.safeTransferFrom(funder, address(this), amount);
         receivedAmount = usdcToken.balanceOf(address(this)) - balanceBefore;
         require(receivedAmount == amount, "Fee token unsupported");
+    }
+
+    function _setFeedbackRegistry(address feedbackRegistry_) internal {
+        require(feedbackRegistry_ != address(0) && feedbackRegistry_.code.length != 0, "Invalid feedback registry");
+        feedbackRegistry = IFeedbackRegistry(feedbackRegistry_);
+        emit FeedbackRegistryUpdated(feedbackRegistry_);
     }
 
     function _requireTargetRound(uint256 contentId, uint256 roundId) internal view {

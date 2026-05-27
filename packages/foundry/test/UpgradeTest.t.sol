@@ -17,6 +17,7 @@ import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
 import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
+import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
 import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
@@ -79,6 +80,7 @@ contract UpgradeTest is Test {
     ProtocolConfig public protocolConfig;
     QuestionRewardPoolEscrow public questionRewardPoolEscrow;
     FeedbackBonusEscrow public feedbackBonusEscrow;
+    FeedbackRegistry public feedbackRegistry;
     ProxyAdmin public contentRegistryAdmin;
     ProxyAdmin public votingEngineAdmin;
     ProxyAdmin public rewardDistributorAdmin;
@@ -87,6 +89,7 @@ contract UpgradeTest is Test {
     ProxyAdmin public protocolConfigAdmin;
     ProxyAdmin public questionRewardPoolEscrowAdmin;
     ProxyAdmin public feedbackBonusEscrowAdmin;
+    ProxyAdmin public feedbackRegistryAdmin;
 
     LoopReputation public lrepToken;
     MockVotingEngineForUpgrade public mockVotingEngine;
@@ -192,6 +195,15 @@ contract UpgradeTest is Test {
         questionRewardPoolEscrowAdmin = _proxyAdmin(address(qrpProxy));
 
         // --- FeedbackBonusEscrow ---
+        FeedbackRegistry feedbackRegistryImpl = new FeedbackRegistry();
+        TransparentUpgradeableProxy feedbackRegistryProxy = new TransparentUpgradeableProxy(
+            address(feedbackRegistryImpl),
+            governance,
+            abi.encodeCall(FeedbackRegistry.initialize, (admin, governance, address(votingEngine)))
+        );
+        feedbackRegistry = FeedbackRegistry(address(feedbackRegistryProxy));
+        feedbackRegistryAdmin = _proxyAdmin(address(feedbackRegistryProxy));
+
         FeedbackBonusEscrow fbeImpl = new FeedbackBonusEscrow();
         TransparentUpgradeableProxy fbeProxy = new TransparentUpgradeableProxy(
             address(fbeImpl),
@@ -203,7 +215,8 @@ contract UpgradeTest is Test {
                     address(lrepToken),
                     address(contentRegistry),
                     address(votingEngine),
-                    address(raterRegistry)
+                    address(raterRegistry),
+                    address(feedbackRegistry)
                 )
             )
         );
@@ -541,7 +554,12 @@ contract UpgradeTest is Test {
         vm.prank(admin);
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         feedbackBonusEscrow.initialize(
-            governance, address(lrepToken), address(contentRegistry), address(votingEngine), address(raterRegistry)
+            governance,
+            address(lrepToken),
+            address(contentRegistry),
+            address(votingEngine),
+            address(raterRegistry),
+            address(feedbackRegistry)
         );
     }
 
@@ -608,7 +626,12 @@ contract UpgradeTest is Test {
         FeedbackBonusEscrow fbeImpl = new FeedbackBonusEscrow();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         fbeImpl.initialize(
-            governance, address(lrepToken), address(contentRegistry), address(votingEngine), address(raterRegistry)
+            governance,
+            address(lrepToken),
+            address(contentRegistry),
+            address(votingEngine),
+            address(raterRegistry),
+            address(feedbackRegistry)
         );
     }
 

@@ -6,6 +6,7 @@ import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
+import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
@@ -74,6 +75,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     FrontendRegistry public frontendRegistry;
     QuestionRewardPoolEscrow public questionRewardPoolEscrow;
     FeedbackBonusEscrow public feedbackBonusEscrow;
+    FeedbackRegistry public feedbackRegistry;
     ProtocolConfig public protocolConfig;
     MockERC20 public usdc;
     RaterRegistry public raterRegistry;
@@ -92,12 +94,16 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     uint256 public constant STAKE = 5e6;
     uint256 public constant EPOCH_DURATION = 10 minutes;
     uint256 public constant BONUS_AMOUNT = 100e6;
-    bytes32 public constant FEEDBACK_HASH = keccak256("rateloop-feedback-v1:test");
+    bytes32 public FEEDBACK_HASH;
 
     string internal constant QUESTION = "Would you recommend this hotel?";
     string internal constant DESCRIPTION = "Vote based on the overall stay quality.";
     string internal constant TAGS = "travel";
     string internal constant DEFAULT_MEDIA_URL = "hotel-room";
+    string internal constant FEEDBACK_TYPE = "evidence";
+    string internal constant FEEDBACK_BODY = "Helpful feedback for the asker.";
+    string internal constant FEEDBACK_SOURCE_URL = "https://example.com/feedback-source";
+    bytes32 internal constant FEEDBACK_NONCE = keccak256("feedback nonce");
     uint256 internal constant CATEGORY_ID = 1;
 
     function _tlockDrandChainHash() internal pure override returns (bytes32) {
@@ -131,6 +137,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         FrontendRegistry frontendRegistryImpl = new FrontendRegistry();
         QuestionRewardPoolEscrow questionRewardPoolImpl = new QuestionRewardPoolEscrow();
         FeedbackBonusEscrow feedbackBonusImpl = new FeedbackBonusEscrow();
+        FeedbackRegistry feedbackRegistryImpl = new FeedbackRegistry();
 
         protocolConfig = _deployProtocolConfig(owner);
         registry = ContentRegistry(
@@ -192,13 +199,29 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
                 )
             )
         );
+        feedbackRegistry = FeedbackRegistry(
+            address(
+                new ERC1967Proxy(
+                    address(feedbackRegistryImpl),
+                    abi.encodeCall(FeedbackRegistry.initialize, (owner, owner, address(votingEngine)))
+                )
+            )
+        );
+        FEEDBACK_HASH = _feedbackHash(1, 1, voter1);
         feedbackBonusEscrow = FeedbackBonusEscrow(
             address(
                 new ERC1967Proxy(
                     address(feedbackBonusImpl),
                     abi.encodeCall(
                         FeedbackBonusEscrow.initialize,
-                        (owner, address(usdc), address(registry), address(votingEngine), address(raterRegistry))
+                        (
+                            owner,
+                            address(usdc),
+                            address(registry),
+                            address(votingEngine),
+                            address(raterRegistry),
+                            address(feedbackRegistry)
+                        )
                     )
                 )
             )
@@ -543,9 +566,10 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
         uint256 holderBalanceBefore = usdc.balanceOf(voter1);
         uint256 delegateBalanceBefore = usdc.balanceOf(delegate1);
+        bytes32 delegateFeedbackHash = _feedbackHash(contentId, 1, delegate1);
 
         vm.prank(funder);
-        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, delegate1, FEEDBACK_HASH, 10e6);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, delegate1, delegateFeedbackHash, 10e6);
 
         assertEq(recipientAmount, 10e6);
         assertEq(usdc.balanceOf(voter1), holderBalanceBefore + recipientAmount);
@@ -573,9 +597,10 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.stopPrank();
 
         uint256 holderBalanceBefore = usdc.balanceOf(voter1);
+        bytes32 delegateFeedbackHash = _feedbackHash(contentId, roundId, delegate1);
 
         vm.prank(funder);
-        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, delegateFeedbackHash, 10e6);
 
         assertEq(recipientAmount, 10e6);
         assertEq(usdc.balanceOf(voter1), holderBalanceBefore + recipientAmount);
@@ -756,6 +781,12 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         }
 
         roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        for (uint256 i = 0; i < voters.length; i++) {
+            bytes32 feedbackHash = _feedbackHash(contentId, roundId, voters[i]);
+            vm.prank(voters[i]);
+            feedbackRegistry.commitFeedbackHash(contentId, roundId, commitKeys[i], feedbackHash);
+        }
+
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
 
         for (uint256 i = 0; i < voters.length; i++) {
@@ -763,6 +794,13 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         }
 
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            vm.prank(voters[i]);
+            feedbackRegistry.revealFeedback(
+                contentId, roundId, commitKeys[i], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+            );
+        }
     }
 
     function _commitFeedbackVote(address voter, uint256 contentId, bool isUp, uint256 index, address frontend)
@@ -796,6 +834,12 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         lrepToken.approve(address(frontendRegistry), frontendRegistry.STAKE_AMOUNT());
         frontendRegistry.register();
         vm.stopPrank();
+    }
+
+    function _feedbackHash(uint256 contentId, uint256 roundId, address author) internal view returns (bytes32) {
+        return feedbackRegistry.buildContentFeedbackHash(
+            contentId, roundId, author, FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
     }
 
     function _threeVoters() internal view returns (address[] memory voters) {

@@ -15,6 +15,7 @@ import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol"
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { CategoryRegistry } from "../contracts/CategoryRegistry.sol";
 import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
+import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
 import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
@@ -122,6 +123,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         ProtocolConfig protocolConfigImpl = new ProtocolConfig();
         QuestionRewardPoolEscrow questionRewardPoolEscrowImpl = new QuestionRewardPoolEscrow();
         FeedbackBonusEscrow feedbackBonusEscrowImpl = new FeedbackBonusEscrow();
+        FeedbackRegistry feedbackRegistryImpl = new FeedbackRegistry();
 
         TransparentUpgradeableProxy frontendRegistryProxy = new TransparentUpgradeableProxy(
             address(frontendRegistryImpl),
@@ -245,12 +247,26 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         X402QuestionSubmitter x402QuestionSubmitter =
             new X402QuestionSubmitter(registry, usdcTokenAddress, address(questionRewardPoolEscrow), governance);
 
+        TransparentUpgradeableProxy feedbackRegistryProxy = new TransparentUpgradeableProxy(
+            address(feedbackRegistryImpl),
+            governance,
+            abi.encodeCall(FeedbackRegistry.initialize, (deployer, governance, address(votingEngine)))
+        );
+        FeedbackRegistry feedbackRegistry = FeedbackRegistry(address(feedbackRegistryProxy));
+
         TransparentUpgradeableProxy feedbackBonusEscrowProxy = new TransparentUpgradeableProxy(
             address(feedbackBonusEscrowImpl),
             governance,
             abi.encodeCall(
                 FeedbackBonusEscrow.initialize,
-                (governance, usdcTokenAddress, address(registry), address(votingEngine), address(raterRegistry))
+                (
+                    governance,
+                    usdcTokenAddress,
+                    address(registry),
+                    address(votingEngine),
+                    address(raterRegistry),
+                    address(feedbackRegistry)
+                )
             )
         );
         FeedbackBonusEscrow feedbackBonusEscrow = FeedbackBonusEscrow(address(feedbackBonusEscrowProxy));
@@ -387,6 +403,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             Deployment("QuestionRewardPoolEscrowProxyAdmin", _proxyAdmin(address(questionRewardPoolEscrowProxy)))
         );
         deployments.push(Deployment("X402QuestionSubmitter", address(x402QuestionSubmitter)));
+        deployments.push(Deployment("FeedbackRegistry", address(feedbackRegistryProxy)));
+        deployments.push(Deployment("FeedbackRegistryProxyAdmin", _proxyAdmin(address(feedbackRegistryProxy))));
         deployments.push(Deployment("FeedbackBonusEscrow", address(feedbackBonusEscrowProxy)));
         deployments.push(Deployment("FeedbackBonusEscrowProxyAdmin", _proxyAdmin(address(feedbackBonusEscrowProxy))));
         deployments.push(Deployment("CategoryRegistry", address(categoryRegistry)));
@@ -411,6 +429,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("RoundRewardDistributor:", address(rewardDistributor));
         console.log("QuestionRewardPoolEscrow:", address(questionRewardPoolEscrow));
         console.log("X402QuestionSubmitter:", address(x402QuestionSubmitter));
+        console.log("FeedbackRegistry:", address(feedbackRegistry));
         console.log("FeedbackBonusEscrow:", address(feedbackBonusEscrow));
         console.log("USDC token:", usdcTokenAddress);
         console.log("CategoryRegistry:", address(categoryRegistry));
