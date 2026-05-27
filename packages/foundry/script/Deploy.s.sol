@@ -287,6 +287,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             )
         );
         FeedbackBonusEscrow feedbackBonusEscrow = FeedbackBonusEscrow(address(feedbackBonusEscrowProxy));
+        if (!isLocalDev) {
+            feedbackRegistry.renounceRole(feedbackRegistry.CONFIG_ROLE(), deployer);
+        }
 
         // Bracket the first setVotingEngine AND setQuestionRewardPoolEscrow calls with
         // pause/unpause so the deploy script exercises the same observable state as a future
