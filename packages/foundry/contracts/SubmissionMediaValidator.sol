@@ -46,7 +46,7 @@ contract SubmissionMediaValidator {
         require(imageUrls.length <= MAX_IMAGE_URLS, "Too many images");
 
         for (uint256 i = 0; i < imageUrls.length; i++) {
-            require(_isValidSubmissionUrl(imageUrls[i]), "Invalid URL");
+            require(_isValidMediaReferenceUrl(imageUrls[i]), "Invalid URL");
             require(_isSupportedImageUrl(imageUrls[i]), "Invalid media URL");
         }
     }
@@ -59,7 +59,9 @@ contract SubmissionMediaValidator {
         if (_hasUploadedImagePath(url, "https://www.rateloop.xyz/api/attachments/images/att_")) return true;
         if (_hasUploadedImagePath(url, "https://rateloop.xyz/api/attachments/images/att_")) return true;
         if (_hasUploadedImagePath(url, "https://www.rateloop.ai/api/attachments/images/att_")) return true;
-        return _hasUploadedImagePath(url, "https://rateloop.ai/api/attachments/images/att_");
+        if (_hasUploadedImagePath(url, "https://rateloop.ai/api/attachments/images/att_")) return true;
+        if (_isValidContentAddressedUri(url)) return true;
+        return _hasSha256AnchoredHttpsUrl(url);
     }
 
     function _isSupportedVideoUrl(string memory url) internal pure returns (bool) {
@@ -120,6 +122,27 @@ contract SubmissionMediaValidator {
         return hostLength > 0;
     }
 
+    function _isValidMediaReferenceUrl(string memory url) internal pure returns (bool) {
+        return _isValidSubmissionUrl(url) || _isValidContentAddressedUri(url);
+    }
+
+    function _isValidContentAddressedUri(string memory url) internal pure returns (bool) {
+        bytes memory urlBytes = bytes(url);
+        bool ipfs = _hasPrefix(url, "ipfs://");
+        bool ar = _hasPrefix(url, "ar://");
+        if (!ipfs && !ar) return false;
+        if (urlBytes.length > MAX_URL_LENGTH) return false;
+
+        uint256 prefixLength = ipfs ? bytes("ipfs://").length : bytes("ar://").length;
+        if (urlBytes.length <= prefixLength) return false;
+        for (uint256 i = prefixLength; i < urlBytes.length; i++) {
+            bytes1 char = urlBytes[i];
+            if (char < 0x21 || char > 0x7E) return false;
+            if (!_isSafeSubmissionUrlChar(char)) return false;
+        }
+        return true;
+    }
+
     function _isSafeSubmissionUrlChar(bytes1 char) private pure returns (bool) {
         if (char >= "0" && char <= "9") return true;
         if (char >= "A" && char <= "Z") return true;
@@ -155,6 +178,24 @@ contract SubmissionMediaValidator {
             if (!_isAttachmentIdByte(valueBytes[i])) return false;
         }
 
+        return true;
+    }
+
+    function _hasSha256AnchoredHttpsUrl(string memory value) internal pure returns (bool) {
+        if (!_isValidSubmissionUrl(value)) return false;
+
+        bytes memory valueBytes = bytes(value);
+        bytes memory marker = bytes("#sha256=0x");
+        uint256 digestLength = 64;
+        if (valueBytes.length < marker.length + digestLength) return false;
+
+        uint256 markerOffset = valueBytes.length - marker.length - digestLength;
+        for (uint256 i = 0; i < marker.length; i++) {
+            if (valueBytes[markerOffset + i] != marker[i]) return false;
+        }
+        for (uint256 i = markerOffset + marker.length; i < valueBytes.length; i++) {
+            if (!_isHexByte(valueBytes[i])) return false;
+        }
         return true;
     }
 

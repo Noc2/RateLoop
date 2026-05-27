@@ -580,6 +580,18 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_SubmitQuestion_AllowsContentAddressedExternalImages() public view {
+        string[] memory imageUrls = new string[](3);
+        imageUrls[0] = "ipfs://bafybeigdyrzt5sfp7udm7hu76u5n3da7z5jhjxvzv35gn4c2kaou6mriya";
+        imageUrls[1] = "ar://VZcC2M9fXxTcdGQYQ0lM8dPj7Q8g3F6h3xUR8nW8L4Q";
+        imageUrls[2] =
+            "https://cdn.example.com/review/image.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        registry.previewQuestionSubmissionKey(
+            "https://example.com/context", imageUrls, "", "Question?", "Context", "Products", 1
+        );
+    }
+
     function test_SubmitQuestion_AllowsYouTubeVideoWithoutContextUrl() public {
         string memory url = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
         string memory title = "Is this video clear?";
