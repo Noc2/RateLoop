@@ -27,35 +27,41 @@
     {
       "slot": 4,
       "offset": 0,
+      "label": "feedbackRegistry",
+      "type": "t_contract(IFeedbackRegistry)"
+    },
+    {
+      "slot": 5,
+      "offset": 0,
       "label": "nextFeedbackBonusPoolId",
       "type": "t_uint256"
     },
     {
-      "slot": 5,
+      "slot": 6,
       "offset": 0,
       "label": "defaultFrontendFeeBps",
       "type": "t_uint16"
     },
     {
-      "slot": 6,
+      "slot": 7,
       "offset": 0,
       "label": "feedbackBonusPools",
       "type": "t_mapping(t_uint256,t_struct(FeedbackBonusPool))"
     },
     {
-      "slot": 7,
+      "slot": 8,
       "offset": 0,
       "label": "identityKeyAwarded",
       "type": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))"
     },
     {
-      "slot": 8,
+      "slot": 9,
       "offset": 0,
       "label": "feedbackHashAwarded",
       "type": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))"
     },
     {
-      "slot": 9,
+      "slot": 10,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -71,8 +77,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[50]",
-      "numberOfBytes": "1600",
+      "label": "uint256[49]",
+      "numberOfBytes": "1568",
       "base": "t_uint256"
     },
     {
@@ -97,6 +103,12 @@
       "id": "t_contract(IERC20)",
       "encoding": "inplace",
       "label": "contract IERC20",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_contract(IFeedbackRegistry)",
+      "encoding": "inplace",
+      "label": "contract IFeedbackRegistry",
       "numberOfBytes": "20"
     },
     {
