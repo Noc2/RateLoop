@@ -106,7 +106,7 @@ jobs:
         run: aderyn --version
       - name: Build contracts for Aderyn
         working-directory: packages/foundry
-        run: forge build
+        run: forge build --skip script --skip test
       - name: Patch OZ submodule configs (aderyn doesn't support evm_version osaka yet)
         run: |
           if grep -q "evm_version = 'osaka'" packages/foundry/lib/openzeppelin-contracts/foundry.toml; then
@@ -158,7 +158,7 @@ jobs:
         working-directory: packages/foundry
         run: |
           forge clean
-          forge build
+          forge build --skip script --skip test
       - name: Run forge coverage
         # Foundry's coverage instrumentation can hit Yul stack-depth limits even
         # when the normal build and test compiler paths are healthy.

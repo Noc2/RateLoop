@@ -44,16 +44,15 @@ jobs:
           key: forge-${{ hashFiles('packages/foundry/foundry.toml', 'packages/foundry/**/*.sol') }}
       - name: Run Foundry tests
         run: |
-          forge test -vvv \
-            --skip AdversarialTests.t.sol \
-            --skip AuditGapTests.t.sol \
-            --skip FormalVerification_GameTheory.t.sol \
-            --skip GameTheoryImprovements.t.sol \
-            --skip GasBudget.t.sol \
-            --skip GasEstimatesReport.t.sol \
-            --skip QuestionRewardPoolEscrow.t.sol \
-            --skip RoundIntegration.t.sol \
-            --skip SettlementEdgeCases.t.sol
+          for suite in test/*.t.sol; do
+            case "$(basename "$suite")" in
+              AdversarialTests.t.sol|AuditGapTests.t.sol|FormalVerification_GameTheory.t.sol|GameTheoryImprovements.t.sol|GasBudget.t.sol|GasEstimatesReport.t.sol|QuestionRewardPoolEscrow.t.sol|RoundIntegration.t.sol|SettlementEdgeCases.t.sol)
+                continue
+                ;;
+            esac
+
+            forge test -vvv --match-path "$suite"
+          done
         working-directory: packages/foundry
 
   foundry-heavy:
