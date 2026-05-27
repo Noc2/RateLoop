@@ -214,7 +214,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
 
         CategoryRegistry categoryRegistry = new CategoryRegistry(deployer, governance);
-        RaterRegistry raterRegistry = new RaterRegistry(
+        RaterRegistry raterRegistryImpl = new RaterRegistry(
             deployer,
             governance,
             worldIdRouterAddress,
@@ -222,6 +222,22 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             worldIdExternalNullifierHash,
             WORLD_ID_CREDENTIAL_TTL_SECONDS
         );
+        TransparentUpgradeableProxy raterRegistryProxy = new TransparentUpgradeableProxy(
+            address(raterRegistryImpl),
+            governance,
+            abi.encodeCall(
+                RaterRegistry.initialize,
+                (
+                    deployer,
+                    governance,
+                    worldIdRouterAddress,
+                    worldIdScope,
+                    worldIdExternalNullifierHash,
+                    WORLD_ID_CREDENTIAL_TTL_SECONDS
+                )
+            )
+        );
+        RaterRegistry raterRegistry = RaterRegistry(address(raterRegistryProxy));
         if (!isLocalDev) {
             raterRegistry.freezeWorldIdVerifierConfig();
             raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
@@ -410,7 +426,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("FeedbackBonusEscrowProxyAdmin", _proxyAdmin(address(feedbackBonusEscrowProxy))));
         deployments.push(Deployment("CategoryRegistry", address(categoryRegistry)));
         deployments.push(Deployment("ClusterPayoutOracle", address(clusterPayoutOracle)));
-        deployments.push(Deployment("RaterRegistry", address(raterRegistry)));
+        deployments.push(Deployment("RaterRegistry", address(raterRegistryProxy)));
+        deployments.push(Deployment("RaterRegistryProxyAdmin", _proxyAdmin(address(raterRegistryProxy))));
         if (isLocalDev) deployments.push(Deployment("MockWorldIDRouter", address(localWorldIdRouter)));
         deployments.push(Deployment("LaunchDistributionPool", address(launchDistributionPool)));
         deployments.push(Deployment("AdvisoryVoteRecorder", address(advisoryVoteRecorder)));

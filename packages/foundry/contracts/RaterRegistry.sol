@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { IWorldIDRouter } from "./interfaces/IWorldIDRouter.sol";
+import { IWorldIDVerifier } from "./interfaces/IWorldIDVerifier.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 
 /// @title RaterRegistry
 /// @notice Optional rater metadata, human credentials, public follows, and delegation for RateLoop.
 /// @dev This registry is intentionally non-gating: rating contracts may read it, but base participation
 ///      must keep working when no profile or credential exists.
-contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
+contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentityRegistry {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant SEEDER_ROLE = keccak256("SEEDER_ROLE");
 
@@ -33,7 +35,8 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     enum HumanCredentialProvider {
         None,
         WorldId,
-        SeededHuman
+        SeededHuman,
+        WorldIdV4
     }
 
     struct HumanCredential {
@@ -82,6 +85,16 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     ///      SEEDER-seeded credentials. 0 means "no governance-imposed cap" (i.e., the prior
     ///      behavior in which SEEDER could pass `type(uint64).max`).
     uint64 public maxSeededCredentialTtl;
+    IWorldIDVerifier public worldIdV4Verifier;
+    uint64 public worldIdV4RpId;
+    uint256 public worldIdV4Action;
+    uint64 public worldIdV4CredentialTtl;
+    uint64 public worldIdV4IssuerSchemaId;
+    uint256 public worldIdV4CredentialGenesisIssuedAtMin;
+    bool public worldIdV4VerifierConfigFrozen;
+
+    /// @dev Reserved storage gap for future proxy-safe upgrades.
+    uint256[43] private __gap;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -123,6 +136,15 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         address indexed router, bytes32 indexed scope, uint256 externalNullifierHash, uint64 credentialTtl
     );
     event WorldIdVerifierConfigLocked(address indexed account);
+    event WorldIdV4VerifierConfigUpdated(
+        address indexed verifier,
+        uint64 indexed rpId,
+        uint256 indexed action,
+        uint64 credentialTtl,
+        uint64 issuerSchemaId,
+        uint256 credentialGenesisIssuedAtMin
+    );
+    event WorldIdV4VerifierConfigLocked(address indexed account);
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
     event DelegateRequested(address indexed holder, address indexed delegate);
@@ -141,7 +163,10 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
     error NoPendingDelegate();
     error ActiveHumanCredentialRequiresHumanProfile();
     error WorldIdVerifierConfigFrozen();
+    error WorldIdV4VerifierConfigFrozen();
+    error WorldIdV4VerifierNotConfigured();
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(
         address admin,
         address governance,
@@ -150,6 +175,34 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         uint256 _worldIdExternalNullifierHash,
         uint64 _worldIdCredentialTtl
     ) {
+        _initializeRaterRegistry(
+            admin, governance, _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl
+        );
+        _disableInitializers();
+    }
+
+    function initialize(
+        address admin,
+        address governance,
+        address _worldIdRouter,
+        bytes32 _worldIdScope,
+        uint256 _worldIdExternalNullifierHash,
+        uint64 _worldIdCredentialTtl
+    ) external initializer {
+        __AccessControl_init();
+        _initializeRaterRegistry(
+            admin, governance, _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl
+        );
+    }
+
+    function _initializeRaterRegistry(
+        address admin,
+        address governance,
+        address _worldIdRouter,
+        bytes32 _worldIdScope,
+        uint256 _worldIdExternalNullifierHash,
+        uint64 _worldIdCredentialTtl
+    ) private {
         if (admin == address(0) || governance == address(0)) {
             revert InvalidAddress();
         }
@@ -186,6 +239,33 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         emit WorldIdVerifierConfigLocked(msg.sender);
     }
 
+    function setWorldIdV4VerifierConfig(
+        address _worldIdV4Verifier,
+        uint64 _worldIdV4RpId,
+        uint256 _worldIdV4Action,
+        uint64 _worldIdV4CredentialTtl,
+        uint64 _worldIdV4IssuerSchemaId,
+        uint256 _worldIdV4CredentialGenesisIssuedAtMin
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (worldIdV4VerifierConfigFrozen) {
+            revert WorldIdV4VerifierConfigFrozen();
+        }
+        _setWorldIdV4VerifierConfig(
+            _worldIdV4Verifier,
+            _worldIdV4RpId,
+            _worldIdV4Action,
+            _worldIdV4CredentialTtl,
+            _worldIdV4IssuerSchemaId,
+            _worldIdV4CredentialGenesisIssuedAtMin,
+            true
+        );
+    }
+
+    function freezeWorldIdV4VerifierConfig() external onlyRole(ADMIN_ROLE) {
+        worldIdV4VerifierConfigFrozen = true;
+        emit WorldIdV4VerifierConfigLocked(msg.sender);
+    }
+
     function _setWorldIdVerifierConfig(
         address _worldIdRouter,
         bytes32 _worldIdScope,
@@ -205,6 +285,57 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         worldIdCredentialTtl = _worldIdCredentialTtl;
         emit WorldIdVerifierConfigUpdated(
             _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl
+        );
+    }
+
+    function _setWorldIdV4VerifierConfig(
+        address _worldIdV4Verifier,
+        uint64 _worldIdV4RpId,
+        uint256 _worldIdV4Action,
+        uint64 _worldIdV4CredentialTtl,
+        uint64 _worldIdV4IssuerSchemaId,
+        uint256 _worldIdV4CredentialGenesisIssuedAtMin,
+        bool requireCode
+    ) private {
+        if (_worldIdV4Verifier == address(0)) {
+            if (
+                _worldIdV4RpId != 0 || _worldIdV4Action != 0 || _worldIdV4CredentialTtl != 0
+                    || _worldIdV4IssuerSchemaId != 0 || _worldIdV4CredentialGenesisIssuedAtMin != 0
+            ) {
+                revert InvalidCredential();
+            }
+
+            worldIdV4Verifier = IWorldIDVerifier(address(0));
+            worldIdV4RpId = 0;
+            worldIdV4Action = 0;
+            worldIdV4CredentialTtl = 0;
+            worldIdV4IssuerSchemaId = 0;
+            worldIdV4CredentialGenesisIssuedAtMin = 0;
+            emit WorldIdV4VerifierConfigUpdated(address(0), 0, 0, 0, 0, 0);
+            return;
+        }
+
+        if (requireCode && _worldIdV4Verifier.code.length == 0) revert InvalidAddress();
+        if (
+            _worldIdV4RpId == 0 || _worldIdV4Action == 0 || _worldIdV4CredentialTtl == 0
+                || _worldIdV4IssuerSchemaId == 0
+        ) {
+            revert InvalidCredential();
+        }
+
+        worldIdV4Verifier = IWorldIDVerifier(_worldIdV4Verifier);
+        worldIdV4RpId = _worldIdV4RpId;
+        worldIdV4Action = _worldIdV4Action;
+        worldIdV4CredentialTtl = _worldIdV4CredentialTtl;
+        worldIdV4IssuerSchemaId = _worldIdV4IssuerSchemaId;
+        worldIdV4CredentialGenesisIssuedAtMin = _worldIdV4CredentialGenesisIssuedAtMin;
+        emit WorldIdV4VerifierConfigUpdated(
+            _worldIdV4Verifier,
+            _worldIdV4RpId,
+            _worldIdV4Action,
+            _worldIdV4CredentialTtl,
+            _worldIdV4IssuerSchemaId,
+            _worldIdV4CredentialGenesisIssuedAtMin
         );
     }
 
@@ -359,6 +490,66 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
             keccak256(abi.encodePacked("world-id-v3", block.chainid, address(worldIdRouter), root, signalHash));
         _attestHumanCredential(
             msg.sender, storedNullifier, worldIdScope, uint64(expiresAt), HumanCredentialProvider.WorldId, evidenceHash
+        );
+    }
+
+    /// @notice Preview World ID 4.0 uniqueness attestation path. Disabled until governance configures a verifier.
+    /// @dev The v4 proof is still bound to msg.sender via RateLoop's stable address signal hash.
+    function attestHumanCredentialWithV4Proof(
+        uint256 nullifier,
+        uint256 nonce,
+        uint64 expiresAtMin,
+        uint256[5] calldata proof
+    ) external {
+        if (address(worldIdV4Verifier) == address(0)) revert WorldIdV4VerifierNotConfigured();
+        if (nullifier == 0) revert InvalidCredential();
+
+        bytes32 storedNullifier = bytes32(nullifier);
+        HumanCredential storage previous = _humanCredentials[msg.sender];
+        if (
+            previous.verified && !previous.revoked && previous.expiresAt > block.timestamp
+                && previous.nullifierHash != storedNullifier
+        ) {
+            revert InvalidCredential();
+        }
+
+        address currentOwner = _humanNullifierOwnerByProvider[HumanCredentialProvider.WorldIdV4][storedNullifier];
+        if (currentOwner != address(0) && currentOwner != msg.sender) revert NullifierAlreadyAssigned();
+
+        uint256 signalHash = worldIdSignalHash(msg.sender);
+        worldIdV4Verifier.verify(
+            nullifier,
+            worldIdV4Action,
+            worldIdV4RpId,
+            nonce,
+            signalHash,
+            expiresAtMin,
+            worldIdV4IssuerSchemaId,
+            worldIdV4CredentialGenesisIssuedAtMin,
+            proof
+        );
+
+        uint256 expiresAt = block.timestamp + worldIdV4CredentialTtl;
+        if (expiresAt > type(uint64).max) revert InvalidCredential();
+
+        bytes32 evidenceHash = keccak256(
+            abi.encodePacked(
+                "world-id-v4-preview",
+                block.chainid,
+                address(worldIdV4Verifier),
+                worldIdV4RpId,
+                worldIdV4Action,
+                nonce,
+                signalHash
+            )
+        );
+        _attestHumanCredential(
+            msg.sender,
+            storedNullifier,
+            worldIdV4CredentialScope(),
+            uint64(expiresAt),
+            HumanCredentialProvider.WorldIdV4,
+            evidenceHash
         );
     }
 
@@ -524,6 +715,11 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
 
     function worldIdSignalHash(address rater) public pure returns (uint256) {
         return hashToField(abi.encodePacked(rater));
+    }
+
+    function worldIdV4CredentialScope() public view returns (bytes32) {
+        if (worldIdV4RpId == 0 || worldIdV4Action == 0) return bytes32(0);
+        return keccak256(abi.encode("world-id-v4", worldIdV4RpId, worldIdV4Action));
     }
 
     function hashToField(bytes memory value) public pure returns (uint256) {
