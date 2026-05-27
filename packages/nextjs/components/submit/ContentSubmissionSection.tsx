@@ -57,6 +57,7 @@ import {
   getContentTagValidationError,
   getContentTitleValidationError,
 } from "~~/lib/moderation/submissionValidation";
+import { getSubmissionRewardCoverageMinimum } from "~~/lib/questionRewardMinimums";
 import {
   DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS,
   DEFAULT_SUBMISSION_REWARD_POOL,
@@ -422,7 +423,7 @@ export function ContentSubmissionSection() {
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [questionDrafts, setQuestionDrafts] = useState<QuestionDraft[]>([createEmptyQuestionDraft()]);
   const [rewardAsset, setRewardAsset] = useState<SubmissionRewardAsset>("usdc");
-  const [rewardAmount, setRewardAmount] = useState("1");
+  const [rewardAmount, setRewardAmount] = useState("2");
   const [rewardRequiredVoters, setRewardRequiredVoters] = useState("3");
   const [rewardRequiredRounds, setRewardRequiredRounds] = useState("1");
   const [bountyEligibility, setBountyEligibility] = useState<BountyEligibilitySelection>("everyone");
@@ -1028,7 +1029,12 @@ export function ContentSubmissionSection() {
   };
   const selectedRequiredVoters = BigInt(Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, parsedRewardRequiredVoters));
   const selectedRequiredSettledRounds = BigInt(Math.max(MIN_REWARD_POOL_SETTLED_ROUNDS, parsedRewardRequiredRounds));
-  const bountyMinimumCoverageAmount = selectedRequiredVoters * selectedRequiredSettledRounds;
+  const bountyMinimumCoverageAmount = getSubmissionRewardCoverageMinimum({
+    maxVoters: selectedRoundConfig.maxVoters,
+    questionCount,
+    requiredSettledRounds: selectedRequiredSettledRounds,
+    requiredVoters: selectedRequiredVoters,
+  });
   const minimumRewardAmount =
     rewardAsset === "lrep"
       ? typeof minSubmissionLrepPool === "bigint"
@@ -1046,7 +1052,7 @@ export function ContentSubmissionSection() {
           ? `Minimum is ${formatSubmissionRewardAmount(
               bountyMinimumCoverageAmount,
               rewardAsset,
-            )} for the selected voter requirements.`
+            )} for the selected voter cap.`
           : null;
   const minimumBountyAmount =
     minimumRewardAmount > bountyMinimumCoverageAmount ? minimumRewardAmount : bountyMinimumCoverageAmount;
@@ -2113,7 +2119,7 @@ export function ContentSubmissionSection() {
       setSelectedCategory(null);
       setSelectedSubcategories([]);
       setCustomSubcategory("");
-      setRewardAmount("1");
+      setRewardAmount("2");
       setRewardRequiredVoters("3");
       setRewardRequiredRounds("1");
       setBountyWindowPreset(DEFAULT_BOUNTY_WINDOW_PRESET);
