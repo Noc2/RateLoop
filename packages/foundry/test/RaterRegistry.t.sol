@@ -297,10 +297,10 @@ contract RaterRegistryTest is Test {
         vm.stopPrank();
     }
 
-    function test_GovernanceCanFreezeWorldIdVerifierConfig() public {
+    function test_AdminRoleCanFreezeWorldIdVerifierConfig() public {
         MockWorldIDRouter replacementRouter = new MockWorldIDRouter();
 
-        vm.prank(governance);
+        vm.prank(admin);
         registry.freezeWorldIdVerifierConfig();
 
         assertTrue(registry.worldIdVerifierConfigFrozen());

@@ -181,7 +181,7 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         );
     }
 
-    function freezeWorldIdVerifierConfig() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function freezeWorldIdVerifierConfig() external onlyRole(ADMIN_ROLE) {
         worldIdVerifierConfigFrozen = true;
         emit WorldIdVerifierConfigLocked(msg.sender);
     }
