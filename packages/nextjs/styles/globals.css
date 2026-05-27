@@ -371,6 +371,15 @@ body {
   color: inherit !important;
 }
 
+.launch-bonus-claim-button:disabled,
+.launch-bonus-claim-button.btn-disabled {
+  color: rgb(245 245 245 / 0.36) !important;
+  background: rgb(245 245 245 / 0.1) !important;
+  border-color: transparent !important;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .btn-rateloop {
   @apply shadow-sm;
   color: var(--rateloop-action-content) !important;

@@ -817,7 +817,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
 
           <button
             type="button"
-            className="btn btn-primary w-full gap-2"
+            className="btn btn-primary launch-bonus-claim-button w-full gap-2"
             disabled={!canClaimVerifiedBonus}
             onClick={() => void handleClaimVerifiedBonus()}
           >
