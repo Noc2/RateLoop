@@ -1402,7 +1402,7 @@ export function ContentSubmissionSection() {
     setFeedbackBonusStepAttempted(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (submissionStep === "question") {
@@ -1412,6 +1412,12 @@ export function ContentSubmissionSection() {
 
     if (submissionStep === "bounty") {
       handleGoToFeedbackBonusStep();
+      return;
+    }
+  };
+
+  const handleFinalSubmit = async () => {
+    if (submissionStep !== "feedbackBonus") {
       return;
     }
 
@@ -3045,7 +3051,8 @@ export function ContentSubmissionSection() {
         Back
       </button>
       <button
-        type="submit"
+        type="button"
+        onClick={handleFinalSubmit}
         className="btn btn-submit w-full sm:flex-1"
         disabled={isSubmitting || isAwaitingSponsoredSubmitCalls || isMissingGasBalance}
       >
@@ -3091,7 +3098,7 @@ export function ContentSubmissionSection() {
       </div>
 
       <div className="surface-card rounded-2xl p-6" style={{ overflow: "visible" }}>
-        <form onSubmit={handleSubmit} noValidate className="space-y-6">
+        <form onSubmit={handleFormSubmit} noValidate className="space-y-6">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">{pageContext}</p>
           </div>
