@@ -675,10 +675,10 @@ contract ProtocolConfigBranchesTest is Test {
 
         ProtocolConfig.RoundConfigBounds memory bounds = config.getRoundConfigBounds();
         assertEq(bounds.minEpochDuration, 1 minutes);
-        assertEq(bounds.maxEpochDuration, 7 days);
+        assertEq(bounds.maxEpochDuration, 30 days);
         assertEq(bounds.minRoundDuration, 1 minutes);
-        assertEq(bounds.maxRoundDuration, 30 days);
-        assertEq(config.ABSOLUTE_MAX_ROUND_DURATION(), 30 days);
+        assertEq(bounds.maxRoundDuration, 60 days);
+        assertEq(config.ABSOLUTE_MAX_ROUND_DURATION(), 60 days);
         assertEq(bounds.minSettlementVoters, 3);
         assertEq(bounds.maxSettlementVoters, 100);
         assertEq(bounds.minVoterCap, 3);
@@ -713,6 +713,10 @@ contract ProtocolConfigBranchesTest is Test {
         roundCfg = config.validateRoundConfig(3 days, 3 days, 5, 100);
         assertEq(roundCfg.epochDuration, 3 days);
         assertEq(roundCfg.maxDuration, 3 days);
+
+        roundCfg = config.validateRoundConfig(30 days, 60 days, 5, 100);
+        assertEq(roundCfg.epochDuration, 30 days);
+        assertEq(roundCfg.maxDuration, 60 days);
     }
 
     function test_ValidateRoundConfig_RejectsOutsideGovernanceBounds() public {
@@ -722,7 +726,10 @@ contract ProtocolConfigBranchesTest is Test {
         config.validateRoundConfig(30 seconds, 2 hours, 4, 25);
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.validateRoundConfig(8 days, 8 days, 4, 25);
+        config.validateRoundConfig(31 days, 31 days, 4, 25);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.validateRoundConfig(30 days, 60 days + 1, 4, 25);
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.validateRoundConfig(10 minutes, 5 minutes, 4, 25);
@@ -793,7 +800,7 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(1 minutes, 7 days, 1 minutes, 30 days + 1, 3, 100, 3, 1_000);
+        config.setRoundConfigBounds(1 minutes, 30 days, 1 minutes, 60 days + 1, 3, 100, 3, 1_000);
     }
 
     function test_SetRaterRegistry() public {

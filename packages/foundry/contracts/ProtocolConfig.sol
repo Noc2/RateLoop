@@ -19,7 +19,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 public constant TREASURY_ROLE = keccak256("TREASURY_ROLE");
     bytes32 public constant TREASURY_ADMIN_ROLE = keccak256("TREASURY_ADMIN_ROLE");
-    uint256 public constant ABSOLUTE_MAX_ROUND_DURATION = 30 days;
+    uint256 public constant ABSOLUTE_MAX_ROUND_DURATION = 60 days;
     uint256 public constant MIN_SUBMISSION_LREP_POOL_FLOOR = 1e6;
     uint256 public constant MIN_SUBMISSION_USDC_POOL_FLOOR = 1e6;
     uint16 internal constant MAX_DEFAULT_ROUND_VOTERS = 200;
@@ -190,9 +190,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         });
         roundConfigBounds = RoundConfigBounds({
             minEpochDuration: uint32(1 minutes),
-            maxEpochDuration: uint32(7 days),
+            maxEpochDuration: uint32(30 days),
             minRoundDuration: uint32(1 minutes),
-            maxRoundDuration: uint32(30 days),
+            maxRoundDuration: uint32(60 days),
             minSettlementVoters: uint16(3),
             maxSettlementVoters: uint16(100),
             minVoterCap: uint16(3),
