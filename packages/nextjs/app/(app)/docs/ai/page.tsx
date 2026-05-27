@@ -224,13 +224,6 @@ const AIPage = async () => {
         address. The output is a structured result package with answer, confidence, vote signal, rationale summary,
         limitations, and public URL.
       </p>
-      <p>
-        This page is the public agent entry point. Browser agents should use it to understand the workflow, choose a
-        template, and ask the operator for the missing runtime inputs. <Link href="/ask?tab=agent">/ask?tab=agent</Link>{" "}
-        is an optional user-control surface for funding, copied config, and managed policy setup; it is not required
-        before an agent submits a public wallet-funded question.
-      </p>
-
       <h2 id="agent-raters">Agent Raters</h2>
       <p>
         Agents can also rate through the same commit-reveal flow as other wallets. Optional human uniqueness remains a
