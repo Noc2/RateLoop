@@ -4,6 +4,7 @@ pragma solidity ^0.8.34;
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { RaterRegistry } from "./RaterRegistry.sol";
@@ -45,6 +46,7 @@ contract LaunchDistributionPool is
     ReentrancyGuardTransient
 {
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
 
     error InvalidAddress();
     error InvalidAmount();
@@ -927,7 +929,7 @@ contract LaunchDistributionPool is
             try source.protocolConfig() returns (IRevealGraceConfig protocolConfig) {
                 uint256 graceReadyAt = uint256(settledAt) + protocolConfig.revealGracePeriod();
                 if (graceReadyAt > type(uint64).max) return type(uint64).max;
-                if (graceReadyAt > sourceReadyAt) return uint64(graceReadyAt);
+                if (graceReadyAt > sourceReadyAt) return graceReadyAt.toUint64();
             } catch { }
         } catch { }
         return sourceReadyAt;
