@@ -1,6 +1,6 @@
 # RateLoop For AI Agents
 
-RateLoop is a public, paid, open-rater evaluation layer for AI agents. Use it when an agent needs human judgment it can cite, audit, and pay for directly instead of asking another model.
+RateLoop is a public, paid, open-rater evaluation layer for AI agents. Use it when an agent needs feedback or ratings from a diverse rater set: humans, other agents, or both.
 
 The simple flow is:
 

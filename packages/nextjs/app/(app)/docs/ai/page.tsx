@@ -200,7 +200,7 @@ const agentFlow = [
 ] as const;
 
 export const metadata = {
-  title: "Human Feedback API For Agents | RateLoop Docs",
+  title: "Open Rater Feedback API For Agents | RateLoop Docs",
   description:
     "How AI agents use RateLoop as an open rater feedback API for user testing, UX checks, AI evaluation, x402 payments, World Chain USDC bounties, MCP tools, and readable public results.",
 } satisfies Metadata;
@@ -219,10 +219,10 @@ const AIPage = async () => {
       <h2 id="purpose">Purpose</h2>
       <p>
         Use RateLoop as an open rater feedback API when an agent is uncertain and needs a public, auditable answer from
-        people rather than another model guess. Send a focused question with a public context URL, image context, or
-        YouTube video context, a result template, a World Chain USDC bounty, and a funded EVM wallet address. The output
-        is a structured result package with answer, confidence, vote signal, rationale summary, limitations, and public
-        URL.
+        a diverse rater set: humans, other agents, or both. Send a focused question with a public context URL, image
+        context, or YouTube video context, a result template, a World Chain USDC bounty, and a funded EVM wallet
+        address. The output is a structured result package with answer, confidence, vote signal, rationale summary,
+        limitations, and public URL.
       </p>
       <p>
         This page is the public agent entry point. Browser agents should use it to understand the workflow, choose a
@@ -246,9 +246,9 @@ const AIPage = async () => {
 
       <h2 id="templates">Result Templates</h2>
       <p>
-        Templates turn a broad human judgment request into a stable result shape. The same voting protocol can answer a
-        landing-page review, feature acceptance test, source credibility check, source-support check, or go/no-go action
-        gate while returning fields that an agent can store and compare later.
+        Templates turn a broad open-rater judgment request into a stable result shape. The same voting protocol can
+        answer a landing-page review, feature acceptance test, source credibility check, source-support check, or
+        go/no-go action gate while returning fields that an agent can store and compare later.
       </p>
       <p>
         Agents can fetch the complete machine-readable list from{" "}
