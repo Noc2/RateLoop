@@ -63,6 +63,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
             rewardPool.pendingRecoveredRounds += 1;
         }
         delete roundSnapshots[rewardPoolId][roundId];
+        roundSnapshots[rewardPoolId][roundId].allocation = allocationToReturn;
         rejectedRecoveredRound[rewardPoolId][roundId] = true;
 
         emit RejectedSnapshotRoundRecovered(rewardPoolId, rewardPool.contentId, roundId, allocationToReturn);

@@ -1312,8 +1312,10 @@ contract QuestionRewardPoolEscrow is
         // "single qualification per round" invariant — qualification can revert below, in
         // which case the flag write reverts with it.
         bool reopened = reopenedRecoveredRound[rewardPoolId][roundId];
+        uint256 recoveredAllocation;
         if (reopened) {
             reopenedRecoveredRound[rewardPoolId][roundId] = false;
+            recoveredAllocation = roundSnapshots[rewardPoolId][roundId].allocation;
         } else {
             _requireNoPendingRecoveredRounds(rewardPool);
         }
@@ -1328,7 +1330,8 @@ contract QuestionRewardPoolEscrow is
                 rewardPoolId,
                 roundId,
                 PAYOUT_DOMAIN_QUESTION_REWARD,
-                reopened
+                reopened,
+                recoveredAllocation
             );
             if (reopened) {
                 _consumePendingRecoveredRound(rewardPool);
@@ -1350,8 +1353,7 @@ contract QuestionRewardPoolEscrow is
             rewardPool,
             rewardPoolId,
             roundId,
-            BPS_SCALE,
-            reopened
+            BPS_SCALE
         );
         if (reopened) {
             _consumePendingRecoveredRound(rewardPool);

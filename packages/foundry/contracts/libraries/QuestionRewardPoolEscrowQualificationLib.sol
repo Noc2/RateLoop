@@ -143,8 +143,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         RewardPool storage rewardPool,
         uint256 rewardPoolId,
         uint256 roundId,
-        uint256 bpsScale,
-        bool reopened
+        uint256 bpsScale
     )
         external
         returns (
@@ -157,12 +156,9 @@ library QuestionRewardPoolEscrowQualificationLib {
     {
         require(roundId >= rewardPool.startRoundId, "Round too early");
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
-        // FE-1: admit either the normal sequential cursor OR a recovered-and-reopened round
-        // whose cursor has already advanced past it. The caller (escrow) guarantees the
-        // `reopened` flag was set via the DEFAULT_ADMIN_ROLE-gated `reopenRecoveredSnapshotRound`
-        // path, which itself requires the oracle has a new finalized snapshot with a non-rejected
-        // weight root.
-        require(reopened || roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
+        // Non-cluster rounds always qualify through the sequential cursor. Recovered snapshot
+        // requalification is only reachable for cluster-snapshot pools.
+        require(roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
 
         (
             bool roundSettled,
@@ -192,7 +188,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         require(canQualify, "Too few eligible voters");
         require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
 
-        allocation = _previewRoundAllocation(rewardPool, reopened);
+        allocation = _previewRoundAllocation(rewardPool, false, 0);
         require(allocation > 0 && allocation <= rewardPool.unallocatedAmount, "No allocation");
         require(allocation >= effectiveUnits, "Small allocation");
         frontendFeeAllocation = (allocation * rewardPool.frontendFeeBps) / bpsScale;
@@ -243,7 +239,8 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 rewardPoolId,
         uint256 roundId,
         uint8 payoutDomain,
-        bool reopened
+        bool reopened,
+        uint256 recoveredAllocation
     ) external {
         require(roundId >= rewardPool.startRoundId, "Round too early");
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
@@ -293,7 +290,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             "Too few eligible voters"
         );
 
-        uint256 allocation = _previewRoundAllocation(rewardPool, reopened);
+        uint256 allocation = _previewRoundAllocation(rewardPool, reopened, recoveredAllocation);
         require(allocation > 0 && allocation <= rewardPool.unallocatedAmount, "No allocation");
         require(allocation >= effectiveParticipantUnits, "Small allocation");
         uint256 frontendFeeAllocation = (allocation * rewardPool.frontendFeeBps) / BPS_SCALE;
@@ -440,7 +437,7 @@ library QuestionRewardPoolEscrowQualificationLib {
                 submitterIdentityKey: rewardPool.submitterIdentityKey
             })
         );
-        if (canQualify) canQualify = _previewRoundAllocation(rewardPool, false) >= effectiveParticipantUnits;
+        if (canQualify) canQualify = _previewRoundAllocation(rewardPool, false, 0) >= effectiveParticipantUnits;
         return (true, canQualify, effectiveParticipantUnits);
     }
 
@@ -487,7 +484,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             uint256 effectiveFloor = minEffectiveUnits * BPS_SCALE;
             canQualify = rawEligibleVoters >= rewardPool.requiredVoters && effectiveParticipantUnits >= effectiveFloor
                 && payoutSnapshot.totalClaimWeight > 0;
-            if (canQualify) canQualify = _previewRoundAllocation(rewardPool, false) >= effectiveParticipantUnits;
+            if (canQualify) canQualify = _previewRoundAllocation(rewardPool, false, 0) >= effectiveParticipantUnits;
             return (true, canQualify, effectiveParticipantUnits);
         } catch {
             return (false, false, 0);
@@ -567,18 +564,14 @@ library QuestionRewardPoolEscrowQualificationLib {
         return BPS_SCALE;
     }
 
-    function _previewRoundAllocation(RewardPool storage rewardPool, bool reopened)
+    function _previewRoundAllocation(RewardPool storage rewardPool, bool reopened, uint256 recoveredAllocation)
         private
         view
         returns (uint256 allocation)
     {
         if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds) return 0;
-        if (reopened && rewardPool.unallocatedRefunded) {
-            uint256 pendingRecoveredRounds = rewardPool.pendingRecoveredRounds;
-            if (pendingRecoveredRounds == 0) return 0;
-            return pendingRecoveredRounds == 1
-                ? rewardPool.unallocatedAmount
-                : rewardPool.unallocatedAmount / pendingRecoveredRounds;
+        if (reopened) {
+            return recoveredAllocation;
         }
         uint256 remainingRounds = uint256(rewardPool.requiredSettledRounds) - rewardPool.qualifiedRounds;
         allocation = remainingRounds == 1

@@ -30,6 +30,8 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 
+    error RecoveredRoundPending();
+
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
         uint256 indexed contentId,
@@ -122,6 +124,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         uint256 claimGrace
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
+        _requireNoPendingRecoveredRounds(rewardPool);
         if (rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds || rewardPool.unallocatedRefunded) {
             return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, claimGrace);
         }
@@ -139,6 +142,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         uint256 rewardPoolId
     ) external returns (uint256 refundAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPools, rewardPoolId);
+        _requireNoPendingRecoveredRounds(rewardPool);
         require(!registry.isContentActive(rewardPool.contentId), "Content active");
         require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
         return _refundUnallocatedRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool);
@@ -296,6 +300,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         rewardPool.unallocatedAmount = 0;
         rewardPool.fundedAmount -= refundAmount;
         _transferRewardPoolResidue(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, refundAmount);
+    }
+
+    function _requireNoPendingRecoveredRounds(RewardPool storage rewardPool) private view {
+        if (rewardPool.pendingRecoveredRounds != 0) revert RecoveredRoundPending();
     }
 
     function _refundCompleteRewardPool(
