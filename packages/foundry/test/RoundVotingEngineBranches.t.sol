@@ -2999,6 +2999,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 contentId = _submitContent();
         (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
         (bytes32 advisoryCommitKey, bytes32 advisorySalt) = _recordAdvisory(voter1, contentId, "late-advisory");
+        (bytes32 graceOnlyAdvisoryCommitKey, bytes32 graceOnlyAdvisorySalt) =
+            _recordAdvisory(voter5, contentId, "late-advisory-grace-only");
 
         (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
         (bytes32 ck4, bytes32 s4) = _commit(voter4, contentId, false, STAKE);
@@ -3013,13 +3015,17 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
         // I-Vote-A: advisory reveals are allowed during a `revealGracePeriod` window after
-        // settlement, so the immediate post-settle reveal is no longer expected to revert.
-        // Warp past the grace period to assert the reveal is still rejected once the grace
-        // expires.
+        // settlement, but post-settlement reveals no longer qualify for launch credit because
+        // the settled RBTS score inputs are already known.
+        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
+        vm.expectRevert(AdvisoryVoteRecorder.AdvisoryRevealedAfterSettlement.selector);
+        advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
+
+        // Warp past the grace period to assert the reveal is still rejected once the grace expires.
         uint256 grace = ProtocolConfig(protocolConfigAddress).revealGracePeriod();
         vm.warp(block.timestamp + grace + 1);
         vm.expectRevert(AdvisoryVoteRecorder.RoundNotOpen.selector);
-        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
+        advisoryRecorder.revealAdvisoryVote(graceOnlyAdvisoryCommitKey, true, 5_000, graceOnlyAdvisorySalt);
     }
 
     function test_AdvisoryVoteCapsCommitsAtRoundMaxVoters() public {

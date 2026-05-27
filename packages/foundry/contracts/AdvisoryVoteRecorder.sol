@@ -71,6 +71,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         bool revealed;
         bool isUp;
         bool launchCreditClaimed;
+        bool revealedAfterSettlement;
         uint16 scoreBps;
         /// @notice Drand chain hash actually used at commit-time to validate the ciphertext.
         /// @dev When the round snapshot is empty at commit-time the recorder falls back to
@@ -334,6 +335,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             revealed: false,
             isUp: false,
             launchCreditClaimed: false,
+            revealedAfterSettlement: false,
             scoreBps: 0,
             usedChainHashAtCommit: usedChainHash
         });
@@ -396,6 +398,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         advisoryCommit.isUp = isUp;
         advisoryCommit.predictedUpBps = predictedUpBps;
         advisoryCommit.revealedAt = uint48(block.timestamp);
+        advisoryCommit.revealedAfterSettlement = _isTerminalRound(advisoryCommit.contentId, advisoryCommit.roundId);
 
         emit AdvisoryVoteRevealed(
             advisoryCommit.contentId,
@@ -429,16 +432,12 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         totalStake;
         thresholdReachedAt;
         if (state != RoundLib.RoundState.Settled) revert RoundNotSettled();
-        // M-Vote-1: mirror the reveal-time grace window allowed by `_effectiveRevealableAfter`
-        // (I-Vote-A fix). Without this, advisory reveals that landed inside
-        // `ProtocolConfig.revealGracePeriod` past `settledAt` would still revert at claim time
-        // — losing the launch credit the grace fix was meant to preserve.
+        // Advisory reveals may still land briefly after settlement so fast-settling keepers do
+        // not make the reveal impossible, but launch-credit scoring must only use advisory votes
+        // revealed before the settled outcome and RBTS reward pools are known.
         if (advisoryCommit.revealedAt == 0) revert AdvisoryRevealedAfterSettlement();
-        if (advisoryCommit.revealedAt > settledAt) {
-            uint256 grace = protocolConfig.revealGracePeriod();
-            if (settledAt == 0 || grace == 0 || uint256(advisoryCommit.revealedAt) > uint256(settledAt) + grace) {
-                revert AdvisoryRevealedAfterSettlement();
-            }
+        if (settledAt == 0 || advisoryCommit.revealedAfterSettlement || advisoryCommit.revealedAt > settledAt) {
+            revert AdvisoryRevealedAfterSettlement();
         }
         if (!votingEngine.roundRbtsScored(advisoryCommit.contentId, advisoryCommit.roundId)) revert RoundNotSettled();
         if (revealedCount < 3) revert NotEnoughVotes();
@@ -760,6 +759,11 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         if (firstRealEpochEnd > revealableAfter) revealableAfter = firstRealEpochEnd;
         if (targetRevealableAfter > revealableAfter) revealableAfter = targetRevealableAfter;
         return revealableAfter;
+    }
+
+    function _isTerminalRound(uint256 contentId, uint256 roundId) internal view returns (bool) {
+        (, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(contentId, roundId);
+        return state == RoundLib.RoundState.Settled || state == RoundLib.RoundState.Tied;
     }
 
     function _advisoryRewardRecipient(AdvisoryCommit storage advisoryCommit) internal view returns (address) {
