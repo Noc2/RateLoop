@@ -1705,7 +1705,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             "https://example.com/bundle-underfunded-b", "bundle-underfunded-b", roundConfig
         );
 
-        uint256 amount = 3;
+        uint256 amount = 4 * 10_000 - 1;
         vm.prank(funder);
         usdc.approve(address(rewardPoolEscrow), amount);
 
@@ -1728,15 +1728,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         contentIds[1] = _submitQuestionWithContextAndRoundConfig(
             "https://example.com/bundle-funded-b", "bundle-funded-b", roundConfig
         );
-        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, 4, 3);
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, 4 * 10_000, 3);
 
         address[] memory overfullVoters = _fourVoters();
         bool[] memory overfullDirections = _directions(true, true, false, true);
         _settleRoundWith(overfullVoters, contentIds[0], overfullDirections);
         _settleRoundWith(overfullVoters, contentIds[1], overfullDirections);
 
-        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 1);
-        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter4), 1);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 10_000);
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter4), 10_000);
     }
 
     function testBundleRoundSetRetryIgnoresFutureRoundsRecordedBeforeReset() public {

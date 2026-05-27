@@ -11,6 +11,8 @@ import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVote
 import { RoundLib } from "./RoundLib.sol";
 
 library QuestionRewardPoolEscrowBundleLib {
+    uint256 internal constant BPS_SCALE = 10_000;
+
     function isRoundSetClaimOpen(
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         BundleReward storage bundle,
@@ -194,7 +196,7 @@ library QuestionRewardPoolEscrowBundleLib {
                 ++i;
             }
         }
-        require(amount >= maxRoundVoters * requiredSettledRounds, "Amount too small");
+        require(amount >= maxRoundVoters * requiredSettledRounds * BPS_SCALE, "Amount too small");
     }
 
     function isBundleExcludedVoter(
