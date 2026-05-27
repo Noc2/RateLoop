@@ -451,6 +451,7 @@ contract RaterRegistryTest is Test {
         registry.setWorldIdV4VerifierConfig(address(0), 0, 0, 0, 0, 0);
         assertEq(address(registry.worldIdV4Verifier()), address(0));
         assertEq(registry.worldIdV4CredentialScope(), bytes32(0));
+        assertTrue(registry.legacyWorldIdAttestationDisabled());
     }
 
     function test_WorldIdV4VerifierConfigRejectsInvalidUpdatesAndFreezes() public {
@@ -548,6 +549,42 @@ contract RaterRegistryTest is Test {
             rater
         );
         assertTrue(registry.hasActiveHumanCredential(rater));
+    }
+
+    function test_ConfiguringWorldIdV4DisablesLegacyWorldIdProofs() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[8] memory legacyProof;
+        uint256[5] memory v4Proof;
+        uint256 nonce = 99;
+        uint64 expiresAtMin = uint64(block.timestamp + 1 hours);
+
+        _configureV4Verifier(verifier);
+        assertTrue(registry.legacyWorldIdAttestationDisabled());
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.LegacyWorldIdAttestationDisabled.selector);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), legacyProof);
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), nonce, expiresAtMin, v4Proof);
+
+        RaterRegistry.HumanCredential memory credential = registry.getHumanCredential(rater);
+        assertEq(uint256(credential.provider), uint256(RaterRegistry.HumanCredentialProvider.WorldIdV4));
+        assertEq(credential.nullifierHash, NULLIFIER_HASH);
+    }
+
+    function test_LegacyWorldIdProofsStayDisabledAfterV4VerifierIsCleared() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[8] memory proof;
+
+        _configureV4Verifier(verifier);
+
+        vm.prank(governance);
+        registry.setWorldIdV4VerifierConfig(address(0), 0, 0, 0, 0, 0);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.LegacyWorldIdAttestationDisabled.selector);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
     }
 
     function test_AttestHumanCredentialWithV4ProofBubblesInvalidProof() public {

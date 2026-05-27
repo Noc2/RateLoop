@@ -10,6 +10,7 @@ import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOrac
 import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
 import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract WeakLaunchRaterRegistry {
     function getHumanCredential(address) external pure returns (RaterRegistry.HumanCredential memory credential) {
@@ -60,6 +61,11 @@ contract LaunchDistributionPoolTest is Test {
     address internal alice = address(0xA11CE);
     address internal bob = address(0xB0B);
     address internal referrer = address(0xA11CE5);
+
+    uint64 internal constant WORLD_ID_V4_RP_ID = 42;
+    uint256 internal constant WORLD_ID_V4_ACTION = uint256(keccak256("rateloop-human-credential-v4"));
+    uint64 internal constant WORLD_ID_V4_ISSUER_SCHEMA_ID = 7;
+    uint256 internal constant WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN = 1_700_000_000;
 
     function setUp() public {
         lrep = new LoopReputation(address(this), address(this));
@@ -1285,6 +1291,22 @@ contract LaunchDistributionPoolTest is Test {
         pool.unlockFullEarnedRaterCap(bob);
     }
 
+    function test_ConfiguredWorldIdV4ClosesLegacyFullCapDoubleUsePath() public {
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+        policy.unverifiedEarnedRaterCapBps = 2_500;
+        pool.setLaunchRewardPolicy(policy);
+        _configureWorldIdV4();
+
+        _verifyV4(alice, bytes32("alice-v4-human"));
+        _recordFiveEligibleCredits(alice);
+        assertTrue(pool.raterFullLaunchCapUnlocked(alice));
+
+        uint256[8] memory legacyProof;
+        vm.prank(bob);
+        vm.expectRevert(RaterRegistry.LegacyWorldIdAttestationDisabled.selector);
+        registry.attestHumanCredentialWithProof(1, uint256(bytes32("bob-legacy-human")), legacyProof);
+    }
+
     function test_UnlockFullEarnedRaterCapRequiresActiveCredential() public {
         ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
         policy.unverifiedEarnedRaterCapBps = 2_500;
@@ -1911,6 +1933,19 @@ contract LaunchDistributionPoolTest is Test {
         );
     }
 
+    function test_ConfiguredWorldIdV4ClosesLegacyBonusDoubleClaimPath() public {
+        _configureWorldIdV4();
+        _verifyV4(alice, bytes32("alice-v4-human"));
+
+        vm.prank(alice);
+        pool.claimVerifiedBonus(address(0));
+
+        uint256[8] memory legacyProof;
+        vm.prank(bob);
+        vm.expectRevert(RaterRegistry.LegacyWorldIdAttestationDisabled.selector);
+        registry.attestHumanCredentialWithProof(1, uint256(bytes32("bob-legacy-human")), legacyProof);
+    }
+
     function _recordLaunchReward(address rater, uint256 roundId, bytes32 anchorId) internal returns (uint256) {
         return _recordLaunchRewardWithScore(rater, roundId, anchorId, 8_000);
     }
@@ -2085,6 +2120,24 @@ contract LaunchDistributionPoolTest is Test {
         uint256[8] memory proof;
         vm.prank(account);
         registry.attestHumanCredentialWithProof(1, uint256(nullifier), proof);
+    }
+
+    function _configureWorldIdV4() internal {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        registry.setWorldIdV4VerifierConfig(
+            address(verifier),
+            WORLD_ID_V4_RP_ID,
+            WORLD_ID_V4_ACTION,
+            365 days,
+            WORLD_ID_V4_ISSUER_SCHEMA_ID,
+            WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN
+        );
+    }
+
+    function _verifyV4(address account, bytes32 nullifier) internal {
+        uint256[5] memory proof;
+        vm.prank(account);
+        registry.attestHumanCredentialWithV4Proof(uint256(nullifier), 1, uint64(block.timestamp + 1 hours), proof);
     }
 
     function _credentialKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifier)

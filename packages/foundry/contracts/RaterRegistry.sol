@@ -92,9 +92,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     uint64 public worldIdV4IssuerSchemaId;
     uint256 public worldIdV4CredentialGenesisIssuedAtMin;
     bool public worldIdV4VerifierConfigFrozen;
+    bool public legacyWorldIdAttestationDisabled;
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[43] private __gap;
+    uint256[42] private __gap;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -145,6 +146,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         uint256 credentialGenesisIssuedAtMin
     );
     event WorldIdV4VerifierConfigLocked(address indexed account);
+    event LegacyWorldIdAttestationDisabledSet(address indexed account);
     event ProfileFollowed(address indexed follower, address indexed target, uint64 followedAt);
     event ProfileUnfollowed(address indexed follower, address indexed target, uint64 unfollowedAt);
     event DelegateRequested(address indexed holder, address indexed delegate);
@@ -165,6 +167,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     error WorldIdVerifierConfigFrozen();
     error WorldIdV4VerifierConfigFrozen();
     error WorldIdV4VerifierNotConfigured();
+    error LegacyWorldIdAttestationDisabled();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(
@@ -329,6 +332,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         worldIdV4CredentialTtl = _worldIdV4CredentialTtl;
         worldIdV4IssuerSchemaId = _worldIdV4IssuerSchemaId;
         worldIdV4CredentialGenesisIssuedAtMin = _worldIdV4CredentialGenesisIssuedAtMin;
+        if (!legacyWorldIdAttestationDisabled) {
+            legacyWorldIdAttestationDisabled = true;
+            emit LegacyWorldIdAttestationDisabledSet(msg.sender);
+        }
         emit WorldIdV4VerifierConfigUpdated(
             _worldIdV4Verifier,
             _worldIdV4RpId,
@@ -464,6 +471,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     /// @notice Attach a fresh World ID verified-human unit to the calling wallet.
     /// @dev The World ID signal is derived from msg.sender, so wallet ownership is proven by the transaction sender.
     function attestHumanCredentialWithProof(uint256 root, uint256 nullifierHash, uint256[8] calldata proof) external {
+        if (legacyWorldIdAttestationDisabled) revert LegacyWorldIdAttestationDisabled();
         if (nullifierHash == 0) revert InvalidCredential();
 
         bytes32 storedNullifier = bytes32(nullifierHash);
