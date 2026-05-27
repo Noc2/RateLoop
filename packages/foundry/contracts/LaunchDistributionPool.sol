@@ -1240,6 +1240,12 @@ contract LaunchDistributionPool is
         pure
         returns (bytes32)
     {
+        if (
+            provider == RaterRegistry.HumanCredentialProvider.WorldId
+                || provider == RaterRegistry.HumanCredentialProvider.WorldIdV4
+        ) {
+            return keccak256(abi.encode("rateloop.launch-world-id-human-v1", nullifierHash));
+        }
         return keccak256(abi.encode(provider, nullifierHash));
     }
 
