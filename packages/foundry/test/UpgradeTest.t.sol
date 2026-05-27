@@ -181,8 +181,7 @@ contract UpgradeTest is Test {
             address(rrImpl),
             governance,
             abi.encodeCall(
-                RaterRegistry.initialize,
-                (admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days)
+                RaterRegistry.initialize, (admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days)
             )
         );
         raterRegistry = RaterRegistry(address(rrProxy));

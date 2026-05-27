@@ -787,9 +787,7 @@ contract RaterRegistryTest is Test {
 
         IRaterIdentityRegistry.ResolvedRater memory refreshed = registry.resolveRater(rater);
         assertEq(refreshed.humanNullifier, NULLIFIER_HASH);
-        assertEq(
-            refreshed.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
-        );
+        assertEq(refreshed.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH));
     }
 
     /// @notice RR-1 (2026-05-20 follow-up audit): the M-Identity-2 sticky-canonical fix preserved
