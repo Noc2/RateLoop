@@ -73,6 +73,10 @@ export function getConfiguredContentRegistryAddress(chainId: number): `0x${strin
   return getDeployedContractAddress(chainId, "ContentRegistry");
 }
 
+export function getConfiguredRoundVotingEngineAddress(chainId: number): `0x${string}` | undefined {
+  return getDeployedContractAddress(chainId, "RoundVotingEngine");
+}
+
 export function getConfiguredQuestionRewardPoolEscrowAddress(chainId: number): `0x${string}` | undefined {
   const envAddress = normalizeAddress(process.env.NEXT_PUBLIC_QUESTION_REWARD_POOL_ESCROW_ADDRESS);
   const deployedAddress = getDeployedContractAddress(chainId, "QuestionRewardPoolEscrow");
@@ -98,6 +102,10 @@ export function getConfiguredQuestionRewardPoolEscrowAddress(chainId: number): `
 
 export function getConfiguredFeedbackBonusEscrowAddress(chainId: number): `0x${string}` | undefined {
   return getDeployedContractAddress(chainId, "FeedbackBonusEscrow");
+}
+
+export function getConfiguredFeedbackRegistryAddress(chainId: number): `0x${string}` | undefined {
+  return getDeployedContractAddress(chainId, "FeedbackRegistry");
 }
 
 export function getDefaultUsdcAddress(chainId: number): `0x${string}` | undefined {

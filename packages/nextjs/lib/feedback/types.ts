@@ -32,12 +32,12 @@ export const CONTENT_FEEDBACK_BODY_MAX_LENGTH = 1500;
 export const CONTENT_FEEDBACK_SOURCE_URL_MAX_LENGTH = 2048;
 
 export interface ContentFeedbackItem {
-  id: number;
+  id: number | string;
   contentId: string;
   roundId: string | null;
   chainId: number | null;
   authorAddress: `0x${string}`;
-  feedbackType: ContentFeedbackType;
+  feedbackType: ContentFeedbackType | string;
   feedbackTypeLabel: string;
   body: string;
   sourceUrl: string | null;

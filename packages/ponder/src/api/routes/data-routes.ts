@@ -5,6 +5,7 @@ import {
   advisoryVote,
   category,
   content,
+  contentFeedback,
   feedbackBonusAward,
   feedbackBonusPool,
   frontend,
@@ -77,6 +78,47 @@ function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
 }
 
 export function registerDataRoutes(app: ApiApp) {
+  app.get("/content-feedback", async (c) => {
+    const contentId = safeBigInt(c.req.query("contentId") ?? "");
+    const roundId = c.req.query("roundId") ? safeBigInt(c.req.query("roundId") ?? "") : null;
+    const authorRaw = c.req.query("author");
+    const limit = safeLimit(c.req.query("limit"), 100, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (contentId === null) return c.json({ error: "Invalid contentId" }, 400);
+    if (c.req.query("roundId") && roundId === null) return c.json({ error: "Invalid roundId" }, 400);
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const author = authorRaw?.trim().toLowerCase() as `0x${string}` | undefined;
+    if (authorRaw && (!author || !isValidAddress(author))) {
+      return c.json({ error: "Invalid author address" }, 400);
+    }
+
+    const conditions = [eq(contentFeedback.contentId, contentId), eq(contentFeedback.revealed, true)];
+    if (roundId !== null) conditions.push(eq(contentFeedback.roundId, roundId));
+    if (author) conditions.push(eq(contentFeedback.author, author));
+
+    const where = and(...conditions);
+    const [countRow] = await db
+      .select({ value: sql<number>`count(*)` })
+      .from(contentFeedback)
+      .where(where);
+    const items = await db
+      .select()
+      .from(contentFeedback)
+      .where(where)
+      .orderBy(desc(contentFeedback.revealedAt), desc(contentFeedback.updatedAt), desc(contentFeedback.id))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, {
+      items,
+      total: Number(countRow?.value ?? 0),
+      limit,
+      offset,
+      hasMore: offset + items.length < Number(countRow?.value ?? 0),
+    });
+  });
+
   app.get("/question-bundles/:id", async (c) => {
     const bundleId = safeBigInt(c.req.param("id"));
     if (bundleId === null) return c.json({ error: "Invalid bundle id" }, 400);

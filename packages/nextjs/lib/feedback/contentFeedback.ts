@@ -20,7 +20,7 @@ import {
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
 import { isValidWalletAddress, normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
-import { ponderApi } from "~~/services/ponder/client";
+import { type PonderContentFeedbackItem, isPonderConfigured, ponderApi } from "~~/services/ponder/client";
 import { containsBlockedText, containsBlockedUrl } from "~~/utils/contentFilter";
 
 const CONTENT_FEEDBACK_LIST_LIMIT = 100;
@@ -599,6 +599,106 @@ function mapFeedbackRow(
   };
 }
 
+function unixSecondsToIso(value: string | number | bigint | null | undefined): string {
+  if (value === null || value === undefined) {
+    return createContentFeedbackTimestamp().toISOString();
+  }
+
+  try {
+    return new Date(Number(BigInt(value)) * 1000).toISOString();
+  } catch {
+    return createContentFeedbackTimestamp().toISOString();
+  }
+}
+
+function mapProtocolFeedbackRow(
+  row: PonderContentFeedbackItem,
+  params: {
+    viewerAddress?: `0x${string}` | null;
+  },
+): ContentFeedbackItem | null {
+  if (!row.revealed || !row.body || !row.feedbackType) {
+    return null;
+  }
+  if (!isValidWalletAddress(row.author)) {
+    return null;
+  }
+
+  const authorAddress = normalizeWalletAddress(row.author);
+  const normalizedKnownType = normalizeFeedbackType(row.feedbackType);
+  const rawFeedbackType = row.feedbackType.trim();
+  const feedbackType = normalizedKnownType ?? rawFeedbackType.toLowerCase();
+  const feedbackTypeLabel = normalizedKnownType ? CONTENT_FEEDBACK_TYPE_LABELS[normalizedKnownType] : rawFeedbackType;
+  const isOwn = params.viewerAddress === authorAddress;
+  const createdAt = unixSecondsToIso(row.revealedAt ?? row.committedAt);
+
+  return {
+    id: `protocol:${row.id}`,
+    contentId: row.contentId,
+    roundId: row.roundId,
+    chainId: null,
+    authorAddress,
+    feedbackType,
+    feedbackTypeLabel,
+    body: row.body,
+    sourceUrl: row.sourceUrl?.trim() || null,
+    feedbackHash: row.feedbackHash,
+    clientNonce: row.clientNonce ?? null,
+    moderationStatus: APPROVED_MODERATION_STATUS,
+    visibilityStatus: "public_onchain",
+    createdAt,
+    updatedAt: unixSecondsToIso(row.updatedAt ?? row.revealedAt ?? row.committedAt),
+    isOwn,
+    isPublic: true,
+  };
+}
+
+async function listProtocolContentFeedback(params: {
+  contentId: string;
+  viewerAddress?: `0x${string}` | null;
+}): Promise<ContentFeedbackItem[]> {
+  if (!isPonderConfigured()) {
+    return [];
+  }
+
+  try {
+    const response = await ponderApi.getContentFeedback({
+      contentId: params.contentId,
+      limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
+    });
+    return response.items
+      .map(row => mapProtocolFeedbackRow(row, { viewerAddress: params.viewerAddress }))
+      .filter((item): item is ContentFeedbackItem => item !== null);
+  } catch (error) {
+    console.warn("[content-feedback] Unable to load protocol-indexed feedback.", {
+      contentId: params.contentId,
+      error,
+    });
+    return [];
+  }
+}
+
+function contentFeedbackItemKey(item: ContentFeedbackItem) {
+  return item.feedbackHash?.toLowerCase() ?? String(item.id);
+}
+
+function mergeContentFeedbackItems(protocolItems: ContentFeedbackItem[], localItems: ContentFeedbackItem[]) {
+  const byKey = new Map<string, ContentFeedbackItem>();
+  for (const item of protocolItems) {
+    byKey.set(contentFeedbackItemKey(item), item);
+  }
+  for (const item of localItems) {
+    const key = contentFeedbackItemKey(item);
+    if (!byKey.has(key)) {
+      byKey.set(key, item);
+    }
+  }
+
+  return Array.from(byKey.values())
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, CONTENT_FEEDBACK_LIST_LIMIT);
+}
+
 export async function addContentFeedback(
   payload: PreparedContentFeedbackInput,
   context: ContentFeedbackRoundContext,
@@ -717,15 +817,21 @@ export async function listContentFeedback(params: {
     };
   }
 
-  const items = rows
+  const localItems = rows
     .map(row => mapFeedbackRow(row, { context: params.context, viewerAddress: params.viewerAddress }))
     .filter((item): item is ContentFeedbackItem => item !== null);
+  const protocolItems = await listProtocolContentFeedback({
+    contentId: params.contentId,
+    viewerAddress: params.viewerAddress,
+  });
+  const items = mergeContentFeedbackItems(protocolItems, localItems);
   const ownHiddenCount = items.filter(item => item.isOwn && !item.isPublic).length;
+  const mergedPublicCount = items.filter(item => item.isPublic).length;
 
   return {
     items,
     count: items.length,
-    publicCount,
+    publicCount: Math.max(publicCount, mergedPublicCount),
     ownHiddenCount,
     settlementComplete: params.context.settlementComplete,
     openRoundId: params.context.openRoundId,

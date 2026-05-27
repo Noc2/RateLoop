@@ -1,10 +1,17 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { FeedbackRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSignMessage } from "wagmi";
+import { encodePacked, keccak256, zeroHash } from "viem";
+import { usePublicClient, useSignMessage, useWriteContract } from "wagmi";
+import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { ensurePrivateAccountReadSession } from "~~/hooks/usePrivateAccountSession";
 import type { ContentFeedbackItem, ContentFeedbackListResult, ContentFeedbackType } from "~~/lib/feedback/types";
+import {
+  getConfiguredFeedbackRegistryAddress,
+  getConfiguredRoundVotingEngineAddress,
+} from "~~/lib/questionRewardPools";
 import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 interface SignedChallengeResponse {
@@ -21,6 +28,7 @@ interface SubmitContentFeedbackInput {
   feedbackType: ContentFeedbackType;
   body: string;
   sourceUrl?: string;
+  commitHash?: `0x${string}` | null;
 }
 
 interface ContentFeedbackActionResult {
@@ -57,6 +65,9 @@ async function readResponseBody<T>(response: Response, fallbackError: string): P
 export function useContentFeedback(contentId: bigint | string | number | null | undefined, address?: string) {
   const queryClient = useQueryClient();
   const { signMessageAsync } = useSignMessage();
+  const { writeContractAsync } = useWriteContract();
+  const { targetNetwork } = useTargetNetwork();
+  const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const normalizedContentId = useMemo(() => normalizeContentId(contentId), [contentId]);
   const normalizedAddress = address?.toLowerCase();
   const queryKey = useMemo(
@@ -65,6 +76,50 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
+  const [isRevealing, setIsRevealing] = useState(false);
+
+  const resolveCommitKey = useCallback(
+    async (roundId: string, knownCommitHash?: `0x${string}` | null): Promise<`0x${string}` | null> => {
+      if (!address || !normalizedContentId) return null;
+
+      let commitHash = knownCommitHash;
+      if (!commitHash || commitHash === zeroHash) {
+        const votingEngineAddress = getConfiguredRoundVotingEngineAddress(targetNetwork.id);
+        if (!votingEngineAddress || !publicClient) return null;
+        commitHash = (await publicClient.readContract({
+          address: votingEngineAddress,
+          abi: RoundVotingEngineAbi,
+          functionName: "voterCommitHash",
+          args: [BigInt(normalizedContentId), BigInt(roundId), address as `0x${string}`],
+        })) as `0x${string}`;
+      }
+
+      if (!commitHash || commitHash === zeroHash) return null;
+      return keccak256(encodePacked(["address", "bytes32"], [address as `0x${string}`, commitHash]));
+    },
+    [address, normalizedContentId, publicClient, targetNetwork.id],
+  );
+
+  const commitFeedbackHashOnchain = useCallback(
+    async (params: { roundId: string; feedbackHash: `0x${string}`; commitHash?: `0x${string}` | null }) => {
+      if (!normalizedContentId) return;
+      const feedbackRegistryAddress = getConfiguredFeedbackRegistryAddress(targetNetwork.id);
+      if (!feedbackRegistryAddress) return;
+
+      const commitKey = await resolveCommitKey(params.roundId, params.commitHash);
+      if (!commitKey) {
+        throw new Error("Vote on this question before saving feedback");
+      }
+
+      await writeContractAsync({
+        address: feedbackRegistryAddress,
+        abi: FeedbackRegistryAbi,
+        functionName: "commitFeedbackHash",
+        args: [BigInt(normalizedContentId), BigInt(params.roundId), commitKey, params.feedbackHash],
+      });
+    },
+    [normalizedContentId, resolveCommitKey, targetNetwork.id, writeContractAsync],
+  );
 
   const feedbackQuery = useQuery({
     queryKey,
@@ -122,6 +177,11 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         }
 
         const signature = await signMessageAsync({ message: challenge.message });
+        await commitFeedbackHashOnchain({
+          roundId: challenge.roundId,
+          feedbackHash: challenge.feedbackHash as `0x${string}`,
+          commitHash: input.commitHash,
+        });
         await readResponseBody<{ ok: true; item: ContentFeedbackItem }>(
           await fetch("/api/feedback", {
             method: "POST",
@@ -159,7 +219,61 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         setIsSubmitting(false);
       }
     },
-    [address, normalizedContentId, queryClient, queryKey, signMessageAsync],
+    [address, commitFeedbackHashOnchain, normalizedContentId, queryClient, queryKey, signMessageAsync],
+  );
+
+  const revealFeedback = useCallback(
+    async (item: ContentFeedbackItem): Promise<ContentFeedbackActionResult> => {
+      if (!address || !normalizedContentId) {
+        return { ok: false, reason: "not_connected" };
+      }
+      if (!item.roundId || !item.feedbackHash || !item.clientNonce) {
+        return { ok: false, reason: "request_failed", error: "Feedback is missing on-chain reveal metadata" };
+      }
+
+      const feedbackRegistryAddress = getConfiguredFeedbackRegistryAddress(targetNetwork.id);
+      if (!feedbackRegistryAddress) {
+        return { ok: false, reason: "request_failed", error: "Feedback registry is not deployed for this chain" };
+      }
+
+      setIsRevealing(true);
+      try {
+        const commitKey = await resolveCommitKey(item.roundId);
+        if (!commitKey) {
+          return { ok: false, reason: "request_failed", error: "Vote commitment not found for this feedback" };
+        }
+
+        await writeContractAsync({
+          address: feedbackRegistryAddress,
+          abi: FeedbackRegistryAbi,
+          functionName: "revealFeedback",
+          args: [
+            BigInt(normalizedContentId),
+            BigInt(item.roundId),
+            commitKey,
+            item.feedbackType,
+            item.body,
+            item.sourceUrl ?? "",
+            item.clientNonce as `0x${string}`,
+          ],
+        });
+
+        await queryClient.invalidateQueries({ queryKey });
+        return { ok: true };
+      } catch (error) {
+        if (isSignatureRejected(error)) {
+          return { ok: false, reason: "rejected" };
+        }
+        return {
+          ok: false,
+          reason: "request_failed",
+          error: error instanceof Error ? error.message : "Failed to reveal feedback",
+        };
+      } finally {
+        setIsRevealing(false);
+      }
+    },
+    [address, normalizedContentId, queryClient, queryKey, resolveCommitKey, targetNetwork.id, writeContractAsync],
   );
 
   const requestReadAccess = useCallback(async (): Promise<ContentFeedbackActionResult> => {
@@ -202,7 +316,9 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     isFetching: feedbackQuery.isFetching,
     isSubmitting,
     isUnlocking,
+    isRevealing,
     submitFeedback,
+    revealFeedback,
     requestReadAccess,
   };
 }

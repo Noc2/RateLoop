@@ -46,7 +46,17 @@ function hasNonZeroCommit(value: unknown) {
   return typeof value === "string" && value !== zeroHash;
 }
 
-function FeedbackItem({ item }: { item: ContentFeedbackItem }) {
+function FeedbackItem({
+  item,
+  canReveal,
+  isRevealing,
+  onReveal,
+}: {
+  item: ContentFeedbackItem;
+  canReveal?: boolean;
+  isRevealing?: boolean;
+  onReveal?: (item: ContentFeedbackItem) => void;
+}) {
   const visibilityLabel = item.isPublic ? "Public" : "Private until settlement";
   const visibilityTooltip = item.isPublic
     ? "This feedback is visible to everyone because the round has settled."
@@ -61,15 +71,37 @@ function FeedbackItem({ item }: { item: ContentFeedbackItem }) {
             {shortenAddress(item.authorAddress)} · {formatFeedbackDate(item.createdAt)}
           </p>
         </div>
-        <TooltipAnchor text={visibilityTooltip} position="top" className="shrink-0 rounded-full">
-          <span
-            tabIndex={0}
-            className="rounded-full bg-base-content/[0.07] px-2 py-1 text-[0.66rem] font-semibold leading-none text-base-content/58"
-            aria-label={`${visibilityLabel}: ${visibilityTooltip}`}
-          >
-            {visibilityLabel}
-          </span>
-        </TooltipAnchor>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {canReveal ? (
+            <TooltipAnchor text="Publish this settled feedback on-chain" position="top" className="rounded-full">
+              <button
+                type="button"
+                className="vote-btn vote-btn-sm vote-light"
+                onClick={() => onReveal?.(item)}
+                disabled={isRevealing}
+                aria-label="Publish feedback on-chain"
+              >
+                <span className="vote-bg" />
+                <span className="vote-symbol">
+                  {isRevealing ? (
+                    <span className="loading loading-spinner loading-xs" />
+                  ) : (
+                    <ArrowTopRightOnSquareIcon className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </span>
+              </button>
+            </TooltipAnchor>
+          ) : null}
+          <TooltipAnchor text={visibilityTooltip} position="top" className="rounded-full">
+            <span
+              tabIndex={0}
+              className="rounded-full bg-base-content/[0.07] px-2 py-1 text-[0.66rem] font-semibold leading-none text-base-content/58"
+              aria-label={`${visibilityLabel}: ${visibilityTooltip}`}
+            >
+              {visibilityLabel}
+            </span>
+          </TooltipAnchor>
+        </div>
       </div>
       <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-base-content/78">{item.body}</p>
       {item.sourceUrl ? (
@@ -94,7 +126,10 @@ export function ContentFeedbackPanel({
   onRequestConnect,
 }: ContentFeedbackPanelProps) {
   const { address } = useAccount();
-  const { feedback, items, isLoading, isSubmitting, submitFeedback } = useContentFeedback(item?.id ?? null, address);
+  const { feedback, items, isLoading, isSubmitting, isRevealing, submitFeedback, revealFeedback } = useContentFeedback(
+    item?.id ?? null,
+    address,
+  );
   const [feedbackType, setFeedbackType] = useState<ContentFeedbackType>("evidence");
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -168,6 +203,7 @@ export function ContentFeedbackPanel({
       feedbackType,
       body,
       sourceUrl: sourceUrl.trim() || undefined,
+      commitHash: hasNonZeroCommit(myCommitHash) ? (myCommitHash as `0x${string}`) : null,
     });
 
     if (!result.ok) {
@@ -179,6 +215,17 @@ export function ContentFeedbackPanel({
     setBody("");
     setSourceUrl("");
     notification.success(feedback.settlementComplete ? "Feedback published" : "Feedback added until settlement");
+  };
+
+  const handleRevealFeedback = async (feedbackItem: ContentFeedbackItem) => {
+    const result = await revealFeedback(feedbackItem);
+    if (!result.ok) {
+      if (result.reason === "rejected") return;
+      notification.error(result.error || "Failed to publish feedback on-chain");
+      return;
+    }
+
+    notification.success("Feedback published on-chain");
   };
 
   return (
@@ -279,7 +326,13 @@ export function ContentFeedbackPanel({
         ) : visibleItems.length > 0 ? (
           <ul className="flex flex-col gap-2">
             {visibleItems.map(feedbackItem => (
-              <FeedbackItem key={feedbackItem.id} item={feedbackItem} />
+              <FeedbackItem
+                key={feedbackItem.id}
+                item={feedbackItem}
+                canReveal={feedback.settlementComplete && feedbackItem.isOwn && !feedbackItem.isPublic}
+                isRevealing={isRevealing}
+                onReveal={handleRevealFeedback}
+              />
             ))}
           </ul>
         ) : feedback.settlementComplete ? (

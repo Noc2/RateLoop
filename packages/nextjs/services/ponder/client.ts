@@ -736,6 +736,37 @@ export interface PonderRewardClaim {
   claimedAt: string;
 }
 
+export interface PonderContentFeedbackItem {
+  id: string;
+  contentId: string;
+  roundId: string;
+  commitKey: string;
+  author: string;
+  feedbackHash: string;
+  committedAt: string;
+  commitTxHash?: string | null;
+  commitBlockNumber?: string | null;
+  commitLogIndex?: number | null;
+  revealed: boolean;
+  feedbackType?: string | null;
+  body?: string | null;
+  sourceUrl?: string | null;
+  clientNonce?: string | null;
+  revealedAt?: string | null;
+  revealTxHash?: string | null;
+  revealBlockNumber?: string | null;
+  revealLogIndex?: number | null;
+  updatedAt: string;
+}
+
+export interface PonderContentFeedbackResponse {
+  items: PonderContentFeedbackItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
 export interface PonderTokenTransfer {
   id: string;
   from: string;
@@ -1275,6 +1306,16 @@ export const ponderApi = {
     offset?: string;
   }) {
     return ponderGet<PonderVotesResponse>("/votes", params);
+  },
+
+  getContentFeedback(params: {
+    contentId: string;
+    roundId?: string;
+    author?: string;
+    limit?: string;
+    offset?: string;
+  }) {
+    return ponderGet<PonderContentFeedbackResponse>("/content-feedback", params);
   },
 
   getVoteCooldowns(params?: { voters?: string; contentIds?: string }) {
