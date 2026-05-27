@@ -223,6 +223,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             WORLD_ID_CREDENTIAL_TTL_SECONDS
         );
         if (!isLocalDev) {
+            raterRegistry.freezeWorldIdVerifierConfig();
             raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
             raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
         }

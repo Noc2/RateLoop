@@ -545,11 +545,17 @@ contract RaterRegistryTest is Test {
     }
 
     /// @notice RR-4 (2026-05-20 follow-up audit): governance can cap the SEEDER-seeded credential
-    ///         TTL, mirroring the immutable WorldID TTL cap. cap=0 keeps the legacy behavior.
+    ///         TTL, mirroring the immutable WorldID TTL cap. cap=0 is an explicit opt-out.
     function test_MaxSeededCredentialTtlClampsSeedExpiry() public {
-        // Default: no cap; long-lived seeds accepted (legacy behavior).
+        assertEq(registry.maxSeededCredentialTtl(), WORLD_ID_CREDENTIAL_TTL);
+
+        // Default: seeded credentials are capped to the World ID TTL.
         vm.prank(admin);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
         registry.seedHumanCredential(rater, uint64(block.timestamp + 100 * 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
         // Governance sets a 30-day cap.
         vm.prank(governance);

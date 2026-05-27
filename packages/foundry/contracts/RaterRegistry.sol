@@ -156,6 +156,8 @@ contract RaterRegistry is AccessControl, IRaterIdentityRegistry {
         _setWorldIdVerifierConfig(
             _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl, false
         );
+        maxSeededCredentialTtl = _worldIdCredentialTtl;
+        emit MaxSeededCredentialTtlUpdated(0, _worldIdCredentialTtl);
 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
         _grantRole(ADMIN_ROLE, governance);

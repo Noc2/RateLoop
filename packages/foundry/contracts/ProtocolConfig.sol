@@ -9,6 +9,7 @@ import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol"
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
 
@@ -128,7 +129,13 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     ///      otherwise every reveal will fail signature validation against the wrong drand public key.
     function initialize(address admin, address governance) external initializer {
         _initialize(
-            admin, governance, governance, MAINNET_DRAND_CHAIN_HASH, MAINNET_DRAND_GENESIS_TIME, MAINNET_DRAND_PERIOD
+            admin,
+            governance,
+            governance,
+            MAINNET_DRAND_CHAIN_HASH,
+            MAINNET_DRAND_GENESIS_TIME,
+            MAINNET_DRAND_PERIOD,
+            false
         );
     }
 
@@ -140,7 +147,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             treasuryAuthority,
             MAINNET_DRAND_CHAIN_HASH,
             MAINNET_DRAND_GENESIS_TIME,
-            MAINNET_DRAND_PERIOD
+            MAINNET_DRAND_PERIOD,
+            false
         );
     }
 
@@ -154,7 +162,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         uint64 drandGenesisTime_,
         uint64 drandPeriod_
     ) external initializer {
-        _initialize(admin, governance, treasuryAuthority, drandChainHash_, drandGenesisTime_, drandPeriod_);
+        _initialize(admin, governance, treasuryAuthority, drandChainHash_, drandGenesisTime_, drandPeriod_, true);
     }
 
     function _initialize(
@@ -163,7 +171,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address treasuryAuthority,
         bytes32 drandChainHash_,
         uint64 drandGenesisTime_,
-        uint64 drandPeriod_
+        uint64 drandPeriod_,
+        bool validateDrandBounds
     ) internal {
         if (admin == address(0)) revert InvalidAddress();
         if (governance == address(0)) revert InvalidAddress();
@@ -199,16 +208,13 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             maxVoterCap: MAX_CREATOR_ROUND_VOTERS
         });
         revealGracePeriod = 60 minutes;
-        // DRAND-1 (2026-05-21 testnet-readiness audit): drand config is now an explicit init
-        // parameter so testnet deploys MUST commit to the `quicknet-t` chain hash rather than
-        // silently falling back to mainnet `quicknet`. We reject zero values to catch a
-        // missing-argument mistake; the stricter `genesisTime > block.timestamp` and
-        // `period > minEpochDuration` checks live on `setDrandConfig` (post-init) so they fire
-        // against a real wall-clock and a populated `roundConfigBounds`, not against the
-        // unwarped foundry-test `block.timestamp = 1`.
         if (drandChainHash_ == bytes32(0)) revert InvalidConfig();
         if (drandGenesisTime_ == 0) revert InvalidConfig();
         if (drandPeriod_ == 0) revert InvalidConfig();
+        if (validateDrandBounds) {
+            if (drandGenesisTime_ > block.timestamp) revert InvalidConfig();
+            if (drandPeriod_ > roundConfigBounds.minEpochDuration) revert InvalidConfig();
+        }
         drandChainHash = drandChainHash_;
         drandGenesisTime = drandGenesisTime_;
         drandPeriod = drandPeriod_;
@@ -447,6 +453,11 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function _setCategoryRegistry(address value) internal {
         if (value == address(0)) revert InvalidAddress();
+        if (value.code.length == 0) revert InvalidAddress();
+        try ICategoryRegistry(value).isCategory(0) returns (bool) { }
+        catch {
+            revert InvalidConfig();
+        }
         categoryRegistry = value;
         emit CategoryRegistryUpdated(value);
     }

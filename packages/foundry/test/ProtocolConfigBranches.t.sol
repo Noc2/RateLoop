@@ -7,6 +7,7 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
@@ -235,6 +236,26 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setFrontendRegistry(invalidRegistry);
+    }
+
+    function test_SetCategoryRegistry_ValidatesIntegration() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        MockCategoryRegistry categoryRegistry = new MockCategoryRegistry();
+
+        config.setCategoryRegistry(address(categoryRegistry));
+
+        assertEq(config.categoryRegistry(), address(categoryRegistry));
+    }
+
+    function test_SetCategoryRegistry_RejectsInvalidIntegration() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address invalidRegistry = address(new MockRewardDistributorForConfig(address(this)));
+
+        vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
+        config.setCategoryRegistry(address(0xFEE));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setCategoryRegistry(invalidRegistry);
     }
 
     function test_SetClusterPayoutOracle_AllowsBootstrapBeforeLaunchPool() public {
@@ -508,6 +529,29 @@ contract ProtocolConfigBranchesTest is Test {
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setDrandConfig(QUICKNET_CHAIN_HASH, 1, 1 minutes + 1);
+    }
+
+    function test_InitializeWithDrandConfig_RejectsFutureGenesisOrPeriodLongerThanMinEpoch() public {
+        vm.warp(100);
+        ProtocolConfig configImpl = new ProtocolConfig();
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        new ERC1967Proxy(
+            address(configImpl),
+            abi.encodeCall(
+                ProtocolConfig.initializeWithDrandConfig,
+                (address(this), address(this), address(this), QUICKNET_CHAIN_HASH, uint64(101), uint64(3))
+            )
+        );
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        new ERC1967Proxy(
+            address(configImpl),
+            abi.encodeCall(
+                ProtocolConfig.initializeWithDrandConfig,
+                (address(this), address(this), address(this), QUICKNET_CHAIN_HASH, uint64(1), uint64(1 minutes + 1))
+            )
+        );
     }
 
     function test_DefaultRatingAndSlashConfig_UseRedeployDefaults() public {
