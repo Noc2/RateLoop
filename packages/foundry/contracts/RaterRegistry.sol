@@ -786,11 +786,22 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
                 && (previous.nullifierHash != nullifierHash || previous.provider != provider)
         ) {
             HumanCredentialProvider previousProvider = previous.provider;
+            bool previousOwnerSlotCleared;
             if (
                 previousProvider != HumanCredentialProvider.None
                     && _humanNullifierOwnerByProvider[previousProvider][previous.nullifierHash] == rater
             ) {
                 delete _humanNullifierOwnerByProvider[previousProvider][previous.nullifierHash];
+                previousOwnerSlotCleared = true;
+            }
+            if (previousOwnerSlotCleared) {
+                bytes32 previousKey = credentialIdentityKey(previousProvider, previous.nullifierHash);
+                bytes32 currentCanonical = _canonicalHumanIdentityKey[rater];
+                if (currentCanonical == previousKey) {
+                    bytes32 newKey = credentialIdentityKey(provider, nullifierHash);
+                    _canonicalHumanIdentityKey[rater] = newKey;
+                    emit CanonicalHumanIdentityKeyRotated(rater, previousKey, newKey, provider);
+                }
             }
         }
 

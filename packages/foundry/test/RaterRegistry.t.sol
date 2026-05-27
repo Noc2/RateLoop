@@ -719,13 +719,16 @@ contract RaterRegistryTest is Test {
 
         vm.prank(rater);
         registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), proof);
+        bytes32 legacyWorldIdKey = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH);
         assertEq(
             registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH), rater
         );
+        assertEq(registry.resolveRater(rater).identityKey, legacyWorldIdKey);
 
         // Switch the rater to the RateLoop seed provider while keeping the nullifier bytes the same.
         vm.prank(admin);
         registry.seedHumanCredential(rater, uint64(block.timestamp + 30 days), anchorId, EVIDENCE_HASH);
+        bytes32 seededKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, anchorId);
 
         // The old WorldId slot must be cleared by the switch -- not waiting for a revoke.
         assertEq(
@@ -735,6 +738,7 @@ contract RaterRegistryTest is Test {
         assertEq(
             registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.SeededHuman, anchorId), rater
         );
+        assertEq(registry.resolveRater(rater).identityKey, seededKey);
 
         // A different rater can now claim the nullifier under the old provider.
         vm.prank(otherRater);
@@ -743,6 +747,8 @@ contract RaterRegistryTest is Test {
             registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
             otherRater
         );
+        assertEq(registry.resolveRater(otherRater).identityKey, legacyWorldIdKey);
+        assertTrue(registry.resolveRater(rater).identityKey != registry.resolveRater(otherRater).identityKey);
     }
 
     function test_CredentialIdentityKeysAreProviderNamespaced() public {
@@ -767,7 +773,7 @@ contract RaterRegistryTest is Test {
         assertTrue(worldIdRater.identityKey != seededRater.identityKey);
     }
 
-    function test_CredentialRefreshKeepsCanonicalIdentityKey() public {
+    function test_CredentialProviderSwitchRotatesCanonicalIdentityKey() public {
         vm.prank(admin);
         registry.seedHumanCredential(rater, uint64(block.timestamp + 1), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
 
@@ -782,7 +788,7 @@ contract RaterRegistryTest is Test {
         IRaterIdentityRegistry.ResolvedRater memory refreshed = registry.resolveRater(rater);
         assertEq(refreshed.humanNullifier, NULLIFIER_HASH);
         assertEq(
-            refreshed.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID)
+            refreshed.identityKey, _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
         );
     }
 
