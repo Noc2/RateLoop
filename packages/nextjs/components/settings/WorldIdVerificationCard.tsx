@@ -631,9 +631,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             World ID
           </div>
           <h3 className="mt-3 text-2xl font-semibold text-base-content">Human credential</h3>
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-base-content/65">
-            Add an optional World ID proof to this wallet. Rating and LREP participation stay open without it.
-          </p>
         </div>
 
         <div className="flex shrink-0 flex-col items-stretch gap-3 sm:min-w-56">
@@ -731,9 +728,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h4 className="text-lg font-semibold text-base-content">Launch referral</h4>
-              <p className="mt-1 text-sm leading-relaxed text-base-content/60">
-                Referral attribution is optional and is applied when the verified launch bonus is claimed.
-              </p>
             </div>
             {referralInput ? (
               <button
@@ -802,9 +796,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         <div className="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
           <div>
             <h4 className="text-lg font-semibold text-base-content">Verified launch bonus</h4>
-            <p className="mt-1 text-sm leading-relaxed text-base-content/60">
-              The one-time verified bonus decays as more wallets claim it.
-            </p>
           </div>
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
