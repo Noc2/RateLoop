@@ -5,6 +5,7 @@ export { ContentRegistryAbi } from "./ContentRegistryAbi";
 export { RateLoopGovernorAbi } from "./RateLoopGovernorAbi";
 export { LoopReputationAbi } from "./LoopReputationAbi";
 export { FeedbackBonusEscrowAbi } from "./FeedbackBonusEscrowAbi";
+export { FeedbackRegistryAbi } from "./FeedbackRegistryAbi";
 export { FrontendRegistryAbi } from "./FrontendRegistryAbi";
 export { LaunchDistributionPoolAbi } from "./LaunchDistributionPoolAbi";
 export { ProfileRegistryAbi } from "./ProfileRegistryAbi";

@@ -6,6 +6,7 @@ import {
   CategoryRegistryAbi,
   ClusterPayoutOracleAbi,
   ContentRegistryAbi,
+  FeedbackRegistryAbi,
   LoopReputationAbi,
   FeedbackBonusEscrowAbi,
   FrontendRegistryAbi,
@@ -347,6 +348,10 @@ const addresses = {
     "PONDER_FEEDBACK_BONUS_ESCROW_ADDRESS",
     "FeedbackBonusEscrow",
   ),
+  feedbackRegistry: resolveOptionalAddress(
+    "PONDER_FEEDBACK_REGISTRY_ADDRESS",
+    "FeedbackRegistry",
+  ),
   raterRegistry: resolveAddress(
     "PONDER_RATER_REGISTRY_ADDRESS",
     "RaterRegistry",
@@ -401,6 +406,10 @@ const startBlocks = {
   feedbackBonusEscrow: resolveStartBlock(
     "PONDER_FEEDBACK_BONUS_ESCROW_START_BLOCK",
     "FeedbackBonusEscrow",
+  ),
+  feedbackRegistry: resolveStartBlock(
+    "PONDER_FEEDBACK_REGISTRY_START_BLOCK",
+    "FeedbackRegistry",
   ),
   raterRegistry: resolveStartBlock(
     "PONDER_RATER_REGISTRY_START_BLOCK",
@@ -512,6 +521,13 @@ export default createConfig({
       network: contractOnActiveNetwork(
         addresses.feedbackBonusEscrow,
         startBlocks.feedbackBonusEscrow,
+      ),
+    },
+    FeedbackRegistry: {
+      abi: FeedbackRegistryAbi,
+      network: contractOnActiveNetwork(
+        addresses.feedbackRegistry,
+        startBlocks.feedbackRegistry,
       ),
     },
     RaterRegistry: {

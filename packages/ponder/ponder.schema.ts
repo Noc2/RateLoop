@@ -639,6 +639,44 @@ export const feedbackBonusAward = onchainTable(
 );
 
 // ============================================================
+// CONTENT FEEDBACK (canonical on-chain anchors)
+// ============================================================
+
+export const contentFeedback = onchainTable(
+  "content_feedback",
+  (t) => ({
+    id: t.text().primaryKey(), // `${contentId}-${roundId}-${commitKey}`
+    contentId: t.bigint().notNull(),
+    roundId: t.bigint().notNull(),
+    commitKey: t.hex().notNull(),
+    author: t.hex().notNull(),
+    feedbackHash: t.hex().notNull(),
+    committedAt: t.bigint().notNull(),
+    commitTxHash: t.hex(),
+    commitBlockNumber: t.bigint(),
+    commitLogIndex: t.integer(),
+    revealed: t.boolean().notNull(),
+    feedbackType: t.text(),
+    body: t.text(),
+    sourceUrl: t.text(),
+    clientNonce: t.hex(),
+    revealedAt: t.bigint(),
+    revealTxHash: t.hex(),
+    revealBlockNumber: t.bigint(),
+    revealLogIndex: t.integer(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    contentIdx: index().on(table.contentId),
+    roundIdx: index().on(table.contentId, table.roundId),
+    authorIdx: index().on(table.author),
+    commitKeyIdx: index().on(table.commitKey),
+    feedbackHashIdx: index().on(table.feedbackHash),
+    revealedIdx: index().on(table.revealed),
+  }),
+);
+
+// ============================================================
 // CATEGORY
 // ============================================================
 

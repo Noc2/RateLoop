@@ -283,6 +283,19 @@ export const FeedbackBonusEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "feedbackRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IFeedbackRegistry"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "forfeitExpiredFeedbackBonus",
     "inputs": [
       {
@@ -411,6 +424,11 @@ export const FeedbackBonusEscrowAbi = [
       },
       {
         "name": "raterRegistry_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "feedbackRegistry_",
         "type": "address",
         "internalType": "address"
       }
@@ -544,6 +562,19 @@ export const FeedbackBonusEscrowAbi = [
         "name": "frontendFeeBps_",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setFeedbackRegistry",
+    "inputs": [
+      {
+        "name": "feedbackRegistry_",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -820,6 +851,19 @@ export const FeedbackBonusEscrowAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeedbackRegistryUpdated",
+    "inputs": [
+      {
+        "name": "feedbackRegistry",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       }
     ],
     "anonymous": false

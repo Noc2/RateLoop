@@ -18116,6 +18116,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "feedbackRegistry",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IFeedbackRegistry",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "forfeitExpiredFeedbackBonus",
           inputs: [
             {
@@ -18244,6 +18257,11 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "raterRegistry_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "feedbackRegistry_",
               type: "address",
               internalType: "address",
             },
@@ -18377,6 +18395,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "frontendFeeBps_",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setFeedbackRegistry",
+          inputs: [
+            {
+              name: "feedbackRegistry_",
+              type: "address",
+              internalType: "address",
             },
           ],
           outputs: [],
@@ -18653,6 +18684,19 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "FeedbackRegistryUpdated",
+          inputs: [
+            {
+              name: "feedbackRegistry",
+              type: "address",
+              indexed: false,
+              internalType: "address",
             },
           ],
           anonymous: false,
@@ -26771,6 +26815,22 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "error",
           name: "ReentrancyGuardReentrantCall",
           inputs: [],
+        },
+        {
+          type: "error",
+          name: "SafeCastOverflowedUintDowncast",
+          inputs: [
+            {
+              name: "bits",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
         },
         {
           type: "error",
@@ -42729,6 +42789,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "feedbackRegistry",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IFeedbackRegistry",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "forfeitExpiredFeedbackBonus",
           inputs: [
             {
@@ -42857,6 +42930,11 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "raterRegistry_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "feedbackRegistry_",
               type: "address",
               internalType: "address",
             },
@@ -42990,6 +43068,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "frontendFeeBps_",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setFeedbackRegistry",
+          inputs: [
+            {
+              name: "feedbackRegistry_",
+              type: "address",
+              internalType: "address",
             },
           ],
           outputs: [],
@@ -43266,6 +43357,19 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "FeedbackRegistryUpdated",
+          inputs: [
+            {
+              name: "feedbackRegistry",
+              type: "address",
+              indexed: false,
+              internalType: "address",
             },
           ],
           anonymous: false,
@@ -51994,6 +52098,22 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "error",
           name: "ReentrancyGuardReentrantCall",
           inputs: [],
+        },
+        {
+          type: "error",
+          name: "SafeCastOverflowedUintDowncast",
+          inputs: [
+            {
+              name: "bits",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
         },
         {
           type: "error",
