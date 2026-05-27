@@ -565,7 +565,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         for (uint256 i = 0; i < testAccounts.length; i++) {
             bytes32 anchorId = keccak256(abi.encodePacked("rateloop:local-dev-human-v1", testAccounts[i]));
             bytes32 evidenceHash = keccak256(abi.encodePacked("rateloop:local-dev-evidence-v1", testAccounts[i]));
-            raterRegistry.seedHumanCredential(testAccounts[i], type(uint64).max, anchorId, evidenceHash);
+            raterRegistry.seedHumanCredential(
+                testAccounts[i], uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL_SECONDS), anchorId, evidenceHash
+            );
         }
     }
 
