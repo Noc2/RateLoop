@@ -33,10 +33,12 @@ fi
 CONTRACTS=(
   "ContentRegistry"
   "FeedbackBonusEscrow"
+  "FeedbackRegistry"
   "FrontendRegistry"
   "ProfileRegistry"
   "ProtocolConfig"
   "QuestionRewardPoolEscrow"
+  "RaterRegistry"
   "RoundRewardDistributor"
   "RoundVotingEngine"
 )

@@ -19,10 +19,11 @@ import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.
 import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
 import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
 import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
 /// @title Minimal mock for RoundVotingEngine interface (used by FrontendRegistry)
 contract MockVotingEngineForUpgrade is IRoundVotingEngine {
@@ -81,6 +82,7 @@ contract UpgradeTest is Test {
     QuestionRewardPoolEscrow public questionRewardPoolEscrow;
     FeedbackBonusEscrow public feedbackBonusEscrow;
     FeedbackRegistry public feedbackRegistry;
+    RaterRegistry public raterRegistry;
     ProxyAdmin public contentRegistryAdmin;
     ProxyAdmin public votingEngineAdmin;
     ProxyAdmin public rewardDistributorAdmin;
@@ -90,10 +92,11 @@ contract UpgradeTest is Test {
     ProxyAdmin public questionRewardPoolEscrowAdmin;
     ProxyAdmin public feedbackBonusEscrowAdmin;
     ProxyAdmin public feedbackRegistryAdmin;
+    ProxyAdmin public raterRegistryAdmin;
 
     LoopReputation public lrepToken;
     MockVotingEngineForUpgrade public mockVotingEngine;
-    MockRaterIdentityRegistry public raterRegistry;
+    MockWorldIDRouter public worldIdRouter;
 
     // Roles
     address public admin = address(1);
@@ -107,6 +110,7 @@ contract UpgradeTest is Test {
         // Deploy token
         lrepToken = new LoopReputation(admin, governance);
         mockVotingEngine = new MockVotingEngineForUpgrade();
+        worldIdRouter = new MockWorldIDRouter();
 
         // --- ContentRegistry ---
         ContentRegistry crImpl = new ContentRegistry();
@@ -170,9 +174,21 @@ contract UpgradeTest is Test {
         frontendRegistry = FrontendRegistry(address(frProxy));
         frontendRegistryAdmin = _proxyAdmin(address(frProxy));
 
-        raterRegistry = new MockRaterIdentityRegistry();
+        // --- RaterRegistry ---
+        RaterRegistry rrImpl =
+            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        TransparentUpgradeableProxy rrProxy = new TransparentUpgradeableProxy(
+            address(rrImpl),
+            governance,
+            abi.encodeCall(
+                RaterRegistry.initialize,
+                (admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days)
+            )
+        );
+        raterRegistry = RaterRegistry(address(rrProxy));
+        raterRegistryAdmin = _proxyAdmin(address(rrProxy));
+
         profileRegistry.setRaterRegistry(address(raterRegistry));
-        raterRegistry.setHolder(address(10));
 
         // --- QuestionRewardPoolEscrow ---
         QuestionRewardPoolEscrow qrpImpl = new QuestionRewardPoolEscrow();
@@ -490,6 +506,53 @@ contract UpgradeTest is Test {
     }
 
     // =========================================================================
+    // RaterRegistry upgrade tests
+    // =========================================================================
+
+    function test_RaterRegistry_GovernanceCanUpgrade() public {
+        RaterRegistry newImpl =
+            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        vm.prank(governance);
+        raterRegistryAdmin.upgradeAndCall(_proxy(address(raterRegistry)), address(newImpl), "");
+    }
+
+    function test_RaterRegistry_UnauthorizedCannotUpgrade() public {
+        RaterRegistry newImpl =
+            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        vm.prank(attacker);
+        vm.expectRevert();
+        raterRegistryAdmin.upgradeAndCall(_proxy(address(raterRegistry)), address(newImpl), "");
+    }
+
+    function test_RaterRegistry_CannotReinitialize() public {
+        vm.prank(admin);
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        raterRegistry.initialize(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+    }
+
+    function test_RaterRegistry_StatePreservedAfterUpgrade() public {
+        vm.prank(admin);
+        raterRegistry.seedHumanCredential(address(10), uint64(block.timestamp + 30 days), bytes32("human-10"), 0);
+
+        assertEq(raterRegistryAdmin.owner(), governance);
+        assertTrue(raterRegistry.hasRole(raterRegistry.DEFAULT_ADMIN_ROLE(), governance));
+        assertTrue(raterRegistry.hasActiveHumanCredential(address(10)));
+        assertEq(address(raterRegistry.worldIdRouter()), address(worldIdRouter));
+        assertEq(raterRegistry.worldIdScope(), bytes32("rate-loop"));
+
+        RaterRegistry newImpl =
+            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        vm.prank(governance);
+        raterRegistryAdmin.upgradeAndCall(_proxy(address(raterRegistry)), address(newImpl), "");
+
+        assertEq(raterRegistryAdmin.owner(), governance);
+        assertTrue(raterRegistry.hasRole(raterRegistry.DEFAULT_ADMIN_ROLE(), governance));
+        assertTrue(raterRegistry.hasActiveHumanCredential(address(10)));
+        assertEq(address(raterRegistry.worldIdRouter()), address(worldIdRouter));
+        assertEq(raterRegistry.worldIdScope(), bytes32("rate-loop"));
+    }
+
+    // =========================================================================
     // QuestionRewardPoolEscrow upgrade tests
     // =========================================================================
 
@@ -583,6 +646,47 @@ contract UpgradeTest is Test {
     }
 
     // =========================================================================
+    // FeedbackRegistry upgrade tests
+    // =========================================================================
+
+    function test_FeedbackRegistry_GovernanceCanUpgrade() public {
+        FeedbackRegistry newImpl = new FeedbackRegistry();
+        vm.prank(governance);
+        feedbackRegistryAdmin.upgradeAndCall(_proxy(address(feedbackRegistry)), address(newImpl), "");
+    }
+
+    function test_FeedbackRegistry_UnauthorizedCannotUpgrade() public {
+        FeedbackRegistry newImpl = new FeedbackRegistry();
+        vm.prank(attacker);
+        vm.expectRevert();
+        feedbackRegistryAdmin.upgradeAndCall(_proxy(address(feedbackRegistry)), address(newImpl), "");
+    }
+
+    function test_FeedbackRegistry_CannotReinitialize() public {
+        vm.prank(admin);
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        feedbackRegistry.initialize(admin, governance, address(votingEngine));
+    }
+
+    function test_FeedbackRegistry_StatePreservedAfterUpgrade() public {
+        assertEq(feedbackRegistryAdmin.owner(), governance);
+        assertEq(address(feedbackRegistry.votingEngine()), address(votingEngine));
+        assertTrue(feedbackRegistry.hasRole(feedbackRegistry.DEFAULT_ADMIN_ROLE(), governance));
+        assertTrue(feedbackRegistry.hasRole(feedbackRegistry.CONFIG_ROLE(), governance));
+        assertTrue(feedbackRegistry.hasRole(feedbackRegistry.CONFIG_ROLE(), admin));
+
+        FeedbackRegistry newImpl = new FeedbackRegistry();
+        vm.prank(governance);
+        feedbackRegistryAdmin.upgradeAndCall(_proxy(address(feedbackRegistry)), address(newImpl), "");
+
+        assertEq(feedbackRegistryAdmin.owner(), governance);
+        assertEq(address(feedbackRegistry.votingEngine()), address(votingEngine));
+        assertTrue(feedbackRegistry.hasRole(feedbackRegistry.DEFAULT_ADMIN_ROLE(), governance));
+        assertTrue(feedbackRegistry.hasRole(feedbackRegistry.CONFIG_ROLE(), governance));
+        assertTrue(feedbackRegistry.hasRole(feedbackRegistry.CONFIG_ROLE(), admin));
+    }
+
+    // =========================================================================
     // Implementation direct initialization protection
     // =========================================================================
 
@@ -633,6 +737,15 @@ contract UpgradeTest is Test {
             address(raterRegistry),
             address(feedbackRegistry)
         );
+
+        FeedbackRegistry feedbackImpl = new FeedbackRegistry();
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        feedbackImpl.initialize(admin, governance, address(votingEngine));
+
+        RaterRegistry raterImpl =
+            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
+        raterImpl.initialize(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
     }
 
     function _proxy(address proxy) internal pure returns (ITransparentUpgradeableProxy) {
