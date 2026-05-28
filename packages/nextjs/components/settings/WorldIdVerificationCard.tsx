@@ -647,6 +647,19 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             Human Credential
             <InfoTooltip text="Only Orb verification is supported right now." position="top" />
           </h3>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-base-content/60">
+            World ID lets you prove you are a unique human while keeping personal details private. RateLoop uses this
+            wallet-bound proof to unlock human credential rewards;{" "}
+            <a
+              href="https://world.org/world-id"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="link link-primary"
+            >
+              learn more about World ID
+            </a>
+            .
+          </p>
         </div>
       </div>
 
