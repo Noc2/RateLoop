@@ -97,6 +97,7 @@ const cspDirectives = [
     // drand (tlock encryption)
     "https://api.drand.sh",
     "https://mainnet.drand.sh",
+    "https://testnet-api.drand.cloudflare.com",
     // World ID bridge + verification assets
     "https://bridge.worldcoin.org",
     "https://developer.world.org",
