@@ -1,4 +1,6 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures/wallet";
+import { waitForPonderIndexed } from "../helpers/admin-helpers";
 import {
   continueToBountyStep,
   continueToFeedbackBonusStep,
@@ -6,7 +8,39 @@ import {
   selectAskSubcategory,
   selectBountyRewardAsset,
 } from "../helpers/ask-form";
+import { getContentList } from "../helpers/ponder-api";
 import { gotoWithRetry } from "../helpers/wait-helpers";
+
+async function fillBasicQuestionFields(page: Page, uniqueId: number) {
+  const urlInput = page.locator("input[type='url']").first();
+  await expect(urlInput).toBeVisible({ timeout: 5_000 });
+  await urlInput.fill(`https://example.com/e2etest-${uniqueId}`);
+
+  const title = `E2E Test Title ${uniqueId}`;
+  const titleInput = page.getByPlaceholder("Write a subjective question voters can rate");
+  await expect(titleInput).toBeVisible({ timeout: 3_000 });
+  await titleInput.fill(title);
+  await page.getByPlaceholder("Add context voters should consider").fill(`E2E test description ${uniqueId}`);
+
+  return title;
+}
+
+async function expectSuccessfulSubmission(page: Page) {
+  const submitBtn = page.getByRole("button", { name: /^Submit/i });
+  await expect(submitBtn).toBeVisible({ timeout: 5_000 });
+  await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
+  await submitBtn.click();
+
+  const successDialog = page.getByRole("dialog", { name: /Question submitted/i });
+  const submitted = await successDialog
+    .waitFor({ state: "visible", timeout: 60_000 })
+    .then(() => true)
+    .catch(() => false);
+  test.skip(!submitted, "Ask submission did not complete in this shared E2E chain state.");
+  await expect(successDialog.getByRole("heading", { name: /Question Submitted!/i })).toBeVisible();
+  await page.waitForTimeout(1_500);
+  await expect(successDialog).toBeVisible();
+}
 
 test.describe("Ask page", () => {
   test("ask page shows form when connected with rater credential", async ({ connectedPage: page }) => {
@@ -37,15 +71,7 @@ test.describe("Ask page", () => {
 
     // 2. Enter a unique context URL. Images are upload-only, so the basic ask flow uses link context.
     const uniqueId = Date.now();
-    const urlInput = page.locator("input[type='url']").first();
-    await expect(urlInput).toBeVisible({ timeout: 5_000 });
-    await urlInput.fill(`https://example.com/e2etest-${uniqueId}`);
-
-    // 3. Enter title and description.
-    const titleInput = page.getByPlaceholder("Write a subjective question voters can rate");
-    await expect(titleInput).toBeVisible({ timeout: 3_000 });
-    await titleInput.fill(`E2E Test Title ${uniqueId}`);
-    await page.getByPlaceholder("Add context voters should consider").fill(`E2E test description ${uniqueId}`);
+    await fillBasicQuestionFields(page, uniqueId);
 
     // 4. Select at least one subcategory tag
     const hasSubcategory = await selectAskSubcategory(page);
@@ -62,20 +88,49 @@ test.describe("Ask page", () => {
     await expect(page.getByRole("button", { name: /^Submitting/i })).toBeHidden();
     await expect(page.getByRole("button", { name: /^No bonus$/i })).toHaveAttribute("aria-pressed", "true");
 
-    const submitBtn = page.getByRole("button", { name: /^Submit/i });
-    await expect(submitBtn).toBeVisible({ timeout: 5_000 });
-    await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
-    await submitBtn.click();
-
     // 6. Wait for the share modal to confirm success
-    const successDialog = page.getByRole("dialog", { name: /Question submitted/i });
-    const submitted = await successDialog
-      .waitFor({ state: "visible", timeout: 60_000 })
-      .then(() => true)
-      .catch(() => false);
-    test.skip(!submitted, "Ask submission did not complete in this shared E2E chain state.");
-    await expect(successDialog.getByRole("heading", { name: /Question Submitted!/i })).toBeVisible();
-    await page.waitForTimeout(1_500);
-    await expect(successDialog).toBeVisible();
+    await expectSuccessfulSubmission(page);
+  });
+
+  test("can ask a question with the default USDC bounty and see it indexed", async ({ connectedPage: page }) => {
+    await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
+    await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
+
+    const hasCategories = await selectAskCategory(page);
+    test.skip(!hasCategories, "Categories not loaded — Ponder and RPC fallback both unavailable");
+
+    const uniqueId = Date.now();
+    const title = await fillBasicQuestionFields(page, uniqueId);
+
+    const hasSubcategory = await selectAskSubcategory(page);
+    test.skip(!hasSubcategory, "No seeded subcategory available for ask submission");
+
+    await continueToBountyStep(page);
+    const usdcAssetButton = page.getByTestId("bounty-asset-usdc");
+    await expect(usdcAssetButton).toBeVisible({ timeout: 5_000 });
+    await expect(usdcAssetButton).toHaveAttribute("aria-pressed", "true");
+
+    await continueToFeedbackBonusStep(page);
+    await expect(page.getByRole("heading", { name: "Feedback Bonus" })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: /^No bonus$/i })).toHaveAttribute("aria-pressed", "true");
+
+    await expectSuccessfulSubmission(page);
+
+    const indexedAsUsdc = await waitForPonderIndexed(
+      async () => {
+        const { items } = await getContentList({ search: title, limit: 5 });
+        const submittedQuestion = items.find(item => item.title === title);
+        return (
+          submittedQuestion?.rewardPoolSummary?.currency === "USDC" &&
+          submittedQuestion.rewardPoolSummary.asset === 1 &&
+          submittedQuestion.rewardPoolSummary.activeRewardPoolCount > 0 &&
+          BigInt(submittedQuestion.rewardPoolSummary.currentRewardPoolAmount) > 0n
+        );
+      },
+      90_000,
+      2_000,
+      "waitForSubmittedUsdcBounty",
+    );
+    expect(indexedAsUsdc, "submitted question should index with an active USDC bounty").toBe(true);
   });
 });

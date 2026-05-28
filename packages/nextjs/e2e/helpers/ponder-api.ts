@@ -32,6 +32,13 @@ export type ContentItem = {
   submitter: string;
   createdAt: number;
   updatedAt: number;
+  rewardPoolSummary?: {
+    asset: number | null;
+    currency: "LREP" | "USDC" | "MIXED";
+    activeRewardPoolCount: number;
+    currentRewardPoolAmount: string;
+    hasActiveBounty?: boolean;
+  } | null;
 };
 
 export type ContentRound = {
