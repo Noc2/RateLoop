@@ -40,6 +40,16 @@ const REQUIRED_WORLD_CHAIN_EXPORT = {
   "0x000000000000000000000000000000000000000f": "ClusterPayoutOracle",
   "0x0000000000000000000000000000000000000010": "LaunchDistributionPool",
   "0x0000000000000000000000000000000000000011": "AdvisoryVoteRecorder",
+  "0x0000000000000000000000000000000000000012": "FrontendRegistryProxyAdmin",
+  "0x0000000000000000000000000000000000000013": "ProfileRegistryProxyAdmin",
+  "0x0000000000000000000000000000000000000014": "ContentRegistryProxyAdmin",
+  "0x0000000000000000000000000000000000000015": "RoundVotingEngineProxyAdmin",
+  "0x0000000000000000000000000000000000000016": "ProtocolConfigProxyAdmin",
+  "0x0000000000000000000000000000000000000017": "RoundRewardDistributorProxyAdmin",
+  "0x0000000000000000000000000000000000000018": "QuestionRewardPoolEscrowProxyAdmin",
+  "0x0000000000000000000000000000000000000019": "FeedbackRegistryProxyAdmin",
+  "0x000000000000000000000000000000000000001a": "FeedbackBonusEscrowProxyAdmin",
+  "0x000000000000000000000000000000000000001b": "RaterRegistryProxyAdmin",
   deploymentBlockNumber: "200",
   deploymentComplete: "true",
   networkName: "worldchain",
@@ -129,6 +139,47 @@ describe("assertFreshTargetDeployment", () => {
           { 480: 200 }
         ),
       /missing required contracts/
+    );
+  });
+
+  test("rejects proxy-backed deployment exports without proxy admins", () => {
+    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    const { "0x000000000000000000000000000000000000001b": _proxyAdmin, ...deploymentExport } =
+      REQUIRED_WORLD_CHAIN_EXPORT;
+
+    assert.throws(
+      () =>
+        assertFreshTargetDeployment(
+          {},
+          {},
+          { 480: deploymentExport },
+          { 480: 200 }
+        ),
+      /missing proxy admin entries: RaterRegistryProxyAdmin/
+    );
+  });
+
+  test("rejects proxy-backed deployment exports that point at implementation creates", () => {
+    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+
+    assert.throws(
+      () =>
+        assertFreshTargetDeployment(
+          {},
+          {},
+          { 480: REQUIRED_WORLD_CHAIN_EXPORT },
+          { 480: 200 },
+          {},
+          {
+            480: new Map([
+              [
+                "0x000000000000000000000000000000000000000e",
+                "RaterRegistry",
+              ],
+            ]),
+          }
+        ),
+      /maps proxy-backed contracts to implementation CREATE addresses: RaterRegistry/
     );
   });
 

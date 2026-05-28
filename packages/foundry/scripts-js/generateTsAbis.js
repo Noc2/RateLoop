@@ -43,6 +43,19 @@ const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "AdvisoryVoteRecorder",
 ];
 
+const PROXY_BACKED_DEPLOYMENT_EXPORT_CONTRACTS = [
+  "FrontendRegistry",
+  "ProfileRegistry",
+  "ContentRegistry",
+  "RoundVotingEngine",
+  "ProtocolConfig",
+  "RoundRewardDistributor",
+  "QuestionRewardPoolEscrow",
+  "FeedbackRegistry",
+  "FeedbackBonusEscrow",
+  "RaterRegistry",
+];
+
 function getDirectories(path) {
   if (!existsSync(path)) {
     return [];
@@ -204,6 +217,7 @@ export function processAllDeployments(broadcastPath) {
   const allDeploymentsByAddress = new Map();
   const latestBroadcastBlockNumbers = {};
   const latestBroadcastDeploymentAddresses = {};
+  const latestBroadcastDeploymentContractsByAddress = {};
   const latestBroadcastTimestamps = {};
 
   scriptFolders.forEach((scriptFolder) => {
@@ -230,10 +244,14 @@ export function processAllDeployments(broadcastPath) {
         if (timestamp > (latestBroadcastTimestamps[chainId] || 0)) {
           latestBroadcastTimestamps[chainId] = timestamp;
           latestBroadcastDeploymentAddresses[chainId] = new Set();
+          latestBroadcastDeploymentContractsByAddress[chainId] = new Map();
         }
         if (timestamp === latestBroadcastTimestamps[chainId]) {
-          latestBroadcastDeploymentAddresses[chainId].add(
-            deployment.address.toLowerCase()
+          const deploymentAddress = deployment.address.toLowerCase();
+          latestBroadcastDeploymentAddresses[chainId].add(deploymentAddress);
+          latestBroadcastDeploymentContractsByAddress[chainId].set(
+            deploymentAddress,
+            deployment.contractName
           );
         }
         const key = `${chainId}-${deployment.contractName}`;
@@ -306,6 +324,7 @@ export function processAllDeployments(broadcastPath) {
     deploymentsByAddress: allDeploymentsByAddress,
     latestBroadcastBlockNumbers,
     latestBroadcastDeploymentAddresses,
+    latestBroadcastDeploymentContractsByAddress,
   };
 }
 
@@ -342,6 +361,16 @@ function pruneGeneratedOnlyContracts(contracts) {
   );
 }
 
+function pruneIncompleteNonLocalGeneratedContracts(contracts, deployments) {
+  return Object.fromEntries(
+    Object.entries(contracts).filter(
+      ([chainId]) =>
+        !isNonLocalDeploymentChain(chainId) ||
+        isCompleteDeploymentExport(deployments[chainId])
+    )
+  );
+}
+
 function deploymentExportContractNames(chainDeployments) {
   if (typeof chainDeployments !== "object" || chainDeployments === null) {
     return new Set();
@@ -367,6 +396,18 @@ function deploymentExportRequiredAddresses(chainDeployments) {
         address.startsWith("0x") && requiredContractNames.has(contractName)
     )
     .map(([address]) => address.toLowerCase());
+}
+
+function deploymentExportAddressByContractName(chainDeployments) {
+  if (typeof chainDeployments !== "object" || chainDeployments === null) {
+    return new Map();
+  }
+
+  return new Map(
+    Object.entries(chainDeployments)
+      .filter(([address]) => address.startsWith("0x"))
+      .map(([address, contractName]) => [contractName, address.toLowerCase()])
+  );
 }
 
 function isCompleteDeploymentExport(chainDeployments) {
@@ -419,6 +460,12 @@ export function assertSharedDeploymentArtifactsSynced(
     if (typeof chainDeployments !== "object" || chainDeployments === null) {
       continue;
     }
+    if (
+      isNonLocalDeploymentChain(chainId) &&
+      !isCompleteDeploymentExport(chainDeployments)
+    ) {
+      continue;
+    }
 
     const chainContracts = sharedContracts[chainId] || {};
     const mismatches = [];
@@ -463,7 +510,8 @@ function assertCompleteNonLocalDeploymentExport(
   chainDeployments,
   latestBroadcastBlockNumber,
   targetLabel,
-  latestBroadcastDeploymentAddresses = new Set()
+  latestBroadcastDeploymentAddresses = new Set(),
+  latestBroadcastDeploymentContractsByAddress = new Map()
 ) {
   if (!isCompleteDeploymentExport(chainDeployments)) {
     throw new Error(
@@ -481,6 +529,38 @@ function assertCompleteNonLocalDeploymentExport(
       `Fresh deployment export for ${targetLabel} is missing required contracts: ${missingContracts.join(
         ", "
       )}. Refusing to use raw broadcast data for target-chain artifacts.`
+    );
+  }
+
+  const exportedAddressByContractName =
+    deploymentExportAddressByContractName(chainDeployments);
+  const missingProxyAdminContracts =
+    PROXY_BACKED_DEPLOYMENT_EXPORT_CONTRACTS.flatMap((contractName) => {
+      if (!exportedContractNames.has(contractName)) return [];
+      const proxyAdminName = `${contractName}ProxyAdmin`;
+      return exportedContractNames.has(proxyAdminName) ? [] : [proxyAdminName];
+    });
+  if (missingProxyAdminContracts.length > 0) {
+    throw new Error(
+      `Fresh deployment export for ${targetLabel} is missing proxy admin entries: ${missingProxyAdminContracts.join(
+        ", "
+      )}. Refusing to publish implementation-address artifacts for proxy-backed contracts.`
+    );
+  }
+
+  const implementationAddressExports =
+    PROXY_BACKED_DEPLOYMENT_EXPORT_CONTRACTS.flatMap((contractName) => {
+      const exportedAddress = exportedAddressByContractName.get(contractName);
+      if (!exportedAddress) return [];
+      const broadcastContractName =
+        latestBroadcastDeploymentContractsByAddress.get(exportedAddress);
+      return broadcastContractName === contractName ? [contractName] : [];
+    });
+  if (implementationAddressExports.length > 0) {
+    throw new Error(
+      `Fresh deployment export for ${targetLabel} maps proxy-backed contracts to implementation CREATE addresses: ${implementationAddressExports.join(
+        ", "
+      )}. Re-run the deploy script and export proxy addresses instead.`
     );
   }
 
@@ -514,7 +594,8 @@ export function assertFreshTargetDeployment(
   existingContracts,
   deployments = {},
   latestBroadcastBlockNumbers = {},
-  latestBroadcastDeploymentAddresses = {}
+  latestBroadcastDeploymentAddresses = {},
+  latestBroadcastDeploymentContractsByAddress = {}
 ) {
   const deployTarget = process.env.DEPLOY_TARGET_NETWORK;
   if (!deployTarget) {
@@ -536,7 +617,8 @@ export function assertFreshTargetDeployment(
         deployments[chainId],
         latestBroadcastBlockNumbers[chainId] || 0,
         `chainId ${chainId}`,
-        latestBroadcastDeploymentAddresses[chainId] || new Set()
+        latestBroadcastDeploymentAddresses[chainId] || new Set(),
+        latestBroadcastDeploymentContractsByAddress[chainId] || new Map()
       );
     }
     return;
@@ -551,7 +633,8 @@ export function assertFreshTargetDeployment(
       deployments[chainId],
       latestBroadcastBlockNumbers[chainId] || 0,
       `DEPLOY_TARGET_NETWORK='${deployTarget}' (chainId ${targetChainId})`,
-      latestBroadcastDeploymentAddresses[chainId] || new Set()
+      latestBroadcastDeploymentAddresses[chainId] || new Set(),
+      latestBroadcastDeploymentContractsByAddress[chainId] || new Map()
     );
     return;
   }
@@ -612,6 +695,7 @@ function main() {
     deploymentsByAddress,
     latestBroadcastBlockNumbers,
     latestBroadcastDeploymentAddresses,
+    latestBroadcastDeploymentContractsByAddress,
   } = processAllDeployments(current_path_to_broadcast);
 
   // Handle upgradeable proxies: the deployments JSON maps proxy addresses to
@@ -676,17 +760,20 @@ function main() {
   const existingContracts = readExistingDeployedContracts(
     deployedContractsTargetFile
   );
+  const generatedContractsForValidation =
+    pruneIncompleteNonLocalGeneratedContracts(allGeneratedContracts, deployments);
   const existingContractsForPublish =
     pruneGeneratedOnlyContracts(existingContracts);
   assertFreshTargetDeployment(
-    allGeneratedContracts,
+    generatedContractsForValidation,
     existingContractsForPublish,
     deployments,
     latestBroadcastBlockNumbers,
-    latestBroadcastDeploymentAddresses
+    latestBroadcastDeploymentAddresses,
+    latestBroadcastDeploymentContractsByAddress
   );
   const generatedContractsForPublish = pruneGeneratedOnlyContracts(
-    filterGeneratedContractsForDeployTarget(allGeneratedContracts)
+    filterGeneratedContractsForDeployTarget(generatedContractsForValidation)
   );
   const mergedContracts = {
     ...existingContractsForPublish,

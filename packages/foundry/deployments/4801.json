@@ -14,7 +14,7 @@
   "0x736f59b9121D169305b6ae258762a57B238ef4d8": "RoundRewardDistributorProxyAdmin",
   "0x7E59FfF03f3A3cfC3E8DB9AcE665A228b3353C21": "ContentRegistryProxyAdmin",
   "0x93050f59ea3f19c36F6aDE49823c9d2390c478f3": "ClusterPayoutOracle",
-  "0xAfFb47E6e092282C8dfc5946aABfB3401e79A5b4": "RaterRegistry",
+  "0xAfFb47E6e092282C8dfc5946aABfB3401e79A5b4": "RaterRegistryImplementation",
   "0xBb4b0D42194c3f6876831d640E3A946839BBb56A": "QuestionRewardPoolEscrow",
   "0xBfE61CFf736DC7Bf72dAf6B74E3324A4d7AF0FBD": "RoundVotingEngine",
   "0xC056384c6F1ea8C369762F0a8fFdB4437a6BCe93": "FeedbackBonusEscrowProxyAdmin",
@@ -27,6 +27,6 @@
   "0xc234e00929A4E8340184F3628ecfF06a47e64FD7": "LaunchDistributionPool",
   "0xfAC12C696d4e6eD8841A3B0363D53E08cf24d5a4": "RateLoopGovernor",
   "deploymentBlockNumber": 29667641,
-  "deploymentComplete": "true",
+  "deploymentComplete": "false",
   "networkName": "worldchainSepolia"
 }

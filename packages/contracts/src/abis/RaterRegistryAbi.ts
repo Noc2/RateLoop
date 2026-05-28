@@ -151,6 +151,34 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "attestHumanCredentialWithV4Proof",
+    "inputs": [
+      {
+        "name": "nullifier",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expiresAtMin",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "proof",
+        "type": "uint256[5]",
+        "internalType": "uint256[5]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "clearRevokedHumanNullifier",
     "inputs": [
       {
@@ -298,6 +326,13 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "freezeWorldIdV4VerifierConfig",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -528,6 +563,44 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "initialize",
+    "inputs": [
+      {
+        "name": "admin",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "governance",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_worldIdRouter",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_worldIdScope",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_worldIdExternalNullifierHash",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_worldIdCredentialTtl",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "isFollowing",
     "inputs": [
       {
@@ -541,6 +614,19 @@ export const RaterRegistryAbi = [
         "internalType": "address"
       }
     ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "legacyWorldIdAttestationDisabled",
+    "inputs": [],
     "outputs": [
       {
         "name": "",
@@ -814,6 +900,44 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "setWorldIdV4VerifierConfig",
+    "inputs": [
+      {
+        "name": "_worldIdV4Verifier",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_worldIdV4RpId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "_worldIdV4Action",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_worldIdV4CredentialTtl",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "_worldIdV4IssuerSchemaId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "_worldIdV4CredentialGenesisIssuedAtMin",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setWorldIdVerifierConfig",
     "inputs": [
       {
@@ -942,6 +1066,110 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4Action",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4CredentialGenesisIssuedAtMin",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4CredentialScope",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4CredentialTtl",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4IssuerSchemaId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4RpId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4Verifier",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IWorldIDVerifier"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4VerifierConfigFrozen",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1164,6 +1392,32 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LegacyWorldIdAttestationDisabledSet",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "MaxSeededCredentialTtlUpdated",
     "inputs": [
       {
@@ -1358,6 +1612,62 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "event",
+    "name": "WorldIdV4VerifierConfigLocked",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WorldIdV4VerifierConfigUpdated",
+    "inputs": [
+      {
+        "name": "verifier",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "rpId",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "action",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "credentialTtl",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "issuerSchemaId",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "credentialGenesisIssuedAtMin",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "WorldIdVerifierConfigLocked",
     "inputs": [
       {
@@ -1458,6 +1768,16 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LegacyWorldIdAttestationDisabled",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NoDelegateSet",
     "inputs": []
   },
@@ -1468,7 +1788,22 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "error",
+    "name": "NotInitializing",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NullifierAlreadyAssigned",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WorldIdV4VerifierConfigFrozen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WorldIdV4VerifierNotConfigured",
     "inputs": []
   },
   {
