@@ -39,7 +39,18 @@ test("formatPrivateRoundHint shows the next private round countdown", () => {
       currentEpochRemaining: 9 * 60 + 5,
       roundTimeRemaining: 20 * 60,
     }),
-    "Private round ends in 9:05",
+    "Private round ends in 9m 5s",
+  );
+});
+
+test("formatPrivateRoundHint shows days for long private rounds", () => {
+  assert.equal(
+    formatPrivateRoundHint({
+      phase: "voting",
+      currentEpochRemaining: 719 * 60 * 60 + 5 * 60 + 37,
+      roundTimeRemaining: 40 * 24 * 60 * 60,
+    }),
+    "Private round ends in 29d 23h 5m",
   );
 });
 
@@ -50,7 +61,7 @@ test("formatPrivateRoundHint respects the final round deadline", () => {
       currentEpochRemaining: 20 * 60,
       roundTimeRemaining: 4 * 60 + 3,
     }),
-    "Private round ends in 4:03",
+    "Private round ends in 4m 3s",
   );
 });
 

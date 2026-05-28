@@ -18,15 +18,20 @@ interface RoundRevealedBreakdownProps {
 
 function formatRoundCountdown(seconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(safeSeconds / 3600);
+  const days = Math.floor(safeSeconds / 86_400);
+  const hours = Math.floor((safeSeconds % 86_400) / 3600);
   const minutes = Math.floor((safeSeconds % 3600) / 60);
   const remainingSeconds = safeSeconds % 60;
 
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
   }
 
-  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  return `${minutes}m ${remainingSeconds}s`;
 }
 
 export function formatPrivateRoundHint(
