@@ -1,7 +1,8 @@
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { setupWallet } from "../helpers/wallet-session";
-import { voteOnContent } from "../helpers/vote-helpers";
+import { createFreshVoteableContent } from "../helpers/voteable-content";
+import { voteOnSpecificContent } from "../helpers/vote-helpers";
 import { VOTE_DOWN_BUTTON_NAME, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 import { expect, test } from "@playwright/test";
 
@@ -50,8 +51,8 @@ test.describe("Voting flow — 3-voter threshold", () => {
     await context.close();
   });
 
-  // Extend timeout: 3 accounts × ~45s each (load + thumbnail cycling + tx + revert handling)
-  test("three accounts can vote on the same content", async ({ browser }) => {
+  // Extend timeout: fresh content submission + 3 accounts × UI load + tx + indexing.
+  test("three accounts can vote on the same fresh content", async ({ browser }) => {
     test.setTimeout(180_000);
     // Use accounts #8, #9, #10 — these have 1000 LREP + rater credential.
     // Accounts #3-#7 are reserved for settlement/reward-claim tests to avoid cooldown collisions.
@@ -60,6 +61,8 @@ test.describe("Voting flow — 3-voter threshold", () => {
       { account: ANVIL_ACCOUNTS.account9, direction: "up" as const },
       { account: ANVIL_ACCOUNTS.account10, direction: "down" as const },
     ];
+    const target = await createFreshVoteableContent("UI Vote Target");
+    expect(target, "fresh vote target should submit and index").not.toBeNull();
 
     let successCount = 0;
 
@@ -68,18 +71,14 @@ test.describe("Voting flow — 3-voter threshold", () => {
       const page = await context.newPage();
       await setupWallet(page, voter.account.privateKey);
 
-      const success = await voteOnContent(page, voter.direction, { voterAddress: voter.account.address });
+      const success = await voteOnSpecificContent(page, target!.contentId, voter.direction, {
+        voterAddress: voter.account.address,
+      });
       if (success) successCount++;
 
       await context.close();
     }
 
-    // On a fresh deploy all 3 succeed. Repeated runs or prior settlement tests
-    // may exhaust voteable content (rounds settled, cooldowns active).
-    if (successCount === 0) {
-      test.skip(true, "No votes succeeded — content likely settled or cooldowns from prior tests");
-      return;
-    }
-    expect(successCount).toBeGreaterThanOrEqual(1);
+    expect(successCount).toBe(3);
   });
 });

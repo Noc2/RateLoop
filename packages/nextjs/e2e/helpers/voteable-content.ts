@@ -40,6 +40,47 @@ function createFallbackContentUrl(uniqueId: string, attempt: number): string {
   return `https://www.youtube.com/watch?v=responsive${uniqueId}${attempt}`;
 }
 
+export async function createFreshVoteableContent(
+  label: string,
+  submitter = ANVIL_ACCOUNTS.account3.address,
+): Promise<{ contentId: string; title: string } | null> {
+  const uniqueId = Date.now().toString(36);
+  const title = `${label} ${uniqueId}`;
+  const approved = await approveLREP(
+    CONTRACT_ADDRESSES.ContentRegistry,
+    SUBMIT_STAKE,
+    submitter,
+    CONTRACT_ADDRESSES.LoopReputation,
+  );
+  if (!approved) return null;
+
+  const submitted = await submitContentDirect(
+    `https://www.youtube.com/watch?v=vote${uniqueId}`,
+    title,
+    "Fresh deterministic content for UI vote transaction coverage.",
+    "Technology,Testing,Video",
+    1,
+    submitter,
+    CONTRACT_ADDRESSES.ContentRegistry,
+  );
+  if (!submitted) return null;
+
+  let contentId: string | null = null;
+  const indexed = await waitForPonderIndexed(
+    async () => {
+      const { items } = await getContentList({ search: title, status: "all", limit: 5 });
+      const match = items.find(item => item.title === title && item.submitter.toLowerCase() === submitter.toLowerCase());
+      contentId = match?.id ?? null;
+      return Boolean(contentId);
+    },
+    90_000,
+    2_000,
+    "createFreshVoteableContent",
+  );
+
+  return indexed && contentId ? { contentId, title } : null;
+}
+
 export async function ensureVoteableContentWithDeps(
   page: Page,
   deps: EnsureVoteableContentDeps = defaultDeps,
