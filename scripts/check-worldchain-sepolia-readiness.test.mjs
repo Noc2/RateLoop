@@ -97,6 +97,21 @@ test("validateOfflineReadiness rejects missing World Chain Sepolia USDC config",
   assert(result.failures.some(message => message.includes("USDC address")));
 });
 
+test("validateOfflineReadiness rejects missing x402 submitter deployment", () => {
+  const deploymentJson = makeDeploymentJson();
+  const x402Address = buildDeploymentAddressMap(deploymentJson).get("X402QuestionSubmitter");
+  delete deploymentJson[x402Address];
+
+  const result = validateOfflineReadiness({
+    deploymentJson,
+    deployedContractsSource: makeGeneratedContractsSource(),
+    questionRewardPoolsSource,
+  });
+
+  assert.equal(result.ok, false);
+  assert(result.failures.some(message => message.includes("X402QuestionSubmitter has an address")));
+});
+
 test("validateLiveReadiness can skip missing targets for ad-hoc local use", async () => {
   const result = await validateLiveReadiness({
     deploymentJson: makeDeploymentJson(),

@@ -24,6 +24,7 @@ export const REQUIRED_DEPLOYED_CONTRACTS = [
   "RaterRegistry",
   "RoundRewardDistributor",
   "RoundVotingEngine",
+  "X402QuestionSubmitter",
 ];
 
 export const PONDER_INDEXED_CONTRACTS = [
@@ -264,7 +265,7 @@ export async function validateLiveReadiness({
   }
 
   if (appUrl) {
-    for (const path of ["/", "/ask", "/docs/ai"]) {
+    for (const path of ["/", "/ask", "/docs/ai", "/api/agent/templates"]) {
       try {
         const response = await fetchWithTimeout(new URL(path, appUrl));
         addCheck(checks, failures, response.status < 500, `app route ${path} returns below HTTP 500`);
