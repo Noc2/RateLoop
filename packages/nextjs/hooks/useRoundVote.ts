@@ -358,6 +358,13 @@ export function useRoundVote() {
 
       const ensureOpenStakedRuntime = () =>
         ensureOpenStakedRoundRuntime({
+          buildOpenedRuntimeFallback: openedRuntime =>
+            openedRuntime.roundId > 0n
+              ? {
+                  ...openedRuntime,
+                  requiresOpenRound: false,
+                }
+              : null,
           openRound: submitOpenRound,
           resolveRuntime: resolveFreshStakedRuntime,
         });

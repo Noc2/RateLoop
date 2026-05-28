@@ -9,11 +9,13 @@ type OpenableStakedRoundRuntime = {
 const sleep = (delayMs: number) => new Promise<void>(resolve => setTimeout(resolve, delayMs));
 
 export async function ensureOpenStakedRoundRuntime<Runtime extends OpenableStakedRoundRuntime>({
+  buildOpenedRuntimeFallback,
   openRound,
   resolveRuntime,
   retryDelaysMs = DEFAULT_OPEN_STAKED_ROUND_RETRY_DELAYS_MS,
   wait = sleep,
 }: {
+  buildOpenedRuntimeFallback?: (runtime: Runtime) => Runtime | null;
   openRound: () => Promise<void>;
   resolveRuntime: () => Promise<Runtime>;
   retryDelaysMs?: readonly number[];
@@ -51,6 +53,11 @@ export async function ensureOpenStakedRoundRuntime<Runtime extends OpenableStake
     if (delayedRuntime) {
       return delayedRuntime;
     }
+  }
+
+  const openedRuntimeFallback = buildOpenedRuntimeFallback?.(runtime);
+  if (openedRuntimeFallback) {
+    return openedRuntimeFallback;
   }
 
   const error = new Error(PREPARING_ROUND_VOTE_MESSAGE);

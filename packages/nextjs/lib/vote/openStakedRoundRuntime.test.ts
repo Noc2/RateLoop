@@ -67,3 +67,26 @@ test("ensureOpenStakedRoundRuntime throws a user-facing preparation message afte
 
   assert.equal(openCalls, 1);
 });
+
+test("ensureOpenStakedRoundRuntime can fall back to the preview runtime after opening a round", async () => {
+  type TestRuntime = {
+    requiresOpenRound: boolean;
+    roundId: bigint;
+  };
+  const runtime = await ensureOpenStakedRoundRuntime<TestRuntime>({
+    buildOpenedRuntimeFallback: pendingRuntime => ({
+      ...pendingRuntime,
+      requiresOpenRound: false,
+    }),
+    openRound: async () => {},
+    resolveRuntime: async () => ({
+      requiresOpenRound: true,
+      roundId: 10n,
+    }),
+    retryDelaysMs: [10],
+    wait: async () => {},
+  });
+
+  assert.equal(runtime.requiresOpenRound, false);
+  assert.equal(runtime.roundId, 10n);
+});
