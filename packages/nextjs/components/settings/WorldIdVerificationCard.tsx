@@ -142,10 +142,10 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     args: [walletAddress],
     query: { enabled: Boolean(walletAddress) },
   });
-  const { writeContractAsync: claimVerifiedBonus, isPending: isClaimPending } = useScaffoldWriteContract({
+  const { writeContractAsync: claimVerifiedBonus } = useScaffoldWriteContract({
     contractName: "LaunchDistributionPool",
   });
-  const { writeContractAsync: unlockFullEarnedRaterCap, isPending: isUnlockPending } = useScaffoldWriteContract({
+  const { writeContractAsync: unlockFullEarnedRaterCap } = useScaffoldWriteContract({
     contractName: "LaunchDistributionPool",
   });
   const { writeContractAsync: attestWorldIdCredential, isMining: isAttestingCredential } = useScaffoldWriteContract({
@@ -186,17 +186,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const isVerifiedBonusClaimed = verifiedBonusClaimed === true;
   const activeEarnedRaterCap = typeof raterLaunchCap === "bigint" ? raterLaunchCap : undefined;
   const fullEarnedRaterCap = typeof raterFullLaunchCap === "bigint" ? raterFullLaunchCap : undefined;
-  const launchCapUnlockAmount =
-    fullEarnedRaterCap !== undefined && activeEarnedRaterCap !== undefined && fullEarnedRaterCap > activeEarnedRaterCap
-      ? fullEarnedRaterCap - activeEarnedRaterCap
-      : 0n;
-  const canUnlockFullEarnedRaterCap = Boolean(
-    walletAddress &&
-      isCredentialActive &&
-      raterFullLaunchCapUnlocked === false &&
-      launchCapUnlockAmount > 0n &&
-      !isUnlockPending,
-  );
   const hasInvalidReferral = referralInputState.status === "invalid" || referralInputState.status === "self";
   const referralHint = referralInputState.message
     ? referralInputState.message
@@ -207,24 +196,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           ? `Referrer can earn ${formatLrepAmount(referralBonusPreview)} LREP when you claim.`
           : "This referrer is not verified yet, so no referral bonus will be paid."
       : undefined;
-  const canClaimVerifiedBonus = Boolean(
-    walletAddress &&
-      isCredentialActive &&
-      !isVerifiedBonusClaimed &&
-      currentVerifiedBonus !== undefined &&
-      currentVerifiedBonus > 0n &&
-      !hasInvalidReferral &&
-      !isClaimPending,
-  );
-  const claimDisabledReason = !walletAddress
-    ? "Connect a wallet to claim the launch bonus."
-    : !isCredentialActive
-      ? "Verify with World ID before claiming the launch bonus."
-      : isVerifiedBonusClaimed
-        ? "This wallet already claimed the verified launch bonus."
-        : hasInvalidReferral
-          ? referralInputState.message
-          : null;
   const worldIdRequestPanelState = getWorldIdRequestPanelState({
     connectorURI,
     errorCode: worldIdErrorCode,
@@ -455,56 +426,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       rpContextResponse,
     ],
   );
-
-  const handleClaimVerifiedBonus = useCallback(async () => {
-    if (!canClaimVerifiedBonus) {
-      return;
-    }
-
-    try {
-      await claimVerifiedBonus(
-        {
-          functionName: "claimVerifiedBonus",
-          args: [claimReferrer],
-        },
-        {
-          action: "claim launch bonus",
-          suppressSuccessToast: true,
-        },
-      );
-      notification.success("Launch bonus claimed.");
-      if (claimReferrer !== zeroAddress) {
-        clearStoredReferralAttribution();
-        setReferralInput("");
-      }
-      await refreshLaunchReads();
-    } catch {
-      // The transaction wrapper already renders the parsed contract error.
-    }
-  }, [canClaimVerifiedBonus, claimReferrer, claimVerifiedBonus, refreshLaunchReads]);
-
-  const handleUnlockFullEarnedRaterCap = useCallback(async () => {
-    if (!canUnlockFullEarnedRaterCap || !walletAddress) {
-      return;
-    }
-
-    try {
-      await unlockFullEarnedRaterCap(
-        {
-          functionName: "unlockFullEarnedRaterCap",
-          args: [walletAddress],
-        },
-        {
-          action: "unlock full earned-rater cap",
-          suppressSuccessToast: true,
-        },
-      );
-      notification.success("Full earned-rater launch cap unlocked.");
-      await refreshLaunchReads();
-    } catch {
-      // The transaction wrapper already renders the parsed contract error.
-    }
-  }, [canUnlockFullEarnedRaterCap, refreshLaunchReads, unlockFullEarnedRaterCap, walletAddress]);
 
   const handleSuccess = useCallback(
     async (result: IDKitResult) => {
@@ -760,149 +681,37 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       ) : null}
 
       {isCredentialActive ? (
-        <div className="mt-6 grid gap-6 border-t border-base-300 pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
-          <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h4 className="text-lg font-semibold text-base-content">Referral bonus for verified humans</h4>
-              </div>
-              {referralInput ? (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm btn-square shrink-0"
-                  aria-label="Clear referral"
-                  onClick={handleClearReferral}
-                >
-                  <XMarkIcon className="h-4 w-4" />
-                </button>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor={referralInputId} className="text-sm font-medium text-base-content/70">
-                Referrer address
-              </label>
+        <div className="mt-6 grid gap-6 border-t border-base-300 pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.45fr)]">
+          <div className="space-y-2">
+            <label htmlFor={`${referralInputId}-share`} className="text-sm font-medium text-base-content/70">
+              Your referral link
+            </label>
+            <div className="flex gap-2">
               <input
-                id={referralInputId}
+                id={`${referralInputId}-share`}
                 type="text"
-                inputMode="text"
-                autoComplete="off"
-                placeholder="0x..."
-                aria-describedby={referralHint ? referralHintId : undefined}
-                className={`input input-bordered w-full bg-base-100 font-mono text-sm ${
-                  hasInvalidReferral ? "input-error" : ""
-                }`}
-                value={referralInput}
-                onBlur={handleReferralBlur}
-                onChange={event => setReferralInput(event.target.value)}
+                readOnly
+                className="input input-bordered min-w-0 flex-1 bg-base-100 font-mono text-xs"
+                value={shareLink}
+                placeholder="Connect a wallet to generate a link"
               />
-              {referralHint ? (
-                <p
-                  id={referralHintId}
-                  className={`text-sm ${hasInvalidReferral ? "text-error" : "text-base-content/55"}`}
-                >
-                  {referralHint}
-                </p>
-              ) : null}
+              <button
+                type="button"
+                className="btn btn-secondary btn-square shrink-0"
+                aria-label="Copy referral link"
+                disabled={!shareLink}
+                onClick={() => void handleCopyReferralLink()}
+              >
+                <ClipboardDocumentIcon className="h-5 w-5" />
+              </button>
             </div>
-
-            <div className="space-y-2">
-              <label htmlFor={`${referralInputId}-share`} className="text-sm font-medium text-base-content/70">
-                Your referral link
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id={`${referralInputId}-share`}
-                  type="text"
-                  readOnly
-                  className="input input-bordered min-w-0 flex-1 bg-base-100 font-mono text-xs"
-                  value={shareLink}
-                  placeholder="Connect a wallet to generate a link"
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-square shrink-0"
-                  aria-label="Copy referral link"
-                  disabled={!shareLink}
-                  onClick={() => void handleCopyReferralLink()}
-                >
-                  <ClipboardDocumentIcon className="h-5 w-5" />
-                </button>
-              </div>
-              {isCopiedToClipboard ? <p className="text-sm text-base-content/55">Referral link copied.</p> : null}
-            </div>
+            {isCopiedToClipboard ? <p className="text-sm text-base-content/55">Referral link copied.</p> : null}
           </div>
 
-          <div className="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
-            <div>
-              <h4 className="text-lg font-semibold text-base-content">Verified launch bonus</h4>
-            </div>
-
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-              <dt className="text-base-content/55">Current bonus</dt>
-              <dd className="text-right font-semibold text-base-content">
-                {formatLrepAmount(currentVerifiedBonus)} LREP
-              </dd>
-              <dt className="text-base-content/55">Referral earned</dt>
-              <dd className="text-right font-semibold text-base-content">{formatLrepAmount(referralEarnings)} LREP</dd>
-              <dt className="text-base-content/55">Credential</dt>
-              <dd className="text-right font-semibold text-base-content">
-                {isCredentialActive ? "Active" : "Not active"}
-              </dd>
-              <dt className="text-base-content/55">Bonus status</dt>
-              <dd className="text-right font-semibold text-base-content">
-                {isVerifiedBonusClaimed ? "Claimed" : "Unclaimed"}
-              </dd>
-            </dl>
-
-            <button
-              type="button"
-              className="btn btn-primary launch-bonus-claim-button w-full gap-2"
-              disabled={!canClaimVerifiedBonus}
-              onClick={() => void handleClaimVerifiedBonus()}
-            >
-              {isClaimPending ? (
-                <>
-                  <span className="loading loading-spinner loading-sm" />
-                  Claiming...
-                </>
-              ) : (
-                `Claim ${formatLrepAmount(currentVerifiedBonus)} LREP`
-              )}
-            </button>
-            {claimDisabledReason ? (
-              <p className="text-sm leading-relaxed text-base-content/55">{claimDisabledReason}</p>
-            ) : null}
-            {launchCapUnlockAmount > 0n || raterFullLaunchCapUnlocked === true ? (
-              <div className="surface-card-nested rounded-xl p-3 text-sm text-base-content/65">
-                <div className="flex items-center justify-between gap-3">
-                  <span>Earned-rater cap</span>
-                  <span className="font-semibold text-base-content">
-                    {raterFullLaunchCapUnlocked === true
-                      ? "Full cap active"
-                      : `${formatLrepAmount(launchCapUnlockAmount)} LREP unlockable`}
-                  </span>
-                </div>
-                {raterFullLaunchCapUnlocked === true ? null : (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm mt-3 w-full"
-                    disabled={!canUnlockFullEarnedRaterCap}
-                    onClick={() => void handleUnlockFullEarnedRaterCap()}
-                  >
-                    {isUnlockPending ? (
-                      <>
-                        <span className="loading loading-spinner loading-xs" />
-                        Unlocking...
-                      </>
-                    ) : (
-                      "Unlock full earned cap"
-                    )}
-                  </button>
-                )}
-              </div>
-            ) : null}
-          </div>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:block lg:space-y-2 lg:text-right">
+            <dt className="text-base-content/55">Referral earned</dt>
+            <dd className="font-semibold text-base-content">{formatLrepAmount(referralEarnings)} LREP</dd>
+          </dl>
         </div>
       ) : (
         <div className="mt-6 border-t border-base-300 pt-5">
