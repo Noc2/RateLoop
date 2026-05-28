@@ -6,6 +6,7 @@ import {
   getAttachmentImageUrl,
   getImageAttachment,
   getImageAttachmentUploadMode,
+  isImageAttachmentBlobStorageConfigured,
   processCompletedImageUpload,
   processCompletedLocalImageUpload,
   reserveImageUploadDailyQuotas,
@@ -37,6 +38,8 @@ type TokenPayload = {
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 const TOKEN_TTL_MS = 10 * 60 * 1000;
 const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const BLOB_STORAGE_CONFIGURATION_ERROR =
+  "Image uploads are not configured. Set BLOB_READ_WRITE_TOKEN in the deployment environment.";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -234,6 +237,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { error: "Local image uploads are enabled. Refresh the page and try the upload again." },
         { status: 400 },
       );
+    }
+    if (!isImageAttachmentBlobStorageConfigured()) {
+      return NextResponse.json({ error: BLOB_STORAGE_CONFIGURATION_ERROR }, { status: 503 });
     }
 
     const body = (await request.json()) as HandleUploadBody;

@@ -297,7 +297,7 @@ function getConfiguredAttachmentBaseUrl() {
   }
 }
 
-function hasBlobReadWriteToken(env: ImageAttachmentUploadModeEnv = process.env) {
+export function isImageAttachmentBlobStorageConfigured(env: ImageAttachmentUploadModeEnv = process.env) {
   return Boolean(env.BLOB_READ_WRITE_TOKEN?.trim());
 }
 
@@ -333,7 +333,7 @@ export function getAttachmentImageUrl(requestUrl: string, attachmentId: string) 
 }
 
 export function getImageAttachmentUploadMode(env: ImageAttachmentUploadModeEnv = process.env): "blob" | "local" {
-  return env.NODE_ENV !== "production" && !hasBlobReadWriteToken(env) ? "local" : "blob";
+  return env.NODE_ENV !== "production" && !isImageAttachmentBlobStorageConfigured(env) ? "local" : "blob";
 }
 
 export function parseAttachmentIdFromImageUrl(value: string): string | null {

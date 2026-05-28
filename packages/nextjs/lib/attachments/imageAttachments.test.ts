@@ -11,6 +11,7 @@ import {
   getImageAttachment,
   getImageAttachmentSubmissionValidationError,
   getImageAttachmentUploadMode,
+  isImageAttachmentBlobStorageConfigured,
   isLocalImageAttachmentPathname,
   parseAttachmentIdFromImageUrl,
   processCompletedImageUpload,
@@ -74,12 +75,20 @@ test("parses RateLoop attachment ids from public upload image URLs", () => {
 
 test("uses local image upload mode in development when Vercel Blob is not configured", () => {
   assert.equal(getImageAttachmentUploadMode({ NODE_ENV: "development" }), "local");
+  assert.equal(isImageAttachmentBlobStorageConfigured({ NODE_ENV: "development" }), false);
   assert.equal(
     getImageAttachmentUploadMode({
       BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_store_secret",
       NODE_ENV: "development",
     }),
     "blob",
+  );
+  assert.equal(
+    isImageAttachmentBlobStorageConfigured({
+      BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_store_secret",
+      NODE_ENV: "development",
+    }),
+    true,
   );
   assert.equal(getImageAttachmentUploadMode({ NODE_ENV: "production" }), "blob");
 });
