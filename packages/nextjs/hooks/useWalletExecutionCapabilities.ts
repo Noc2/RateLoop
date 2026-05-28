@@ -83,12 +83,26 @@ export function walletCapabilitiesSupportPaymasterService(capabilities: Record<s
   return isObjectRecord(paymasterService) && paymasterService.supported === true;
 }
 
+export function walletCapabilitiesSupportAtomicBatch(capabilities: Record<string, unknown> | undefined) {
+  const atomic = capabilities?.atomic;
+  if (!isObjectRecord(atomic)) {
+    return false;
+  }
+
+  return atomic.status === "supported" || atomic.status === "ready";
+}
+
 export function shouldQueryWalletCapabilities(params: {
   chainId: number | undefined;
+  hasSendCalls?: boolean;
   supportedChain: boolean;
   walletId: string | undefined;
 }) {
-  return isThirdwebInAppWalletId(params.walletId) && typeof params.chainId === "number" && params.supportedChain;
+  return (
+    (isThirdwebInAppWalletId(params.walletId) || params.hasSendCalls === true) &&
+    typeof params.chainId === "number" &&
+    params.supportedChain
+  );
 }
 
 export function useWalletExecutionCapabilities() {
@@ -99,8 +113,10 @@ export function useWalletExecutionCapabilities() {
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
   const supportedChain = supportsThirdwebExecutionCapabilities(chainId);
   const walletId = wallet?.id;
+  const hasSendCallsForQuery = Boolean(thirdwebAccount?.sendCalls ?? wallet?.getAccount()?.sendCalls);
   const shouldQueryCapabilities = shouldQueryWalletCapabilities({
     chainId,
+    hasSendCalls: hasSendCallsForQuery,
     supportedChain,
     walletId,
   });
@@ -117,6 +133,7 @@ export function useWalletExecutionCapabilities() {
     const hasSendCalls = Boolean(thirdwebAccount?.sendCalls ?? wallet?.getAccount()?.sendCalls);
     const isThirdwebInApp = isThirdwebInAppWalletId(wallet?.id);
     const thirdwebSponsorshipMode = isThirdwebInApp ? getThirdwebWalletSponsorshipMode(wallet) : null;
+    const supportsAtomicBatchCalls = walletCapabilitiesSupportAtomicBatch(activeCapabilities);
     const supportsPaymasterService = walletCapabilitiesSupportPaymasterService(activeCapabilities);
 
     const executionMode = resolveWalletExecutionMode({
@@ -131,6 +148,7 @@ export function useWalletExecutionCapabilities() {
       executionMode,
       hasSendCalls,
       isThirdwebInApp,
+      supportsAtomicBatchCalls,
       supportsFeeCurrencyFallback: supportedChain,
       supportsPaymasterService,
       supportsSponsoredCalls: executionMode === "sponsored_7702",

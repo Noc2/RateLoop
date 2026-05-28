@@ -105,7 +105,7 @@ test("uses self-funded batch calls only after in-app wallets switch to paid gas 
   );
 });
 
-test("uses self-funded batch calls for active external wallets that expose sendCalls", () => {
+test("uses self-funded batch calls for active external wallets with atomic sendCalls support", () => {
   assert.equal(
     shouldUseSelfFundedBatchCalls({
       activeWalletId: "io.metamask",
@@ -113,6 +113,7 @@ test("uses self-funded batch calls for active external wallets that expose sendC
       connectorId: "io.metamask",
       executionMode: "fee_currency",
       hasSendCalls: true,
+      supportsAtomicBatchCalls: true,
     }),
     true,
   );
@@ -124,6 +125,19 @@ test("uses self-funded batch calls for active external wallets that expose sendC
       connectorId: "io.metamask",
       executionMode: "fee_currency",
       hasSendCalls: false,
+      supportsAtomicBatchCalls: true,
+    }),
+    false,
+  );
+
+  assert.equal(
+    shouldUseSelfFundedBatchCalls({
+      activeWalletId: "io.metamask",
+      chainId: 4801,
+      connectorId: "io.metamask",
+      executionMode: "fee_currency",
+      hasSendCalls: true,
+      supportsAtomicBatchCalls: false,
     }),
     false,
   );

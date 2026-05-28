@@ -92,6 +92,7 @@ export function shouldUseSelfFundedBatchCalls(params: {
   executionMode: WalletExecutionMode;
   hasSendCalls?: boolean;
   isThirdwebInApp?: boolean;
+  supportsAtomicBatchCalls?: boolean;
 }) {
   const isInAppSelfFunded =
     shouldExpectSponsoredThirdwebBatchCalls(params) && params.executionMode === "self_funded_7702";
@@ -101,6 +102,7 @@ export function shouldUseSelfFundedBatchCalls(params: {
     typeof params.activeWalletId === "string" &&
     typeof params.connectorId === "string" &&
     params.activeWalletId === params.connectorId &&
+    params.supportsAtomicBatchCalls === true &&
     typeof params.chainId === "number" &&
     supportsThirdwebExecutionCapabilities(params.chainId);
 
@@ -183,7 +185,7 @@ export function useThirdwebSponsoredSubmitCalls() {
   const statusToast = useTransactionStatusToast();
   const { address, chainId: wagmiChainId, connector } = useAccount();
   const freeTransactionAllowance = useFreeTransactionAllowance();
-  const { executionMode, hasSendCalls, isThirdwebInApp } = useWalletExecutionCapabilities();
+  const { executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
 
   const expectsSponsoredBatchCalls = useMemo(
@@ -216,8 +218,9 @@ export function useThirdwebSponsoredSubmitCalls() {
         executionMode,
         hasSendCalls,
         isThirdwebInApp,
+        supportsAtomicBatchCalls,
       }),
-    [activeWalletId, chainId, connector?.id, executionMode, hasSendCalls, isThirdwebInApp],
+    [activeWalletId, chainId, connector?.id, executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls],
   );
 
   const canUseGaslessSubmitTransactions = prefersSponsoredBatchCalls;

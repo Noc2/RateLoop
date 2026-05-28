@@ -3,6 +3,7 @@ import {
   resolveWalletExecutionChainId,
   resolveWalletExecutionMode,
   shouldQueryWalletCapabilities,
+  walletCapabilitiesSupportAtomicBatch,
   walletCapabilitiesSupportPaymasterService,
 } from "./useWalletExecutionCapabilities";
 import assert from "node:assert/strict";
@@ -56,7 +57,7 @@ test("resolveWalletExecutionMode keeps unsupported external wallets on direct wo
   );
 });
 
-test("shouldQueryWalletCapabilities only enables capability probing for in-app wallets on supported chains", () => {
+test("shouldQueryWalletCapabilities enables capability probing for batch-capable wallet shapes on supported chains", () => {
   assert.equal(
     shouldQueryWalletCapabilities({
       chainId: 480,
@@ -78,6 +79,17 @@ test("shouldQueryWalletCapabilities only enables capability probing for in-app w
   assert.equal(
     shouldQueryWalletCapabilities({
       chainId: 480,
+      hasSendCalls: true,
+      supportedChain: true,
+      walletId: "io.metamask",
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldQueryWalletCapabilities({
+      chainId: 480,
+      hasSendCalls: false,
       supportedChain: true,
       walletId: "io.metamask",
     }),
@@ -129,6 +141,35 @@ test("resolveWalletCapabilitiesForChain accepts direct chain-filtered capabiliti
         supported: true,
       },
     },
+  );
+});
+
+test("walletCapabilitiesSupportAtomicBatch accepts supported and ready atomic capabilities", () => {
+  assert.equal(
+    walletCapabilitiesSupportAtomicBatch({
+      atomic: {
+        status: "supported",
+      },
+    }),
+    true,
+  );
+
+  assert.equal(
+    walletCapabilitiesSupportAtomicBatch({
+      atomic: {
+        status: "ready",
+      },
+    }),
+    true,
+  );
+
+  assert.equal(
+    walletCapabilitiesSupportAtomicBatch({
+      atomic: {
+        status: "unsupported",
+      },
+    }),
+    false,
   );
 });
 
