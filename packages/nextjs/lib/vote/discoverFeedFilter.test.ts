@@ -353,11 +353,11 @@ test("bundle-only items keep the active bounty status when the bundle bounty is 
   assert.equal(shouldShowBountyExpiredStatus(item, 10_000), false);
 });
 
-test("feedback bonuses are closed when no voting round is open", () => {
+test("feedback bonuses stay active without an indexed open round when the award window is still open", () => {
   const item = makeContentItem({
     id: 1n,
-    url: "https://example.com/feedback-closed",
-    title: "Feedback closed",
+    url: "https://example.com/feedback-active-before-round",
+    title: "Feedback active before round",
     rewardPoolSummary: {
       totalFunded: 12_000_000n,
       totalAvailable: 12_000_000n,
@@ -374,6 +374,37 @@ test("feedback bonuses are closed when no voting round is open", () => {
       awardCount: 0,
       hasActiveFeedbackBonus: true,
       nextFeedbackClosesAt: 12_000n,
+    },
+  });
+
+  assert.equal(hasActiveFeedbackBonus(item, 10_000), true);
+  assert.equal(getActiveFeedbackClosesAt(item, 10_000), 12_000n);
+  assert.equal(shouldShowFeedbackClosedStatus(item, 10_000), false);
+  assert.equal(getVisibleRewardPoolAmount(item, 10_000), 12_000_000n);
+  assert.equal(getVisibleFeedbackBonusAmount(item, 10_000), 100_000_000n);
+});
+
+test("feedback bonuses are closed when the award window has elapsed", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/feedback-expired",
+    title: "Feedback expired",
+    rewardPoolSummary: {
+      totalFunded: 12_000_000n,
+      totalAvailable: 12_000_000n,
+      activeRewardPoolCount: 1,
+      expiredRewardPoolCount: 0,
+      hasActiveBounty: true,
+    },
+    feedbackBonusSummary: {
+      totalFunded: 100_000_000n,
+      totalRemaining: 100_000_000n,
+      totalAwarded: 0n,
+      activePoolCount: 0,
+      expiredPoolCount: 1,
+      awardCount: 0,
+      hasActiveFeedbackBonus: false,
+      nextFeedbackClosesAt: null,
     },
   });
 

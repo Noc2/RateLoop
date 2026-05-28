@@ -91,7 +91,7 @@ export function shouldShowBountyExpiredStatus(item: ContentItem, nowSeconds = Ma
 
 export function getActiveFeedbackClosesAt(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
   const feedbackSummary = item.feedbackBonusSummary;
-  if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n || !item.openRound) return null;
+  if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n) return null;
 
   const closesAt = feedbackSummary.nextFeedbackClosesAt ?? 0n;
   if (closesAt <= 0n || closesAt <= BigInt(nowSeconds)) return null;
@@ -101,7 +101,7 @@ export function getActiveFeedbackClosesAt(item: ContentItem, nowSeconds = Math.f
 
 export function hasActiveFeedbackBonus(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
   const feedbackSummary = item.feedbackBonusSummary;
-  if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n || !item.openRound) return false;
+  if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n) return false;
 
   const closesAt = feedbackSummary.nextFeedbackClosesAt ?? 0n;
   if (closesAt > 0n && closesAt <= BigInt(nowSeconds)) return false;
