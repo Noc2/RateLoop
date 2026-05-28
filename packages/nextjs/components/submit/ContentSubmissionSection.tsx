@@ -410,8 +410,15 @@ export function ContentSubmissionSection() {
     includeExternalSendCalls: true,
   });
   const statusToast = useTransactionStatusToast();
-  const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
-    useThirdwebSponsoredSubmitCalls();
+  const {
+    canUseSelfFundedBatchCalls,
+    canUseSponsoredSubmitCalls,
+    executeSponsoredCalls,
+    isAwaitingSelfFundedSubmitCalls,
+    isAwaitingSponsoredSubmitCalls,
+  } = useThirdwebSponsoredSubmitCalls();
+  const canUseBatchedSubmitCalls = canUseSponsoredSubmitCalls || canUseSelfFundedBatchCalls;
+  const submitCallSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const { showWalletRpcOverloadNotification } = useWalletRpcRecovery();
   const { requireAcceptance } = useTermsAcceptance();
 
@@ -1581,7 +1588,7 @@ export function ContentSubmissionSection() {
 
     setQuestionStepAttempted(true);
 
-    if (isAwaitingSponsoredSubmitCalls) {
+    if (isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls) {
       notification.warning("Wallet reconnecting. Retry in a moment.");
       return;
     }
@@ -1960,7 +1967,7 @@ export function ContentSubmissionSection() {
           });
 
       cancelReservedSubmission = async (revealCommitment: `0x${string}`) => {
-        if (canUseSponsoredSubmitCalls) {
+        if (canUseBatchedSubmitCalls) {
           await executeSponsoredCalls(
             [
               {
@@ -1972,6 +1979,7 @@ export function ContentSubmissionSection() {
             ],
             {
               atomicRequired: true,
+              sponsorshipMode: submitCallSponsorshipMode,
               suppressStatusToast: true,
             },
           );
@@ -1996,7 +2004,7 @@ export function ContentSubmissionSection() {
       };
 
       const reserveSubmission = async (revealCommitment: `0x${string}`) => {
-        if (canUseSponsoredSubmitCalls) {
+        if (canUseBatchedSubmitCalls) {
           await executeSponsoredCalls(
             [
               {
@@ -2008,6 +2016,7 @@ export function ContentSubmissionSection() {
             ],
             {
               atomicRequired: true,
+              sponsorshipMode: submitCallSponsorshipMode,
               suppressStatusToast: true,
             },
           );
@@ -2041,7 +2050,7 @@ export function ContentSubmissionSection() {
       // Give the next block timestamp enough room to advance before the reveal submit.
       await new Promise(resolve => setTimeout(resolve, 1_100));
 
-      if (canUseSponsoredSubmitCalls) {
+      if (canUseBatchedSubmitCalls) {
         const callsResult = await executeSponsoredCalls(
           [
             {
@@ -2075,6 +2084,7 @@ export function ContentSubmissionSection() {
           ],
           {
             atomicRequired: true,
+            sponsorshipMode: submitCallSponsorshipMode,
             suppressStatusToast: true,
           },
         );
@@ -2170,15 +2180,6 @@ export function ContentSubmissionSection() {
             functionName: "approve",
             args: [feedbackBonusEscrowAddress, selectedFeedbackBonusAmount],
           } as const;
-          const feedbackApproveTxHash = localE2ETestWalletClient
-            ? await localE2ETestWalletClient.writeContract(feedbackApproveWrite as any)
-            : await writeContract(wagmiConfig, await prepareDirectWalletWrite(feedbackApproveWrite));
-
-          if (feedbackApproveTxHash) {
-            await waitForTransactionReceipt(wagmiConfig, { hash: feedbackApproveTxHash });
-          }
-          const feedbackApproveNonce = await getSubmittedTransactionNonce(feedbackApproveTxHash);
-
           const feedbackPoolWrite = {
             address: feedbackBonusEscrowAddress,
             abi: FEEDBACK_BONUS_ESCROW_ABI,
@@ -2191,19 +2192,38 @@ export function ContentSubmissionSection() {
               selectedFeedbackBonusAwarderAddress,
             ],
           } as const;
-          const feedbackPoolTxHash = localE2ETestWalletClient
-            ? await localE2ETestWalletClient.writeContract(feedbackPoolWrite as any)
-            : await writeContract(
-                wagmiConfig,
-                (await prepareDirectWalletWrite(feedbackPoolWrite, {
-                  minimumNonce: feedbackApproveNonce === undefined ? undefined : feedbackApproveNonce + 1,
-                })) as any,
-              );
 
-          if (feedbackPoolTxHash) {
-            await waitForTransactionReceipt(wagmiConfig, { hash: feedbackPoolTxHash });
+          if (canUseBatchedSubmitCalls) {
+            await executeSponsoredCalls([feedbackApproveWrite, feedbackPoolWrite], {
+              atomicRequired: true,
+              sponsorshipMode: submitCallSponsorshipMode,
+              suppressStatusToast: true,
+            });
+            feedbackBonusFunded = true;
+          } else {
+            const feedbackApproveTxHash = localE2ETestWalletClient
+              ? await localE2ETestWalletClient.writeContract(feedbackApproveWrite as any)
+              : await writeContract(wagmiConfig, await prepareDirectWalletWrite(feedbackApproveWrite));
+
+            if (feedbackApproveTxHash) {
+              await waitForTransactionReceipt(wagmiConfig, { hash: feedbackApproveTxHash });
+            }
+            const feedbackApproveNonce = await getSubmittedTransactionNonce(feedbackApproveTxHash);
+
+            const feedbackPoolTxHash = localE2ETestWalletClient
+              ? await localE2ETestWalletClient.writeContract(feedbackPoolWrite as any)
+              : await writeContract(
+                  wagmiConfig,
+                  (await prepareDirectWalletWrite(feedbackPoolWrite, {
+                    minimumNonce: feedbackApproveNonce === undefined ? undefined : feedbackApproveNonce + 1,
+                  })) as any,
+                );
+
+            if (feedbackPoolTxHash) {
+              await waitForTransactionReceipt(wagmiConfig, { hash: feedbackPoolTxHash });
+            }
+            feedbackBonusFunded = true;
           }
-          feedbackBonusFunded = true;
         } catch (feedbackBonusError) {
           feedbackBonusFundingError =
             getSubmissionErrorMessage(feedbackBonusError) || "Feedback Bonus funding transaction failed.";
@@ -3239,7 +3259,9 @@ export function ContentSubmissionSection() {
         type="button"
         onClick={handleFinalSubmit}
         className="btn btn-submit w-full sm:flex-1"
-        disabled={isSubmitting || isAwaitingSponsoredSubmitCalls || isMissingGasBalance}
+        disabled={
+          isSubmitting || isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls || isMissingGasBalance
+        }
       >
         {isSubmitting ? (
           <span className="flex items-center gap-2 text-base-content">

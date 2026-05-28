@@ -50,10 +50,30 @@ export function shouldPreferSponsoredBatchCalls(params: {
   connectorId: string | undefined;
   isThirdwebInApp?: boolean;
 }) {
-  return params.canUseFreeTransactions && shouldExpectThirdwebBatchCalls(params);
+  return params.canUseFreeTransactions && shouldExpectSponsoredThirdwebBatchCalls(params);
 }
 
 export function shouldExpectThirdwebBatchCalls(params: {
+  activeWalletId?: string;
+  chainId: number | undefined;
+  connectorId: string | undefined;
+  isThirdwebInApp?: boolean;
+}) {
+  const hasSettledInAppConnector =
+    params.connectorId === "in-app-wallet" || (!params.connectorId && params.isThirdwebInApp === true);
+  const hasSettledExternalConnector =
+    typeof params.activeWalletId === "string" &&
+    typeof params.connectorId === "string" &&
+    params.activeWalletId === params.connectorId;
+
+  return (
+    (hasSettledInAppConnector || hasSettledExternalConnector) &&
+    typeof params.chainId === "number" &&
+    supportsThirdwebExecutionCapabilities(params.chainId)
+  );
+}
+
+function shouldExpectSponsoredThirdwebBatchCalls(params: {
   chainId: number | undefined;
   connectorId: string | undefined;
   isThirdwebInApp?: boolean;
@@ -66,12 +86,25 @@ export function shouldExpectThirdwebBatchCalls(params: {
 }
 
 export function shouldUseSelfFundedBatchCalls(params: {
+  activeWalletId?: string;
   chainId: number | undefined;
   connectorId: string | undefined;
   executionMode: WalletExecutionMode;
+  hasSendCalls?: boolean;
   isThirdwebInApp?: boolean;
 }) {
-  return shouldExpectThirdwebBatchCalls(params) && params.executionMode === "self_funded_7702";
+  const isInAppSelfFunded =
+    shouldExpectSponsoredThirdwebBatchCalls(params) && params.executionMode === "self_funded_7702";
+  const isExternalSelfFunded =
+    params.executionMode === "fee_currency" &&
+    params.hasSendCalls === true &&
+    typeof params.activeWalletId === "string" &&
+    typeof params.connectorId === "string" &&
+    params.activeWalletId === params.connectorId &&
+    typeof params.chainId === "number" &&
+    supportsThirdwebExecutionCapabilities(params.chainId);
+
+  return isInAppSelfFunded || isExternalSelfFunded;
 }
 
 export function shouldPreferSponsoredSubmitCalls(params: {
@@ -88,7 +121,7 @@ export function shouldExpectSponsoredSubmitCalls(params: {
   connectorId: string | undefined;
   isThirdwebInApp?: boolean;
 }) {
-  return shouldExpectThirdwebBatchCalls(params);
+  return shouldExpectSponsoredThirdwebBatchCalls(params);
 }
 
 export function isThirdwebSponsorshipDeniedError(error: unknown) {
@@ -143,6 +176,7 @@ export function shouldIgnorePostTransactionFallbackWalletSyncError(callStatus: s
 export function useThirdwebSponsoredSubmitCalls() {
   const queryClient = useQueryClient();
   const activeWallet = useActiveWallet();
+  const activeWalletId = activeWallet?.id;
   const activeWalletChain = useActiveWalletChain();
   const setActiveWallet = useSetActiveWallet();
   const { syncWalletToWagmi } = useThirdwebWagmiSync();
@@ -152,9 +186,9 @@ export function useThirdwebSponsoredSubmitCalls() {
   const { executionMode, hasSendCalls, isThirdwebInApp } = useWalletExecutionCapabilities();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
 
-  const expectsThirdwebBatchCalls = useMemo(
+  const expectsSponsoredBatchCalls = useMemo(
     () =>
-      shouldExpectThirdwebBatchCalls({
+      shouldExpectSponsoredSubmitCalls({
         chainId,
         connectorId: connector?.id,
         isThirdwebInApp,
@@ -176,17 +210,19 @@ export function useThirdwebSponsoredSubmitCalls() {
   const prefersSelfFundedBatchCalls = useMemo(
     () =>
       shouldUseSelfFundedBatchCalls({
+        activeWalletId,
         chainId,
         connectorId: connector?.id,
         executionMode,
+        hasSendCalls,
         isThirdwebInApp,
       }),
-    [chainId, connector?.id, executionMode, isThirdwebInApp],
+    [activeWalletId, chainId, connector?.id, executionMode, hasSendCalls, isThirdwebInApp],
   );
 
   const canUseGaslessSubmitTransactions = prefersSponsoredBatchCalls;
 
-  const isEligibleForGaslessSubmitTransactions = expectsThirdwebBatchCalls;
+  const isEligibleForGaslessSubmitTransactions = expectsSponsoredBatchCalls;
 
   const canUseSponsoredSubmitCalls = Boolean(
     thirdwebClient && activeWallet && typeof chainId === "number" && hasSendCalls && prefersSponsoredBatchCalls,
@@ -195,7 +231,7 @@ export function useThirdwebSponsoredSubmitCalls() {
     thirdwebClient && activeWallet && typeof chainId === "number" && hasSendCalls && prefersSelfFundedBatchCalls,
   );
   const isAwaitingSponsoredSubmitCalls =
-    expectsThirdwebBatchCalls &&
+    expectsSponsoredBatchCalls &&
     (!freeTransactionAllowance.isResolved || (prefersSponsoredBatchCalls && !canUseSponsoredSubmitCalls));
   const isAwaitingSelfFundedSubmitCalls = useMemo(
     () =>

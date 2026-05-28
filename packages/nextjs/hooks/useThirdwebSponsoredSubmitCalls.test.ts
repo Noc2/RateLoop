@@ -55,6 +55,28 @@ test("expects thirdweb batch calls for supported in-app wallets", () => {
   );
 });
 
+test("expects thirdweb batch calls for active external wallets with matching connectors", () => {
+  assert.equal(
+    shouldExpectThirdwebBatchCalls({
+      activeWalletId: "io.metamask",
+      chainId: 4801,
+      connectorId: "io.metamask",
+    }),
+    true,
+  );
+});
+
+test("does not expect thirdweb batch calls from stale external wallets", () => {
+  assert.equal(
+    shouldExpectThirdwebBatchCalls({
+      activeWalletId: "io.metamask",
+      chainId: 4801,
+      connectorId: "com.coinbase.wallet",
+    }),
+    false,
+  );
+});
+
 test("uses self-funded batch calls only after in-app wallets switch to paid gas mode", () => {
   assert.equal(
     shouldUseSelfFundedBatchCalls({
@@ -83,6 +105,30 @@ test("uses self-funded batch calls only after in-app wallets switch to paid gas 
   );
 });
 
+test("uses self-funded batch calls for active external wallets that expose sendCalls", () => {
+  assert.equal(
+    shouldUseSelfFundedBatchCalls({
+      activeWalletId: "io.metamask",
+      chainId: 4801,
+      connectorId: "io.metamask",
+      executionMode: "fee_currency",
+      hasSendCalls: true,
+    }),
+    true,
+  );
+
+  assert.equal(
+    shouldUseSelfFundedBatchCalls({
+      activeWalletId: "io.metamask",
+      chainId: 4801,
+      connectorId: "io.metamask",
+      executionMode: "fee_currency",
+      hasSendCalls: false,
+    }),
+    false,
+  );
+});
+
 test("expects sponsored submit calls from active in-app wallet before wagmi connector settles", () => {
   assert.equal(
     shouldExpectSponsoredSubmitCalls({
@@ -91,6 +137,16 @@ test("expects sponsored submit calls from active in-app wallet before wagmi conn
       isThirdwebInApp: true,
     }),
     true,
+  );
+});
+
+test("does not expect sponsored submit calls for active external wallets", () => {
+  assert.equal(
+    shouldExpectSponsoredSubmitCalls({
+      chainId: 4801,
+      connectorId: "io.metamask",
+    }),
+    false,
   );
 });
 
