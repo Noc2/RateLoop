@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { isAddress } from "viem";
 import { useAccount, useConfig, useWriteContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { XMarkIcon } from "@heroicons/react/24/outline";
@@ -67,7 +68,10 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
   const { writeContractAsync } = useWriteContract();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
+  const awarderInputId = useId();
   const [amount, setAmount] = useState("2");
+  const [awarderAddress, setAwarderAddress] = useState("");
+  const [awarderTouched, setAwarderTouched] = useState(false);
   const [feedbackWindowPreset, setFeedbackWindowPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
   const [customFeedbackWindowAmount, setCustomFeedbackWindowAmount] = useState(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
   const [customFeedbackWindowUnit, setCustomFeedbackWindowUnit] = useState<BountyWindowUnit>(
@@ -79,6 +83,17 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
   const escrowAddress = useMemo(() => getConfiguredFeedbackBonusEscrowAddress(chainId), [chainId]);
   const fallbackUsdcAddress = useMemo(() => getDefaultUsdcAddress(chainId), [chainId]);
   const parsedAmount = useMemo(() => parseUsdRewardPoolAmount(amount), [amount]);
+  const trimmedAwarderAddress = awarderAddress.trim();
+  const selectedAwarderAddress = trimmedAwarderAddress
+    ? isAddress(trimmedAwarderAddress)
+      ? (trimmedAwarderAddress as `0x${string}`)
+      : undefined
+    : address;
+  const awarderError = selectedAwarderAddress
+    ? null
+    : trimmedAwarderAddress
+      ? "Enter a valid EVM address for the awarder."
+      : "Connect a wallet or enter an awarder address.";
   const feedbackWindowSeconds = getBountyWindowSeconds(
     feedbackWindowPreset,
     customFeedbackWindowAmount,
@@ -88,7 +103,14 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
   const hasValidFeedbackWindow =
     feedbackWindowSeconds !== null && feedbackWindowAmount >= (feedbackWindowPreset === "custom" ? 1 : 0);
   const hasActiveRound = roundId > 0n;
-  const canSubmit = Boolean(address && escrowAddress && parsedAmount && hasActiveRound && hasValidFeedbackWindow);
+  const canSubmit = Boolean(
+    address && escrowAddress && parsedAmount && selectedAwarderAddress && hasActiveRound && hasValidFeedbackWindow,
+  );
+
+  useEffect(() => {
+    if (awarderTouched) return;
+    setAwarderAddress(address ?? "");
+  }, [address, awarderTouched]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -120,6 +142,10 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
     }
     if (!hasValidFeedbackWindow) {
       notification.warning("Choose a feedback window.");
+      return;
+    }
+    if (!selectedAwarderAddress) {
+      notification.warning("Enter a valid awarder address.");
       return;
     }
 
@@ -173,7 +199,7 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
         address: escrowAddress,
         abi: FEEDBACK_BONUS_ESCROW_ABI,
         functionName: "createFeedbackBonusPool",
-        args: [contentId, roundId, parsedAmount, feedbackClosesAt, address],
+        args: [contentId, roundId, parsedAmount, feedbackClosesAt, selectedAwarderAddress],
       });
       await waitForTransactionReceipt(wagmiConfig, { hash: feedbackBonusHash });
 
@@ -240,6 +266,43 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
               />
               <span className="text-base-content/50">USDC</span>
             </div>
+          </div>
+
+          <div className="form-control">
+            <FeedbackBonusFieldLabel
+              htmlFor={awarderInputId}
+              tooltip="Defaults to your connected wallet. Paste another wallet if someone else should decide feedback awards."
+            >
+              Awarder address
+            </FeedbackBonusFieldLabel>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                id={awarderInputId}
+                type="text"
+                value={awarderAddress}
+                onChange={event => {
+                  setAwarderTouched(true);
+                  setAwarderAddress(event.target.value);
+                }}
+                className={`input input-bordered min-w-0 flex-1 bg-base-100 ${awarderError ? "input-error" : ""}`}
+                placeholder={address ?? "0x..."}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setAwarderTouched(false);
+                  setAwarderAddress(address ?? "");
+                }}
+                className="btn btn-outline h-12 shrink-0"
+              >
+                Use connected
+              </button>
+            </div>
+            {awarderError ? (
+              <span className="label pt-1">
+                <span className="label-text-alt text-error">{awarderError}</span>
+              </span>
+            ) : null}
           </div>
 
           <div className="space-y-2">

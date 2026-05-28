@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery } from "@tanstack/react-query";
-import { decodeEventLog, encodeFunctionData, toHex } from "viem";
+import { decodeEventLog, encodeFunctionData, isAddress, toHex } from "viem";
 import { useAccount, useConfig } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
@@ -284,6 +284,10 @@ function formatFrontendFeePercent(frontendFeeBps: number): string {
   return fractional === 0 ? `${whole}%` : `${whole}.${String(fractional).padStart(2, "0").replace(/0+$/, "")}%`;
 }
 
+function formatShortAddress(address: string | undefined): string {
+  return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Connect wallet";
+}
+
 function formatBountyExpiryDate(windowSeconds: number | null, referenceTimeMs: number | null): string {
   if (windowSeconds === null) {
     return "Choose a window";
@@ -436,6 +440,8 @@ export function ContentSubmissionSection() {
   const [bountyExpiryReferenceTimeMs, setBountyExpiryReferenceTimeMs] = useState<number | null>(null);
   const [feedbackBonusMode, setFeedbackBonusMode] = useState<FeedbackBonusSelection>("none");
   const [feedbackBonusAmount, setFeedbackBonusAmount] = useState("2");
+  const [feedbackBonusAwarderAddress, setFeedbackBonusAwarderAddress] = useState("");
+  const [feedbackBonusAwarderTouched, setFeedbackBonusAwarderTouched] = useState(false);
   const [feedbackBonusStepAttempted, setFeedbackBonusStepAttempted] = useState(false);
   const [roundBlindMinutes, setRoundBlindMinutes] = useState(
     String(Number(DEFAULT_QUESTION_ROUND_CONFIG.epochDuration / 60n)),
@@ -468,6 +474,11 @@ export function ContentSubmissionSection() {
   useEffect(() => {
     setBountyExpiryReferenceTimeMs(Date.now());
   }, [bountyWindowOverridden, bountyWindowPreset, customBountyWindowAmount, customBountyWindowUnit, roundBlindMinutes]);
+
+  useEffect(() => {
+    if (feedbackBonusAwarderTouched) return;
+    setFeedbackBonusAwarderAddress(connectedAddress ?? "");
+  }, [connectedAddress, feedbackBonusAwarderTouched]);
 
   useEffect(() => {
     if (!selectedCategory) return;
@@ -1102,13 +1113,28 @@ export function ContentSubmissionSection() {
   const rewardExpiryError = bountyStepAttempted ? rewardExpiryValidationError : null;
   const selectedBountyEligibility = BOUNTY_ELIGIBILITY_OPTIONS.find(option => option.id === bountyEligibility)!;
   const selectedFeedbackBonusAmount = parseUsdRewardPoolAmount(feedbackBonusAmount);
+  const trimmedFeedbackBonusAwarderAddress = feedbackBonusAwarderAddress.trim();
+  const selectedFeedbackBonusAwarderAddress = trimmedFeedbackBonusAwarderAddress
+    ? isAddress(trimmedFeedbackBonusAwarderAddress)
+      ? (trimmedFeedbackBonusAwarderAddress as `0x${string}`)
+      : undefined
+    : connectedAddress;
   const feedbackBonusUnavailableForBundle = questionCount > 1 && feedbackBonusMode === "enabled";
   const feedbackBonusAmountError =
     feedbackBonusStepAttempted && feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount === null
       ? "Enter a positive USDC feedback bonus amount."
       : null;
+  const feedbackBonusAwarderError =
+    feedbackBonusStepAttempted && feedbackBonusMode === "enabled" && !selectedFeedbackBonusAwarderAddress
+      ? trimmedFeedbackBonusAwarderAddress
+        ? "Enter a valid EVM address for the awarder."
+        : "Connect a wallet or enter an awarder address."
+      : null;
   const feedbackBonusSettingsValid =
-    feedbackBonusMode === "none" || (!feedbackBonusUnavailableForBundle && selectedFeedbackBonusAmount !== null);
+    feedbackBonusMode === "none" ||
+    (!feedbackBonusUnavailableForBundle &&
+      selectedFeedbackBonusAmount !== null &&
+      selectedFeedbackBonusAwarderAddress !== undefined);
   const bountySettingsValid =
     rewardRequiredVotersValidationError === null &&
     rewardRequiredRoundsValidationError === null &&
@@ -1555,6 +1581,11 @@ export function ContentSubmissionSection() {
       if (!selectedFeedbackBonusAmount) {
         setSubmissionStep("feedbackBonus");
         notification.warning("Enter a feedback bonus amount before submitting.");
+        return;
+      }
+      if (!selectedFeedbackBonusAwarderAddress) {
+        setSubmissionStep("feedbackBonus");
+        notification.warning("Enter a valid awarder address before submitting.");
         return;
       }
     }
@@ -2009,6 +2040,7 @@ export function ContentSubmissionSection() {
       if (
         shouldFundFeedbackBonus &&
         selectedFeedbackBonusAmount &&
+        selectedFeedbackBonusAwarderAddress &&
         feedbackBonusEscrowAddress &&
         feedbackBonusUsdcAddress &&
         verifiedVotingEngineAddress &&
@@ -2050,7 +2082,7 @@ export function ContentSubmissionSection() {
               feedbackRoundId,
               selectedFeedbackBonusAmount,
               rewardPoolExpiresAt,
-              submitterAddress,
+              selectedFeedbackBonusAwarderAddress,
             ],
           } as const;
           const feedbackPoolTxHash = localE2ETestWalletClient
@@ -2128,6 +2160,8 @@ export function ContentSubmissionSection() {
       setBountyWindowOverridden(false);
       setFeedbackBonusMode("none");
       setFeedbackBonusAmount("2");
+      setFeedbackBonusAwarderAddress(connectedAddress ?? "");
+      setFeedbackBonusAwarderTouched(false);
       setRoundBlindMinutes(String(Math.max(1, Math.round(roundConfigDefaults.epochDuration / SECONDS_PER_MINUTE))));
       setRoundMaxDurationMinutes(String(Math.max(1, Math.round(roundConfigDefaults.maxDuration / SECONDS_PER_MINUTE))));
       setRoundMinVoters(
@@ -2969,16 +3003,53 @@ export function ContentSubmissionSection() {
               <div>
                 <p className="flex items-center gap-1.5 text-base text-base-content/70">
                   Awarder
-                  <InfoTooltip text="The connected wallet funds the bonus and is allowed to award it after settlement." />
+                  <InfoTooltip text="This address can award selected revealed feedback after settlement. It can be different from the funding wallet." />
                 </p>
                 <p className="mt-1 break-all text-base font-medium text-base-content">
-                  {connectedAddress
-                    ? `${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`
-                    : "Connect wallet"}
+                  {formatShortAddress(selectedFeedbackBonusAwarderAddress)}
                 </p>
               </div>
             </div>
           </div>
+
+          <label className="form-control">
+            <span className="label">
+              <span className="label-text flex items-center gap-1.5">
+                Awarder address
+                <InfoTooltip text="Defaults to your connected wallet. Paste another wallet if someone else should decide feedback awards." />
+              </span>
+            </span>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={feedbackBonusAwarderAddress}
+                onChange={e => {
+                  setFeedbackBonusAwarderTouched(true);
+                  setFeedbackBonusAwarderAddress(e.target.value);
+                }}
+                placeholder={connectedAddress ?? "0x..."}
+                className={`input input-bordered min-w-0 flex-1 bg-base-100 ${
+                  feedbackBonusAwarderError ? "input-error" : ""
+                }`}
+                aria-label="Feedback Bonus awarder address"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setFeedbackBonusAwarderTouched(false);
+                  setFeedbackBonusAwarderAddress(connectedAddress ?? "");
+                }}
+                className="btn btn-outline btn-sm h-12 sm:h-auto"
+              >
+                Use connected
+              </button>
+            </div>
+            {feedbackBonusAwarderError ? (
+              <span className="label pt-1">
+                <span className="label-text-alt text-error">{feedbackBonusAwarderError}</span>
+              </span>
+            ) : null}
+          </label>
 
           {!feedbackBonusEscrowAddress ? (
             <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
