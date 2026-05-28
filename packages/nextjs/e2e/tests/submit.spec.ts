@@ -32,11 +32,7 @@ async function expectSuccessfulSubmission(page: Page) {
   await submitBtn.click();
 
   const successDialog = page.getByRole("dialog", { name: /Question submitted/i });
-  const submitted = await successDialog
-    .waitFor({ state: "visible", timeout: 60_000 })
-    .then(() => true)
-    .catch(() => false);
-  test.skip(!submitted, "Ask submission did not complete in this shared E2E chain state.");
+  await successDialog.waitFor({ state: "visible", timeout: 60_000 });
   await expect(successDialog.getByRole("heading", { name: /Question Submitted!/i })).toBeVisible();
   await page.waitForTimeout(1_500);
   await expect(successDialog).toBeVisible();
