@@ -80,7 +80,7 @@ export function LegacyClaimPage() {
 
       {!isConnected && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
-          <h2 className="text-xl font-semibold text-base-content">Connect wallet</h2>
+          <h2 className="text-xl font-semibold text-base-content">Connect Wallet</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">
             Connect the wallet associated with the legacy allocation snapshot to see claim status.
           </p>
@@ -92,7 +92,7 @@ export function LegacyClaimPage() {
 
       {isConnected && isWrongChain && (
         <section className="rounded-lg border border-warning/30 bg-warning/10 p-6">
-          <h2 className="text-xl font-semibold text-base-content">Switch network</h2>
+          <h2 className="text-xl font-semibold text-base-content">Switch Network</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">
             Legacy claims are issued on {expectedChainName}. Switch your wallet to that network to see your allocation.
           </p>
@@ -107,7 +107,7 @@ export function LegacyClaimPage() {
 
       {isConnected && error && (
         <section className="rounded-lg border border-error/20 bg-error/10 p-6">
-          <h2 className="text-xl font-semibold text-error">Claim lookup unavailable</h2>
+          <h2 className="text-xl font-semibold text-error">Claim Lookup Unavailable</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">
             The legacy claim lookup could not be loaded. Refresh and try again.
           </p>
@@ -116,7 +116,7 @@ export function LegacyClaimPage() {
 
       {isConnected && claimData?.status === "not_published" && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
-          <h2 className="text-xl font-semibold text-base-content">Legacy claim root pending</h2>
+          <h2 className="text-xl font-semibold text-base-content">Legacy Claim Root Pending</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">
             The legacy contributor Merkle root has not been published yet. Once the snapshot is finalized, this page
             will show allocation, vesting, and claimable LREP for eligible wallets.
@@ -126,7 +126,7 @@ export function LegacyClaimPage() {
 
       {isConnected && claimData?.status === "not_eligible" && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
-          <h2 className="text-xl font-semibold text-base-content">No legacy allocation found</h2>
+          <h2 className="text-xl font-semibold text-base-content">No Legacy Allocation Found</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">
             This connected wallet is not present in the published legacy contributor snapshot.
           </p>

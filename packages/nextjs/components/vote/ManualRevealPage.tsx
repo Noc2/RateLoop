@@ -106,7 +106,7 @@ export function ManualRevealPage() {
           </div>
         ) : votes.length === 0 ? (
           <div className="surface-card rounded-lg p-8 space-y-2">
-            <h2 className="text-xl font-semibold">No unrevealed votes</h2>
+            <h2 className="text-xl font-semibold">No Unrevealed Votes</h2>
             <p className="text-base-content/75">Nothing needs manual help right now.</p>
           </div>
         ) : (

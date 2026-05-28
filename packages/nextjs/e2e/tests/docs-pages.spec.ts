@@ -78,7 +78,7 @@ test.describe("Documentation pages", () => {
   test("docs explain advisory launch credits without stale credential wording", async ({ page }) => {
     await page.goto("/docs/how-it-works#eligible-settled-rounds", { waitUntil: "domcontentloaded" });
 
-    await expect(page.getByRole("heading", { name: "Launch LREP credits" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Launch LREP Credits" })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/effective credit = finalized independence weight/i)).toBeVisible();
     await expect(page.getByText(/self-verified/i)).toHaveCount(0);
 

@@ -678,7 +678,7 @@ export function AgentSubmissionPanel() {
     <>
       <dl className="mt-4 space-y-3 text-sm">
         <div className="flex items-center justify-between gap-4">
-          <dt className="text-base-content/60">Access token</dt>
+          <dt className="text-base-content/60">Access Token</dt>
           <dd>{selectedPolicy.hasToken ? "Active" : "Not created"}</dd>
         </div>
         <div className="flex items-center justify-between gap-4">
@@ -819,7 +819,7 @@ export function AgentSubmissionPanel() {
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Configured Agent</p>
-              <h2 className="mt-1 text-2xl font-semibold">Agent dashboard</h2>
+              <h2 className="mt-1 text-2xl font-semibold">Agent Dashboard</h2>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {policySelector}
@@ -844,21 +844,21 @@ export function AgentSubmissionPanel() {
             <div className="surface-card-nested rounded-lg p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                 <CpuChipIcon className="h-4 w-4" />
-                <span>Policy identity</span>
+                <span>Policy Identity</span>
               </div>
               <p className="mt-2 break-words text-lg font-semibold">{selectedPolicy.agentId}</p>
             </div>
             <div className="surface-card-nested rounded-lg p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                 <WalletIcon className="h-4 w-4" />
-                <span>Agent wallet</span>
+                <span>Agent Wallet</span>
               </div>
               <p className="mt-2 font-mono text-sm">{shortAddress(selectedPolicy.agentWalletAddress)}</p>
             </div>
             <div className="surface-card-nested rounded-lg p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                 <KeyIcon className="h-4 w-4" />
-                <span>Spend caps</span>
+                <span>Spend Caps</span>
               </div>
               <p className="mt-2 text-sm text-base-content/75">
                 {formatPolicyCap(selectedPolicy.perAskLimitAtomic)} per ask
@@ -914,7 +914,7 @@ export function AgentSubmissionPanel() {
 
             <div className="surface-card rounded-lg p-5">
               <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Recent Agent Asks</p>
-              <h3 className="mt-1 text-lg font-semibold">Audit trail</h3>
+              <h3 className="mt-1 text-lg font-semibold">Audit Trail</h3>
               <div className="mt-4">{recentAsksPanel}</div>
             </div>
           </div>
@@ -924,7 +924,7 @@ export function AgentSubmissionPanel() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent Access</p>
-                  <h3 className="mt-1 text-lg font-semibold">Access token</h3>
+                  <h3 className="mt-1 text-lg font-semibold">Access Token</h3>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <Link href={`${DOCS_AI_ROUTE}#mcp`} className="link link-primary text-sm">
@@ -937,7 +937,7 @@ export function AgentSubmissionPanel() {
 
             <div className="surface-card rounded-lg p-5">
               <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Pause / Revoke</p>
-              <h3 className="mt-1 text-lg font-semibold">Kill switch</h3>
+              <h3 className="mt-1 text-lg font-semibold">Kill Switch</h3>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -1050,7 +1050,7 @@ export function AgentSubmissionPanel() {
 
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <div className="surface-card-nested rounded-lg p-4">
-              <h4 className="text-sm font-semibold">User signs in browser</h4>
+              <h4 className="text-sm font-semibold">User Signs In Browser</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
                 The agent creates a signing link. The user opens RateLoop, connects the wallet, and approves the exact
                 ask calls in the browser.
@@ -1060,7 +1060,7 @@ export function AgentSubmissionPanel() {
               </button>
             </div>
             <div className="surface-card-nested rounded-lg p-4">
-              <h4 className="text-sm font-semibold">Local signer CLI</h4>
+              <h4 className="text-sm font-semibold">Local Signer CLI</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
                 Generate an encrypted local signer, paste its public address here, fund it with World Chain USDC, then
                 run
@@ -1071,7 +1071,7 @@ export function AgentSubmissionPanel() {
               </button>
             </div>
             <div className="surface-card-nested rounded-lg p-4">
-              <h4 className="text-sm font-semibold">Managed policy token</h4>
+              <h4 className="text-sm font-semibold">Managed Policy Token</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/60">
                 Save optional spend/category controls and create a bearer token for agents that need callbacks, audit
                 history, or operator-managed limits.
@@ -1292,7 +1292,7 @@ export function AgentSubmissionPanel() {
           <div className="mt-5 surface-card-nested rounded-lg p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <h4 className="font-semibold">Allowed categories</h4>
+                <h4 className="font-semibold">Allowed Categories</h4>
               </div>
               <button
                 type="button"
@@ -1306,7 +1306,7 @@ export function AgentSubmissionPanel() {
           </div>
 
           <div className="mt-5 surface-card-nested rounded-lg p-4">
-            <h4 className="font-semibold">MCP scopes</h4>
+            <h4 className="font-semibold">MCP Scopes</h4>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {DEFAULT_AGENT_SCOPES.map(scope => (
                 <label key={scope} className="surface-card-nested flex items-center gap-2 rounded-lg px-3 py-2 text-sm">
@@ -1348,10 +1348,10 @@ export function AgentSubmissionPanel() {
               </p>
               <h3 className="mt-1 flex items-center gap-2 text-xl font-semibold">
                 {!policyControlsEnabled
-                  ? "Public agent access"
+                  ? "Public Agent Access"
                   : selectedPolicy
-                    ? "Agent controls saved"
-                    : "Connect agent"}
+                    ? "Agent Controls Saved"
+                    : "Connect Agent"}
                 <InfoTooltip text={AGENT_MCP_HELP_TEXT} position="right" />
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
@@ -1373,7 +1373,7 @@ export function AgentSubmissionPanel() {
                 <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <WalletIcon className="h-4 w-4" />
-                    <span>Wallet address</span>
+                    <span>Wallet Address</span>
                   </div>
                   <p className="mt-2 break-words font-mono text-sm">{agentWalletAddress ?? "0x..."}</p>
                 </div>
@@ -1395,7 +1395,7 @@ export function AgentSubmissionPanel() {
 
               <div className="mt-5 surface-card-nested rounded-lg p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <h4 className="font-semibold">Public MCP config</h4>
+                  <h4 className="font-semibold">Public MCP Config</h4>
                   <button
                     type="button"
                     className="btn btn-outline btn-xs"
@@ -1415,7 +1415,7 @@ export function AgentSubmissionPanel() {
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
                 <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-semibold">Browser signing link</h4>
+                    <h4 className="font-semibold">Browser Signing Link</h4>
                     <button
                       type="button"
                       className="btn btn-outline btn-xs"
@@ -1434,7 +1434,7 @@ export function AgentSubmissionPanel() {
 
                 <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-semibold">Local signer CLI</h4>
+                    <h4 className="font-semibold">Local Signer CLI</h4>
                     <button
                       type="button"
                       className="btn btn-outline btn-xs"
@@ -1458,21 +1458,21 @@ export function AgentSubmissionPanel() {
                 <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <CpuChipIcon className="h-4 w-4" />
-                    <span>Policy identity</span>
+                    <span>Policy Identity</span>
                   </div>
                   <p className="mt-2 break-words text-lg font-semibold">{selectedPolicy.agentId}</p>
                 </div>
                 <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <WalletIcon className="h-4 w-4" />
-                    <span>Agent wallet</span>
+                    <span>Agent Wallet</span>
                   </div>
                   <p className="mt-2 font-mono text-sm">{shortAddress(selectedPolicy.agentWalletAddress)}</p>
                 </div>
                 <div className="surface-card-nested rounded-lg p-4">
                   <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                     <KeyIcon className="h-4 w-4" />
-                    <span>Spend caps</span>
+                    <span>Spend Caps</span>
                   </div>
                   <p className="mt-2 text-sm text-base-content/75">
                     {formatPolicyCap(selectedPolicy.perAskLimitAtomic)} per ask
@@ -1484,7 +1484,7 @@ export function AgentSubmissionPanel() {
               </div>
 
               <div className="mt-5 surface-card-nested rounded-lg p-4">
-                <h4 className="font-semibold">Access token</h4>
+                <h4 className="font-semibold">Access Token</h4>
                 <p className="mt-1 text-sm leading-relaxed text-base-content/60">
                   Use this token and config in the agent client that will call RateLoop tools.
                 </p>
@@ -1493,7 +1493,7 @@ export function AgentSubmissionPanel() {
             </>
           ) : (
             <div className="surface-card-nested mt-5 rounded-lg p-4">
-              <h4 className="font-semibold text-warning">No saved controls selected</h4>
+              <h4 className="font-semibold text-warning">No Saved Controls Selected</h4>
               <p className="mt-2 text-sm leading-relaxed text-base-content/70">
                 Go back to Optional controls and save them first, or turn controls off to use public wallet access.
               </p>

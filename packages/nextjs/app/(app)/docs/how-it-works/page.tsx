@@ -76,7 +76,7 @@ const HowItWorks: NextPage = () => {
       </ul>
 
       <h2 id="on-chain-settlement">3. Settle Rewards</h2>
-      <h3 id="lrep-stake-settlement">LREP stake settlement</h3>
+      <h3 id="lrep-stake-settlement">LREP Stake Settlement</h3>
       <p>
         RBTS compares every revealed staked report with the stake-weighted mean score. A report&apos;s score spread is
         its own score minus that mean.
@@ -116,7 +116,7 @@ const HowItWorks: NextPage = () => {
         Alice claims 11.188 LREP, Bob claims 5.342 LREP, and Carol claims 3.40625 LREP.
       </p>
 
-      <h3 id="eligible-settled-rounds">Launch LREP credits</h3>
+      <h3 id="eligible-settled-rounds">Launch LREP Credits</h3>
       <p>
         To earn launch LREP, reveal useful advisory or staked ratings in eligible settled rounds; each finalized round
         adds <code>effective credit = finalized independence weight / 10,000</code>. After enough full credits and the
@@ -154,7 +154,7 @@ const HowItWorks: NextPage = () => {
         that round set.
       </p>
 
-      <h3>Feedback bonuses</h3>
+      <h3>Feedback Bonuses</h3>
       <p>
         To earn a feedback bonus, reveal your vote and leave useful hidden feedback; the configured awarder can pay one
         award per independent rater or feedback hash before the feedback window closes. The calculation is{" "}

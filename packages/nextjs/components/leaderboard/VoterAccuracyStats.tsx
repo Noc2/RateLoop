@@ -38,7 +38,7 @@ export function VoterAccuracyStats() {
   return (
     <div className="surface-card rounded-2xl p-6 space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <h2 className={surfaceSectionHeadingClassName}>Your voting accuracy</h2>
+        <h2 className={surfaceSectionHeadingClassName}>Your Voting Accuracy</h2>
         <span className="text-base tabular-nums text-base-content/60">{stats.totalSettledVotes} resolved votes</span>
       </div>
 

@@ -1276,8 +1276,8 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   {credentialLoading
                     ? "Loading credential..."
                     : hasActiveHumanCredential
-                      ? "Human credential active"
-                      : "No human credential"}
+                      ? "Human Credential Active"
+                      : "No Human Credential"}
                 </span>
               </div>
             </div>
@@ -1514,7 +1514,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
         <div className="surface-card rounded-3xl p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-base-content">Reputation context</h2>
+              <h2 className="text-xl font-semibold text-base-content">Reputation Context</h2>
             </div>
             {hasCurrentRaterType ? (
               <div className="rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
@@ -1540,7 +1540,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 <div className="surface-card-nested rounded-2xl px-4 py-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="text-sm text-base-content/60">Verified human</div>
+                      <div className="text-sm text-base-content/60">Verified Human</div>
                       <div className="mt-1 text-xl font-semibold capitalize">{rewardStatus.humanCredential.status}</div>
                     </div>
                     {ownProfile && rewardStatus.humanCredential.status !== "verified" ? (
@@ -1553,7 +1553,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 </div>
 
                 <div className="surface-card-nested rounded-2xl px-4 py-3">
-                  <div className="text-sm text-base-content/60">Launch reward progress</div>
+                  <div className="text-sm text-base-content/60">Launch Reward Progress</div>
                   <div className="mt-1 text-xl font-semibold">{formatLaunchCapSummary(rewardStatus.launchRewards)}</div>
                   <div className="mt-1 text-sm text-base-content/55">
                     {rewardStatus.launchRewards.fullCapUnlocked ||
@@ -1579,7 +1579,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
         <div className="surface-card rounded-3xl p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1.5">
-              <span className="text-base font-medium text-base-content/60">Voting performance</span>
+              <span className="text-base font-medium text-base-content/60">Voting Performance</span>
               <InfoTooltip text="Resolved rounds only. Category bars show win and loss ratios by category." />
             </div>
             <span className="text-base tabular-nums text-base-content/60">{resolvedVotesLabel} resolved</span>
@@ -1593,28 +1593,28 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                 <div className="flex flex-1 flex-col gap-3">
                   <div className="flex flex-wrap gap-2">
                     <div className="rounded-full bg-base-content/[0.06] px-3 py-1.5 text-base">
-                      <span className="text-base-content/50">Current streak </span>
+                      <span className="text-base-content/50">Current Streak </span>
                       <span className="font-mono tabular-nums">{streakLabel}</span>
                     </div>
                     <div className="rounded-full bg-base-content/[0.06] px-3 py-1.5 text-base">
-                      <span className="text-base-content/50">Best streak </span>
+                      <span className="text-base-content/50">Best Streak </span>
                       <span className="font-mono tabular-nums">{stats.bestWinStreak}W</span>
                     </div>
                     <div className="rounded-full bg-base-content/[0.06] px-3 py-1.5 text-base">
-                      <span className="text-base-content/50">Win rate </span>
+                      <span className="text-base-content/50">Win Rate </span>
                       <span className="font-mono tabular-nums">{(stats.winRate * 100).toFixed(1)}%</span>
                     </div>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="surface-card-nested rounded-2xl px-4 py-3">
-                      <div className="text-base text-base-content/60">Stake won</div>
+                      <div className="text-base text-base-content/60">Stake Won</div>
                       <div className="mt-1 text-xl font-semibold text-success">
                         {formatLrepString(stats.totalStakeWon)} LREP
                       </div>
                     </div>
                     <div className="surface-card-nested rounded-2xl px-4 py-3">
-                      <div className="text-base text-base-content/60">Stake lost</div>
+                      <div className="text-base text-base-content/60">Stake Lost</div>
                       <div className="mt-1 text-xl font-semibold text-error">
                         {formatLrepString(stats.totalStakeLost)} LREP
                       </div>
@@ -1635,7 +1635,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
         <div className="surface-card rounded-3xl p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1.5">
-              <span className="text-base font-medium text-base-content/60">Recent questions</span>
+              <span className="text-base font-medium text-base-content/60">Recent Questions</span>
               <InfoTooltip text="Latest questions this curator has asked. This is the clearest payoff from following them." />
             </div>
             <span className="text-base tabular-nums text-base-content/60">
@@ -1697,7 +1697,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
         <div className="surface-card rounded-3xl p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1.5">
-              <span className="text-base font-medium text-base-content/60">Recent votes</span>
+              <span className="text-base font-medium text-base-content/60">Recent Votes</span>
               <InfoTooltip text="Latest 20 vote commits for this wallet. Outcomes appear once rounds settle." />
             </div>
             <span className="text-base tabular-nums text-base-content/60">
@@ -1772,7 +1772,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-semibold">Edit avatar gradient</h2>
+                  <h2 className="text-2xl font-semibold">Edit Avatar Gradient</h2>
                   <p className="mt-1 text-base text-base-content/60">
                     Choose the color seed for your public avatar ring.
                   </p>

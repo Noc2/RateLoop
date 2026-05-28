@@ -53,7 +53,7 @@ export function VotingGuide() {
           >
             <XMarkIcon className="w-4 h-4" />
           </button>
-          <h3 className="font-bold text-lg leading-snug pr-6">How it works</h3>
+          <h3 className="font-bold text-lg leading-snug pr-6">How It Works</h3>
         </div>
 
         {/* Steps */}

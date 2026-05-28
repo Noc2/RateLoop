@@ -245,7 +245,7 @@ export function NotificationSettingsPanel({
               <BellAlertIcon className="h-4 w-4" />
               Notifications
             </div>
-            <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Notification settings</h2>
+            <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Notification Settings</h2>
             <p className="mt-3 text-base text-base-content/75">
               Sign in to choose which in-app, browser, and email alerts you want to receive.
             </p>
@@ -275,7 +275,7 @@ export function NotificationSettingsPanel({
               <BellAlertIcon className="h-4 w-4" />
               Notifications
             </div>
-            <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Notification settings</h2>
+            <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Notification Settings</h2>
           </div>
           <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/75">
             {browserPermission === "granted"
@@ -292,7 +292,7 @@ export function NotificationSettingsPanel({
       <section className="surface-card rounded-3xl p-6 sm:p-8">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-base-content">In-app and browser alerts</h2>
+            <h2 className="text-xl font-semibold text-base-content">In-App And Browser Alerts</h2>
           </div>
           {browserPermission === "default" ? (
             <button type="button" onClick={() => void requestBrowserPermission()} className="btn btn-submit btn-sm">
@@ -322,9 +322,9 @@ export function NotificationSettingsPanel({
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-base-content/[0.06] px-3 py-1 text-sm font-semibold uppercase tracking-wide text-base-content/80">
               <EnvelopeIcon className="h-4 w-4" />
-              Email delivery
+              Email Delivery
             </div>
-            <h2 className="mt-3 text-xl font-semibold text-base-content">Email notifications</h2>
+            <h2 className="mt-3 text-xl font-semibold text-base-content">Email Notifications</h2>
           </div>
           <div className="surface-card-nested rounded-2xl px-4 py-3 text-sm text-base-content/75">
             {!emailSettings.email

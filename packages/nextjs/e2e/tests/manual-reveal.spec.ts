@@ -138,8 +138,8 @@ test.describe("Manual reveal fallback", () => {
     const contentLink = page.getByRole("link", { name: `Content #${contentId}` });
     const revealButton = page.getByRole("button", { name: "Reveal" });
 
-    // Wait for either the content link or the "No unrevealed votes" heading
-    const noVotes = page.getByRole("heading", { name: "No unrevealed votes" });
+    // Wait for either the content link or the "No Unrevealed Votes" heading
+    const noVotes = page.getByRole("heading", { name: "No Unrevealed Votes" });
     const voteOrEmpty = contentLink.or(noVotes);
     await expect(voteOrEmpty.first()).toBeVisible({ timeout: 30_000 });
 
@@ -162,7 +162,7 @@ test.describe("Manual reveal fallback", () => {
     expect(indexedReveal, "Ponder did not index the manual reveal").toBe(true);
 
     await page.reload();
-    await expect(page.getByRole("heading", { name: "No unrevealed votes" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "No Unrevealed Votes" })).toBeVisible({ timeout: 15_000 });
 
     await context.close();
   });

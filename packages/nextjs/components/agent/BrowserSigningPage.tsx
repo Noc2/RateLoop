@@ -546,7 +546,7 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
           <section className="surface-card rounded-lg p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">Sign and submit</h2>
+                <h2 className="text-lg font-semibold">Sign And Submit</h2>
                 <p className="mt-1 text-sm text-base-content/60">
                   Browser signing keeps the private key in the user wallet. RateLoop receives only the submitted
                   transaction hashes.

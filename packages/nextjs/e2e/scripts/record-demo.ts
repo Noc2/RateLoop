@@ -178,7 +178,7 @@ async function recordIdentityIntro(page: Page): Promise<void> {
   await gotoWithRetry(page, "/settings#identity", { ensureWalletConnected: true, timeout: 60_000 });
   await ensureWalletVisible(page, ANVIL_ACCOUNTS.account1.address);
 
-  await page.getByRole("heading", { name: "Human credential" }).waitFor({ state: "visible", timeout: 30_000 });
+  await page.getByRole("heading", { name: "Human Credential" }).waitFor({ state: "visible", timeout: 30_000 });
   await page.waitForLoadState("networkidle").catch(() => undefined);
 
   const worldIdButton = page.getByRole("button", { name: "Verify with World ID" }).first();

@@ -69,8 +69,8 @@ test.describe("Settings page", () => {
 
     await expect(page).toHaveURL(/\/settings#wallet$/);
     await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
-    await expect(page.getByRole("heading", { name: "Gas and wallet funding" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: "Top up network fees" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Gas And Wallet Funding" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Top Up Network Fees" })).toBeVisible();
     await expect(page.getByText("ETH top-up is available on World Chain mainnet deployments.")).toBeVisible();
   });
 
@@ -84,7 +84,7 @@ test.describe("Settings page", () => {
     await installLocalE2EWorldIdMock(page, account.address);
     await gotoWithRetry(page, "/settings#identity", { ensureWalletConnected: true });
 
-    await expect(page.getByRole("heading", { name: "Human credential" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Human Credential" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/self-verified/i)).toHaveCount(0);
 
     const verifyButton = page.getByRole("button", { name: "Verify with World ID" });

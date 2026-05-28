@@ -117,7 +117,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
   return (
     <div className="space-y-6">
       <section className="surface-card rounded-3xl p-6 sm:p-8">
-        <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">Start building reputation</h1>
+        <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">Start Building Reputation</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-base-content/65">
           Earn launch credits from eligible settled rounds and for human verification.
         </p>
@@ -130,7 +130,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
               <ShieldCheckIcon className="h-6 w-6" />
             </div>
           </div>
-          <h2 className="mt-5 text-2xl font-semibold text-base-content">Verify as human</h2>
+          <h2 className="mt-5 text-2xl font-semibold text-base-content">Verify As Human</h2>
           <p className="mt-3 text-base leading-7 text-base-content/65">
             Add a wallet-bound{" "}
             <a href={WORLD_ID_HREF} target="_blank" rel="noopener noreferrer" className="link link-primary">
@@ -140,7 +140,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
           </p>
           <div className="mt-5 space-y-4">
             <ActionStat
-              label="Verified bonus"
+              label="Verified Bonus"
               value={humanVerified ? "Ready" : verifiedBonusLabel}
               detail={humanVerified ? "Claim from identity settings." : undefined}
             />
@@ -148,7 +148,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
           </div>
           <div className={actionButtonFooterClassName}>
             <Link href={`${SETTINGS_ROUTE}#identity`} className={actionButtonClassName}>
-              Verify as human
+              Verify As Human
               <ArrowRightIcon className="h-4 w-4" />
             </Link>
           </div>
@@ -160,7 +160,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
               <ChartBarSquareIcon className="h-6 w-6" />
             </div>
           </div>
-          <h2 className="mt-5 text-2xl font-semibold text-base-content">Earn LREP by voting</h2>
+          <h2 className="mt-5 text-2xl font-semibold text-base-content">Earn LREP By Voting</h2>
           <p className="mt-3 text-base leading-7 text-base-content/65">
             Submit private ratings without LREP in rounds that already have a staked vote;{" "}
             <Link href={ELIGIBLE_SETTLED_ROUNDS_DOCS_HREF} className="link link-primary">
@@ -170,7 +170,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
           </p>
           <div className="mt-5 space-y-4">
             <ActionStat
-              label="Launch credits"
+              label="Launch Credits"
               value={rewardStatusLoading ? "..." : `${qualifyingRatingCount}/${eligibilityRatingCount}`}
               tooltip={LAUNCH_CREDITS_TOOLTIP}
               detail={
@@ -188,7 +188,7 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
           </div>
           <div className={actionButtonFooterClassName}>
             <Link href={RATE_ROUTE} className={actionButtonClassName}>
-              Earn LREP by voting
+              Earn LREP By Voting
               <ArrowRightIcon className="h-4 w-4" />
             </Link>
           </div>

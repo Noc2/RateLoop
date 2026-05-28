@@ -644,7 +644,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             World ID
           </div>
           <h3 className="mt-3 inline-flex items-center gap-2 text-2xl font-semibold text-base-content">
-            Human credential
+            Human Credential
             <InfoTooltip text="Only Orb verification is supported right now." position="top" />
           </h3>
         </div>
@@ -724,7 +724,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         <div className="mt-6 grid gap-6 border-t border-base-300 pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.45fr)]">
           <div className="space-y-2">
             <label htmlFor={`${referralInputId}-share`} className="text-sm font-medium text-base-content/70">
-              Your referral link
+              Your Referral Link
             </label>
             <div className="flex gap-2">
               <input
@@ -749,11 +749,11 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           </div>
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:block lg:space-y-2 lg:text-right">
-            <dt className="text-base-content/55">Referral earned</dt>
+            <dt className="text-base-content/55">Referral Earned</dt>
             <dd className="font-semibold text-base-content">{formatLrepAmount(referralEarnings)} LREP</dd>
             {canClaimVerifiedBonus ? (
               <>
-                <dt className="text-base-content/55">Launch bonus</dt>
+                <dt className="text-base-content/55">Launch Bonus</dt>
                 <dd>
                   <button
                     type="button"
@@ -774,7 +774,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <label htmlFor={referralInputId} className="text-sm font-medium text-base-content/70">
-                  Referrer address
+                  Referrer Address
                 </label>
                 {referralInput ? (
                   <button
@@ -812,7 +812,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             </div>
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:block lg:space-y-2 lg:text-right">
-              <dt className="text-base-content/55">Current bonus</dt>
+              <dt className="text-base-content/55">Current Bonus</dt>
               <dd className="font-semibold text-base-content">{formatLrepAmount(currentVerifiedBonus)} LREP</dd>
             </dl>
           </div>

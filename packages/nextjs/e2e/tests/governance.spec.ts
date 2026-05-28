@@ -48,10 +48,10 @@ test.describe("Governance page", () => {
     await setupWallet(page, ANVIL_ACCOUNTS.account1.privateKey);
     await gotoWithRetry(page, "/governance", { ensureWalletConnected: true });
 
-    await expect(page.getByRole("heading", { name: "Start building reputation" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: "Verify as human" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Earn LREP by voting" })).toBeVisible();
-    await expect(page.getByText("Launch credits", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Start Building Reputation" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Verify As Human" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Earn LREP By Voting" })).toBeVisible();
+    await expect(page.getByText("Launch Credits", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "eligible settled rounds" })).toHaveAttribute(
       "href",
       "/docs/how-it-works#eligible-settled-rounds",

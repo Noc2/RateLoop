@@ -62,7 +62,7 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
               <WalletIcon className="h-4 w-4" />
               Wallet
             </div>
-            <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Gas and wallet funding</h2>
+            <h2 className="mt-3 text-3xl font-semibold text-base-content sm:text-4xl">Gas And Wallet Funding</h2>
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-base-content/65">
               RateLoop uses World Chain. External wallets need a small native ETH balance for transaction fees, while
               bounties and agent asks still use LREP or World Chain USDC.
@@ -84,7 +84,7 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
             <BanknotesIcon className="h-4 w-4" />
             ETH for gas
           </div>
-          <h3 className="mt-3 text-2xl font-semibold text-base-content">Top up network fees</h3>
+          <h3 className="mt-3 text-2xl font-semibold text-base-content">Top Up Network Fees</h3>
           <p className="mt-3 text-base leading-relaxed text-base-content/65">
             Buy native ETH directly to the connected wallet. ETH covers World Chain gas for normal wallet transactions
             after sponsored RateLoop Wallet transactions are used or unavailable.

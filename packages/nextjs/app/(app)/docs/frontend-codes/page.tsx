@@ -33,7 +33,7 @@ const FrontendCodes: NextPage = () => {
 
       <div className="not-prose grid gap-4 sm:grid-cols-2 my-6">
         <div className="surface-card rounded-xl p-4">
-          <h3 className="mb-1.5 text-base font-semibold">Use the SDK</h3>
+          <h3 className="mb-1.5 text-base font-semibold">Use The SDK</h3>
           <p className="text-base text-base-content/60 leading-relaxed">
             Use <code>@rateloop/sdk</code> when you want hosted reads, vote helpers, and frontend attribution support in
             an existing website or app.
@@ -44,7 +44,7 @@ const FrontendCodes: NextPage = () => {
         </div>
 
         <div className="surface-card rounded-xl p-4">
-          <h3 className="mb-1.5 text-base font-semibold">Register an Operator</h3>
+          <h3 className="mb-1.5 text-base font-semibold">Register An Operator</h3>
           <p className="text-base text-base-content/60 leading-relaxed">
             Register a frontend address when you want votes made through your interface to earn{" "}
             <strong>{protocolDocFacts.frontendShareLabel}</strong> from settled two-sided rounds.
@@ -55,7 +55,7 @@ const FrontendCodes: NextPage = () => {
         </div>
       </div>
 
-      <h2>Start With the SDK</h2>
+      <h2>Start With The SDK</h2>
       <p>
         The SDK is the fastest path for integrating RateLoop into an existing codebase. It packages the hosted read
         client and the vote/frontend helpers that the reference app already relies on.
