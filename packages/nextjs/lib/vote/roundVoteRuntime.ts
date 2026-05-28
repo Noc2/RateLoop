@@ -28,6 +28,38 @@ type RoundDrandRuntime = {
   drandPeriodSeconds: bigint;
 };
 
+function roundAtOrAfterSeconds(timestampSeconds: bigint, genesisTimeSeconds: bigint, periodSeconds: bigint): bigint {
+  if (periodSeconds <= 0n || timestampSeconds < genesisTimeSeconds) return 0n;
+  const elapsed = timestampSeconds - genesisTimeSeconds;
+  return (elapsed + periodSeconds - 1n) / periodSeconds + 1n;
+}
+
+function deriveContractAcceptedTargetRound(params: {
+  drandGenesisTimeSeconds: bigint;
+  drandPeriodSeconds: bigint;
+  epochDurationSeconds: number;
+  roundStartTimeSeconds: number | null;
+  runtimeTimestampSeconds: number;
+}): bigint | undefined {
+  if (params.roundStartTimeSeconds == null || params.roundStartTimeSeconds <= 0) return undefined;
+  if (params.drandGenesisTimeSeconds <= 0n || params.drandPeriodSeconds <= 0n) return undefined;
+
+  const epochDurationSeconds = BigInt(Math.max(1, Math.floor(params.epochDurationSeconds)));
+  const roundStartTimeSeconds = BigInt(Math.floor(params.roundStartTimeSeconds));
+  const commitTimestampSeconds = BigInt(Math.max(0, Math.floor(params.runtimeTimestampSeconds)) + 1);
+  const elapsedSeconds =
+    commitTimestampSeconds > roundStartTimeSeconds ? commitTimestampSeconds - roundStartTimeSeconds : 0n;
+  const epochIndex = elapsedSeconds / epochDurationSeconds;
+  const revealableAfterSeconds = roundStartTimeSeconds + (epochIndex + 1n) * epochDurationSeconds;
+  const targetRound = roundAtOrAfterSeconds(
+    revealableAfterSeconds,
+    params.drandGenesisTimeSeconds,
+    params.drandPeriodSeconds,
+  );
+
+  return targetRound > 0n ? targetRound : undefined;
+}
+
 function hasUsableDrandConfig(config: RoundDrandRuntime) {
   return (
     config.drandChainHash.toLowerCase() !== zeroHash &&
@@ -256,6 +288,12 @@ export async function resolveRoundVoteRuntime(params: {
     roundId: resolvedRoundId,
     block: previewBlock,
   });
+  const targetRound = deriveContractAcceptedTargetRound({
+    ...drandRuntime,
+    epochDurationSeconds: epochDuration,
+    roundStartTimeSeconds,
+    runtimeTimestampSeconds,
+  });
 
   return {
     epochDuration,
@@ -266,6 +304,7 @@ export async function resolveRoundVoteRuntime(params: {
     roundStartTimeSeconds,
     roundId: resolvedRoundId,
     roundReferenceRatingBps: resolvedRoundReferenceRatingBps,
+    ...(targetRound != null ? { targetRound } : {}),
     ...drandRuntime,
   };
 }

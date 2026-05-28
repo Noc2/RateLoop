@@ -189,6 +189,52 @@ test("resolveRoundVoteRuntime uses current open round when preview points at an 
   assert.equal(runtime.roundReferenceRatingBps, 5_000);
 });
 
+test("resolveRoundVoteRuntime derives a contract-window target for open rounds", async () => {
+  const roundStartTime = TEST_DRAND_CONFIG[1];
+  const publicClient = {
+    getBlock: async (args: Record<string, unknown>) =>
+      args.blockTag === "pending"
+        ? {
+            number: 124n,
+            timestamp: roundStartTime + 181n,
+          }
+        : {
+            number: 123n,
+            timestamp: roundStartTime + 180n,
+          },
+    readContract: async (args: Record<string, unknown>) => {
+      if (args.functionName === "previewCommitReferenceRatingBps") {
+        return 5_000;
+      }
+
+      if (args.functionName === "previewCommitRoundId") {
+        return 2n;
+      }
+
+      if (args.functionName === "roundConfigSnapshot") {
+        return [3_600, 3_600, 3, 200];
+      }
+
+      if (args.functionName === "roundDrandConfig") {
+        return TEST_DRAND_CONFIG;
+      }
+
+      return [roundStartTime, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n];
+    },
+  };
+
+  const runtime = await resolveRoundVoteRuntime({
+    publicClient: publicClient as never,
+    votingEngineAddress: "0x0000000000000000000000000000000000000001",
+    contentId: 7n,
+    fallbackEpochDuration: 1200,
+  });
+
+  assert.equal(runtime.requiresOpenRound, false);
+  assert.equal(runtime.roundStartTimeSeconds, Number(roundStartTime));
+  assert.equal(runtime.targetRound, 1_201n);
+});
+
 test("resolveRoundVoteRuntime rejects non-votable preview states", async () => {
   const publicClient = {
     getBlock: async () => ({

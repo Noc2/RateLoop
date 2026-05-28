@@ -372,7 +372,9 @@ export function useRoundVote() {
       const ensureOpenStakedRuntime = () =>
         ensureOpenStakedRoundRuntime({
           buildOpenedRuntimeFallback: openedRuntime =>
-            openedRuntime.roundId > 0n
+            openedRuntime.roundId > 0n &&
+            openedRuntime.roundStartTimeSeconds != null &&
+            BigInt(openedRuntime.roundStartTimeSeconds) > 0n
               ? {
                   ...openedRuntime,
                   requiresOpenRound: false,
