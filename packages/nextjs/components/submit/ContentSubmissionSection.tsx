@@ -129,6 +129,8 @@ const BOUNTY_ELIGIBILITY_OPTIONS: Array<{
 
 const MAX_QUESTION_BUNDLE_COUNT = 10;
 const MAX_CONTENT_TAGS_LENGTH = 256;
+const DEFAULT_SUBMISSION_BOUNTY_AMOUNT = "1";
+const DEFAULT_SUBMISSION_ROUND_MAX_VOTERS = 100;
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
 const MIN_HUMAN_RESPONSE_WINDOW_MINUTES = 20;
@@ -428,7 +430,7 @@ export function ContentSubmissionSection() {
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [questionDrafts, setQuestionDrafts] = useState<QuestionDraft[]>([createEmptyQuestionDraft()]);
   const [rewardAsset, setRewardAsset] = useState<SubmissionRewardAsset>("usdc");
-  const [rewardAmount, setRewardAmount] = useState("2");
+  const [rewardAmount, setRewardAmount] = useState(DEFAULT_SUBMISSION_BOUNTY_AMOUNT);
   const [rewardRequiredVoters, setRewardRequiredVoters] = useState("3");
   const [rewardRequiredRounds, setRewardRequiredRounds] = useState("1");
   const [bountyEligibility, setBountyEligibility] = useState<BountyEligibilitySelection>("everyone");
@@ -451,7 +453,7 @@ export function ContentSubmissionSection() {
     String(Number(DEFAULT_QUESTION_ROUND_CONFIG.maxDuration / 60n)),
   );
   const [roundMinVoters, setRoundMinVoters] = useState(String(DEFAULT_QUESTION_ROUND_CONFIG.minVoters));
-  const [roundMaxVoters, setRoundMaxVoters] = useState(String(DEFAULT_QUESTION_ROUND_CONFIG.maxVoters));
+  const [roundMaxVoters, setRoundMaxVoters] = useState(String(DEFAULT_SUBMISSION_ROUND_MAX_VOTERS));
   const [roundConfigTouched, setRoundConfigTouched] = useState(false);
   const [roundMaxDurationOverridden, setRoundMaxDurationOverridden] = useState(false);
   const [settlementVotersOverridden, setSettlementVotersOverridden] = useState(false);
@@ -886,6 +888,15 @@ export function ContentSubmissionSection() {
       maxVoterCap: Number(value?.maxVoterCap ?? value?.[7] ?? DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxVoterCap),
     };
   }, [protocolRoundConfigBounds]);
+  const defaultRoundMaxVoters = useMemo(
+    () =>
+      clampWholeNumberInput(
+        String(DEFAULT_SUBMISSION_ROUND_MAX_VOTERS),
+        roundConfigBounds.minVoterCap,
+        roundConfigBounds.maxVoterCap,
+      ),
+    [roundConfigBounds.maxVoterCap, roundConfigBounds.minVoterCap],
+  );
   const syncedSettlementVoters = getSyncedSettlementVotersForPaidCompleters(
     rewardRequiredVoters,
     roundConfigBounds.minSettlementVoters,
@@ -909,8 +920,8 @@ export function ContentSubmissionSection() {
     setRoundBlindMinutes(String(Math.max(1, Math.round(roundConfigDefaults.epochDuration / SECONDS_PER_MINUTE))));
     setRoundMaxDurationMinutes(String(Math.max(1, Math.round(roundConfigDefaults.maxDuration / SECONDS_PER_MINUTE))));
     setRoundMinVoters(syncedSettlementVoters);
-    setRoundMaxVoters(String(roundConfigDefaults.maxVoters));
-  }, [protocolRoundConfig, roundConfigDefaults, roundConfigTouched, syncedSettlementVoters]);
+    setRoundMaxVoters(defaultRoundMaxVoters);
+  }, [defaultRoundMaxVoters, protocolRoundConfig, roundConfigDefaults, roundConfigTouched, syncedSettlementVoters]);
   const roundBlindMinuteBounds = useMemo(() => {
     const min = Math.ceil(roundConfigBounds.minEpochDuration / SECONDS_PER_MINUTE);
     const max = Math.max(min, Math.floor(roundConfigBounds.maxEpochDuration / SECONDS_PER_MINUTE));
@@ -2240,7 +2251,7 @@ export function ContentSubmissionSection() {
       setSelectedCategory(null);
       setSelectedSubcategories([]);
       setCustomSubcategory("");
-      setRewardAmount("2");
+      setRewardAmount(DEFAULT_SUBMISSION_BOUNTY_AMOUNT);
       setRewardRequiredVoters("3");
       setRewardRequiredRounds("1");
       setBountyWindowPreset(DEFAULT_BOUNTY_WINDOW_PRESET);
@@ -2260,7 +2271,7 @@ export function ContentSubmissionSection() {
           roundConfigBounds.maxSettlementVoters,
         ),
       );
-      setRoundMaxVoters(String(roundConfigDefaults.maxVoters));
+      setRoundMaxVoters(defaultRoundMaxVoters);
       setRoundConfigTouched(false);
       setRoundMaxDurationOverridden(false);
       setSettlementVotersOverridden(false);

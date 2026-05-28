@@ -15,6 +15,18 @@ test("single-question reward minimum mirrors escrow max-voter coverage", () => {
   );
 });
 
+test("single-question reward minimum is 1 USDC for 100 max voters", () => {
+  assert.equal(
+    getSubmissionRewardCoverageMinimum({
+      maxVoters: 100n,
+      questionCount: 1,
+      requiredSettledRounds: 1n,
+      requiredVoters: 3n,
+    }),
+    1_000_000n,
+  );
+});
+
 test("single-question reward minimum uses required voters when above cap defensively", () => {
   assert.equal(
     getSubmissionRewardCoverageMinimum({
