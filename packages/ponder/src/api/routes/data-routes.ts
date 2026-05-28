@@ -54,6 +54,7 @@ import { resolveQuestionPayoutProof } from "../../payout-proofs.js";
 const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
 const SNAPSHOT_STATUS_FINALIZED = 3;
 const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
+const HEX_BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 
 const STREAK_MILESTONES = [
   { days: 7, baseBonus: 10 },
@@ -78,6 +79,90 @@ function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
 }
 
 export function registerDataRoutes(app: ApiApp) {
+  app.get("/feedback-bonus-pools", async (c) => {
+    const contentId = safeBigInt(c.req.query("contentId") ?? "");
+    const roundId = c.req.query("roundId") ? safeBigInt(c.req.query("roundId") ?? "") : null;
+    const awarderRaw = c.req.query("awarder");
+    const activeOnly = c.req.query("activeOnly") === "true";
+    const limit = safeLimit(c.req.query("limit"), 100, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (contentId === null) return c.json({ error: "Invalid contentId" }, 400);
+    if (c.req.query("roundId") && roundId === null) return c.json({ error: "Invalid roundId" }, 400);
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const awarder = awarderRaw?.trim().toLowerCase() as `0x${string}` | undefined;
+    if (awarderRaw && (!awarder || !isValidAddress(awarder))) {
+      return c.json({ error: "Invalid awarder address" }, 400);
+    }
+
+    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const conditions = [eq(feedbackBonusPool.contentId, contentId)];
+    if (roundId !== null) conditions.push(eq(feedbackBonusPool.roundId, roundId));
+    if (awarder) conditions.push(eq(feedbackBonusPool.awarder, awarder));
+    if (activeOnly) {
+      conditions.push(
+        eq(feedbackBonusPool.forfeited, false),
+        sql`${feedbackBonusPool.remainingAmount} > 0`,
+        sql`${feedbackBonusPool.feedbackClosesAt} > ${nowSeconds}`,
+      );
+    }
+
+    const items = await db
+      .select()
+      .from(feedbackBonusPool)
+      .where(and(...conditions))
+      .orderBy(asc(feedbackBonusPool.feedbackClosesAt), asc(feedbackBonusPool.id))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, {
+      items,
+      limit,
+      offset,
+      hasMore: items.length >= limit,
+    });
+  });
+
+  app.get("/feedback-bonus-awards", async (c) => {
+    const contentId = safeBigInt(c.req.query("contentId") ?? "");
+    const roundId = c.req.query("roundId") ? safeBigInt(c.req.query("roundId") ?? "") : null;
+    const feedbackHashesRaw = c.req.query("feedbackHashes");
+    const limit = safeLimit(c.req.query("limit"), 100, 200);
+    const offset = safeOffset(c.req.query("offset"));
+    if (contentId === null) return c.json({ error: "Invalid contentId" }, 400);
+    if (c.req.query("roundId") && roundId === null) return c.json({ error: "Invalid roundId" }, 400);
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const feedbackHashes = (feedbackHashesRaw ?? "")
+      .split(",")
+      .map(value => value.trim().toLowerCase())
+      .filter(Boolean);
+    if (feedbackHashes.some(value => !HEX_BYTES32_PATTERN.test(value))) {
+      return c.json({ error: "Invalid feedback hash" }, 400);
+    }
+
+    const conditions = [eq(feedbackBonusAward.contentId, contentId)];
+    if (roundId !== null) conditions.push(eq(feedbackBonusAward.roundId, roundId));
+    if (feedbackHashes.length > 0) {
+      conditions.push(inArray(feedbackBonusAward.feedbackHash, feedbackHashes as `0x${string}`[]));
+    }
+
+    const items = await db
+      .select()
+      .from(feedbackBonusAward)
+      .where(and(...conditions))
+      .orderBy(desc(feedbackBonusAward.awardedAt), desc(feedbackBonusAward.id))
+      .limit(limit)
+      .offset(offset);
+
+    return jsonBig(c, {
+      items,
+      limit,
+      offset,
+      hasMore: items.length >= limit,
+    });
+  });
+
   app.get("/content-feedback", async (c) => {
     const contentId = safeBigInt(c.req.query("contentId") ?? "");
     const roundId = c.req.query("roundId") ? safeBigInt(c.req.query("roundId") ?? "") : null;

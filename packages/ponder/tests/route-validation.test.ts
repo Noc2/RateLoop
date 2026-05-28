@@ -193,16 +193,25 @@ function mockPonderModules<T>(result: T) {
       updatedAt: "profile.updatedAt",
     },
     feedbackBonusAward: {
+      awardedAt: "feedbackBonusAward.awardedAt",
+      contentId: "feedbackBonusAward.contentId",
+      feedbackHash: "feedbackBonusAward.feedbackHash",
       frontendFee: "feedbackBonusAward.frontendFee",
       grossAmount: "feedbackBonusAward.grossAmount",
+      id: "feedbackBonusAward.id",
       recipientAmount: "feedbackBonusAward.recipientAmount",
+      roundId: "feedbackBonusAward.roundId",
     },
     feedbackBonusPool: {
+      awarder: "feedbackBonusPool.awarder",
       contentId: "feedbackBonusPool.contentId",
+      feedbackClosesAt: "feedbackBonusPool.feedbackClosesAt",
       forfeited: "feedbackBonusPool.forfeited",
       forfeitedAmount: "feedbackBonusPool.forfeitedAmount",
       fundedAmount: "feedbackBonusPool.fundedAmount",
+      id: "feedbackBonusPool.id",
       remainingAmount: "feedbackBonusPool.remainingAmount",
+      roundId: "feedbackBonusPool.roundId",
     },
     questionRewardPool: {
       asset: "questionRewardPool.asset",
@@ -1125,6 +1134,129 @@ describe("registerLeaderboardRoutes", () => {
 });
 
 describe("registerDataRoutes", () => {
+  it("rejects invalid feedback bonus pool awarder filters before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/feedback-bonus-pools?contentId=1&awarder=not-an-address",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid awarder address" });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("lists active feedback bonus pools for an awarder", async () => {
+    const { queryBuilder } = mockPonderModules([
+      {
+        id: 7n,
+        contentId: 1n,
+        roundId: 2n,
+        awarder: "0x00000000000000000000000000000000000000aa",
+        remainingAmount: 2_000_000n,
+        feedbackClosesAt: 9_999_999_999n,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/feedback-bonus-pools?contentId=1&roundId=2&awarder=0x00000000000000000000000000000000000000AA&activeOnly=true&limit=5",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(5);
+    const serializedWhere = serializeExpression(
+      queryBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("feedbackBonusPool.contentId");
+    expect(serializedWhere).toContain("feedbackBonusPool.roundId");
+    expect(serializedWhere).toContain("feedbackBonusPool.awarder");
+    expect(serializedWhere).toContain("feedbackBonusPool.remainingAmount");
+    expect(serializedWhere).toContain("feedbackBonusPool.feedbackClosesAt");
+    expect(body.items[0]).toMatchObject({
+      id: "7",
+      contentId: "1",
+      roundId: "2",
+      awarder: "0x00000000000000000000000000000000000000aa",
+      remainingAmount: "2000000",
+    });
+  });
+
+  it("rejects invalid feedback bonus award hash filters before querying the database", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/feedback-bonus-awards?contentId=1&feedbackHashes=0x1234",
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid feedback hash" });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("lists feedback bonus awards for visible feedback hashes", async () => {
+    const hash =
+      "0x1111111111111111111111111111111111111111111111111111111111111111";
+    const { queryBuilder } = mockPonderModules([
+      {
+        id: `7-${hash}`,
+        poolId: 7n,
+        contentId: 1n,
+        roundId: 2n,
+        feedbackHash: hash,
+        grossAmount: 1_000_000n,
+        recipientAmount: 970_000n,
+        frontendFee: 30_000n,
+        awardedAt: 5_000n,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      `http://localhost/feedback-bonus-awards?contentId=1&roundId=2&feedbackHashes=${hash}&limit=5`,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(5);
+    const serializedWhere = serializeExpression(
+      queryBuilder.where.mock.calls[0]?.[0],
+    );
+    expect(serializedWhere).toContain("feedbackBonusAward.contentId");
+    expect(serializedWhere).toContain("feedbackBonusAward.roundId");
+    expect(serializedWhere).toContain("feedbackBonusAward.feedbackHash");
+    expect(body.items[0]).toMatchObject({
+      poolId: "7",
+      feedbackHash: hash,
+      grossAmount: "1000000",
+      recipientAmount: "970000",
+      frontendFee: "30000",
+    });
+  });
+
   it("rejects invalid rater participation status addresses before querying the database", async () => {
     const { db } = mockPonderModules([]);
     const { registerDataRoutes } = await import(
