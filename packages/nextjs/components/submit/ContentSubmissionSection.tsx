@@ -2047,16 +2047,13 @@ export function ContentSubmissionSection() {
         primarySubmittedContentId !== null
       ) {
         try {
-          const feedbackRoundId = (await readContract(wagmiConfig, {
+          const currentFeedbackRoundId = (await readContract(wagmiConfig, {
             address: verifiedVotingEngineAddress,
             abi: RoundVotingEngineAbi,
             functionName: "currentRoundId",
             args: [primarySubmittedContentId],
           })) as bigint;
-
-          if (feedbackRoundId <= 0n) {
-            throw new Error("Could not find the open round for the submitted question.");
-          }
+          const feedbackRoundId = currentFeedbackRoundId > 0n ? currentFeedbackRoundId : 1n;
 
           const feedbackApproveWrite = {
             address: feedbackBonusUsdcAddress,

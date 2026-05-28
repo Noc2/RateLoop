@@ -12,6 +12,7 @@ import {
   confirmFeedbackBonusQuestionSubmissionRequest,
   getX402QuestionSubmissionByClientRequest,
   prepareAgentWalletQuestionSubmissionRequest,
+  prepareFeedbackBonusQuestionSubmissionRequest,
   prepareNativeX402QuestionSubmissionRequest,
   preparePermissionlessNativeX402QuestionSubmissionRequest,
   preparePermissionlessWalletQuestionSubmissionRequest,
@@ -523,6 +524,69 @@ test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the fund
   assert.equal(body.feedbackBonus.status, "funded");
   assert.equal(body.feedbackBonus.poolId, "55");
   assert.deepEqual(body.feedbackBonus.transactionHashes, [feedbackHash]);
+});
+
+test("prepareFeedbackBonusQuestionSubmissionRequest targets first round before any round is opened", async () => {
+  const payload = buildPayload("wallet-feedback-bonus-first-round");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const submitHash = `0x${"a".repeat(64)}` as const;
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    feedbackBonus: {
+      amount: 2_000_000n,
+      asset: "USDC",
+      awarder: walletAddress,
+      feedbackClosesAt: payload.bounty.rewardPoolExpiresAt,
+    },
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const expectedContentHash = getExpectedContentHash(record);
+
+  setDefaultTestOverrides({
+    createPublicQuestionClient: () =>
+      ({
+        getBlock: async () => ({ timestamp: payload.bounty.rewardPoolExpiresAt - 60n }),
+        readContract: async ({ functionName }: { functionName: string }) => {
+          if (functionName === "votingEngine") {
+            return "0x0000000000000000000000000000000000000020";
+          }
+          if (functionName === "currentRoundId") {
+            return 0n;
+          }
+          throw new Error(`Unexpected readContract call: ${functionName}`);
+        },
+      }) as never,
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(
+        hash,
+        buildSubmittedQuestionLogs({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: expectedContentHash,
+          contentId: 123n,
+          payload,
+          submitter: walletAddress,
+        }),
+      ),
+  });
+
+  await confirmAgentWalletQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [submitHash],
+  });
+  const prepared = await prepareFeedbackBonusQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+  });
+  const body = prepared.body as { feedbackBonus: { roundId: string; status: string } };
+
+  assert.equal(prepared.status, 202);
+  assert.equal(body.feedbackBonus.status, "awaiting_wallet_signature");
+  assert.equal(body.feedbackBonus.roundId, "1");
 });
 
 test("confirmAgentWalletQuestionSubmissionRequest rejects unrelated same-wallet submission logs", async () => {

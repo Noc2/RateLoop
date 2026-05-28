@@ -449,6 +449,7 @@ export function toPermissionlessWalletPayload(
 type X402QuestionSubmissionTestOverrides = {
   buildAgentWalletQuestionSubmissionPlan?: typeof buildAgentWalletQuestionSubmissionPlan;
   buildNativeX402QuestionSubmissionPlan?: typeof buildNativeX402QuestionSubmissionPlan;
+  createPublicQuestionClient?: typeof createPublicQuestionClient;
   preflightX402QuestionSubmission?: typeof preflightX402QuestionSubmission;
   resolveX402QuestionConfig?: typeof resolveX402QuestionConfig;
   waitForSuccessfulReceipt?: typeof waitForSuccessfulReceipt;
@@ -778,6 +779,8 @@ function getQuestionSubmissionDependencies() {
       x402QuestionSubmissionTestOverrides?.preflightX402QuestionSubmission ?? preflightX402QuestionSubmission,
     resolveX402QuestionConfig:
       x402QuestionSubmissionTestOverrides?.resolveX402QuestionConfig ?? resolveX402QuestionConfig,
+    createPublicQuestionClient:
+      x402QuestionSubmissionTestOverrides?.createPublicQuestionClient ?? createPublicQuestionClient,
     waitForSuccessfulReceipt: x402QuestionSubmissionTestOverrides?.waitForSuccessfulReceipt ?? waitForSuccessfulReceipt,
   };
 }
@@ -2046,7 +2049,7 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
   if (!config.feedbackBonusEscrowAddress) {
     throw new X402QuestionConfigError("Feedback Bonus escrow is not deployed for the requested chain.");
   }
-  const publicClient = createPublicQuestionClient(config);
+  const publicClient = dependencies.createPublicQuestionClient(config);
   const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
   if (BigInt(feedbackBonus.feedbackClosesAt) <= latestBlock.timestamp) {
     throw new X402QuestionConflictError("Feedback Bonus close time is in the past.");
@@ -2057,15 +2060,13 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
     abi: ContentRegistryAbi,
     functionName: "votingEngine",
   })) as Address;
-  const roundId = (await publicClient.readContract({
+  const currentRoundId = (await publicClient.readContract({
     address: votingEngineAddress,
     abi: RoundVotingEngineAbi,
     functionName: "currentRoundId",
     args: [BigInt(record.contentId)],
   })) as bigint;
-  if (roundId <= 0n) {
-    throw new X402QuestionConflictError("Could not find the open round for the submitted question.");
-  }
+  const roundId = currentRoundId > 0n ? currentRoundId : 1n;
 
   const amount = BigInt(feedbackBonus.amount);
   const walletAddress = record.payerAddress as Address;
