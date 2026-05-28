@@ -1,20 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RatingLib } from "../contracts/libraries/RatingLib.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RatingLib} from "../contracts/libraries/RatingLib.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {deployInitializedProtocolConfig} from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
     address public votingEngine;
 
     constructor(address votingEngine_) {
         votingEngine = votingEngine_;
+    }
+}
+
+contract MockRewardDistributorWithoutEngineForConfig {}
+
+contract MockRewardDistributorRevertingEngineForConfig {
+    function votingEngine() external pure returns (address) {
+        revert("mock engine revert");
     }
 }
 
@@ -458,6 +466,43 @@ contract ProtocolConfigBranchesTest is Test {
         assertFalse(config.isRewardDistributorForEngine(replacementDistributor, engine));
     }
 
+    function test_SetRewardDistributor_RejectsEoa() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address eoaDistributor = address(0xBEEF);
+
+        vm.expectRevert(ProtocolConfig.InvalidAddress.selector);
+        config.setRewardDistributor(eoaDistributor);
+
+        assertFalse(config.isRewardDistributor(eoaDistributor));
+        assertEq(config.rewardDistributor(), address(0));
+    }
+
+    function test_SetRewardDistributor_RejectsMissingVotingEngine() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address distributor = address(new MockRewardDistributorWithoutEngineForConfig());
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(distributor);
+
+        assertFalse(config.isRewardDistributor(distributor));
+        assertEq(config.rewardDistributor(), address(0));
+    }
+
+    function test_SetRewardDistributor_RejectsRevertingOrZeroVotingEngine() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address revertingDistributor = address(new MockRewardDistributorRevertingEngineForConfig());
+        address zeroEngineDistributor = address(new MockRewardDistributorForConfig(address(0)));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(revertingDistributor);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(zeroEngineDistributor);
+
+        assertFalse(config.isRewardDistributor(revertingDistributor));
+        assertFalse(config.isRewardDistributor(zeroEngineDistributor));
+        assertEq(config.rewardDistributor(), address(0));
+    }
+
     function test_SetRewardDistributor_KeepsPreviousEngineAuthorized() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
@@ -478,7 +523,7 @@ contract ProtocolConfigBranchesTest is Test {
 
     function test_RevokeRewardDistributor_RemovesAuthorization() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address distributor = address(0xBEEF);
+        address distributor = address(new MockRewardDistributorForConfig(address(0xE641)));
         config.setRewardDistributor(distributor);
 
         vm.expectEmit(false, false, false, true);
