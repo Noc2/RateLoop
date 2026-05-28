@@ -68,7 +68,7 @@ test.describe("Voting flow — 3-voter threshold", () => {
       const page = await context.newPage();
       await setupWallet(page, voter.account.privateKey);
 
-      const success = await voteOnContent(page, voter.direction);
+      const success = await voteOnContent(page, voter.direction, { voterAddress: voter.account.address });
       if (success) successCount++;
 
       await context.close();

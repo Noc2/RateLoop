@@ -1,5 +1,48 @@
 import { VOTE_DOWN_BUTTON_NAME, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "./wait-helpers";
+import { waitForPonderIndexed } from "./admin-helpers";
+import { getVotes } from "./ponder-api";
 import type { Page } from "@playwright/test";
+
+type VoteSubmissionOptions = {
+  voterAddress?: string;
+  requireIndexed?: boolean;
+  indexedTimeoutMs?: number;
+};
+
+function normalizeAddress(address: string) {
+  return address.trim().toLowerCase();
+}
+
+async function getActiveVoteContentId(page: Page): Promise<string | null> {
+  const urlContentId = new URL(page.url()).searchParams.get("content");
+  if (urlContentId) return urlContentId;
+
+  const contentId = await page
+    .getByTestId("vote-content-card-shell")
+    .first()
+    .getAttribute("data-content-id")
+    .catch(() => null);
+  return contentId?.trim() || null;
+}
+
+async function waitForVoteIndexed(
+  voterAddress: string | undefined,
+  contentId: string | null,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (!voterAddress || !contentId) return true;
+
+  const normalizedVoter = normalizeAddress(voterAddress);
+  return waitForPonderIndexed(
+    async () => {
+      const { items } = await getVotes({ voter: normalizedVoter, contentId });
+      return items.some(item => item.contentId === contentId && normalizeAddress(item.voter) === normalizedVoter);
+    },
+    timeoutMs,
+    2_000,
+    "waitForVoteIndexed",
+  );
+}
 
 /**
  * Try to vote on content. If the featured content has cooldown/own-content/round-full,
@@ -8,7 +51,11 @@ import type { Page } from "@playwright/test";
  * Returns true if the vote was successfully placed, false otherwise.
  * Handles transaction reverts gracefully by returning false instead of throwing.
  */
-export async function voteOnContent(page: Page, direction: "up" | "down"): Promise<boolean> {
+export async function voteOnContent(
+  page: Page,
+  direction: "up" | "down",
+  options: VoteSubmissionOptions = {},
+): Promise<boolean> {
   await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
   await waitForFeedLoaded(page);
 
@@ -43,6 +90,8 @@ export async function voteOnContent(page: Page, direction: "up" | "down"): Promi
   if (!canVote) {
     return false;
   }
+
+  const contentId = await getActiveVoteContentId(page);
 
   // Click the vote button — retry if the element gets detached during a
   // React re-render (feed data polling can replace DOM nodes mid-click).
@@ -113,7 +162,13 @@ export async function voteOnContent(page: Page, direction: "up" | "down"): Promi
     .first()
     .isVisible()
     .catch(() => false);
-  return wasSuccess;
+  if (!wasSuccess) return false;
+
+  if (options.requireIndexed ?? Boolean(options.voterAddress)) {
+    return waitForVoteIndexed(options.voterAddress, contentId, options.indexedTimeoutMs ?? 60_000);
+  }
+
+  return true;
 }
 
 /**
@@ -126,6 +181,7 @@ export async function voteOnSpecificContent(
   page: Page,
   contentId: string | number,
   direction: "up" | "down",
+  options: VoteSubmissionOptions = {},
 ): Promise<boolean> {
   await gotoWithRetry(page, `/rate?content=${contentId}`, { ensureWalletConnected: true });
   await waitForFeedLoaded(page);
@@ -202,8 +258,15 @@ export async function voteOnSpecificContent(
     return false;
   }
 
-  return await successIndicator
+  const wasSuccess = await successIndicator
     .first()
     .isVisible()
     .catch(() => false);
+  if (!wasSuccess) return false;
+
+  if (options.requireIndexed ?? Boolean(options.voterAddress)) {
+    return waitForVoteIndexed(options.voterAddress, contentId.toString(), options.indexedTimeoutMs ?? 60_000);
+  }
+
+  return true;
 }

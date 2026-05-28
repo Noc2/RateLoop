@@ -114,7 +114,9 @@ test.describe("Tied round lifecycle", () => {
       const page = await context.newPage();
       await setupWallet(page, voter.account.privateKey);
 
-      const success = await voteOnSpecificContent(page, newContentId!, voter.direction);
+      const success = await voteOnSpecificContent(page, newContentId!, voter.direction, {
+        voterAddress: voter.account.address,
+      });
       if (success) successCount++;
 
       await context.close();
