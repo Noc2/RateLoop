@@ -90,6 +90,9 @@ library LaunchRaterRewardLib {
         pure
         returns (bytes32)
     {
+        if (provider == RaterRegistry.HumanCredentialProvider.WorldIdV4) {
+            provider = RaterRegistry.HumanCredentialProvider.WorldId;
+        }
         return keccak256(abi.encode(provider, nullifierHash));
     }
 

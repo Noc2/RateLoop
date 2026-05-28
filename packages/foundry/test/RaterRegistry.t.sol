@@ -5,8 +5,19 @@ import { Test } from "forge-std/Test.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import { LaunchRaterRewardLib } from "../contracts/libraries/LaunchRaterRewardLib.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+
+contract LaunchRaterRewardLibHarness {
+    function launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
+        external
+        pure
+        returns (bytes32)
+    {
+        return LaunchRaterRewardLib.launchRewardCredentialAnchorId(provider, nullifierHash);
+    }
+}
 
 contract RaterRegistryTest is Test {
     RaterRegistry internal registry;
@@ -549,6 +560,53 @@ contract RaterRegistryTest is Test {
             rater
         );
         assertTrue(registry.hasActiveHumanCredential(rater));
+    }
+
+    function test_WorldIdAndV4SharedNullifierResolveToSameHumanIdentity() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[8] memory legacyProof;
+        uint256[5] memory v4Proof;
+
+        bytes32 legacyKey = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH);
+        bytes32 v4Key = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
+        bytes32 seededKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH);
+        assertEq(
+            legacyKey,
+            keccak256(
+                abi.encode("rateloop.human-identity-v1", RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
+            )
+        );
+        assertEq(legacyKey, v4Key);
+        assertTrue(seededKey != legacyKey);
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), legacyProof);
+
+        _configureV4Verifier(verifier);
+        vm.prank(otherRater);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), v4Proof);
+
+        IRaterIdentityRegistry.ResolvedRater memory legacyResolved = registry.resolveRater(rater);
+        IRaterIdentityRegistry.ResolvedRater memory v4Resolved = registry.resolveRater(otherRater);
+
+        assertEq(legacyResolved.identityKey, legacyKey);
+        assertEq(v4Resolved.identityKey, legacyKey);
+        assertEq(legacyResolved.humanNullifier, NULLIFIER_HASH);
+        assertEq(v4Resolved.humanNullifier, NULLIFIER_HASH);
+
+        LaunchRaterRewardLibHarness launchHarness = new LaunchRaterRewardLibHarness();
+        assertEq(
+            launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
+            launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
+        );
+        assertEq(
+            launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
+            keccak256(abi.encode(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH))
+        );
+        assertTrue(
+            launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH)
+                != launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
+        );
     }
 
     function test_ConfiguringWorldIdV4DisablesLegacyWorldIdProofs() public {

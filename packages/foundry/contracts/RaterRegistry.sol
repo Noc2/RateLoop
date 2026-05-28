@@ -745,6 +745,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         returns (bytes32)
     {
         if (provider == HumanCredentialProvider.None || nullifierHash == bytes32(0)) return bytes32(0);
+        if (provider == HumanCredentialProvider.WorldIdV4) provider = HumanCredentialProvider.WorldId;
         return keccak256(abi.encode("rateloop.human-identity-v1", provider, nullifierHash));
     }
 
