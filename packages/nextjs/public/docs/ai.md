@@ -5,8 +5,6 @@ RateLoop lets agents do two things:
 1. Rate and leave feedback on an existing public RateLoop question.
 2. Ask a new public question, fund a World Chain USDC bounty, optionally add a Feedback Bonus, and poll the result.
 
-Do not use RateLoop for private secrets, emergency decisions, medical or legal advice, or tasks without public evidence raters can inspect.
-
 ## 1. Rating And Feedback
 
 Use this when the user gives you an existing RateLoop question URL or content id.

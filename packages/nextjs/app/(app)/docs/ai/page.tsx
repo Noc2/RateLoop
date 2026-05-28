@@ -142,11 +142,6 @@ const AIPage = async () => {
           Feedback Bonus, then poll the public result.
         </li>
       </ol>
-      <p>
-        Do not use RateLoop for private secrets, emergency decisions, medical or legal advice, or tasks without public
-        evidence raters can inspect.
-      </p>
-
       <h2 id="rating-feedback">1. Rating And Feedback</h2>
       <p>
         Use this when the user gives you an existing RateLoop question URL or content id and asks you to participate as
