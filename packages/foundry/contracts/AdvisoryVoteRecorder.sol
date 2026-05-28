@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {RoundVotingEngine} from "./RoundVotingEngine.sol";
-import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {LaunchRaterRewardLib} from "./libraries/LaunchRaterRewardLib.sol";
-import {RobustBtsMath} from "./libraries/RobustBtsMath.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {TlockVoteLib} from "./libraries/TlockVoteLib.sol";
-import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { RoundVotingEngine } from "./RoundVotingEngine.sol";
+import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
+import { RobustBtsMath } from "./libraries/RobustBtsMath.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { TlockVoteLib } from "./libraries/TlockVoteLib.sol";
+import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 
 /// @title AdvisoryVoteRecorder
 /// @notice Zero-stake commit-reveal votes that can bootstrap launch rewards without affecting vote/stake accounting.
@@ -804,7 +804,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
                     if (resolved.identityKey == advisoryCommit.identityKey && resolved.holder != address(0)) {
                         return resolved.holder;
                     }
-                } catch {}
+                } catch { }
             }
         }
         return advisoryCommit.voter;

@@ -584,7 +584,9 @@ contract RaterRegistryTest is Test {
 
         _configureV4Verifier(verifier);
         vm.prank(otherRater);
-        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), v4Proof);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), v4Proof
+        );
 
         IRaterIdentityRegistry.ResolvedRater memory legacyResolved = registry.resolveRater(rater);
         IRaterIdentityRegistry.ResolvedRater memory v4Resolved = registry.resolveRater(otherRater);
@@ -597,15 +599,21 @@ contract RaterRegistryTest is Test {
         LaunchRaterRewardLibHarness launchHarness = new LaunchRaterRewardLibHarness();
         assertEq(
             launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
-            launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
+            launchHarness.launchRewardCredentialAnchorId(
+                RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH
+            )
         );
         assertEq(
             launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
             keccak256(abi.encode(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH))
         );
         assertTrue(
-            launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH)
-                != launchHarness.launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
+            launchHarness.launchRewardCredentialAnchorId(
+                RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
+            )
+            != launchHarness.launchRewardCredentialAnchorId(
+                RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
+            )
         );
     }
 

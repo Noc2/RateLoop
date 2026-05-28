@@ -761,7 +761,10 @@ function main() {
     deployedContractsTargetFile
   );
   const generatedContractsForValidation =
-    pruneIncompleteNonLocalGeneratedContracts(allGeneratedContracts, deployments);
+    pruneIncompleteNonLocalGeneratedContracts(
+      allGeneratedContracts,
+      deployments
+    );
   const existingContractsForPublish =
     pruneGeneratedOnlyContracts(existingContracts);
   assertFreshTargetDeployment(

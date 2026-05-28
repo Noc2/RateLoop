@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
-import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
-import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
+import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract WeakLaunchRaterRegistry {
     function getHumanCredential(address) external pure returns (RaterRegistry.HumanCredential memory credential) {

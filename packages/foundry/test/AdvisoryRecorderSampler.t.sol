@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Test} from "forge-std/Test.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import { Test } from "forge-std/Test.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 
 /// @notice Test harness exposing `AdvisoryVoteRecorder` internals for the M-Vote-5 sampler tests.
 /// @dev Subclasses the real recorder so we exercise the production helpers (compiled into the
@@ -16,7 +16,7 @@ import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
 contract HarnessAdvisoryRecorder is AdvisoryVoteRecorder {
     constructor(address _votingEngine, address _registry, address owner_)
         AdvisoryVoteRecorder(_votingEngine, _registry, owner_)
-    {}
+    { }
 
     function harnessBuildRevealedKeySet(uint256 contentId, uint256 roundId, uint16 voteCount)
         external
