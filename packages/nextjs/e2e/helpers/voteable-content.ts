@@ -1,4 +1,4 @@
-import { approveLREP, submitContentDirect, waitForPonderIndexed } from "./admin-helpers";
+import { approveLREP, submitContentDirect, waitForPonderIndexed, waitForPonderIndexedAfterSync } from "./admin-helpers";
 import { ANVIL_ACCOUNTS } from "./anvil-accounts";
 import { CONTRACT_ADDRESSES } from "./contracts";
 import { getContentList } from "./ponder-api";
@@ -66,7 +66,7 @@ export async function createFreshVoteableContent(
   if (!submitted) return null;
 
   let contentId: string | null = null;
-  const indexed = await waitForPonderIndexed(
+  const indexed = await waitForPonderIndexedAfterSync(
     async () => {
       const { items } = await getContentList({ search: title, status: "all", limit: 5 });
       const match = items.find(item => item.title === title && item.submitter.toLowerCase() === submitter.toLowerCase());
@@ -118,7 +118,7 @@ export async function ensureVoteableContentWithDeps(
     }
 
     let indexedContentId: string | null = null;
-    const indexed = await deps.waitForPonderIndexed(
+    const indexed = await waitForPonderIndexedAfterSync(
       async () => {
         const { items } = await deps.getContentList({ status: "all", limit: 100 });
         const match = items.find(

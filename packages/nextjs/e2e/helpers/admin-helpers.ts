@@ -2078,6 +2078,20 @@ export async function waitForPonderIndexed(
   return false;
 }
 
+export async function waitForPonderIndexedAfterSync(
+  pollFn: () => Promise<boolean>,
+  maxWaitMs = 60_000,
+  pollInterval = 2_000,
+  label = "waitForPonderIndexedAfterSync",
+  ponderURL = PONDER_URL,
+): Promise<boolean> {
+  const synced = await waitForPonderSync(maxWaitMs, pollInterval, ponderURL);
+  if (!synced) {
+    console.warn(`[${label}] Ponder did not report sync before indexed-data polling; continuing with predicate polling.`);
+  }
+  return waitForPonderIndexed(pollFn, maxWaitMs, pollInterval, label);
+}
+
 /**
  * Read the current round config tuple.
  * Accepts a ProtocolConfig address directly or a contract that exposes protocolConfig().
