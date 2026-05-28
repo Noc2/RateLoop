@@ -69,14 +69,14 @@ export async function resolveRoundVoteRuntime(params: {
         abi: RoundVotingEngineAbi,
         functionName: "rounds",
         args: [params.contentId, roundId],
-        blockNumber: snapshotBlockNumber,
+        ...previewBlock,
       }),
       params.publicClient.readContract({
         address: params.votingEngineAddress,
         abi: RoundVotingEngineAbi,
         functionName: "roundConfigSnapshot",
         args: [params.contentId, roundId],
-        blockNumber: snapshotBlockNumber,
+        ...previewBlock,
       }),
     ]);
     const parsedRound = parseRound(round);

@@ -49,11 +49,8 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
     ["latest", "pending"],
   );
   assert.equal(readCalls.length, 4);
-  for (const call of readCalls.slice(0, 2)) {
+  for (const call of readCalls) {
     assert.equal(call.blockTag, "pending");
-  }
-  for (const call of readCalls.slice(2)) {
-    assert.equal(call.blockNumber, 123n);
   }
   assert.equal(runtime.now(), 1_101_000);
   assert.equal(runtime.epochDuration, 100);
@@ -64,6 +61,7 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
 });
 
 test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale", async () => {
+  const readCalls: Array<Record<string, unknown>> = [];
   const publicClient = {
     getBlock: async (args: Record<string, unknown>) =>
       args.blockTag === "pending"
@@ -76,6 +74,8 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
             timestamp: 1_000n,
           },
     readContract: async (args: Record<string, unknown>) => {
+      readCalls.push(args);
+
       if (args.functionName === "previewCommitReferenceRatingBps") {
         return 5_000;
       }
@@ -85,10 +85,12 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
       }
 
       if (args.functionName === "roundConfigSnapshot") {
-        return [0, 0, 0, 0];
+        return [100, 3_600, 3, 1_000];
       }
 
-      return [0n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n];
+      return args.blockTag === "pending"
+        ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n]
+        : [0n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n];
     },
   };
 
@@ -99,10 +101,14 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
     fallbackEpochDuration: 1200,
   });
 
+  assert.equal(readCalls.length, 4);
+  for (const call of readCalls) {
+    assert.equal(call.blockTag, "pending");
+  }
   assert.equal(runtime.now(), 4_001_000);
-  assert.equal(runtime.epochDuration, 1200);
-  assert.equal(runtime.requiresOpenRound, true);
-  assert.equal(runtime.roundStartTimeSeconds, null);
+  assert.equal(runtime.epochDuration, 100);
+  assert.equal(runtime.requiresOpenRound, false);
+  assert.equal(runtime.roundStartTimeSeconds, 4_000);
   assert.equal(runtime.roundId, 3n);
 });
 
