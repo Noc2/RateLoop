@@ -44,4 +44,4 @@ jobs:
 
       - name: Live readiness probes
         if: github.event_name == 'schedule' || github.event.inputs.live == 'true'
-        run: node scripts/check-worldchain-sepolia-readiness.mjs --live
+        run: node scripts/check-worldchain-sepolia-readiness.mjs --live --require-live-targets

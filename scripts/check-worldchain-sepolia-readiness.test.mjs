@@ -4,6 +4,7 @@ import {
   REQUIRED_DEPLOYED_CONTRACTS,
   buildDeploymentAddressMap,
   parseGeneratedContractsForChain,
+  validateLiveReadiness,
   validateOfflineReadiness,
 } from "./check-worldchain-sepolia-readiness.mjs";
 
@@ -94,4 +95,25 @@ test("validateOfflineReadiness rejects missing World Chain Sepolia USDC config",
 
   assert.equal(result.ok, false);
   assert(result.failures.some(message => message.includes("USDC address")));
+});
+
+test("validateLiveReadiness can skip missing targets for ad-hoc local use", async () => {
+  const result = await validateLiveReadiness({
+    deploymentJson: makeDeploymentJson(),
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("validateLiveReadiness fails closed when required live targets are missing", async () => {
+  const result = await validateLiveReadiness({
+    deploymentJson: makeDeploymentJson(),
+    requireTargets: true,
+  });
+
+  assert.equal(result.ok, false);
+  assert(result.failures.some(message => message.includes("WORLDCHAIN_SEPOLIA_RPC_URL")));
+  assert(result.failures.some(message => message.includes("WORLDCHAIN_SEPOLIA_PONDER_URL")));
+  assert(result.failures.some(message => message.includes("WORLDCHAIN_SEPOLIA_APP_URL")));
 });

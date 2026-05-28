@@ -24,8 +24,9 @@ yarn worldchain-sepolia:check --live
 ```
 
 Live mode verifies the RPC reports chain ID `4801`, deployed contracts have bytecode, Ponder `/status` is indexed at or beyond the deployment block, and key app routes return below HTTP 500.
+Add `--require-live-targets` in scheduled or release-gate jobs so missing live endpoints fail the check instead of being reported as skipped.
 
-GitHub Actions runs the offline check on pushes and pull requests. The scheduled/manual workflow can also run live probes when these repository settings are configured:
+GitHub Actions runs the offline check on pushes and pull requests. The scheduled/manual workflow runs live probes with `--require-live-targets`, so configure these repository settings before enabling the live path:
 
 - Secret: `WORLDCHAIN_SEPOLIA_RPC_URL`
 - Variables: `WORLDCHAIN_SEPOLIA_PONDER_URL`, `WORLDCHAIN_SEPOLIA_APP_URL`

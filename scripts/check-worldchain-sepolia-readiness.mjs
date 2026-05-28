@@ -199,6 +199,7 @@ export async function validateLiveReadiness({
   appUrl,
   deploymentJson,
   ponderUrl,
+  requireTargets = false,
   rpcUrl,
 }) {
   const checks = [];
@@ -226,7 +227,12 @@ export async function validateLiveReadiness({
       addCheck(checks, failures, false, `RPC readiness probe failed: ${message}`);
     }
   } else {
-    addCheck(checks, failures, true, "live RPC probe skipped because WORLDCHAIN_SEPOLIA_RPC_URL is unset");
+    addCheck(
+      checks,
+      failures,
+      !requireTargets,
+      "live RPC probe skipped because WORLDCHAIN_SEPOLIA_RPC_URL is unset",
+    );
   }
 
   if (ponderUrl) {
@@ -249,7 +255,12 @@ export async function validateLiveReadiness({
       addCheck(checks, failures, false, `Ponder readiness probe failed: ${message}`);
     }
   } else {
-    addCheck(checks, failures, true, "live Ponder probe skipped because WORLDCHAIN_SEPOLIA_PONDER_URL is unset");
+    addCheck(
+      checks,
+      failures,
+      !requireTargets,
+      "live Ponder probe skipped because WORLDCHAIN_SEPOLIA_PONDER_URL is unset",
+    );
   }
 
   if (appUrl) {
@@ -263,7 +274,12 @@ export async function validateLiveReadiness({
       }
     }
   } else {
-    addCheck(checks, failures, true, "live app probe skipped because WORLDCHAIN_SEPOLIA_APP_URL is unset");
+    addCheck(
+      checks,
+      failures,
+      !requireTargets,
+      "live app probe skipped because WORLDCHAIN_SEPOLIA_APP_URL is unset",
+    );
   }
 
   return { ok: failures.length === 0, checks, failures };
@@ -273,6 +289,7 @@ function parseArgs(argv) {
   return {
     live: argv.includes("--live"),
     json: argv.includes("--json"),
+    requireLiveTargets: argv.includes("--require-live-targets"),
   };
 }
 
@@ -300,6 +317,7 @@ async function main() {
       appUrl: process.env.WORLDCHAIN_SEPOLIA_APP_URL,
       deploymentJson: offlineInputs.deploymentJson,
       ponderUrl: process.env.WORLDCHAIN_SEPOLIA_PONDER_URL,
+      requireTargets: args.requireLiveTargets,
       rpcUrl: process.env.WORLDCHAIN_SEPOLIA_RPC_URL,
     });
     printResult("World Chain Sepolia live readiness", liveResult, args.json);
