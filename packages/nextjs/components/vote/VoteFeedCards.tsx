@@ -283,6 +283,7 @@ export const FeedVoteCard = memo(function FeedVoteCard({
       <div className={contentGridClassName}>
         <div
           data-testid="vote-content-card-shell"
+          data-content-id={item.id.toString()}
           className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-base-200"
         >
           <div
