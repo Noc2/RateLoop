@@ -687,25 +687,6 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             <InfoTooltip text="Only Orb verification is supported right now." position="top" />
           </h3>
         </div>
-
-        <div className="flex shrink-0 flex-col items-stretch gap-3 sm:min-w-56">
-          <button
-            type="button"
-            className="btn btn-primary gap-2"
-            disabled={!canVerify || isWorldIdRequestBusy}
-            onClick={() => void handleStart()}
-          >
-            <ShieldCheckIcon className="h-5 w-5" />
-            {isWorldIdRequestBusy ? "Verifying..." : "Verify with World ID"}
-          </button>
-          {!isConfigured ? (
-            <p className="text-sm leading-relaxed text-base-content/55">
-              World ID is not configured for this deployment.
-            </p>
-          ) : !address ? (
-            <p className="text-sm leading-relaxed text-base-content/55">Connect a wallet to request a credential.</p>
-          ) : null}
-        </div>
       </div>
 
       {open && worldIdRequestPanelState.step !== "idle" ? (
@@ -778,150 +759,224 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         </div>
       ) : null}
 
-      <div className="mt-6 grid gap-6 border-t border-base-300 pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
-        <div className="space-y-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h4 className="text-lg font-semibold text-base-content">Referral bonus for verified humans</h4>
-            </div>
-            {referralInput ? (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm btn-square shrink-0"
-                aria-label="Clear referral"
-                onClick={handleClearReferral}
-              >
-                <XMarkIcon className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor={referralInputId} className="text-sm font-medium text-base-content/70">
-              Referrer address
-            </label>
-            <input
-              id={referralInputId}
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              placeholder="0x..."
-              aria-describedby={referralHint ? referralHintId : undefined}
-              className={`input input-bordered w-full bg-base-100 font-mono text-sm ${
-                hasInvalidReferral ? "input-error" : ""
-              }`}
-              value={referralInput}
-              onBlur={handleReferralBlur}
-              onChange={event => setReferralInput(event.target.value)}
-            />
-            {referralHint ? (
-              <p
-                id={referralHintId}
-                className={`text-sm ${hasInvalidReferral ? "text-error" : "text-base-content/55"}`}
-              >
-                {referralHint}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor={`${referralInputId}-share`} className="text-sm font-medium text-base-content/70">
-              Your referral link
-            </label>
-            <div className="flex gap-2">
-              <input
-                id={`${referralInputId}-share`}
-                type="text"
-                readOnly
-                className="input input-bordered min-w-0 flex-1 bg-base-100 font-mono text-xs"
-                value={shareLink}
-                placeholder="Connect a wallet to generate a link"
-              />
-              <button
-                type="button"
-                className="btn btn-secondary btn-square shrink-0"
-                aria-label="Copy referral link"
-                disabled={!shareLink}
-                onClick={() => void handleCopyReferralLink()}
-              >
-                <ClipboardDocumentIcon className="h-5 w-5" />
-              </button>
-            </div>
-            {isCopiedToClipboard ? <p className="text-sm text-base-content/55">Referral link copied.</p> : null}
-          </div>
-        </div>
-
-        <div className="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
-          <div>
-            <h4 className="text-lg font-semibold text-base-content">Verified launch bonus</h4>
-          </div>
-
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <dt className="text-base-content/55">Current bonus</dt>
-            <dd className="text-right font-semibold text-base-content">
-              {formatLrepAmount(currentVerifiedBonus)} LREP
-            </dd>
-            <dt className="text-base-content/55">Referral earned</dt>
-            <dd className="text-right font-semibold text-base-content">{formatLrepAmount(referralEarnings)} LREP</dd>
-            <dt className="text-base-content/55">Credential</dt>
-            <dd className="text-right font-semibold text-base-content">
-              {isCredentialActive ? "Active" : "Not active"}
-            </dd>
-            <dt className="text-base-content/55">Bonus status</dt>
-            <dd className="text-right font-semibold text-base-content">
-              {isVerifiedBonusClaimed ? "Claimed" : "Unclaimed"}
-            </dd>
-          </dl>
-
-          <button
-            type="button"
-            className="btn btn-primary launch-bonus-claim-button w-full gap-2"
-            disabled={!canClaimVerifiedBonus}
-            onClick={() => void handleClaimVerifiedBonus()}
-          >
-            {isClaimPending ? (
-              <>
-                <span className="loading loading-spinner loading-sm" />
-                Claiming...
-              </>
-            ) : (
-              `Claim ${formatLrepAmount(currentVerifiedBonus)} LREP`
-            )}
-          </button>
-          {claimDisabledReason ? (
-            <p className="text-sm leading-relaxed text-base-content/55">{claimDisabledReason}</p>
-          ) : null}
-          {launchCapUnlockAmount > 0n || raterFullLaunchCapUnlocked === true ? (
-            <div className="surface-card-nested rounded-xl p-3 text-sm text-base-content/65">
-              <div className="flex items-center justify-between gap-3">
-                <span>Earned-rater cap</span>
-                <span className="font-semibold text-base-content">
-                  {raterFullLaunchCapUnlocked === true
-                    ? "Full cap active"
-                    : `${formatLrepAmount(launchCapUnlockAmount)} LREP unlockable`}
-                </span>
+      {isCredentialActive ? (
+        <div className="mt-6 grid gap-6 border-t border-base-300 pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h4 className="text-lg font-semibold text-base-content">Referral bonus for verified humans</h4>
               </div>
-              {raterFullLaunchCapUnlocked === true ? null : (
+              {referralInput ? (
                 <button
                   type="button"
-                  className="btn btn-outline btn-sm mt-3 w-full"
-                  disabled={!canUnlockFullEarnedRaterCap}
-                  onClick={() => void handleUnlockFullEarnedRaterCap()}
+                  className="btn btn-ghost btn-sm btn-square shrink-0"
+                  aria-label="Clear referral"
+                  onClick={handleClearReferral}
                 >
-                  {isUnlockPending ? (
-                    <>
-                      <span className="loading loading-spinner loading-xs" />
-                      Unlocking...
-                    </>
-                  ) : (
-                    "Unlock full earned cap"
-                  )}
+                  <XMarkIcon className="h-4 w-4" />
                 </button>
-              )}
+              ) : null}
             </div>
-          ) : null}
+
+            <div className="space-y-2">
+              <label htmlFor={referralInputId} className="text-sm font-medium text-base-content/70">
+                Referrer address
+              </label>
+              <input
+                id={referralInputId}
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                placeholder="0x..."
+                aria-describedby={referralHint ? referralHintId : undefined}
+                className={`input input-bordered w-full bg-base-100 font-mono text-sm ${
+                  hasInvalidReferral ? "input-error" : ""
+                }`}
+                value={referralInput}
+                onBlur={handleReferralBlur}
+                onChange={event => setReferralInput(event.target.value)}
+              />
+              {referralHint ? (
+                <p
+                  id={referralHintId}
+                  className={`text-sm ${hasInvalidReferral ? "text-error" : "text-base-content/55"}`}
+                >
+                  {referralHint}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor={`${referralInputId}-share`} className="text-sm font-medium text-base-content/70">
+                Your referral link
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id={`${referralInputId}-share`}
+                  type="text"
+                  readOnly
+                  className="input input-bordered min-w-0 flex-1 bg-base-100 font-mono text-xs"
+                  value={shareLink}
+                  placeholder="Connect a wallet to generate a link"
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-square shrink-0"
+                  aria-label="Copy referral link"
+                  disabled={!shareLink}
+                  onClick={() => void handleCopyReferralLink()}
+                >
+                  <ClipboardDocumentIcon className="h-5 w-5" />
+                </button>
+              </div>
+              {isCopiedToClipboard ? <p className="text-sm text-base-content/55">Referral link copied.</p> : null}
+            </div>
+          </div>
+
+          <div className="space-y-4 lg:border-l lg:border-base-300 lg:pl-6">
+            <div>
+              <h4 className="text-lg font-semibold text-base-content">Verified launch bonus</h4>
+            </div>
+
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <dt className="text-base-content/55">Current bonus</dt>
+              <dd className="text-right font-semibold text-base-content">
+                {formatLrepAmount(currentVerifiedBonus)} LREP
+              </dd>
+              <dt className="text-base-content/55">Referral earned</dt>
+              <dd className="text-right font-semibold text-base-content">{formatLrepAmount(referralEarnings)} LREP</dd>
+              <dt className="text-base-content/55">Credential</dt>
+              <dd className="text-right font-semibold text-base-content">
+                {isCredentialActive ? "Active" : "Not active"}
+              </dd>
+              <dt className="text-base-content/55">Bonus status</dt>
+              <dd className="text-right font-semibold text-base-content">
+                {isVerifiedBonusClaimed ? "Claimed" : "Unclaimed"}
+              </dd>
+            </dl>
+
+            <button
+              type="button"
+              className="btn btn-primary launch-bonus-claim-button w-full gap-2"
+              disabled={!canClaimVerifiedBonus}
+              onClick={() => void handleClaimVerifiedBonus()}
+            >
+              {isClaimPending ? (
+                <>
+                  <span className="loading loading-spinner loading-sm" />
+                  Claiming...
+                </>
+              ) : (
+                `Claim ${formatLrepAmount(currentVerifiedBonus)} LREP`
+              )}
+            </button>
+            {claimDisabledReason ? (
+              <p className="text-sm leading-relaxed text-base-content/55">{claimDisabledReason}</p>
+            ) : null}
+            {launchCapUnlockAmount > 0n || raterFullLaunchCapUnlocked === true ? (
+              <div className="surface-card-nested rounded-xl p-3 text-sm text-base-content/65">
+                <div className="flex items-center justify-between gap-3">
+                  <span>Earned-rater cap</span>
+                  <span className="font-semibold text-base-content">
+                    {raterFullLaunchCapUnlocked === true
+                      ? "Full cap active"
+                      : `${formatLrepAmount(launchCapUnlockAmount)} LREP unlockable`}
+                  </span>
+                </div>
+                {raterFullLaunchCapUnlocked === true ? null : (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm mt-3 w-full"
+                    disabled={!canUnlockFullEarnedRaterCap}
+                    onClick={() => void handleUnlockFullEarnedRaterCap()}
+                  >
+                    {isUnlockPending ? (
+                      <>
+                        <span className="loading loading-spinner loading-xs" />
+                        Unlocking...
+                      </>
+                    ) : (
+                      "Unlock full earned cap"
+                    )}
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="mt-6 border-t border-base-300 pt-5">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.45fr)]">
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <label htmlFor={referralInputId} className="text-sm font-medium text-base-content/70">
+                  Referrer address
+                </label>
+                {referralInput ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm btn-square shrink-0"
+                    aria-label="Clear referral"
+                    onClick={handleClearReferral}
+                  >
+                    <XMarkIcon className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+              <input
+                id={referralInputId}
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                placeholder="0x..."
+                aria-describedby={referralHint ? referralHintId : undefined}
+                className={`input input-bordered w-full bg-base-100 font-mono text-sm ${
+                  hasInvalidReferral ? "input-error" : ""
+                }`}
+                value={referralInput}
+                onBlur={handleReferralBlur}
+                onChange={event => setReferralInput(event.target.value)}
+              />
+              {referralHint ? (
+                <p
+                  id={referralHintId}
+                  className={`text-sm ${hasInvalidReferral ? "text-error" : "text-base-content/55"}`}
+                >
+                  {referralHint}
+                </p>
+              ) : null}
+            </div>
+
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:block lg:space-y-2 lg:text-right">
+              <dt className="text-base-content/55">Current bonus</dt>
+              <dd className="font-semibold text-base-content">{formatLrepAmount(currentVerifiedBonus)} LREP</dd>
+            </dl>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-h-5">
+              {!isConfigured ? (
+                <p className="text-sm leading-relaxed text-base-content/55">
+                  World ID is not configured for this deployment.
+                </p>
+              ) : !address ? (
+                <p className="text-sm leading-relaxed text-base-content/55">
+                  Connect a wallet to request a credential.
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary gap-2 sm:min-w-56"
+              disabled={!canVerify || isWorldIdRequestBusy}
+              onClick={() => void handleStart()}
+            >
+              <ShieldCheckIcon className="h-5 w-5" />
+              {isWorldIdRequestBusy ? "Verifying..." : "Verify with World ID"}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
