@@ -75,6 +75,7 @@ export interface ContentItem {
   bundleIndex?: number | null;
   bundle?: {
     id: bigint;
+    asset?: number | null;
     questionCount: number;
     requiredCompleters: number;
     requiredSettledRounds: number;
@@ -271,6 +272,7 @@ export function mapContentItem(
     bundleIndex?: number | null;
     bundle?: {
       id?: string | number | null;
+      asset?: string | number | bigint | null;
       questionCount?: number | null;
       requiredCompleters?: number | null;
       requiredSettledRounds?: number | null;
@@ -453,6 +455,7 @@ export function mapContentItem(
       item.bundle && item.bundle.id !== undefined && item.bundle.id !== null
         ? {
             id: BigInt(item.bundle.id),
+            asset: item.bundle.asset === undefined || item.bundle.asset === null ? null : Number(item.bundle.asset),
             questionCount: item.bundle.questionCount ?? 0,
             requiredCompleters: item.bundle.requiredCompleters ?? 0,
             requiredSettledRounds: item.bundle.requiredSettledRounds ?? 1,

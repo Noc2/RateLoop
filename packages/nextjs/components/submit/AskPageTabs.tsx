@@ -7,6 +7,7 @@ import {
   ASK_AGENT_ROUTE_TAB,
   ASK_MANUAL_ROUTE_TAB,
   ASK_ROUTE_TAB_PARAM,
+  ASK_SUBMISSIONS_ROUTE_TAB,
   type AskRouteTab,
   parseAskRouteTab,
 } from "~~/constants/routes";
@@ -19,6 +20,12 @@ const ContentSubmissionSection = dynamic(
 );
 const AgentSubmissionPanel = dynamic(
   () => import("~~/components/submit/AgentSubmissionPanel").then(mod => mod.AgentSubmissionPanel),
+  {
+    loading: () => <AskTabPanelLoading />,
+  },
+);
+const SubmissionOverviewPanel = dynamic(
+  () => import("~~/components/submit/SubmissionOverviewPanel").then(mod => mod.SubmissionOverviewPanel),
   {
     loading: () => <AskTabPanelLoading />,
   },
@@ -53,7 +60,7 @@ export function AskPageTabs() {
     if (tab === ASK_MANUAL_ROUTE_TAB) {
       params.delete(ASK_ROUTE_TAB_PARAM);
     } else {
-      params.set(ASK_ROUTE_TAB_PARAM, ASK_AGENT_ROUTE_TAB);
+      params.set(ASK_ROUTE_TAB_PARAM, tab);
     }
 
     const query = params.toString();
@@ -81,9 +88,24 @@ export function AskPageTabs() {
         >
           <span>Agent</span>
         </button>
+        <button
+          type="button"
+          onClick={() => handleSelectTab(ASK_SUBMISSIONS_ROUTE_TAB)}
+          className={`tab-control inline-flex items-center px-4 py-1.5 text-base font-medium transition-colors ${
+            activeTab === ASK_SUBMISSIONS_ROUTE_TAB ? "pill-active" : "pill-inactive"
+          }`}
+        >
+          <span>Submissions</span>
+        </button>
       </div>
 
-      {activeTab === ASK_MANUAL_ROUTE_TAB ? <ContentSubmissionSection /> : <AgentSubmissionPanel />}
+      {activeTab === ASK_MANUAL_ROUTE_TAB ? (
+        <ContentSubmissionSection />
+      ) : activeTab === ASK_AGENT_ROUTE_TAB ? (
+        <AgentSubmissionPanel />
+      ) : (
+        <SubmissionOverviewPanel />
+      )}
     </div>
   );
 }
