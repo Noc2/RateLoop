@@ -33,7 +33,11 @@ import { getWorldIdClientConfig } from "~~/lib/world-id/config";
 import { readLocalE2EWorldIdMock } from "~~/lib/world-id/e2eMock";
 import { parseWorldIdProof } from "~~/lib/world-id/onchainProof";
 import { pollWorldIdRequest } from "~~/lib/world-id/requestPolling";
-import { formatWorldIdError, getWorldIdRequestPanelState } from "~~/lib/world-id/verificationUiState";
+import {
+  formatWorldIdError,
+  getWorldIdCredentialAttestationErrorMessage,
+  getWorldIdRequestPanelState,
+} from "~~/lib/world-id/verificationUiState";
 import { notification } from "~~/utils/scaffold-eth";
 
 const LREP_DECIMALS = 6;
@@ -393,6 +397,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             },
             {
               action: "attest World ID credential",
+              getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
               suppressSuccessToast: true,
             },
           );
@@ -404,6 +409,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             },
             {
               action: "attest World ID credential",
+              getErrorMessage: getWorldIdCredentialAttestationErrorMessage,
               suppressSuccessToast: true,
             },
           );
@@ -442,7 +448,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           }
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "World ID credential attestation failed.";
+        const message = getWorldIdCredentialAttestationErrorMessage(error);
         setVerificationState({ status: "error", message });
         throw new Error(message);
       }

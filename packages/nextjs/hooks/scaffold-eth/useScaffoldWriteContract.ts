@@ -148,6 +148,8 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
           wagmiConfig,
           writeContractParams: writeContractObject,
           chainId: selectedNetwork.id as AllowedChainIds,
+          getErrorMessage: options?.getErrorMessage,
+          suppressErrorToast: options?.suppressErrorToast,
         });
       }
 

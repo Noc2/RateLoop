@@ -398,17 +398,24 @@ export const simulateContractWriteAndNotifyError = async ({
   wagmiConfig,
   writeContractParams: params,
   chainId,
+  getErrorMessage,
+  suppressErrorToast,
 }: {
   wagmiConfig: Config;
   writeContractParams: WriteContractVariables<Abi, string, any[], Config, number>;
   chainId: AllowedChainIds;
+  getErrorMessage?: TransactorFuncOptions["getErrorMessage"];
+  suppressErrorToast?: boolean;
 }) => {
   try {
     await simulateContract(wagmiConfig, params);
   } catch (error) {
     const parsedError = getParsedErrorWithAllAbis(error, chainId);
+    const message = getErrorMessage?.(error, parsedError) ?? parsedError;
 
-    notification.error(parsedError);
+    if (!suppressErrorToast) {
+      notification.error(message);
+    }
     throw error;
   }
 };

@@ -1,4 +1,10 @@
-import { type WorldIdVerificationStep, formatWorldIdError, getWorldIdRequestPanelState } from "./verificationUiState";
+import {
+  WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
+  type WorldIdVerificationStep,
+  formatWorldIdError,
+  getWorldIdCredentialAttestationErrorMessage,
+  getWorldIdRequestPanelState,
+} from "./verificationUiState";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -8,6 +14,15 @@ function assertStep(input: Parameters<typeof getWorldIdRequestPanelState>[0], ex
 
 test("formats World ID error codes for display", () => {
   assert.equal(formatWorldIdError("user_rejected"), "user rejected");
+});
+
+test("formats already-used World ID attestation reverts for display", () => {
+  assert.equal(
+    getWorldIdCredentialAttestationErrorMessage(
+      'The contract function "attestHumanCredentialWithProof" reverted. Error: NullifierAlreadyAssigned()',
+    ),
+    WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
+  );
 });
 
 test("derives QR-first request states", () => {

@@ -33,6 +33,54 @@ export function formatWorldIdError(errorCode: string) {
   return errorCode.replace(/_/g, " ");
 }
 
+export const WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE =
+  "This World ID has already been used to verify another wallet. Use a different World ID or continue with the wallet that was already verified.";
+
+function getErrorText(error: unknown) {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object") {
+    const maybeWalk = (error as { walk?: () => unknown }).walk;
+    if (typeof maybeWalk === "function") {
+      const walked = maybeWalk.call(error);
+      if (walked !== error) {
+        return getErrorText(walked);
+      }
+    }
+
+    const maybeShortMessage = (error as { shortMessage?: unknown }).shortMessage;
+    if (typeof maybeShortMessage === "string") {
+      return maybeShortMessage;
+    }
+
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === "string") {
+      return maybeMessage;
+    }
+  }
+
+  return "";
+}
+
+export function getWorldIdCredentialAttestationErrorMessage(
+  error: unknown,
+  fallback = "World ID credential attestation failed.",
+) {
+  const message = getErrorText(error);
+
+  if (message.includes("NullifierAlreadyAssigned")) {
+    return WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE;
+  }
+
+  return message || fallback;
+}
+
 export function getWorldIdRequestPanelState(input: WorldIdRequestStateInput): WorldIdRequestPanelState {
   if (input.isHostSubmitting) {
     return {
