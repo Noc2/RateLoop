@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
 
 /// @title SelectiveRevelationTest
 /// @notice Tests for the selective vote revelation (front-running keeper) fix.
@@ -159,6 +160,25 @@ contract SelectiveRevelationTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
     }
 
+    function _scoreSeedFromLogs(Vm.Log[] memory logs, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (bytes32 scoreSeed)
+    {
+        bytes32 expectedTopic =
+            keccak256("RbtsRewardsScored(uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint16)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (
+                logs[i].emitter == address(engine) && logs[i].topics.length == 3 && logs[i].topics[0] == expectedTopic
+                    && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
+            ) {
+                (scoreSeed,,,,,) = abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256, uint16));
+                return scoreSeed;
+            }
+        }
+        revert("RbtsRewardsScored event not emitted");
+    }
+
     function _submitContent() internal returns (uint256 contentId) {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
@@ -265,6 +285,64 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
+    }
+
+    function test_MultiEpoch_CurrentEpochUnrevealedDoesNotAffectRbtsSeed() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, false, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
+
+        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
+
+        (bytes32 currentEpochKey1,) = _commit(voters[3], contentId, false, STAKE);
+        (bytes32 currentEpochKey2,) = _commit(voters[4], contentId, false, STAKE);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, true, s2);
+        _reveal(contentId, roundId, ck3, false, s3);
+
+        vm.recordLogs();
+        _settleAfterRbtsSeed(engine, contentId, roundId);
+        bytes32 actualSeed = _scoreSeedFromLogs(vm.getRecordedLogs(), contentId, roundId);
+
+        bytes32 scoringSetHash;
+        scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, ck1));
+        scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, ck2));
+        scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, ck3));
+        bytes32 expectedSeed = keccak256(
+            abi.encode(
+                block.chainid,
+                address(engine),
+                contentId,
+                roundId,
+                uint256(3),
+                scoringSetHash,
+                engine.roundRbtsSeedEntropy(contentId, roundId)
+            )
+        );
+
+        bytes32 pollutedSetHash = scoringSetHash;
+        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, currentEpochKey1));
+        pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, currentEpochKey2));
+        bytes32 pollutedSeed = keccak256(
+            abi.encode(
+                block.chainid,
+                address(engine),
+                contentId,
+                roundId,
+                uint256(5),
+                pollutedSetHash,
+                engine.roundRbtsSeedEntropy(contentId, roundId)
+            )
+        );
+
+        assertEq(actualSeed, expectedSeed, "score seed only includes threshold scoring set");
+        assertNotEq(actualSeed, pollutedSeed, "current-epoch unrevealed commits must not perturb seed");
     }
 
     function test_MultiEpoch_CurrentEpochUnrevealedDoesNotCreateSubsidy() public {

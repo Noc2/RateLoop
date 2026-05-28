@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { RobustBtsMath } from "./RobustBtsMath.sol";
-import { RoundLib } from "./RoundLib.sol";
-import { RewardMath } from "./RewardMath.sol";
-import { TlockVoteLib } from "./TlockVoteLib.sol";
-import { VotePreflightLib } from "./VotePreflightLib.sol";
+import {RobustBtsMath} from "./RobustBtsMath.sol";
+import {RoundLib} from "./RoundLib.sol";
+import {RewardMath} from "./RewardMath.sol";
+import {TlockVoteLib} from "./TlockVoteLib.sol";
+import {VotePreflightLib} from "./VotePreflightLib.sol";
 
 /// @title RoundRevealLib
 /// @notice Shared reveal accounting extracted from RoundVotingEngine to reduce runtime size.
@@ -178,23 +178,24 @@ library RoundRevealLib {
 
         if (params.thresholdReachedAt == 0) revert NotEnoughVotes();
 
-        // M-Vote-2: the sampler SEED is hashed over the full COMMITTED set (every commitKey,
-        // revealed or not, in commit order), so selective reveal cannot grind the seed.
+        // M-Vote-7: the sampler SEED is hashed over the threshold-frozen SCORING set
+        // (revealed commits with pre-threshold RBTS weight, in commit order), so unrevealed
+        // current-epoch commits that are allowed to settle/refund cannot grind reward draws.
         // The sampler INDEX SPACE is frozen to commits whose RBTS weight was recorded before
         // reveal threshold. This avoids block.timestamp ambiguity for post-threshold reveals
         // included in the same block as the quorum-closing reveal.
         uint256 committedCount = commitKeys.length;
         bytes32[] memory revealedKeysMem = new bytes32[](committedCount);
-        bytes32 committedSetHash;
+        bytes32 scoringSetHash;
         uint256 revealedBuildIdx;
         uint256 economicCount;
         RbtsRoundTotals memory totals;
         for (uint256 i = 0; i < committedCount;) {
             bytes32 commitKey = commitKeys[i];
-            committedSetHash = keccak256(abi.encodePacked(committedSetHash, commitKey));
             RoundLib.Commit storage revealedCommit = roundCommits[commitKey];
             if (revealedCommit.revealed) {
                 if (commitRbtsWeight[commitKey] > 0) {
+                    scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, commitKey));
                     revealedKeysMem[revealedBuildIdx] = commitKey;
                     unchecked {
                         ++economicCount;
@@ -214,10 +215,9 @@ library RoundRevealLib {
         }
         if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
 
-        // Seed combines post-threshold entropy with M-Vote-2 (committed-set binding):
-        // fixed after the commit set closes and invariant under selective reveal.
+        // Seed combines post-threshold entropy with the threshold-frozen scoring set.
         result.scoreSeed = _rbtsScoreSeed(
-            params.contentId, params.roundId, committedCount, committedSetHash, params.settlementEntropy
+            params.contentId, params.roundId, revealedBuildIdx, scoringSetHash, params.settlementEntropy
         );
         (uint256 weightedScoreSum, uint256 scoreWeightSum) = _scoreRbtsRevealedSet(
             roundCommits,
@@ -536,23 +536,24 @@ library RoundRevealLib {
     /// @dev The seed binds:
     ///      - `block.chainid` and `address(this)` (cross-chain / cross-engine replay protection),
     ///      - `contentId` / `roundId` (per-round uniqueness),
-    ///      - `committedCount` and `committedSetHash` (M-Vote-2: the FULL committed set in
-    ///        commit order, not the revealed subset; selective reveal cannot move the seed),
+    ///      - `scoringSetCount` and `scoringSetHash` (M-Vote-7: the threshold-frozen RBTS
+    ///        scoring set in commit order, excluding unrevealed current-epoch commits that are
+    ///        allowed to settle/refund and post-threshold stake-return-only reveals),
     ///      - `settlementEntropy`, captured when reveal quorum first closes the commit set so
     ///        neither the last committer nor the settlement caller can overwrite the entropy while
     ///        choosing whether to proceed.
-    ///      Together the post-threshold entropy + M-Vote-2 make the seed fixed after commits close
-    ///      and invariant under any honest or adversarial reveal pattern.
+    ///      Together the post-threshold entropy + M-Vote-7 make the seed fixed after reveal
+    ///      threshold and invariant to non-scoring commits.
     function _rbtsScoreSeed(
         uint256 contentId,
         uint256 roundId,
-        uint256 committedCount,
-        bytes32 committedSetHash,
+        uint256 scoringSetCount,
+        bytes32 scoringSetHash,
         bytes32 settlementEntropy
     ) private view returns (bytes32 scoreSeed) {
         scoreSeed = keccak256(
             abi.encode(
-                block.chainid, address(this), contentId, roundId, committedCount, committedSetHash, settlementEntropy
+                block.chainid, address(this), contentId, roundId, scoringSetCount, scoringSetHash, settlementEntropy
             )
         );
     }
