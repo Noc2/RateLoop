@@ -15,6 +15,14 @@ test.describe("Ask page", () => {
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
   });
 
+  test("ask page shows submissions overview tab", async ({ connectedPage: page }) => {
+    await gotoWithRetry(page, "/ask?tab=submissions", { ensureWalletConnected: true });
+
+    await expect(page.getByRole("button", { name: "Submissions" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Your Submissions" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: "Submit Question" })).toBeVisible();
+  });
+
   test("can ask a question", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
 
