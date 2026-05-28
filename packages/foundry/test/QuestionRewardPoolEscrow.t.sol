@@ -3524,6 +3524,74 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward, expectedReward);
     }
 
+    function testClusterRewardPoolSkipsRawIneligibleRoundWithoutOracleSnapshot() public {
+        _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_ineligibleVoters(), contentId, _directions(true, true, false));
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 1);
+        assertEq(nextRoundToEvaluate, roundId + 1);
+    }
+
+    function testClusterRewardPoolRefundsRawIneligibleRoundAfterCursorAdvanceWithoutOracleSnapshot() public {
+        _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+
+        _settleRoundWith(_ineligibleVoters(), contentId, _directions(true, true, false));
+
+        vm.warp(expiresAt + 1);
+        vm.expectRevert(QuestionRewardPoolEscrow.RewardPoolCursorNeedsAdvance.selector);
+        rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+
+        (uint256 skipped,) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 1);
+
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+        uint256 refund = rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+        assertEq(refund, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore + refund);
+    }
+
+    function testClusterRewardPoolKeepsRawEligibleRoundPendingWithoutOracleSnapshot() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 0);
+        assertEq(nextRoundToEvaluate, roundId);
+
+        vm.warp(expiresAt + 1);
+        vm.expectRevert(QuestionRewardPoolEscrow.RewardPoolCursorNeedsAdvance.selector);
+        rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            3,
+            30_000,
+            payoutWeight.effectiveWeight,
+            oracle.payoutWeightLeaf(payoutWeight)
+        );
+
+        bytes32[] memory proof = new bytes32[](0);
+        vm.prank(voter1);
+        uint256 reward = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof);
+        assertGt(reward, 0);
+    }
+
     function testIneligibleEarlierRoundCanBeSkippedForLaterEligibleRound() public {
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);

@@ -460,6 +460,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             payoutDomain
         );
         if (!roundSettled) return (false, false, 0);
+        if (rawEligibleVoters < rewardPool.requiredVoters) return (true, false, rawEligibleVoters);
 
         address clusterPayoutOracle = _clusterPayoutOracleAddress(rewardPoolClusterPayoutOracle, rewardPool.id);
         try IClusterPayoutOracle(clusterPayoutOracle)
