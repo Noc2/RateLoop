@@ -4,6 +4,8 @@ import {
   ASK_MANUAL_ROUTE_TAB,
   ASK_ROUTE,
   ASK_ROUTE_TAB_PARAM,
+  ASK_SUBMISSIONS_ROUTE,
+  ASK_SUBMISSIONS_ROUTE_TAB,
   buildRouteWithSearchParams,
   parseAskRouteTab,
 } from "./routes";
@@ -14,13 +16,22 @@ test("agent submit route targets the ask page agent tab", () => {
   assert.equal(ASK_AGENT_ROUTE, `${ASK_ROUTE}?${ASK_ROUTE_TAB_PARAM}=${ASK_AGENT_ROUTE_TAB}`);
 });
 
-test("ask route tab parsing defaults to manual unless agent is requested", () => {
+test("submissions route targets the ask page submissions tab", () => {
+  assert.equal(ASK_SUBMISSIONS_ROUTE, `${ASK_ROUTE}?${ASK_ROUTE_TAB_PARAM}=${ASK_SUBMISSIONS_ROUTE_TAB}`);
+});
+
+test("ask route tab parsing defaults to manual unless a known tab is requested", () => {
   assert.equal(parseAskRouteTab(ASK_AGENT_ROUTE_TAB), ASK_AGENT_ROUTE_TAB);
   assert.equal(parseAskRouteTab(ASK_MANUAL_ROUTE_TAB), ASK_MANUAL_ROUTE_TAB);
+  assert.equal(parseAskRouteTab(ASK_SUBMISSIONS_ROUTE_TAB), ASK_SUBMISSIONS_ROUTE_TAB);
   assert.equal(parseAskRouteTab("docs"), ASK_MANUAL_ROUTE_TAB);
   assert.equal(parseAskRouteTab(undefined), ASK_MANUAL_ROUTE_TAB);
 });
 
 test("route search param builder preserves ask tab values", () => {
   assert.equal(buildRouteWithSearchParams(ASK_ROUTE, { [ASK_ROUTE_TAB_PARAM]: ASK_AGENT_ROUTE_TAB }), ASK_AGENT_ROUTE);
+  assert.equal(
+    buildRouteWithSearchParams(ASK_ROUTE, { [ASK_ROUTE_TAB_PARAM]: ASK_SUBMISSIONS_ROUTE_TAB }),
+    ASK_SUBMISSIONS_ROUTE,
+  );
 });

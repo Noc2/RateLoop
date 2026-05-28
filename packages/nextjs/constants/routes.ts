@@ -2,7 +2,8 @@ export const ASK_ROUTE = "/ask";
 export const ASK_ROUTE_TAB_PARAM = "tab";
 export const ASK_MANUAL_ROUTE_TAB = "manual";
 export const ASK_AGENT_ROUTE_TAB = "agent";
-export type AskRouteTab = typeof ASK_MANUAL_ROUTE_TAB | typeof ASK_AGENT_ROUTE_TAB;
+export const ASK_SUBMISSIONS_ROUTE_TAB = "submissions";
+export type AskRouteTab = typeof ASK_MANUAL_ROUTE_TAB | typeof ASK_AGENT_ROUTE_TAB | typeof ASK_SUBMISSIONS_ROUTE_TAB;
 
 export const RATE_ROUTE = "/rate";
 
@@ -39,11 +40,16 @@ export function buildRouteWithSearchParams(route: string, searchParams?: SearchP
 }
 
 export const ASK_AGENT_ROUTE = buildRouteWithSearchParams(ASK_ROUTE, { [ASK_ROUTE_TAB_PARAM]: ASK_AGENT_ROUTE_TAB });
+export const ASK_SUBMISSIONS_ROUTE = buildRouteWithSearchParams(ASK_ROUTE, {
+  [ASK_ROUTE_TAB_PARAM]: ASK_SUBMISSIONS_ROUTE_TAB,
+});
 
 export function buildRateContentHref(contentId: string | number | bigint) {
   return buildRouteWithSearchParams(RATE_ROUTE, { content: contentId.toString() });
 }
 
 export function parseAskRouteTab(tab: string | null | undefined): AskRouteTab {
-  return tab === ASK_AGENT_ROUTE_TAB ? ASK_AGENT_ROUTE_TAB : ASK_MANUAL_ROUTE_TAB;
+  if (tab === ASK_AGENT_ROUTE_TAB) return ASK_AGENT_ROUTE_TAB;
+  if (tab === ASK_SUBMISSIONS_ROUTE_TAB) return ASK_SUBMISSIONS_ROUTE_TAB;
+  return ASK_MANUAL_ROUTE_TAB;
 }
