@@ -205,7 +205,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         : referrerHasActiveCredential
           ? `Referrer can earn ${formatLrepAmount(referralBonusPreview)} LREP when you claim.`
           : "This referrer is not verified yet, so no referral bonus will be paid."
-      : "Paste a referral address or use a referral link before claiming.";
+      : undefined;
   const canClaimVerifiedBonus = Boolean(
     walletAddress &&
       isCredentialActive &&
@@ -802,7 +802,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
               inputMode="text"
               autoComplete="off"
               placeholder="0x..."
-              aria-describedby={referralHintId}
+              aria-describedby={referralHint ? referralHintId : undefined}
               className={`input input-bordered w-full bg-base-100 font-mono text-sm ${
                 hasInvalidReferral ? "input-error" : ""
               }`}
@@ -810,9 +810,14 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
               onBlur={handleReferralBlur}
               onChange={event => setReferralInput(event.target.value)}
             />
-            <p id={referralHintId} className={`text-sm ${hasInvalidReferral ? "text-error" : "text-base-content/55"}`}>
-              {referralHint}
-            </p>
+            {referralHint ? (
+              <p
+                id={referralHintId}
+                className={`text-sm ${hasInvalidReferral ? "text-error" : "text-base-content/55"}`}
+              >
+                {referralHint}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -838,9 +843,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
                 <ClipboardDocumentIcon className="h-5 w-5" />
               </button>
             </div>
-            <p className="text-sm text-base-content/55">
-              {isCopiedToClipboard ? "Referral link copied." : "Verified referrers receive a bounded referral bonus."}
-            </p>
+            {isCopiedToClipboard ? <p className="text-sm text-base-content/55">Referral link copied.</p> : null}
           </div>
         </div>
 
