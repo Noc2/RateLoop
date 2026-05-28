@@ -108,6 +108,8 @@ contract RoundVotingEngine is
     //     shifted up by 1.
     //   * Post-2026-05-19: `roundRbtsMeanScoreBps` (uint256→uint16) inserted mid-layout at
     //     line 139; all later slots shifted down by 1.
+    //   * Post-2026-05-28: `roundRbtsScoreSeed` inserted after `roundRbtsMeanScoreBps` so
+    //     advisory sampling can bind to the finalized engine seed. Fresh deployments only.
     //
     // CI runbook: any future change to the order or type of state variables in this contract
     // must run OZ `validateUpgrade` against the previous implementation before any non-31337
@@ -1535,5 +1537,5 @@ contract RoundVotingEngine is
     uint256 internal _pendingTreasuryForfeitLrep;
 
     // --- Storage gap reserved for future upgrades ---
-    uint256[21] private __gap;
+    uint256[20] private __gap;
 }

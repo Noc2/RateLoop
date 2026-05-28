@@ -1,29 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {
     TransparentUpgradeableProxy,
     ITransparentUpgradeableProxy
 } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
-import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
-import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
-import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
+import {FeedbackRegistry} from "../contracts/FeedbackRegistry.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {IProfileRegistry} from "../contracts/interfaces/IProfileRegistry.sol";
+import {IRoundVotingEngine} from "../contracts/interfaces/IRoundVotingEngine.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 /// @title Minimal mock for RoundVotingEngine interface (used by FrontendRegistry)
 contract MockVotingEngineForUpgrade is IRoundVotingEngine {
@@ -67,7 +67,7 @@ contract MockVotingEngineForUpgrade is IRoundVotingEngine {
         return (0, RoundLib.RoundState.Open, 0, 0, 0, 0, 0, 0, 0, false, 0, 0, 0, 0);
     }
 
-    function transferReward(address, uint256) external override { }
+    function transferReward(address, uint256) external override {}
 }
 
 /// @title Transparent Proxy Upgrade Tests for all proxy-backed contracts
@@ -368,11 +368,11 @@ contract UpgradeTest is Test {
         uint256 roundId = 8;
         bytes32 commitKey = keccak256("layout-commit");
 
-        vm.store(address(votingEngine), _doubleUintMappingSlot(55, contentId, roundId), bytes32(uint256(111)));
-        vm.store(address(votingEngine), _doubleUintMappingSlot(56, contentId, roundId), bytes32(uint256(222)));
+        vm.store(address(votingEngine), _doubleUintMappingSlot(56, contentId, roundId), bytes32(uint256(111)));
+        vm.store(address(votingEngine), _doubleUintMappingSlot(57, contentId, roundId), bytes32(uint256(222)));
         vm.store(
             address(votingEngine),
-            _tripleUintBytes32MappingSlot(57, contentId, roundId, commitKey),
+            _tripleUintBytes32MappingSlot(58, contentId, roundId, commitKey),
             bytes32(uint256(333))
         );
 
