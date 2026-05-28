@@ -5,10 +5,11 @@ import dynamic from "next/dynamic";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery } from "@tanstack/react-query";
 import { decodeEventLog, encodeFunctionData, isAddress, toHex } from "viem";
-import { useAccount, useConfig } from "wagmi";
+import { useAccount, useConfig, useReadContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
+import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
 import { GasBalanceWarning } from "~~/components/shared/GasBalanceWarning";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
@@ -1176,14 +1177,105 @@ export function ContentSubmissionSection() {
           : parsedRoundMaxVoters > Math.max(parsedRewardRequiredVoters, 1) * 3
             ? "A high max voters per round can dilute the per-voter payout if participation is high; use it when broader input matters more than payout density."
             : "These settings give a clear payout target for a small qualifying round.";
-  const rewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : getDefaultUsdcAddress(targetNetwork.id);
-  const feedbackBonusUsdcAddress = getDefaultUsdcAddress(targetNetwork.id);
+  const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
+  const rewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : usdcAddress;
+  const feedbackBonusUsdcAddress = usdcAddress;
   const feedbackBonusEscrowAddress = getConfiguredFeedbackBonusEscrowAddress(targetNetwork.id);
+  const { data: lrepBalance, isLoading: isLrepBalanceLoading } = useReadContract({
+    address: lrepAddress,
+    abi: ERC20_APPROVAL_ABI,
+    functionName: "balanceOf",
+    args: connectedAddress ? [connectedAddress] : undefined,
+    query: {
+      enabled: Boolean(connectedAddress && lrepAddress),
+    },
+  });
+  const { data: usdcBalance, isLoading: isUsdcBalanceLoading } = useReadContract({
+    address: usdcAddress,
+    abi: ERC20_APPROVAL_ABI,
+    functionName: "balanceOf",
+    args: connectedAddress ? [connectedAddress] : undefined,
+    query: {
+      enabled: Boolean(connectedAddress && usdcAddress),
+    },
+  });
+  const hasResolvedLrepBalance =
+    Boolean(connectedAddress && lrepAddress) && !isLrepBalanceLoading && lrepBalance !== undefined;
+  const hasResolvedUsdcBalance =
+    Boolean(connectedAddress && usdcAddress) && !isUsdcBalanceLoading && usdcBalance !== undefined;
+  const selectedRewardBalance = rewardAsset === "lrep" ? lrepBalance : usdcBalance;
+  const selectedRewardBalanceResolved = rewardAsset === "lrep" ? hasResolvedLrepBalance : hasResolvedUsdcBalance;
   const estimatedFeedbackBonusRecipientAmount =
     feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount
       ? applyEstimatedFrontendFee(selectedFeedbackBonusAmount, frontendFeeBps)
       : 0n;
   const feedbackBonusWindowLabel = estimatedBountyExpiresAtLabel;
+  const hasNoSupportedBountyFunds =
+    hasResolvedLrepBalance && hasResolvedUsdcBalance && lrepBalance === 0n && usdcBalance === 0n;
+  const requiredUsdcFundingAmount =
+    feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount
+      ? rewardAsset === "usdc" && selectedRewardAmount
+        ? selectedRewardAmount + selectedFeedbackBonusAmount
+        : selectedFeedbackBonusAmount
+      : rewardAsset === "usdc" && selectedRewardAmount
+        ? selectedRewardAmount
+        : 0n;
+  const hasInsufficientSelectedBountyFunds =
+    selectedRewardAmount !== null &&
+    selectedRewardBalanceResolved &&
+    selectedRewardBalance !== undefined &&
+    selectedRewardBalance < selectedRewardAmount;
+  const hasInsufficientFeedbackBonusFunds =
+    submissionStep === "feedbackBonus" &&
+    feedbackBonusMode === "enabled" &&
+    selectedFeedbackBonusAmount !== null &&
+    hasResolvedUsdcBalance &&
+    usdcBalance !== undefined &&
+    usdcBalance < requiredUsdcFundingAmount;
+  const bountyFundingWarning = (() => {
+    if (!connectedAddress || (!hasResolvedLrepBalance && !hasResolvedUsdcBalance)) {
+      return null;
+    }
+
+    if (submissionStep === "question" && hasNoSupportedBountyFunds) {
+      return {
+        title: "Need bounty funds",
+        message:
+          "Every question needs a funded bounty before it can be submitted. Add LREP or World Chain USDC to this wallet, then continue.",
+      };
+    }
+
+    if (submissionStep !== "question" && rewardAsset === "lrep" && hasInsufficientSelectedBountyFunds) {
+      return {
+        title: "Need LREP for bounty",
+        message: `You need ${formatSubmissionRewardAmount(
+          selectedRewardAmount,
+          rewardAsset,
+        )} to fund this bounty. Your wallet has ${formatSubmissionRewardAmount(selectedRewardBalance, rewardAsset)}.`,
+      };
+    }
+
+    if (hasInsufficientFeedbackBonusFunds) {
+      return {
+        title: "Need USDC for funding",
+        message: `You need ${formatUsdAmount(requiredUsdcFundingAmount)} USDC to fund the selected bounty and Feedback Bonus. Your wallet has ${formatUsdAmount(
+          usdcBalance,
+        )} USDC.`,
+      };
+    }
+
+    if (submissionStep !== "question" && hasInsufficientSelectedBountyFunds) {
+      return {
+        title: "Need USDC for bounty",
+        message: `You need ${formatSubmissionRewardAmount(
+          selectedRewardAmount,
+          rewardAsset,
+        )} to fund this bounty. Your wallet has ${formatSubmissionRewardAmount(selectedRewardBalance, rewardAsset)}.`,
+      };
+    }
+
+    return null;
+  })();
   const { refetch: refetchNextContentId } = useScaffoldReadContract({
     contractName: "ContentRegistry",
     functionName: "nextContentId",
@@ -3557,6 +3649,9 @@ export function ContentSubmissionSection() {
                 {questionPreviewCard}
                 {prohibitedContentNotice}
                 {isMissingGasBalance ? <GasBalanceWarning nativeTokenSymbol={nativeTokenSymbol} /> : null}
+                {bountyFundingWarning ? (
+                  <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
+                ) : null}
                 {activeQuestionIndex > 0 ? (
                   <button type="button" onClick={handleGoToPreviousQuestion} className="btn btn-ghost w-full">
                     Back to Q{activeQuestionIndex}
@@ -3575,6 +3670,9 @@ export function ContentSubmissionSection() {
               <div className="space-y-4 xl:sticky xl:top-24">
                 {bountyInsightsCard}
                 {isMissingGasBalance ? <GasBalanceWarning nativeTokenSymbol={nativeTokenSymbol} /> : null}
+                {bountyFundingWarning ? (
+                  <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
+                ) : null}
                 {bountyActions}
               </div>
             </div>
@@ -3584,6 +3682,9 @@ export function ContentSubmissionSection() {
               <div className="space-y-4 xl:sticky xl:top-24">
                 {feedbackBonusInsightsCard}
                 {isMissingGasBalance ? <GasBalanceWarning nativeTokenSymbol={nativeTokenSymbol} /> : null}
+                {bountyFundingWarning ? (
+                  <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
+                ) : null}
                 {feedbackBonusActions}
               </div>
             </div>
