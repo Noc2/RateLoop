@@ -68,6 +68,15 @@ export function normalizeRoundVoteError(message: string) {
   ) {
     return "Preparing private vote timing. Please try again in a moment.";
   }
+  if (normalizedMessage.includes("unsupported drand chain")) {
+    return "This deployment is configured for an unsupported drand network. Restart with a fresh deployment or update ProtocolConfig to drand quicknet/quicknet-t.";
+  }
+  if (normalizedMessage.includes("does not match vote round drand")) {
+    return "The vote round drand configuration changed while your vote was being prepared. Please try again.";
+  }
+  if (matchesContractError(message, normalizedMessage, "DrandChainHashMismatch")) {
+    return "The vote ciphertext was prepared for the wrong drand network. Refresh the app and try again.";
+  }
   if (
     matchesContractError(message, normalizedMessage, "RoundNotAccepting") ||
     matchesContractError(message, normalizedMessage, "RoundNotOpen")

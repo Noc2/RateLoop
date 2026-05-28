@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
+import { LoopReputationAbi, getVoteTlockChainInfo, packVoteRoundContext } from "@rateloop/contracts";
 import { AdvisoryVoteRecorderAbi, ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { buildCommitVoteParams, buildStakeAmountWei } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
@@ -229,9 +229,14 @@ export function useRoundVote() {
             roundReferenceRatingBps: availability.roundReferenceRatingBps,
             roundStartTimeSeconds: null,
             targetRound: availability.minTargetRound,
+            drandChainHash: availability.drandChainHash,
+            drandGenesisTimeSeconds: availability.drandGenesisTime,
+            drandPeriodSeconds: availability.drandPeriod,
           };
+          await getVoteTlockChainInfo(runtime);
           if (process.env.NODE_ENV !== "production") {
             console.debug("[round-vote] advisory availability", {
+              drandChainHash: availability.drandChainHash,
               contentId: contentId.toString(),
               epochEnd: availability.epochEnd.toString(),
               maxTargetRound: availability.maxTargetRound.toString(),
@@ -244,7 +249,9 @@ export function useRoundVote() {
             contentId: contentId.toString(),
             error: availabilityError,
           });
-          setError("Preparing vote. Try again in a moment.");
+          const message =
+            availabilityError instanceof Error ? availabilityError.message : "Preparing vote. Try again in a moment.";
+          setError(normalizeRoundVoteError(message));
           return false;
         }
       } else if (publicClient) {
@@ -255,12 +262,15 @@ export function useRoundVote() {
             contentId,
             fallbackEpochDuration: roundConfig?.epochDuration ?? DEFAULT_VOTING_CONFIG.epochDuration,
           });
+          await getVoteTlockChainInfo(runtime);
         } catch (runtimeError) {
           console.warn("[round-vote] failed to anchor tlock target to the active round.", {
             contentId: contentId.toString(),
             error: runtimeError,
           });
-          setError("Preparing vote. Try again in a moment.");
+          const message =
+            runtimeError instanceof Error ? runtimeError.message : "Preparing vote. Try again in a moment.";
+          setError(normalizeRoundVoteError(message));
           return false;
         }
       }
@@ -324,6 +334,9 @@ export function useRoundVote() {
           votingEngineAddress,
           contentId,
           fallbackEpochDuration: roundConfig?.epochDuration ?? DEFAULT_VOTING_CONFIG.epochDuration,
+        }).then(async resolvedRuntime => {
+          await getVoteTlockChainInfo(resolvedRuntime);
+          return resolvedRuntime;
         });
 
       const submitOpenRound = async () => {

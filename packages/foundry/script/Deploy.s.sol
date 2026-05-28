@@ -59,7 +59,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint64 internal constant MAINNET_DRAND_GENESIS_TIME = 1_692_803_367;
     uint64 internal constant MAINNET_DRAND_PERIOD = 3;
     bytes32 internal constant TESTNET_DRAND_CHAIN_HASH =
-        0xf3827d772c155f95a9fda8901ddd59591a082df5ac6efe3a479ddb1f5eeb202c;
+        0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5;
     uint64 internal constant TESTNET_DRAND_GENESIS_TIME = 1_689_232_296;
     uint64 internal constant TESTNET_DRAND_PERIOD = 3;
 

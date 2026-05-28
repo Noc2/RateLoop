@@ -334,9 +334,9 @@ async function deriveRevealAvailableAtSeconds(params: {
   }
 
   let tlockChainInfo = params.tlockChainInfo;
-  if (tlockChainInfo === undefined) {
+  if (tlockChainInfo === undefined || tlockChainInfo?.drandChainHash.toLowerCase() !== drandChainHash.toLowerCase()) {
     try {
-      tlockChainInfo = await getVoteTlockChainInfo();
+      tlockChainInfo = await getVoteTlockChainInfo({ drandChainHash });
     } catch {
       tlockChainInfo = null;
     }
@@ -570,7 +570,9 @@ export function useManualRevealVotes(voter?: Address) {
           return false;
         }
 
-        const decrypted = await decryptTlockVoteCiphertext(vote.ciphertext);
+        const decrypted = await decryptTlockVoteCiphertext(vote.ciphertext, {
+          drandChainHash: latestCommit.drandChainHash,
+        });
         if (!decrypted) {
           notification.error("The stored ciphertext could not be decoded.");
           return false;

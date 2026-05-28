@@ -726,6 +726,42 @@ test("getVoteTlockChainInfo returns the canonical drand metadata from the tlock 
   });
 });
 
+test("getVoteTlockChainInfo rejects unsupported on-chain drand configs before voting", async () => {
+  await assert.rejects(
+    getVoteTlockChainInfo({
+      drandChainHash:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    }),
+    /Unsupported drand chain/,
+  );
+});
+
+test("createTlockRbtsVoteCommit rejects a tlock client that does not match the vote round drand config", async () => {
+  await assert.rejects(
+    createTlockRbtsVoteCommit(
+      {
+        voter: "0x2222222222222222222222222222222222222222",
+        isUp: true,
+        predictedUpBps: 6_900,
+        salt: ("0x" + "66".repeat(32)) as `0x${string}`,
+        contentId: 7n,
+        roundId: 3n,
+        roundReferenceRatingBps: 5_000,
+        epochDurationSeconds: 1200,
+      },
+      {
+        client: fakeClient,
+        drandChainHash:
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        encryptFn: async () => {
+          throw new Error("encrypt should not be called");
+        },
+      },
+    ),
+    /does not match vote round drand chain/,
+  );
+});
+
 test("deriveVoteTlockRevealAvailableAtSeconds converts a committed round into its reveal timestamp", () => {
   assert.equal(
     deriveVoteTlockRevealAvailableAtSeconds(401n, {
@@ -779,7 +815,10 @@ test("deriveVoteTlockRevealAvailableAtSeconds: nonsense inputs collapse to 0", (
   assert.equal(deriveVoteTlockRevealAvailableAtSeconds(0n, chain), 0n);
   assert.equal(deriveVoteTlockRevealAvailableAtSeconds(-1n, chain), 0n);
   assert.equal(
-    deriveVoteTlockRevealAvailableAtSeconds(401n, { ...chain, periodSeconds: 0n }),
+    deriveVoteTlockRevealAvailableAtSeconds(401n, {
+      ...chain,
+      periodSeconds: 0n,
+    }),
     0n,
   );
 });

@@ -23,10 +23,22 @@ type TlockChainInfo = {
   genesis_time: number;
   hash: string;
 };
+type TlockChainOptions = {
+  disableBeaconVerification: boolean;
+  noCache: boolean;
+  chainVerificationParams?: {
+    chainHash: string;
+    publicKey: string;
+  };
+};
 type TlockClient = {
   chain: () => {
     info: () => Promise<TlockChainInfo>;
   };
+};
+type TlockChain = {
+  baseUrl: string;
+  info: () => Promise<TlockChainInfo>;
 };
 type TlockEncryptFn = (
   targetRound: number,
@@ -38,7 +50,17 @@ type TlockDecryptFn = (
   client: unknown,
 ) => Promise<Uint8Array>;
 type TlockModule = {
+  HttpCachingChain: new (
+    baseUrl: string,
+    options?: TlockChainOptions,
+  ) => TlockChain;
+  HttpChainClient: new (
+    chain: TlockChain,
+    options?: TlockChainOptions,
+    httpOptions?: { userAgent?: string },
+  ) => TlockClient;
   mainnetClient: () => TlockClient;
+  testnetClient: () => TlockClient;
   timelockEncrypt: TlockEncryptFn;
   timelockDecrypt: TlockDecryptFn;
 };
@@ -57,6 +79,9 @@ export type VoteTlockRuntime = {
   roundStartTimeSeconds?: bigint | number | null;
   candidateTimestampOffsetsSeconds?: readonly number[];
   targetRound?: bigint | number;
+  drandChainHash?: VoteDrandChainHash | null;
+  drandGenesisTimeSeconds?: bigint | number | null;
+  drandPeriodSeconds?: bigint | number | null;
   encryptFn?: TlockEncryptFn;
   decryptFn?: TlockDecryptFn;
 };
@@ -73,6 +98,17 @@ const AGE_MAC_LENGTH = 32;
 const MIN_TLOCK_STANZA_BODY_LENGTH = 80;
 const MIN_ENCRYPTED_BODY_LENGTH = 65;
 const ROUND_REFERENCE_RATING_MASK = 0xffffn;
+const MAINNET_QUICKNET_CHAIN_HASH =
+  "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
+const TLOCK_JS_TESTNET_CHAIN_HASH =
+  "7672797f548f3f4748ac4bf3352fc6c6b6468c9ad40ad456a397545c6e2df5bf";
+const QUICKNET_T_CHAIN = {
+  url: "https://testnet-api.drand.cloudflare.com/cc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5",
+  chainHash: "cc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5",
+  publicKey:
+    "b15b65b46fb29104f6a4b5d1e11a8da6344463973d423661bb0804846a0ecd1ef93c25057f1c0baab2ac53e56c662b66072f6d84ee791a3382bfb055afab1e6a375538d8ffc451104ac971d2dc9b168e2d3246b0be2015969cbaac298f6502da",
+} as const;
+const RATELOOP_TLOCK_USER_AGENT = "rateloop-tlock";
 export const MIN_PREDICTED_UP_BPS = USER_PREDICTION_BPS.min;
 export const MAX_PREDICTED_UP_BPS = USER_PREDICTION_BPS.max;
 export const MIN_PREDICTED_UP_PERCENT = USER_PREDICTION_PERCENT.min;
@@ -137,7 +173,12 @@ export function unpackVoteRoundContext(roundContext: bigint): {
 
 async function loadTlockModule(): Promise<TlockModule> {
   tlockModulePromise ??= import("tlock-js").then((module) => ({
+    HttpCachingChain:
+      module.HttpCachingChain as TlockModule["HttpCachingChain"],
+    HttpChainClient:
+      module.HttpChainClient as unknown as TlockModule["HttpChainClient"],
     mainnetClient: module.mainnetClient as TlockModule["mainnetClient"],
+    testnetClient: module.testnetClient as TlockModule["testnetClient"],
     timelockEncrypt: module.timelockEncrypt as TlockModule["timelockEncrypt"],
     timelockDecrypt: module.timelockDecrypt as TlockModule["timelockDecrypt"],
   }));
@@ -145,12 +186,117 @@ async function loadTlockModule(): Promise<TlockModule> {
   return tlockModulePromise;
 }
 
+function normalizeDrandChainHash(
+  hash: string | null | undefined,
+): string | null {
+  if (!hash) return null;
+  const normalized = hash.toLowerCase();
+  if (!/^0x[0-9a-f]{64}$/u.test(normalized)) {
+    throw new Error("Invalid drand chain hash");
+  }
+  return normalized.slice(2);
+}
+
+function normalizeOptionalPositiveBigInt(
+  value: bigint | number | null | undefined,
+  label: string,
+): bigint | null {
+  if (value == null) return null;
+  const normalized =
+    typeof value === "bigint" ? value : BigInt(Math.trunc(value));
+  if (normalized <= 0n) {
+    throw new Error(`Invalid drand ${label}`);
+  }
+  return normalized;
+}
+
+function createHttpTlockClient(
+  tlockModule: TlockModule,
+  chain: typeof QUICKNET_T_CHAIN,
+): TlockClient {
+  const options: TlockChainOptions = {
+    disableBeaconVerification: false,
+    noCache: false,
+    chainVerificationParams: {
+      chainHash: chain.chainHash,
+      publicKey: chain.publicKey,
+    },
+  };
+  const httpChain = new tlockModule.HttpCachingChain(chain.url, options);
+  return new tlockModule.HttpChainClient(httpChain, options, {
+    userAgent: RATELOOP_TLOCK_USER_AGENT,
+  });
+}
+
+function resolveTlockClientForRuntime(
+  tlockModule: TlockModule,
+  runtime: VoteTlockRuntime = {},
+): TlockClient {
+  if (runtime.client) {
+    return runtime.client;
+  }
+
+  const expectedHash = normalizeDrandChainHash(runtime.drandChainHash);
+  if (!expectedHash || expectedHash === MAINNET_QUICKNET_CHAIN_HASH) {
+    return tlockModule.mainnetClient();
+  }
+  if (expectedHash === QUICKNET_T_CHAIN.chainHash) {
+    return createHttpTlockClient(tlockModule, QUICKNET_T_CHAIN);
+  }
+  if (expectedHash === TLOCK_JS_TESTNET_CHAIN_HASH) {
+    return tlockModule.testnetClient();
+  }
+
+  throw new Error(
+    `Unsupported drand chain 0x${expectedHash}. Update ProtocolConfig to drand quicknet or quicknet-t before voting.`,
+  );
+}
+
+function assertTlockChainInfoMatchesRuntime(
+  chainInfo: TlockChainInfo,
+  runtime: VoteTlockRuntime = {},
+) {
+  const expectedHash = normalizeDrandChainHash(runtime.drandChainHash);
+  if (!expectedHash) return;
+
+  const actualHash = chainInfo.hash.toLowerCase();
+  if (actualHash !== expectedHash) {
+    throw new Error(
+      `Tlock client chain 0x${actualHash} does not match vote round drand chain 0x${expectedHash}.`,
+    );
+  }
+
+  const expectedGenesisTime = normalizeOptionalPositiveBigInt(
+    runtime.drandGenesisTimeSeconds,
+    "genesis time",
+  );
+  if (
+    expectedGenesisTime != null &&
+    BigInt(chainInfo.genesis_time) !== expectedGenesisTime
+  ) {
+    throw new Error(
+      `Tlock client genesis ${chainInfo.genesis_time} does not match vote round drand genesis ${expectedGenesisTime.toString()}.`,
+    );
+  }
+
+  const expectedPeriod = normalizeOptionalPositiveBigInt(
+    runtime.drandPeriodSeconds,
+    "period",
+  );
+  if (expectedPeriod != null && BigInt(chainInfo.period) !== expectedPeriod) {
+    throw new Error(
+      `Tlock client period ${chainInfo.period} does not match vote round drand period ${expectedPeriod.toString()}.`,
+    );
+  }
+}
+
 export async function getVoteTlockChainInfo(
   runtime: VoteTlockRuntime = {},
 ): Promise<VoteTlockChainInfo> {
-  const { mainnetClient } = await loadTlockModule();
-  const client = runtime.client ?? mainnetClient();
+  const tlockModule = await loadTlockModule();
+  const client = resolveTlockClientForRuntime(tlockModule, runtime);
   const chainInfo = await client.chain().info();
+  assertTlockChainInfoMatchesRuntime(chainInfo, runtime);
 
   return {
     periodSeconds: BigInt(chainInfo.period),
@@ -488,11 +634,13 @@ async function createTlockVoteArtifacts(
   targetRound: bigint;
   drandChainHash: VoteDrandChainHash;
 }> {
-  const { mainnetClient, timelockEncrypt } = await loadTlockModule();
-  const client = runtime.client ?? mainnetClient();
+  const tlockModule = await loadTlockModule();
+  const { timelockEncrypt } = tlockModule;
+  const client = resolveTlockClientForRuntime(tlockModule, runtime);
   const now = runtime.now ?? Date.now;
   const encryptFn = runtime.encryptFn ?? timelockEncrypt;
   const chainInfo = await client.chain().info();
+  assertTlockChainInfoMatchesRuntime(chainInfo, runtime);
   const targetRound =
     runtime.targetRound != null
       ? normalizeTlockTargetRound(runtime.targetRound)
@@ -690,19 +838,32 @@ export async function decryptTlockVoteCiphertext(
   predictedUpPercent: number;
   salt: VoteSalt;
 } | null> {
-  const { mainnetClient, timelockDecrypt } = await loadTlockModule();
-  const client = runtime.client ?? mainnetClient();
+  const tlockModule = await loadTlockModule();
+  const { timelockDecrypt } = tlockModule;
+  const client = resolveTlockClientForRuntime(tlockModule, runtime);
   const decryptFn = runtime.decryptFn ?? timelockDecrypt;
   const armored = hexToString(ciphertext);
   // Cheap structural sanity check before handing the payload to the tlock library.
   // The age armor header alone is ~36 chars and the smallest valid body is bounded by
   // MIN_ENCRYPTED_BODY_LENGTH, so anything shorter than the armor framing + body
   // floor cannot plausibly decrypt to our 36-byte RBTS plaintext.
-  if (armored.length < AGE_ARMOR_HEADER.length + AGE_ARMOR_FOOTER.length + MIN_ENCRYPTED_BODY_LENGTH) {
+  if (
+    armored.length <
+    AGE_ARMOR_HEADER.length +
+      AGE_ARMOR_FOOTER.length +
+      MIN_ENCRYPTED_BODY_LENGTH
+  ) {
     return null;
   }
-  if (!armored.includes(AGE_ARMOR_HEADER) || !armored.includes(AGE_ARMOR_FOOTER)) {
+  if (
+    !armored.includes(AGE_ARMOR_HEADER) ||
+    !armored.includes(AGE_ARMOR_FOOTER)
+  ) {
     return null;
+  }
+  if (runtime.drandChainHash) {
+    const chainInfo = await client.chain().info();
+    assertTlockChainInfoMatchesRuntime(chainInfo, runtime);
   }
   const plaintext = await decryptFn(armored, client);
   return decodeRbtsVotePlaintext(plaintext);

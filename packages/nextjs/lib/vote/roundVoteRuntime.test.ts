@@ -2,6 +2,12 @@ import { resolveRoundVoteRuntime } from "./roundVoteRuntime";
 import assert from "node:assert/strict";
 import test from "node:test";
 
+const TEST_DRAND_CONFIG = [
+  "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+  1_692_803_367n,
+  3n,
+] as const;
+
 test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestamp", async () => {
   const readCalls: Array<Record<string, unknown>> = [];
   const blockCalls: Array<Record<string, unknown>> = [];
@@ -33,6 +39,10 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
         return [100, 3_600, 3, 1_000];
       }
 
+      if (args.functionName === "roundDrandConfig") {
+        return TEST_DRAND_CONFIG;
+      }
+
       return [900n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n];
     },
   };
@@ -48,7 +58,7 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
     blockCalls.map(call => call.blockTag),
     ["latest", "pending"],
   );
-  assert.equal(readCalls.length, 4);
+  assert.equal(readCalls.length, 5);
   for (const call of readCalls) {
     assert.equal(call.blockTag, "pending");
   }
@@ -58,6 +68,9 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
   assert.equal(runtime.roundStartTimeSeconds, 900);
   assert.equal(runtime.roundId, 2n);
   assert.equal(runtime.roundReferenceRatingBps, 5_000);
+  assert.equal(runtime.drandChainHash, TEST_DRAND_CONFIG[0]);
+  assert.equal(runtime.drandGenesisTimeSeconds, TEST_DRAND_CONFIG[1]);
+  assert.equal(runtime.drandPeriodSeconds, TEST_DRAND_CONFIG[2]);
 });
 
 test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale", async () => {
@@ -88,6 +101,10 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
         return [100, 3_600, 3, 1_000];
       }
 
+      if (args.functionName === "roundDrandConfig") {
+        return TEST_DRAND_CONFIG;
+      }
+
       return args.blockTag === "pending"
         ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n]
         : [0n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n];
@@ -101,7 +118,7 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
     fallbackEpochDuration: 1200,
   });
 
-  assert.equal(readCalls.length, 4);
+  assert.equal(readCalls.length, 5);
   for (const call of readCalls) {
     assert.equal(call.blockTag, "pending");
   }
@@ -142,6 +159,10 @@ test("resolveRoundVoteRuntime uses current open round when preview points at an 
 
       if (args.functionName === "roundConfigSnapshot") {
         return [100, 3_600, 3, 1_000];
+      }
+
+      if (args.functionName === "roundDrandConfig") {
+        return TEST_DRAND_CONFIG;
       }
 
       const contractArgs = args.args as unknown[] | undefined;

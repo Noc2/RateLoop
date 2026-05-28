@@ -1,7 +1,7 @@
 import { parseRound, parseVotingConfig } from "../contracts/roundVotingEngine";
 import { deriveCommitVoteRuntimeNowMs } from "./tlockCommitTiming";
-import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
-import { type PublicClient } from "viem";
+import { ProtocolConfigAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { type Hex, type PublicClient, zeroHash } from "viem";
 
 const roundCommitPreviewAbi = [
   {
@@ -19,6 +19,91 @@ const roundCommitPreviewAbi = [
     outputs: [{ name: "", type: "uint16" }],
   },
 ] as const;
+
+type PreviewBlock = { blockTag: "pending" } | { blockNumber: bigint };
+
+type RoundDrandRuntime = {
+  drandChainHash: `0x${string}`;
+  drandGenesisTimeSeconds: bigint;
+  drandPeriodSeconds: bigint;
+};
+
+function hasUsableDrandConfig(config: RoundDrandRuntime) {
+  return (
+    config.drandChainHash.toLowerCase() !== zeroHash &&
+    config.drandGenesisTimeSeconds > 0n &&
+    config.drandPeriodSeconds > 0n
+  );
+}
+
+async function readLiveDrandRuntime(params: {
+  publicClient: PublicClient;
+  votingEngineAddress: `0x${string}`;
+  block: PreviewBlock;
+}): Promise<RoundDrandRuntime> {
+  const protocolConfigAddress = (await params.publicClient.readContract({
+    address: params.votingEngineAddress,
+    abi: RoundVotingEngineAbi,
+    functionName: "protocolConfig",
+    ...params.block,
+  })) as `0x${string}`;
+
+  const [drandChainHash, drandGenesisTimeSeconds, drandPeriodSeconds] = await Promise.all([
+    params.publicClient.readContract({
+      address: protocolConfigAddress,
+      abi: ProtocolConfigAbi,
+      functionName: "drandChainHash",
+      ...params.block,
+    }),
+    params.publicClient.readContract({
+      address: protocolConfigAddress,
+      abi: ProtocolConfigAbi,
+      functionName: "drandGenesisTime",
+      ...params.block,
+    }),
+    params.publicClient.readContract({
+      address: protocolConfigAddress,
+      abi: ProtocolConfigAbi,
+      functionName: "drandPeriod",
+      ...params.block,
+    }),
+  ]);
+
+  return {
+    drandChainHash: (drandChainHash as Hex).toLowerCase() as `0x${string}`,
+    drandGenesisTimeSeconds: BigInt(drandGenesisTimeSeconds as bigint),
+    drandPeriodSeconds: BigInt(drandPeriodSeconds as bigint),
+  };
+}
+
+async function readRoundDrandRuntime(params: {
+  publicClient: PublicClient;
+  votingEngineAddress: `0x${string}`;
+  contentId: bigint;
+  roundId: bigint;
+  block: PreviewBlock;
+}): Promise<RoundDrandRuntime> {
+  if (params.roundId > 0n) {
+    const [chainHash, genesisTime, period] = (await params.publicClient.readContract({
+      address: params.votingEngineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "roundDrandConfig",
+      args: [params.contentId, params.roundId],
+      ...params.block,
+    })) as readonly [Hex, bigint, bigint];
+
+    const snapshot = {
+      drandChainHash: chainHash.toLowerCase() as `0x${string}`,
+      drandGenesisTimeSeconds: BigInt(genesisTime),
+      drandPeriodSeconds: BigInt(period),
+    };
+    if (hasUsableDrandConfig(snapshot)) {
+      return snapshot;
+    }
+  }
+
+  return readLiveDrandRuntime(params);
+}
 
 function isRoundClosed(params: {
   parsedConfig: ReturnType<typeof parseVotingConfig>;
@@ -164,6 +249,13 @@ export async function resolveRoundVoteRuntime(params: {
     epochDurationSeconds: epochDuration,
     roundStartTimeSeconds,
   });
+  const drandRuntime = await readRoundDrandRuntime({
+    publicClient: params.publicClient,
+    votingEngineAddress: params.votingEngineAddress,
+    contentId: params.contentId,
+    roundId: resolvedRoundId,
+    block: previewBlock,
+  });
 
   return {
     epochDuration,
@@ -174,5 +266,6 @@ export async function resolveRoundVoteRuntime(params: {
     roundStartTimeSeconds,
     roundId: resolvedRoundId,
     roundReferenceRatingBps: resolvedRoundReferenceRatingBps,
+    ...drandRuntime,
   };
 }
