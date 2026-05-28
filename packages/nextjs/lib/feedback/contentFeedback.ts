@@ -15,12 +15,20 @@ import {
   CONTENT_FEEDBACK_SOURCE_URL_MAX_LENGTH,
   CONTENT_FEEDBACK_TYPES,
   CONTENT_FEEDBACK_TYPE_LABELS,
+  type ContentFeedbackBonusAward,
+  type ContentFeedbackBonusPool,
   type ContentFeedbackItem,
   type ContentFeedbackListResult,
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
 import { isValidWalletAddress, normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
-import { type PonderContentFeedbackItem, isPonderConfigured, ponderApi } from "~~/services/ponder/client";
+import {
+  type PonderContentFeedbackItem,
+  type PonderFeedbackBonusAward,
+  type PonderFeedbackBonusPool,
+  isPonderConfigured,
+  ponderApi,
+} from "~~/services/ponder/client";
 import { containsBlockedText, containsBlockedUrl } from "~~/utils/contentFilter";
 
 const CONTENT_FEEDBACK_LIST_LIMIT = 100;
@@ -68,6 +76,8 @@ type DeployedContractsMap = Record<number, Record<string, DeployedContractRecord
 type FeedbackVoteEligibilityTestOverrides = {
   getAllRounds?: typeof ponderApi.getAllRounds;
   getContentById?: typeof ponderApi.getContentById;
+  getFeedbackBonusAwards?: typeof ponderApi.getFeedbackBonusAwards;
+  getFeedbackBonusPools?: typeof ponderApi.getFeedbackBonusPools;
   getVotes?: typeof ponderApi.getVotes;
   hasOnchainFeedbackEligibleVote?: (params: FeedbackVoteEligibilityParams) => Promise<boolean>;
   resolveOnchainOpenRoundId?: (params: { contentId: string; chainId?: number }) => Promise<string | null>;
@@ -678,6 +688,111 @@ async function listProtocolContentFeedback(params: {
   }
 }
 
+function isHexHash(value: string | null | undefined): value is `0x${string}` {
+  return typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
+}
+
+function mapFeedbackBonusPool(row: PonderFeedbackBonusPool): ContentFeedbackBonusPool | null {
+  if (!isValidWalletAddress(row.awarder)) return null;
+  return {
+    id: row.id,
+    contentId: row.contentId,
+    roundId: row.roundId,
+    awarder: normalizeWalletAddress(row.awarder),
+    fundedAmount: row.fundedAmount,
+    remainingAmount: row.remainingAmount,
+    awardedAmount: row.awardedAmount,
+    feedbackClosesAt: row.feedbackClosesAt,
+    frontendFeeBps: Number(row.frontendFeeBps) || 0,
+  };
+}
+
+function mapFeedbackBonusAward(row: PonderFeedbackBonusAward): ContentFeedbackBonusAward | null {
+  if (!isValidWalletAddress(row.recipient) || !isHexHash(row.feedbackHash)) return null;
+  return {
+    id: row.id,
+    poolId: row.poolId,
+    contentId: row.contentId,
+    roundId: row.roundId,
+    recipient: normalizeWalletAddress(row.recipient),
+    feedbackHash: row.feedbackHash.toLowerCase() as `0x${string}`,
+    grossAmount: row.grossAmount,
+    recipientAmount: row.recipientAmount,
+    frontendFee: row.frontendFee,
+    awardedAt: row.awardedAt,
+  };
+}
+
+async function listAwardableFeedbackBonusPools(params: {
+  contentId: string;
+  awarderAddress?: `0x${string}` | null;
+}): Promise<ContentFeedbackBonusPool[]> {
+  const getFeedbackBonusPools =
+    feedbackVoteEligibilityTestOverrides?.getFeedbackBonusPools ?? ponderApi.getFeedbackBonusPools;
+  if (
+    !params.awarderAddress ||
+    (!feedbackVoteEligibilityTestOverrides?.getFeedbackBonusPools && !isPonderConfigured())
+  ) {
+    return [];
+  }
+
+  try {
+    const response = await getFeedbackBonusPools({
+      contentId: params.contentId,
+      awarder: params.awarderAddress,
+      activeOnly: "true",
+      limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
+    });
+    return response.items.map(mapFeedbackBonusPool).filter((pool): pool is ContentFeedbackBonusPool => pool !== null);
+  } catch (error) {
+    console.warn("[content-feedback] Unable to load awardable feedback bonus pools.", {
+      awarder: params.awarderAddress,
+      contentId: params.contentId,
+      error,
+    });
+    return [];
+  }
+}
+
+async function listFeedbackBonusAwards(params: {
+  contentId: string;
+  items: ContentFeedbackItem[];
+}): Promise<ContentFeedbackBonusAward[]> {
+  const getFeedbackBonusAwards =
+    feedbackVoteEligibilityTestOverrides?.getFeedbackBonusAwards ?? ponderApi.getFeedbackBonusAwards;
+  if (!feedbackVoteEligibilityTestOverrides?.getFeedbackBonusAwards && !isPonderConfigured()) {
+    return [];
+  }
+
+  const feedbackHashes = Array.from(
+    new Set(
+      params.items
+        .map(item => (isHexHash(item.feedbackHash) ? item.feedbackHash.toLowerCase() : null))
+        .filter((hash): hash is string => hash !== null),
+    ),
+  );
+  if (feedbackHashes.length === 0) {
+    return [];
+  }
+
+  try {
+    const response = await getFeedbackBonusAwards({
+      contentId: params.contentId,
+      feedbackHashes: feedbackHashes.join(","),
+      limit: String(CONTENT_FEEDBACK_LIST_LIMIT),
+    });
+    return response.items
+      .map(mapFeedbackBonusAward)
+      .filter((award): award is ContentFeedbackBonusAward => award !== null);
+  } catch (error) {
+    console.warn("[content-feedback] Unable to load feedback bonus awards.", {
+      contentId: params.contentId,
+      error,
+    });
+    return [];
+  }
+}
+
 function contentFeedbackItemKey(item: ContentFeedbackItem) {
   return item.feedbackHash?.toLowerCase() ?? String(item.id);
 }
@@ -772,6 +887,7 @@ export async function listContentFeedback(params: {
   contentId: string;
   context: ContentFeedbackRoundContext;
   viewerAddress?: `0x${string}` | null;
+  awarderAddress?: `0x${string}` | null;
 }): Promise<ContentFeedbackListResult> {
   let rows: FeedbackRow[];
   let publicCount = 0;
@@ -814,6 +930,7 @@ export async function listContentFeedback(params: {
       ownHiddenCount: 0,
       settlementComplete: params.context.settlementComplete,
       openRoundId: params.context.openRoundId,
+      awardableFeedbackBonusPools: [],
     };
   }
 
@@ -825,16 +942,36 @@ export async function listContentFeedback(params: {
     viewerAddress: params.viewerAddress,
   });
   const items = mergeContentFeedbackItems(protocolItems, localItems);
+  const [awardableFeedbackBonusPools, feedbackBonusAwards] = await Promise.all([
+    listAwardableFeedbackBonusPools({
+      contentId: params.contentId,
+      awarderAddress: params.awarderAddress,
+    }),
+    listFeedbackBonusAwards({ contentId: params.contentId, items }),
+  ]);
+  const awardsByFeedbackHash = new Map<string, ContentFeedbackBonusAward[]>();
+  for (const award of feedbackBonusAwards) {
+    const key = award.feedbackHash.toLowerCase();
+    awardsByFeedbackHash.set(key, [...(awardsByFeedbackHash.get(key) ?? []), award]);
+  }
+  const annotatedItems = items.map(item => {
+    const feedbackHash = isHexHash(item.feedbackHash) ? item.feedbackHash.toLowerCase() : null;
+    return {
+      ...item,
+      feedbackBonusAwards: feedbackHash ? (awardsByFeedbackHash.get(feedbackHash) ?? []) : [],
+    };
+  });
   const ownHiddenCount = items.filter(item => item.isOwn && !item.isPublic).length;
   const mergedPublicCount = items.filter(item => item.isPublic).length;
 
   return {
-    items,
-    count: items.length,
+    items: annotatedItems,
+    count: annotatedItems.length,
     publicCount: Math.max(publicCount, mergedPublicCount),
     ownHiddenCount,
     settlementComplete: params.context.settlementComplete,
     openRoundId: params.context.openRoundId,
+    awardableFeedbackBonusPools,
   };
 }
 

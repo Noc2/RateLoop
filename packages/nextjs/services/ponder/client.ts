@@ -767,6 +767,57 @@ export interface PonderContentFeedbackResponse {
   hasMore: boolean;
 }
 
+export interface PonderFeedbackBonusPool {
+  id: string;
+  contentId: string;
+  roundId: string;
+  funder: string;
+  awarder: string;
+  fundedAmount: string;
+  remainingAmount: string;
+  awardedAmount: string;
+  voterAwardedAmount: string;
+  frontendAwardedAmount: string;
+  forfeitedAmount: string;
+  awardCount: number;
+  feedbackClosesAt: string;
+  awardDeadline: string;
+  frontendFeeBps: number;
+  forfeited: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PonderFeedbackBonusAward {
+  id: string;
+  poolId: string;
+  contentId: string;
+  roundId: string;
+  recipient: string;
+  identityKey: string;
+  feedbackHash: string;
+  grossAmount: string;
+  recipientAmount: string;
+  frontend: string;
+  frontendRecipient: string;
+  frontendFee: string;
+  awardedAt: string;
+}
+
+export interface PonderFeedbackBonusPoolsResponse {
+  items: PonderFeedbackBonusPool[];
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+export interface PonderFeedbackBonusAwardsResponse {
+  items: PonderFeedbackBonusAward[];
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
 export interface PonderTokenTransfer {
   id: string;
   from: string;
@@ -1316,6 +1367,27 @@ export const ponderApi = {
     offset?: string;
   }) {
     return ponderGet<PonderContentFeedbackResponse>("/content-feedback", params);
+  },
+
+  getFeedbackBonusPools(params: {
+    contentId: string;
+    roundId?: string;
+    awarder?: string;
+    activeOnly?: string;
+    limit?: string;
+    offset?: string;
+  }) {
+    return ponderGet<PonderFeedbackBonusPoolsResponse>("/feedback-bonus-pools", params);
+  },
+
+  getFeedbackBonusAwards(params: {
+    contentId: string;
+    roundId?: string;
+    feedbackHashes?: string;
+    limit?: string;
+    offset?: string;
+  }) {
+    return ponderGet<PonderFeedbackBonusAwardsResponse>("/feedback-bonus-awards", params);
   },
 
   getVoteCooldowns(params?: { voters?: string; contentIds?: string }) {

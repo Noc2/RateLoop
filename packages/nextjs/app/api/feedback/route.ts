@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
     const result = await listContentFeedback({
       contentId: normalized.payload.contentId,
       context,
+      awarderAddress: requestedViewerAddress,
       viewerAddress,
     });
 

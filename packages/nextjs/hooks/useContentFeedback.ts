@@ -45,6 +45,7 @@ const EMPTY_FEEDBACK_RESPONSE: ContentFeedbackListResult = {
   settlementComplete: false,
   openRoundId: null,
   hasReadSession: false,
+  awardableFeedbackBonusPools: [],
 };
 
 function normalizeContentId(contentId: bigint | string | number | null | undefined): string | null {

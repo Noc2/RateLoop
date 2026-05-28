@@ -7,6 +7,8 @@ process.env.DATABASE_URL = "memory:";
 type ContentFeedbackModule = typeof import("./contentFeedback");
 type NormalizedContentFeedbackInput = import("./contentFeedback").NormalizedContentFeedbackInput;
 type ContentFeedbackRoundContext = import("./contentFeedback").ContentFeedbackRoundContext;
+type PonderFeedbackBonusAward = import("~~/services/ponder/client").PonderFeedbackBonusAward;
+type PonderFeedbackBonusPool = import("~~/services/ponder/client").PonderFeedbackBonusPool;
 type PonderRoundItem = import("~~/services/ponder/client").PonderRoundItem;
 type PonderVoteItem = import("~~/services/ponder/client").PonderVoteItem;
 type PonderVotesResponse = import("~~/services/ponder/client").PonderVotesResponse;
@@ -87,6 +89,49 @@ function buildRoundItem(params: { contentId?: string; roundId: string; state: nu
     url: null,
     submitter: null,
     categoryId: null,
+  };
+}
+
+function buildFeedbackBonusPool(params: Partial<PonderFeedbackBonusPool> = {}): PonderFeedbackBonusPool {
+  return {
+    id: "7",
+    contentId: "13",
+    roundId: "8",
+    funder: WALLET,
+    awarder: WALLET,
+    fundedAmount: "5000000",
+    remainingAmount: "3000000",
+    awardedAmount: "2000000",
+    voterAwardedAmount: "1940000",
+    frontendAwardedAmount: "60000",
+    forfeitedAmount: "0",
+    awardCount: 1,
+    feedbackClosesAt: "2000",
+    awardDeadline: "2600",
+    frontendFeeBps: 300,
+    forfeited: false,
+    createdAt: "1000",
+    updatedAt: "1200",
+    ...params,
+  };
+}
+
+function buildFeedbackBonusAward(params: Partial<PonderFeedbackBonusAward> = {}): PonderFeedbackBonusAward {
+  return {
+    id: "7-1",
+    poolId: "7",
+    contentId: "13",
+    roundId: "8",
+    recipient: WALLET,
+    identityKey: `0x${"22".repeat(32)}`,
+    feedbackHash: `0x${"33".repeat(32)}`,
+    grossAmount: "1000000",
+    recipientAmount: "970000",
+    frontend: WALLET,
+    frontendRecipient: WALLET,
+    frontendFee: "30000",
+    awardedAt: "1500",
+    ...params,
   };
 }
 
@@ -388,6 +433,55 @@ test("terminal round feedback becomes public", async () => {
   assert.equal(result.count, 1);
   assert.equal(result.publicCount, 1);
   assert.equal(result.items[0]?.isPublic, true);
+});
+
+test("returns awardable feedback bonus pools and awards for public feedback", async () => {
+  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
+  const settledContext = contentFeedback.buildContentFeedbackRoundContext([
+    { roundId: "8", state: ROUND_STATE.Settled },
+  ]);
+  const payload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "13",
+    feedbackType: "evidence",
+    body: "The cited report confirms the central claim.",
+  });
+  assert.equal(payload.ok, true);
+  if (!payload.ok) return;
+
+  const added = await contentFeedback.addContentFeedback(
+    prepareFeedback(payload.payload, activeContext),
+    activeContext,
+  );
+  assert.ok(added.feedbackHash);
+
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getFeedbackBonusAwards: async params => ({
+      items: [buildFeedbackBonusAward({ feedbackHash: params.feedbackHashes?.split(",")[0] })],
+      limit: 1,
+      offset: 0,
+      hasMore: false,
+    }),
+    getFeedbackBonusPools: async params => ({
+      items: [buildFeedbackBonusPool({ awarder: params.awarder })],
+      limit: 1,
+      offset: 0,
+      hasMore: false,
+    }),
+  });
+
+  const result = await contentFeedback.listContentFeedback({
+    contentId: "13",
+    context: settledContext,
+    awarderAddress: WALLET,
+  });
+
+  assert.equal(result.awardableFeedbackBonusPools?.length, 1);
+  assert.equal(result.awardableFeedbackBonusPools?.[0]?.id, "7");
+  assert.equal(result.awardableFeedbackBonusPools?.[0]?.awarder, WALLET);
+  assert.equal(result.items[0]?.feedbackBonusAwards?.length, 1);
+  assert.equal(result.items[0]?.feedbackBonusAwards?.[0]?.poolId, "7");
+  assert.equal(result.items[0]?.feedbackBonusAwards?.[0]?.feedbackHash, added.feedbackHash);
 });
 
 test("public feedback remains visible behind newer hidden active-round rows", async () => {

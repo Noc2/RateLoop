@@ -49,6 +49,7 @@ export interface ContentFeedbackItem {
   updatedAt: string;
   isOwn: boolean;
   isPublic: boolean;
+  feedbackBonusAwards?: ContentFeedbackBonusAward[];
 }
 
 export interface ContentFeedbackListResult {
@@ -59,4 +60,30 @@ export interface ContentFeedbackListResult {
   settlementComplete: boolean;
   openRoundId: string | null;
   hasReadSession?: boolean;
+  awardableFeedbackBonusPools?: ContentFeedbackBonusPool[];
+}
+
+export interface ContentFeedbackBonusPool {
+  id: string;
+  contentId: string;
+  roundId: string;
+  awarder: `0x${string}`;
+  fundedAmount: string;
+  remainingAmount: string;
+  awardedAmount: string;
+  feedbackClosesAt: string;
+  frontendFeeBps: number;
+}
+
+export interface ContentFeedbackBonusAward {
+  id: string;
+  poolId: string;
+  contentId: string;
+  roundId: string;
+  recipient: `0x${string}`;
+  feedbackHash: `0x${string}`;
+  grossAmount: string;
+  recipientAmount: string;
+  frontendFee: string;
+  awardedAt: string;
 }
