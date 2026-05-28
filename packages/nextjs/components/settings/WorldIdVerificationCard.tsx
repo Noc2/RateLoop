@@ -21,6 +21,7 @@ import {
   useScaffoldReadContract,
   useScaffoldWriteContract,
 } from "~~/hooks/scaffold-eth";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLaunchReferralInputState, resolveLaunchClaimReferrer } from "~~/lib/referrals/launchReferral";
 import {
   buildReferralLandingUrl,
@@ -142,7 +143,13 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     args: [walletAddress],
     query: { enabled: Boolean(walletAddress) },
   });
-  const { writeContractAsync: claimVerifiedBonus } = useScaffoldWriteContract({
+  const { refetch: refetchLrepBalance } = useScaffoldReadContract({
+    contractName: REPUTATION_CONTRACT_NAME,
+    functionName: "balanceOf",
+    args: [walletAddress],
+    query: { enabled: Boolean(walletAddress) },
+  });
+  const { writeContractAsync: claimVerifiedBonus, isMining: isClaimingVerifiedBonus } = useScaffoldWriteContract({
     contractName: "LaunchDistributionPool",
   });
   const { writeContractAsync: unlockFullEarnedRaterCap } = useScaffoldWriteContract({
@@ -183,7 +190,11 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const referralBonusPreview =
     currentVerifiedBonus !== undefined ? (currentVerifiedBonus * REFERRAL_BONUS_BPS) / 10_000n : undefined;
   const isCredentialActive = hasActiveCredential === true;
-  const isVerifiedBonusClaimed = verifiedBonusClaimed === true;
+  const canClaimVerifiedBonus =
+    isCredentialActive &&
+    verifiedBonusClaimed === false &&
+    currentVerifiedBonus !== undefined &&
+    currentVerifiedBonus > 0n;
   const activeEarnedRaterCap = typeof raterLaunchCap === "bigint" ? raterLaunchCap : undefined;
   const fullEarnedRaterCap = typeof raterFullLaunchCap === "bigint" ? raterFullLaunchCap : undefined;
   const hasInvalidReferral = referralInputState.status === "invalid" || referralInputState.status === "self";
@@ -257,16 +268,70 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       refetchRaterLaunchCap(),
       refetchRaterFullLaunchCap(),
       refetchRaterFullLaunchCapUnlocked(),
+      refetchLrepBalance(),
     ]);
   }, [
     refetchCurrentVerifiedBonus,
     refetchHasActiveCredential,
+    refetchLrepBalance,
     refetchRaterFullLaunchCap,
     refetchRaterFullLaunchCapUnlocked,
     refetchRaterLaunchCap,
     refetchReferralEarnings,
     refetchVerifiedBonusClaimed,
   ]);
+
+  const claimVerifiedLaunchBonusIfAvailable = useCallback(async () => {
+    if (!walletAddress) {
+      return false;
+    }
+
+    const [latestVerifiedBonusClaimedResult, latestVerifiedBonusResult] = await Promise.all([
+      refetchVerifiedBonusClaimed(),
+      refetchCurrentVerifiedBonus(),
+    ]);
+    const latestVerifiedBonusClaimed = latestVerifiedBonusClaimedResult.data === true;
+    const latestVerifiedBonus =
+      typeof latestVerifiedBonusResult.data === "bigint" ? latestVerifiedBonusResult.data : undefined;
+
+    if (latestVerifiedBonusClaimed || latestVerifiedBonus === undefined || latestVerifiedBonus <= 0n) {
+      return false;
+    }
+
+    const verifiedBonusReferrer = hasInvalidReferral ? zeroAddress : claimReferrer;
+
+    await claimVerifiedBonus(
+      {
+        functionName: "claimVerifiedBonus",
+        args: [verifiedBonusReferrer],
+      },
+      {
+        action: "claim launch bonus",
+        suppressSuccessToast: true,
+      },
+    );
+    if (verifiedBonusReferrer !== zeroAddress) {
+      clearStoredReferralAttribution();
+      setReferralInput("");
+    }
+    notification.success("Launch bonus claimed.");
+    return true;
+  }, [
+    claimReferrer,
+    claimVerifiedBonus,
+    hasInvalidReferral,
+    refetchCurrentVerifiedBonus,
+    refetchVerifiedBonusClaimed,
+    walletAddress,
+  ]);
+
+  const handleClaimVerifiedBonus = useCallback(async () => {
+    try {
+      await claimVerifiedLaunchBonusIfAvailable();
+    } finally {
+      await refreshLaunchReads();
+    }
+  }, [claimVerifiedLaunchBonusIfAvailable, refreshLaunchReads]);
 
   const handleReferralBlur = useCallback(() => {
     if (referralInputState.canUseReferrer) {
@@ -347,31 +412,10 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           throw new Error("World ID credential transaction was not submitted.");
         }
 
-        if (
-          !isVerifiedBonusClaimed &&
-          currentVerifiedBonus !== undefined &&
-          currentVerifiedBonus > 0n &&
-          !hasInvalidReferral
-        ) {
-          try {
-            await claimVerifiedBonus(
-              {
-                functionName: "claimVerifiedBonus",
-                args: [claimReferrer],
-              },
-              {
-                action: "claim launch bonus",
-                suppressSuccessToast: true,
-              },
-            );
-            if (claimReferrer !== zeroAddress) {
-              clearStoredReferralAttribution();
-              setReferralInput("");
-            }
-            notification.success("Launch bonus claimed.");
-          } catch {
-            // Verification succeeded. The separate claim control remains available if the bonus claim needs a retry.
-          }
+        try {
+          await claimVerifiedLaunchBonusIfAvailable();
+        } catch {
+          // Verification succeeded even if the follow-up launch bonus claim needs a retry.
         }
 
         if (
@@ -410,13 +454,9 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       address,
       attestWorldIdCredential,
       chain?.id,
-      claimReferrer,
-      claimVerifiedBonus,
-      currentVerifiedBonus,
+      claimVerifiedLaunchBonusIfAvailable,
       fullEarnedRaterCap,
       hasWorldIdV4AttestFunction,
-      hasInvalidReferral,
-      isVerifiedBonusClaimed,
       raterFullLaunchCapUnlocked,
       refreshLaunchReads,
       signal,
@@ -711,6 +751,21 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:block lg:space-y-2 lg:text-right">
             <dt className="text-base-content/55">Referral earned</dt>
             <dd className="font-semibold text-base-content">{formatLrepAmount(referralEarnings)} LREP</dd>
+            {canClaimVerifiedBonus ? (
+              <>
+                <dt className="text-base-content/55">Launch bonus</dt>
+                <dd>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-xs"
+                    disabled={isClaimingVerifiedBonus}
+                    onClick={() => void handleClaimVerifiedBonus()}
+                  >
+                    {isClaimingVerifiedBonus ? "Claiming..." : `Claim ${formatLrepAmount(currentVerifiedBonus)} LREP`}
+                  </button>
+                </dd>
+              </>
+            ) : null}
           </dl>
         </div>
       ) : (
