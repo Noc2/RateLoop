@@ -37,6 +37,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
     uint256 public constant TREASURY_AMOUNT = 25_000_000 * 1e6;
     uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - TREASURY_AMOUNT;
+    bytes32 public constant LEGACY_CONTRIBUTOR_ROOT =
+        0xcaa28d15e6c6c1bb47d347a413cb808e40c38a7e43171ce9a131983a92b97d18;
+    uint256 public constant LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL = 9_000_000 * 1e6;
     bytes32 internal constant ERC1967_ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
 
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
@@ -382,13 +385,14 @@ contract DeployRateLoop is ScaffoldETHDeploy {
                 address(questionRewardPoolEscrow)
             );
             RateLoopGovernor(payable(governorAddr)).initializePools(excludedHolders);
-            launchDistributionPool.transferOwnership(governance);
         }
 
         lrepToken.mint(deployer, LAUNCH_DISTRIBUTION_AMOUNT);
         lrepToken.approve(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
         launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
+        _activateLegacyContributorRoot(launchDistributionPool);
         if (!isLocalDev) {
+            launchDistributionPool.transferOwnership(governance);
             lrepToken.renounceRole(lrepToken.MINTER_ROLE(), deployer);
         }
         protocolConfig.setLaunchDistributionPool(address(launchDistributionPool));
@@ -461,6 +465,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("LaunchDistributionPool:", address(launchDistributionPool));
         console.log("AdvisoryVoteRecorder:", address(advisoryVoteRecorder));
         console.log("Governance:", governance);
+    }
+
+    function _activateLegacyContributorRoot(LaunchDistributionPool launchDistributionPool) internal {
+        launchDistributionPool.setLegacyContributorRoot(LEGACY_CONTRIBUTOR_ROOT, LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL);
     }
 
     function _proxyAdmin(address proxy) internal view returns (address) {

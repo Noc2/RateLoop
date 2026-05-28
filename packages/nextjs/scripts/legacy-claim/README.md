@@ -27,7 +27,7 @@ node packages/nextjs/scripts/legacy-claim/build-manifest.mjs
 
 The script emits:
 
-- the merkle root (paste this into the on-chain `setLegacyContributorRoot(...)` call on testnet/mainnet)
+- the merkle root (must match `Deploy.s.sol`'s `LEGACY_CONTRIBUTOR_ROOT`)
 - the allocation total (must equal the snapshot's `legacyPoolAmount`)
 - the full per-entry table
 
@@ -35,7 +35,7 @@ The generated `manifest.ts` is committed. Reviewers can re-run the script and co
 
 ## On-chain activation
 
-Once the manifest's merkle root is final, governance calls:
+Fresh deployments automatically call:
 
 ```solidity
 launchDistributionPool.setLegacyContributorRoot(
@@ -44,13 +44,13 @@ launchDistributionPool.setLegacyContributorRoot(
 );
 ```
 
-This sets `legacyContributorVestingStart = block.timestamp`. The vesting curve is hard-coded on the contract (24-month linear vest with 1 % instant unlock on day 0; see `LaunchDistributionPool.LEGACY_VESTING_DURATION`).
+from `Deploy.s.sol` after the launch pool is funded and before ownership is transferred to governance. This sets `legacyContributorVestingStart = block.timestamp`. The vesting curve is hard-coded on the contract (24-month linear vest with 1 % instant unlock on day 0; see `LaunchDistributionPool.LEGACY_VESTING_DURATION`).
 
 Re-running `setLegacyContributorRoot` after any allocation has been claimed reverts (`AlreadyClaimed`), so the root is effectively immutable post-launch. Get it right the first time. If a re-vest is ever needed, the only path is `recoverSurplus` + a fresh deploy.
 
 ## Verification checklist
 
-Before signing the `setLegacyContributorRoot` tx:
+Before deploying or proposing a manual activation for an already-deployed pool:
 
 1. `node packages/nextjs/scripts/legacy-claim/build-manifest.mjs` and confirm the printed merkle root matches `packages/nextjs/lib/legacy-claim/manifest.ts`.
 2. `cd packages/nextjs && node ../../scripts/run-node-tests.mjs lib/legacy-claim app/api/legacy-claim` — the test `every manifest entry's leaf hashes back to the merkle root via its proof` re-derives the root from every proof using the same algorithm the contract uses on-chain. If it passes, the proofs are sound.

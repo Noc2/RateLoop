@@ -37,6 +37,10 @@ contract DeployRateLoopHarness is DeployRateLoop {
             questionRewardPoolEscrow
         );
     }
+
+    function activateLegacyContributorRoot(LaunchDistributionPool launchPool) external {
+        _activateLegacyContributorRoot(launchPool);
+    }
 }
 
 contract RevertingDecimalsToken {
@@ -64,11 +68,33 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(launchPool.EARNED_RATER_POOL_AMOUNT(), 24_000_000 * 1e6, "earned rater pool should be 24M");
         assertEq(launchPool.LEGACY_CONTRIBUTOR_POOL_AMOUNT(), 9_000_000 * 1e6, "legacy pool should be 9M");
         assertEq(
+            deployScript.LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL(),
+            launchPool.LEGACY_CONTRIBUTOR_POOL_AMOUNT(),
+            "legacy manifest total should fill legacy pool"
+        );
+        assertEq(
             launchPool.TOTAL_POOL_AMOUNT(),
             deployScript.LAUNCH_DISTRIBUTION_AMOUNT(),
             "launch pool split should equal 75M"
         );
         assertEq(deployScript.TREASURY_AMOUNT(), 25_000_000 * 1e6, "treasury should be 25M");
+    }
+
+    function test_ActivateLegacyContributorRootConfiguresGeneratedManifestRoot() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        LoopReputation lrepToken = new LoopReputation(address(this), address(this));
+        RaterRegistry raterRegistry = new RaterRegistry(
+            address(this), address(this), address(new MockWorldIDRouter()), bytes32("rate-loop"), 1, 365 days
+        );
+        LaunchDistributionPool launchPool =
+            new LaunchDistributionPool(address(lrepToken), address(raterRegistry), address(deployScript));
+        launchPool.transferOwnership(address(deployScript));
+
+        deployScript.activateLegacyContributorRoot(launchPool);
+
+        assertEq(launchPool.legacyContributorRoot(), deployScript.LEGACY_CONTRIBUTOR_ROOT());
+        assertEq(launchPool.legacyContributorAllocationTotal(), deployScript.LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL());
+        assertEq(launchPool.legacyContributorVestingStart(), block.timestamp);
     }
 
     function test_WorldIdExternalNullifierHashMatchesLocalConfigVector() public {
