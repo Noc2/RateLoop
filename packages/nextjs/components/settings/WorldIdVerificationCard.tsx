@@ -14,6 +14,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { WorldIdQrCode } from "~~/components/settings/WorldIdQrCode";
+import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import {
   useCopyToClipboard,
   useDeployedContractInfo,
@@ -681,7 +682,10 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
             <ShieldCheckIcon className="h-4 w-4" />
             World ID
           </div>
-          <h3 className="mt-3 text-2xl font-semibold text-base-content">Human credential</h3>
+          <h3 className="mt-3 inline-flex items-center gap-2 text-2xl font-semibold text-base-content">
+            Human credential
+            <InfoTooltip text="Only Orb verification is supported right now." position="top" />
+          </h3>
         </div>
 
         <div className="flex shrink-0 flex-col items-stretch gap-3 sm:min-w-56">
