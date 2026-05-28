@@ -31,6 +31,7 @@ import {
   parseAdvisoryCommitAvailability,
 } from "~~/lib/vote/advisoryVoteAvailability";
 import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
+import { PREPARING_ROUND_VOTE_MESSAGE, ensureOpenStakedRoundRuntime } from "~~/lib/vote/openStakedRoundRuntime";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
 import { type RoundVoteContractCall, buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
@@ -355,22 +356,16 @@ export function useRoundVote() {
         }
       };
 
-      const ensureOpenStakedRuntime = async () => {
-        let freshRuntime = await resolveFreshStakedRuntime();
-        if (freshRuntime.requiresOpenRound) {
-          await submitOpenRound();
-          freshRuntime = await resolveFreshStakedRuntime();
-          if (freshRuntime.requiresOpenRound) {
-            throw new Error("Preparing vote. Try again in a moment.");
-          }
-        }
-        return freshRuntime;
-      };
+      const ensureOpenStakedRuntime = () =>
+        ensureOpenStakedRoundRuntime({
+          openRound: submitOpenRound,
+          resolveRuntime: resolveFreshStakedRuntime,
+        });
 
       const buildFreshRoundVotePlan = async (allowanceForPlan: bigint) => {
         const freshRuntime = isRequestedAdvisoryVote ? runtime : await ensureOpenStakedRuntime();
         if (!freshRuntime) {
-          throw new Error("Preparing vote. Try again in a moment.");
+          throw new Error(PREPARING_ROUND_VOTE_MESSAGE);
         }
 
         const commitParams = await buildCommitVoteParams({
