@@ -557,7 +557,7 @@ export async function getSigningIntent(
     config,
     agentSigningIntentUrl(config, params),
     {
-      headers: agentHeaders(config),
+      headers: signingIntentReadHeaders(config, params),
       method: "GET",
     },
   );
@@ -1009,7 +1009,6 @@ function agentSigningIntentUrl(
     `./signing-intents/${params.intentId.trim()}`,
     `${agentBaseUrl(config)}/`,
   );
-  url.searchParams.set("token", params.token);
   return url.toString();
 }
 
@@ -1139,6 +1138,13 @@ function jsonAgentHeaders(config: NormalizedAgentConfig) {
   return {
     ...agentHeaders(config),
     "content-type": "application/json",
+  };
+}
+
+function signingIntentReadHeaders(config: NormalizedAgentConfig, params: SigningIntentLookup) {
+  return {
+    ...agentHeaders(config),
+    "x-rateloop-signing-intent-token": params.token.trim(),
   };
 }
 

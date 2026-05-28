@@ -212,11 +212,13 @@ test("askHumans supports tokenless direct agent HTTP with a wallet address", asy
 test("signing intent helpers use direct browser-handoff routes", async () => {
   const requestedUrls: string[] = [];
   const requestedBodies: any[] = [];
+  const requestedHeaders: Headers[] = [];
   const agent = createRateLoopAgentClient({
     apiBaseUrl: API_BASE_URL,
     fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
       requestedUrls.push(String(input));
       requestedBodies.push(init?.body ? JSON.parse(String(init.body)) : null);
+      requestedHeaders.push(new Headers(init?.headers));
       const url = String(input);
       if (url.endsWith("/api/agent/signing-intents")) {
         return jsonResponse({
@@ -288,8 +290,9 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
   );
   assert.equal(
     requestedUrls[1],
-    "https://rateloop.example/api/agent/signing-intents/asi_test?token=secret",
+    "https://rateloop.example/api/agent/signing-intents/asi_test",
   );
+  assert.equal(requestedHeaders[1].get("x-rateloop-signing-intent-token"), "secret");
   assert.equal(
     requestedUrls[2],
     "https://rateloop.example/api/agent/signing-intents/asi_test/prepare",
