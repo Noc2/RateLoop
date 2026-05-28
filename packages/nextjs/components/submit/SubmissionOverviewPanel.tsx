@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAccount } from "wagmi";
 import { ArrowPathIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon } from "@heroicons/react/24/outline";
 import { ConnectWalletCard } from "~~/components/shared/ConnectWalletCard";
-import { ASK_ROUTE, buildRateContentHref } from "~~/constants/routes";
+import { buildRateContentHref } from "~~/constants/routes";
 import { CONTENT_STATUS, type RewardPoolCurrency } from "~~/hooks/contentFeed/shared";
 import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
 import { type ContentItem, useContentFeed } from "~~/hooks/useContentFeed";
@@ -195,17 +195,11 @@ export function SubmissionOverviewPanel() {
 
   return (
     <section className="surface-card rounded-2xl p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
         <div>
           <h2 className="text-2xl font-semibold text-base-content">Your Submissions</h2>
           <p className="mt-1 text-sm text-base-content/55">{totalContent} total</p>
         </div>
-        <Link
-          href={ASK_ROUTE}
-          className="btn btn-sm rounded-lg border border-base-content/10 bg-base-content text-base-100 hover:bg-base-content/90"
-        >
-          Submit Question
-        </Link>
       </div>
 
       <div className="mt-5 overflow-hidden rounded-lg border border-base-content/10 bg-base-200/40">

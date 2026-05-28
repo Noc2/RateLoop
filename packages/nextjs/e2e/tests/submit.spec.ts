@@ -20,7 +20,7 @@ test.describe("Ask page", () => {
 
     await expect(page.getByRole("button", { name: "Submissions" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "Your Submissions" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("link", { name: "Submit Question" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Submit Question" })).toHaveCount(0);
   });
 
   test("can ask a question", async ({ connectedPage: page }) => {
