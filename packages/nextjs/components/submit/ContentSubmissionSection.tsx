@@ -58,7 +58,10 @@ import {
   getContentTagValidationError,
   getContentTitleValidationError,
 } from "~~/lib/moderation/submissionValidation";
-import { getSubmissionRewardCoverageMinimum } from "~~/lib/questionRewardMinimums";
+import {
+  getContentRegistrySubmissionRewardMinimum,
+  getSubmissionRewardCoverageMinimum,
+} from "~~/lib/questionRewardMinimums";
 import {
   DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS,
   DEFAULT_SUBMISSION_REWARD_POOL,
@@ -1054,11 +1057,10 @@ export function ContentSubmissionSection() {
   const selectedRequiredSettledRounds = BigInt(Math.max(MIN_REWARD_POOL_SETTLED_ROUNDS, parsedRewardRequiredRounds));
   const bountyMinimumCoverageAmount = getSubmissionRewardCoverageMinimum({
     maxVoters: selectedRoundConfig.maxVoters,
-    questionCount,
     requiredSettledRounds: selectedRequiredSettledRounds,
     requiredVoters: selectedRequiredVoters,
   });
-  const minimumRewardAmount =
+  const configuredMinimumRewardAmount =
     rewardAsset === "lrep"
       ? typeof minSubmissionLrepPool === "bigint"
         ? minSubmissionLrepPool
@@ -1066,6 +1068,10 @@ export function ContentSubmissionSection() {
       : typeof minSubmissionUsdcPool === "bigint"
         ? minSubmissionUsdcPool
         : DEFAULT_SUBMISSION_REWARD_POOL;
+  const minimumRewardAmount = getContentRegistrySubmissionRewardMinimum({
+    configuredMinimum: configuredMinimumRewardAmount,
+    defaultMaxVoters: BigInt(Math.max(0, roundConfigDefaults.maxVoters)),
+  });
   const rewardAmountError =
     selectedRewardAmount === null
       ? "Enter a positive amount with up to 6 decimals."

@@ -1,4 +1,8 @@
-import { REWARD_POOL_EFFECTIVE_UNIT_SCALE, getSubmissionRewardCoverageMinimum } from "./questionRewardMinimums";
+import {
+  REWARD_POOL_EFFECTIVE_UNIT_SCALE,
+  getContentRegistrySubmissionRewardMinimum,
+  getSubmissionRewardCoverageMinimum,
+} from "./questionRewardMinimums";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -7,7 +11,6 @@ test("single-question reward minimum mirrors escrow max-voter coverage", () => {
   assert.equal(
     getSubmissionRewardCoverageMinimum({
       maxVoters: 200n,
-      questionCount: 1,
       requiredSettledRounds: 1n,
       requiredVoters: 3n,
     }),
@@ -19,7 +22,6 @@ test("single-question reward minimum is 1 USDC for 100 max voters", () => {
   assert.equal(
     getSubmissionRewardCoverageMinimum({
       maxVoters: 100n,
-      questionCount: 1,
       requiredSettledRounds: 1n,
       requiredVoters: 3n,
     }),
@@ -31,7 +33,6 @@ test("single-question reward minimum uses required voters when above cap defensi
   assert.equal(
     getSubmissionRewardCoverageMinimum({
       maxVoters: 3n,
-      questionCount: 1,
       requiredSettledRounds: 2n,
       requiredVoters: 5n,
     }),
@@ -39,14 +40,33 @@ test("single-question reward minimum uses required voters when above cap defensi
   );
 });
 
-test("bundle reward minimum keeps the bundle escrow scale", () => {
+test("bundle reward minimum mirrors escrow max-voter coverage", () => {
   assert.equal(
     getSubmissionRewardCoverageMinimum({
       maxVoters: 100n,
-      questionCount: 2,
       requiredSettledRounds: 3n,
       requiredVoters: 5n,
     }),
-    300n,
+    3_000_000n,
+  );
+});
+
+test("content registry submission minimum includes default turnout coverage", () => {
+  assert.equal(
+    getContentRegistrySubmissionRewardMinimum({
+      configuredMinimum: 1_000_000n,
+      defaultMaxVoters: 200n,
+    }),
+    2_000_000n,
+  );
+});
+
+test("content registry submission minimum keeps higher configured minimum", () => {
+  assert.equal(
+    getContentRegistrySubmissionRewardMinimum({
+      configuredMinimum: 5_000_000n,
+      defaultMaxVoters: 200n,
+    }),
+    5_000_000n,
   );
 });

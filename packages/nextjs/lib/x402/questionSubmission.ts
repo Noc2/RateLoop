@@ -28,7 +28,10 @@ import {
   getServerTargetNetworkById,
   getX402UsdcAddressOverride,
 } from "~~/lib/env/server";
-import { getSubmissionRewardCoverageMinimum } from "~~/lib/questionRewardMinimums";
+import {
+  getContentRegistrySubmissionRewardMinimum,
+  getSubmissionRewardCoverageMinimum,
+} from "~~/lib/questionRewardMinimums";
 import { questionRoundConfigToAbi, serializeQuestionRoundConfig } from "~~/lib/questionRoundConfig";
 import {
   buildQuestionBundleSubmissionRevealCommitment,
@@ -820,16 +823,25 @@ async function assertBountyMeetsProtocolMinimum(params: {
     abi: ProtocolConfigAbi,
     functionName: "minSubmissionUsdcPool",
   })) as bigint;
+  const protocolRoundConfig = (await params.publicClient.readContract({
+    address: protocolConfigAddress,
+    abi: ProtocolConfigAbi,
+    functionName: "config",
+  })) as any;
+  const defaultMaxVoters = BigInt(protocolRoundConfig?.maxVoters ?? protocolRoundConfig?.[3] ?? 0);
+  const submissionMinimum = getContentRegistrySubmissionRewardMinimum({
+    configuredMinimum: minimum,
+    defaultMaxVoters,
+  });
 
-  if (params.payload.bounty.amount < minimum) {
+  if (params.payload.bounty.amount < submissionMinimum) {
     throw new X402QuestionConflictError(
-      `Bounty is below the on-chain USDC minimum (${minimum.toString()} atomic units).`,
+      `Bounty is below the on-chain USDC minimum (${submissionMinimum.toString()} atomic units).`,
     );
   }
 
   const coverageMinimum = getSubmissionRewardCoverageMinimum({
     maxVoters: params.payload.roundConfig.maxVoters,
-    questionCount: params.payload.questions.length,
     requiredSettledRounds: params.payload.bounty.requiredSettledRounds,
     requiredVoters: params.payload.bounty.requiredVoters,
   });
