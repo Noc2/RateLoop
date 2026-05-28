@@ -2993,7 +2993,7 @@ export function ContentSubmissionSection() {
               <div>
                 <p className="flex items-center gap-1.5 text-base text-base-content/70">
                   Feedback window
-                  <InfoTooltip text="For now, the feedback bonus closes with the bounty window selected in the previous step." />
+                  <InfoTooltip text="The feedback bonus closes with the bounty window selected in the previous step." />
                 </p>
                 <p className="mt-1 text-base font-medium text-base-content">{feedbackBonusWindowLabel}</p>
               </div>
