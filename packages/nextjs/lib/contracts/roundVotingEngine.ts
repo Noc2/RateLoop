@@ -133,7 +133,10 @@ export const DEFAULT_VOTING_CONFIG: VotingConfig = {
 const RBTS_MIN_REVEALS = 3;
 
 function toBigInt(value: unknown, fallback = 0n): bigint {
-  return typeof value === "bigint" ? value : fallback;
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+  if (typeof value === "string" && /^\d+$/u.test(value)) return BigInt(value);
+  return fallback;
 }
 
 function toNumber(value: unknown, fallback = 0): number {

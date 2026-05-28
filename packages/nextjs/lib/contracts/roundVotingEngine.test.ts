@@ -117,6 +117,16 @@ test("parseRound prefers tuple values when named round fields are incomplete", (
   assert.equal(parsedRound.upCount, 1n);
 });
 
+test("parseRound preserves viem numeric tuple fields", () => {
+  const parsedRound = parseRound([1_779_992_260, ROUND_STATE.Open, 0, 0, 0n, 0n, 0n, 0, 0, false, 0, 0, 0n, 0n]);
+
+  assert.ok(parsedRound);
+  assert.equal(parsedRound.startTime, 1_779_992_260n);
+  assert.equal(parsedRound.voteCount, 0n);
+  assert.equal(parsedRound.upCount, 0n);
+  assert.equal(parsedRound.thresholdReachedAt, 0n);
+});
+
 test("mergeRoundDataWithFallback keeps the higher feed vote totals for the same round", () => {
   const merged = mergeRoundDataWithFallback({
     roundId: 7n,
