@@ -3,7 +3,13 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { zeroHash } from "viem";
 import { useAccount } from "wagmi";
-import { ArrowTopRightOnSquareIcon, ChatBubbleLeftEllipsisIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowTopRightOnSquareIcon,
+  BanknotesIcon,
+  ChatBubbleLeftEllipsisIcon,
+  LockClosedIcon,
+} from "@heroicons/react/24/outline";
+import { AwardFeedbackBonusModal } from "~~/components/feedback/AwardFeedbackBonusModal";
 import { SafeExternalLink } from "~~/components/shared/SafeExternalLink";
 import { TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -14,6 +20,7 @@ import {
   CONTENT_FEEDBACK_BODY_MAX_LENGTH,
   CONTENT_FEEDBACK_TYPES,
   CONTENT_FEEDBACK_TYPE_LABELS,
+  type ContentFeedbackBonusPool,
   type ContentFeedbackItem,
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
@@ -46,21 +53,32 @@ function hasNonZeroCommit(value: unknown) {
   return typeof value === "string" && value !== zeroHash;
 }
 
+function hasHexFeedbackHash(item: ContentFeedbackItem) {
+  return typeof item.feedbackHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(item.feedbackHash);
+}
+
 function FeedbackItem({
   item,
+  awardablePoolCount,
   canReveal,
+  isAwarded,
   isRevealing,
+  onAward,
   onReveal,
 }: {
   item: ContentFeedbackItem;
+  awardablePoolCount?: number;
   canReveal?: boolean;
+  isAwarded?: boolean;
   isRevealing?: boolean;
+  onAward?: (item: ContentFeedbackItem) => void;
   onReveal?: (item: ContentFeedbackItem) => void;
 }) {
   const visibilityLabel = item.isPublic ? "Public" : "Private until settlement";
   const visibilityTooltip = item.isPublic
     ? "This feedback is visible to everyone because the round has settled."
     : "Only you can see this feedback while voting is active. It becomes public after settlement.";
+  const canAwardFeedback = Boolean(awardablePoolCount && awardablePoolCount > 0);
 
   return (
     <li className="surface-card-nested rounded-lg p-3">
@@ -72,6 +90,35 @@ function FeedbackItem({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {canAwardFeedback ? (
+            <TooltipAnchor
+              text="Award this feedback from your Feedback Bonus pool"
+              position="top"
+              className="rounded-full"
+            >
+              <button
+                type="button"
+                className="vote-btn vote-btn-sm vote-feedback"
+                onClick={() => onAward?.(item)}
+                aria-label="Award Feedback Bonus"
+              >
+                <span className="vote-bg" />
+                <span className="vote-symbol">
+                  <BanknotesIcon className="h-4 w-4" aria-hidden="true" />
+                </span>
+              </button>
+            </TooltipAnchor>
+          ) : isAwarded ? (
+            <TooltipAnchor text="Feedback Bonus already paid to this feedback" position="top" className="rounded-full">
+              <span
+                tabIndex={0}
+                className="rounded-full bg-success/10 px-2 py-1 text-[0.66rem] font-semibold leading-none text-success"
+                aria-label="Feedback Bonus awarded"
+              >
+                Awarded
+              </span>
+            </TooltipAnchor>
+          ) : null}
           {canReveal ? (
             <TooltipAnchor text="Publish this settled feedback on-chain" position="top" className="rounded-full">
               <button
@@ -126,13 +173,12 @@ export function ContentFeedbackPanel({
   onRequestConnect,
 }: ContentFeedbackPanelProps) {
   const { address } = useAccount();
-  const { feedback, items, isLoading, isSubmitting, isRevealing, submitFeedback, revealFeedback } = useContentFeedback(
-    item?.id ?? null,
-    address,
-  );
+  const { feedback, items, isLoading, isSubmitting, isRevealing, submitFeedback, revealFeedback, refetchFeedback } =
+    useContentFeedback(item?.id ?? null, address);
   const [feedbackType, setFeedbackType] = useState<ContentFeedbackType>("evidence");
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
+  const [awardTarget, setAwardTarget] = useState<ContentFeedbackItem | null>(null);
   const isSheet = variant === "sheet";
   const isFeatureAcceptanceTest = item?.resultSpecHash?.toLowerCase() === FEATURE_ACCEPTANCE_RESULT_SPEC_HASH;
   const defaultFeedbackType: ContentFeedbackType = isFeatureAcceptanceTest ? "bug_report" : "evidence";
@@ -188,6 +234,20 @@ export function ContentFeedbackPanel({
       return Date.parse(b.createdAt) - Date.parse(a.createdAt);
     });
   }, [items]);
+  const awardablePools = feedback.awardableFeedbackBonusPools ?? [];
+  const getAwardablePoolsForFeedback = (feedbackItem: ContentFeedbackItem): ContentFeedbackBonusPool[] => {
+    if (!feedbackItem.isPublic || !hasHexFeedbackHash(feedbackItem) || !feedbackItem.roundId) return [];
+
+    const awardedPoolIds = new Set((feedbackItem.feedbackBonusAwards ?? []).map(award => award.poolId));
+    return awardablePools.filter(pool => {
+      if (pool.roundId !== feedbackItem.roundId || awardedPoolIds.has(pool.id)) return false;
+      try {
+        return BigInt(pool.remainingAmount) > 0n;
+      } catch {
+        return false;
+      }
+    });
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -329,8 +389,11 @@ export function ContentFeedbackPanel({
               <FeedbackItem
                 key={feedbackItem.id}
                 item={feedbackItem}
+                awardablePoolCount={getAwardablePoolsForFeedback(feedbackItem).length}
                 canReveal={feedback.settlementComplete && feedbackItem.isOwn && !feedbackItem.isPublic}
+                isAwarded={(feedbackItem.feedbackBonusAwards ?? []).length > 0}
                 isRevealing={isRevealing}
+                onAward={setAwardTarget}
                 onReveal={handleRevealFeedback}
               />
             ))}
@@ -341,6 +404,14 @@ export function ContentFeedbackPanel({
           </p>
         ) : null}
       </div>
+      {awardTarget ? (
+        <AwardFeedbackBonusModal
+          item={awardTarget}
+          pools={getAwardablePoolsForFeedback(awardTarget)}
+          onAwarded={() => void refetchFeedback()}
+          onClose={() => setAwardTarget(null)}
+        />
+      ) : null}
     </section>
   );
 }

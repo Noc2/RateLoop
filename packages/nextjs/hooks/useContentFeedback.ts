@@ -321,5 +321,6 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     submitFeedback,
     revealFeedback,
     requestReadAccess,
+    refetchFeedback: feedbackQuery.refetch,
   };
 }
