@@ -175,7 +175,7 @@ test.describe("Category filter", () => {
 
     // Should show content cards, vote buttons, loading state, or the empty state
     const thumbnailCards = page.locator("[data-testid='content-thumbnail']");
-    const featuredCard = page.getByRole("button", { name: /Vote up|Vote down/i });
+    const featuredCard = page.getByTestId("vote-button-up").or(page.getByTestId("vote-button-down"));
     const emptyState = page.getByText(/No content found/i);
     const sortDropdown = page.locator("select").first();
 

@@ -3,7 +3,13 @@ import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { getContentList } from "../helpers/ponder-api";
 import { E2E_BASE_URL } from "../helpers/service-urls";
-import { findVoteableContent, getVisibleConnectedWallet, gotoWithRetry } from "../helpers/wait-helpers";
+import {
+  VOTE_DOWN_BUTTON_NAME,
+  VOTE_UP_BUTTON_NAME,
+  findVoteableContent,
+  getVisibleConnectedWallet,
+  gotoWithRetry,
+} from "../helpers/wait-helpers";
 import { swapWalletSession } from "../helpers/wallet-session";
 import { type Locator, type Page, chromium } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
@@ -159,8 +165,8 @@ async function prepareDemoContent(): Promise<{ searchQuery: string }> {
 
 async function waitForVoteFeedScene(page: Page, timeout = 30_000): Promise<void> {
   const indicators = page
-    .getByRole("button", { name: "Vote up" })
-    .or(page.getByRole("button", { name: "Vote down" }))
+    .getByRole("button", { name: VOTE_UP_BUTTON_NAME })
+    .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON_NAME }))
     .or(page.getByText(/Voted(?: hidden| Up| Down)?/i))
     .or(page.getByText("Your question"))
     .or(page.getByText(/Cooldown/i))
@@ -220,7 +226,7 @@ async function recordVoteScene(page: Page, searchQuery?: string): Promise<void> 
     throw new Error("No voteable content was visible for any verified demo wallet");
   }
 
-  const voteButton = page.getByRole("button", { name: "Vote up" }).first();
+  const voteButton = page.getByRole("button", { name: VOTE_UP_BUTTON_NAME }).first();
   await voteButton.waitFor({ state: "visible", timeout: 20_000 });
 
   await moveMouseTo(page, voteButton, 30);

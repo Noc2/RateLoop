@@ -17,7 +17,9 @@ test.describe("Page smoke tests", () => {
     // session is already active. Either the hero section or a redirected page is acceptable.
     const heroHeading = page.getByRole("heading", { name: /Level Up Your Agent/i }).first();
     const governancePage = page.getByRole("button", { name: /Profile|Leaderboard|Faucet/i }).first();
-    const feedPage = page.getByRole("button", { name: /Predict final rating|Vote up|Vote down/i }).first();
+    const feedPage = page
+      .getByRole("button", { name: /Predict final rating|Vote (?:thumbs )?(?:up|down)/i })
+      .first();
 
     const landingOrRedirect = heroHeading.or(governancePage).or(feedPage);
     await expect(landingOrRedirect.first()).toBeVisible({ timeout: 15_000 });

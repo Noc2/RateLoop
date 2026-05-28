@@ -1,8 +1,8 @@
 import { RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY } from "../../services/thirdweb/testWalletStorage";
 import type { Locator, Page } from "@playwright/test";
 
-const VOTE_UP_BUTTON_NAME = /^Vote up\b/i;
-const VOTE_DOWN_BUTTON_NAME = /^Vote down\b/i;
+export const VOTE_UP_BUTTON_NAME = /^Vote (?:thumbs )?up\b/i;
+export const VOTE_DOWN_BUTTON_NAME = /^Vote (?:thumbs )?down\b/i;
 const PREDICT_BUTTON_NAME = /^(?:Predict final rating|Predict)\b/i;
 export const FEED_EMPTY_STATE_RE =
   /No questions have been asked yet|No content found|No content is trending right now|No recent questions are available right now|No live rounds look meaningfully contested right now|No funded USD bounties are available right now|No open rounds look close to settlement right now/i;
@@ -276,7 +276,7 @@ export async function waitForVisibleWithReload(
 /**
  * Find voteable content by cycling through thumbnail grid items.
  * The default featured card may be the user's own content, so this clicks
- * through thumbnails until it finds one with a "Vote up" button.
+ * through thumbnails until it finds one with an up-vote button.
  * Returns true if voteable content was found.
  */
 export async function findVoteableContent(page: Page): Promise<boolean> {

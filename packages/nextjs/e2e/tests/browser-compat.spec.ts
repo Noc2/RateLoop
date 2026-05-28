@@ -1,6 +1,11 @@
 import { expect, test } from "../fixtures/wallet";
 import { expectNoHorizontalOverflow, expectNoNextErrorOverlay } from "../helpers/layout";
-import { FEED_EMPTY_STATE_RE, waitForFeedLoaded } from "../helpers/wait-helpers";
+import {
+  FEED_EMPTY_STATE_RE,
+  VOTE_DOWN_BUTTON_NAME,
+  VOTE_UP_BUTTON_NAME,
+  waitForFeedLoaded,
+} from "../helpers/wait-helpers";
 
 const PUBLIC_ROUTES = [
   { path: "/", content: /Level Up Your\s+Agent|Rate|Vote/i },
@@ -8,8 +13,6 @@ const PUBLIC_ROUTES = [
   { path: "/legal", content: /^Legal$/i },
   { path: "/legal/terms", content: /Terms of Service/i },
 ];
-const VOTE_UP_BUTTON = /^Vote up\b/i;
-const VOTE_DOWN_BUTTON = /^Vote down\b/i;
 
 test.describe("Browser compatibility smoke", () => {
   for (const { path, content } of PUBLIC_ROUTES) {
@@ -40,8 +43,8 @@ test.describe("Browser compatibility smoke", () => {
     await expect(main).toBeVisible({ timeout: 10_000 });
     await expect(
       page
-        .getByRole("button", { name: VOTE_UP_BUTTON })
-        .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON }))
+        .getByRole("button", { name: VOTE_UP_BUTTON_NAME })
+        .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON_NAME }))
         .or(page.getByText(FEED_EMPTY_STATE_RE))
         .first(),
     ).toBeVisible({ timeout: 15_000 });

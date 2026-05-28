@@ -1,7 +1,12 @@
 import { type Page, expect, test } from "../fixtures/wallet";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { E2E_BASE_URL } from "../helpers/service-urls";
-import { findVoteableContent, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
+import {
+  VOTE_UP_BUTTON_NAME,
+  findVoteableContent,
+  gotoWithRetry,
+  waitForFeedLoaded,
+} from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 
 async function gotoPath(page: Page, path: string, options?: { ensureWalletConnected?: boolean }): Promise<void> {
@@ -119,7 +124,7 @@ test.describe("Accessibility basics", () => {
       return;
     }
 
-    const voteUpBtn = page.getByRole("button", { name: /^Vote up\b/i }).first();
+    const voteUpBtn = page.getByRole("button", { name: VOTE_UP_BUTTON_NAME }).first();
     if (!(await voteUpBtn.isVisible({ timeout: 10_000 }).catch(() => false))) {
       test.skip(true, "No visible vote-up button available for accessibility dialog assertions");
       return;

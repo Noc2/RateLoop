@@ -73,6 +73,7 @@ export function AskPageTabs() {
         <button
           type="button"
           onClick={() => handleSelectTab(ASK_MANUAL_ROUTE_TAB)}
+          data-testid="ask-tab-manual"
           className={`tab-control inline-flex items-center px-4 py-1.5 text-base font-medium transition-colors ${
             activeTab === ASK_MANUAL_ROUTE_TAB ? "pill-active" : "pill-inactive"
           }`}
@@ -82,6 +83,7 @@ export function AskPageTabs() {
         <button
           type="button"
           onClick={() => handleSelectTab(ASK_AGENT_ROUTE_TAB)}
+          data-testid="ask-tab-agent"
           className={`tab-control inline-flex items-center px-4 py-1.5 text-base font-medium transition-colors ${
             activeTab === ASK_AGENT_ROUTE_TAB ? "pill-active" : "pill-inactive"
           }`}
@@ -91,6 +93,7 @@ export function AskPageTabs() {
         <button
           type="button"
           onClick={() => handleSelectTab(ASK_SUBMISSIONS_ROUTE_TAB)}
+          data-testid="ask-tab-submissions"
           className={`tab-control inline-flex items-center px-4 py-1.5 text-base font-medium transition-colors ${
             activeTab === ASK_SUBMISSIONS_ROUTE_TAB ? "pill-active" : "pill-inactive"
           }`}

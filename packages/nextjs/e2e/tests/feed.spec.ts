@@ -1,6 +1,6 @@
 import { expect, test } from "../fixtures/wallet";
 import { getContentById } from "../helpers/ponder-api";
-import { gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
+import { VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 
 test.describe("Content feed", () => {
   test("displays content items at /rate", async ({ connectedPage: page }) => {
@@ -9,7 +9,7 @@ test.describe("Content feed", () => {
 
     // The feed should show vote UI or an empty state — one of these must be visible
     const anyState = page
-      .getByRole("button", { name: "Vote up" })
+      .getByRole("button", { name: VOTE_UP_BUTTON_NAME })
       .or(page.getByText(/Voted(?: hidden| Up| Down)?/i))
       .or(page.getByText("Your question"))
       .or(page.getByText("Round full"))

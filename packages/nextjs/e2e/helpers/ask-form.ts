@@ -71,7 +71,10 @@ export async function continueToFeedbackBonusStep(page: Page): Promise<void> {
 
 export async function selectBountyRewardAsset(page: Page, asset: "lrep" | "usdc"): Promise<void> {
   const buttonLabel = asset === "lrep" ? "LREP" : "USDC";
-  const assetButton = page.getByRole("button", { name: new RegExp(`^${escapeRegExp(buttonLabel)}$`, "i") });
+  const assetButton = page
+    .getByTestId(`bounty-asset-${asset}`)
+    .or(page.getByRole("button", { name: new RegExp(`^${escapeRegExp(buttonLabel)}$`, "i") }))
+    .first();
 
   await expect(assetButton).toBeVisible({ timeout: 5_000 });
   await assetButton.click();

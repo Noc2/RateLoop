@@ -709,7 +709,7 @@ test.describe("Mobile viewport (phone)", () => {
     const canVote = await findVoteableContent(page);
     expect(canVote, "Should find at least one voteable content via thumbnail grid").toBeTruthy();
 
-    await page.getByRole("button", { name: "Vote up" }).click();
+    await page.getByTestId("vote-button-up").click();
 
     const dialog = page.locator("[role='dialog']").first();
     await expect(dialog).toBeVisible({ timeout: 5_000 });

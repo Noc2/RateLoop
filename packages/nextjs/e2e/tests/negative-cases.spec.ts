@@ -3,7 +3,7 @@ import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { gotoWithRetry } from "../helpers/wait-helpers";
-import { findVoteableContent, waitForFeedLoaded } from "../helpers/wait-helpers";
+import { VOTE_UP_BUTTON_NAME, findVoteableContent, waitForFeedLoaded } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 import { expect, test } from "@playwright/test";
 
@@ -76,7 +76,7 @@ test.describe("Negative cases", () => {
     await gotoWithRetry(page, "/rate", { ensureWalletConnected: true, timeout: 30_000 });
     await waitForFeedLoaded(page, 20_000);
 
-    const voteUp = page.getByRole("button", { name: /^Vote up\b/i }).first();
+    const voteUp = page.getByRole("button", { name: VOTE_UP_BUTTON_NAME }).first();
     const canVote = await findVoteableContent(page);
 
     if (!canVote) {

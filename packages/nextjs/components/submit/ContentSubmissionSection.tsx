@@ -2530,6 +2530,7 @@ export function ContentSubmissionSection() {
         <button
           type="button"
           aria-pressed={rewardAsset === "usdc"}
+          data-testid="bounty-asset-usdc"
           onClick={() => setRewardAsset("usdc")}
           className={`btn btn-sm ${rewardAsset === "usdc" ? "btn-primary" : "btn-outline"}`}
         >
@@ -2538,6 +2539,7 @@ export function ContentSubmissionSection() {
         <button
           type="button"
           aria-pressed={rewardAsset === "lrep"}
+          data-testid="bounty-asset-lrep"
           onClick={() => setRewardAsset("lrep")}
           className={`btn btn-sm ${rewardAsset === "lrep" ? "btn-primary" : "btn-outline"}`}
         >

@@ -281,6 +281,7 @@ export function StakeSelector({
                 <button
                   type="button"
                   onClick={() => handleSignalChange(true)}
+                  data-testid="stake-signal-up"
                   className={`btn min-h-12 rounded-lg ${isUp ? "btn-success text-success-content" : "pill-inactive-muted"}`}
                   disabled={formDisabled}
                   aria-pressed={isUp}
@@ -291,6 +292,7 @@ export function StakeSelector({
                 <button
                   type="button"
                   onClick={() => handleSignalChange(false)}
+                  data-testid="stake-signal-down"
                   className={`btn min-h-12 rounded-lg ${!isUp ? "btn-error text-error-content" : "pill-inactive-muted"}`}
                   disabled={formDisabled}
                   aria-pressed={!isUp}

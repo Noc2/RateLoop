@@ -2,7 +2,7 @@ import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { newE2EContext } from "../helpers/browser-context";
 import { setupWallet } from "../helpers/wallet-session";
 import { voteOnContent } from "../helpers/vote-helpers";
-import { gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
+import { VOTE_DOWN_BUTTON_NAME, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 import { expect, test } from "@playwright/test";
 
 test.describe("Voting flow — 3-voter threshold", () => {
@@ -37,8 +37,8 @@ test.describe("Voting flow — 3-voter threshold", () => {
     // Verify the wallet is connected by checking for any voting-related UI,
     // or the empty feed state (feed loaded, wallet connected, but no content indexed yet).
     const connectedIndicators = page
-      .getByRole("button", { name: "Vote up" })
-      .or(page.getByRole("button", { name: "Vote down" }))
+      .getByRole("button", { name: VOTE_UP_BUTTON_NAME })
+      .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON_NAME }))
       .or(page.getByText("Your question"))
       .or(page.getByText(/Cooldown/))
       .or(page.getByText(/Voted(?: hidden| Up| Down)?/i))

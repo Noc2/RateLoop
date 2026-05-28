@@ -43,6 +43,7 @@ export function RateLoopVoteButton({
         onClick={onClick}
         disabled={disabled}
         aria-label={isUp ? "Vote thumbs up" : "Vote thumbs down"}
+        data-testid={isUp ? "vote-button-up" : "vote-button-down"}
         title={label}
         className={`vote-btn ${isSmall ? "vote-btn-sm" : ""} ${isUp ? "vote-yes" : "vote-no"} ${
           attention ? "vote-btn-attention" : ""

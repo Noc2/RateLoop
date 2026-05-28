@@ -1,7 +1,13 @@
 import { type Page, expect, test } from "../fixtures/wallet";
 import { expectNoHorizontalOverflow, expectNoNextErrorOverlay } from "../helpers/layout";
 import { ensureVoteableContent } from "../helpers/voteable-content";
-import { FEED_EMPTY_STATE_RE, gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
+import {
+  FEED_EMPTY_STATE_RE,
+  VOTE_DOWN_BUTTON_NAME,
+  VOTE_UP_BUTTON_NAME,
+  gotoWithRetry,
+  waitForFeedLoaded,
+} from "../helpers/wait-helpers";
 
 const VIEWPORTS = [
   { name: "small phone", width: 360, height: 640 },
@@ -15,8 +21,6 @@ const VIEWPORTS = [
 
 const ROUTES = ["/", "/rate", "/ask", "/governance", "/docs", "/legal"];
 const WALLET_ROUTES = new Set(["/rate", "/ask", "/governance"]);
-const VOTE_UP_BUTTON = /^Vote up\b/i;
-const VOTE_DOWN_BUTTON = /^Vote down\b/i;
 
 async function expectNavigationForViewport(page: Page, width: number): Promise<void> {
   const sidebar = page.locator("aside").first();
@@ -40,8 +44,8 @@ async function expectRouteControls(page: Page, path: string, width: number): Pro
     await expectNavigationForViewport(page, width);
     await expect(
       page
-        .getByRole("button", { name: VOTE_UP_BUTTON })
-        .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON }))
+        .getByRole("button", { name: VOTE_UP_BUTTON_NAME })
+        .or(page.getByRole("button", { name: VOTE_DOWN_BUTTON_NAME }))
         .or(page.getByText(FEED_EMPTY_STATE_RE))
         .or(page.getByRole("feed", { name: "Content feed" }).getByRole("article"))
         .first(),
@@ -121,7 +125,7 @@ test.describe("Responsive layout", () => {
     const canVote = await ensureVoteableContent(page);
     test.skip(!canVote, "No voteable content is available in this seeded E2E run.");
 
-    await page.getByRole("button", { name: VOTE_UP_BUTTON }).click();
+    await page.getByRole("button", { name: VOTE_UP_BUTTON_NAME }).click();
 
     const dialog = page.getByRole("dialog").first();
     await expect(dialog).toBeVisible({ timeout: 5_000 });

@@ -1,4 +1,4 @@
-import { gotoWithRetry, waitForFeedLoaded } from "./wait-helpers";
+import { VOTE_DOWN_BUTTON_NAME, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "./wait-helpers";
 import type { Page } from "@playwright/test";
 
 /**
@@ -12,8 +12,9 @@ export async function voteOnContent(page: Page, direction: "up" | "down"): Promi
   await gotoWithRetry(page, "/rate", { ensureWalletConnected: true });
   await waitForFeedLoaded(page);
 
-  const ariaLabel = direction === "up" ? "Vote up" : "Vote down";
-  const voteBtn = page.getByRole("button", { name: ariaLabel });
+  const voteBtn = page.getByRole("button", {
+    name: direction === "up" ? VOTE_UP_BUTTON_NAME : VOTE_DOWN_BUTTON_NAME,
+  });
 
   // Check if vote button is visible on the featured content (waitFor actually waits, unlike isVisible)
   let canVote = await voteBtn
@@ -129,8 +130,9 @@ export async function voteOnSpecificContent(
   await gotoWithRetry(page, `/rate?content=${contentId}`, { ensureWalletConnected: true });
   await waitForFeedLoaded(page);
 
-  const ariaLabel = direction === "up" ? "Vote up" : "Vote down";
-  const voteBtn = page.getByRole("button", { name: ariaLabel });
+  const voteBtn = page.getByRole("button", {
+    name: direction === "up" ? VOTE_UP_BUTTON_NAME : VOTE_DOWN_BUTTON_NAME,
+  });
 
   const canVote = await voteBtn
     .waitFor({ state: "visible", timeout: 10_000 })
