@@ -34340,6 +34340,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundRbtsScoreSeed",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundRbtsScored",
           inputs: [
             {
@@ -52562,6 +52586,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "STALE_PENDING_EARNED_RATER_CREDIT_DELAY",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "TOTAL_POOL_AMOUNT",
           inputs: [],
           outputs: [
@@ -52604,6 +52641,29 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "cancelStalePendingEarnedRaterCredit",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -53384,6 +53444,30 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "pending",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "pendingVerifiedAnchorReservationCount",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint32",
+              internalType: "uint32",
             },
           ],
           stateMutability: "view",
@@ -55006,6 +55090,37 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "StalePendingEarnedRaterCreditCancelled",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "StalePendingEarnedRaterCreditRescued",
           inputs: [
             {
@@ -55146,6 +55261,11 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
           ],
+        },
+        {
+          type: "error",
+          name: "PendingCreditNotStale",
+          inputs: [],
         },
         {
           type: "error",
