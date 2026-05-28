@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { RaterRegistry } from "./RaterRegistry.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {RaterRegistry} from "./RaterRegistry.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @dev M-Oracle-1: minimal view shape on RoundVotingEngine that LaunchDistributionPool needs to
 ///      authoritatively answer whether a (contentId, roundId) payload is source-ready for a
@@ -58,6 +58,7 @@ contract LaunchDistributionPool is
     error SnapshotNotFinalized();
     error LegacyClaimWindowClosed();
     error LegacyClaimWindowOpen();
+    error PendingCreditNotStale();
 
     uint256 public constant VERIFIED_REFERRAL_POOL_AMOUNT = 42_000_000e6;
     uint256 public constant EARNED_RATER_POOL_AMOUNT = 24_000_000e6;
@@ -83,6 +84,7 @@ contract LaunchDistributionPool is
     uint64 public constant LEGACY_VESTING_DURATION = 730 days;
     uint64 public constant LEGACY_CLAIM_GRACE_PERIOD = 91 days;
     uint64 public constant LEGACY_CLAIM_DURATION = LEGACY_VESTING_DURATION + LEGACY_CLAIM_GRACE_PERIOD;
+    uint64 public constant STALE_PENDING_EARNED_RATER_CREDIT_DELAY = 30 days;
 
     uint256 public constant REFERRAL_BONUS_BPS = 5_000;
     uint256 public constant MAX_REFERRAL_REWARD_PER_REFERRER = 10_000e6;
@@ -138,6 +140,7 @@ contract LaunchDistributionPool is
     mapping(address => uint32) public raterDistinctAnchorRoundCount;
     mapping(bytes32 => mapping(address => bool)) public verifiedAnchorRaterSeen;
     mapping(bytes32 => uint32) public verifiedAnchorDistinctRaterCount;
+    mapping(bytes32 => mapping(address => uint32)) public pendingVerifiedAnchorReservationCount;
     mapping(address => mapping(uint256 => mapping(uint256 => bool))) public raterRoundCreditRecorded;
     mapping(uint256 => mapping(uint256 => uint16)) public roundUnverifiedLaunchCreditCount;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingEarnedRaterCredit))) public
@@ -183,6 +186,9 @@ contract LaunchDistributionPool is
     );
     event EarnedRaterRewardCreditPending(
         address indexed rater, uint256 indexed contentId, uint256 indexed roundId, bytes32 commitKey, uint16 scoreBps
+    );
+    event StalePendingEarnedRaterCreditCancelled(
+        address indexed rater, uint256 indexed contentId, uint256 indexed roundId, bytes32 commitKey
     );
     /// @notice Emitted when governance repoints a pending earned-rater credit whose oracle pin
     ///         has become stale after a cluster oracle rotation.
@@ -274,7 +280,7 @@ contract LaunchDistributionPool is
             // source. The returned timestamp is intentionally discarded; the probe is purely
             // a try/catch barrier to confirm the candidate decodes uint48.
             // slither-disable-next-line unused-return
-            try IRoundClusterReadyAtSource(newSource).roundClusterPayoutReadyAt(0, 0) returns (uint48) { }
+            try IRoundClusterReadyAtSource(newSource).roundClusterPayoutReadyAt(0, 0) returns (uint48) {}
             catch {
                 revert InvalidAddress();
             }
@@ -322,6 +328,25 @@ contract LaunchDistributionPool is
             pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = newReadyAt;
         }
         emit StalePendingEarnedRaterCreditRescued(pending.rater, contentId, roundId, commitKey, staleOracle);
+    }
+
+    function cancelStalePendingEarnedRaterCredit(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        external
+        onlyOwner
+        nonReentrant
+    {
+        PendingEarnedRaterCredit memory pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        if (!pending.pending) revert InvalidAmount();
+        if (earnedRewardCreditFinalized[contentId][roundId][commitKey]) revert AlreadyClaimed();
+        uint64 readyAt = pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey];
+        if (readyAt == 0 || block.timestamp < uint256(readyAt) + STALE_PENDING_EARNED_RATER_CREDIT_DELAY) {
+            revert PendingCreditNotStale();
+        }
+
+        _clearPendingVerifiedAnchorReservations(contentId, roundId, commitKey, pending.rater);
+        delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
+        delete pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey];
+        emit StalePendingEarnedRaterCreditCancelled(pending.rater, contentId, roundId, commitKey);
     }
 
     function setAuthorizedCaller(address caller, bool authorized) external onlyOwner {
@@ -656,13 +681,13 @@ contract LaunchDistributionPool is
         _recordPendingVerifiedAnchors(
             pending.policy, pending.rater, pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey]
         );
+        _clearPendingVerifiedAnchorReservations(contentId, roundId, commitKey, pending.rater);
         // M-Funds-3: reclaim the pending entry now that it has been finalized. The slot
         // (oracle, rater, scoreBps, policy) was a one-shot ticket; leaving it in storage
         // strands gas and makes governance rotation of `clusterPayoutOracle` ambiguous about
         // whether the entry should re-verify against the new oracle.
         delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
         delete pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey];
-        delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         uint256 effectiveCreditBps = payoutWeight.effectiveWeight;
         paidAmount = _recordEarnedRaterReward(
             pending.rater, contentId, roundId, commitKey, pending.scoreBps, pending.policy, effectiveCreditBps
@@ -795,9 +820,8 @@ contract LaunchDistributionPool is
                 creditReadyAt = sourceReadyAt;
             }
         }
-        pendingEarnedRaterCredits[contentId][roundId][commitKey] = PendingEarnedRaterCredit({
-            rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
-        });
+        pendingEarnedRaterCredits[contentId][roundId][commitKey] =
+            PendingEarnedRaterCredit({rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true});
         pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = creditReadyAt;
         // M-Oracle-1: record the earliest sourceReadyAt for this round so the cluster oracle can
         // reject snapshot proposals submitted before any credit has been recorded.
@@ -911,7 +935,7 @@ contract LaunchDistributionPool is
         if (address(source) != address(0)) {
             try source.roundClusterPayoutReadyAt(contentId, roundId) returns (uint48 readyAt) {
                 if (readyAt != 0) return _launchSnapshotReadyAtAfterAdvisoryGrace(source, contentId, roundId, readyAt);
-            } catch { }
+            } catch {}
         }
         return 0;
     }
@@ -931,8 +955,8 @@ contract LaunchDistributionPool is
                 uint256 graceReadyAt = uint256(settledAt) + protocolConfig.revealGracePeriod();
                 if (graceReadyAt > type(uint64).max) return type(uint64).max;
                 if (graceReadyAt > sourceReadyAt) return graceReadyAt.toUint64();
-            } catch { }
-        } catch { }
+            } catch {}
+        } catch {}
         return sourceReadyAt;
     }
 
@@ -1184,12 +1208,47 @@ contract LaunchDistributionPool is
         internal
         returns (bool reserved)
     {
-        if (raterVerifiedAnchorSeen[rater][anchorId] || verifiedAnchorRaterSeen[anchorId][rater]) return true;
-        if (verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor) return false;
+        if (raterVerifiedAnchorSeen[rater][anchorId]) return false;
+        uint32 pendingCount = pendingVerifiedAnchorReservationCount[anchorId][rater];
+        if (!verifiedAnchorRaterSeen[anchorId][rater]) {
+            if (verifiedAnchorDistinctRaterCount[anchorId] >= policy.maxDistinctRatersPerVerifiedAnchor) return false;
+            verifiedAnchorRaterSeen[anchorId][rater] = true;
+            verifiedAnchorDistinctRaterCount[anchorId] += 1;
+        }
 
-        verifiedAnchorRaterSeen[anchorId][rater] = true;
-        verifiedAnchorDistinctRaterCount[anchorId] += 1;
+        pendingVerifiedAnchorReservationCount[anchorId][rater] = pendingCount + 1;
         return true;
+    }
+
+    function _clearPendingVerifiedAnchorReservations(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        address rater
+    ) internal {
+        bytes32[] storage pendingAnchors = pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
+        uint256 anchorCount = pendingAnchors.length;
+        for (uint256 i = 0; i < anchorCount; i++) {
+            bytes32 anchorId = pendingAnchors[i];
+            uint32 pendingCount = pendingVerifiedAnchorReservationCount[anchorId][rater];
+            if (pendingCount == 0) continue;
+            unchecked {
+                pendingCount -= 1;
+            }
+            if (pendingCount == 0) {
+                delete pendingVerifiedAnchorReservationCount[anchorId][rater];
+                if (!raterVerifiedAnchorSeen[rater][anchorId] && verifiedAnchorRaterSeen[anchorId][rater]) {
+                    verifiedAnchorRaterSeen[anchorId][rater] = false;
+                    uint32 distinctCount = verifiedAnchorDistinctRaterCount[anchorId];
+                    if (distinctCount > 0) {
+                        verifiedAnchorDistinctRaterCount[anchorId] = distinctCount - 1;
+                    }
+                }
+            } else {
+                pendingVerifiedAnchorReservationCount[anchorId][rater] = pendingCount;
+            }
+        }
+        delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
     }
 
     function _countDistinctAvailableAnchors(
@@ -1270,7 +1329,7 @@ contract LaunchDistributionPool is
         RaterRegistry registry = RaterRegistry(newRegistry);
         address sample = address(uint160(uint256(keccak256("rateloop.rater-registry.validation"))));
         bytes32 expectedSampleKey = keccak256(abi.encodePacked("rateloop.address-identity-v1", sample));
-        try registry.getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) { }
+        try registry.getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) {}
         catch {
             revert InvalidAddress();
         }
@@ -1305,14 +1364,14 @@ contract LaunchDistributionPool is
         if (newOracle == address(0) || newOracle.code.length == 0) revert InvalidAddress();
         try IClusterPayoutOracle(newOracle).roundPayoutSnapshotKey(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, 0, 0) returns (
             bytes32
-        ) { }
+        ) {}
         catch {
             revert InvalidAddress();
         }
         try IClusterPayoutOracle(newOracle)
             .roundPayoutSnapshotProposedAt(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, 0, 0) returns (
             uint64
-        ) { }
+        ) {}
         catch {
             revert InvalidAddress();
         }
