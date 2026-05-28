@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { RoundVotingEngine } from "./RoundVotingEngine.sol";
-import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
-import { RobustBtsMath } from "./libraries/RobustBtsMath.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { TlockVoteLib } from "./libraries/TlockVoteLib.sol";
-import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {RoundVotingEngine} from "./RoundVotingEngine.sol";
+import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {LaunchRaterRewardLib} from "./libraries/LaunchRaterRewardLib.sol";
+import {RobustBtsMath} from "./libraries/RobustBtsMath.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {TlockVoteLib} from "./libraries/TlockVoteLib.sol";
+import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
 
 /// @title AdvisoryVoteRecorder
 /// @notice Zero-stake commit-reveal votes that can bootstrap launch rewards without affecting vote/stake accounting.
@@ -445,15 +445,6 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             revert PendingCleanup();
         }
 
-        bytes32 seed = keccak256(
-            abi.encodePacked(
-                block.chainid,
-                address(this),
-                advisoryCommitKey,
-                votingEngine.roundRbtsRewardWeight(advisoryCommit.contentId, advisoryCommit.roundId),
-                votingEngine.roundRbtsForfeitedPool(advisoryCommit.contentId, advisoryCommit.roundId)
-            )
-        );
         // M-Vote-5 (audit 2026-05-18): mirror the M-Vote-4 fix on the engine. Build the
         // revealed-and-staked subset once, then index directly into it for the reference and
         // peer draws so that a sybil cluster of unrevealed commits cannot bias the sampler
@@ -462,6 +453,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             _buildRevealedKeySet(advisoryCommit.contentId, advisoryCommit.roundId, voteCount);
         uint256 revealedLen = revealedKeys.length;
         if (revealedLen < 2) revert NotEnoughVotes();
+        bytes32 seed = _advisorySamplerSeed(advisoryCommit);
         uint256 referenceIndex = uint256(seed) % revealedLen;
         bytes32 referenceKey = revealedKeys[referenceIndex];
         uint256 peerIndex = _advisoryPeerIndex(seed, referenceIndex, revealedLen);
@@ -547,6 +539,40 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
                 verifiedAnchorIds,
                 votingEngine.roundClusterPayoutReadyAt(advisoryCommit.contentId, advisoryCommit.roundId)
             );
+    }
+
+    function _advisorySamplerSeed(AdvisoryCommit storage advisoryCommit) internal view returns (bytes32) {
+        bytes32 rbtsScoreSeed = votingEngine.roundRbtsScoreSeed(advisoryCommit.contentId, advisoryCommit.roundId);
+        if (rbtsScoreSeed == bytes32(0)) revert RoundNotSettled();
+        return _buildAdvisorySamplerSeed(
+            advisoryCommit.contentId,
+            advisoryCommit.roundId,
+            advisoryCommit.voter,
+            advisoryCommit.identityKey,
+            rbtsScoreSeed
+        );
+    }
+
+    function _buildAdvisorySamplerSeed(
+        uint256 contentId,
+        uint256 roundId,
+        address voter,
+        bytes32 identityKey,
+        bytes32 rbtsScoreSeed
+    ) internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                "rateloop.advisory.rbts-sampler.v1",
+                block.chainid,
+                address(votingEngine),
+                address(this),
+                contentId,
+                roundId,
+                voter,
+                identityKey,
+                rbtsScoreSeed
+            )
+        );
     }
 
     function advisoryCommitCore(bytes32 advisoryCommitKey)
@@ -778,7 +804,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
                     if (resolved.identityKey == advisoryCommit.identityKey && resolved.holder != address(0)) {
                         return resolved.holder;
                     }
-                } catch { }
+                } catch {}
             }
         }
         return advisoryCommit.voter;

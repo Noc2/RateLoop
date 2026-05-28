@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
 
 /// @notice Test harness exposing `AdvisoryVoteRecorder` internals for the M-Vote-5 sampler tests.
 /// @dev Subclasses the real recorder so we exercise the production helpers (compiled into the
@@ -16,7 +16,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 contract HarnessAdvisoryRecorder is AdvisoryVoteRecorder {
     constructor(address _votingEngine, address _registry, address owner_)
         AdvisoryVoteRecorder(_votingEngine, _registry, owner_)
-    { }
+    {}
 
     function harnessBuildRevealedKeySet(uint256 contentId, uint256 roundId, uint16 voteCount)
         external
@@ -32,6 +32,16 @@ contract HarnessAdvisoryRecorder is AdvisoryVoteRecorder {
         returns (uint256)
     {
         return _advisoryPeerIndex(seed, referenceIndex, count);
+    }
+
+    function harnessBuildAdvisorySamplerSeed(
+        uint256 contentId,
+        uint256 roundId,
+        address voter,
+        bytes32 identityKey,
+        bytes32 rbtsScoreSeed
+    ) external view returns (bytes32) {
+        return _buildAdvisorySamplerSeed(contentId, roundId, voter, identityKey, rbtsScoreSeed);
     }
 }
 
@@ -284,5 +294,40 @@ contract AdvisoryRecorderSamplerTest is Test {
             assertLt(hits[b], expected * 2, "no peer index exceeds 2x uniform");
             assertGt(hits[b] * 2, expected, "no peer index falls below 0.5x uniform");
         }
+    }
+
+    function test_AdvisorySamplerSeed_BindsToEngineScoreSeedNotCommitHash() public view {
+        address voter = address(uint160(0xB0B));
+        bytes32 identityKey = keccak256("identity");
+        bytes32 rbtsScoreSeed = keccak256("engine-score-seed");
+
+        bytes32 seed = recorder.harnessBuildAdvisorySamplerSeed(CONTENT_ID, ROUND_ID, voter, identityKey, rbtsScoreSeed);
+        bytes32 expected = keccak256(
+            abi.encode(
+                "rateloop.advisory.rbts-sampler.v1",
+                block.chainid,
+                engineAddress,
+                address(recorder),
+                CONTENT_ID,
+                ROUND_ID,
+                voter,
+                identityKey,
+                rbtsScoreSeed
+            )
+        );
+
+        assertEq(seed, expected, "seed uses finalized engine RBTS score seed");
+        assertEq(
+            seed,
+            recorder.harnessBuildAdvisorySamplerSeed(CONTENT_ID, ROUND_ID, voter, identityKey, rbtsScoreSeed),
+            "no advisory commit hash input exists to grind"
+        );
+        assertNotEq(
+            seed,
+            recorder.harnessBuildAdvisorySamplerSeed(
+                CONTENT_ID, ROUND_ID, voter, identityKey, keccak256("different-engine-score-seed")
+            ),
+            "engine score seed changes sampler"
+        );
     }
 }
