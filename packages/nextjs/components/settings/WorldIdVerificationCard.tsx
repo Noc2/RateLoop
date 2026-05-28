@@ -778,7 +778,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         <div className="space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h4 className="text-lg font-semibold text-base-content">Launch referral</h4>
+              <h4 className="text-lg font-semibold text-base-content">Referral bonus for verified humans</h4>
             </div>
             {referralInput ? (
               <button
