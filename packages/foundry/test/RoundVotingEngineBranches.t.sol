@@ -889,6 +889,48 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 4e6, "post-threshold stake returned");
     }
 
+    function test_AdvisoryLaunchCreditExpiredRbtsSeedConsumesAsZeroCredit() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 advisoryCommitKey, bytes32 advisorySalt) =
+            _recordAdvisory(voter5, contentId, "expired-seed-advisory");
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 7_000, 4e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 7_000, s4);
+        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
+
+        bytes32 originalMarker = engine.roundRbtsSeedEntropy(contentId, roundId);
+        uint256 seedBlock = uint256(originalMarker) ^ (uint256(1) << 255);
+        vm.roll(seedBlock + 257);
+
+        engine.settleRound(contentId, roundId);
+        assertTrue(engine.roundRbtsScored(contentId, roundId), "round scored with rewards disabled");
+        assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed leaves no score seed");
+
+        (uint16 scoreBps, uint256 paidAmount) = advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
+        assertEq(scoreBps, 0, "expired seed consumes advisory claim without scoring");
+        assertEq(paidAmount, 0, "expired seed pays no launch credit");
+
+        (,,,,,,,, bool launchCreditClaimed, uint16 storedScoreBps) =
+            advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
+        assertTrue(launchCreditClaimed, "expired seed advisory claim is consumed");
+        assertEq(storedScoreBps, 0, "expired seed stores zero advisory score");
+
+        (scoreBps, paidAmount) = advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
+        assertEq(scoreBps, 0, "repeat claim remains zero");
+        assertEq(paidAmount, 0, "repeat claim pays nothing");
+    }
+
     function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {
         uint256 contentId = _submitContent();
 

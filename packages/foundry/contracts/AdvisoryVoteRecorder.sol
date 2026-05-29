@@ -445,6 +445,20 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             revert PendingCleanup();
         }
 
+        bytes32 rbtsScoreSeed = votingEngine.roundRbtsScoreSeed(advisoryCommit.contentId, advisoryCommit.roundId);
+        if (rbtsScoreSeed == bytes32(0)) {
+            advisoryCommit.launchCreditClaimed = true;
+            emit AdvisoryLaunchCreditClaimed(
+                advisoryCommit.contentId,
+                advisoryCommit.roundId,
+                _advisoryRewardRecipient(advisoryCommit),
+                advisoryCommitKey,
+                0,
+                0
+            );
+            return (0, 0);
+        }
+
         // M-Vote-5 (audit 2026-05-18): mirror the M-Vote-4 fix on the engine. Build the
         // revealed-and-staked subset once, then index directly into it for the reference and
         // peer draws so that a sybil cluster of unrevealed commits cannot bias the sampler
@@ -453,7 +467,13 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             _buildRevealedKeySet(advisoryCommit.contentId, advisoryCommit.roundId, voteCount);
         uint256 revealedLen = revealedKeys.length;
         if (revealedLen < 2) revert NotEnoughVotes();
-        bytes32 seed = _advisorySamplerSeed(advisoryCommit);
+        bytes32 seed = _buildAdvisorySamplerSeed(
+            advisoryCommit.contentId,
+            advisoryCommit.roundId,
+            advisoryCommit.voter,
+            advisoryCommit.identityKey,
+            rbtsScoreSeed
+        );
         uint256 referenceIndex = uint256(seed) % revealedLen;
         bytes32 referenceKey = revealedKeys[referenceIndex];
         uint256 peerIndex = _advisoryPeerIndex(seed, referenceIndex, revealedLen);
@@ -539,18 +559,6 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
                 verifiedAnchorIds,
                 votingEngine.roundClusterPayoutReadyAt(advisoryCommit.contentId, advisoryCommit.roundId)
             );
-    }
-
-    function _advisorySamplerSeed(AdvisoryCommit storage advisoryCommit) internal view returns (bytes32) {
-        bytes32 rbtsScoreSeed = votingEngine.roundRbtsScoreSeed(advisoryCommit.contentId, advisoryCommit.roundId);
-        if (rbtsScoreSeed == bytes32(0)) revert RoundNotSettled();
-        return _buildAdvisorySamplerSeed(
-            advisoryCommit.contentId,
-            advisoryCommit.roundId,
-            advisoryCommit.voter,
-            advisoryCommit.identityKey,
-            rbtsScoreSeed
-        );
     }
 
     function _buildAdvisorySamplerSeed(
