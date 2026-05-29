@@ -11,7 +11,7 @@ import { publicEnv } from "~~/utils/env/public";
 
 const THIRDWEB_CONNECT_CHAIN_IDS = new Set([31337, 480, 4801]);
 const THIRDWEB_EXECUTION_CHAIN_IDS = new Set([480, 4801]);
-const THIRDWEB_IN_APP_EXECUTION_CHAIN_IDS = new Set([480, 4801]);
+const THIRDWEB_IN_APP_EXECUTION_CHAIN_IDS = new Set([480]);
 const THIRDWEB_ACTIVE_CHAIN_KEY = "thirdweb:active-chain";
 const THIRDWEB_SPONSORSHIP_MODE_KEY = "thirdweb:sponsorship-mode";
 const RATELOOP_THIRDWEB_ICON = "/rateloop-logo.svg";
