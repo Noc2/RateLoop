@@ -115,7 +115,7 @@ test.describe("Category filter", () => {
   });
 
   test("overflow dropdown opens with search", async ({ connectedPage: page }) => {
-    await page.setViewportSize({ width: 480, height: 900 });
+    await page.setViewportSize({ width: 640, height: 900 });
     await loadVoteFeed(page);
 
     const moreButton = page.getByRole("button", { name: /^\+\d+ more$/i });
