@@ -6,7 +6,7 @@ import { gotoWithRetry } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 
 test.describe("Settings page", () => {
-  test("delegation tab can transfer LREP to another address", async ({ connectedPage: page }) => {
+  test("wallet tab can transfer LREP to another address", async ({ connectedPage: page }) => {
     test.setTimeout(60_000);
 
     const sender = ANVIL_ACCOUNTS.account2.address;
@@ -18,8 +18,9 @@ test.describe("Settings page", () => {
     const senderBalanceBefore = await readTokenBalance(sender, tokenAddress);
     const recipientBalanceBefore = await readTokenBalance(recipient, tokenAddress);
 
-    await gotoWithRetry(page, "/settings#delegation");
+    await gotoWithRetry(page, "/settings#wallet");
 
+    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
     await expect(page.getByRole("heading", { name: "Delegated Vote ID" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "Transfer LREP" })).toBeVisible({ timeout: 15_000 });
 
@@ -40,12 +41,12 @@ test.describe("Settings page", () => {
     expect(recipientBalanceAfter).toBe(recipientBalanceBefore + transferAmountMicro);
   });
 
-  test("delegation tab explains missing rater credential instead of rendering empty", async ({ page }) => {
+  test("wallet tab explains missing rater credential instead of rendering empty", async ({ page }) => {
     await setupWallet(page, ANVIL_ACCOUNTS.account1.privateKey);
-    await gotoWithRetry(page, "/settings#delegation", { ensureWalletConnected: true });
+    await gotoWithRetry(page, "/settings#wallet", { ensureWalletConnected: true });
 
-    await expect(page).toHaveURL(/\/settings#delegation$/);
-    await expect(page.getByRole("button", { name: "Delegation", exact: true })).toHaveClass(/pill-active/);
+    await expect(page).toHaveURL(/\/settings#wallet$/);
+    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
     const credentialPrompt = page.getByRole("heading", { name: "Rater credential required for delegation" });
     await expect(credentialPrompt).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("link", { name: "Open rater setup" })).toHaveAttribute("href", "/governance");

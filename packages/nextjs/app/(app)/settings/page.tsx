@@ -10,12 +10,11 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { SETTINGS_FRONTEND_HASH, SETTINGS_ROUTE } from "~~/constants/routes";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 
-type SettingsTab = "delegation" | "identity" | "notifications" | "wallet" | typeof SETTINGS_FRONTEND_HASH;
+type SettingsTab = "identity" | "notifications" | "wallet" | typeof SETTINGS_FRONTEND_HASH;
 
-const settingsTabs: SettingsTab[] = ["wallet", "identity", "notifications", "delegation", SETTINGS_FRONTEND_HASH];
+const settingsTabs: SettingsTab[] = ["wallet", "identity", "notifications", SETTINGS_FRONTEND_HASH];
 
 const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
-  delegation: "Delegation",
   frontend: "Frontend",
   identity: "Identity",
   notifications: "Notifications",
@@ -37,10 +36,6 @@ const FrontendRegistration = dynamic(
   () => import("~~/components/governance/FrontendRegistration").then(mod => mod.FrontendRegistration),
   { loading: SettingsSectionLoading },
 );
-const DelegationSection = dynamic(
-  () => import("~~/components/profile/DelegationSection").then(mod => mod.DelegationSection),
-  { loading: SettingsSectionLoading },
-);
 const WalletSettingsPanel = dynamic(
   () => import("~~/components/settings/WalletSettingsPanel").then(mod => mod.WalletSettingsPanel),
   { loading: SettingsSectionLoading },
@@ -51,6 +46,7 @@ const WorldIdVerificationCard = dynamic(
 );
 
 function parseSettingsTab(value: string | null): SettingsTab | null {
+  if (value === "delegation") return "wallet";
   return settingsTabs.includes((value ?? "") as SettingsTab) ? (value as SettingsTab) : null;
 }
 
@@ -128,7 +124,6 @@ function SettingsPageInner() {
         ))}
       </div>
 
-      {activeTab === "delegation" && <DelegationSection />}
       {activeTab === SETTINGS_FRONTEND_HASH && <FrontendRegistration />}
       {activeTab === "identity" && <WorldIdVerificationCard address={address} />}
       {activeTab === "notifications" && <NotificationSettingsPanel address={address} />}

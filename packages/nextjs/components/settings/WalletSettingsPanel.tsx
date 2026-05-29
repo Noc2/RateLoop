@@ -6,6 +6,7 @@ import { formatEther, isAddress } from "viem";
 import { worldchain } from "viem/chains";
 import { useAccount, useBalance } from "wagmi";
 import { ArrowsRightLeftIcon, BanknotesIcon, WalletIcon } from "@heroicons/react/24/outline";
+import { DelegationSection } from "~~/components/profile/DelegationSection";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useWalletSummaryData } from "~~/hooks/useWalletSummaryData";
@@ -172,6 +173,8 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
           )}
         </div>
       </div>
+
+      <DelegationSection />
     </section>
   );
 }

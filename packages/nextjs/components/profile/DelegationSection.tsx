@@ -207,17 +207,6 @@ export function DelegationSection() {
         <InfoTooltip text="Authorize a delegate address (hot wallet) to vote on behalf of your rater credential. Your main key stays safely offline." />
       </h2>
 
-      <div className="surface-card-nested rounded-xl p-4 text-base text-base-content/75 space-y-2">
-        <p>Keep your rater credential on a cold wallet and use a separate hot wallet for daily actions.</p>
-        <p>
-          Your delegate can vote and use profile or frontend actions, but only the credential holder can set or remove
-          delegation. Submissions themselves do not need delegation.
-        </p>
-        <p>
-          If the hot wallet is compromised, remove it here, set a new delegate, and only fund the delegate as needed.
-        </p>
-      </div>
-
       {/* Current delegation status */}
       {hasDelegate && (
         <div className="bg-success/10 border border-success/20 rounded-xl p-4 space-y-3">

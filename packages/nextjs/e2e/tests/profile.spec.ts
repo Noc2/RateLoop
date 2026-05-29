@@ -45,7 +45,7 @@ test.describe("Profile management", () => {
     await openSettingsWithConnectedWallet(page);
 
     await expect(page.getByRole("heading", { name: /Notification settings/i })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("button", { name: "Delegation" })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("button", { name: "Wallet" })).toBeVisible({ timeout: 5_000 });
     await expect(page.getByRole("button", { name: "Profile" })).toHaveCount(0);
 
     expect(notificationChallengeRequests).toHaveLength(0);
