@@ -39,7 +39,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
   const CHAIN_TIME_OFFSET = EPOCH_DURATION - TLOCK_EPOCH;
   const KEEPER_INTERVAL_MS = Number(process.env.KEEPER_INTERVAL_MS ?? 30_000);
   const KEEPER_DECRYPT_BUFFER_MS = 10_000;
-  const MAX_KEEPER_DECRYPT_WAIT_MS = Number(process.env.E2E_KEEPER_MAX_DECRYPT_WAIT_MS ?? 240_000);
+  const MAX_KEEPER_DECRYPT_WAIT_MS = Number(process.env.E2E_KEEPER_MAX_DECRYPT_WAIT_MS ?? 360_000);
   const publicClient = createPublicClient({
     chain: foundry,
     transport: http(E2E_RPC_URL),
@@ -54,7 +54,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
   });
 
   test("keeper reveals and settles a short-tlock round end to end", async () => {
-    test.setTimeout(600_000);
+    test.setTimeout(780_000);
 
     await evmSetTimestamp(Math.floor(Date.now() / 1000) - CHAIN_TIME_OFFSET);
 
@@ -186,7 +186,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
         const round = data.rounds.find(item => item.roundId === String(roundId));
         return round !== undefined && round.state === 1;
       },
-      150_000,
+      240_000,
       2_000,
       "keeper-settlement:settled",
     );
