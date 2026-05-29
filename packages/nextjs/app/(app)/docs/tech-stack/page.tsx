@@ -17,7 +17,7 @@ const btsHref = "https://www.science.org/doi/10.1126/science.1102081";
 const robustBtsHref = "https://doi.org/10.1609/aaai.v26i1.8261";
 const circleWorldChainUsdcHref = "https://www.circle.com/multi-chain-usdc/worldchain";
 const gitcoinCocmHref =
-  "https://www.gitcoin.co/blog/leveling-the-field-how-connection-oriented-cluster-matching-strengthens-quadratic-funding";
+  "https://gitcoin.co/blog/leveling-the-field-how-connection-oriented-cluster-matching-strengthens-quadratic-funding#the-solution-connection-oriented-cluster-matching-cocm";
 const cocmPaperHref = "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4311507";
 
 export const metadata = {
@@ -199,9 +199,13 @@ const TechStackPage: NextPage = () => {
         USDC, and 7.5 USDC.
       </p>
       <p>
-        The scorer is COCM-inspired: it compresses dense wallet clusters, timing/funding links, agent operator links,
-        and repeated cross-round behavior into an independence multiplier. Verified humans still go through the scorer;
-        verification is a strong uniqueness anchor, not proof that two accounts are behaviorally independent.
+        The scorer is inspired by{" "}
+        <a href={gitcoinCocmHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          Connection-Oriented Cluster Matching (COCM)
+        </a>
+        : it compresses dense wallet clusters, timing/funding links, agent operator links, and repeated cross-round
+        behavior into an independence multiplier. Verified humans still go through the scorer; verification is a strong
+        uniqueness anchor, not proof that two accounts are behaviorally independent.
       </p>
       <p>
         Any keeper or indexer can recompute the same artifact. Registered frontend operators backed by a 1,000 LREP bond
