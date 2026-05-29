@@ -92,6 +92,7 @@ contract RoundVotingEngine is
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+    address internal constant DISABLED_ADVISORY_VOTE_RECORDER = address(1);
 
     // --- State ---
     // M-Crosscutting-1 (audit 2026-05-20): Storage layout history. This contract is
@@ -110,6 +111,8 @@ contract RoundVotingEngine is
     //     line 139; all later slots shifted down by 1.
     //   * Post-2026-05-28: `roundRbtsScoreSeed` inserted after `roundRbtsMeanScoreBps` so
     //     advisory sampling can bind to the finalized engine seed. Fresh deployments only.
+    //   * Post-2026-05-29: `roundAdvisoryVoteRecorderSnapshot` inserted after
+    //     `roundRaterRegistrySnapshot` so recorder rotation does not affect open rounds.
     //
     // CI runbook: any future change to the order or type of state variables in this contract
     // must run OZ `validateUpgrade` against the previous implementation before any non-31337
@@ -189,6 +192,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) public roundFrontendPool;
     mapping(uint256 => mapping(uint256 => uint256)) public roundEligibleFrontendCount;
     mapping(uint256 => mapping(uint256 => address)) public roundRaterRegistrySnapshot;
+    mapping(uint256 => mapping(uint256 => address)) public roundAdvisoryVoteRecorderSnapshot;
 
     // --- Events ---
     event VoteCommitted(
@@ -395,6 +399,7 @@ contract RoundVotingEngine is
         uint256 roundId = currentRoundId[contentId];
         if (roundId == 0) revert RoundNotOpen();
         if (roundId != roundContext >> 16) revert InvalidCommitHash();
+        if (msg.sender != _getRoundAdvisoryVoteRecorder(contentId, roundId)) revert Unauthorized();
 
         RoundLib.Round storage round = rounds[contentId][roundId];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
@@ -445,7 +450,7 @@ contract RoundVotingEngine is
         IRaterIdentityRegistry.ResolvedRater memory resolved =
             VotePreflightLib.validateVoterAndContent(roundRaterRegistry, registry, voter, contentId);
         VotePreflightLib.validateNoAdvisoryConflict(
-            protocolConfig.advisoryVoteRecorder(),
+            _getRoundAdvisoryVoteRecorder(contentId, roundId),
             contentId,
             roundId,
             voter,
@@ -724,6 +729,7 @@ contract RoundVotingEngine is
             roundDrandPeriodSnapshot,
             roundRaterRegistrySnapshot,
             roundFrontendRegistrySnapshot,
+            roundAdvisoryVoteRecorderSnapshot,
             protocolConfig,
             contentId,
             roundId
@@ -1133,6 +1139,13 @@ contract RoundVotingEngine is
             snapshot = protocolConfig.raterRegistry();
         }
         return IRaterIdentityRegistry(snapshot);
+    }
+
+    function _getRoundAdvisoryVoteRecorder(uint256 contentId, uint256 roundId) internal view returns (address) {
+        address snapshot = roundAdvisoryVoteRecorderSnapshot[contentId][roundId];
+        if (snapshot == DISABLED_ADVISORY_VOTE_RECORDER) return address(0);
+        if (snapshot == address(0)) return protocolConfig.advisoryVoteRecorder();
+        return snapshot;
     }
 
     function _resolveClaimCommit(uint256 contentId, uint256 roundId, address account)

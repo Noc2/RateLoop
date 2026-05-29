@@ -61,6 +61,7 @@ library RoundCreationLib {
         mapping(uint256 => mapping(uint256 => uint64)) storage roundDrandPeriodSnapshot,
         mapping(uint256 => mapping(uint256 => address)) storage roundRaterRegistrySnapshot,
         mapping(uint256 => mapping(uint256 => address)) storage roundFrontendRegistrySnapshot,
+        mapping(uint256 => mapping(uint256 => address)) storage roundAdvisoryVoteRecorderSnapshot,
         ProtocolConfig protocolConfig,
         uint256 contentId,
         uint256 roundId
@@ -70,6 +71,9 @@ library RoundCreationLib {
         roundDrandPeriodSnapshot[contentId][roundId] = protocolConfig.drandPeriod();
         roundRaterRegistrySnapshot[contentId][roundId] = protocolConfig.raterRegistry();
         roundFrontendRegistrySnapshot[contentId][roundId] = protocolConfig.frontendRegistry();
+        address advisoryRecorder = protocolConfig.advisoryVoteRecorder();
+        roundAdvisoryVoteRecorderSnapshot[contentId][roundId] =
+            advisoryRecorder == address(0) ? address(1) : advisoryRecorder;
     }
 
     function activateNewRound(

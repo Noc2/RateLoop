@@ -2969,6 +2969,69 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_OpenRoundKeepsSnapshottedAdvisoryRecorderAfterRotation() public {
+        uint256 contentId = _submitContent();
+        _openStakedRound(voter2, contentId, "advisory-rotation-open");
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint16 referenceRatingBps = engine.previewCommitReferenceRatingBps(contentId);
+        assertEq(engine.roundAdvisoryVoteRecorderSnapshot(contentId, roundId), address(advisoryRecorder));
+
+        _recordAdvisory(voter1, contentId, "advisory-before-rotation");
+
+        AdvisoryVoteRecorder replacementRecorder = new AdvisoryVoteRecorder(address(engine), address(registry), owner);
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setAdvisoryVoteRecorder(address(replacementRecorder));
+
+        uint64 targetRound = _tlockCommitTargetRound();
+        bytes32 drandChainHash = _tlockDrandChainHash();
+        bytes32 replacementSalt = keccak256(abi.encodePacked(voter3, block.timestamp, "replacement-advisory"));
+        bytes memory replacementCiphertext =
+            _testCiphertext(true, replacementSalt, contentId, targetRound, drandChainHash);
+        bytes32 replacementCommitHash = _commitHash(
+            true,
+            replacementSalt,
+            voter3,
+            contentId,
+            roundId,
+            referenceRatingBps,
+            targetRound,
+            drandChainHash,
+            replacementCiphertext
+        );
+
+        vm.prank(voter3);
+        vm.expectRevert(RoundVotingEngine.Unauthorized.selector);
+        replacementRecorder.recordAdvisoryVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            replacementCommitHash,
+            replacementCiphertext
+        );
+
+        bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "real-after-rotation"));
+        bytes memory ciphertext = _testCiphertext(true, salt, contentId, targetRound, drandChainHash);
+        bytes32 commitHash = _commitHash(
+            true, salt, voter1, contentId, roundId, referenceRatingBps, targetRound, drandChainHash, ciphertext
+        );
+
+        vm.startPrank(voter1);
+        lrepToken.approve(address(engine), STAKE);
+        vm.expectRevert(RoundVotingEngine.AlreadyCommitted.selector);
+        engine.commitVote(
+            contentId,
+            _roundContext(roundId, referenceRatingBps),
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+    }
+
     function test_RealCommitAfterDelegateAdvisoryIdentityChurn_RevertsAlreadyCommitted() public {
         uint256 contentId = _submitContent();
         _openStakedRound(voter2, contentId, "delegate-advisory-open");
