@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseDeployArgs } from "./deployArgs.js";
+import {
+  buildDeployFlowFlags,
+  isSlowBroadcastNetwork,
+  parseDeployArgs,
+} from "./deployArgs.js";
 
 test("parseDeployArgs returns defaults with no options", () => {
   assert.deepEqual(parseDeployArgs([]), {
@@ -68,5 +72,28 @@ test("parseDeployArgs rejects networks unsupported by the deploy script", () => 
   assert.throws(
     () => parseDeployArgs(["--network", "sepolia"]),
     /Unsupported deploy network: sepolia/
+  );
+});
+
+test("buildDeployFlowFlags leaves non-World Chain deploys unchanged", () => {
+  assert.equal(buildDeployFlowFlags("localhost", {}), "");
+});
+
+test("buildDeployFlowFlags throttles World Chain deploys", () => {
+  assert.equal(isSlowBroadcastNetwork("worldchainSepolia"), true);
+  assert.equal(
+    buildDeployFlowFlags("worldchainSepolia", {}),
+    "--slow --compute-units-per-second 25 --rpc-timeout 120 --timeout 300"
+  );
+});
+
+test("buildDeployFlowFlags accepts World Chain throttle overrides", () => {
+  assert.equal(
+    buildDeployFlowFlags("worldchain", {
+      WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND: "10",
+      WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS: "180",
+      WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS: "600",
+    }),
+    "--slow --compute-units-per-second 10 --rpc-timeout 180 --timeout 600"
   );
 });

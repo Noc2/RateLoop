@@ -4,7 +4,12 @@ import { join, dirname } from "path";
 import { readFileSync, existsSync } from "fs";
 import { parse } from "toml";
 import { fileURLToPath } from "url";
-import { DEPLOY_HELP_TEXT, parseDeployArgs } from "./deployArgs.js";
+import {
+  DEPLOY_HELP_TEXT,
+  buildDeployFlowFlags,
+  isSlowBroadcastNetwork,
+  parseDeployArgs,
+} from "./deployArgs.js";
 import { selectOrCreateKeystore } from "./selectOrCreateKeystore.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -149,18 +154,15 @@ process.env.RESUME_FLAG = resume ? "--resume" : "";
 // World Chain explorer support can vary by provider. Skip auto-verification here;
 // verify manually via: make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract
 const BLOCKSCOUT_NETWORKS = new Set(["worldchainSepolia", "worldchain"]);
-const SLOW_BROADCAST_NETWORKS = new Set(["worldchainSepolia", "worldchain"]);
-process.env.DEPLOY_FLOW_FLAGS = SLOW_BROADCAST_NETWORKS.has(network)
-  ? "--slow"
-  : "";
+process.env.DEPLOY_FLOW_FLAGS = buildDeployFlowFlags(network, process.env);
 
 if (resume) {
   console.log("\n⏯️  Resuming previous broadcast state");
 }
 
-if (SLOW_BROADCAST_NETWORKS.has(network)) {
+if (isSlowBroadcastNetwork(network)) {
   console.log(
-    `\n🐢 Using slow broadcast mode for ${network} to avoid sequencer nonce issues`
+    `\n🐢 Using throttled slow broadcast mode for ${network} to avoid sequencer nonce and RPC rate-limit issues`
   );
 }
 

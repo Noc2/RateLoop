@@ -17,6 +17,12 @@ const SUPPORTED_DEPLOY_NETWORKS = new Set([
   "worldchain",
 ]);
 
+const SLOW_BROADCAST_NETWORKS = new Set(["worldchainSepolia", "worldchain"]);
+
+export const DEFAULT_WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND = "25";
+export const DEFAULT_WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS = "120";
+export const DEFAULT_WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS = "300";
+
 function readOptionValue(args, index, optionName) {
   const value = args[index + 1];
   if (!value || value.startsWith("-")) {
@@ -76,4 +82,45 @@ export function parseDeployArgs(args) {
   }
 
   return { showHelp: false, network, keystoreArg, resume };
+}
+
+function envValue(env, key, fallback) {
+  const value = env[key]?.trim();
+  return value ? value : fallback;
+}
+
+export function isSlowBroadcastNetwork(network) {
+  return SLOW_BROADCAST_NETWORKS.has(network);
+}
+
+export function buildDeployFlowFlags(network, env = process.env) {
+  if (!isSlowBroadcastNetwork(network)) {
+    return "";
+  }
+
+  const computeUnitsPerSecond = envValue(
+    env,
+    "WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND",
+    DEFAULT_WORLDCHAIN_DEPLOY_COMPUTE_UNITS_PER_SECOND
+  );
+  const rpcTimeoutSeconds = envValue(
+    env,
+    "WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS",
+    DEFAULT_WORLDCHAIN_DEPLOY_RPC_TIMEOUT_SECONDS
+  );
+  const broadcastTimeoutSeconds = envValue(
+    env,
+    "WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS",
+    DEFAULT_WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS
+  );
+
+  return [
+    "--slow",
+    "--compute-units-per-second",
+    computeUnitsPerSecond,
+    "--rpc-timeout",
+    rpcTimeoutSeconds,
+    "--timeout",
+    broadcastTimeoutSeconds,
+  ].join(" ");
 }

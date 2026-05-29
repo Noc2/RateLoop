@@ -5,6 +5,7 @@ COVERAGE_ARGS ?=
 RESUME_FLAG ?=
 DEPLOY_FLOW_FLAGS ?=
 DEPLOY_PROFILE ?= deploy
+DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS ?= --ignored-error-codes 2394 --ignored-error-codes 3860 --ignored-error-codes 5574 --ignored-error-codes 6335
 LOCALHOST_EVM_SIZE_FLAGS ?=
 LOCALHOST_DEPLOYER_PRIVATE_KEY ?= 0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6
 
@@ -31,7 +32,7 @@ deploy:
 		env -u ETH_KEYSTORE_ACCOUNT -u ETH_KEYSTORE -u ETH_PASSWORD \
 			FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url localhost --private-key $(LOCALHOST_DEPLOYER_PRIVATE_KEY) --broadcast --ffi --slow --non-interactive $(LOCALHOST_EVM_SIZE_FLAGS) $(RESUME_FLAG); \
 	else \
-		FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url $(RPC_URL) --account $(ETH_KEYSTORE_ACCOUNT) --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS); \
+		FOUNDRY_PROFILE=$(DEPLOY_PROFILE) forge script script/Deploy.s.sol --tc DeployScript --rpc-url $(RPC_URL) --account $(ETH_KEYSTORE_ACCOUNT) --broadcast --ffi --gas-estimate-multiplier 200 $(DEPLOY_SCRIPT_IGNORED_ERROR_CODE_FLAGS) --non-interactive $(DEPLOY_FLOW_FLAGS) $(RESUME_FLAG) $(VERIFY_FLAGS); \
 	fi
 
 # Deploy and generate shared deployment artifacts.
