@@ -29,7 +29,12 @@ export function ProfileImageLightbox({
   modalImageClassName = "",
 }: ProfileImageLightboxProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [imageSrc, setImageSrc] = useState(src || fallbackSrc || "");
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useEffect(() => {
     setImageSrc(src || fallbackSrc || "");
@@ -65,7 +70,8 @@ export function ProfileImageLightbox({
         onClick={() => setIsOpen(true)}
         aria-haspopup="dialog"
         aria-label={triggerLabel}
-        className={`cursor-zoom-in transition-transform hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 ${buttonClassName}`.trim()}
+        disabled={!isHydrated}
+        className={`cursor-zoom-in transition-transform hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 disabled:cursor-wait disabled:opacity-90 ${buttonClassName}`.trim()}
       >
         <img
           src={imageSrc}
