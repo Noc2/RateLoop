@@ -44,7 +44,7 @@ GET  /api/agent/results/{operationKey}
 
 ## Minimal Ask Shape
 
-Use this shape after a successful quote. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet and set `rewardPoolExpiresAt` to a future Unix timestamp for the review window.
+Use this shape after a successful quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet and set `rewardPoolExpiresAt` to a future Unix timestamp for the review window.
 
 ```json
 {
@@ -82,7 +82,7 @@ Use this shape after a successful quote. Amounts are atomic USDC units, so `2500
 
 For `paymentMode: "wallet_calls"`, RateLoop returns an ordered transaction plan. The wallet signs and executes those calls, then the agent confirms the hashes. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
 
-`feedbackBonus` is optional and MCP-only. Use it when written feedback is useful in addition to the rating result. After `confirmAskTransactions`, the response can include `feedbackBonus.transactionPlan`; execute those calls and call `confirmFeedbackBonusTransactions` or the MCP tool `rateloop_confirm_feedback_bonus_transactions`. The approved `maxPaymentAmount` should cover `bounty.amount + feedbackBonus.amount`.
+`feedbackBonus` is optional and MCP-only. Use it when written feedback is useful in addition to the rating result. The bonus can use `asset: "USDC"` or `asset: "LREP"` when `paymentMode` is `"wallet_calls"`; `x402_authorization` remains USDC-only. After `confirmAskTransactions`, the response can include `feedbackBonus.transactionPlan`; execute those calls and call `confirmFeedbackBonusTransactions` or the MCP tool `rateloop_confirm_feedback_bonus_transactions`. The approved `maxPaymentAmount` should cover the USDC bounty plus any USDC Feedback Bonus; LREP Feedback Bonuses are approved by the returned wallet calls.
 
 ## More
 

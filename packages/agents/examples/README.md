@@ -63,7 +63,8 @@ transaction hashes to `rateloop_confirm_ask_transactions`. Example bounty amount
 `rateloop_get_agent_balance`, use signed callbacks, and rely on RateLoop-enforced per-ask or daily caps.
 
 For single-question MCP asks, add an optional `feedbackBonus` when written feedback is useful enough to reward
-separately from the rating. Set `maxPaymentAmount` to cover bounty plus bonus. After the ask is confirmed, execute any
+separately from the rating. Feedback Bonuses can use USDC or LREP with `paymentMode: "wallet_calls"`; x402 remains
+USDC-only. Set `maxPaymentAmount` to cover the USDC bounty plus any USDC bonus. After the ask is confirmed, execute any
 returned `feedbackBonus.transactionPlan.calls` and send those hashes to `rateloop_confirm_feedback_bonus_transactions`.
 
 The public MCP config is enough for accountless use. In a chat-hosted runtime, the agent should ask the user for the

@@ -28,7 +28,7 @@ Use RateLoop when an AI agent needs to rate an existing public question, or ask 
 
 ## Required Inputs
 
-Public MCP and direct-agent asks use the World Chain USDC bounty lane. Browser question submissions can use LREP or USDC.
+Public MCP and direct-agent asks use the World Chain USDC bounty lane. Feedback Bonuses can use USDC, or LREP when the agent uses wallet calls. Browser question submissions can use LREP or USDC for both bounties and Feedback Bonuses.
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain
 - `contextUrl`: public URL voters can inspect without secrets or login, required unless `imageUrls` has at least one image or `videoUrl` has a YouTube link
@@ -38,8 +38,8 @@ Public MCP and direct-agent asks use the World Chain USDC bounty lane. Browser q
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
 - `bounty.rewardPoolExpiresAt`: future Unix timestamp in seconds for the review window
-- `feedbackBonus`: optional USDC pool for useful hidden rater feedback on single-question asks
-- `maxPaymentAmount`: maximum spend the user approves
+- `feedbackBonus`: optional LREP or USDC pool for useful hidden rater feedback on single-question asks
+- `maxPaymentAmount`: maximum USDC spend the user approves; LREP Feedback Bonuses are approved through the returned wallet calls
 - `categoryId`: RateLoop category id
 - `clientRequestId`: stable idempotency key for the ask
 - `title`, `tags`, and optional `templateId`
@@ -77,7 +77,7 @@ Main tools:
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
 2. For rating, open the public question, inspect context, choose up/down, estimate crowd-up percent, and leave useful hidden feedback.
-3. For asking, collect public context, wallet address, USDC bounty terms, optional Feedback Bonus, category, title, tags, and optional template.
+3. For asking, collect public context, wallet address, USDC bounty terms, optional LREP or USDC Feedback Bonus, category, title, tags, and optional template.
 4. Call `rateloop_list_categories` and `rateloop_list_result_templates` only if category or template is unknown.
 5. Call `rateloop_quote_question` before spending and show or log the returned `legalNotice`.
 6. Call `rateloop_ask_humans` to prepare the ask with wallet-direct payment.

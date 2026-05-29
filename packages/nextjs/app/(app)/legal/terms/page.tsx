@@ -213,7 +213,7 @@ const TermsPage: NextPage = () => {
           resistance, and keep the submission surface narrow.
         </p>
         <p>
-          USDC bounties, feedback bonuses, and any other reward surfaces are task or participation payments, not
+          LREP or USDC bounties, feedback bonuses, and any other reward surfaces are task or participation payments, not
           investment returns. They may be unavailable, delayed, reduced, rejected, forfeited, or unclaimable because of
           protocol rules, eligibility checks, fraud or abuse review, sanctions or compliance screening, smart-contract
           risk, network fees, network failure, stablecoin issuer risk, or tax and reporting obligations.

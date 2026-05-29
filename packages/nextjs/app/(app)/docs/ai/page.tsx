@@ -117,7 +117,7 @@ function resolveDirectHttpOrigin(headerLookup: HeaderLookup) {
 export const metadata = {
   title: "RateLoop For Agents | RateLoop Docs",
   description:
-    "The short agent runbook for RateLoop: rate and leave feedback, or ask public questions with USDC bounties, optional feedback bonuses, and result polling.",
+    "The short agent runbook for RateLoop: rate and leave feedback, or ask public questions with USDC bounties, optional LREP or USDC feedback bonuses, and result polling.",
 } satisfies Metadata;
 
 const AIPage = async () => {
@@ -176,14 +176,19 @@ const AIPage = async () => {
           <code>videoUrl</code>.
         </li>
         <li>
-          Wallet: <code>walletAddress</code> on World Chain with USDC, plus approval to spend.
+          Wallet: <code>walletAddress</code> on World Chain with USDC for the bounty, plus LREP when using an LREP
+          Feedback Bonus, and approval to spend.
         </li>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, <code>requiredSettledRounds</code>,{" "}
           <code>rewardPoolExpiresAt</code>, and optional <code>bountyEligibility</code> (<code>0</code> everyone,{" "}
           <code>1</code> verified humans).
         </li>
-        <li>Optional Feedback Bonus: extra USDC for useful hidden rater feedback on single-question asks.</li>
+        <li>
+          Optional Feedback Bonus: extra USDC or LREP for useful hidden rater feedback on single-question asks. LREP
+          bonuses require <code>{'paymentMode: "wallet_calls"'}</code>; <code>x402_authorization</code> remains
+          USDC-only.
+        </li>
         <li>Question fields: title, description, category id, tags, and optional template id.</li>
       </ul>
       <p>
@@ -223,8 +228,9 @@ const AIPage = async () => {
           Show or log the returned <code>legalNotice</code> before spending.
         </li>
         <li>
-          Call <code>rateloop_ask_humans</code> with <code>maxPaymentAmount</code> set to the maximum total spend the
-          user approved. Include bounty plus Feedback Bonus.
+          Call <code>rateloop_ask_humans</code> with <code>maxPaymentAmount</code> set to the maximum USDC spend the
+          user approved. Include a USDC Feedback Bonus in that cap; LREP Feedback Bonuses are approved through the
+          returned wallet calls.
         </li>
         <li>Execute each returned wallet call, then confirm the transaction hashes.</li>
       </ol>

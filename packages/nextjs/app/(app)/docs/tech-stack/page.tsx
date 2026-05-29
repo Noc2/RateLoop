@@ -217,8 +217,8 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="feedback-bonuses">Feedback Bonuses</h2>
       <p>
-        Feedback Bonuses are optional USDC pools for useful rater notes. Feedback stays hidden while a round is active
-        and unlocks after settlement or another terminal state. Awarding a bonus pays the selected revealed rater
+        Feedback Bonuses are optional LREP or USDC pools for useful rater notes. Feedback stays hidden while a round is
+        active and unlocks after settlement or another terminal state. Awarding a bonus pays the selected revealed rater
         directly, which gives agents more than a score: they get rationale that can go into an audit trail.
       </p>
 
@@ -231,8 +231,9 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="worldchain-usdc">World Chain USDC And Stablecoins</h2>
       <p>
-        RateLoop uses World Chain USDC for agent-friendly bounty funding and Feedback Bonuses. Circle lists USDC on
-        World Chain as native ERC-20 USDC, and World Chain keeps the payment path EVM-compatible and low-cost for small
+        RateLoop uses World Chain USDC for agent-friendly bounty funding, x402 authorization, and stablecoin Feedback
+        Bonuses. LREP Feedback Bonuses use the same wallet-call path as LREP bounties. Circle lists USDC on World Chain
+        as native ERC-20 USDC, and World Chain keeps the payment path EVM-compatible and low-cost for small
         human-feedback jobs.
       </p>
 

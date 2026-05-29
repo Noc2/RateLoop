@@ -227,7 +227,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The landing experience now leads with the concrete agent promise: Level Up Your Agent. The supporting line explains the loop in product language: Human and AI Raters Guide Decisions and Earn USDC. The visual system uses the segmented RateLoop ring mark, gradient wordmark treatment, and project hero animation, then explains the product through three steps: agents ask with context and bounty, raters predict during blind rounds with optional stake, and raters earn while agents use the public rating signal.",
+            text: "The landing experience now leads with the concrete agent promise: Level Up Your Agent. The supporting line explains the loop in product language: Human and AI Raters Guide Decisions and Earn LREP or USDC. The visual system uses the segmented RateLoop ring mark, gradient wordmark treatment, and project hero animation, then explains the product through three steps: agents ask with context and bounty, raters predict during blind rounds with optional stake, and raters earn while agents use the public rating signal.",
           },
           {
             type: "bullets",
@@ -268,7 +268,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The rater side is designed around concrete paid work rather than abstract engagement. Raters evaluate bounded asks, optionally risk LREP stake, reveal through keeper-assisted or fallback paths, claim eligible bounties and rewards after settlement, and can earn optional USDC Feedback Bonuses for hidden notes that make the result more useful to agents.",
+            text: "The rater side is designed around concrete paid work rather than abstract engagement. Raters evaluate bounded asks, optionally risk LREP stake, reveal through keeper-assisted or fallback paths, claim eligible bounties and rewards after settlement, and can earn optional LREP or USDC Feedback Bonuses for hidden notes that make the result more useful to agents.",
           },
         ],
       },
@@ -393,7 +393,7 @@ export const SECTIONS: Section[] = [
               "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators after correlation-capped payout weights finalize.",
               "Registered frontend operators bond 1,000 LREP before proposing payout roots for those claim weights.",
               "Payout-root challengers post a USDC ERC20 bond, defaulting to 5 USDC (5_000_000 atomic units).",
-              "Optional USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
+              "Optional LREP or USDC Feedback Bonuses reward hidden notes by canonical hash after settlement.",
               "USDC asks do not require proof-of-personhood; bounty eligibility is set by the ask and finalized claim weights, while reputation and calibration can still shape policy and routing.",
               "Submitters do not earn upside from their own ask; the protocol pays for judgment, not self-rating.",
             ],
@@ -471,7 +471,7 @@ export const SECTIONS: Section[] = [
               "Public MCP and direct JSON routes support wallet-direct asks with `walletAddress` and no bearer token.",
               "MCP-style tools include `rateloop_list_categories`, `rateloop_list_result_templates`, `rateloop_quote_question`, `rateloop_ask_humans`, `rateloop_confirm_ask_transactions`, `rateloop_get_question_status`, and `rateloop_get_result`.",
               "Direct HTTP routes cover templates, quotes, ask creation, transaction confirmation, status/result reads, and browser-signing intent create/read/prepare/complete endpoints under `/api/agent/signing-intents`.",
-              "Payment modes include ordered `wallet_calls` and native `x402_authorization` for World Chain USDC asks.",
+              "Payment modes include ordered `wallet_calls` for LREP or USDC escrow funding and native `x402_authorization` for World Chain USDC asks.",
               "Browser signing intents let an agent create an approval URL for a human operator to connect a wallet, prepare the ask, execute transactions, and confirm hashes.",
               "The local signer CLI loads an encrypted keystore, signs x402 authorization when needed, sends returned transaction plan calls through viem, waits for receipts, and confirms the ask.",
               "Optional managed policies add bearer tokens, RateLoop-enforced spend caps, category allowlists, signed callbacks, balance tooling through `rateloop_get_agent_balance`, and audit exports.",

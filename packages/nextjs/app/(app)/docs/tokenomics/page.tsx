@@ -261,7 +261,7 @@ const Tokenomics = () => {
             </tr>
             <tr>
               <td>Fund a Feedback Bonus</td>
-              <td className="font-mono">USDC only</td>
+              <td className="font-mono">LREP or USDC</td>
               <td>Optional; unawarded remainder goes to treasury after the award deadline</td>
             </tr>
             <tr>
