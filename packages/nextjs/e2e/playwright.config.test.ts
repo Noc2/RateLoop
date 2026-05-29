@@ -47,6 +47,12 @@ test("browser-scoped Playwright projects only match their intended spec files", 
       matchingSpec: "mobile.spec.ts",
       nonMatchingSpec: "browser-compat.spec.ts",
     },
+    {
+      project: "world-id-mock",
+      workspaceSegment: "world-id-mock",
+      matchingSpec: "world-id-mock.spec.ts",
+      nonMatchingSpec: "settings.spec.ts",
+    },
   ];
 
   for (const { project, workspaceSegment, matchingSpec, nonMatchingSpec } of scenarios) {
@@ -80,6 +86,7 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
   const apiSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/ponder-api.spec.ts";
   const lifecycleSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/settlement-lifecycle.spec.ts";
   const compatSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/browser-compat.spec.ts";
+  const worldIdMockSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/world-id-mock.spec.ts";
 
   assert.equal(testIgnore.test(broadSpec), false, "ci-app should include broad app specs");
   assert.equal(testIgnore.test(smokeSpec), true, "ci-app should leave smoke specs to ci-smoke");
@@ -90,6 +97,7 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
     true,
     "ci-app should leave browser compat specs to scheduled compat projects",
   );
+  assert.equal(testIgnore.test(worldIdMockSpec), true, "ci-app should leave World ID mock specs to the mock project");
 });
 
 test("CI smoke and API projects keep browser smoke separate from fetch-only specs", () => {

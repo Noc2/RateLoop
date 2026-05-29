@@ -4,7 +4,6 @@ import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { gotoWithRetry } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
-import { installLocalE2EWorldIdMock, readActiveHumanCredential } from "../helpers/world-id";
 
 test.describe("Settings page", () => {
   test("delegation tab can transfer LREP to another address", async ({ connectedPage: page }) => {
@@ -48,11 +47,7 @@ test.describe("Settings page", () => {
     await expect(page).toHaveURL(/\/settings#delegation$/);
     await expect(page.getByRole("button", { name: "Delegation", exact: true })).toHaveClass(/pill-active/);
     const credentialPrompt = page.getByRole("heading", { name: "Rater credential required for delegation" });
-    const promptVisible = await credentialPrompt
-      .waitFor({ state: "visible", timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    test.skip(!promptVisible, "Missing-credential delegation prompt is not present in this seeded state.");
+    await expect(credentialPrompt).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("link", { name: "Open rater setup" })).toHaveAttribute("href", "/governance");
   });
 
@@ -72,39 +67,5 @@ test.describe("Settings page", () => {
     await expect(page.getByRole("heading", { name: "Gas And Wallet Funding" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "Top Up Network Fees" })).toBeVisible();
     await expect(page.getByText("ETH top-up is available on World Chain mainnet deployments.")).toBeVisible();
-  });
-
-  test("world id mock flow attests an active human credential on-chain", async ({ page }) => {
-    test.setTimeout(90_000);
-
-    const account = ANVIL_ACCOUNTS.account2;
-    const registryAddress = CONTRACT_ADDRESSES.RaterRegistry;
-
-    await setupWallet(page, account.privateKey);
-    await installLocalE2EWorldIdMock(page, account.address);
-    await gotoWithRetry(page, "/settings#identity", { ensureWalletConnected: true });
-
-    await expect(page.getByRole("heading", { name: "Human Credential" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/self-verified/i)).toHaveCount(0);
-
-    const verifyButton = page.getByRole("button", { name: "Verify with World ID" });
-    const canVerify = await verifyButton
-      .waitFor({ state: "visible", timeout: 15_000 })
-      .then(async () => verifyButton.isEnabled())
-      .catch(() => false);
-    test.skip(!canVerify, "World ID mock verification is not available in this seeded state.");
-    await verifyButton.click();
-
-    const verifiedMessage = page.getByText("World ID verified");
-    const failureMessage = page.getByText("Verification failed");
-    await verifiedMessage
-      .or(failureMessage)
-      .first()
-      .waitFor({ state: "visible", timeout: 45_000 });
-    test.skip(
-      await failureMessage.isVisible(),
-      "World ID mock proof was rejected by the seeded credential registry state.",
-    );
-    await expect.poll(() => readActiveHumanCredential(account.address, registryAddress)).toBe(true);
   });
 });

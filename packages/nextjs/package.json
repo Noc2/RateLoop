@@ -23,7 +23,7 @@
     "whitepaper": "tsx scripts/whitepaper/generate.tsx",
     "demo:record": "tsx e2e/scripts/record-demo.ts",
     "e2e": "playwright test --config e2e/playwright.config.ts --project=chromium",
-    "e2e:world-id:local": "playwright test --config e2e/playwright.config.ts --project=chromium e2e/tests/settings.spec.ts -g \"world id mock flow\"",
+    "e2e:world-id:local": "playwright test --config e2e/playwright.config.ts --project=world-id-mock",
     "e2e:ci:smoke": "playwright test --config e2e/playwright.config.ts --project=ci-smoke",
     "e2e:ci:api": "playwright test --config e2e/playwright.config.ts --project=ci-api",
     "e2e:ci:app": "playwright test --config e2e/playwright.config.ts --project=ci-app",

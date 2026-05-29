@@ -8,12 +8,13 @@ const BROWSER_COMPAT_TESTS = specFile("browser-compat");
 const RESPONSIVE_LAYOUT_TESTS = specFile("responsive-layout");
 const ACCESSIBILITY_AXE_TESTS = specFile("accessibility-axe");
 const MOBILE_TESTS = specFile("mobile");
+const WORLD_ID_MOCK_TESTS = specFile("world-id-mock");
 const CI_SMOKE_TESTS = specFiles("smoke", "pages-smoke", "docs-pages");
 const CI_API_TESTS = specFiles("nextjs-api", "watchlist-api", "faucet", "contract-boundaries", "ponder-api");
 const CHROMIUM_SPECIAL_TESTS =
-  /round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
+  /round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe|world-id-mock/;
 const CI_APP_IGNORED_TESTS =
-  /smoke|pages-smoke|docs-pages|nextjs-api|watchlist-api|faucet|contract-boundaries|ponder-api|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe/;
+  /smoke|pages-smoke|docs-pages|nextjs-api|watchlist-api|faucet|contract-boundaries|ponder-api|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe|world-id-mock/;
 
 export default defineConfig({
   globalSetup: "./global-setup.cts",
@@ -71,6 +72,11 @@ export default defineConfig({
       name: "accessibility-axe",
       use: { ...devices["Desktop Chrome"] },
       testMatch: ACCESSIBILITY_AXE_TESTS,
+    },
+    {
+      name: "world-id-mock",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: WORLD_ID_MOCK_TESTS,
     },
     {
       name: "compat-chromium",
