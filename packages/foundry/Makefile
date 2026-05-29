@@ -42,6 +42,7 @@ deploy:
 # broadcast/deployments JSON written by `deploy`.
 deploy-and-generate-abis: check-contract-sizes
 	$(MAKE) deploy
+	node scripts-js/exportDeploymentFromBroadcast.js
 	$(MAKE) generate-abis
 
 # Generate TypeScript ABIs
