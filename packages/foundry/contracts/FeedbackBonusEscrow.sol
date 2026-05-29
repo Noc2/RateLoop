@@ -453,7 +453,6 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         internal
         returns (uint256 receivedAmount)
     {
-        uint256 balanceBefore = usdcToken.balanceOf(address(this));
         IReceiveWithAuthorizationToken(address(usdcToken))
             .receiveWithAuthorization(
                 authorization.from,
@@ -466,8 +465,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
                 authorization.r,
                 authorization.s
             );
-        receivedAmount = usdcToken.balanceOf(address(this)) - balanceBefore;
-        require(receivedAmount == authorization.value, "Fee token unsupported");
+        receivedAmount = authorization.value;
     }
 
     function _bonusToken(uint8 asset) internal view returns (IERC20 token) {
