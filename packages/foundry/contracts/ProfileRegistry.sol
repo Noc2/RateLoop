@@ -85,15 +85,7 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
     /// @notice Set or clear the optional rater registry used as a profile continuity signal.
     /// @param _raterRegistry The rater registry contract address, or zero to disable credential lookups.
     function setRaterRegistry(address _raterRegistry) external onlyRole(ADMIN_ROLE) {
-        if (_raterRegistry != address(0)) {
-            require(_raterRegistry.code.length != 0, "No code");
-            try IRaterIdentityRegistry(_raterRegistry).resolveRater(address(this)) returns (
-                IRaterIdentityRegistry.ResolvedRater memory
-            ) { }
-            catch {
-                revert("Invalid registry");
-            }
-        }
+        if (_raterRegistry != address(0)) _validateRaterRegistry(_raterRegistry);
         raterRegistry = IRaterIdentityRegistry(_raterRegistry);
         emit RaterRegistryUpdated(_raterRegistry);
     }
@@ -284,6 +276,39 @@ contract ProfileRegistry is IProfileRegistry, Initializable, AccessControlUpgrad
         IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(user);
         if (resolved.holder != user || resolved.humanNullifier == bytes32(0)) return bytes32(0);
         return resolved.identityKey;
+    }
+
+    function _validateRaterRegistry(address value) internal view {
+        require(value.code.length != 0, "No code");
+        IRaterIdentityRegistry registry = IRaterIdentityRegistry(value);
+        address sample = address(uint160(uint256(keccak256("rateloop.rater-registry.validation"))));
+        bytes32 expectedSampleKey = keccak256(abi.encodePacked("rateloop.address-identity-v1", sample));
+
+        try registry.addressIdentityKey(address(0)) returns (bytes32 zeroKey) {
+            require(zeroKey == bytes32(0), "Invalid registry");
+        } catch {
+            revert("Invalid registry");
+        }
+        try registry.addressIdentityKey(sample) returns (bytes32 sampleKey) {
+            require(sampleKey == expectedSampleKey, "Invalid registry");
+        } catch {
+            revert("Invalid registry");
+        }
+        try registry.resolveRater(sample) returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
+            require(
+                resolved.holder == sample && resolved.identityKey == expectedSampleKey
+                    && resolved.humanNullifier == bytes32(0) && !resolved.hasActiveHumanCredential
+                    && !resolved.delegated,
+                "Invalid registry"
+            );
+        } catch {
+            revert("Invalid registry");
+        }
+        try registry.hasActiveHumanCredential(sample) returns (bool active) {
+            require(!active, "Invalid registry");
+        } catch {
+            revert("Invalid registry");
+        }
     }
 
     function _migrateProfileForIdentityKey(address user, bytes32 identityKey) internal {

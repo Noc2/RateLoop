@@ -6,7 +6,25 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+
+contract WeakProfileRaterRegistry {
+    function resolveRater(address actor) external pure returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
+        resolved.holder = actor;
+        resolved.identityKey = bytes32(uint256(1));
+        resolved.humanNullifier = bytes32(uint256(1));
+        resolved.hasActiveHumanCredential = true;
+    }
+
+    function addressIdentityKey(address) external pure returns (bytes32) {
+        return bytes32(uint256(1));
+    }
+
+    function hasActiveHumanCredential(address) external pure returns (bool) {
+        return true;
+    }
+}
 
 /// @title ProfileRegistry Test Suite
 contract ProfileRegistryTest is Test {
@@ -430,6 +448,11 @@ contract ProfileRegistryTest is Test {
         vm.prank(admin);
         vm.expectRevert("Invalid registry");
         registry.setRaterRegistry(address(wrongContract));
+
+        WeakProfileRaterRegistry weakRegistry = new WeakProfileRaterRegistry();
+        vm.prank(admin);
+        vm.expectRevert("Invalid registry");
+        registry.setRaterRegistry(address(weakRegistry));
     }
 
     function test_GetAddressByName() public {
