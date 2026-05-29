@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { type Abi } from "viem";
+import { useAccount } from "wagmi";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import {
   type ClaimableRewardItem,
@@ -11,6 +12,7 @@ import {
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
+import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import {
@@ -52,6 +54,7 @@ function getClaimableRewardLabel(item: ClaimableRewardItem) {
 }
 
 export function useClaimAll() {
+  const { address } = useAccount();
   const [isClaiming, setIsClaiming] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const { requireAcceptance } = useTermsAcceptance();
@@ -80,6 +83,7 @@ export function useClaimAll() {
     includeExternalSendCalls: true,
   });
   const { showWalletRpcOverloadNotification } = useWalletRpcRecovery();
+  const refreshWalletBalances = useRefreshWalletBalances();
 
   const { writeContractAsync: writeDistributor } = useScaffoldWriteContract({
     contractName: "RoundRewardDistributor",
@@ -276,6 +280,7 @@ export function useClaimAll() {
           }
         }
       }
+      await refreshWalletBalances(address);
       onComplete?.();
     } finally {
       setIsClaiming(false);

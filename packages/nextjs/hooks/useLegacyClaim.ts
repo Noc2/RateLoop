@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { type Abi } from "viem";
 import { useAccount } from "wagmi";
 import {
@@ -11,8 +11,8 @@ import {
   useTargetNetwork,
 } from "~~/hooks/scaffold-eth";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
+import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
-import { getWalletDisplaySummaryQueryKey } from "~~/hooks/useWalletDisplaySummary";
 import { getClaimPreflightErrorMessage } from "~~/lib/claimTransactionFeedback";
 import type { LegacyClaimLookupResult } from "~~/lib/legacy-claim/lookup";
 import { notification } from "~~/utils/scaffold-eth";
@@ -27,7 +27,7 @@ async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLook
 
 export function useLegacyClaim() {
   const { address, chain, isConnected } = useAccount();
-  const queryClient = useQueryClient();
+  const refreshWalletBalances = useRefreshWalletBalances();
   const [isSponsoredClaiming, setIsSponsoredClaiming] = useState(false);
   const connectedAddress = address as `0x${string}` | undefined;
   // CLAIM-3 (2026-05-21 testnet-readiness audit): if the wallet is on the wrong chain, the
@@ -122,12 +122,7 @@ export function useLegacyClaim() {
 
   const refetchOnChainState = async () => {
     await Promise.all([refetchVested(), refetchClaimable(), refetchClaimed()]);
-    await queryClient.invalidateQueries({ queryKey: ["readContract"] });
-    if (connectedAddress) {
-      await queryClient.invalidateQueries({
-        queryKey: getWalletDisplaySummaryQueryKey(connectedAddress, targetNetwork.id),
-      });
-    }
+    await refreshWalletBalances(connectedAddress);
   };
 
   const claim = async () => {

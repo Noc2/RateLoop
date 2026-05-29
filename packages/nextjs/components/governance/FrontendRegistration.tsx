@@ -13,6 +13,7 @@ import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContr
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useFrontendClaimableFees } from "~~/hooks/useFrontendClaimableFees";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
+import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
@@ -66,6 +67,7 @@ function FrontendOperatorAddressRow({ label, address }: { label?: string; addres
 export function FrontendRegistration() {
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const refreshWalletBalances = useRefreshWalletBalances();
   const {
     canSponsorTransactions,
     freeTransactionRemaining,
@@ -352,6 +354,7 @@ export function FrontendRegistration() {
       }
 
       notification.success(`Claimed ${lrepFees.toFixed(2)} LREP!`);
+      await refreshWalletBalances(address);
       refetchFees();
     } catch (e: any) {
       console.error("Claim failed:", e);
@@ -385,6 +388,7 @@ export function FrontendRegistration() {
       }
 
       notification.success(`Credited ${(Number(BigInt(claimableFee)) / 1e6).toFixed(2)} LREP from round ${roundId}.`);
+      await refreshWalletBalances(address);
       await Promise.all([refetchClaimableRoundFees(), refetchFees()]);
     } catch (e: any) {
       console.error("Frontend round fee claim failed:", e);
@@ -435,6 +439,9 @@ export function FrontendRegistration() {
         notification.warning("Some frontend fee claims failed. You can retry the remaining rounds individually.");
       }
 
+      if (claimedCount > 0) {
+        await refreshWalletBalances(address);
+      }
       await Promise.all([refetchClaimableRoundFees(), refetchFees()]);
     } catch (e: any) {
       console.error("Claim all frontend round fees failed:", e);

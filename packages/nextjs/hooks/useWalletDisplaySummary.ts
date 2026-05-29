@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const SNAPSHOT_MAX_AGE_MS = 120_000;
 const STORAGE_KEY_PREFIX = "rateloop:wallet-display-summary:";
@@ -148,6 +148,27 @@ export function persistWalletDisplaySummarySnapshot(
   } catch {
     // Ignore storage failures and continue rendering from in-memory cache.
   }
+}
+
+export function clearPersistedWalletDisplaySummarySnapshot(address: string | undefined, chainId?: number) {
+  if (!address || typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.removeItem(getStorageKey(address, chainId));
+  } catch {
+    // Ignore storage failures and continue with the in-memory cache.
+  }
+}
+
+export function resetWalletDisplaySummaryCache(
+  queryClient: QueryClient,
+  address: string | undefined,
+  chainId?: number,
+) {
+  if (!address) return;
+
+  clearPersistedWalletDisplaySummarySnapshot(address, chainId);
+  queryClient.setQueryData(getWalletDisplaySummaryQueryKey(address, chainId), null);
 }
 
 export function reconcileWalletDisplaySummary(

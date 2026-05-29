@@ -21,6 +21,7 @@ import {
   useScaffoldReadContract,
   useScaffoldWriteContract,
 } from "~~/hooks/scaffold-eth";
+import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getLaunchReferralInputState, resolveLaunchClaimReferrer } from "~~/lib/referrals/launchReferral";
 import {
@@ -99,6 +100,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
   const referralInputId = useId();
   const referralHintId = useId();
   const { copyToClipboard, isCopiedToClipboard } = useCopyToClipboard({ successDurationMs: 1_600 });
+  const refreshWalletBalances = useRefreshWalletBalances();
   const localE2EWorldIdMock = readLocalE2EWorldIdMock();
   const appId = config.appId?.startsWith("app_")
     ? (config.appId as `app_${string}`)
@@ -274,6 +276,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
       refetchRaterFullLaunchCapUnlocked(),
       refetchLrepBalance(),
     ]);
+    await refreshWalletBalances(walletAddress);
   }, [
     refetchCurrentVerifiedBonus,
     refetchHasActiveCredential,
@@ -283,6 +286,8 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
     refetchRaterLaunchCap,
     refetchReferralEarnings,
     refetchVerifiedBonusClaimed,
+    refreshWalletBalances,
+    walletAddress,
   ]);
 
   const claimVerifiedLaunchBonusIfAvailable = useCallback(async () => {

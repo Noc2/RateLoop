@@ -9,6 +9,7 @@ import { hardhat } from "viem/chains";
 import { useAccount } from "wagmi";
 import { GiftIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useTransactor } from "~~/hooks/scaffold-eth";
+import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { notification } from "~~/utils/scaffold-eth";
 
 // Account index to use from generated hardhat accounts.
@@ -146,6 +147,7 @@ export const FaucetModal = () => {
 
   const faucetTxn = useTransactor(localWalletClient);
   const queryClient = useQueryClient();
+  const refreshWalletBalances = useRefreshWalletBalances();
 
   // Get contract addresses from localhost deployment
   const lrepTokenAddress = (deployedContracts as any)[31337]?.LoopReputation?.address as AddressType | undefined;
@@ -301,6 +303,7 @@ export const FaucetModal = () => {
         throw new Error("LREP faucet transaction reverted");
       }
 
+      await refreshWalletBalances(inputAddress);
       queryClient.invalidateQueries();
       notification.success(`Sent ${lrepAmount} LREP to ${inputAddress.slice(0, 6)}...${inputAddress.slice(-4)}`);
       setLrepLoading(false);
