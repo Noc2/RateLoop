@@ -1,7 +1,7 @@
+import config from "./playwright.config";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import config from "./playwright.config";
 
 function getProjectTestMatch(name: string): RegExp {
   const project = (config.projects ?? []).find(candidate => candidate.name === name);
@@ -85,7 +85,11 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
   assert.equal(testIgnore.test(smokeSpec), true, "ci-app should leave smoke specs to ci-smoke");
   assert.equal(testIgnore.test(apiSpec), true, "ci-app should leave API-only specs to ci-api");
   assert.equal(testIgnore.test(lifecycleSpec), true, "ci-app should leave lifecycle specs to lifecycle projects");
-  assert.equal(testIgnore.test(compatSpec), true, "ci-app should leave browser compat specs to scheduled compat projects");
+  assert.equal(
+    testIgnore.test(compatSpec),
+    true,
+    "ci-app should leave browser compat specs to scheduled compat projects",
+  );
 });
 
 test("CI smoke and API projects keep browser smoke separate from fetch-only specs", () => {
@@ -102,4 +106,13 @@ test("CI smoke and API projects keep browser smoke separate from fetch-only spec
   assert.equal(apiMatch.test(apiSpec), true, "ci-api should include Ponder API specs");
   assert.equal(apiMatch.test(watchlistApiSpec), true, "ci-api should include Next API specs");
   assert.equal(apiMatch.test(smokeSpec), false, "ci-api should not include browser smoke specs");
+});
+
+test("Playwright config fails required E2E runs on unexpected skips", () => {
+  const reporterEntries = config.reporter;
+  assert.ok(Array.isArray(reporterEntries), "Playwright reporters should be configured as an array");
+  assert.ok(
+    reporterEntries.some(entry => Array.isArray(entry) && entry[0] === "./reporters/no-unexpected-skips.ts"),
+    "required E2E runs should include the no-unexpected-skips reporter",
+  );
 });

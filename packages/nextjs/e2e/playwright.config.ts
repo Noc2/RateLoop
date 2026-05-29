@@ -22,7 +22,13 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1, // Single worker to prevent Anvil nonce conflicts
-  reporter: process.env.CI ? [["github"], ["html", { open: "never", outputFolder: "playwright-report" }]] : "html",
+  reporter: process.env.CI
+    ? [
+        ["github"],
+        ["./reporters/no-unexpected-skips.ts"],
+        ["html", { open: "never", outputFolder: "playwright-report" }],
+      ]
+    : [["./reporters/no-unexpected-skips.ts"], ["html"]],
   outputDir: "test-results",
   timeout: 60_000, // On-chain tx confirmation needs time
 
