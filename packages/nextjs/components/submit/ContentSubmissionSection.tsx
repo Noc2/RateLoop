@@ -10,7 +10,7 @@ import { getPublicClient, readContract, waitForTransactionReceipt, writeContract
 import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
-import { GasBalanceWarning } from "~~/components/shared/GasBalanceWarning";
+import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -413,8 +413,18 @@ export function ContentSubmissionSection() {
   const { address: connectedAddress } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const localE2ETestWalletClient = useLocalE2ETestWalletClient(connectedAddress, targetNetwork.id);
-  const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
+  const {
+    canSponsorTransactions,
+    freeTransactionRemaining,
+    freeTransactionVerified,
+    isMissingGasBalance,
+    nativeTokenSymbol,
+  } = useGasBalanceStatus({
     includeExternalSendCalls: true,
+  });
+  const showGasWarningTransactionCostsLink = shouldShowGasWarningTransactionCostsLink({
+    freeTransactionRemaining,
+    freeTransactionVerified,
   });
   const statusToast = useTransactionStatusToast();
   const {
@@ -3750,7 +3760,12 @@ export function ContentSubmissionSection() {
               <div className="space-y-4 xl:sticky xl:top-24">
                 {questionPreviewCard}
                 {prohibitedContentNotice}
-                {isMissingGasBalance ? <GasBalanceWarning nativeTokenSymbol={nativeTokenSymbol} /> : null}
+                {isMissingGasBalance ? (
+                  <GasBalanceWarning
+                    nativeTokenSymbol={nativeTokenSymbol}
+                    showTransactionCostsLink={showGasWarningTransactionCostsLink}
+                  />
+                ) : null}
                 {bountyFundingWarning ? (
                   <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
                 ) : null}
@@ -3771,7 +3786,12 @@ export function ContentSubmissionSection() {
               <div className="space-y-4">{bountyDetailsCard}</div>
               <div className="space-y-4 xl:sticky xl:top-24">
                 {bountyInsightsCard}
-                {isMissingGasBalance ? <GasBalanceWarning nativeTokenSymbol={nativeTokenSymbol} /> : null}
+                {isMissingGasBalance ? (
+                  <GasBalanceWarning
+                    nativeTokenSymbol={nativeTokenSymbol}
+                    showTransactionCostsLink={showGasWarningTransactionCostsLink}
+                  />
+                ) : null}
                 {bountyFundingWarning ? (
                   <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
                 ) : null}
@@ -3783,7 +3803,12 @@ export function ContentSubmissionSection() {
               <div className="space-y-4">{feedbackBonusDetailsCard}</div>
               <div className="space-y-4 xl:sticky xl:top-24">
                 {feedbackBonusInsightsCard}
-                {isMissingGasBalance ? <GasBalanceWarning nativeTokenSymbol={nativeTokenSymbol} /> : null}
+                {isMissingGasBalance ? (
+                  <GasBalanceWarning
+                    nativeTokenSymbol={nativeTokenSymbol}
+                    showTransactionCostsLink={showGasWarningTransactionCostsLink}
+                  />
+                ) : null}
                 {bountyFundingWarning ? (
                   <BountyFundingWarning title={bountyFundingWarning.title} message={bountyFundingWarning.message} />
                 ) : null}

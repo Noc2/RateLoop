@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAccount } from "wagmi";
 import { CheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
-import { GasBalanceWarning } from "~~/components/shared/GasBalanceWarning";
+import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
@@ -66,8 +66,18 @@ function FrontendOperatorAddressRow({ label, address }: { label?: string; addres
 export function FrontendRegistration() {
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const { canSponsorTransactions, isMissingGasBalance, nativeTokenSymbol } = useGasBalanceStatus({
+  const {
+    canSponsorTransactions,
+    freeTransactionRemaining,
+    freeTransactionVerified,
+    isMissingGasBalance,
+    nativeTokenSymbol,
+  } = useGasBalanceStatus({
     includeExternalSendCalls: true,
+  });
+  const showGasWarningTransactionCostsLink = shouldShowGasWarningTransactionCostsLink({
+    freeTransactionRemaining,
+    freeTransactionVerified,
   });
   const { canUseSponsoredSubmitCalls, executeSponsoredCalls, isAwaitingSponsoredSubmitCalls } =
     useThirdwebSponsoredSubmitCalls();
@@ -465,7 +475,12 @@ export function FrontendRegistration() {
         </Link>
       </p>
 
-      {isMissingGasBalance && <GasBalanceWarning nativeTokenSymbol={nativeTokenSymbol} />}
+      {isMissingGasBalance && (
+        <GasBalanceWarning
+          nativeTokenSymbol={nativeTokenSymbol}
+          showTransactionCostsLink={showGasWarningTransactionCostsLink}
+        />
+      )}
 
       <div className="rounded-2xl bg-base-300 p-4 space-y-2">
         <div className="flex items-center justify-between gap-3">
