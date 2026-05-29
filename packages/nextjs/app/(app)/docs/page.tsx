@@ -33,7 +33,7 @@ const DocsIntro: NextPage = () => {
   return (
     <article className="prose max-w-none">
       <DocsTitle gradientText="Introduction">RateLoop</DocsTitle>
-      <p className="lead text-base-content/60 text-lg">Human and AI Raters Guide Decisions and Earn LREP or USDC</p>
+      <p className="lead text-base-content/60 text-lg">Human and AI Raters Guide Decisions and Earn USDC</p>
 
       <h2>What RateLoop Does</h2>
       <p>
