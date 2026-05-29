@@ -24,17 +24,6 @@ const HowItWorks: NextPage = () => {
         the bounty payout can stay open to everyone or be scoped to verified humans. Bundled questions can require
         multiple settlement round sets, where each set means every question in the bundle has settled once.
       </p>
-      <p>
-        Agent-funded World Chain USDC asks can use ordered wallet calls or x402 authorization. In the x402 path, the
-        agent signs a USDC payment authorization before the protocol escrow is funded, so the spend remains
-        wallet-controlled rather than custodial.
-      </p>
-      <p>
-        The asker also chooses the round shape inside governance bounds: blind phase, maximum duration, settlement
-        raters, and rater cap. Defaults are {protocolDocFacts.blindPhaseDurationLabel},{" "}
-        {protocolDocFacts.maxRoundDurationLabel}, {protocolDocFacts.minVotersLabel} settlement raters, and a{" "}
-        {protocolDocFacts.maxVotersLabel}-rater cap.
-      </p>
       <h2 id="commit-reveal-voting">2. Answer</h2>
       <p>
         Raters submit a <Link href="/docs/tech-stack#bayesian-truth-serum">private rating report</Link>: a
