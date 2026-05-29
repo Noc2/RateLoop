@@ -546,6 +546,83 @@ contract ClusterPayoutOracleTest is Test {
         assertFalse(oracle.verifyPayoutWeight(payout, proof));
     }
 
+    function test_StaleFinalizedRoundPayoutSnapshotCanBeReplacedWhenUnconsumed() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+        );
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+        bytes32 staleDigest = oracle.roundPayoutSnapshotProposalDigest(snapshotKey);
+
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("replacement-cluster-root"),
+            keccak256("params"),
+            keccak256("replacement-epoch-artifact"),
+            "ipfs://epoch-replacement"
+        );
+        vm.warp(3 hours + 4);
+        oracle.finalizeCorrelationEpoch(1);
+
+        input.artifactHash = keccak256("replacement-epoch-artifact");
+        input.weightRoot = keccak256("replacement-weight-root");
+        input.reasonRoot = keccak256("replacement-reason-root");
+        input.artifactURI = "ipfs://round-replacement";
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        assertTrue(oracle.rejectedRoundPayoutSnapshotDigests(snapshotKey, staleDigest));
+        ClusterPayoutOracle.RoundPayoutProposal memory replacement = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(replacement.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Proposed));
+        assertEq(replacement.snapshot.weightRoot, input.weightRoot);
+        assertEq(replacement.artifactHash, keccak256("replacement-epoch-artifact"));
+    }
+
+    function test_StaleFinalizedRoundPayoutSnapshotCannotBeReplacedWhenConsumed() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(
+            oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), input.rewardPoolId, input.contentId, input.roundId
+        );
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.finalizeRoundPayoutSnapshot(snapshotKey);
+
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-parent"));
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("replacement-cluster-root"),
+            keccak256("params"),
+            keccak256("replacement-epoch-artifact"),
+            "ipfs://epoch-replacement"
+        );
+        vm.warp(3 hours + 4);
+        oracle.finalizeCorrelationEpoch(1);
+
+        questionConsumer.setConsumed(true);
+        input.artifactHash = keccak256("replacement-epoch-artifact");
+        input.weightRoot = keccak256("replacement-weight-root");
+        vm.expectRevert(ClusterPayoutOracle.SnapshotConsumed.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
     function test_RejectedFinalizedCorrelationEpochCanBeReplacedWithDifferentRoot() public {
         bytes32 badRoot = keccak256("bad-cluster-root");
         oracle.proposeCorrelationEpoch(

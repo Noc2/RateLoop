@@ -360,7 +360,16 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         RoundPayoutProposal storage existing = roundPayoutProposals[snapshotKey];
         if (existing.snapshot.status != SnapshotStatus.None && existing.snapshot.status != SnapshotStatus.Rejected) {
-            revert SnapshotExists();
+            if (
+                existing.snapshot.status != SnapshotStatus.Finalized
+                    || _isCurrentCorrelationEpoch(existing.correlationEpochDigest, existing.snapshot.correlationEpochId)
+            ) {
+                revert SnapshotExists();
+            }
+            (bool consumed, bool consumedKnown) = _roundPayoutSnapshotConsumptionStatus(existing);
+            if (!consumedKnown) revert SnapshotExists();
+            if (consumed) revert SnapshotConsumed();
+            rejectedRoundPayoutSnapshotDigests[snapshotKey][_roundPayoutSnapshotProposalDigest(existing)] = true;
         }
         if (existing.snapshot.status == SnapshotStatus.Rejected && rejectedRoundPayoutSnapshotConsumed[snapshotKey]) {
             revert SnapshotConsumed();
@@ -797,6 +806,26 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             keccak256(bytes(proposal.artifactURI)),
             proposal.correlationEpochDigest
         );
+    }
+
+    function _roundPayoutSnapshotConsumptionStatus(RoundPayoutProposal storage proposal)
+        private
+        view
+        returns (bool consumed, bool consumedKnown)
+    {
+        address consumer = proposal.consumer;
+        if (consumer == address(0)) return (true, false);
+        RoundPayoutSnapshot storage snapshot = proposal.snapshot;
+        try IRoundPayoutSnapshotConsumer(consumer)
+            .isRoundPayoutSnapshotConsumed(
+                snapshot.domain, snapshot.rewardPoolId, snapshot.contentId, snapshot.roundId
+            ) returns (
+            bool isConsumed
+        ) {
+            return (isConsumed, true);
+        } catch {
+            return (true, false);
+        }
     }
 
     function _roundPayoutSnapshotDigest(
