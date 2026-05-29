@@ -53,7 +53,7 @@ function formatWinRate(value: number) {
 }
 
 function formatWalletAddressLabel(address: string) {
-  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+  return `${address.slice(0, 6)}...`;
 }
 
 function WalletAddressCopyRow({ address, displayName }: { address: string; displayName: string }) {
