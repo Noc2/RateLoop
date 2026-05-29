@@ -33,7 +33,8 @@ async function expectSuccessfulSubmission(page: Page) {
 
   const successDialog = page.getByRole("dialog", { name: /Question submitted/i });
   await successDialog.waitFor({ state: "visible", timeout: 60_000 });
-  await expect(successDialog.getByRole("heading", { name: /Question Submitted!/i })).toBeVisible();
+  await expect(successDialog.getByText(/Question submitted/i)).toBeVisible();
+  await expect(successDialog.getByRole("link", { name: /View Content/i })).toBeVisible();
   await page.waitForTimeout(1_500);
   await expect(successDialog).toBeVisible();
 }
