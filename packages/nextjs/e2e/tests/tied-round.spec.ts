@@ -1,6 +1,9 @@
 import {
+  approveLREP,
+  commitVoteDirect,
   evmIncreaseTime,
   getActiveRoundId,
+  revealVoteDirect,
   setTestConfig,
   settleRoundDirect,
   submitContentDirect,
@@ -8,13 +11,10 @@ import {
   waitForPonderSync,
 } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
-import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { waitForSettlementIndexed } from "../helpers/keeper";
 import { getContentById, getContentList } from "../helpers/ponder-api";
 import { PONDER_URL } from "../helpers/ponder-url";
-import { voteOnSpecificContent } from "../helpers/vote-helpers";
-import { setupWallet } from "../helpers/wallet-session";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -24,9 +24,8 @@ import { expect, test } from "@playwright/test";
  *
  * Strategy:
  * 1. Ask a fresh question directly to get a clean round with 0 votes
- * 2. 4 accounts vote on the SAME content via UI: 2 UP + 2 DOWN, all 1 LREP
- *    (UI voting uses commitVote correctly via hooks)
- * 3. Fast-forward past epoch → keeper reveals via keeper API → fast-forward → settle
+ * 2. 4 accounts vote on the SAME content directly: 2 UP + 2 DOWN, all equal stake
+ * 3. Fast-forward past epoch → reveal votes → fast-forward → settle
  * 4. Verify round.state === 3 (Tied) and rating unchanged
  *
  * Account allocation:
@@ -42,7 +41,10 @@ test.describe("Tied round lifecycle", () => {
   test.describe.configure({ mode: "serial" });
 
   const VOTING_ENGINE = CONTRACT_ADDRESSES.RoundVotingEngine;
-  const EPOCH_DURATION = 300; // 5 min — contract minimum is 5 minutes
+  const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
+  const EPOCH_DURATION = 60;
+  const STAKE = BigInt(10e6);
+  const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
   test.beforeAll(async () => {
     const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION);
@@ -95,7 +97,7 @@ test.describe("Tied round lifecycle", () => {
     expect(newContentId).toBeTruthy();
   });
 
-  test("4 voters create a tie (2 up, 2 down, equal stakes)", async ({ browser }) => {
+  test("4 voters create a tie (2 up, 2 down, equal stakes)", async () => {
     test.setTimeout(240_000);
     test.skip(!newContentId, "No content from previous test");
 
@@ -107,25 +109,23 @@ test.describe("Tied round lifecycle", () => {
       { account: ANVIL_ACCOUNTS.account6, direction: "down" as const },
     ];
 
-    let successCount = 0;
+    const commits: { commitKey: `0x${string}`; isUp: boolean; salt: `0x${string}` }[] = [];
 
     for (const voter of voters) {
-      const context = await newE2EContext(browser);
-      const page = await context.newPage();
-      await setupWallet(page, voter.account.privateKey);
+      const isUp = voter.direction === "up";
+      const approved = await approveLREP(VOTING_ENGINE, STAKE, voter.account.address, LREP_TOKEN);
+      expect(approved, `Vote approval failed for ${voter.account.address}`).toBe(true);
 
-      const success = await voteOnSpecificContent(page, newContentId!, voter.direction, {
-        voterAddress: voter.account.address,
-      });
-      if (success) successCount++;
-
-      await context.close();
-    }
-
-    // Need all 4 votes for a perfect tie (>= minVoters=3 for settlement)
-    if (successCount < 4) {
-      test.skip(true, `Only ${successCount}/4 votes succeeded (cooldowns?)`);
-      return;
+      const result = await commitVoteDirect(
+        BigInt(newContentId!),
+        isUp,
+        STAKE,
+        ZERO_ADDRESS,
+        voter.account.address,
+        VOTING_ENGINE,
+      );
+      expect(result.success, `Commit failed for ${voter.account.address}`).toBe(true);
+      commits.push({ commitKey: result.commitKey, isUp: result.isUp, salt: result.salt });
     }
 
     // Snapshot the pre-settlement rating
@@ -138,14 +138,18 @@ test.describe("Tied round lifecycle", () => {
     // Fast-forward past epoch duration so votes become revealable
     await evmIncreaseTime(EPOCH_DURATION + 1);
 
-    // Trigger the keeper to reveal votes via its API.
-    // The keeper reads committed votes on-chain and calls revealVoteByCommitKey.
-    // In E2E, we trigger a keeper run by calling its endpoint or just fast-forward
-    // and let the keeper poll loop handle it. UI votes are commitVote writes,
-    // and the keeper decodes the mock ciphertext before revealing.
-    //
-    // Wait a bit for the keeper to pick up the reveals
-    await waitForPonderSync();
+    for (let i = 0; i < commits.length; i++) {
+      const revealed = await revealVoteDirect(
+        BigInt(newContentId!),
+        roundId,
+        commits[i].commitKey,
+        commits[i].isUp,
+        commits[i].salt,
+        ANVIL_ACCOUNTS.account1.address,
+        VOTING_ENGINE,
+      );
+      expect(revealed, `Reveal failed for voter ${i}`).toBe(true);
+    }
 
     // Fast-forward past epoch (no settlement delay, but chain time must advance)
     await evmIncreaseTime(EPOCH_DURATION + 1);
@@ -153,11 +157,12 @@ test.describe("Tied round lifecycle", () => {
 
     // Try to settle
     if (roundId > 0n) {
-      await settleRoundDirect(BigInt(newContentId!), roundId, ANVIL_ACCOUNTS.account1.address, VOTING_ENGINE);
+      const settledTx = await settleRoundDirect(BigInt(newContentId!), roundId, ANVIL_ACCOUNTS.account1.address, VOTING_ENGINE);
+      expect(settledTx, "Settlement tx failed").toBe(true);
     }
 
     // Wait for settlement in Ponder
-    const settled = await waitForSettlementIndexed(newContentId!, PONDER_URL, 30_000);
+    const settled = await waitForSettlementIndexed(newContentId!, PONDER_URL, 60_000);
     expect(settled).toBe(true);
 
     // Verify round state — must be Tied (state=3) since pools are equal
