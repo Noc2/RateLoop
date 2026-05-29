@@ -11,7 +11,7 @@ import { AdvisoryVoteRecorderAbi, ContentRegistryAbi, RoundVotingEngineAbi } fro
 import { buildCommitVoteParams, buildStakeAmountWei } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { type Address } from "viem";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useSignTypedData, useWriteContract } from "wagmi";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-eth";
@@ -40,7 +40,12 @@ import { recordLocalVoteCooldown } from "~~/lib/vote/localCooldown";
 import { PREPARING_ROUND_VOTE_MESSAGE, ensureOpenStakedRoundRuntime } from "~~/lib/vote/openStakedRoundRuntime";
 import { normalizeRoundVoteError } from "~~/lib/vote/roundVoteErrors";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
-import { type RoundVoteContractCall, buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
+import {
+  type RoundVoteContractCall,
+  type RoundVotePermitSignature,
+  buildRoundVoteTransactionPlan,
+} from "~~/lib/vote/roundVoteTransactionPlan";
+import { buildLrepPermitTypedData, getDefaultSignatureDeadline, getSignatureParts } from "~~/lib/walletSignatures";
 import scaffoldConfig from "~~/scaffold.config";
 import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
 
@@ -138,6 +143,7 @@ export function useRoundVote() {
   const localE2ETestWalletClient = useLocalE2ETestWalletClient(address, targetNetwork.id);
   const writeTx = useTransactor(localE2ETestWalletClient);
   const wagmiTokenWrite = useWriteContract();
+  const { signTypedDataAsync } = useSignTypedData();
   const useDirectLocalE2EWrites = Boolean(localE2ETestWalletClient);
   const {
     canUseSelfFundedBatchCalls,
@@ -374,6 +380,34 @@ export function useRoundVote() {
               args: [address as Address, votingEngineAddress],
             })) as bigint);
       let currentAllowance = await readCurrentAllowance();
+      const signPermitForVote = async (stakeWei: bigint): Promise<RoundVotePermitSignature | undefined> => {
+        if (useDirectLocalE2EWrites || stakeWei === 0n) return undefined;
+        try {
+          const nonce = (await publicClient.readContract({
+            address: lrepAddress,
+            abi: LoopReputationAbi,
+            functionName: "nonces",
+            args: [address as Address],
+          })) as bigint;
+          const deadline = getDefaultSignatureDeadline();
+          const signature = await signTypedDataAsync(
+            buildLrepPermitTypedData({
+              chainId: targetNetwork.id,
+              deadline,
+              nonce,
+              owner: address as Address,
+              spender: votingEngineAddress,
+              tokenAddress: lrepAddress,
+              value: stakeWei,
+            }),
+          );
+          const parts = getSignatureParts(signature);
+          return { deadline, ...parts };
+        } catch (permitError) {
+          console.warn("LREP permit signing unavailable; falling back to approve + vote.", permitError);
+          return undefined;
+        }
+      };
       const writePlannedCall = async (call: RoundVoteContractCall, action: string) => {
         const request: any = {
           abi: call.abi,
@@ -465,7 +499,7 @@ export function useRoundVote() {
           resolveRuntime: resolveFreshStakedRuntime,
         });
 
-      const buildFreshRoundVotePlan = async (allowanceForPlan: bigint) => {
+      const buildFreshRoundVotePlan = async (allowanceForPlan: bigint, permitSignature?: RoundVotePermitSignature) => {
         const freshRuntime = isRequestedAdvisoryVote ? runtime : await ensureOpenStakedRuntime();
         if (!freshRuntime) {
           throw new Error(PREPARING_ROUND_VOTE_MESSAGE);
@@ -496,6 +530,7 @@ export function useRoundVote() {
           drandChainHash,
           frontend,
           lrepAddress,
+          permitSignature,
           roundContext,
           stakeWei,
           targetRound,
@@ -506,7 +541,11 @@ export function useRoundVote() {
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
       if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
-        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+        const permitSignature =
+          !isZeroStakeVote && currentAllowance < requestedStakeWei
+            ? await signPermitForVote(requestedStakeWei)
+            : undefined;
+        const freshVote = await buildFreshRoundVotePlan(currentAllowance, permitSignature);
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,
@@ -514,7 +553,11 @@ export function useRoundVote() {
         });
         submittedVote = freshVote;
       } else if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
-        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+        const permitSignature =
+          !isZeroStakeVote && currentAllowance < requestedStakeWei
+            ? await signPermitForVote(requestedStakeWei)
+            : undefined;
+        const freshVote = await buildFreshRoundVotePlan(currentAllowance, permitSignature);
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
           atomicRequired: true,
@@ -525,6 +568,20 @@ export function useRoundVote() {
         const needsApproval = !isZeroStakeVote && currentAllowance < requestedStakeWei;
 
         if (needsApproval) {
+          const permitSignature = await signPermitForVote(requestedStakeWei);
+          if (permitSignature) {
+            const freshVote = await buildFreshRoundVotePlan(currentAllowance, permitSignature);
+            for (const call of freshVote.plan.calls) {
+              const transactionHash = await writePlannedCall(call, "vote");
+              if (!transactionHash) {
+                return false;
+              }
+            }
+            submittedVote = freshVote;
+          }
+        }
+
+        if (needsApproval && !submittedVote) {
           const approvalPlan = await buildFreshRoundVotePlan(0n);
           const approvalCall = approvalPlan.plan.calls.find(call => call.kind === "approve");
           if (!approvalCall) {
@@ -537,14 +594,16 @@ export function useRoundVote() {
           currentAllowance = requestedStakeWei;
         }
 
-        const freshVote = await buildFreshRoundVotePlan(currentAllowance);
-        for (const call of freshVote.plan.calls) {
-          const transactionHash = await writePlannedCall(call, call.kind === "approve" ? "approve" : "vote");
-          if (!transactionHash) {
-            return false;
+        if (!submittedVote) {
+          const freshVote = await buildFreshRoundVotePlan(currentAllowance);
+          for (const call of freshVote.plan.calls) {
+            const transactionHash = await writePlannedCall(call, call.kind === "approve" ? "approve" : "vote");
+            if (!transactionHash) {
+              return false;
+            }
           }
+          submittedVote = freshVote;
         }
-        submittedVote = freshVote;
       }
 
       if (!submittedVote) {

@@ -65,6 +65,28 @@ test("buildRoundVoteTransactionPlan batches approval before commit when allowanc
   assert.deepEqual(plan.calls[1].args, plan.commitVoteArgs);
 });
 
+test("buildRoundVoteTransactionPlan uses permit-backed commit when allowance is low and permit is supplied", () => {
+  const permitSignature = {
+    deadline: 1234n,
+    r: `0x${"1".repeat(64)}` as const,
+    s: `0x${"2".repeat(64)}` as const,
+    v: 27,
+  };
+  const plan = buildRoundVoteTransactionPlan({
+    ...baseParams,
+    currentAllowance: 1n,
+    permitSignature,
+    stakeWei: 10n,
+  });
+
+  assert.equal(plan.isAdvisoryVote, false);
+  assert.equal(plan.needsApproval, true);
+  assert.equal(plan.calls.length, 1);
+  assert.equal(plan.calls[0].kind, "commitVoteWithPermit");
+  assert.equal(plan.calls[0].functionName, "commitVoteWithPermit");
+  assert.deepEqual(plan.calls[0].args, [...plan.commitVoteArgs, 1234n, 27, permitSignature.r, permitSignature.s]);
+});
+
 test("buildRoundVoteTransactionPlan skips approval when allowance covers the stake", () => {
   const plan = buildRoundVoteTransactionPlan({
     ...baseParams,

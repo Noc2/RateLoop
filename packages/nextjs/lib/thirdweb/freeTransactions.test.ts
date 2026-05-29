@@ -215,6 +215,22 @@ const voteCall = (voteMarker: `0x${string}`) =>
     WALLET,
   ]);
 
+const permitVoteCall = (voteMarker: `0x${string}`) =>
+  encodeCall(votingEngineContract, "commitVoteWithPermit", [
+    1n,
+    1n,
+    1n,
+    `0x${"1".repeat(64)}`,
+    `0x${"2".repeat(64)}`,
+    voteMarker,
+    1n,
+    WALLET,
+    1234n,
+    27,
+    `0x${"3".repeat(64)}`,
+    `0x${"4".repeat(64)}`,
+  ]);
+
 function submitQuestionWithRewardCall(
   overrides: Partial<{
     contextUrl: string;
@@ -562,6 +578,7 @@ test("supported sponsored operation families are allowlisted", async () => {
   };
   const supportedCases = [
     [voteCall("0x07")],
+    [permitVoteCall("0x0701")],
     [
       encodeCall(lrepContract, "approve", [rewardEscrowContract.address, 1_000_000n]),
       encodeCall(contentRegistryContract, "reserveSubmission", [`0x${"1".repeat(64)}`]),

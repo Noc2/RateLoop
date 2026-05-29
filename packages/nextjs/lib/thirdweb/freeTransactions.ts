@@ -929,7 +929,11 @@ async function validateSponsoredCalls(
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "RoundVotingEngine":
-        if (functionName === "claimCancelledRoundRefund" || functionName === "commitVote") {
+        if (
+          functionName === "claimCancelledRoundRefund" ||
+          functionName === "commitVote" ||
+          functionName === "commitVoteWithPermit"
+        ) {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };

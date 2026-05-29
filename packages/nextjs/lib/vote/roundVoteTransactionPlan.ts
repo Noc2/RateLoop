@@ -4,7 +4,7 @@ import type { Abi, Hex } from "viem";
 
 type EvmAddress = `0x${string}`;
 
-export type RoundVoteCallKind = "approve" | "commitVote" | "openRound" | "recordAdvisoryVote";
+export type RoundVoteCallKind = "approve" | "commitVote" | "commitVoteWithPermit" | "openRound" | "recordAdvisoryVote";
 
 export type RoundVoteContractCall = {
   abi: Abi;
@@ -44,6 +44,13 @@ type RoundVoteTransactionPlan = {
   stakeWei: bigint;
 };
 
+export type RoundVotePermitSignature = {
+  deadline: bigint;
+  r: Hex;
+  s: Hex;
+  v: number;
+};
+
 export function buildRoundVoteTransactionPlan(params: {
   advisoryVoteRecorderAddress?: EvmAddress;
   ciphertext: Hex;
@@ -54,6 +61,7 @@ export function buildRoundVoteTransactionPlan(params: {
   frontend: EvmAddress;
   lrepAddress: EvmAddress;
   roundContext: bigint;
+  permitSignature?: RoundVotePermitSignature;
   stakeWei: bigint;
   targetRound: bigint;
   votingEngineAddress: EvmAddress;
@@ -93,7 +101,7 @@ export function buildRoundVoteTransactionPlan(params: {
 
   const needsApproval = params.currentAllowance < params.stakeWei;
   const calls: RoundVoteContractCall[] = [];
-  if (needsApproval) {
+  if (needsApproval && !params.permitSignature) {
     calls.push({
       abi: LoopReputationAbi as Abi,
       address: params.lrepAddress,
@@ -101,6 +109,31 @@ export function buildRoundVoteTransactionPlan(params: {
       functionName: "approve",
       kind: "approve",
     });
+  }
+
+  if (needsApproval && params.permitSignature) {
+    calls.push({
+      abi: RoundVotingEngineAbi as Abi,
+      address: params.votingEngineAddress,
+      args: [
+        ...commitVoteArgs,
+        params.permitSignature.deadline,
+        params.permitSignature.v,
+        params.permitSignature.r,
+        params.permitSignature.s,
+      ] as const,
+      functionName: "commitVoteWithPermit",
+      kind: "commitVoteWithPermit",
+    });
+
+    return {
+      advisoryVoteArgs,
+      calls,
+      commitVoteArgs,
+      isAdvisoryVote: false,
+      needsApproval,
+      stakeWei: params.stakeWei,
+    };
   }
 
   calls.push({
