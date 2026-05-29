@@ -22,6 +22,7 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         address author;
         uint48 committedAt;
         uint48 revealedAt;
+        RoundVotingEngine votingEngineSnapshot;
     }
 
     RoundVotingEngine public votingEngine;
@@ -73,14 +74,16 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
 
     function commitFeedbackHash(uint256 contentId, uint256 roundId, bytes32 commitKey, bytes32 feedbackHash) external {
         require(feedbackHash != bytes32(0), "Feedback hash required");
-        require(_roundState(contentId, roundId) == RoundLib.RoundState.Open, "Round not open");
-        address author = _requireCommitAuthor(contentId, roundId, commitKey);
+        RoundVotingEngine engine = votingEngine;
+        require(_roundState(engine, contentId, roundId) == RoundLib.RoundState.Open, "Round not open");
+        address author = _requireCommitAuthor(engine, contentId, roundId, commitKey);
 
         FeedbackRecord storage record = feedbackByCommitKey[contentId][roundId][commitKey];
         require(record.feedbackHash == bytes32(0), "Feedback already committed");
         record.feedbackHash = feedbackHash;
         record.author = author;
         record.committedAt = uint48(block.timestamp);
+        record.votingEngineSnapshot = engine;
 
         emit FeedbackCommitted(contentId, roundId, commitKey, author, feedbackHash);
     }
@@ -94,11 +97,13 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         string calldata sourceUrl,
         bytes32 clientNonce
     ) external {
-        require(_isTerminalRound(_roundState(contentId, roundId)), "Round not terminal");
         FeedbackRecord storage record = feedbackByCommitKey[contentId][roundId][commitKey];
         require(record.feedbackHash != bytes32(0), "Feedback not committed");
         require(record.revealedAt == 0, "Feedback already revealed");
         require(record.author == msg.sender, "Only author");
+        RoundVotingEngine engine = record.votingEngineSnapshot;
+        if (address(engine) == address(0)) engine = votingEngine;
+        require(_isTerminalRound(_roundState(engine, contentId, roundId)), "Round not terminal");
         require(bytes(feedbackType).length > 0 && bytes(feedbackType).length <= MAX_FEEDBACK_TYPE_LENGTH, "Bad type");
         require(bytes(body).length > 0 && bytes(body).length <= MAX_FEEDBACK_BODY_LENGTH, "Bad body");
         require(bytes(sourceUrl).length <= MAX_SOURCE_URL_LENGTH, "Source too long");
@@ -106,7 +111,7 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         bytes32 expectedHash =
             buildContentFeedbackHash(contentId, roundId, record.author, feedbackType, body, sourceUrl, clientNonce);
         require(expectedHash == record.feedbackHash, "Feedback hash mismatch");
-        _requireRevealedCommit(contentId, roundId, commitKey);
+        _requireRevealedCommit(engine, contentId, roundId, commitKey);
 
         record.revealedAt = uint48(block.timestamp);
         emit FeedbackRevealed(
@@ -153,18 +158,18 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         emit VotingEngineUpdated(votingEngine_);
     }
 
-    function _requireCommitAuthor(uint256 contentId, uint256 roundId, bytes32 commitKey)
+    function _requireCommitAuthor(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
         internal
         view
         returns (address author)
     {
-        (address committedVoter,,,,,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+        (address committedVoter,,,,,,) = engine.commitCore(contentId, roundId, commitKey);
         require(committedVoter != address(0), "No commit");
         if (committedVoter == msg.sender) {
             return msg.sender;
         }
 
-        bytes32 commitHash = votingEngine.voterCommitHash(contentId, roundId, msg.sender);
+        bytes32 commitHash = engine.voterCommitHash(contentId, roundId, msg.sender);
         require(
             commitHash != bytes32(0) && keccak256(abi.encodePacked(msg.sender, commitHash)) == commitKey,
             "Only commit voter"
@@ -172,13 +177,20 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         return msg.sender;
     }
 
-    function _requireRevealedCommit(uint256 contentId, uint256 roundId, bytes32 commitKey) internal view {
-        (address voter,,,, bool revealed,,) = votingEngine.commitCore(contentId, roundId, commitKey);
+    function _requireRevealedCommit(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+    {
+        (address voter,,,, bool revealed,,) = engine.commitCore(contentId, roundId, commitKey);
         require(voter != address(0) && revealed, "Vote not revealed");
     }
 
-    function _roundState(uint256 contentId, uint256 roundId) internal view returns (RoundLib.RoundState state) {
-        (, state,,,,,,,,,,,,) = votingEngine.rounds(contentId, roundId);
+    function _roundState(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (RoundLib.RoundState state)
+    {
+        (, state,,,,,,,,,,,,) = engine.rounds(contentId, roundId);
     }
 
     function _isTerminalRound(RoundLib.RoundState state) internal pure returns (bool) {

@@ -305,6 +305,50 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function testFeedbackRevealUsesEngineSnapshottedAtCommit() public {
+        uint256 contentId = _submitQuestion("");
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        bytes32[] memory salts = new bytes32[](voters.length);
+        bytes32[] memory commitKeys = new bytes32[](voters.length);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            (salts[i], commitKeys[i]) = _commitFeedbackVote(voters[i], contentId, directions[i], i, address(0));
+        }
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        bytes32 feedbackHash = _feedbackHash(contentId, roundId, voter1);
+        vm.prank(voter1);
+        feedbackRegistry.commitFeedbackHash(contentId, roundId, commitKeys[0], feedbackHash);
+
+        _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
+        for (uint256 i = 0; i < voters.length; i++) {
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
+        }
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+
+        RoundVotingEngine replacementEngine = RoundVotingEngine(
+            address(
+                new ERC1967Proxy(
+                    address(new RoundVotingEngine()),
+                    abi.encodeCall(
+                        RoundVotingEngine.initialize,
+                        (owner, address(lrepToken), address(registry), address(protocolConfig))
+                    )
+                )
+            )
+        );
+
+        vm.prank(owner);
+        feedbackRegistry.setVotingEngine(address(replacementEngine));
+
+        vm.prank(voter1);
+        feedbackRegistry.revealFeedback(
+            contentId, roundId, commitKeys[0], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+        assertTrue(feedbackRegistry.isAwardableFeedback(contentId, roundId, commitKeys[0], feedbackHash));
+    }
+
     function testAwardPaysRevealedVoterAndVoteAttributedFrontend() public {
         _registerFrontend(frontend1);
         uint256 contentId = _submitQuestion("");
