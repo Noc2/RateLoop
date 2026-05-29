@@ -173,6 +173,7 @@ jobs:
           RPC_URL: http://127.0.0.1:8545
           CHAIN_ID: "31337"
           KEEPER_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+          PONDER_BASE_URL: http://127.0.0.1:42069
           METRICS_ENABLED: "true"
           METRICS_PORT: "9090"
         run: yarn keeper:start &
