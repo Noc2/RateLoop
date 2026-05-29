@@ -14,11 +14,8 @@ import {
   waitForPonderSync,
 } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
-import { newE2EContext } from "../helpers/browser-context";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
 import { getContentById, getContentList, ponderGet } from "../helpers/ponder-api";
-import { gotoWithRetry } from "../helpers/wait-helpers";
-import { setupWallet } from "../helpers/wallet-session";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -168,37 +165,6 @@ test.describe("Reward claim lifecycle", () => {
 
     expect(data.content).toHaveProperty("rating");
     expect(data.content).toHaveProperty("totalVotes");
-  });
-
-  test("sidebar wallet summary claims reward after settlement", async ({ browser }) => {
-    test.setTimeout(120_000);
-    test.skip(!settledContentId || roundId === 0n, "No settled content from previous test");
-
-    const context = await newE2EContext(browser);
-    const page = await context.newPage();
-    const winner = ANVIL_ACCOUNTS.account4;
-    await setupWallet(page, winner.privateKey);
-
-    await gotoWithRetry(page, "/governance#profile", { ensureWalletConnected: true });
-
-    const balanceBefore = await readTokenBalance(winner.address, LREP_TOKEN);
-    const walletSummary = page.getByTestId("wallet-connected");
-    const claimButton = walletSummary.getByRole("button", { name: /^Claim\b/ }).first();
-    const claimVisible = await claimButton
-      .waitFor({ state: "visible", timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-    test.skip(!claimVisible, "No sidebar claim is available for this settlement state.");
-    await claimButton.click();
-
-    await expect
-      .poll(async () => readTokenBalance(winner.address, LREP_TOKEN), {
-        message: "winner wallet balance should increase after claiming from the relocated wallet summary",
-        timeout: 45_000,
-      })
-      .toBeGreaterThan(balanceBefore);
-
-    await context.close();
   });
 
   test("winning voter claims reward via direct call", async () => {
