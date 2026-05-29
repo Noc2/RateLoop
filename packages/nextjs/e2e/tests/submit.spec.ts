@@ -57,7 +57,7 @@ test.describe("Ask page", () => {
   test("can ask a question", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
 
-    // Wait for the form to appear (requires wallet + rater credential)
+    // Wait for the form to appear.
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
 
     // 1. Select category — click the category dropdown trigger

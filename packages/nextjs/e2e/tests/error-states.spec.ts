@@ -5,27 +5,14 @@ import { gotoWithRetry, waitForFeedLoaded } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 
 test.describe("Error states and edge cases", () => {
-  test("ask page without rater credential shows mint prompt", async ({ browser }) => {
+  test("ask page without rater credential shows submit form", async ({ browser }) => {
     // Account #0 has no rater credential and is otherwise idle in local E2E.
     const context = await newE2EContext(browser);
     const page = await context.newPage();
     await setupWallet(page, ANVIL_ACCOUNTS.account0.privateKey, { bootstrap: false });
-    await page.goto("/ask", { waitUntil: "domcontentloaded" });
+    await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
 
-    // Without rater credential, should show "Rater Credential Required" heading
-    const voterIdRequired = page.getByRole("heading", { name: /Rater Credential Required/i });
-    const getVoterIdLink = page.getByRole("link", { name: /Get rater credential/i });
-    const submitForm = page.getByRole("heading", { name: "Submit Question" });
-    const signedOutHeading = page.getByRole("heading", { name: "Submit" });
-    // Local wallet auto-connect is best-effort in E2E. Accept either the
-    // connected no rater credential prompt, the full ask form, or the signed-out shell.
-    await expect(voterIdRequired.or(submitForm).or(signedOutHeading)).toBeVisible({ timeout: 15_000 });
-
-    if (await voterIdRequired.isVisible()) {
-      await expect(getVoterIdLink).toBeVisible({ timeout: 5_000 });
-    } else if (await signedOutHeading.isVisible().catch(() => false)) {
-      await expect(signedOutHeading).toBeVisible({ timeout: 5_000 });
-    }
+    await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
 
     await context.close();
   });

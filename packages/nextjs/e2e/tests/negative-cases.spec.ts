@@ -41,18 +41,14 @@ test.describe("Negative cases", () => {
     await context.close();
   });
 
-  test("ask page shows rater credential prompt for user without rater credential", async ({ browser }) => {
+  test("ask page shows submit form for user without rater credential", async ({ browser }) => {
     const context = await newE2EContext(browser);
     const page = await context.newPage();
     await setupWallet(page, ANVIL_ACCOUNTS.account0.privateKey, { bootstrap: false });
 
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
 
-    const voterIdRequired = page.getByRole("heading", { name: /Rater Credential Required/i });
-    await expect(voterIdRequired).toBeVisible({ timeout: 15_000 });
-
-    const getVoterIdLink = page.getByRole("link", { name: /Get rater credential/i });
-    await expect(getVoterIdLink).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
 
     await context.close();
   });
