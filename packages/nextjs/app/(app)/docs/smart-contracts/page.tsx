@@ -6,6 +6,7 @@ import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 const contractsSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/foundry/contracts";
 const deploymentsSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/foundry/deployments";
 const tsContractsSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/contracts";
+const robustBtsHref = "https://doi.org/10.1609/aaai.v26i1.8261";
 
 const SmartContracts: NextPage = () => {
   return (
@@ -134,7 +135,13 @@ const SmartContracts: NextPage = () => {
             </tr>
             <tr>
               <td className="font-mono text-primary">RewardMath</td>
-              <td>Library: RBTS score-spread settlement, forfeited-pool routing, and reward calculations</td>
+              <td>
+                Library:{" "}
+                <a href={robustBtsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+                  Robust Bayesian Truth Serum (RBTS)
+                </a>{" "}
+                score-spread settlement, forfeited-pool routing, and reward calculations
+              </td>
               <td>&mdash;</td>
             </tr>
             <tr>

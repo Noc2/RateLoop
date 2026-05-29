@@ -6,6 +6,8 @@ import { RbtsScoreSpreadSettlementDiagram } from "~~/components/docs/RbtsScoreSp
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import { getFreeTransactionLimit } from "~~/lib/env/server";
 
+const robustBtsHref = "https://doi.org/10.1609/aaai.v26i1.8261";
+
 const HowItWorks: NextPage = () => {
   const freeTransactionLimit = getFreeTransactionLimit();
 
@@ -67,8 +69,11 @@ const HowItWorks: NextPage = () => {
       <h2 id="on-chain-settlement">3. Settle Rewards</h2>
       <h3 id="lrep-stake-settlement">LREP Stake Settlement</h3>
       <p>
-        RBTS compares every revealed staked report with the stake-weighted mean score. A report&apos;s score spread is
-        its own score minus that mean.
+        <a href={robustBtsHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
+          Robust Bayesian Truth Serum (RBTS)
+        </a>{" "}
+        compares every revealed staked report with the stake-weighted mean score. A report&apos;s score spread is its
+        own score minus that mean.
       </p>
       <ul>
         <li>
