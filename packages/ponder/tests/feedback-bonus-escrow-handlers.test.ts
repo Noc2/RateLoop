@@ -94,6 +94,7 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
           roundId: 3n,
           funder: "0x0000000000000000000000000000000000000001",
           awarder: "0x0000000000000000000000000000000000000002",
+          asset: 0n,
           amount: 100_000_000n,
           feedbackClosesAt: 2_592_000n,
           frontendFeeBps: 300n,
@@ -111,6 +112,7 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
         roundId: 3n,
         fundedAmount: 100_000_000n,
         remainingAmount: 100_000_000n,
+        asset: 0,
         frontendFeeBps: 300,
       }),
     });
@@ -119,7 +121,7 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
 
   it("updates pool accounting for awards and forfeits", async () => {
     const { db, inserts, updates } = createDb({
-      'feedbackBonusPool:{"id":"7"}': { id: 7n, contentId: 1n },
+      'feedbackBonusPool:{"id":"7"}': { id: 7n, contentId: 1n, asset: 0 },
       content: { id: 1n },
     });
     const registeredHandlers = await loadHandlers();
@@ -162,6 +164,7 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
         id: "7-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         grossAmount: 10_000_000n,
         recipientAmount: 9_700_000n,
+        asset: 0,
         frontendFee: 300_000n,
       }),
     });

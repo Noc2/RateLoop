@@ -115,6 +115,10 @@ export interface ContentItem {
     nextFeedbackClosesAt?: bigint | null;
   } | null;
   feedbackBonusSummary?: {
+    asset?: number | null;
+    currency?: RewardPoolCurrency;
+    displayCurrency?: RewardPoolDisplayCurrency;
+    decimals?: number;
     totalFunded: bigint;
     totalRemaining: bigint;
     totalAwarded: bigint;
@@ -340,6 +344,10 @@ export function mapContentItem(
       nextFeedbackClosesAt?: string | number | bigint | null;
     } | null;
     feedbackBonusSummary?: {
+      asset?: number | string | bigint | null;
+      currency?: string | null;
+      displayCurrency?: string | null;
+      decimals?: number | null;
       totalFunded?: string | number | bigint | null;
       totalFundedAmount?: string | number | bigint | null;
       totalRemaining?: string | number | bigint | null;
@@ -412,6 +420,13 @@ export function mapContentItem(
   const rewardPoolDisplayCurrency =
     item.rewardPoolSummary && rewardPoolCurrency
       ? normalizeRewardPoolDisplayCurrency(item.rewardPoolSummary.displayCurrency, rewardPoolCurrency)
+      : undefined;
+  const feedbackBonusCurrency = item.feedbackBonusSummary
+    ? normalizeRewardPoolCurrency(item.feedbackBonusSummary.currency, item.feedbackBonusSummary.asset)
+    : undefined;
+  const feedbackBonusDisplayCurrency =
+    item.feedbackBonusSummary && feedbackBonusCurrency
+      ? normalizeRewardPoolDisplayCurrency(item.feedbackBonusSummary.displayCurrency, feedbackBonusCurrency)
       : undefined;
   const ratingSettledRounds = Math.max(0, item.ratingSettledRounds ?? mappedOpenRound?.settledRounds ?? 0);
   const displayedRating = item.rating;
@@ -512,6 +527,13 @@ export function mapContentItem(
       : null,
     feedbackBonusSummary: item.feedbackBonusSummary
       ? {
+          asset:
+            item.feedbackBonusSummary.asset === undefined || item.feedbackBonusSummary.asset === null
+              ? null
+              : Number(item.feedbackBonusSummary.asset),
+          currency: feedbackBonusCurrency,
+          displayCurrency: feedbackBonusDisplayCurrency,
+          decimals: item.feedbackBonusSummary.decimals ?? 6,
           totalFunded: BigInt(
             item.feedbackBonusSummary.totalFunded ?? item.feedbackBonusSummary.totalFundedAmount ?? 0,
           ),

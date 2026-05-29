@@ -694,11 +694,15 @@ function isHexHash(value: string | null | undefined): value is `0x${string}` {
 
 function mapFeedbackBonusPool(row: PonderFeedbackBonusPool): ContentFeedbackBonusPool | null {
   if (!isValidWalletAddress(row.awarder)) return null;
+  const currency = row.asset === 0 ? "LREP" : "USDC";
   return {
     id: row.id,
     contentId: row.contentId,
     roundId: row.roundId,
     awarder: normalizeWalletAddress(row.awarder),
+    asset: row.asset,
+    currency,
+    displayCurrency: currency === "USDC" ? "USD" : "LREP",
     fundedAmount: row.fundedAmount,
     remainingAmount: row.remainingAmount,
     awardedAmount: row.awardedAmount,
@@ -709,6 +713,7 @@ function mapFeedbackBonusPool(row: PonderFeedbackBonusPool): ContentFeedbackBonu
 
 function mapFeedbackBonusAward(row: PonderFeedbackBonusAward): ContentFeedbackBonusAward | null {
   if (!isValidWalletAddress(row.recipient) || !isHexHash(row.feedbackHash)) return null;
+  const currency = row.asset === 0 ? "LREP" : "USDC";
   return {
     id: row.id,
     poolId: row.poolId,
@@ -716,6 +721,9 @@ function mapFeedbackBonusAward(row: PonderFeedbackBonusAward): ContentFeedbackBo
     roundId: row.roundId,
     recipient: normalizeWalletAddress(row.recipient),
     feedbackHash: row.feedbackHash.toLowerCase() as `0x${string}`,
+    asset: row.asset,
+    currency,
+    displayCurrency: currency === "USDC" ? "USD" : "LREP",
     grossAmount: row.grossAmount,
     recipientAmount: row.recipientAmount,
     frontendFee: row.frontendFee,

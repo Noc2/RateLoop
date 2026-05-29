@@ -360,6 +360,8 @@ export interface PonderContentItem {
 export type PonderRewardCurrency = "LREP" | "USDC";
 export type PonderRewardPoolCurrency = PonderRewardCurrency | "MIXED";
 export type PonderRewardPoolDisplayCurrency = "LREP" | "USD" | "MIXED";
+export type PonderFeedbackBonusCurrency = PonderRewardCurrency | "MIXED";
+export type PonderFeedbackBonusDisplayCurrency = "LREP" | "USD" | "MIXED";
 
 export interface PonderRewardPoolSummary {
   asset: number | null;
@@ -389,8 +391,9 @@ export interface PonderRewardPoolSummary {
 }
 
 export interface PonderFeedbackBonusSummary {
-  currency: "USDC";
-  displayCurrency: "USD";
+  asset: number | null;
+  currency: PonderFeedbackBonusCurrency;
+  displayCurrency: PonderFeedbackBonusDisplayCurrency;
   decimals: 6;
   poolCount: number;
   activePoolCount: number;
@@ -773,6 +776,7 @@ export interface PonderFeedbackBonusPool {
   roundId: string;
   funder: string;
   awarder: string;
+  asset: number;
   fundedAmount: string;
   remainingAmount: string;
   awardedAmount: string;
@@ -796,6 +800,7 @@ export interface PonderFeedbackBonusAward {
   recipient: string;
   identityKey: string;
   feedbackHash: string;
+  asset: number;
   grossAmount: string;
   recipientAmount: string;
   frontend: string;

@@ -306,6 +306,10 @@ test("mapContentItem supports text-only questions and Ponder bounty summaries", 
       activeRewardPoolCount: 1,
     },
     feedbackBonusSummary: {
+      asset: 0,
+      currency: "LREP",
+      displayCurrency: "LREP",
+      decimals: 6,
       totalFundedAmount: "12000000",
       totalRemainingAmount: "8000000",
       totalAwardedAmount: "4000000",
@@ -332,6 +336,10 @@ test("mapContentItem supports text-only questions and Ponder bounty summaries", 
   assert.equal(item.rewardPoolSummary?.totalVoterClaimed, 6_790_000n);
   assert.equal(item.rewardPoolSummary?.totalFrontendClaimed, 210_000n);
   assert.equal(item.rewardPoolSummary?.activeRewardPoolCount, 1);
+  assert.equal(item.feedbackBonusSummary?.asset, 0);
+  assert.equal(item.feedbackBonusSummary?.currency, "LREP");
+  assert.equal(item.feedbackBonusSummary?.displayCurrency, "LREP");
+  assert.equal(item.feedbackBonusSummary?.decimals, 6);
   assert.equal(item.feedbackBonusSummary?.totalFunded, 12_000_000n);
   assert.equal(item.feedbackBonusSummary?.totalRemaining, 8_000_000n);
   assert.equal(item.feedbackBonusSummary?.totalAwarded, 4_000_000n);

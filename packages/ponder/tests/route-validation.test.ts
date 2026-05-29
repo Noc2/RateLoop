@@ -193,6 +193,7 @@ function mockPonderModules<T>(result: T) {
       updatedAt: "profile.updatedAt",
     },
     feedbackBonusAward: {
+      asset: "feedbackBonusAward.asset",
       awardedAt: "feedbackBonusAward.awardedAt",
       contentId: "feedbackBonusAward.contentId",
       feedbackHash: "feedbackBonusAward.feedbackHash",
@@ -203,6 +204,7 @@ function mockPonderModules<T>(result: T) {
       roundId: "feedbackBonusAward.roundId",
     },
     feedbackBonusPool: {
+      asset: "feedbackBonusPool.asset",
       awarder: "feedbackBonusPool.awarder",
       contentId: "feedbackBonusPool.contentId",
       feedbackClosesAt: "feedbackBonusPool.feedbackClosesAt",

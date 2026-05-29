@@ -576,7 +576,7 @@ export const questionBundleClaim = onchainTable(
 );
 
 // ============================================================
-// FEEDBACK BONUS POOLS (USDC)
+// FEEDBACK BONUS POOLS
 // ============================================================
 
 export const feedbackBonusPool = onchainTable(
@@ -587,6 +587,7 @@ export const feedbackBonusPool = onchainTable(
     roundId: t.bigint().notNull(),
     funder: t.hex().notNull(),
     awarder: t.hex().notNull(),
+    asset: t.integer().notNull(),
     fundedAmount: t.bigint().notNull(),
     remainingAmount: t.bigint().notNull(),
     awardedAmount: t.bigint().notNull(),
@@ -621,6 +622,7 @@ export const feedbackBonusAward = onchainTable(
     recipient: t.hex().notNull(),
     identityKey: t.hex().notNull(),
     feedbackHash: t.hex().notNull(),
+    asset: t.integer().notNull(),
     grossAmount: t.bigint().notNull(),
     recipientAmount: t.bigint().notNull(),
     frontend: t.hex().notNull(),

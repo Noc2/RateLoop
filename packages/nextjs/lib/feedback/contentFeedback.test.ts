@@ -99,6 +99,7 @@ function buildFeedbackBonusPool(params: Partial<PonderFeedbackBonusPool> = {}): 
     roundId: "8",
     funder: WALLET,
     awarder: WALLET,
+    asset: 0,
     fundedAmount: "5000000",
     remainingAmount: "3000000",
     awardedAmount: "2000000",
@@ -125,6 +126,7 @@ function buildFeedbackBonusAward(params: Partial<PonderFeedbackBonusAward> = {})
     recipient: WALLET,
     identityKey: `0x${"22".repeat(32)}`,
     feedbackHash: `0x${"33".repeat(32)}`,
+    asset: 0,
     grossAmount: "1000000",
     recipientAmount: "970000",
     frontend: WALLET,
@@ -479,9 +481,11 @@ test("returns awardable feedback bonus pools and awards for public feedback", as
   assert.equal(result.awardableFeedbackBonusPools?.length, 1);
   assert.equal(result.awardableFeedbackBonusPools?.[0]?.id, "7");
   assert.equal(result.awardableFeedbackBonusPools?.[0]?.awarder, WALLET);
+  assert.equal(result.awardableFeedbackBonusPools?.[0]?.currency, "LREP");
   assert.equal(result.items[0]?.feedbackBonusAwards?.length, 1);
   assert.equal(result.items[0]?.feedbackBonusAwards?.[0]?.poolId, "7");
   assert.equal(result.items[0]?.feedbackBonusAwards?.[0]?.feedbackHash, added.feedbackHash);
+  assert.equal(result.items[0]?.feedbackBonusAwards?.[0]?.currency, "LREP");
 });
 
 test("public feedback remains visible behind newer hidden active-round rows", async () => {

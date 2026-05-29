@@ -11,7 +11,7 @@ async function touchContent(context: { db: any }, contentId: bigint, timestamp: 
 }
 
 ponder.on("FeedbackBonusEscrow:FeedbackBonusPoolCreated", async ({ event, context }) => {
-  const { poolId, contentId, roundId, funder, awarder, amount, feedbackClosesAt, frontendFeeBps } = event.args;
+  const { poolId, contentId, roundId, funder, awarder, amount, feedbackClosesAt, frontendFeeBps, asset } = event.args;
 
   await context.db
     .insert(feedbackBonusPool)
@@ -21,6 +21,7 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusPoolCreated", async ({ event, contex
       roundId,
       funder,
       awarder,
+      asset: Number(asset ?? 1),
       fundedAmount: amount,
       remainingAmount: amount,
       awardedAmount: 0n,
@@ -54,6 +55,7 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusAwarded", async ({ event, context })
     frontendRecipient,
     frontendFee,
   } = event.args;
+  const existingPool = await context.db.find(feedbackBonusPool, { id: poolId });
 
   await context.db
     .insert(feedbackBonusAward)
@@ -65,6 +67,7 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusAwarded", async ({ event, context })
       recipient,
       identityKey,
       feedbackHash,
+      asset: existingPool?.asset ?? 1,
       grossAmount,
       recipientAmount,
       frontend,

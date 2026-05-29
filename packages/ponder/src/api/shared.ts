@@ -133,6 +133,7 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
   const feedbackBonusRows = await db
     .select({
       contentId: feedbackBonusPool.contentId,
+      asset: feedbackBonusPool.asset,
       poolCount: sql<number>`count(*)`,
       activePoolCount: sql<number>`sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.feedbackClosesAt} > ${nowSeconds} then 1 else 0 end)`,
       expiredPoolCount: sql<number>`sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.feedbackClosesAt} <= ${nowSeconds} then 1 else 0 end)`,
@@ -149,11 +150,16 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
     })
     .from(feedbackBonusPool)
     .where(inArray(feedbackBonusPool.contentId, contentIds))
-    .groupBy(feedbackBonusPool.contentId);
+    .groupBy(feedbackBonusPool.contentId, feedbackBonusPool.asset);
 
-  const feedbackBonusSummaryByContentId = new Map<bigint, ReturnType<typeof formatFeedbackBonusSummary>>();
+  const feedbackBonusRowsByContentId = new Map<bigint, FeedbackBonusSummaryRow[]>();
   for (const row of feedbackBonusRows) {
-    feedbackBonusSummaryByContentId.set(row.contentId, formatFeedbackBonusSummary(row));
+    feedbackBonusRowsByContentId.set(row.contentId, [...(feedbackBonusRowsByContentId.get(row.contentId) ?? []), row]);
+  }
+
+  const feedbackBonusSummaryByContentId = new Map<bigint, ReturnType<typeof formatFeedbackBonusSummaryRows>>();
+  for (const [contentId, rows] of feedbackBonusRowsByContentId) {
+    feedbackBonusSummaryByContentId.set(contentId, formatFeedbackBonusSummaryRows(rows));
   }
 
   const openRounds = await db
@@ -271,6 +277,7 @@ function emptyRewardPoolSummary() {
 
 function emptyFeedbackBonusSummary() {
   return {
+    asset: null as number | null,
     currency: "USDC",
     displayCurrency: "USD",
     decimals: 6,
@@ -298,7 +305,8 @@ function toBigIntValue(value: bigint | string | number | null | undefined) {
   return 0n;
 }
 
-function formatFeedbackBonusSummary(row: {
+type FeedbackBonusSummaryRow = {
+  asset: number | string | bigint | null;
   poolCount: number | string | bigint | null;
   activePoolCount: number | string | bigint | null;
   expiredPoolCount: number | string | bigint | null;
@@ -312,26 +320,53 @@ function formatFeedbackBonusSummary(row: {
   totalForfeitedAmount: bigint | string | number | null;
   awardCount: number | string | bigint | null;
   nextFeedbackClosesAt: bigint | string | number | null;
-}) {
-  const activePoolCount = toNumberValue(row.activePoolCount);
+};
+
+function feedbackCurrencyForAsset(asset: number | string | bigint | null | undefined) {
+  return asset === 0 || asset === "0" || asset === 0n ? "LREP" : "USDC";
+}
+
+type FeedbackBonusCurrency = "LREP" | "USDC" | "MIXED";
+
+function feedbackDisplayCurrency(currency: FeedbackBonusCurrency) {
+  if (currency === "USDC") return "USD";
+  return currency;
+}
+
+function minNullableTimestamp(left: bigint | null, right: bigint | string | number | null) {
+  if (right === null) return left;
+  const parsed = toBigIntValue(right);
+  if (parsed <= 0n) return left;
+  return left === null || parsed < left ? parsed : left;
+}
+
+function formatFeedbackBonusSummaryRows(rows: FeedbackBonusSummaryRow[]) {
+  const assets = new Set(rows.map(row => toNumberValue(row.asset)));
+  const currencies = new Set(rows.map(row => feedbackCurrencyForAsset(row.asset)));
+  const currency: FeedbackBonusCurrency = currencies.size > 1 ? "MIXED" : (currencies.values().next().value ?? "USDC");
+  const activePoolCount = rows.reduce((sum, row) => sum + toNumberValue(row.activePoolCount), 0);
   return {
-    currency: "USDC",
-    displayCurrency: "USD",
+    asset: assets.size === 1 ? (assets.values().next().value ?? null) : null,
+    currency,
+    displayCurrency: feedbackDisplayCurrency(currency),
     decimals: 6,
-    poolCount: toNumberValue(row.poolCount),
+    poolCount: rows.reduce((sum, row) => sum + toNumberValue(row.poolCount), 0),
     activePoolCount,
-    expiredPoolCount: toNumberValue(row.expiredPoolCount),
-    totalFundedAmount: toBigIntValue(row.totalFundedAmount),
-    totalRemainingAmount: toBigIntValue(row.totalRemainingAmount),
-    activeRemainingAmount: toBigIntValue(row.activeRemainingAmount),
-    expiredRemainingAmount: toBigIntValue(row.expiredRemainingAmount),
-    totalAwardedAmount: toBigIntValue(row.totalAwardedAmount),
-    totalVoterAwardedAmount: toBigIntValue(row.totalVoterAwardedAmount),
-    totalFrontendAwardedAmount: toBigIntValue(row.totalFrontendAwardedAmount),
-    totalForfeitedAmount: toBigIntValue(row.totalForfeitedAmount),
-    awardCount: toNumberValue(row.awardCount),
+    expiredPoolCount: rows.reduce((sum, row) => sum + toNumberValue(row.expiredPoolCount), 0),
+    totalFundedAmount: rows.reduce((sum, row) => sum + toBigIntValue(row.totalFundedAmount), 0n),
+    totalRemainingAmount: rows.reduce((sum, row) => sum + toBigIntValue(row.totalRemainingAmount), 0n),
+    activeRemainingAmount: rows.reduce((sum, row) => sum + toBigIntValue(row.activeRemainingAmount), 0n),
+    expiredRemainingAmount: rows.reduce((sum, row) => sum + toBigIntValue(row.expiredRemainingAmount), 0n),
+    totalAwardedAmount: rows.reduce((sum, row) => sum + toBigIntValue(row.totalAwardedAmount), 0n),
+    totalVoterAwardedAmount: rows.reduce((sum, row) => sum + toBigIntValue(row.totalVoterAwardedAmount), 0n),
+    totalFrontendAwardedAmount: rows.reduce((sum, row) => sum + toBigIntValue(row.totalFrontendAwardedAmount), 0n),
+    totalForfeitedAmount: rows.reduce((sum, row) => sum + toBigIntValue(row.totalForfeitedAmount), 0n),
+    awardCount: rows.reduce((sum, row) => sum + toNumberValue(row.awardCount), 0),
     hasActiveFeedbackBonus: activePoolCount > 0,
-    nextFeedbackClosesAt: row.nextFeedbackClosesAt === null ? null : toBigIntValue(row.nextFeedbackClosesAt),
+    nextFeedbackClosesAt: rows.reduce(
+      (next, row) => minNullableTimestamp(next, row.nextFeedbackClosesAt),
+      null as bigint | null,
+    ),
   };
 }
 

@@ -68,6 +68,9 @@ export interface ContentFeedbackBonusPool {
   contentId: string;
   roundId: string;
   awarder: `0x${string}`;
+  asset: number;
+  currency: "LREP" | "USDC";
+  displayCurrency: "LREP" | "USD";
   fundedAmount: string;
   remainingAmount: string;
   awardedAmount: string;
@@ -82,6 +85,9 @@ export interface ContentFeedbackBonusAward {
   roundId: string;
   recipient: `0x${string}`;
   feedbackHash: `0x${string}`;
+  asset: number;
+  currency: "LREP" | "USDC";
+  displayCurrency: "LREP" | "USD";
   grossAmount: string;
   recipientAmount: string;
   frontendFee: string;
