@@ -33,35 +33,41 @@
     {
       "slot": 5,
       "offset": 0,
+      "label": "lrepToken",
+      "type": "t_contract(IERC20)"
+    },
+    {
+      "slot": 6,
+      "offset": 0,
       "label": "nextFeedbackBonusPoolId",
       "type": "t_uint256"
     },
     {
-      "slot": 6,
+      "slot": 7,
       "offset": 0,
       "label": "defaultFrontendFeeBps",
       "type": "t_uint16"
     },
     {
-      "slot": 7,
+      "slot": 8,
       "offset": 0,
       "label": "feedbackBonusPools",
       "type": "t_mapping(t_uint256,t_struct(FeedbackBonusPool))"
     },
     {
-      "slot": 8,
+      "slot": 9,
       "offset": 0,
       "label": "identityKeyAwarded",
       "type": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))"
     },
     {
-      "slot": 9,
+      "slot": 10,
       "offset": 0,
       "label": "feedbackHashAwarded",
       "type": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))"
     },
     {
-      "slot": 10,
+      "slot": 11,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -242,6 +248,12 @@
           "offset": 1,
           "label": "frontendFeeBps",
           "type": "t_uint16"
+        },
+        {
+          "slot": 10,
+          "offset": 3,
+          "label": "asset",
+          "type": "t_uint8"
         }
       ]
     },
@@ -268,6 +280,12 @@
       "encoding": "inplace",
       "label": "uint64",
       "numberOfBytes": "8"
+    },
+    {
+      "id": "t_uint8",
+      "encoding": "inplace",
+      "label": "uint8",
+      "numberOfBytes": "1"
     }
   ]
 }

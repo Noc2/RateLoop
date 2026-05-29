@@ -17947,6 +17947,32 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "REWARD_ASSET_LREP",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "REWARD_ASSET_USDC",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "awardFeedbackBonus",
           inputs: [
             {
@@ -17992,6 +18018,50 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "roundId",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "feedbackClosesAt",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "awarder",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "poolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "createFeedbackBonusPoolWithAsset",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "asset",
+              type: "uint8",
+              internalType: "uint8",
             },
             {
               name: "amount",
@@ -18116,6 +18186,11 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "frontendFeeBps",
               type: "uint16",
               internalType: "uint16",
+            },
+            {
+              name: "asset",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
           stateMutability: "view",
@@ -18271,6 +18346,11 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "lrepToken_",
+              type: "address",
+              internalType: "address",
+            },
+            {
               name: "usdcToken_",
               type: "address",
               internalType: "address",
@@ -18298,6 +18378,19 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "lrepToken",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -18714,6 +18807,12 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
+            },
+            {
+              name: "asset",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
             },
           ],
           anonymous: false,
@@ -43785,6 +43884,32 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "REWARD_ASSET_LREP",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "REWARD_ASSET_USDC",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "awardFeedbackBonus",
           inputs: [
             {
@@ -43830,6 +43955,50 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "roundId",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "feedbackClosesAt",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "awarder",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "poolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "createFeedbackBonusPoolWithAsset",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "asset",
+              type: "uint8",
+              internalType: "uint8",
             },
             {
               name: "amount",
@@ -43954,6 +44123,11 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "frontendFeeBps",
               type: "uint16",
               internalType: "uint16",
+            },
+            {
+              name: "asset",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
           stateMutability: "view",
@@ -44109,6 +44283,11 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "lrepToken_",
+              type: "address",
+              internalType: "address",
+            },
+            {
               name: "usdcToken_",
               type: "address",
               internalType: "address",
@@ -44136,6 +44315,19 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "lrepToken",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -44552,6 +44744,12 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
+            },
+            {
+              name: "asset",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
             },
           ],
           anonymous: false,

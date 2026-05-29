@@ -596,8 +596,8 @@ echo "=== Seed complete: $TOTAL_ITEMS standalone questions and $BUNDLE_SUBMITTED
 echo ""
 
 # --- Feedback Bonus Section ---
-if [ -z "$FEEDBACK_BONUS_ESCROW" ] || [ -z "$USDC_TOKEN" ]; then
-  echo "Skipping feedback bonuses: FeedbackBonusEscrow or Mock USDC not found"
+if [ -z "$FEEDBACK_BONUS_ESCROW" ] || [ -z "$TOKEN" ] || [ -z "$USDC_TOKEN" ]; then
+  echo "Skipping feedback bonuses: FeedbackBonusEscrow, LREP, or Mock USDC not found"
   echo ""
 else
   FEEDBACK_BONUS_COUNT="${#FEEDBACK_BONUS_CONTENT_IDS[@]}"
@@ -621,11 +621,21 @@ else
     FUNDER_KEY="${KEYS[$FUNDER_KEY_INDEX]}"
     FUNDER_ADDR=$(cast wallet address "$FUNDER_KEY")
 
-    echo "[$((i+1))/$FEEDBACK_BONUS_COUNT] Content $CONTENT_ID: funding feedback bonus of $BONUS_AMOUNT mock USDC from $FUNDER_ADDR"
-    cast send "$USDC_TOKEN" "approve(address,uint256)" "$FEEDBACK_BONUS_ESCROW" "$BONUS_AMOUNT" \
+    if [ $((i % 2)) -eq 0 ]; then
+      FEEDBACK_BONUS_ASSET="1"
+      FEEDBACK_BONUS_TOKEN="$USDC_TOKEN"
+      FEEDBACK_BONUS_SYMBOL="mock USDC"
+    else
+      FEEDBACK_BONUS_ASSET="0"
+      FEEDBACK_BONUS_TOKEN="$TOKEN"
+      FEEDBACK_BONUS_SYMBOL="LREP"
+    fi
+
+    echo "[$((i+1))/$FEEDBACK_BONUS_COUNT] Content $CONTENT_ID: funding feedback bonus of $BONUS_AMOUNT $FEEDBACK_BONUS_SYMBOL from $FUNDER_ADDR"
+    cast send "$FEEDBACK_BONUS_TOKEN" "approve(address,uint256)" "$FEEDBACK_BONUS_ESCROW" "$BONUS_AMOUNT" \
       --private-key "$FUNDER_KEY" --rpc-url "$RPC" > /dev/null
-    cast send "$FEEDBACK_BONUS_ESCROW" "createFeedbackBonusPool(uint256,uint256,uint256,uint256,address)" \
-      "$CONTENT_ID" "$FEEDBACK_BONUS_ROUND_ID" "$BONUS_AMOUNT" "$FEEDBACK_BONUS_AWARD_DEADLINE" "$FUNDER_ADDR" \
+    cast send "$FEEDBACK_BONUS_ESCROW" "createFeedbackBonusPoolWithAsset(uint256,uint256,uint8,uint256,uint256,address)" \
+      "$CONTENT_ID" "$FEEDBACK_BONUS_ROUND_ID" "$FEEDBACK_BONUS_ASSET" "$BONUS_AMOUNT" "$FEEDBACK_BONUS_AWARD_DEADLINE" "$FUNDER_ADDR" \
       --private-key "$FUNDER_KEY" --rpc-url "$RPC" > /dev/null
     echo "  Done!"
     echo ""
