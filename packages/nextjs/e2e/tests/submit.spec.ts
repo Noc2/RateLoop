@@ -1,4 +1,3 @@
-import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures/wallet";
 import { waitForPonderIndexed } from "../helpers/admin-helpers";
 import {
@@ -10,6 +9,7 @@ import {
 } from "../helpers/ask-form";
 import { getContentList } from "../helpers/ponder-api";
 import { gotoWithRetry } from "../helpers/wait-helpers";
+import type { Page } from "@playwright/test";
 
 async function fillBasicQuestionFields(page: Page, uniqueId: number) {
   const urlInput = page.locator("input[type='url']").first();
@@ -62,17 +62,15 @@ test.describe("Ask page", () => {
 
     // 1. Select category — click the category dropdown trigger
     // Categories load from Ponder (or RPC fallback). If neither is ready yet,
-    // the page shows the category empty state instead of the dropdown.
-    const hasCategories = await selectAskCategory(page);
-    test.skip(!hasCategories, "Categories not loaded — Ponder and RPC fallback both unavailable");
+    // the test fails instead of hiding a broken ask form behind a skip.
+    await selectAskCategory(page);
 
     // 2. Enter a unique context URL. Images are upload-only, so the basic ask flow uses link context.
     const uniqueId = Date.now();
     await fillBasicQuestionFields(page, uniqueId);
 
     // 4. Select at least one subcategory tag
-    const hasSubcategory = await selectAskSubcategory(page);
-    test.skip(!hasSubcategory, "No seeded subcategory available for ask submission");
+    await selectAskSubcategory(page);
 
     // 5. Continue to bounty details, skip the optional Feedback Bonus, then ask
     await continueToBountyStep(page);
@@ -93,14 +91,12 @@ test.describe("Ask page", () => {
     await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
 
-    const hasCategories = await selectAskCategory(page);
-    test.skip(!hasCategories, "Categories not loaded — Ponder and RPC fallback both unavailable");
+    await selectAskCategory(page);
 
     const uniqueId = Date.now();
     const title = await fillBasicQuestionFields(page, uniqueId);
 
-    const hasSubcategory = await selectAskSubcategory(page);
-    test.skip(!hasSubcategory, "No seeded subcategory available for ask submission");
+    await selectAskSubcategory(page);
 
     await continueToBountyStep(page);
     const usdcAssetButton = page.getByTestId("bounty-asset-usdc");

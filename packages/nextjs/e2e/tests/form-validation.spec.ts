@@ -1,22 +1,18 @@
 import { type Page, expect, test } from "../fixtures/wallet";
 import { continueToBountyStep, selectAskCategory, selectAskSubcategory } from "../helpers/ask-form";
 
-async function fillRequiredQuestionFields(page: Page, contextUrl?: string): Promise<boolean> {
-  const selectedCategory = await selectAskCategory(page);
-  if (!selectedCategory) return false;
+async function fillRequiredQuestionFields(page: Page, contextUrl?: string): Promise<void> {
+  await selectAskCategory(page);
 
   const uniqueId = Date.now();
   await page.getByPlaceholder("Write a subjective question voters can rate").fill(`Validation test ${uniqueId}`);
   await page.locator("textarea").first().fill(`Validation content ${uniqueId}`);
 
-  const selectedSubcategory = await selectAskSubcategory(page);
-  if (!selectedSubcategory) return false;
+  await selectAskSubcategory(page);
 
   if (contextUrl !== undefined) {
     await page.locator("input[type='url']").first().fill(contextUrl);
   }
-
-  return true;
 }
 
 test.describe("Ask form validation", () => {
@@ -37,8 +33,7 @@ test.describe("Ask form validation", () => {
 
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
 
-    const formReady = await fillRequiredQuestionFields(page);
-    test.skip(!formReady, "Categories not loaded for context URL validation");
+    await fillRequiredQuestionFields(page);
 
     await continueToBountyStep(page);
 
@@ -55,22 +50,23 @@ test.describe("Ask form validation", () => {
     // Click category dropdown
     const form = page.locator("form").first();
     const categoryBtn = form.getByText("Select a category...");
-    if (await categoryBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await categoryBtn.click();
+    await expect(categoryBtn, "ask categories should load before the dropdown options are checked").toBeVisible({
+      timeout: 10_000,
+    });
+    await categoryBtn.click();
 
-      const searchInput = page.getByPlaceholder("Search categories...");
-      await expect(searchInput).toBeVisible({ timeout: 3_000 });
+    const searchInput = page.getByPlaceholder("Search categories...");
+    await expect(searchInput).toBeVisible({ timeout: 3_000 });
 
-      // Just verify that at least 3 category buttons are visible in the dropdown.
-      const options = form
-        .locator(".absolute")
-        .locator("button")
-        .filter({ hasText: /Products|Media|General|Software/ });
-      const optionCount = await options.count();
-      expect(optionCount).toBeGreaterThanOrEqual(3);
+    // Just verify that at least 3 category buttons are visible in the dropdown.
+    const options = form
+      .locator(".absolute")
+      .locator("button")
+      .filter({ hasText: /Products|Media|General|Software/ });
+    const optionCount = await options.count();
+    expect(optionCount).toBeGreaterThanOrEqual(3);
 
-      await page.keyboard.press("Escape");
-    }
+    await page.keyboard.press("Escape");
   });
 
   test("invalid URL shows validation feedback", async ({ connectedPage: page }) => {
@@ -78,8 +74,7 @@ test.describe("Ask form validation", () => {
 
     await expect(page.getByRole("heading", { name: "Submit Question" })).toBeVisible({ timeout: 15_000 });
 
-    const formReady = await fillRequiredQuestionFields(page, "not-a-valid-url");
-    test.skip(!formReady, "Categories not loaded for invalid URL validation");
+    await fillRequiredQuestionFields(page, "not-a-valid-url");
 
     const urlInput = page.locator("input[type='url']").first();
     await urlInput.press("Tab");
