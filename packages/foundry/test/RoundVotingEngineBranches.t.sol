@@ -857,6 +857,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
         (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
         (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 7_000, 4e6);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -865,6 +866,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
         engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
         engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 7_000, s4);
 
         bytes32 originalMarker = engine.roundRbtsSeedEntropy(contentId, roundId);
         uint256 seedBlock = uint256(originalMarker) ^ (uint256(1) << 255);
@@ -875,6 +877,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
         bytes32 finalizedExpiredSeed = engine.roundRbtsSeedEntropy(contentId, roundId);
         assertLt(uint256(finalizedExpiredSeed), uint256(1) << 255, "expired marker finalized into entropy");
+        assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "expired seed disables RBTS rewards");
+        assertEq(engine.roundRbtsForfeitedPool(contentId, roundId), 0, "expired seed does not forfeit stake");
+        assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed does not score draws");
+        assertEq(engine.roundVoterPool(contentId, roundId), 0, "expired seed creates no reward pool");
+        assertEq(engine.roundFrontendPool(contentId, roundId), 0, "expired seed creates no frontend pool");
+        assertEq(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "expired seed skips RBTS scoring");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 10e6, "ck1 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 3e6, "ck2 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 3e6, "ck3 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 4e6, "post-threshold stake returned");
     }
 
     function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {

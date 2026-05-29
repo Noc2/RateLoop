@@ -160,6 +160,7 @@ library RoundRevealLib {
         uint16 minParticipants;
         bytes32 settlementEntropy;
         uint48 thresholdReachedAt;
+        bool disableRewards;
     }
 
     function scoreRbtsRewards(
@@ -214,6 +215,15 @@ library RoundRevealLib {
             }
         }
         if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
+
+        // If the captured seed block is no longer available, do not replace it with a
+        // second deterministic reward seed that settlement callers can timing-select.
+        if (params.disableRewards) {
+            _returnScoredStakes(
+                roundCommits, commitRbtsWeight, commitRbtsStakeReturned, revealedKeysMem, revealedBuildIdx
+            );
+            return result;
+        }
 
         // Seed combines post-threshold entropy with the threshold-frozen scoring set.
         result.scoreSeed = _rbtsScoreSeed(
@@ -282,20 +292,29 @@ library RoundRevealLib {
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         uint256 contentId,
         uint256 roundId
-    ) external returns (bytes32 settlementEntropy) {
+    ) external returns (bytes32 settlementEntropy, bool expiredSeed) {
         settlementEntropy = roundRbtsSeedEntropy[contentId][roundId];
         uint256 seedWord = uint256(settlementEntropy);
-        if (seedWord < RBTS_SEED_BLOCK_FLAG) return settlementEntropy;
+        if (seedWord < RBTS_SEED_BLOCK_FLAG) return (settlementEntropy, false);
 
         uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
         if (block.number <= seedBlock) revert RevealGraceActive();
         bytes32 seedBlockhash = blockhash(seedBlock);
         if (seedBlockhash == bytes32(0)) {
-            seedBlockhash = keccak256(
+            expiredSeed = true;
+            settlementEntropy = _lowBitHash(
                 abi.encode(
-                    "rateloop.rbts.expired-seed.v1", block.chainid, address(this), contentId, roundId, settlementEntropy
+                    "rateloop.rbts.expired-seed.rewards-disabled.v1",
+                    block.chainid,
+                    address(this),
+                    contentId,
+                    roundId,
+                    settlementEntropy
                 )
             );
+            roundRbtsSeedEntropy[contentId][roundId] = settlementEntropy;
+            emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
+            return (settlementEntropy, expiredSeed);
         }
         settlementEntropy = keccak256(
             abi.encode(
@@ -310,6 +329,7 @@ library RoundRevealLib {
         );
         roundRbtsSeedEntropy[contentId][roundId] = settlementEntropy;
         emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
+        return (settlementEntropy, false);
     }
 
     function _effectiveStake(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {
@@ -326,6 +346,10 @@ library RoundRevealLib {
         bytes32 seedBlockMarker = bytes32(RBTS_SEED_BLOCK_FLAG | block.number);
         roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
         emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
+    }
+
+    function _lowBitHash(bytes memory value) private pure returns (bytes32) {
+        return bytes32(uint256(keccak256(value)) & (RBTS_SEED_BLOCK_FLAG - 1));
     }
 
     function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {
