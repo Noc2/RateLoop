@@ -73,7 +73,7 @@
       "id": "t_struct(FeedbackRecord)",
       "encoding": "inplace",
       "label": "struct FeedbackRegistry.FeedbackRecord",
-      "numberOfBytes": "64",
+      "numberOfBytes": "96",
       "members": [
         {
           "slot": 0,
@@ -98,6 +98,12 @@
           "offset": 26,
           "label": "revealedAt",
           "type": "t_uint48"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "votingEngineSnapshot",
+          "type": "t_contract(RoundVotingEngine)"
         }
       ]
     },
