@@ -115,15 +115,13 @@ test.describe("Category filter", () => {
   });
 
   test("overflow dropdown opens with search", async ({ connectedPage: page }) => {
+    await page.setViewportSize({ width: 480, height: 900 });
     await loadVoteFeed(page);
 
-    // Narrow viewport to force category overflow
-    await page.setViewportSize({ width: 800, height: 900 });
-
-    // Wait for the category bar to re-render after viewport change
     const moreButton = page.getByRole("button", { name: /^\+\d+ more$/i });
-    const hasOverflow = await moreButton.isVisible({ timeout: 3_000 }).catch(() => false);
-    test.skip(!hasOverflow, "All categories fit at 800px — no overflow");
+    await expect(moreButton, "category filter should overflow at the narrow E2E viewport").toBeVisible({
+      timeout: 10_000,
+    });
 
     await moreButton.click();
 
