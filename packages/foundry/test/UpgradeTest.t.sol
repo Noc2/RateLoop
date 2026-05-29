@@ -368,11 +368,11 @@ contract UpgradeTest is Test {
         uint256 roundId = 8;
         bytes32 commitKey = keccak256("layout-commit");
 
-        vm.store(address(votingEngine), _doubleUintMappingSlot(56, contentId, roundId), bytes32(uint256(111)));
-        vm.store(address(votingEngine), _doubleUintMappingSlot(57, contentId, roundId), bytes32(uint256(222)));
+        vm.store(address(votingEngine), _doubleUintMappingSlot(57, contentId, roundId), bytes32(uint256(111)));
+        vm.store(address(votingEngine), _doubleUintMappingSlot(58, contentId, roundId), bytes32(uint256(222)));
         vm.store(
             address(votingEngine),
-            _tripleUintBytes32MappingSlot(58, contentId, roundId, commitKey),
+            _tripleUintBytes32MappingSlot(59, contentId, roundId, commitKey),
             bytes32(uint256(333))
         );
 
