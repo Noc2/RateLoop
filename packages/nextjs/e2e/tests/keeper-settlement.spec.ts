@@ -34,7 +34,7 @@ test.describe("Keeper-backed settlement lifecycle", () => {
   const CONTENT_REGISTRY = CONTRACT_ADDRESSES.ContentRegistry;
   const STAKE = BigInt(10e6);
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-  const EPOCH_DURATION = 300;
+  const EPOCH_DURATION = 60;
   const TLOCK_EPOCH = 30;
   const CHAIN_TIME_OFFSET = EPOCH_DURATION - TLOCK_EPOCH;
   const KEEPER_INTERVAL_MS = Number(process.env.KEEPER_INTERVAL_MS ?? 30_000);
@@ -171,10 +171,10 @@ test.describe("Keeper-backed settlement lifecycle", () => {
       );
     }
 
-    test.skip(
-      keeperDecryptWaitMs > MAX_KEEPER_DECRYPT_WAIT_MS,
+    expect(
+      keeperDecryptWaitMs,
       `Keeper decrypt target is ${Math.ceil(keeperDecryptWaitMs / 1000)}s away in this seeded chain state.`,
-    );
+    ).toBeLessThanOrEqual(MAX_KEEPER_DECRYPT_WAIT_MS);
 
     if (keeperDecryptWaitMs > 0) {
       await new Promise(resolve => setTimeout(resolve, keeperDecryptWaitMs));
