@@ -50,6 +50,9 @@ import {
 
 const RESERVED_SUBMISSION_WAIT_MS = 1_100;
 const TX_RECEIPT_TIMEOUT_MS = 180_000;
+const FEEDBACK_BONUS_ASSET_LREP = 0;
+const FEEDBACK_BONUS_ASSET_USDC = 1;
+type FeedbackBonusAsset = "LREP" | "USDC";
 
 export type X402QuestionSubmissionStatus = "awaiting_wallet_signature" | "submitted" | "failed";
 
@@ -105,6 +108,7 @@ export type AgentWalletTransactionPhase =
   | "reserve_submission"
   | "submit_question"
   | "submit_x402_question"
+  | "approve_feedback_bonus_lrep"
   | "approve_feedback_bonus_usdc"
   | "create_feedback_bonus_pool";
 
@@ -142,7 +146,7 @@ type AgentWalletQuestionSubmissionPlan = {
 
 export type X402FeedbackBonusRequest = {
   amount: bigint;
-  asset: "USDC";
+  asset: FeedbackBonusAsset;
   awarder: Address;
   feedbackClosesAt: bigint;
 };
@@ -156,7 +160,7 @@ type StoredFeedbackBonusStatus =
 
 type StoredFeedbackBonusRequest = {
   amount: string;
-  asset: "USDC";
+  asset: FeedbackBonusAsset;
   awarder: Address;
   error?: string;
   feedbackClosesAt: string;
@@ -169,7 +173,7 @@ type StoredFeedbackBonusRequest = {
 
 export type AgentFeedbackBonusTransactionPlan = {
   amount: string;
-  asset: "USDC";
+  asset: FeedbackBonusAsset;
   awarder: Address;
   calls: AgentWalletTransactionCall[];
   contentId: string;
@@ -178,7 +182,7 @@ export type AgentFeedbackBonusTransactionPlan = {
   operationKey: `0x${string}`;
   payment: {
     amount: string;
-    asset: "USDC";
+    asset: FeedbackBonusAsset;
     decimals: number;
     spender: Address;
     tokenAddress: Address;
@@ -246,6 +250,18 @@ function toDecimalString(value: unknown): string {
   return typeof value === "bigint" || typeof value === "number" || typeof value === "string"
     ? BigInt(value).toString()
     : "";
+}
+
+function normalizeFeedbackBonusAsset(value: unknown): FeedbackBonusAsset {
+  return typeof value === "string" && value.trim().toUpperCase() === "LREP" ? "LREP" : "USDC";
+}
+
+function feedbackBonusAssetId(asset: FeedbackBonusAsset) {
+  return asset === "LREP" ? FEEDBACK_BONUS_ASSET_LREP : FEEDBACK_BONUS_ASSET_USDC;
+}
+
+function feedbackBonusTokenAddress(config: X402QuestionSubmissionConfig, asset: FeedbackBonusAsset): Address | null {
+  return asset === "LREP" ? (config.lrepAddress ?? null) : config.usdcAddress;
 }
 
 function buildQuestionContentHash(question: X402QuestionPayload["questions"][number]): Hex {
@@ -319,7 +335,7 @@ function serializeFeedbackBonusRequest(
   if (!feedbackBonus) return undefined;
   return {
     amount: feedbackBonus.amount.toString(),
-    asset: "USDC",
+    asset: feedbackBonus.asset,
     awarder: feedbackBonus.awarder,
     feedbackClosesAt: feedbackBonus.feedbackClosesAt.toString(),
     status: "pending_question_confirmation",
@@ -335,6 +351,7 @@ function parseStoredFeedbackBonusRequest(value: unknown): StoredFeedbackBonusReq
       ? parsed.feedbackClosesAt
       : null;
   const awarder = typeof parsed.awarder === "string" && isAddress(parsed.awarder) ? (parsed.awarder as Address) : null;
+  const asset = normalizeFeedbackBonusAsset(parsed.asset);
   if (!amount || !feedbackClosesAt || !awarder) return undefined;
   const rawStatus = typeof parsed.status === "string" ? parsed.status : "requested";
   const status: StoredFeedbackBonusStatus =
@@ -352,7 +369,7 @@ function parseStoredFeedbackBonusRequest(value: unknown): StoredFeedbackBonusReq
     : undefined;
   return {
     amount,
-    asset: "USDC",
+    asset,
     awarder,
     error: typeof parsed.error === "string" ? parsed.error : undefined,
     feedbackClosesAt,
@@ -462,6 +479,7 @@ type X402QuestionSubmissionConfig = {
   chainId: number;
   contentRegistryAddress: Address;
   feedbackBonusEscrowAddress?: Address;
+  lrepAddress?: Address;
   questionRewardPoolEscrowAddress: Address;
   rpcUrl: string;
   targetNetwork: NonNullable<ReturnType<typeof getPrimaryServerTargetNetwork>>;
@@ -747,6 +765,7 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
 
   const contentRegistryAddress = getSharedDeploymentAddress(chainId, "ContentRegistry");
   const feedbackBonusEscrowAddress = getSharedDeploymentAddress(chainId, "FeedbackBonusEscrow");
+  const lrepAddress = getSharedDeploymentAddress(chainId, "LoopReputation");
   const questionRewardPoolEscrowAddress = getSharedDeploymentAddress(chainId, "QuestionRewardPoolEscrow");
   const x402QuestionSubmitterAddress = getSharedDeploymentAddress(chainId, "X402QuestionSubmitter");
   if (!contentRegistryAddress || !questionRewardPoolEscrowAddress || !x402QuestionSubmitterAddress) {
@@ -762,6 +781,7 @@ export function resolveX402QuestionConfig(chainId: number): X402QuestionSubmissi
     chainId,
     contentRegistryAddress,
     ...(feedbackBonusEscrowAddress ? { feedbackBonusEscrowAddress } : {}),
+    ...(lrepAddress ? { lrepAddress } : {}),
     questionRewardPoolEscrowAddress,
     rpcUrl,
     targetNetwork,
@@ -1582,6 +1602,7 @@ function readFeedbackBonusPoolCreated(
   feedbackBonusEscrowAddress: Address,
 ): {
   amount: string;
+  asset: FeedbackBonusAsset;
   awarder: Address;
   contentId: string;
   feedbackClosesAt: string;
@@ -1608,6 +1629,9 @@ function readFeedbackBonusPoolCreated(
       ) {
         return {
           amount: toDecimalString(decoded.args.amount),
+          asset: normalizeFeedbackBonusAsset(
+            toDecimalString(decoded.args.asset) === String(FEEDBACK_BONUS_ASSET_LREP) ? "LREP" : "USDC",
+          ),
           awarder: decoded.args.awarder,
           contentId: decoded.args.contentId.toString(),
           feedbackClosesAt: toDecimalString(decoded.args.feedbackClosesAt),
@@ -1971,7 +1995,7 @@ function buildFeedbackBonusStatusBody(record: X402QuestionSubmissionRecord | nul
 
   return {
     amount: feedbackBonus.amount,
-    asset: "USDC",
+    asset: feedbackBonus.asset,
     awarder: feedbackBonus.awarder,
     enabled: true,
     error: feedbackBonus.error ?? null,
@@ -2082,9 +2106,15 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
 
   const amount = BigInt(feedbackBonus.amount);
   const walletAddress = record.payerAddress as Address;
+  const tokenAddress = feedbackBonusTokenAddress(config, feedbackBonus.asset);
+  if (!tokenAddress) {
+    throw new X402QuestionConfigError(`${feedbackBonus.asset} is not deployed for Feedback Bonus funding.`);
+  }
+  const assetId = feedbackBonusAssetId(feedbackBonus.asset);
+  const assetLabel = feedbackBonus.asset;
   const plan: AgentFeedbackBonusTransactionPlan = {
     amount: feedbackBonus.amount,
-    asset: "USDC",
+    asset: feedbackBonus.asset,
     awarder: feedbackBonus.awarder,
     calls: [
       {
@@ -2093,27 +2123,28 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
           functionName: "approve",
           args: [config.feedbackBonusEscrowAddress, amount],
         }),
-        description: "Approve Feedback Bonus escrow to pull the exact USDC bonus amount",
+        description: `Approve Feedback Bonus escrow to pull the exact ${assetLabel} bonus amount`,
         functionName: "approve",
-        id: "approve-feedback-bonus-usdc",
-        phase: "approve_feedback_bonus_usdc",
-        to: config.usdcAddress,
+        id: `approve-feedback-bonus-${assetLabel.toLowerCase()}`,
+        phase: assetLabel === "LREP" ? "approve_feedback_bonus_lrep" : "approve_feedback_bonus_usdc",
+        to: tokenAddress,
         value: "0",
       },
       {
         data: encodeFunctionData({
           abi: FeedbackBonusEscrowAbi,
-          functionName: "createFeedbackBonusPool",
+          functionName: "createFeedbackBonusPoolWithAsset",
           args: [
             BigInt(record.contentId),
             roundId,
+            assetId,
             amount,
             BigInt(feedbackBonus.feedbackClosesAt),
             feedbackBonus.awarder,
           ],
         }),
         description: "Create the optional Feedback Bonus pool for useful hidden rater feedback",
-        functionName: "createFeedbackBonusPool",
+        functionName: "createFeedbackBonusPoolWithAsset",
         id: "create-feedback-bonus-pool",
         phase: "create_feedback_bonus_pool",
         to: config.feedbackBonusEscrowAddress,
@@ -2126,10 +2157,10 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
     operationKey: params.operationKey,
     payment: {
       amount: feedbackBonus.amount,
-      asset: "USDC",
+      asset: feedbackBonus.asset,
       decimals: X402_USDC_DECIMALS,
       spender: config.feedbackBonusEscrowAddress,
-      tokenAddress: config.usdcAddress,
+      tokenAddress,
     },
     requiresOrderedExecution: true,
     roundId: roundId.toString(),
@@ -2146,7 +2177,7 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
     body: {
       feedbackBonus: {
         amount: feedbackBonus.amount,
-        asset: "USDC",
+        asset: feedbackBonus.asset,
         awarder: feedbackBonus.awarder,
         contentId: record.contentId,
         feedbackClosesAt: feedbackBonus.feedbackClosesAt,
@@ -2220,6 +2251,9 @@ export async function confirmFeedbackBonusQuestionSubmissionRequest(params: {
   }
   if (createdPool.amount !== feedbackBonus.amount) {
     throw new X402QuestionConflictError("Confirmed Feedback Bonus amount does not match the requested amount.");
+  }
+  if (createdPool.asset !== feedbackBonus.asset) {
+    throw new X402QuestionConflictError("Confirmed Feedback Bonus asset does not match the requested asset.");
   }
   if (createdPool.awarder.toLowerCase() !== feedbackBonus.awarder.toLowerCase()) {
     throw new X402QuestionConflictError("Confirmed Feedback Bonus awarder does not match the requested awarder.");
@@ -2492,6 +2526,10 @@ async function prepareNativeQuestionSubmissionRequest(params: {
     agentId: params.agentId,
     ownerWalletAddress: params.walletAddress,
   });
+
+  if (params.feedbackBonus?.asset === "LREP") {
+    throw new X402QuestionInputError("LREP Feedback Bonuses require wallet_calls funding mode.");
+  }
 
   const storedAuthorization = readStoredNativeX402Authorization(existingRecord);
   const plan = await dependencies.buildNativeX402QuestionSubmissionPlan({

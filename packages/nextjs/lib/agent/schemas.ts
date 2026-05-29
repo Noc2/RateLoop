@@ -94,7 +94,7 @@ const agentBountyInputSchema = {
     amount: atomicAmountSchema,
     asset: {
       default: "USDC",
-      enum: ["USDC", "usdc"],
+      enum: ["USDC", "usdc", "LREP", "lrep"],
       type: "string",
     },
     feedbackClosesAt: {
@@ -191,7 +191,7 @@ const agentAskInputBaseProperties = {
   feedbackBonus: {
     ...agentFeedbackBonusInputSchema,
     description:
-      "Optional USDC pool for useful hidden feedback from revealed raters. Recommended for many qualitative AI review asks. Currently supported for single-question asks.",
+      "Optional LREP or USDC pool for useful hidden feedback from revealed raters. LREP requires wallet_calls funding mode; x402_authorization remains USDC-only. Currently supported for single-question asks.",
   },
   roundConfig: agentRoundConfigInputSchema,
   ...templateSelectorSchema.properties,

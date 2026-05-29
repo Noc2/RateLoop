@@ -120,6 +120,7 @@ const TEST_CONFIG = {
   chainId: 480,
   contentRegistryAddress: "0x0000000000000000000000000000000000000011" as const,
   feedbackBonusEscrowAddress: "0x0000000000000000000000000000000000000012" as const,
+  lrepAddress: "0x0000000000000000000000000000000000000016" as const,
   questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000013" as const,
   rpcUrl: "http://localhost:8545",
   targetNetwork: { id: 480 } as never,
@@ -302,6 +303,7 @@ function buildReceipt(hash: Hex, logs: unknown[]): TransactionReceipt {
 
 function buildFeedbackBonusPoolCreatedLog(params: {
   amount: bigint;
+  asset?: number;
   awarder: Address;
   contentId: bigint;
   feedbackClosesAt: bigint;
@@ -317,8 +319,16 @@ function buildFeedbackBonusPoolCreatedLog(params: {
         { name: "amount", type: "uint256" },
         { name: "feedbackClosesAt", type: "uint256" },
         { name: "frontendFeeBps", type: "uint256" },
+        { name: "asset", type: "uint8" },
       ],
-      ["0x00000000000000000000000000000000000000aa", params.awarder, params.amount, params.feedbackClosesAt, 300n],
+      [
+        "0x00000000000000000000000000000000000000aa",
+        params.awarder,
+        params.amount,
+        params.feedbackClosesAt,
+        300n,
+        params.asset ?? 1,
+      ],
     ),
     topics: encodeEventTopics({
       abi: FeedbackBonusEscrowAbi,
@@ -462,7 +472,7 @@ test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission log
 });
 
 test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the funded pool", async () => {
-  const payload = buildPayload("wallet-feedback-bonus-confirm");
+  const payload = buildPayload("wallet-feedback-bonus-confirm-usdc");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const submitHash = `0x${"a".repeat(64)}` as const;
   const feedbackHash = `0x${"b".repeat(64)}` as const;
@@ -527,14 +537,14 @@ test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the fund
 });
 
 test("prepareFeedbackBonusQuestionSubmissionRequest targets first round before any round is opened", async () => {
-  const payload = buildPayload("wallet-feedback-bonus-first-round");
+  const payload = buildPayload("wallet-feedback-bonus-lrep-first-round");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const submitHash = `0x${"a".repeat(64)}` as const;
   await prepareAgentWalletQuestionSubmissionRequest({
     agentId: "agent-wallet",
     feedbackBonus: {
       amount: 2_000_000n,
-      asset: "USDC",
+      asset: "LREP",
       awarder: walletAddress,
       feedbackClosesAt: payload.bounty.rewardPoolExpiresAt,
     },
@@ -582,11 +592,17 @@ test("prepareFeedbackBonusQuestionSubmissionRequest targets first round before a
   const prepared = await prepareFeedbackBonusQuestionSubmissionRequest({
     operationKey: record.operationKey,
   });
-  const body = prepared.body as { feedbackBonus: { roundId: string; status: string } };
+  const body = prepared.body as {
+    feedbackBonus: { asset: string; roundId: string; status: string };
+    transactionPlan: { calls: Array<{ functionName: string; to: string }> };
+  };
 
   assert.equal(prepared.status, 202);
+  assert.equal(body.feedbackBonus.asset, "LREP");
   assert.equal(body.feedbackBonus.status, "awaiting_wallet_signature");
   assert.equal(body.feedbackBonus.roundId, "1");
+  assert.equal(body.transactionPlan.calls[0]?.to, TEST_CONFIG.lrepAddress);
+  assert.equal(body.transactionPlan.calls[1]?.functionName, "createFeedbackBonusPoolWithAsset");
 });
 
 test("confirmAgentWalletQuestionSubmissionRequest rejects unrelated same-wallet submission logs", async () => {
