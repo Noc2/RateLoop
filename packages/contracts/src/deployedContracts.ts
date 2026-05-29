@@ -8015,6 +8015,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundAdvisoryVoteRecorderSnapshot",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundClusterPayoutReadyAt",
           inputs: [
             {
@@ -28426,6 +28450,11 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "revealedAt",
               type: "uint48",
               internalType: "uint48",
+            },
+            {
+              name: "votingEngineSnapshot",
+              type: "address",
+              internalType: "contract RoundVotingEngine",
             },
           ],
           stateMutability: "view",
