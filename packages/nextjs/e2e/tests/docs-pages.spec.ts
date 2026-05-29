@@ -34,7 +34,7 @@ test.describe("Documentation pages", () => {
     const h1 = page.locator("h1");
     await expect(h1.first()).toBeVisible({ timeout: 15_000 });
 
-    const howItWorksLink = page.locator('a[href="/docs/how-it-works"]').first();
+    const howItWorksLink = page.getByRole("link", { name: "How It Works", exact: true }).first();
     await expect(howItWorksLink).toBeVisible({ timeout: 10_000 });
 
     await howItWorksLink.click();
