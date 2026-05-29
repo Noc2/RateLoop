@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { isAddress } from "viem";
-import { useAccount, useConfig, useWriteContract } from "wagmi";
+import { useAccount, useConfig, useSignTypedData, useWriteContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -32,6 +32,11 @@ import {
   getDefaultUsdcAddress,
   parseFeedbackBonusAmount,
 } from "~~/lib/questionRewardPools";
+import {
+  buildUsdcReceiveWithAuthorizationTypedData,
+  getDefaultSignatureDeadline,
+  getSignatureParts,
+} from "~~/lib/walletSignatures";
 import { notification } from "~~/utils/scaffold-eth";
 
 type FundFeedbackBonusModalProps = {
@@ -70,6 +75,7 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const { signTypedDataAsync } = useSignTypedData();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const awarderInputId = useId();
@@ -172,6 +178,80 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
         return;
       }
 
+      const publicClient = getPublicClient(wagmiConfig, { chainId: chainId as any });
+      const latestBlockTimestamp = await publicClient
+        ?.getBlock({ blockTag: "latest" })
+        .then(block => block.timestamp)
+        .catch(() => undefined);
+      const feedbackClosesAt = getBountyClosesAt(
+        feedbackWindowPreset,
+        customFeedbackWindowAmount,
+        customFeedbackWindowUnit,
+        resolveBountyReferenceNowSeconds(latestBlockTimestamp),
+      );
+
+      if (asset === "usdc") {
+        const authorizationParams = {
+          amount: parsedAmount,
+          awarder: selectedAwarderAddress,
+          contentId,
+          feedbackClosesAt,
+          roundId,
+        } as const;
+        let authorizationHash: `0x${string}` | undefined;
+        try {
+          const validAfter = 0n;
+          const validBefore = getDefaultSignatureDeadline();
+          const nonce = (await readContract(wagmiConfig, {
+            address: escrowAddress,
+            abi: FEEDBACK_BONUS_ESCROW_ABI,
+            functionName: "computeFeedbackBonusAuthorizationNonce",
+            args: [authorizationParams, address, validAfter, validBefore],
+          })) as `0x${string}`;
+          const signature = await signTypedDataAsync(
+            buildUsdcReceiveWithAuthorizationTypedData({
+              authorization: {
+                from: address,
+                nonce,
+                to: escrowAddress,
+                validAfter,
+                validBefore,
+                value: parsedAmount,
+              },
+              chainId,
+              tokenAddress,
+            }),
+          );
+          const signatureParts = getSignatureParts(signature);
+          authorizationHash = await writeContractAsync({
+            address: escrowAddress,
+            abi: FEEDBACK_BONUS_ESCROW_ABI,
+            functionName: "createFeedbackBonusPoolWithAuthorization",
+            args: [
+              authorizationParams,
+              {
+                from: address,
+                nonce,
+                to: escrowAddress,
+                validAfter,
+                validBefore,
+                value: parsedAmount,
+                ...signatureParts,
+              },
+            ],
+          });
+          await waitForTransactionReceipt(wagmiConfig, { hash: authorizationHash });
+
+          notification.success(`Feedback Bonus funded with ${formatFeedbackBonusAmount(parsedAmount, asset)}.`);
+          onCreated?.();
+          onClose();
+          return;
+        } catch (authorizationError) {
+          if (authorizationHash) throw authorizationError;
+          console.warn("USDC authorization unavailable; falling back to approve + fund.", authorizationError);
+        }
+      }
+
       const readTokenAllowance = async () =>
         (await readContract(wagmiConfig, {
           address: tokenAddress,
@@ -199,17 +279,6 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
         }
       }
 
-      const publicClient = getPublicClient(wagmiConfig, { chainId: chainId as any });
-      const latestBlockTimestamp = await publicClient
-        ?.getBlock({ blockTag: "latest" })
-        .then(block => block.timestamp)
-        .catch(() => undefined);
-      const feedbackClosesAt = getBountyClosesAt(
-        feedbackWindowPreset,
-        customFeedbackWindowAmount,
-        customFeedbackWindowUnit,
-        resolveBountyReferenceNowSeconds(latestBlockTimestamp),
-      );
       const feedbackBonusHash = await writeContractAsync({
         address: escrowAddress,
         abi: FEEDBACK_BONUS_ESCROW_ABI,

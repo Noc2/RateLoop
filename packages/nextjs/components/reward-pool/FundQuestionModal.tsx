@@ -2,7 +2,8 @@
 
 import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useAccount, useConfig, useWriteContract } from "wagmi";
+import { zeroHash } from "viem";
+import { useAccount, useConfig, useSignTypedData, useWriteContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -32,6 +33,11 @@ import {
   getDefaultUsdcAddress,
   parseUsdRewardPoolAmount,
 } from "~~/lib/questionRewardPools";
+import {
+  buildUsdcReceiveWithAuthorizationTypedData,
+  getDefaultSignatureDeadline,
+  getSignatureParts,
+} from "~~/lib/walletSignatures";
 import { notification } from "~~/utils/scaffold-eth";
 
 type FundQuestionModalProps = {
@@ -63,6 +69,7 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const { signTypedDataAsync } = useSignTypedData();
   const [isMounted, setIsMounted] = useState(false);
   const amountInputId = useId();
   const requiredVotersInputId = useId();
@@ -158,6 +165,82 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
         return;
       }
 
+      const publicClient = getPublicClient(wagmiConfig, { chainId: chainId as any });
+      const latestBlockTimestamp = await publicClient
+        ?.getBlock({ blockTag: "latest" })
+        .then(block => block.timestamp)
+        .catch(() => undefined);
+      const bountyClosesAt = getBountyClosesAt(
+        bountyWindowPreset,
+        customBountyWindowAmount,
+        customBountyWindowUnit,
+        resolveBountyReferenceNowSeconds(latestBlockTimestamp),
+      );
+      const authorizationParams = {
+        amount: parsedAmount,
+        bountyClosesAt,
+        bountyEligibility: 0,
+        bountyKind: 0,
+        contentId,
+        feedbackClosesAt: bountyClosesAt,
+        reasonHash: zeroHash,
+        relatedRoundId: 0n,
+        requiredSettledRounds: BigInt(settledRounds),
+        requiredVoters: BigInt(voterCount),
+      } as const;
+      let authorizationHash: `0x${string}` | undefined;
+      try {
+        const validAfter = 0n;
+        const validBefore = getDefaultSignatureDeadline();
+        const nonce = (await readContract(wagmiConfig, {
+          address: escrowAddress,
+          abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+          functionName: "computeRewardPoolAuthorizationNonce",
+          args: [authorizationParams, address, validAfter, validBefore],
+        })) as `0x${string}`;
+        const signature = await signTypedDataAsync(
+          buildUsdcReceiveWithAuthorizationTypedData({
+            authorization: {
+              from: address,
+              nonce,
+              to: escrowAddress,
+              validAfter,
+              validBefore,
+              value: parsedAmount,
+            },
+            chainId,
+            tokenAddress: usdcAddress,
+          }),
+        );
+        const signatureParts = getSignatureParts(signature);
+        authorizationHash = await writeContractAsync({
+          address: escrowAddress,
+          abi: QUESTION_REWARD_POOL_ESCROW_ABI,
+          functionName: "createRewardPoolWithAuthorization",
+          args: [
+            authorizationParams,
+            {
+              from: address,
+              nonce,
+              to: escrowAddress,
+              validAfter,
+              validBefore,
+              value: parsedAmount,
+              ...signatureParts,
+            },
+          ],
+        });
+        await waitForTransactionReceipt(wagmiConfig, { hash: authorizationHash });
+
+        notification.success(`Bounty funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC on World Chain.`);
+        onCreated?.();
+        onClose();
+        return;
+      } catch (authorizationError) {
+        if (authorizationHash) throw authorizationError;
+        console.warn("USDC authorization unavailable; falling back to approve + fund.", authorizationError);
+      }
+
       const readUsdcAllowance = async () =>
         (await readContract(wagmiConfig, {
           address: usdcAddress,
@@ -187,18 +270,6 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
           );
         }
       }
-
-      const publicClient = getPublicClient(wagmiConfig, { chainId: chainId as any });
-      const latestBlockTimestamp = await publicClient
-        ?.getBlock({ blockTag: "latest" })
-        .then(block => block.timestamp)
-        .catch(() => undefined);
-      const bountyClosesAt = getBountyClosesAt(
-        bountyWindowPreset,
-        customBountyWindowAmount,
-        customBountyWindowUnit,
-        resolveBountyReferenceNowSeconds(latestBlockTimestamp),
-      );
       const rewardPoolHash = await writeContractAsync({
         address: escrowAddress,
         abi: QUESTION_REWARD_POOL_ESCROW_ABI,
