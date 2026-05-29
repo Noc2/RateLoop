@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { LoopReputationAbi, getVoteTlockChainInfo, packVoteRoundContext } from "@rateloop/contracts";
+import {
+  LoopReputationAbi,
+  type VoteTlockRuntime,
+  getVoteTlockChainInfo,
+  packVoteRoundContext,
+} from "@rateloop/contracts";
 import { AdvisoryVoteRecorderAbi, ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { buildCommitVoteParams, buildStakeAmountWei } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,6 +15,7 @@ import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useOptimisticVote } from "~~/contexts/OptimisticVoteContext";
 import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-eth";
+import { useLocalE2ETestWalletClient } from "~~/hooks/scaffold-eth/useLocalE2ETestWalletClient";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { FREE_TRANSACTION_ALLOWANCE_QUERY_KEY } from "~~/hooks/useFreeTransactionAllowance";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
@@ -39,6 +45,8 @@ import scaffoldConfig from "~~/scaffold.config";
 import { getParsedErrorWithAllAbis } from "~~/utils/scaffold-eth/contract";
 
 type RoundVoteCommitRuntime = Awaited<ReturnType<typeof resolveRoundVoteRuntime>> & {
+  client?: VoteTlockRuntime["client"];
+  encryptFn?: VoteTlockRuntime["encryptFn"];
   targetRound?: bigint | number;
 };
 
@@ -54,6 +62,62 @@ interface RoundVoteParams {
 }
 
 const COUNTED_VOTE_MIN_STAKE_WEI = 1_000_000n;
+
+function chunkString(value: string, chunkSize: number): string[] {
+  const chunks: string[] = [];
+  for (let index = 0; index < value.length; index += chunkSize) {
+    chunks.push(value.slice(index, index + chunkSize));
+  }
+  return chunks;
+}
+
+function encodeAsciiBase64(value: string): string {
+  if (typeof btoa === "function") {
+    return btoa(value);
+  }
+
+  throw new Error("Base64 encoder unavailable");
+}
+
+function buildLocalE2EArmoredTlockCiphertext(targetRound: bigint | number, drandChainHash: string): string {
+  const normalizedHash = drandChainHash.replace(/^0x/u, "").toLowerCase();
+  const stanzaBody = chunkString("A".repeat(108), 64).join("\n");
+  const mac = "A".repeat(43);
+  const encryptedBody = "x".repeat(65);
+  const payload = [
+    "age-encryption.org/v1",
+    `-> tlock ${targetRound.toString()} ${normalizedHash}`,
+    stanzaBody,
+    `--- ${mac}`,
+    encryptedBody,
+  ].join("\n");
+  const encodedPayload = chunkString(encodeAsciiBase64(payload), 64).join("\n");
+  return `-----BEGIN AGE ENCRYPTED FILE-----\n${encodedPayload}\n-----END AGE ENCRYPTED FILE-----`;
+}
+
+function withLocalE2ETlockRuntime(runtime: RoundVoteCommitRuntime): RoundVoteCommitRuntime {
+  const drandChainHash = runtime.drandChainHash?.toLowerCase();
+  const genesisTimeSeconds = Number(runtime.drandGenesisTimeSeconds);
+  const periodSeconds = Number(runtime.drandPeriodSeconds);
+
+  if (!drandChainHash || !Number.isFinite(genesisTimeSeconds) || !Number.isFinite(periodSeconds)) {
+    return runtime;
+  }
+
+  return {
+    ...runtime,
+    client: {
+      chain: () => ({
+        info: async () => ({
+          genesis_time: genesisTimeSeconds,
+          hash: drandChainHash.replace(/^0x/u, ""),
+          period: periodSeconds,
+        }),
+      }),
+    } as VoteTlockRuntime["client"],
+    encryptFn: async (targetRound: bigint | number) => buildLocalE2EArmoredTlockCiphertext(targetRound, drandChainHash),
+  };
+}
 
 /**
  * Hook for tlock commit-reveal RBTS vote commits using reputation approval + commit.
@@ -71,8 +135,10 @@ export function useRoundVote() {
   const [error, setError] = useState<string | null>(null);
   const { requireAcceptance } = useTermsAcceptance();
   const queryClient = useQueryClient();
-  const writeTx = useTransactor();
+  const localE2ETestWalletClient = useLocalE2ETestWalletClient(address, targetNetwork.id);
+  const writeTx = useTransactor(localE2ETestWalletClient);
   const wagmiTokenWrite = useWriteContract();
+  const useDirectLocalE2EWrites = Boolean(localE2ETestWalletClient);
   const {
     canUseSelfFundedBatchCalls,
     canUseSponsoredBatchCalls,
@@ -233,6 +299,9 @@ export function useRoundVote() {
             drandGenesisTimeSeconds: availability.drandGenesisTime,
             drandPeriodSeconds: availability.drandPeriod,
           };
+          if (localE2ETestWalletClient) {
+            runtime = withLocalE2ETlockRuntime(runtime);
+          }
           await getVoteTlockChainInfo(runtime);
           if (process.env.NODE_ENV !== "production") {
             console.debug("[round-vote] advisory availability", {
@@ -262,6 +331,9 @@ export function useRoundVote() {
             contentId,
             fallbackEpochDuration: roundConfig?.epochDuration ?? DEFAULT_VOTING_CONFIG.epochDuration,
           });
+          if (localE2ETestWalletClient) {
+            runtime = withLocalE2ETlockRuntime(runtime);
+          }
           await getVoteTlockChainInfo(runtime);
         } catch (runtimeError) {
           console.warn("[round-vote] failed to anchor tlock target to the active round.", {
@@ -322,10 +394,16 @@ export function useRoundVote() {
         request.gas = (estimatedGas * 120n) / 100n;
 
         wagmiTokenWrite.reset();
-        return writeTx(() => wagmiTokenWrite.writeContractAsync(request), {
-          action,
-          suppressSuccessToast: true,
-        });
+        return writeTx(
+          () =>
+            localE2ETestWalletClient
+              ? localE2ETestWalletClient.writeContract(request)
+              : wagmiTokenWrite.writeContractAsync(request),
+          {
+            action,
+            suppressSuccessToast: true,
+          },
+        );
       };
 
       const resolveFreshStakedRuntime = () =>
@@ -335,8 +413,11 @@ export function useRoundVote() {
           contentId,
           fallbackEpochDuration: roundConfig?.epochDuration ?? DEFAULT_VOTING_CONFIG.epochDuration,
         }).then(async resolvedRuntime => {
-          await getVoteTlockChainInfo(resolvedRuntime);
-          return resolvedRuntime;
+          const preparedRuntime = localE2ETestWalletClient
+            ? withLocalE2ETlockRuntime(resolvedRuntime)
+            : resolvedRuntime;
+          await getVoteTlockChainInfo(preparedRuntime);
+          return preparedRuntime;
         });
 
       const submitOpenRound = async () => {
@@ -347,7 +428,7 @@ export function useRoundVote() {
           functionName: "openRound",
           kind: "openRound",
         };
-        if (canUseSponsoredBatchCalls) {
+        if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
           await executeContractCallBatch([openRoundCall], {
             action: "open round",
             atomicRequired: true,
@@ -355,7 +436,7 @@ export function useRoundVote() {
           });
           return;
         }
-        if (canUseSelfFundedBatchCalls) {
+        if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
           await executeContractCallBatch([openRoundCall], {
             action: "open round",
             atomicRequired: true,
@@ -424,7 +505,7 @@ export function useRoundVote() {
       };
       let submittedVote: Awaited<ReturnType<typeof buildFreshRoundVotePlan>> | null = null;
 
-      if (canUseSponsoredBatchCalls) {
+      if (!useDirectLocalE2EWrites && canUseSponsoredBatchCalls) {
         const freshVote = await buildFreshRoundVotePlan(currentAllowance);
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",
@@ -432,7 +513,7 @@ export function useRoundVote() {
           sponsorshipMode: "sponsored",
         });
         submittedVote = freshVote;
-      } else if (canUseSelfFundedBatchCalls) {
+      } else if (!useDirectLocalE2EWrites && canUseSelfFundedBatchCalls) {
         const freshVote = await buildFreshRoundVotePlan(currentAllowance);
         await executeContractCallBatch(freshVote.plan.calls, {
           action: "vote",

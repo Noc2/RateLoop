@@ -1,7 +1,7 @@
-import { VOTE_DOWN_BUTTON_NAME, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "./wait-helpers";
+import type { ConsoleMessage, Page } from "@playwright/test";
 import { waitForPonderIndexed } from "./admin-helpers";
 import { getVotes } from "./ponder-api";
-import type { Page } from "@playwright/test";
+import { VOTE_DOWN_BUTTON_NAME, VOTE_UP_BUTTON_NAME, gotoWithRetry, waitForFeedLoaded } from "./wait-helpers";
 
 type VoteSubmissionOptions = {
   voterAddress?: string;
@@ -135,6 +135,14 @@ export async function voteOnContent(
   if (!confirmVisible) return false;
   await confirmBtn.click();
 
+  const shouldRequireIndexed = options.requireIndexed ?? Boolean(options.voterAddress);
+  if (
+    shouldRequireIndexed &&
+    (await waitForVoteIndexed(options.voterAddress, contentId, options.indexedTimeoutMs ?? 60_000))
+  ) {
+    return true;
+  }
+
   // Wait for EITHER success OR error — the contract call may revert.
   // NOTE: Do NOT match /success/i — scaffold-eth fires a generic
   // "Transaction completed successfully!" toast for the approve tx,
@@ -144,7 +152,6 @@ export async function voteOnContent(
   const errorIndicator = page
     .getByText(/reverted/i)
     .or(page.getByText(/failed/i))
-    .or(page.getByText(/error/i))
     .or(page.getByText(/rejected/i))
     .or(page.getByText(/not confirmed/i));
 
@@ -164,7 +171,7 @@ export async function voteOnContent(
     .catch(() => false);
   if (!wasSuccess) return false;
 
-  if (options.requireIndexed ?? Boolean(options.voterAddress)) {
+  if (shouldRequireIndexed) {
     return waitForVoteIndexed(options.voterAddress, contentId, options.indexedTimeoutMs ?? 60_000);
   }
 
@@ -183,6 +190,37 @@ export async function voteOnSpecificContent(
   direction: "up" | "down",
   options: VoteSubmissionOptions = {},
 ): Promise<boolean> {
+  const diagnostics: string[] = [];
+  const recordConsole = (message: ConsoleMessage) => {
+    const type = message.type();
+    const text = message.text();
+    if (type === "error" || type === "warning") {
+      diagnostics.push(`[${type}] ${text}`);
+    }
+  };
+  const recordPageError = (error: Error) => {
+    diagnostics.push(`[pageerror] ${error.message}`);
+  };
+  page.on("console", recordConsole);
+  page.on("pageerror", recordPageError);
+  const fail = async (reason: string) => {
+    const modalText = await page
+      .locator("[role='dialog']")
+      .first()
+      .textContent({ timeout: 1_000 })
+      .catch(() => null);
+    console.warn("[voteOnSpecificContent] vote failed", {
+      contentId: contentId.toString(),
+      diagnostics: diagnostics.slice(-8),
+      direction,
+      modalText,
+      reason,
+    });
+    page.off("console", recordConsole);
+    page.off("pageerror", recordPageError);
+    return false;
+  };
+
   await gotoWithRetry(page, `/rate?content=${contentId}`, { ensureWalletConnected: true });
   await waitForFeedLoaded(page);
 
@@ -195,7 +233,7 @@ export async function voteOnSpecificContent(
     .then(() => true)
     .catch(() => false);
 
-  if (!canVote) return false;
+  if (!canVote) return fail("vote button not visible");
 
   // Click with retry for React re-renders
   let clicked = false;
@@ -209,7 +247,7 @@ export async function voteOnSpecificContent(
       // Element detached — retry
     }
   }
-  if (!clicked) return false;
+  if (!clicked) return fail("vote button click failed");
 
   // StakeSelector modal
   const stakeModal = page.locator("[role='dialog']").first();
@@ -217,7 +255,7 @@ export async function voteOnSpecificContent(
     .waitFor({ state: "visible", timeout: 5_000 })
     .then(() => true)
     .catch(() => false);
-  if (!modalVisible) return false;
+  if (!modalVisible) return fail("stake modal not visible");
 
   // Click "1" preset (lowest stake = 1 LREP)
   const presetBtn = stakeModal.getByRole("button", { name: /^1$/ });
@@ -238,9 +276,19 @@ export async function voteOnSpecificContent(
       .then(() => true)
       .catch(() => false))
   ) {
-    return false;
+    return fail("confirm button not visible");
   }
   await confirmBtn.click();
+
+  const shouldRequireIndexed = options.requireIndexed ?? Boolean(options.voterAddress);
+  if (
+    shouldRequireIndexed &&
+    (await waitForVoteIndexed(options.voterAddress, contentId.toString(), options.indexedTimeoutMs ?? 60_000))
+  ) {
+    page.off("console", recordConsole);
+    page.off("pageerror", recordPageError);
+    return true;
+  }
 
   // Wait for outcome — avoid /success/i which matches the approve tx toast
   const successIndicator = page.getByText(/voted/i);
@@ -248,25 +296,33 @@ export async function voteOnSpecificContent(
   const errorIndicator = page
     .getByText(/reverted/i)
     .or(page.getByText(/failed/i))
-    .or(page.getByText(/error/i))
     .or(page.getByText(/rejected/i))
     .or(page.getByText(/not confirmed/i));
 
   try {
     await successIndicator.or(errorIndicator).first().waitFor({ state: "visible", timeout: 30_000 });
   } catch {
-    return false;
+    return fail("timed out waiting for vote outcome");
   }
 
   const wasSuccess = await successIndicator
     .first()
     .isVisible()
     .catch(() => false);
-  if (!wasSuccess) return false;
+  if (!wasSuccess) return fail("vote error indicator appeared");
 
-  if (options.requireIndexed ?? Boolean(options.voterAddress)) {
-    return waitForVoteIndexed(options.voterAddress, contentId.toString(), options.indexedTimeoutMs ?? 60_000);
+  if (shouldRequireIndexed) {
+    const indexed = await waitForVoteIndexed(
+      options.voterAddress,
+      contentId.toString(),
+      options.indexedTimeoutMs ?? 60_000,
+    );
+    page.off("console", recordConsole);
+    page.off("pageerror", recordPageError);
+    return indexed;
   }
 
+  page.off("console", recordConsole);
+  page.off("pageerror", recordPageError);
   return true;
 }
