@@ -17,6 +17,9 @@ optimizer = true
 optimizer_runs = 100
 build_info = true
 extra_output = ['abi', 'evm.bytecode', 'evm.deployedBytecode', 'storageLayout']
+# Solidity warns on accepted dependency patterns here: OpenZeppelin's transient
+# storage helper and future reserved identifiers in OpenZeppelin/forge-std.
+ignored_error_codes = [2394, 6335]
 
 [profile.deploy]
 optimizer_runs = 0
