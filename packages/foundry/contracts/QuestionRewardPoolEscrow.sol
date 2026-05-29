@@ -11,6 +11,7 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
@@ -33,6 +34,7 @@ import {
     BundleReward,
     BundleQuestion,
     BundleRoundSetSnapshot,
+    AuthorizedRewardPoolParams,
     CreateRewardPoolParams,
     CreateSubmissionBundleParams,
     BOUNTY_ELIGIBILITY_OPEN
@@ -64,6 +66,9 @@ contract QuestionRewardPoolEscrow is
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
+    bytes32 internal constant REWARD_POOL_AUTHORIZATION_TYPEHASH = keccak256(
+        "RateLoopRewardPoolAuthorization(uint256 chainId,address escrow,uint256 contentId,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyClosesAt,uint256 feedbackClosesAt,uint8 bountyEligibility,uint8 bountyKind,uint256 relatedRoundId,bytes32 reasonHash,address funder,uint256 validAfter,uint256 validBefore)"
+    );
 
     error RewardPoolCursorNeedsAdvance();
 
@@ -308,6 +313,81 @@ contract QuestionRewardPoolEscrow is
             feedbackClosesAt,
             bountyEligibility,
             false
+        );
+    }
+
+    function createRewardPoolWithAuthorization(
+        AuthorizedRewardPoolParams calldata params,
+        Eip3009Authorization calldata authorization
+    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
+        _requireCurrentRegistryEscrow();
+        require(authorization.from != address(0), "Invalid funder");
+        require(authorization.to == address(this), "Bad payee");
+        require(authorization.value == params.amount, "Bad amount");
+        require(
+            authorization.nonce
+                == computeRewardPoolAuthorizationNonce(
+                    params, authorization.from, authorization.validAfter, authorization.validBefore
+                ),
+            "Bad nonce"
+        );
+
+        uint256 fundedAmount = _receiveUsdcAuthorization(authorization);
+        CreateRewardPoolParams memory createParams = CreateRewardPoolParams({
+            contentId: params.contentId,
+            funder: authorization.from,
+            payer: address(0),
+            asset: REWARD_ASSET_USDC,
+            amount: params.amount,
+            requiredVoters: params.requiredVoters,
+            requiredSettledRounds: params.requiredSettledRounds,
+            bountyClosesAt: params.bountyClosesAt,
+            feedbackClosesAt: params.feedbackClosesAt,
+            bountyEligibility: params.bountyEligibility,
+            nonRefundable: false,
+            bountyKind: params.bountyKind,
+            relatedRoundId: params.relatedRoundId,
+            reasonHash: params.reasonHash
+        });
+        (rewardPoolId, nextRewardPoolId) = QuestionRewardPoolEscrowPoolActionsLib.createFundedRewardPool(
+            rewardPools,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            registry,
+            votingEngine,
+            defaultFrontendFeeBps,
+            nextRewardPoolId,
+            fundedAmount,
+            createParams
+        );
+        _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, REWARD_ASSET_USDC);
+    }
+
+    function computeRewardPoolAuthorizationNonce(
+        AuthorizedRewardPoolParams calldata params,
+        address funder,
+        uint256 validAfter,
+        uint256 validBefore
+    ) public view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                REWARD_POOL_AUTHORIZATION_TYPEHASH,
+                block.chainid,
+                address(this),
+                params.contentId,
+                params.amount,
+                params.requiredVoters,
+                params.requiredSettledRounds,
+                params.bountyClosesAt,
+                params.feedbackClosesAt,
+                params.bountyEligibility,
+                params.bountyKind,
+                params.relatedRoundId,
+                params.reasonHash,
+                funder,
+                validAfter,
+                validBefore
+            )
         );
     }
 
@@ -641,6 +721,27 @@ contract QuestionRewardPoolEscrow is
             params
         );
         _snapshotRewardPoolClusterPayoutOracle(rewardPoolId, asset);
+    }
+
+    function _receiveUsdcAuthorization(Eip3009Authorization calldata authorization)
+        private
+        returns (uint256 receivedAmount)
+    {
+        uint256 balanceBefore = usdcToken.balanceOf(address(this));
+        IReceiveWithAuthorizationToken(address(usdcToken))
+            .receiveWithAuthorization(
+                authorization.from,
+                authorization.to,
+                authorization.value,
+                authorization.validAfter,
+                authorization.validBefore,
+                authorization.nonce,
+                authorization.v,
+                authorization.r,
+                authorization.s
+            );
+        receivedAmount = usdcToken.balanceOf(address(this)) - balanceBefore;
+        require(receivedAmount == authorization.value, "Fee token unsupported");
     }
 
     function _snapshotRewardPoolClusterPayoutOracle(uint256 rewardPoolId, uint8 asset) private {

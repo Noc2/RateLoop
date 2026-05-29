@@ -93,6 +93,38 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         }
     }
 
+    function createFundedRewardPool(
+        mapping(uint256 => RewardPool) storage rewardPools,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        uint16 defaultFrontendFeeBps,
+        uint256 nextRewardPoolId,
+        uint256 fundedAmount,
+        CreateRewardPoolParams memory params
+    ) external returns (uint256 rewardPoolId, uint256 updatedNextRewardPoolId) {
+        rewardPoolId = nextRewardPoolId;
+        updatedNextRewardPoolId = nextRewardPoolId + 1;
+        _storeRewardPool(
+            rewardPools,
+            rewardPoolPayerIdentity,
+            rewardPoolPayerIdentityKey,
+            registry,
+            votingEngine,
+            defaultFrontendFeeBps,
+            rewardPoolId,
+            fundedAmount,
+            params
+        );
+
+        if (params.bountyKind != 0) {
+            _setRewardPoolPurpose(
+                rewardPools, rewardPoolId, params.bountyKind, params.relatedRoundId, params.reasonHash
+            );
+        }
+    }
+
     function snapshotRewardPoolClusterPayoutOracle(
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
         RoundVotingEngine votingEngine,

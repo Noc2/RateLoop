@@ -16,7 +16,7 @@ import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol"
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RoundSnapshot } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
+import { AuthorizedRewardPoolParams, RoundSnapshot } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
 import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
@@ -278,6 +278,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward2, claimable2);
         assertEq(reward1 + reward2 + reward3, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
+    }
+
+    function testCreateRewardPoolWithAuthorizationFundsUsdcPool() public {
+        uint256 contentId = _submitQuestion("authorized-reward-pool");
+        AuthorizedRewardPoolParams memory params = _authorizedRewardPoolParams(contentId);
+        Eip3009Authorization memory authorization = _rewardPoolAuthorization(funder, params);
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+
+        vm.prank(voter1);
+        uint256 rewardPoolId = rewardPoolEscrow.createRewardPoolWithAuthorization(params, authorization);
+
+        assertGt(rewardPoolId, 0);
+        assertTrue(usdc.authorizationState(funder, authorization.nonce));
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + params.amount);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore - params.amount);
+    }
+
+    function testCreateRewardPoolWithAuthorizationRejectsBadNonceBeforeTransfer() public {
+        uint256 contentId = _submitQuestion("authorized-reward-pool-bad-nonce");
+        AuthorizedRewardPoolParams memory params = _authorizedRewardPoolParams(contentId);
+        Eip3009Authorization memory authorization = _rewardPoolAuthorization(funder, params);
+        authorization.nonce = keccak256("wrong reward pool nonce");
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+
+        vm.expectRevert("Bad nonce");
+        rewardPoolEscrow.createRewardPoolWithAuthorization(params, authorization);
+
+        assertFalse(usdc.authorizationState(funder, authorization.nonce));
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore);
     }
 
     function testVerifiedHumanBountyCountsOnlyVerifiedHumansWhileVotingStaysOpen() public {
@@ -4341,6 +4373,45 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             questionMetadataHash: keccak256("x402-question-metadata"), resultSpecHash: keccak256("x402-result-spec")
         });
         question.salt = keccak256("x402-usdc-no-voter-id");
+    }
+
+    function _authorizedRewardPoolParams(uint256 contentId)
+        internal
+        view
+        returns (AuthorizedRewardPoolParams memory params)
+    {
+        params = AuthorizedRewardPoolParams({
+            contentId: contentId,
+            amount: REWARD_POOL_AMOUNT,
+            requiredVoters: 3,
+            requiredSettledRounds: 1,
+            bountyClosesAt: block.timestamp + 30 days,
+            feedbackClosesAt: block.timestamp + 30 days,
+            bountyEligibility: 0,
+            bountyKind: 0,
+            relatedRoundId: 0,
+            reasonHash: bytes32(0)
+        });
+    }
+
+    function _rewardPoolAuthorization(address payer, AuthorizedRewardPoolParams memory params)
+        internal
+        view
+        returns (Eip3009Authorization memory authorization)
+    {
+        uint256 validAfter = block.timestamp - 1;
+        uint256 validBefore = block.timestamp + 30 minutes;
+        authorization = Eip3009Authorization({
+            from: payer,
+            to: address(rewardPoolEscrow),
+            value: params.amount,
+            validAfter: validAfter,
+            validBefore: validBefore,
+            nonce: rewardPoolEscrow.computeRewardPoolAuthorizationNonce(params, payer, validAfter, validBefore),
+            v: 27,
+            r: bytes32(0),
+            s: bytes32(0)
+        });
     }
 
     function _reserveX402Question(address agentWallet, X402TestQuestion memory question)
