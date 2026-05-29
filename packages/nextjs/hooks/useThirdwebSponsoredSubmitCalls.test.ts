@@ -1,4 +1,6 @@
 import {
+  getEip7702DelegationTarget,
+  hasMissingEip7702DelegationImplementation,
   isThirdwebSelfFundedFallbackEligibleError,
   isThirdwebSponsorshipDeniedError,
   shouldAttemptSelfFundedThirdwebFallback,
@@ -12,6 +14,28 @@ import {
 } from "./useThirdwebSponsoredSubmitCalls";
 import assert from "node:assert/strict";
 import test from "node:test";
+
+test("detects EIP-7702 delegations with missing implementations", () => {
+  const implementation = "0x3e515544f8d8293b0a353e10ff3b7ca03b52f35b";
+  const walletCode = `0xef0100${implementation.slice(2)}` as const;
+
+  assert.equal(getEip7702DelegationTarget(walletCode), implementation);
+  assert.equal(
+    hasMissingEip7702DelegationImplementation({
+      implementationCode: "0x",
+      walletCode,
+    }),
+    true,
+  );
+  assert.equal(
+    hasMissingEip7702DelegationImplementation({
+      implementationCode: "0x6000",
+      walletCode,
+    }),
+    false,
+  );
+  assert.equal(getEip7702DelegationTarget("0x"), null);
+});
 
 test("prefers sponsored submit calls for thirdweb connector wallets with free transactions on supported chains", () => {
   assert.equal(

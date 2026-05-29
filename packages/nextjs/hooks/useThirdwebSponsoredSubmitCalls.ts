@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { defineChain, prepareTransaction } from "thirdweb";
 import { useActiveWallet, useActiveWalletChain, useSetActiveWallet } from "thirdweb/react";
 import { sendAndConfirmCalls } from "thirdweb/wallets/eip5792";
 import { type Abi, type Hex, encodeFunctionData } from "viem";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import {
   FREE_TRANSACTION_ALLOWANCE_QUERY_KEY,
   useFreeTransactionAllowance,
@@ -44,6 +44,24 @@ type ExecuteContractCallBatchOptions = {
   sponsorshipMode?: ThirdwebBatchSponsorshipMode;
   suppressStatusToast?: boolean;
 };
+
+export function getEip7702DelegationTarget(code: Hex | undefined | null): `0x${string}` | null {
+  const normalizedCode = code?.toLowerCase();
+  if (!normalizedCode?.startsWith("0xef0100") || normalizedCode.length !== 48) {
+    return null;
+  }
+
+  return `0x${normalizedCode.slice(8)}` as `0x${string}`;
+}
+
+export function hasMissingEip7702DelegationImplementation(params: {
+  implementationCode?: Hex | null;
+  walletCode?: Hex | null;
+}) {
+  return Boolean(
+    getEip7702DelegationTarget(params.walletCode) && (!params.implementationCode || params.implementationCode === "0x"),
+  );
+}
 
 export function shouldPreferSponsoredBatchCalls(params: {
   canUseFreeTransactions: boolean;
@@ -188,6 +206,7 @@ export function useThirdwebSponsoredSubmitCalls() {
   const freeTransactionAllowance = useFreeTransactionAllowance();
   const { executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
+  const publicClient = usePublicClient({ chainId });
 
   const expectsSponsoredBatchCalls = useMemo(
     () =>
@@ -224,19 +243,57 @@ export function useThirdwebSponsoredSubmitCalls() {
     [activeWalletId, chainId, connector?.id, executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls],
   );
 
-  const canUseGaslessSubmitTransactions = prefersSponsoredBatchCalls;
+  const shouldInspectSponsoredDelegation = Boolean(
+    expectsSponsoredBatchCalls &&
+      executionMode === "sponsored_7702" &&
+      publicClient &&
+      typeof address === "string" &&
+      typeof chainId === "number",
+  );
+  const sponsoredDelegationQuery = useQuery({
+    queryKey: ["thirdweb-sponsored-delegation", chainId ?? null, address?.toLowerCase() ?? null],
+    enabled: shouldInspectSponsoredDelegation,
+    staleTime: 30_000,
+    retry: 1,
+    queryFn: async () => {
+      const walletCode = await publicClient!.getCode({ address: address as `0x${string}` });
+      const implementation = getEip7702DelegationTarget(walletCode);
+      if (!implementation) {
+        return { hasMissingImplementation: false, implementation: null };
+      }
 
-  const isEligibleForGaslessSubmitTransactions = expectsSponsoredBatchCalls;
+      const implementationCode = await publicClient!.getCode({ address: implementation });
+      return {
+        hasMissingImplementation: hasMissingEip7702DelegationImplementation({ implementationCode, walletCode }),
+        implementation,
+      };
+    },
+  });
+  const hasBrokenSponsoredDelegation = sponsoredDelegationQuery.data?.hasMissingImplementation === true;
+  const isInspectingSponsoredDelegation = shouldInspectSponsoredDelegation && sponsoredDelegationQuery.isLoading;
+
+  const canUseGaslessSubmitTransactions = prefersSponsoredBatchCalls && !hasBrokenSponsoredDelegation;
+
+  const isEligibleForGaslessSubmitTransactions = expectsSponsoredBatchCalls && !hasBrokenSponsoredDelegation;
 
   const canUseSponsoredSubmitCalls = Boolean(
-    thirdwebClient && activeWallet && typeof chainId === "number" && hasSendCalls && prefersSponsoredBatchCalls,
+    thirdwebClient &&
+      activeWallet &&
+      typeof chainId === "number" &&
+      hasSendCalls &&
+      prefersSponsoredBatchCalls &&
+      !isInspectingSponsoredDelegation &&
+      !hasBrokenSponsoredDelegation,
   );
   const canUseSelfFundedBatchCalls = Boolean(
     thirdwebClient && activeWallet && typeof chainId === "number" && hasSendCalls && prefersSelfFundedBatchCalls,
   );
   const isAwaitingSponsoredSubmitCalls =
     expectsSponsoredBatchCalls &&
-    (!freeTransactionAllowance.isResolved || (prefersSponsoredBatchCalls && !canUseSponsoredSubmitCalls));
+    !hasBrokenSponsoredDelegation &&
+    (!freeTransactionAllowance.isResolved ||
+      isInspectingSponsoredDelegation ||
+      (prefersSponsoredBatchCalls && !canUseSponsoredSubmitCalls));
   const isAwaitingSelfFundedSubmitCalls = useMemo(
     () =>
       shouldAwaitSelfFundedSubmitCalls({
