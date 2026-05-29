@@ -241,6 +241,25 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
     }
 
+    function _signLrepPermit(uint256 ownerKey, address owner_, address spender, uint256 value, uint256 deadline)
+        internal
+        view
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        bytes32 structHash = keccak256(
+            abi.encode(
+                keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+                owner_,
+                spender,
+                value,
+                lrepToken.nonces(owner_),
+                deadline
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", lrepToken.DOMAIN_SEPARATOR(), structHash));
+        return vm.sign(ownerKey, digest);
+    }
+
     /// @dev Reveal a vote by commit key. Permissionless — no prank needed.
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
@@ -654,6 +673,75 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(roundId, 1);
         assertEq(referenceRatingBps, _defaultRatingReferenceBps());
         assertTrue(willStartNewRound);
+    }
+
+    function test_CommitVoteWithPermitConsumesPermitAndStake() public {
+        uint256 voterKey = 0xA11CE;
+        address permitVoter = vm.addr(voterKey);
+        vm.prank(owner);
+        lrepToken.mint(permitVoter, 10_000e6);
+        uint256 contentId = _submitContent();
+        bytes32 salt = keccak256("permit-commit");
+        _openRoundForTest(engine, contentId, permitVoter);
+        TestCommitArtifacts memory artifacts =
+            _buildTestCommitArtifacts(address(engine), permitVoter, true, salt, contentId);
+        uint256 deadline = block.timestamp + 1 hours;
+        (uint8 v, bytes32 r, bytes32 s) = _signLrepPermit(voterKey, permitVoter, address(engine), STAKE, deadline);
+
+        vm.prank(permitVoter);
+        engine.commitVoteWithPermit(
+            contentId,
+            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
+            STAKE,
+            address(0),
+            deadline,
+            v,
+            r,
+            s
+        );
+
+        assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
+        assertEq(lrepToken.balanceOf(address(engine)), STAKE);
+        assertEq(engine.voterCommitHash(contentId, artifacts.roundId, permitVoter), artifacts.commitHash);
+    }
+
+    function test_CommitVoteWithPermitAcceptsAlreadyConsumedPermitWhenAllowanceCoversStake() public {
+        uint256 voterKey = 0xB0B;
+        address permitVoter = vm.addr(voterKey);
+        vm.prank(owner);
+        lrepToken.mint(permitVoter, 10_000e6);
+        uint256 contentId = _submitContent();
+        bytes32 salt = keccak256("permit-front-run");
+        _openRoundForTest(engine, contentId, permitVoter);
+        TestCommitArtifacts memory artifacts =
+            _buildTestCommitArtifacts(address(engine), permitVoter, true, salt, contentId);
+        uint256 deadline = block.timestamp + 1 hours;
+        (uint8 v, bytes32 r, bytes32 s) = _signLrepPermit(voterKey, permitVoter, address(engine), STAKE, deadline);
+
+        lrepToken.permit(permitVoter, address(engine), STAKE, deadline, v, r, s);
+
+        vm.prank(permitVoter);
+        engine.commitVoteWithPermit(
+            contentId,
+            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
+            STAKE,
+            address(0),
+            deadline,
+            v,
+            r,
+            s
+        );
+
+        assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
+        assertEq(engine.voterCommitHash(contentId, artifacts.roundId, permitVoter), artifacts.commitHash);
     }
 
     function test_PreviewCommitAvailability_OpenRound_AcceptsCurrentRound() public {

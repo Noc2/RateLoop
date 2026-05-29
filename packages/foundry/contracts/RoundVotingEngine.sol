@@ -393,6 +393,38 @@ contract RoundVotingEngine is
         );
     }
 
+    /// @notice Commit a blind vote after applying an ERC-2612 LREP permit for the stake.
+    /// @dev The permit helper tolerates pre-consumed permits when allowance is already sufficient.
+    function commitVoteWithPermit(
+        uint256 contentId,
+        uint256 roundContext,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes32 commitHash,
+        bytes calldata ciphertext,
+        uint256 stakeAmount,
+        address frontend,
+        uint256 permitDeadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant whenNotPaused {
+        VotePreflightLib.permitStake(
+            address(lrepToken), msg.sender, address(this), stakeAmount, permitDeadline, v, r, s
+        );
+        _commitVote(
+            msg.sender,
+            contentId,
+            roundContext,
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            stakeAmount,
+            frontend
+        );
+    }
+
     /// @notice Bind an advisory commit to the current staked open round.
     /// @dev Records no vote/stake accounting; zero-stake advisory commits cannot open or roll rounds.
     function prepareAdvisoryRound(uint256 contentId, uint256 roundContext) external view {
