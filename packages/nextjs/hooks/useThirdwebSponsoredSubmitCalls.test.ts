@@ -386,6 +386,19 @@ test("stops awaiting self-funded reconnect once the in-app wallet is self-funded
   );
 });
 
+test("does not await self-funded reconnect after in-app wallets fall back to direct transactions", () => {
+  assert.equal(
+    shouldAwaitSelfFundedSubmitCalls({
+      canUseFreeTransactions: false,
+      chainId: 4801,
+      connectorId: "in-app-wallet",
+      executionMode: "direct_worldchain",
+      freeTransactionAllowanceResolved: true,
+    }),
+    false,
+  );
+});
+
 test("does not await self-funded reconnect before free transaction allowance resolves", () => {
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({

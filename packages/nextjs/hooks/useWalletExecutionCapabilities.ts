@@ -27,6 +27,10 @@ export function resolveWalletExecutionMode(params: {
     return "self_funded_7702";
   }
 
+  if (params.isThirdwebInApp) {
+    return "direct_worldchain";
+  }
+
   if (params.supportedChain) {
     // External wallets may expose `sendCalls`, but hardware-backed accounts
     // can still reject the EIP-7702 upgrade path. Keep them on plain World Chain txs.

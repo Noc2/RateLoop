@@ -177,7 +177,7 @@ export function shouldAwaitSelfFundedSubmitCalls(params: {
     shouldExpectThirdwebBatchCalls(params) &&
     params.freeTransactionAllowanceResolved &&
     !params.canUseFreeTransactions &&
-    params.executionMode !== "self_funded_7702"
+    params.executionMode === "sponsored_7702"
   );
 }
 

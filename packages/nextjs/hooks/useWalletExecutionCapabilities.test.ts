@@ -45,6 +45,18 @@ test("resolveWalletExecutionMode keeps external wallets on fee-currency flow for
   );
 });
 
+test("resolveWalletExecutionMode treats in-app EOA fallback as direct transactions", () => {
+  assert.equal(
+    resolveWalletExecutionMode({
+      hasSendCalls: true,
+      isThirdwebInApp: true,
+      supportedChain: true,
+      thirdwebSponsorshipMode: null,
+    }),
+    "direct_worldchain",
+  );
+});
+
 test("resolveWalletExecutionMode keeps unsupported external wallets on direct worldchain transactions", () => {
   assert.equal(
     resolveWalletExecutionMode({

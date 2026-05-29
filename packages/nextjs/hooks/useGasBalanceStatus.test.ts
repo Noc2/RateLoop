@@ -141,3 +141,18 @@ test("stops awaiting self-funded reconnect after wallet switches to paid gas", (
     false,
   );
 });
+
+test("does not await self-funded reconnect after wallet falls back to direct transactions", () => {
+  assert.equal(
+    shouldAwaitSelfFundedGasModeReconnect({
+      canUseFreeTransactions: false,
+      chainId: 4801,
+      connectorId: "in-app-wallet",
+      executionMode: "direct_worldchain",
+      freeTransactionAllowanceResolved: true,
+      includeExternalSendCalls: true,
+      isThirdwebInApp: true,
+    }),
+    false,
+  );
+});
