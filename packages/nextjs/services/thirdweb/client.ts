@@ -29,6 +29,7 @@ type ThirdwebWalletExecutionMode =
 type ThirdwebSponsorshipMode = "sponsored" | "self-funded";
 
 type CreateThirdwebInAppWalletOptions = {
+  forceEoa?: boolean;
   includeWalletAuthOption?: boolean;
   sponsorshipMode?: ThirdwebSponsorshipMode | null;
 };
@@ -137,8 +138,14 @@ export function setStoredThirdwebSponsorshipMode(mode: ThirdwebSponsorshipMode |
 
 export function getThirdwebWalletExecutionMode(
   chainId: number,
-  options?: { sponsorshipMode?: ThirdwebSponsorshipMode | null },
+  options?: { forceEoa?: boolean; sponsorshipMode?: ThirdwebSponsorshipMode | null },
 ): ThirdwebWalletExecutionMode {
+  if (options?.forceEoa) {
+    return {
+      mode: "EOA" as const,
+    };
+  }
+
   if (supportsThirdwebInAppExecutionCapabilities(chainId)) {
     const sponsorshipMode = options?.sponsorshipMode ?? getStoredThirdwebSponsorshipMode() ?? "sponsored";
     return {

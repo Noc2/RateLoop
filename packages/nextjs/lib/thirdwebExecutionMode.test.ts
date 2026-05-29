@@ -13,6 +13,12 @@ test("thirdweb in-app wallets use sponsored EIP-7702 mode on World Chain Sepolia
   });
 });
 
+test("thirdweb in-app wallets can be forced back to EOA mode", () => {
+  assert.deepEqual(getThirdwebWalletExecutionMode(4801, { forceEoa: true }), {
+    mode: "EOA",
+  });
+});
+
 test("World Chain Sepolia supports external and in-app execution", () => {
   assert.equal(supportsThirdwebExecutionCapabilities(4801), true);
   assert.equal(supportsThirdwebInAppExecutionCapabilities(4801), true);

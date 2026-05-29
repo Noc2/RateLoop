@@ -4,9 +4,13 @@ import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { defineChain } from "thirdweb";
 import { useActiveWallet, useActiveWalletChain, useSetActiveWallet } from "thirdweb/react";
-import { useAccount } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import { useThirdwebWagmiSync } from "~~/hooks/useThirdwebWagmiSync";
 import { resolveWalletExecutionChainId } from "~~/hooks/useWalletExecutionCapabilities";
+import {
+  getEip7702DelegationTarget,
+  hasMissingEip7702DelegationImplementation,
+} from "~~/lib/thirdweb/eip7702Delegation";
 import {
   createThirdwebInAppWallet,
   getThirdwebWalletSponsorshipMode,
@@ -176,6 +180,8 @@ export function useFreeTransactionAllowance() {
   const sponsorshipSyncAttemptRef = useRef<string | null>(null);
   const resolvedChainId = resolveWalletExecutionChainId(chain?.id, activeWalletChain?.id);
   const supportsInAppExecution = supportsThirdwebInAppExecutionCapabilities(resolvedChainId);
+  const publicClient = usePublicClient({ chainId: resolvedChainId });
+  const currentSponsorshipMode = getThirdwebWalletSponsorshipMode(activeWallet);
 
   const query = useQuery({
     queryKey: getFreeTransactionAllowanceQueryKey(address, resolvedChainId),
@@ -207,6 +213,37 @@ export function useFreeTransactionAllowance() {
     [address, query.data, resolvedChainId],
   );
 
+  const shouldInspectInAppDelegation = Boolean(
+    supportsInAppExecution &&
+      publicClient &&
+      address &&
+      activeWallet &&
+      isThirdwebInAppWalletId(activeWallet.id) &&
+      currentSponsorshipMode !== null,
+  );
+  const inAppDelegationQuery = useQuery({
+    queryKey: ["thirdweb-in-app-delegation", resolvedChainId ?? null, address?.toLowerCase() ?? null],
+    enabled: shouldInspectInAppDelegation,
+    staleTime: 30_000,
+    retry: 1,
+    queryFn: async () => {
+      const walletCode = await publicClient!.getCode({ address: address as `0x${string}` });
+      const implementation = getEip7702DelegationTarget(walletCode);
+      if (!implementation) {
+        return { hasMissingImplementation: false, implementation: null };
+      }
+
+      const implementationCode = await publicClient!.getCode({ address: implementation });
+      return {
+        hasMissingImplementation: hasMissingEip7702DelegationImplementation({ implementationCode, walletCode }),
+        implementation,
+      };
+    },
+  });
+  const hasBrokenInAppDelegation = inAppDelegationQuery.data?.hasMissingImplementation === true;
+  const isInspectingInAppDelegation = shouldInspectInAppDelegation && inAppDelegationQuery.isLoading;
+  const shouldUseEoaWallet = !supportsInAppExecution || hasBrokenInAppDelegation;
+
   useEffect(() => {
     if (!query.data) {
       return;
@@ -217,7 +254,13 @@ export function useFreeTransactionAllowance() {
 
   const allowance = useMemo(() => {
     const summary = query.data ?? fallbackSummary;
-    const canUseFreeTransactions = Boolean(supportsInAppExecution && summary?.verified && summary.remaining > 0);
+    const canUseFreeTransactions = Boolean(
+      supportsInAppExecution &&
+        !hasBrokenInAppDelegation &&
+        !isInspectingInAppDelegation &&
+        summary?.verified &&
+        summary.remaining > 0,
+    );
 
     return {
       ...query,
@@ -230,18 +273,24 @@ export function useFreeTransactionAllowance() {
       verified: Boolean(summary?.verified),
       raterIdentityKey: summary?.raterIdentityKey ?? null,
     };
-  }, [fallbackSummary, query, supportsInAppExecution]);
+  }, [fallbackSummary, hasBrokenInAppDelegation, isInspectingInAppDelegation, query, supportsInAppExecution]);
 
   const desiredSponsorshipMode = useMemo(() => {
-    if (!resolvedChainId || !supportsInAppExecution || !allowance.isResolved) {
+    if (!resolvedChainId || shouldUseEoaWallet || isInspectingInAppDelegation || !allowance.isResolved) {
       return null;
     }
 
     return allowance.canUseFreeTransactions ? "sponsored" : "self-funded";
-  }, [allowance.canUseFreeTransactions, allowance.isResolved, resolvedChainId, supportsInAppExecution]);
+  }, [
+    allowance.canUseFreeTransactions,
+    allowance.isResolved,
+    isInspectingInAppDelegation,
+    resolvedChainId,
+    shouldUseEoaWallet,
+  ]);
 
   useEffect(() => {
-    if (!resolvedChainId || !supportsInAppExecution) {
+    if (!resolvedChainId || shouldUseEoaWallet) {
       setStoredThirdwebSponsorshipMode(null);
       return;
     }
@@ -251,7 +300,7 @@ export function useFreeTransactionAllowance() {
     }
 
     setStoredThirdwebSponsorshipMode(desiredSponsorshipMode);
-  }, [desiredSponsorshipMode, resolvedChainId, supportsInAppExecution]);
+  }, [desiredSponsorshipMode, resolvedChainId, shouldUseEoaWallet]);
 
   useEffect(() => {
     if (
@@ -309,7 +358,7 @@ export function useFreeTransactionAllowance() {
       !thirdwebClient ||
       !address ||
       !resolvedChainId ||
-      supportsInAppExecution ||
+      !shouldUseEoaWallet ||
       !activeWallet ||
       !isThirdwebInAppWalletId(activeWallet.id) ||
       getThirdwebWalletSponsorshipMode(activeWallet) === null
@@ -330,7 +379,9 @@ export function useFreeTransactionAllowance() {
 
     void (async () => {
       try {
-        const replacementWallet = createThirdwebInAppWallet(resolvedChainId);
+        const replacementWallet = createThirdwebInAppWallet(resolvedChainId, {
+          forceEoa: true,
+        });
 
         await replacementWallet.autoConnect({
           chain: defineChain(resolvedChainId),
@@ -346,7 +397,7 @@ export function useFreeTransactionAllowance() {
         console.error("Failed to sync thirdweb EOA mode:", error);
       }
     })();
-  }, [activeWallet, address, resolvedChainId, setActiveWallet, supportsInAppExecution, syncWalletToWagmi]);
+  }, [activeWallet, address, resolvedChainId, setActiveWallet, shouldUseEoaWallet, syncWalletToWagmi]);
 
   useEffect(() => {
     if (!allowance.verified || !resolvedChainId || !allowance.raterIdentityKey) {
