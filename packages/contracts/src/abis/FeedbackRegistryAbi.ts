@@ -199,6 +199,11 @@ export const FeedbackRegistryAbi = [
         "name": "revealedAt",
         "type": "uint48",
         "internalType": "uint48"
+      },
+      {
+        "name": "votingEngineSnapshot",
+        "type": "address",
+        "internalType": "contract RoundVotingEngine"
       }
     ],
     "stateMutability": "view"

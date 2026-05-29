@@ -33824,6 +33824,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundAdvisoryVoteRecorderSnapshot",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundClusterPayoutReadyAt",
           inputs: [
             {
@@ -41011,7 +41035,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 31,
     },
     QuestionRewardPoolEscrow: {
-      address: "0x150890d6984e98f408162eE65684779804bFf858",
+      address: "0xc525e1beD21174d5615252a16eE2b283B894A318",
       abi: [
         {
           type: "constructor",
@@ -43642,10 +43666,10 @@ const deployedContracts: GenericContractsDeclaration = {
         roundPayoutSnapshotSourceReadyAt:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
       },
-      deployedOnBlock: 38,
+      deployedOnBlock: 39,
     },
     FeedbackBonusEscrow: {
-      address: "0x3A1D75769758705caB1385377d4D88b8193A5f37",
+      address: "0xb1527802E7800034D6887b0a99a5Ad2683184b95",
       abi: [
         {
           type: "constructor",
@@ -44804,10 +44828,10 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
-      deployedOnBlock: 41,
+      deployedOnBlock: 42,
     },
     FeedbackRegistry: {
-      address: "0xE8ecF644D9a3432Dab3A0725308f265990eEDca9",
+      address: "0x3A1D75769758705caB1385377d4D88b8193A5f37",
       abi: [
         {
           type: "constructor",
@@ -45009,6 +45033,11 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "revealedAt",
               type: "uint48",
               internalType: "uint48",
+            },
+            {
+              name: "votingEngineSnapshot",
+              type: "address",
+              internalType: "contract RoundVotingEngine",
             },
           ],
           stateMutability: "view",
@@ -45503,7 +45532,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 40,
+      deployedOnBlock: 41,
     },
     MockWorldIDRouter: {
       address: "0xe8F76a822B57b973c7a89006092364fFF8f69040",
@@ -46655,7 +46684,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 36,
     },
     RaterRegistry: {
-      address: "0xEAb25969e5285dF34a3B245324d0B2B91E31cAD4",
+      address: "0x150890d6984e98f408162eE65684779804bFf858",
       abi: [
         {
           type: "constructor",
@@ -48490,10 +48519,10 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/IRaterIdentityRegistry.sol",
         resolveRater: "contracts/interfaces/IRaterIdentityRegistry.sol",
       },
-      deployedOnBlock: 37,
+      deployedOnBlock: 38,
     },
     X402QuestionSubmitter: {
-      address: "0xc525e1beD21174d5615252a16eE2b283B894A318",
+      address: "0xE8ecF644D9a3432Dab3A0725308f265990eEDca9",
       abi: [
         {
           type: "constructor",
@@ -49071,3211 +49100,10 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 39,
-    },
-    ClusterPayoutOracle: {
-      address: "0x270fBc6A0f1007eB41863237Eefb773795fd1F9C",
-      abi: [
-        {
-          type: "constructor",
-          inputs: [
-            {
-              name: "admin",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "newFrontendRegistry",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "newChallengeBondToken",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "ARBITER_ROLE",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "BPS_DENOMINATOR",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "CONFIG_ROLE",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "CORRELATION_EPOCH_DOMAIN",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "DEFAULT_ADMIN_ROLE",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "DEFAULT_CHALLENGE_BOND",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "DEFAULT_CHALLENGE_WINDOW",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "FINALIZATION_VETO_WINDOW",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MAX_CHALLENGE_BOND",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MAX_CHALLENGE_WINDOW",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MIN_CHALLENGE_BOND",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "PAYOUT_DOMAIN_LAUNCH_CREDIT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "PAYOUT_DOMAIN_QUESTION_REWARD",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "PAYOUT_WEIGHT_DOMAIN",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "ROUND_SNAPSHOT_DOMAIN",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "bondRecipient",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "challengeBond",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "challengeBondToken",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IERC20",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "challengeCorrelationEpoch",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "payable",
-        },
-        {
-          type: "function",
-          name: "challengeRoundPayoutSnapshot",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "payable",
-        },
-        {
-          type: "function",
-          name: "challengeWindow",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "correlationEpochSnapshot",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "tuple",
-              internalType:
-                "struct ClusterPayoutOracle.CorrelationEpochSnapshot",
-              components: [
-                {
-                  name: "epochId",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "fromRoundId",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "toRoundId",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "proposedAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "finalizedAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "proposer",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "challenger",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "clusterRoot",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "parameterHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "artifactHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "artifactURI",
-                  type: "string",
-                  internalType: "string",
-                },
-                {
-                  name: "status",
-                  type: "uint8",
-                  internalType: "enum IClusterPayoutOracle.SnapshotStatus",
-                },
-                {
-                  name: "bond",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-              ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "finalizeChallengedCorrelationEpoch",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "finalizeChallengedRoundPayoutSnapshot",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "finalizeCorrelationEpoch",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "finalizeRoundPayoutSnapshot",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "frontendRegistry",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IFrontendRegistry",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getRoleAdmin",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "getRoundPayoutSnapshot",
-          inputs: [
-            {
-              name: "domain",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "tuple",
-              internalType: "struct IClusterPayoutOracle.RoundPayoutSnapshot",
-              components: [
-                {
-                  name: "snapshotKey",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "domain",
-                  type: "uint8",
-                  internalType: "uint8",
-                },
-                {
-                  name: "correlationEpochId",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "finalizedAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "rawEligibleVoters",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "effectiveParticipantUnits",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "rewardPoolId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "contentId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "roundId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "totalClaimWeight",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "weightRoot",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "reasonRoot",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "status",
-                  type: "uint8",
-                  internalType: "enum IClusterPayoutOracle.SnapshotStatus",
-                },
-              ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "grantRole",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "hasRole",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "isRoundPayoutSnapshotFinalized",
-          inputs: [
-            {
-              name: "domain",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "payoutWeightLeaf",
-          inputs: [
-            {
-              name: "payout",
-              type: "tuple",
-              internalType: "struct IClusterPayoutOracle.PayoutWeight",
-              components: [
-                {
-                  name: "domain",
-                  type: "uint8",
-                  internalType: "uint8",
-                },
-                {
-                  name: "rewardPoolId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "contentId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "roundId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "commitKey",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "identityKey",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "account",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "baseWeight",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "independenceBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "effectiveWeight",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "reasonHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-              ],
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "pendingBondWithdrawals",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "proposeCorrelationEpoch",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "fromRoundId",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "toRoundId",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "clusterRoot",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "parameterHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "artifactHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "artifactURI",
-              type: "string",
-              internalType: "string",
-            },
-          ],
-          outputs: [],
-          stateMutability: "payable",
-        },
-        {
-          type: "function",
-          name: "proposeRoundPayoutSnapshot",
-          inputs: [
-            {
-              name: "input",
-              type: "tuple",
-              internalType:
-                "struct IClusterPayoutOracle.RoundPayoutSnapshotInput",
-              components: [
-                {
-                  name: "domain",
-                  type: "uint8",
-                  internalType: "uint8",
-                },
-                {
-                  name: "rewardPoolId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "contentId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "roundId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "correlationEpochId",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "rawEligibleVoters",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "effectiveParticipantUnits",
-                  type: "uint32",
-                  internalType: "uint32",
-                },
-                {
-                  name: "totalClaimWeight",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "weightRoot",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "reasonRoot",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "artifactHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "artifactURI",
-                  type: "string",
-                  internalType: "string",
-                },
-              ],
-            },
-          ],
-          outputs: [],
-          stateMutability: "payable",
-        },
-        {
-          type: "function",
-          name: "rejectCorrelationEpoch",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "rejectFinalizedCorrelationEpoch",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "rejectFinalizedRoundPayoutSnapshot",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "rejectFinalizedRoundPayoutSnapshotRoot",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "rejectRoundPayoutSnapshot",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "rejectRoundPayoutSnapshotRoot",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "rejectedCorrelationEpochRoots",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "rejectedRoundPayoutSnapshotConsumed",
-          inputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "rejectedRoundPayoutSnapshotDigests",
-          inputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "rejectedRoundPayoutSnapshotRoots",
-          inputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "renounceRole",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "callerConfirmation",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "revokeRole",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "roundPayoutProposal",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "tuple",
-              internalType: "struct ClusterPayoutOracle.RoundPayoutProposal",
-              components: [
-                {
-                  name: "snapshot",
-                  type: "tuple",
-                  internalType:
-                    "struct IClusterPayoutOracle.RoundPayoutSnapshot",
-                  components: [
-                    {
-                      name: "snapshotKey",
-                      type: "bytes32",
-                      internalType: "bytes32",
-                    },
-                    {
-                      name: "domain",
-                      type: "uint8",
-                      internalType: "uint8",
-                    },
-                    {
-                      name: "correlationEpochId",
-                      type: "uint64",
-                      internalType: "uint64",
-                    },
-                    {
-                      name: "finalizedAt",
-                      type: "uint64",
-                      internalType: "uint64",
-                    },
-                    {
-                      name: "rawEligibleVoters",
-                      type: "uint32",
-                      internalType: "uint32",
-                    },
-                    {
-                      name: "effectiveParticipantUnits",
-                      type: "uint32",
-                      internalType: "uint32",
-                    },
-                    {
-                      name: "rewardPoolId",
-                      type: "uint256",
-                      internalType: "uint256",
-                    },
-                    {
-                      name: "contentId",
-                      type: "uint256",
-                      internalType: "uint256",
-                    },
-                    {
-                      name: "roundId",
-                      type: "uint256",
-                      internalType: "uint256",
-                    },
-                    {
-                      name: "totalClaimWeight",
-                      type: "uint256",
-                      internalType: "uint256",
-                    },
-                    {
-                      name: "weightRoot",
-                      type: "bytes32",
-                      internalType: "bytes32",
-                    },
-                    {
-                      name: "reasonRoot",
-                      type: "bytes32",
-                      internalType: "bytes32",
-                    },
-                    {
-                      name: "status",
-                      type: "uint8",
-                      internalType: "enum IClusterPayoutOracle.SnapshotStatus",
-                    },
-                  ],
-                },
-                {
-                  name: "proposedAt",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "consumer",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "proposer",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "challenger",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "artifactHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "artifactURI",
-                  type: "string",
-                  internalType: "string",
-                },
-                {
-                  name: "bond",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "proposerBond",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "correlationEpochDigest",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-              ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundPayoutSnapshotConsumer",
-          inputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundPayoutSnapshotConsumerFor",
-          inputs: [
-            {
-              name: "domain",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundPayoutSnapshotKey",
-          inputs: [
-            {
-              name: "domain",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "roundPayoutSnapshotProposalDigest",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundPayoutSnapshotProposedAt",
-          inputs: [
-            {
-              name: "domain",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setFrontendRegistry",
-          inputs: [
-            {
-              name: "newFrontendRegistry",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setOracleConfig",
-          inputs: [
-            {
-              name: "newChallengeWindow",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "newChallengeBond",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "newBondRecipient",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setRoundPayoutSnapshotConsumer",
-          inputs: [
-            {
-              name: "domain",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "consumer",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "supportsInterface",
-          inputs: [
-            {
-              name: "interfaceId",
-              type: "bytes4",
-              internalType: "bytes4",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "verifyPayoutWeight",
-          inputs: [
-            {
-              name: "payout",
-              type: "tuple",
-              internalType: "struct IClusterPayoutOracle.PayoutWeight",
-              components: [
-                {
-                  name: "domain",
-                  type: "uint8",
-                  internalType: "uint8",
-                },
-                {
-                  name: "rewardPoolId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "contentId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "roundId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "commitKey",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "identityKey",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "account",
-                  type: "address",
-                  internalType: "address",
-                },
-                {
-                  name: "baseWeight",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "independenceBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "effectiveWeight",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "reasonHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-              ],
-            },
-            {
-              name: "proof",
-              type: "bytes32[]",
-              internalType: "bytes32[]",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "withdrawBondCredit",
-          inputs: [],
-          outputs: [
-            {
-              name: "amount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "withdrawBondCreditTo",
-          inputs: [
-            {
-              name: "recipient",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "amount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "event",
-          name: "BondWithdrawalCredited",
-          inputs: [
-            {
-              name: "recipient",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "BondWithdrawn",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "recipient",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "CorrelationEpochChallengeDismissed",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              indexed: true,
-              internalType: "uint64",
-            },
-            {
-              name: "arbiter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "CorrelationEpochChallenged",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              indexed: true,
-              internalType: "uint64",
-            },
-            {
-              name: "challenger",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "CorrelationEpochFinalized",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              indexed: true,
-              internalType: "uint64",
-            },
-            {
-              name: "clusterRoot",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "parameterHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "CorrelationEpochProposed",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              indexed: true,
-              internalType: "uint64",
-            },
-            {
-              name: "fromRoundId",
-              type: "uint64",
-              indexed: false,
-              internalType: "uint64",
-            },
-            {
-              name: "toRoundId",
-              type: "uint64",
-              indexed: false,
-              internalType: "uint64",
-            },
-            {
-              name: "frontendOperator",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "clusterRoot",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "parameterHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "artifactHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "artifactURI",
-              type: "string",
-              indexed: false,
-              internalType: "string",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "CorrelationEpochRejected",
-          inputs: [
-            {
-              name: "epochId",
-              type: "uint64",
-              indexed: true,
-              internalType: "uint64",
-            },
-            {
-              name: "arbiter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "FrontendRegistryUpdated",
-          inputs: [
-            {
-              name: "frontendRegistry",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "OracleConfigUpdated",
-          inputs: [
-            {
-              name: "challengeWindow",
-              type: "uint64",
-              indexed: false,
-              internalType: "uint64",
-            },
-            {
-              name: "challengeBond",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "bondRecipient",
-              type: "address",
-              indexed: false,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "ProposerBondUnrecoverable",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "proposer",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "missingAmount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RoleAdminChanged",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "previousAdminRole",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "newAdminRole",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RoleGranted",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "account",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "sender",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RoleRevoked",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "account",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "sender",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RoundPayoutSnapshotChallengeDismissed",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "arbiter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RoundPayoutSnapshotChallenged",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "challenger",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RoundPayoutSnapshotConsumerUpdated",
-          inputs: [
-            {
-              name: "domain",
-              type: "uint8",
-              indexed: true,
-              internalType: "uint8",
-            },
-            {
-              name: "consumer",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RoundPayoutSnapshotFinalized",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "domain",
-              type: "uint8",
-              indexed: true,
-              internalType: "uint8",
-            },
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "correlationEpochId",
-              type: "uint64",
-              indexed: false,
-              internalType: "uint64",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RoundPayoutSnapshotProposed",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "domain",
-              type: "uint8",
-              indexed: true,
-              internalType: "uint8",
-            },
-            {
-              name: "rewardPoolId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "correlationEpochId",
-              type: "uint64",
-              indexed: false,
-              internalType: "uint64",
-            },
-            {
-              name: "frontendOperator",
-              type: "address",
-              indexed: false,
-              internalType: "address",
-            },
-            {
-              name: "rawEligibleVoters",
-              type: "uint32",
-              indexed: false,
-              internalType: "uint32",
-            },
-            {
-              name: "effectiveParticipantUnits",
-              type: "uint32",
-              indexed: false,
-              internalType: "uint32",
-            },
-            {
-              name: "totalClaimWeight",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "weightRoot",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "reasonRoot",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "artifactHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "artifactURI",
-              type: "string",
-              indexed: false,
-              internalType: "string",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RoundPayoutSnapshotRejected",
-          inputs: [
-            {
-              name: "snapshotKey",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "arbiter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "reasonHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "error",
-          name: "AccessControlBadConfirmation",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "AccessControlUnauthorizedAccount",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "neededRole",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "FrontendNotEligible",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidAddress",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidBond",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidProof",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidSnapshot",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "ReentrancyGuardReentrantCall",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "SafeCastOverflowedUintDowncast",
-          inputs: [
-            {
-              name: "bits",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "value",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "SafeERC20FailedOperation",
-          inputs: [
-            {
-              name: "token",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "SnapshotChallenged",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "SnapshotConsumed",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "SnapshotExists",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "SnapshotFinalized",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "SnapshotNotFinalizable",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "SnapshotNotFound",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "SourceNotReady",
-          inputs: [],
-        },
-      ],
-      inheritedFunctions: {
-        getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
-        isRoundPayoutSnapshotFinalized:
-          "contracts/interfaces/IClusterPayoutOracle.sol",
-        rejectFinalizedCorrelationEpoch:
-          "contracts/interfaces/IClusterPayoutOracle.sol",
-        rejectedRoundPayoutSnapshotDigests:
-          "contracts/interfaces/IClusterPayoutOracle.sol",
-        rejectedRoundPayoutSnapshotRoots:
-          "contracts/interfaces/IClusterPayoutOracle.sol",
-        roundPayoutSnapshotConsumer:
-          "contracts/interfaces/IClusterPayoutOracle.sol",
-        roundPayoutSnapshotConsumerFor:
-          "contracts/interfaces/IClusterPayoutOracle.sol",
-        roundPayoutSnapshotKey: "contracts/interfaces/IClusterPayoutOracle.sol",
-        roundPayoutSnapshotProposalDigest:
-          "contracts/interfaces/IClusterPayoutOracle.sol",
-        roundPayoutSnapshotProposedAt:
-          "contracts/interfaces/IClusterPayoutOracle.sol",
-        verifyPayoutWeight: "contracts/interfaces/IClusterPayoutOracle.sol",
-        DEFAULT_ADMIN_ROLE:
-          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
-        getRoleAdmin:
-          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
-        grantRole:
-          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
-        hasRole:
-          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
-        renounceRole:
-          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
-        revokeRole:
-          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
-        supportsInterface:
-          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
-      },
-      deployedOnBlock: 67,
-    },
-    AdvisoryVoteRecorder: {
-      address: "0x1f9bcC15221EcCc5204EB30B5A156031423700AC",
-      abi: [
-        {
-          type: "constructor",
-          inputs: [
-            {
-              name: "_votingEngine",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "_registry",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "owner_",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "advisoryCommitAvailability",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "availability",
-              type: "tuple",
-              internalType:
-                "struct AdvisoryVoteRecorder.AdvisoryCommitAvailability",
-              components: [
-                {
-                  name: "canCommit",
-                  type: "bool",
-                  internalType: "bool",
-                },
-                {
-                  name: "status",
-                  type: "uint8",
-                  internalType:
-                    "enum AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus",
-                },
-                {
-                  name: "roundId",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "roundReferenceRatingBps",
-                  type: "uint16",
-                  internalType: "uint16",
-                },
-                {
-                  name: "epochEnd",
-                  type: "uint256",
-                  internalType: "uint256",
-                },
-                {
-                  name: "drandChainHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-                {
-                  name: "drandGenesisTime",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "drandPeriod",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "minTargetRound",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-                {
-                  name: "maxTargetRound",
-                  type: "uint64",
-                  internalType: "uint64",
-                },
-              ],
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "advisoryCommitCore",
-          inputs: [
-            {
-              name: "advisoryCommitKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "voter",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "commitHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "revealableAfter",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "revealed",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "isUp",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "predictedUpBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "launchCreditClaimed",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "scoreBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "advisoryCommitKeyByIdentity",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "advisoryCommitKeyByRater",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "advisoryCommitRevealData",
-          inputs: [
-            {
-              name: "advisoryCommitKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "ciphertextHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "targetRound",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "drandChainHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "revealableAfter",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "revealed",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "stakeAmount",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "claimAdvisoryLaunchCredit",
-          inputs: [
-            {
-              name: "advisoryCommitKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "scoreBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "paidAmount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "getRoundAdvisoryCommitKey",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "index",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "lastAdvisoryVoteTimestamp",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "lastAdvisoryVoteTimestampByIdentity",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "owner",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "paused",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "protocolConfig",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract ProtocolConfig",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "recordAdvisoryVote",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundContext",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "targetRound",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "drandChainHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "commitHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "ciphertext",
-              type: "bytes",
-              internalType: "bytes",
-            },
-          ],
-          outputs: [
-            {
-              name: "advisoryCommitKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "registry",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract ContentRegistry",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "renounceOwnership",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "revealAdvisoryVote",
-          inputs: [
-            {
-              name: "advisoryCommitKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "isUp",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "predictedUpBps",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "salt",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "roundAdvisoryCommitCount",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setPaused",
-          inputs: [
-            {
-              name: "value",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "transferOwnership",
-          inputs: [
-            {
-              name: "newOwner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "votingEngine",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract RoundVotingEngine",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "event",
-          name: "AdvisoryLaunchCreditClaimed",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "voter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "advisoryCommitKey",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "scoreBps",
-              type: "uint16",
-              indexed: false,
-              internalType: "uint16",
-            },
-            {
-              name: "paidAmount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "AdvisoryVoteRecorded",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "voter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "advisoryCommitKey",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "commitHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "roundReferenceRatingBps",
-              type: "uint16",
-              indexed: false,
-              internalType: "uint16",
-            },
-            {
-              name: "targetRound",
-              type: "uint64",
-              indexed: false,
-              internalType: "uint64",
-            },
-            {
-              name: "drandChainHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "ciphertextHash",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "ciphertext",
-              type: "bytes",
-              indexed: false,
-              internalType: "bytes",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "AdvisoryVoteRevealed",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              indexed: true,
-              internalType: "uint256",
-            },
-            {
-              name: "voter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "advisoryCommitKey",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-            {
-              name: "isUp",
-              type: "bool",
-              indexed: false,
-              internalType: "bool",
-            },
-            {
-              name: "predictedUpBps",
-              type: "uint16",
-              indexed: false,
-              internalType: "uint16",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "OwnershipTransferred",
-          inputs: [
-            {
-              name: "previousOwner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "newOwner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "PausedUpdated",
-          inputs: [
-            {
-              name: "paused",
-              type: "bool",
-              indexed: false,
-              internalType: "bool",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "error",
-          name: "AdvisoryRevealedAfterSettlement",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "AlreadyCommitted",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "AlreadyRevealed",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "CooldownActive",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "DrandChainHashMismatch",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "EpochNotEnded",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "HashMismatch",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "IndexOutOfBounds",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidAddress",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidCommitHash",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidPrediction",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "InvalidRound",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "MaxAdvisoryVotersReached",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "NoCommit",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "NotEnoughVotes",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "OwnableInvalidOwner",
-          inputs: [
-            {
-              name: "owner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "OwnableUnauthorizedAccount",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "Paused",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "PendingCleanup",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "ReentrancyGuardReentrantCall",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "RoundNotOpen",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "RoundNotSettled",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "SafeCastOverflowedUintDowncast",
-          inputs: [
-            {
-              name: "bits",
-              type: "uint8",
-              internalType: "uint8",
-            },
-            {
-              name: "value",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "TargetRoundOutOfWindow",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "ThresholdReached",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "VoteNotRevealed",
-          inputs: [],
-        },
-      ],
-      inheritedFunctions: {
-        owner: "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
-        renounceOwnership:
-          "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
-        transferOwnership:
-          "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
-      },
-      deployedOnBlock: 74,
+      deployedOnBlock: 40,
     },
     LaunchDistributionPool: {
-      address: "0x5E388db7c3aef7deA9585FbE3c077f0c98857d0d",
+      address: "0x270fBc6A0f1007eB41863237Eefb773795fd1F9C",
       abi: [
         {
           type: "constructor",
@@ -55339,7 +52167,3208 @@ const deployedContracts: GenericContractsDeclaration = {
         transferOwnership:
           "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 66,
+      deployedOnBlock: 67,
+    },
+    ClusterPayoutOracle: {
+      address: "0x9DB9797733FE5F734724Aa05D29Fa39563563Af5",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "admin",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "newFrontendRegistry",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "newChallengeBondToken",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "ARBITER_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "BPS_DENOMINATOR",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "CONFIG_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "CORRELATION_EPOCH_DOMAIN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "DEFAULT_ADMIN_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "DEFAULT_CHALLENGE_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "DEFAULT_CHALLENGE_WINDOW",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "FINALIZATION_VETO_WINDOW",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MAX_CHALLENGE_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MAX_CHALLENGE_WINDOW",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MIN_CHALLENGE_BOND",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "PAYOUT_DOMAIN_LAUNCH_CREDIT",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "PAYOUT_DOMAIN_QUESTION_REWARD",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "PAYOUT_WEIGHT_DOMAIN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "ROUND_SNAPSHOT_DOMAIN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "bondRecipient",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "challengeBond",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "challengeBondToken",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "challengeCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "challengeRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "challengeWindow",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "correlationEpochSnapshot",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType:
+                "struct ClusterPayoutOracle.CorrelationEpochSnapshot",
+              components: [
+                {
+                  name: "epochId",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "fromRoundId",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "toRoundId",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "proposedAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "finalizedAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "proposer",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "challenger",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "clusterRoot",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "parameterHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "artifactHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "artifactURI",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "status",
+                  type: "uint8",
+                  internalType: "enum IClusterPayoutOracle.SnapshotStatus",
+                },
+                {
+                  name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "finalizeChallengedCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "finalizeChallengedRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "finalizeCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "finalizeRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "frontendRegistry",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IFrontendRegistry",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getRoleAdmin",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType: "struct IClusterPayoutOracle.RoundPayoutSnapshot",
+              components: [
+                {
+                  name: "snapshotKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "correlationEpochId",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "finalizedAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "rawEligibleVoters",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "effectiveParticipantUnits",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "totalClaimWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "weightRoot",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "reasonRoot",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "status",
+                  type: "uint8",
+                  internalType: "enum IClusterPayoutOracle.SnapshotStatus",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "grantRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "hasRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "isRoundPayoutSnapshotFinalized",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "payoutWeightLeaf",
+          inputs: [
+            {
+              name: "payout",
+              type: "tuple",
+              internalType: "struct IClusterPayoutOracle.PayoutWeight",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "commitKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "account",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "baseWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "independenceBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "effectiveWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "reasonHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "pendingBondWithdrawals",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "proposeCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "fromRoundId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "toRoundId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "clusterRoot",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "parameterHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "artifactHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "artifactURI",
+              type: "string",
+              internalType: "string",
+            },
+          ],
+          outputs: [],
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "proposeRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "input",
+              type: "tuple",
+              internalType:
+                "struct IClusterPayoutOracle.RoundPayoutSnapshotInput",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "correlationEpochId",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "rawEligibleVoters",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "effectiveParticipantUnits",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "totalClaimWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "weightRoot",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "reasonRoot",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "artifactHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "artifactURI",
+                  type: "string",
+                  internalType: "string",
+                },
+              ],
+            },
+          ],
+          outputs: [],
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "rejectCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectFinalizedCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectFinalizedRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectFinalizedRoundPayoutSnapshotRoot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectRoundPayoutSnapshot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectRoundPayoutSnapshotRoot",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectedCorrelationEpochRoots",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rejectedRoundPayoutSnapshotConsumed",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rejectedRoundPayoutSnapshotDigests",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rejectedRoundPayoutSnapshotRoots",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "renounceRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "callerConfirmation",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "revokeRole",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "roundPayoutProposal",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType: "struct ClusterPayoutOracle.RoundPayoutProposal",
+              components: [
+                {
+                  name: "snapshot",
+                  type: "tuple",
+                  internalType:
+                    "struct IClusterPayoutOracle.RoundPayoutSnapshot",
+                  components: [
+                    {
+                      name: "snapshotKey",
+                      type: "bytes32",
+                      internalType: "bytes32",
+                    },
+                    {
+                      name: "domain",
+                      type: "uint8",
+                      internalType: "uint8",
+                    },
+                    {
+                      name: "correlationEpochId",
+                      type: "uint64",
+                      internalType: "uint64",
+                    },
+                    {
+                      name: "finalizedAt",
+                      type: "uint64",
+                      internalType: "uint64",
+                    },
+                    {
+                      name: "rawEligibleVoters",
+                      type: "uint32",
+                      internalType: "uint32",
+                    },
+                    {
+                      name: "effectiveParticipantUnits",
+                      type: "uint32",
+                      internalType: "uint32",
+                    },
+                    {
+                      name: "rewardPoolId",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "contentId",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "roundId",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "totalClaimWeight",
+                      type: "uint256",
+                      internalType: "uint256",
+                    },
+                    {
+                      name: "weightRoot",
+                      type: "bytes32",
+                      internalType: "bytes32",
+                    },
+                    {
+                      name: "reasonRoot",
+                      type: "bytes32",
+                      internalType: "bytes32",
+                    },
+                    {
+                      name: "status",
+                      type: "uint8",
+                      internalType: "enum IClusterPayoutOracle.SnapshotStatus",
+                    },
+                  ],
+                },
+                {
+                  name: "proposedAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "consumer",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "proposer",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "challenger",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "artifactHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "artifactURI",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "bond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "proposerBond",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "correlationEpochDigest",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundPayoutSnapshotConsumer",
+          inputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundPayoutSnapshotConsumerFor",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundPayoutSnapshotKey",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "roundPayoutSnapshotProposalDigest",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundPayoutSnapshotProposedAt",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "setFrontendRegistry",
+          inputs: [
+            {
+              name: "newFrontendRegistry",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setOracleConfig",
+          inputs: [
+            {
+              name: "newChallengeWindow",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "newChallengeBond",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "newBondRecipient",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setRoundPayoutSnapshotConsumer",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "consumer",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "supportsInterface",
+          inputs: [
+            {
+              name: "interfaceId",
+              type: "bytes4",
+              internalType: "bytes4",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "verifyPayoutWeight",
+          inputs: [
+            {
+              name: "payout",
+              type: "tuple",
+              internalType: "struct IClusterPayoutOracle.PayoutWeight",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "commitKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "identityKey",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "account",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "baseWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "independenceBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "effectiveWeight",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "reasonHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "withdrawBondCredit",
+          inputs: [],
+          outputs: [
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "withdrawBondCreditTo",
+          inputs: [
+            {
+              name: "recipient",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "event",
+          name: "BondWithdrawalCredited",
+          inputs: [
+            {
+              name: "recipient",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "BondWithdrawn",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "recipient",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "CorrelationEpochChallengeDismissed",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              indexed: true,
+              internalType: "uint64",
+            },
+            {
+              name: "arbiter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "CorrelationEpochChallenged",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              indexed: true,
+              internalType: "uint64",
+            },
+            {
+              name: "challenger",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "CorrelationEpochFinalized",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              indexed: true,
+              internalType: "uint64",
+            },
+            {
+              name: "clusterRoot",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "parameterHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "CorrelationEpochProposed",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              indexed: true,
+              internalType: "uint64",
+            },
+            {
+              name: "fromRoundId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "toRoundId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "frontendOperator",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "clusterRoot",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "parameterHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "artifactHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "artifactURI",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "CorrelationEpochRejected",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              indexed: true,
+              internalType: "uint64",
+            },
+            {
+              name: "arbiter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "FrontendRegistryUpdated",
+          inputs: [
+            {
+              name: "frontendRegistry",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "OracleConfigUpdated",
+          inputs: [
+            {
+              name: "challengeWindow",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "challengeBond",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "bondRecipient",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ProposerBondUnrecoverable",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "proposer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "missingAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoleAdminChanged",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "previousAdminRole",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "newAdminRole",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoleGranted",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "sender",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoleRevoked",
+          inputs: [
+            {
+              name: "role",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "sender",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundPayoutSnapshotChallengeDismissed",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "arbiter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundPayoutSnapshotChallenged",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "challenger",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundPayoutSnapshotConsumerUpdated",
+          inputs: [
+            {
+              name: "domain",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "consumer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundPayoutSnapshotFinalized",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "domain",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "correlationEpochId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundPayoutSnapshotProposed",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "domain",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "rewardPoolId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "correlationEpochId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "frontendOperator",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+            {
+              name: "rawEligibleVoters",
+              type: "uint32",
+              indexed: false,
+              internalType: "uint32",
+            },
+            {
+              name: "effectiveParticipantUnits",
+              type: "uint32",
+              indexed: false,
+              internalType: "uint32",
+            },
+            {
+              name: "totalClaimWeight",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "weightRoot",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "reasonRoot",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "artifactHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "artifactURI",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RoundPayoutSnapshotRejected",
+          inputs: [
+            {
+              name: "snapshotKey",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "arbiter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "AccessControlBadConfirmation",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "AccessControlUnauthorizedAccount",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "neededRole",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "FrontendNotEligible",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidAddress",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidBond",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidProof",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidSnapshot",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ReentrancyGuardReentrantCall",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SafeCastOverflowedUintDowncast",
+          inputs: [
+            {
+              name: "bits",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "SafeERC20FailedOperation",
+          inputs: [
+            {
+              name: "token",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "SnapshotChallenged",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SnapshotConsumed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SnapshotExists",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SnapshotFinalized",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SnapshotNotFinalizable",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SnapshotNotFound",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SourceNotReady",
+          inputs: [],
+        },
+      ],
+      inheritedFunctions: {
+        getRoundPayoutSnapshot: "contracts/interfaces/IClusterPayoutOracle.sol",
+        isRoundPayoutSnapshotFinalized:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        rejectFinalizedCorrelationEpoch:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        rejectedRoundPayoutSnapshotDigests:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        rejectedRoundPayoutSnapshotRoots:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        roundPayoutSnapshotConsumer:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        roundPayoutSnapshotConsumerFor:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        roundPayoutSnapshotKey: "contracts/interfaces/IClusterPayoutOracle.sol",
+        roundPayoutSnapshotProposalDigest:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        roundPayoutSnapshotProposedAt:
+          "contracts/interfaces/IClusterPayoutOracle.sol",
+        verifyPayoutWeight: "contracts/interfaces/IClusterPayoutOracle.sol",
+        DEFAULT_ADMIN_ROLE:
+          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
+        getRoleAdmin:
+          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
+        grantRole:
+          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
+        hasRole:
+          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
+        renounceRole:
+          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
+        revokeRole:
+          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
+        supportsInterface:
+          "lib/openzeppelin-contracts/contracts/access/AccessControl.sol",
+      },
+      deployedOnBlock: 68,
+    },
+    AdvisoryVoteRecorder: {
+      address: "0x83B4e0d6ff93f3183D306Da23EfAE17773e6dFc0",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "_votingEngine",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_registry",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "owner_",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "advisoryCommitAvailability",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "availability",
+              type: "tuple",
+              internalType:
+                "struct AdvisoryVoteRecorder.AdvisoryCommitAvailability",
+              components: [
+                {
+                  name: "canCommit",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "status",
+                  type: "uint8",
+                  internalType:
+                    "enum AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundReferenceRatingBps",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "epochEnd",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "drandChainHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "drandGenesisTime",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "drandPeriod",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "minTargetRound",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "maxTargetRound",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "advisoryCommitCore",
+          inputs: [
+            {
+              name: "advisoryCommitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "voter",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "revealableAfter",
+              type: "uint48",
+              internalType: "uint48",
+            },
+            {
+              name: "revealed",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "isUp",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "predictedUpBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "launchCreditClaimed",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "scoreBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "advisoryCommitKeyByIdentity",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "advisoryCommitKeyByRater",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "advisoryCommitRevealData",
+          inputs: [
+            {
+              name: "advisoryCommitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "ciphertextHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "targetRound",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "drandChainHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "revealableAfter",
+              type: "uint48",
+              internalType: "uint48",
+            },
+            {
+              name: "revealed",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "stakeAmount",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "claimAdvisoryLaunchCredit",
+          inputs: [
+            {
+              name: "advisoryCommitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "scoreBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "paidAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "getRoundAdvisoryCommitKey",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "index",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "lastAdvisoryVoteTimestamp",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "lastAdvisoryVoteTimestampByIdentity",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "owner",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "paused",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "protocolConfig",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract ProtocolConfig",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "recordAdvisoryVote",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundContext",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "targetRound",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "drandChainHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "commitHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "ciphertext",
+              type: "bytes",
+              internalType: "bytes",
+            },
+          ],
+          outputs: [
+            {
+              name: "advisoryCommitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "registry",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract ContentRegistry",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "renounceOwnership",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "revealAdvisoryVote",
+          inputs: [
+            {
+              name: "advisoryCommitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "isUp",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "predictedUpBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "salt",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "roundAdvisoryCommitCount",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "setPaused",
+          inputs: [
+            {
+              name: "value",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "transferOwnership",
+          inputs: [
+            {
+              name: "newOwner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "votingEngine",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract RoundVotingEngine",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "event",
+          name: "AdvisoryLaunchCreditClaimed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "advisoryCommitKey",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "scoreBps",
+              type: "uint16",
+              indexed: false,
+              internalType: "uint16",
+            },
+            {
+              name: "paidAmount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "AdvisoryVoteRecorded",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "advisoryCommitKey",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "commitHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "roundReferenceRatingBps",
+              type: "uint16",
+              indexed: false,
+              internalType: "uint16",
+            },
+            {
+              name: "targetRound",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "drandChainHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "ciphertextHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "ciphertext",
+              type: "bytes",
+              indexed: false,
+              internalType: "bytes",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "AdvisoryVoteRevealed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "advisoryCommitKey",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "isUp",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "predictedUpBps",
+              type: "uint16",
+              indexed: false,
+              internalType: "uint16",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "OwnershipTransferred",
+          inputs: [
+            {
+              name: "previousOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "PausedUpdated",
+          inputs: [
+            {
+              name: "paused",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "AdvisoryRevealedAfterSettlement",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "AlreadyCommitted",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "AlreadyRevealed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "CooldownActive",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "DrandChainHashMismatch",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "EpochNotEnded",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "HashMismatch",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "IndexOutOfBounds",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidAddress",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidCommitHash",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidPrediction",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidRound",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "MaxAdvisoryVotersReached",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NoCommit",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NotEnoughVotes",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "OwnableInvalidOwner",
+          inputs: [
+            {
+              name: "owner",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "OwnableUnauthorizedAccount",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "Paused",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "PendingCleanup",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ReentrancyGuardReentrantCall",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "RoundNotOpen",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "RoundNotSettled",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "SafeCastOverflowedUintDowncast",
+          inputs: [
+            {
+              name: "bits",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "TargetRoundOutOfWindow",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ThresholdReached",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "VoteNotRevealed",
+          inputs: [],
+        },
+      ],
+      inheritedFunctions: {
+        owner: "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
+        renounceOwnership:
+          "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
+        transferOwnership:
+          "lib/openzeppelin-contracts/contracts/access/Ownable.sol",
+      },
+      deployedOnBlock: 75,
     },
   },
 };
