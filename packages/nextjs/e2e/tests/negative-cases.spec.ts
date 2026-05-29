@@ -46,23 +46,13 @@ test.describe("Negative cases", () => {
     const page = await context.newPage();
     await setupWallet(page, ANVIL_ACCOUNTS.account0.privateKey, { bootstrap: false });
 
-    await page.goto("/ask");
+    await gotoWithRetry(page, "/ask", { ensureWalletConnected: true });
 
     const voterIdRequired = page.getByRole("heading", { name: /Rater Credential Required/i });
-    const submitForm = page.getByRole("heading", { name: "Submit Question" });
-    const signedOutHeading = page.getByRole("heading", { name: "Submit" });
+    await expect(voterIdRequired).toBeVisible({ timeout: 15_000 });
 
-    // Accept either the connected no rater credential prompt, the ask form, or the
-    // signed-out shell if the local test wallet bridge doesn't attach.
-    await expect(voterIdRequired.or(submitForm).or(signedOutHeading)).toBeVisible({ timeout: 15_000 });
-
-    // If rater credential prompt shows, verify the "Get rater credential" link exists
-    if (await voterIdRequired.isVisible()) {
-      const getVoterIdLink = page.getByRole("link", { name: /Get rater credential/i });
-      await expect(getVoterIdLink).toBeVisible({ timeout: 5_000 });
-    } else if (await signedOutHeading.isVisible().catch(() => false)) {
-      test.skip(true, "Local test wallet bridge did not attach on ask page");
-    }
+    const getVoterIdLink = page.getByRole("link", { name: /Get rater credential/i });
+    await expect(getVoterIdLink).toBeVisible({ timeout: 5_000 });
 
     await context.close();
   });
@@ -79,15 +69,8 @@ test.describe("Negative cases", () => {
     const voteUp = page.getByRole("button", { name: VOTE_UP_BUTTON_NAME }).first();
     const canVote = await findVoteableContent(page);
 
-    if (!canVote) {
-      test.skip(true, "No voteable content found for account #6 (all content has cooldowns)");
-      return;
-    }
-
-    if (!(await voteUp.isVisible({ timeout: 10_000 }).catch(() => false))) {
-      test.skip(true, "No visible vote-up button found after selecting voteable content");
-      return;
-    }
+    expect(canVote, "account #6 should have seeded voteable content in the default E2E suite").toBe(true);
+    await expect(voteUp).toBeVisible({ timeout: 10_000 });
 
     // First vote — wait for the button to stabilize (React re-renders from Ponder polling
     // can detach/reattach the element between locator resolution and click)
@@ -133,10 +116,7 @@ test.describe("Negative cases", () => {
       .catch(() => false);
     const firstVoteSucceeded = hasSuccessMsg || (!hasErrorMsg && !(await stakeModal.isVisible().catch(() => true)));
 
-    if (!firstVoteSucceeded) {
-      test.skip(true, "First vote did not succeed (contract may have reverted)");
-      return;
-    }
+    expect(firstVoteSucceeded, "first vote should succeed before the duplicate-vote cooldown assertion").toBe(true);
 
     // After successful vote, stay on the page and verify the UI shows voted state.
     // The VotingQuestionCard reads the vote from contract state and shows
@@ -175,13 +155,6 @@ test.describe("Negative cases", () => {
       }
     }
 
-    // The voted content should show "Voted hidden", "Cooldown", or
-    // "vote reverted" (contract rejects duplicate votes).
-    // After voting the page auto-advances to the next card, so re-finding
-    // the voted content in the thumbnail grid can be flaky — skip gracefully.
-    if (!foundVotedState) {
-      test.skip(true, "Vote succeeded but could not re-find voted content after page auto-advanced");
-      return;
-    }
+    expect(foundVotedState, "the voted content should show voted, cooldown, or duplicate-vote feedback").toBe(true);
   });
 });
