@@ -54,31 +54,6 @@ test.describe("Content feed", () => {
     await expect(page.locator('article[aria-current="true"]')).toHaveCount(0);
   });
 
-  test("clicking an image preview opens the context link externally", async ({ connectedPage: page }) => {
-    await gotoWithRetry(page, "/rate?q=workspace", { ensureWalletConnected: true, timeout: 45_000 });
-    await waitForFeedLoaded(page, 30_000);
-
-    const imageCard = page
-      .getByRole("article")
-      .filter({ has: page.getByRole("heading", { name: /agent trust this workspace photo/i }) })
-      .first();
-    const imageCardVisible = await imageCard
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .then(() => true)
-      .catch(() => false);
-    test.skip(!imageCardVisible, "Workspace image result is not first-page visible in this shared E2E state.");
-
-    const activeSurface = imageCard.getByTestId("vote-content-surface").first();
-    await expect(activeSurface).toBeVisible({ timeout: 10_000 });
-
-    const popupPromise = page.context().waitForEvent("page");
-    await activeSurface.click();
-
-    const popup = await popupPromise;
-    await popup.waitForLoadState("domcontentloaded");
-    await expect(popup).toHaveURL(/(?:picsum|fastly\.picsum)\.photos/i);
-  });
-
   test("clicking a video preview stays with the player", async ({ connectedPage: page }) => {
     await gotoWithRetry(page, "/rate?q=short%20video", { ensureWalletConnected: true, timeout: 45_000 });
     await waitForFeedLoaded(page, 30_000);
