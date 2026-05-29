@@ -1,10 +1,11 @@
 import type { Page } from "@playwright/test";
-import { E2E_RPC_URL } from "./service-urls";
+import { TERMS_ACCEPTED_KEY, TERMS_VERSION } from "../../constants/termsAcceptance";
 import {
   RATELOOP_E2E_RPC_URL_STORAGE_KEY,
   RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY,
 } from "../../services/thirdweb/testWalletStorage";
 import { WALLET_STATE_EXACT_KEYS, WALLET_STATE_PREFIXES } from "../../services/thirdweb/walletStateCleanup";
+import { E2E_RPC_URL } from "./service-urls";
 
 type WalletSessionStorageEntry = readonly [string, string];
 
@@ -14,9 +15,9 @@ function getWalletSessionStorageEntries(privateKey: string, rpcUrl: string): Wal
     [RATELOOP_E2E_RPC_URL_STORAGE_KEY, rpcUrl],
     ["thirdweb:active-chain", JSON.stringify({ id: 31337 })],
     [
-      "rateloop_terms_accepted",
+      TERMS_ACCEPTED_KEY,
       JSON.stringify({
-        version: "3.0",
+        version: TERMS_VERSION,
         timestamp: Date.now(),
         termsAccepted: true,
         privacyAcknowledged: true,

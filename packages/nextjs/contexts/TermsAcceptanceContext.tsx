@@ -1,9 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-
-const TERMS_ACCEPTED_KEY = "rateloop_terms_accepted";
-const TERMS_VERSION = "4.0";
+import { TERMS_ACCEPTED_KEY, TERMS_VERSION } from "~~/constants/termsAcceptance";
 
 export type ActionType = "faucet" | "vote" | "submit" | "claim" | "buy" | null;
 
