@@ -1,10 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type Abi } from "viem";
 import { useAccount } from "wagmi";
-import { useScaffoldReadContract, useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-eth";
+import {
+  useDeployedContractInfo,
+  useScaffoldReadContract,
+  useScaffoldWriteContract,
+  useTargetNetwork,
+} from "~~/hooks/scaffold-eth";
+import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
+import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
+import { getWalletDisplaySummaryQueryKey } from "~~/hooks/useWalletDisplaySummary";
+import { getClaimPreflightErrorMessage } from "~~/lib/claimTransactionFeedback";
 import type { LegacyClaimLookupResult } from "~~/lib/legacy-claim/lookup";
+import { notification } from "~~/utils/scaffold-eth";
 
 async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLookupResult> {
   const response = await fetch(`/api/legacy-claim/${address}`, { cache: "no-store" });
@@ -16,6 +27,8 @@ async function fetchLegacyClaim(address: `0x${string}`): Promise<LegacyClaimLook
 
 export function useLegacyClaim() {
   const { address, chain, isConnected } = useAccount();
+  const queryClient = useQueryClient();
+  const [isSponsoredClaiming, setIsSponsoredClaiming] = useState(false);
   const connectedAddress = address as `0x${string}` | undefined;
   // CLAIM-3 (2026-05-21 testnet-readiness audit): if the wallet is on the wrong chain, the
   // scaffold-eth read calls below return undefined silently and the UI stalls on "Loading…"
@@ -88,13 +101,89 @@ export function useLegacyClaim() {
   const { writeContractAsync, isMining } = useScaffoldWriteContract({
     contractName: "LaunchDistributionPool",
   } as any);
+  const { data: launchDistributionPoolInfo } = useDeployedContractInfo({
+    contractName: "LaunchDistributionPool",
+  });
+  const { canUseSponsoredSubmitCalls, executeSponsoredCalls } = useThirdwebSponsoredSubmitCalls();
+  const {
+    canShowFreeTransactionAllowance,
+    canSponsorTransactions,
+    freeTransactionRemaining,
+    freeTransactionVerified,
+    isAwaitingFreeTransactionAllowance,
+    isAwaitingSelfFundedWalletReconnect,
+    isAwaitingSponsoredWalletReconnect,
+    isMissingGasBalance,
+    nativeBalanceValue,
+    nativeTokenSymbol,
+  } = useGasBalanceStatus({
+    includeExternalSendCalls: true,
+  });
 
   const refetchOnChainState = async () => {
     await Promise.all([refetchVested(), refetchClaimable(), refetchClaimed()]);
+    await queryClient.invalidateQueries({ queryKey: ["readContract"] });
+    if (connectedAddress) {
+      await queryClient.invalidateQueries({
+        queryKey: getWalletDisplaySummaryQueryKey(connectedAddress, targetNetwork.id),
+      });
+    }
   };
 
   const claim = async () => {
     if (!writeArgs || (claimableRaw as bigint | undefined) === 0n) return;
+
+    const preflightError = getClaimPreflightErrorMessage({
+      canShowFreeTransactionAllowance,
+      canSponsorTransactions,
+      freeTransactionRemaining,
+      freeTransactionVerified,
+      hasNativeGasBalance: nativeBalanceValue > 0n,
+      isAwaitingFreeTransactionAllowance,
+      isAwaitingSelfFundedWalletReconnect,
+      isAwaitingSponsoredWalletReconnect,
+      isMissingGasBalance,
+      nativeTokenSymbol,
+    });
+    if (preflightError) {
+      if (
+        isAwaitingFreeTransactionAllowance ||
+        isAwaitingSelfFundedWalletReconnect ||
+        isAwaitingSponsoredWalletReconnect
+      ) {
+        notification.warning(preflightError);
+      } else {
+        notification.error(preflightError);
+      }
+      return;
+    }
+
+    if (canUseSponsoredSubmitCalls) {
+      if (!launchDistributionPoolInfo) {
+        notification.error("Legacy claim contract is unavailable right now.");
+        return;
+      }
+
+      setIsSponsoredClaiming(true);
+      try {
+        await executeSponsoredCalls(
+          [
+            {
+              abi: launchDistributionPoolInfo.abi as Abi,
+              address: launchDistributionPoolInfo.address as `0x${string}`,
+              args: writeArgs as any,
+              functionName: "claimLegacyContributorAllocation",
+            },
+          ],
+          { action: "Claim legacy LREP" },
+        );
+        await refetchOnChainState();
+      } finally {
+        setIsSponsoredClaiming(false);
+      }
+      return;
+    }
+
     await writeContractAsync(
       {
         functionName: "claimLegacyContributorAllocation",
@@ -102,11 +191,9 @@ export function useLegacyClaim() {
       },
       {
         action: "Claim legacy LREP",
-        onBlockConfirmation: () => {
-          void refetchOnChainState();
-        },
       },
     );
+    await refetchOnChainState();
   };
 
   return {
@@ -117,7 +204,7 @@ export function useLegacyClaim() {
     claimable: (claimableRaw as bigint | undefined) ?? 0n,
     claimData: claimQuery.data,
     error: claimQuery.error,
-    isClaiming: isMining,
+    isClaiming: isMining || isSponsoredClaiming,
     isConnected,
     isLoading: claimQuery.isLoading,
     // CLAIM-3: callers can render a "switch network" prompt when this is true.
