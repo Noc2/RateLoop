@@ -8,6 +8,7 @@ import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
 import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
+import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
@@ -304,6 +305,40 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.expectRevert("Stale engine");
         feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
         vm.stopPrank();
+    }
+
+    function testCreateFeedbackBonusPoolWithAuthorizationFundsUsdcPool() public {
+        uint256 contentId = _submitQuestion("authorized-feedback-bonus");
+        FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params = _authorizedFeedbackBonusParams(contentId);
+        Eip3009Authorization memory authorization = _feedbackBonusAuthorization(funder, params);
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(feedbackBonusEscrow));
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+
+        vm.prank(voter1);
+        uint256 poolId = feedbackBonusEscrow.createFeedbackBonusPoolWithAuthorization(params, authorization);
+
+        (,,,, address storedFunder,,,,,,, uint256 fundedAmount,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
+        assertEq(storedFunder, funder);
+        assertEq(fundedAmount, params.amount);
+        assertTrue(usdc.authorizationState(funder, authorization.nonce));
+        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore + params.amount);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore - params.amount);
+    }
+
+    function testCreateFeedbackBonusPoolWithAuthorizationRejectsBadNonceBeforeTransfer() public {
+        uint256 contentId = _submitQuestion("authorized-feedback-bonus-bad-nonce");
+        FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params = _authorizedFeedbackBonusParams(contentId);
+        Eip3009Authorization memory authorization = _feedbackBonusAuthorization(funder, params);
+        authorization.nonce = keccak256("wrong feedback bonus nonce");
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(feedbackBonusEscrow));
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+
+        vm.expectRevert("Bad nonce");
+        feedbackBonusEscrow.createFeedbackBonusPoolWithAuthorization(params, authorization);
+
+        assertFalse(usdc.authorizationState(funder, authorization.nonce));
+        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore);
     }
 
     function testFeedbackRevealUsesEngineSnapshottedAtCommit() public {
@@ -871,6 +906,40 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             contentId, 1, feedbackBonusEscrow.REWARD_ASSET_LREP(), BONUS_AMOUNT, block.timestamp + 7 days, funder
         );
         vm.stopPrank();
+    }
+
+    function _authorizedFeedbackBonusParams(uint256 contentId)
+        internal
+        view
+        returns (FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params)
+    {
+        params = FeedbackBonusEscrow.AuthorizedFeedbackBonusParams({
+            contentId: contentId,
+            roundId: 1,
+            amount: BONUS_AMOUNT,
+            feedbackClosesAt: block.timestamp + 7 days,
+            awarder: funder
+        });
+    }
+
+    function _feedbackBonusAuthorization(address payer, FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params)
+        internal
+        view
+        returns (Eip3009Authorization memory authorization)
+    {
+        uint256 validAfter = block.timestamp - 1;
+        uint256 validBefore = block.timestamp + 30 minutes;
+        authorization = Eip3009Authorization({
+            from: payer,
+            to: address(feedbackBonusEscrow),
+            value: params.amount,
+            validAfter: validAfter,
+            validBefore: validBefore,
+            nonce: feedbackBonusEscrow.computeFeedbackBonusAuthorizationNonce(params, payer, validAfter, validBefore),
+            v: 27,
+            r: bytes32(0),
+            s: bytes32(0)
+        });
     }
 
     function _settleRoundWith(address[] memory voters, uint256 contentId, bool[] memory directions)
