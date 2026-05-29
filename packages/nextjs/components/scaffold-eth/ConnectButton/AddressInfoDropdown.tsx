@@ -4,11 +4,12 @@ import { getAddress } from "viem";
 import { Address } from "viem";
 import { hardhat } from "viem/chains";
 import { useAccount } from "wagmi";
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftOnRectangleIcon, CheckIcon, ClipboardDocumentIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
 import { FaucetTrigger } from "~~/components/scaffold-eth/Faucet";
 import { ClaimRewardsButton } from "~~/components/shared/ClaimRewardsButton";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useFreeTransactionAllowance } from "~~/hooks/useFreeTransactionAllowance";
 import { shouldShowFreeTransactionAllowance } from "~~/hooks/useGasBalanceStatus";
@@ -49,6 +50,38 @@ function formatUsdcAmount(value: bigint | null | undefined) {
 function formatWinRate(value: number) {
   const percent = Number((value * 100).toFixed(1));
   return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(1)}%`;
+}
+
+function formatWalletAddressLabel(address: string) {
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+function WalletAddressCopyRow({ address, displayName }: { address: string; displayName: string }) {
+  const { copyToClipboard, isCopiedToClipboard } = useCopyToClipboard();
+  const addressLabel =
+    isENS(displayName) && !displayName.toLowerCase().startsWith("0x") ? displayName : formatWalletAddressLabel(address);
+  const copyTitle = isCopiedToClipboard ? "Address copied" : "Copy address";
+
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate text-sm font-medium leading-5 text-base-content/72" title={address}>
+        {addressLabel}
+      </span>
+      <button
+        type="button"
+        onClick={() => void copyToClipboard(address)}
+        className="btn btn-ghost btn-xs btn-square h-6 min-h-0 w-6 shrink-0 text-base-content/62 hover:text-base-content"
+        aria-label="Copy address"
+        title={copyTitle}
+      >
+        {isCopiedToClipboard ? (
+          <CheckIcon className="h-3.5 w-3.5" />
+        ) : (
+          <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+        )}
+      </button>
+    </div>
+  );
 }
 
 function FreeTransactionAllowanceText({ className }: { className?: string }) {
@@ -218,9 +251,7 @@ export const AddressInfoDropdown = ({
                 buttonClassName="btn btn-primary btn-xs h-8 min-h-0 w-full border-none px-3 text-sm"
                 showTokenSymbol={false}
               />
-              <p className="truncate text-sm font-medium leading-5 text-base-content/72">
-                {isENS(displayName) ? displayName : checkSumAddress?.slice(0, 6) + "..." + checkSumAddress?.slice(-4)}
-              </p>
+              <WalletAddressCopyRow address={checkSumAddress} displayName={displayName} />
               <WalletSummaryDetails
                 address={address}
                 balanceClassName="text-sm font-medium leading-5 text-base-content/78"
@@ -246,9 +277,7 @@ export const AddressInfoDropdown = ({
             buttonClassName="btn btn-primary btn-xs h-8 min-h-0 w-full border-none px-3 text-sm"
             showTokenSymbol={false}
           />
-          <span className="truncate text-sm font-medium leading-5 text-base-content/72">
-            {isENS(displayName) ? displayName : checkSumAddress?.slice(0, 6) + "..." + checkSumAddress?.slice(-4)}
-          </span>
+          <WalletAddressCopyRow address={checkSumAddress} displayName={displayName} />
           <WalletSummaryDetails
             address={address}
             balanceClassName="text-left text-sm font-medium leading-5 text-base-content/78"
@@ -284,9 +313,9 @@ export const AddressInfoDropdown = ({
     <div className="flex flex-col items-center xl:items-start gap-0.5" data-testid="wallet-connected">
       <div className="flex items-center justify-center xl:justify-start gap-2 xl:px-2 py-1">
         <BlockieAvatar address={checkSumAddress} size={30} ensImage={ensAvatar} />
-        <span className="text-base hidden lg:inline">
-          {isENS(displayName) ? displayName : checkSumAddress?.slice(0, 6) + "..." + checkSumAddress?.slice(-4)}
-        </span>
+        <div className="hidden lg:block min-w-0">
+          <WalletAddressCopyRow address={checkSumAddress} displayName={displayName} />
+        </div>
       </div>
       <WalletSummaryDetails
         address={address}
