@@ -19,7 +19,7 @@ import { RoundLib } from "./libraries/RoundLib.sol";
 import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 
 /// @title FeedbackBonusEscrow
-/// @notice Holds optional USDC bonuses for useful rater feedback and pays awarded feedback hashes after a round ends.
+/// @notice Holds optional LREP or USDC bonuses for useful rater feedback and pays awarded feedback hashes after a round ends.
 contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -30,6 +30,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     uint256 public constant BPS_SCALE = 10_000;
     uint256 public constant DEFAULT_FRONTEND_FEE_BPS = 300;
     uint256 public constant MAX_FRONTEND_FEE_BPS = 500;
+    uint8 public constant REWARD_ASSET_LREP = 0;
+    uint8 public constant REWARD_ASSET_USDC = 1;
 
     struct FeedbackBonusPool {
         uint64 id;
@@ -47,6 +49,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         uint256 remainingAmount;
         bool forfeited;
         uint16 frontendFeeBps;
+        uint8 asset;
     }
 
     IERC20 public usdcToken;
@@ -54,6 +57,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     RoundVotingEngine public votingEngine;
     IRaterIdentityRegistry public raterRegistry;
     IFeedbackRegistry public feedbackRegistry;
+    IERC20 public lrepToken;
     uint256 public nextFeedbackBonusPoolId;
     uint16 public defaultFrontendFeeBps;
 
@@ -74,7 +78,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         address awarder,
         uint256 amount,
         uint256 feedbackClosesAt,
-        uint256 frontendFeeBps
+        uint256 frontendFeeBps,
+        uint8 asset
     );
     event FeedbackWindowCreated(
         uint256 indexed poolId, uint256 indexed contentId, uint256 indexed roundId, uint256 feedbackClosesAt
@@ -107,6 +112,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
 
     function initialize(
         address admin,
+        address lrepToken_,
         address usdcToken_,
         address registry_,
         address votingEngine_,
@@ -114,6 +120,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         address feedbackRegistry_
     ) external initializer {
         require(admin != address(0), "Invalid admin");
+        require(lrepToken_ != address(0), "Invalid LREP token");
         require(usdcToken_ != address(0), "Invalid token");
         require(registry_ != address(0), "Invalid registry");
         require(votingEngine_ != address(0), "Invalid engine");
@@ -125,6 +132,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         _grantRole(CONFIG_ROLE, admin);
         _grantRole(PAUSER_ROLE, admin);
 
+        lrepToken = IERC20(lrepToken_);
         usdcToken = IERC20(usdcToken_);
         registry = ContentRegistry(registry_);
         votingEngine = RoundVotingEngine(votingEngine_);
@@ -142,7 +150,30 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         uint256 feedbackClosesAt,
         address awarder
     ) external nonReentrant whenNotPaused returns (uint256 poolId) {
+        return _createFeedbackBonusPool(contentId, roundId, REWARD_ASSET_USDC, amount, feedbackClosesAt, awarder);
+    }
+
+    function createFeedbackBonusPoolWithAsset(
+        uint256 contentId,
+        uint256 roundId,
+        uint8 asset,
+        uint256 amount,
+        uint256 feedbackClosesAt,
+        address awarder
+    ) external nonReentrant whenNotPaused returns (uint256 poolId) {
+        return _createFeedbackBonusPool(contentId, roundId, asset, amount, feedbackClosesAt, awarder);
+    }
+
+    function _createFeedbackBonusPool(
+        uint256 contentId,
+        uint256 roundId,
+        uint8 asset,
+        uint256 amount,
+        uint256 feedbackClosesAt,
+        address awarder
+    ) internal returns (uint256 poolId) {
         require(amount > 0, "Amount required");
+        require(asset == REWARD_ASSET_LREP || asset == REWARD_ASSET_USDC, "Invalid asset");
         require(roundId > 0, "Round required");
         require(awarder != address(0), "Invalid awarder");
         require(feedbackClosesAt > block.timestamp, "Invalid feedback close");
@@ -150,7 +181,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         _requireCurrentRegistryVotingEngine();
         _requireTargetRound(contentId, roundId);
 
-        uint256 receivedAmount = _pullUsdc(msg.sender, amount);
+        uint256 receivedAmount = _pullExactToken(_bonusToken(asset), msg.sender, amount);
         (address funderIdentity, bytes32 funderIdentityKey) = _resolveIdentity(contentId, roundId, msg.sender);
         address submitterIdentity = registry.getSubmitterIdentity(contentId);
         bytes32 submitterIdentityKey = registry.contentSubmitterIdentityKey(contentId);
@@ -174,11 +205,20 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             fundedAmount: receivedAmount,
             remainingAmount: receivedAmount,
             forfeited: false,
-            frontendFeeBps: defaultFrontendFeeBps
+            frontendFeeBps: defaultFrontendFeeBps,
+            asset: asset
         });
 
         emit FeedbackBonusPoolCreated(
-            poolId, contentId, roundId, msg.sender, awarder, receivedAmount, feedbackClosesAt, defaultFrontendFeeBps
+            poolId,
+            contentId,
+            roundId,
+            msg.sender,
+            awarder,
+            receivedAmount,
+            feedbackClosesAt,
+            defaultFrontendFeeBps,
+            asset
         );
         emit FeedbackWindowCreated(poolId, contentId, roundId, feedbackClosesAt);
     }
@@ -219,14 +259,15 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         if (awardIdentityKey != identityKey) identityKeyAwarded[poolId][identityKey] = true;
         feedbackHashAwarded[poolId][feedbackHash] = true;
 
-        uint256 paidFrontendFee = _routeFrontendFee(usdcToken, frontendRecipient, frontendFee);
+        IERC20 rewardToken = _bonusToken(pool.asset);
+        uint256 paidFrontendFee = _routeFrontendFee(rewardToken, frontendRecipient, frontendFee);
         if (paidFrontendFee != frontendFee) {
             recipientAmount += frontendFee;
             frontendFee = 0;
             frontendRecipient = address(0);
         }
         if (recipientAmount > 0) {
-            usdcToken.safeTransfer(rewardRecipient, recipientAmount);
+            rewardToken.safeTransfer(rewardRecipient, recipientAmount);
         }
 
         emit FeedbackBonusAwarded(
@@ -266,25 +307,26 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
 
         address treasury = _protocolTreasury();
         if (treasury != address(0)) {
-            usdcToken.safeTransfer(treasury, forfeitedAmount);
+            _bonusToken(pool.asset).safeTransfer(treasury, forfeitedAmount);
             emit FeedbackBonusForfeited(poolId, treasury, forfeitedAmount);
         } else {
             address funder = pool.funder;
             require(funder != address(0), "No fallback recipient");
-            usdcToken.safeTransfer(funder, forfeitedAmount);
+            _bonusToken(pool.asset).safeTransfer(funder, forfeitedAmount);
             emit FeedbackBonusFunderRefunded(poolId, funder, forfeitedAmount);
         }
     }
 
-    /// @notice Recover an ERC-20 that is NOT the protocol's reward asset (USDC).
+    /// @notice Recover an ERC-20 that is NOT one of the protocol's reward assets (LREP/USDC).
     /// @dev Donations of non-asset tokens to the escrow are otherwise permanently stuck.
-    ///      USDC balances reflect per-pool funded/remaining accounting and are deliberately
+    ///      Protocol-asset balances reflect per-pool funded/remaining accounting and are deliberately
     ///      not sweepable through this path. L-Funds-1.
     function recoverNonAssetToken(IERC20 token, address to, uint256 amount)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
+        require(address(token) != address(lrepToken), "Cannot recover protocol asset");
         require(address(token) != address(usdcToken), "Cannot recover protocol asset");
         require(to != address(0), "Invalid recipient");
         token.safeTransfer(to, amount);
@@ -320,11 +362,17 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         _unpause();
     }
 
-    function _pullUsdc(address funder, uint256 amount) internal returns (uint256 receivedAmount) {
-        uint256 balanceBefore = usdcToken.balanceOf(address(this));
-        usdcToken.safeTransferFrom(funder, address(this), amount);
-        receivedAmount = usdcToken.balanceOf(address(this)) - balanceBefore;
+    function _pullExactToken(IERC20 token, address funder, uint256 amount) internal returns (uint256 receivedAmount) {
+        uint256 balanceBefore = token.balanceOf(address(this));
+        token.safeTransferFrom(funder, address(this), amount);
+        receivedAmount = token.balanceOf(address(this)) - balanceBefore;
         require(receivedAmount == amount, "Fee token unsupported");
+    }
+
+    function _bonusToken(uint8 asset) internal view returns (IERC20 token) {
+        if (asset == REWARD_ASSET_LREP) return lrepToken;
+        if (asset == REWARD_ASSET_USDC) return usdcToken;
+        revert("Invalid asset");
     }
 
     function _setFeedbackRegistry(address feedbackRegistry_) internal {

@@ -281,6 +281,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
                 FeedbackBonusEscrow.initialize,
                 (
                     governance,
+                    address(lrepToken),
                     usdcTokenAddress,
                     address(registry),
                     address(votingEngine),

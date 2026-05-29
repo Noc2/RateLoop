@@ -228,6 +228,7 @@ contract UpgradeTest is Test {
                 (
                     governance,
                     address(lrepToken),
+                    address(lrepToken),
                     address(contentRegistry),
                     address(votingEngine),
                     address(raterRegistry),
@@ -618,6 +619,7 @@ contract UpgradeTest is Test {
         feedbackBonusEscrow.initialize(
             governance,
             address(lrepToken),
+            address(lrepToken),
             address(contentRegistry),
             address(votingEngine),
             address(raterRegistry),
@@ -730,6 +732,7 @@ contract UpgradeTest is Test {
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         fbeImpl.initialize(
             governance,
+            address(lrepToken),
             address(lrepToken),
             address(contentRegistry),
             address(votingEngine),

@@ -216,6 +216,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
                         FeedbackBonusEscrow.initialize,
                         (
                             owner,
+                            address(lrepToken),
                             address(usdc),
                             address(registry),
                             address(votingEngine),
@@ -362,8 +363,67 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(recipientAmount, 9_700_000);
         assertEq(usdc.balanceOf(voter1), 1_009_700_000);
         assertEq(usdc.balanceOf(frontend1), 1_000_300_000);
-        (,,,,,,,,,,,, uint256 remainingAmount,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
+        (,,,,,,,,,,,, uint256 remainingAmount,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
         assertEq(remainingAmount, 90e6);
+    }
+
+    function testLrepFeedbackBonusPaysRevealedVoterAndFrontend() public {
+        _registerFrontend(frontend1);
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createLrepFeedbackBonusPool(contentId);
+        _settleRoundWithFrontend(_threeVoters(), contentId, _directions(true, true, false), frontend1);
+
+        uint256 voterBalanceBefore = lrepToken.balanceOf(voter1);
+        uint256 frontendBalanceBefore = lrepToken.balanceOf(frontend1);
+
+        vm.prank(funder);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        assertEq(recipientAmount, 9_700_000);
+        assertEq(lrepToken.balanceOf(voter1), voterBalanceBefore + 9_700_000);
+        assertEq(lrepToken.balanceOf(frontend1), frontendBalanceBefore + 300_000);
+        (,,,,,,,,,,,, uint256 remainingAmount,,, uint8 asset) = feedbackBonusEscrow.feedbackBonusPools(poolId);
+        assertEq(remainingAmount, 90e6);
+        assertEq(asset, feedbackBonusEscrow.REWARD_ASSET_LREP());
+    }
+
+    function testLrepFeedbackBonusExpiredRemainderForfeitsToTreasury() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createLrepFeedbackBonusPool(contentId);
+        uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
+
+        vm.warp(block.timestamp + 8 days);
+
+        uint256 forfeitedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+
+        assertEq(forfeitedAmount, BONUS_AMOUNT);
+        assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore + BONUS_AMOUNT);
+        (,,,,,,,,,,,, uint256 remainingAmount, bool forfeited,, uint8 asset) =
+            feedbackBonusEscrow.feedbackBonusPools(poolId);
+        assertEq(remainingAmount, 0);
+        assertTrue(forfeited);
+        assertEq(asset, feedbackBonusEscrow.REWARD_ASSET_LREP());
+    }
+
+    function testCreateFeedbackBonusPoolRejectsInvalidAsset() public {
+        uint256 contentId = _submitQuestion("");
+
+        vm.startPrank(funder);
+        usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
+        vm.expectRevert("Invalid asset");
+        feedbackBonusEscrow.createFeedbackBonusPoolWithAsset(
+            contentId, 1, 2, BONUS_AMOUNT, block.timestamp + 7 days, funder
+        );
+        vm.stopPrank();
+    }
+
+    function testRecoverNonAssetTokenRejectsLrepAndUsdc() public {
+        vm.startPrank(owner);
+        vm.expectRevert("Cannot recover protocol asset");
+        feedbackBonusEscrow.recoverNonAssetToken(lrepToken, owner, 1);
+        vm.expectRevert("Cannot recover protocol asset");
+        feedbackBonusEscrow.recoverNonAssetToken(usdc, owner, 1);
+        vm.stopPrank();
     }
 
     function testAwardFrontendTransferFailureFallsBackToVoter() public {
@@ -662,7 +722,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.stopPrank();
 
         assertGt(poolId, 0);
-        (,,,,, address funderIdentity,,,,,,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
+        (,,,,, address funderIdentity,,,,,,,,,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
         assertEq(funderIdentity, unverifiedFunder);
     }
 
@@ -728,7 +788,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
         assertEq(forfeitedAmount, 90e6);
         assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + 90e6);
-        (,,,,,,,,,,,, uint256 remainingAmount, bool forfeited,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
+        (,,,,,,,,,,,, uint256 remainingAmount, bool forfeited,,) = feedbackBonusEscrow.feedbackBonusPools(poolId);
         assertEq(remainingAmount, 0);
         assertTrue(forfeited);
     }
@@ -801,6 +861,15 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
         poolId =
             feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
+        vm.stopPrank();
+    }
+
+    function _createLrepFeedbackBonusPool(uint256 contentId) internal returns (uint256 poolId) {
+        vm.startPrank(funder);
+        lrepToken.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
+        poolId = feedbackBonusEscrow.createFeedbackBonusPoolWithAsset(
+            contentId, 1, feedbackBonusEscrow.REWARD_ASSET_LREP(), BONUS_AMOUNT, block.timestamp + 7 days, funder
+        );
         vm.stopPrank();
     }
 
