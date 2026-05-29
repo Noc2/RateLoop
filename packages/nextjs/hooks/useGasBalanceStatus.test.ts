@@ -86,6 +86,17 @@ test("hides free transaction allowance on unsupported chains", () => {
   );
 });
 
+test("hides free transaction allowance for in-app wallets on World Chain Sepolia", () => {
+  assert.equal(
+    shouldShowFreeTransactionAllowance({
+      chainId: 4801,
+      connectorId: "in-app-wallet",
+      isThirdwebInApp: true,
+    }),
+    false,
+  );
+});
+
 test("awaits self-funded reconnect for exhausted free transactions before wagmi connector settles", () => {
   assert.equal(
     shouldAwaitSelfFundedGasModeReconnect({

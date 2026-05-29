@@ -11,6 +11,7 @@ import { publicEnv } from "~~/utils/env/public";
 
 const THIRDWEB_CONNECT_CHAIN_IDS = new Set([31337, 480, 4801]);
 const THIRDWEB_EXECUTION_CHAIN_IDS = new Set([480, 4801]);
+const THIRDWEB_IN_APP_EXECUTION_CHAIN_IDS = new Set([480]);
 const THIRDWEB_ACTIVE_CHAIN_KEY = "thirdweb:active-chain";
 const THIRDWEB_SPONSORSHIP_MODE_KEY = "thirdweb:sponsorship-mode";
 const RATELOOP_THIRDWEB_ICON = "/rateloop-logo.svg";
@@ -42,6 +43,10 @@ export function isThirdwebWalletChain(chainId: number | null | undefined): boole
 
 export function supportsThirdwebExecutionCapabilities(chainId: number | null | undefined): boolean {
   return typeof chainId === "number" && THIRDWEB_EXECUTION_CHAIN_IDS.has(chainId);
+}
+
+export function supportsThirdwebInAppExecutionCapabilities(chainId: number | null | undefined): boolean {
+  return typeof chainId === "number" && THIRDWEB_IN_APP_EXECUTION_CHAIN_IDS.has(chainId);
 }
 
 export const thirdwebClient = publicEnv.thirdwebClientId
@@ -134,7 +139,7 @@ export function getThirdwebWalletExecutionMode(
   chainId: number,
   options?: { sponsorshipMode?: ThirdwebSponsorshipMode | null },
 ): ThirdwebWalletExecutionMode {
-  if (supportsThirdwebExecutionCapabilities(chainId)) {
+  if (supportsThirdwebInAppExecutionCapabilities(chainId)) {
     const sponsorshipMode = options?.sponsorshipMode ?? getStoredThirdwebSponsorshipMode() ?? "sponsored";
     return {
       mode: "EIP7702" as const,

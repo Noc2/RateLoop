@@ -1,12 +1,20 @@
-import { getThirdwebWalletExecutionMode } from "../services/thirdweb/client";
+import {
+  getThirdwebWalletExecutionMode,
+  supportsThirdwebExecutionCapabilities,
+  supportsThirdwebInAppExecutionCapabilities,
+} from "../services/thirdweb/client";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("thirdweb in-app wallets use sponsored EIP-7702 mode on World Chain Sepolia", () => {
+test("thirdweb in-app wallets use EOA mode on World Chain Sepolia", () => {
   assert.deepEqual(getThirdwebWalletExecutionMode(4801), {
-    mode: "EIP7702",
-    sponsorGas: true,
+    mode: "EOA",
   });
+});
+
+test("World Chain Sepolia keeps external execution support but not in-app EIP-7702 mode", () => {
+  assert.equal(supportsThirdwebExecutionCapabilities(4801), true);
+  assert.equal(supportsThirdwebInAppExecutionCapabilities(4801), false);
 });
 
 test("thirdweb in-app wallets use sponsored EIP-7702 mode on World Chain mainnet", () => {

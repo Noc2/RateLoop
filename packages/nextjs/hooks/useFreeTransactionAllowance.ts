@@ -12,7 +12,7 @@ import {
   getThirdwebWalletSponsorshipMode,
   isThirdwebInAppWalletId,
   setStoredThirdwebSponsorshipMode,
-  supportsThirdwebExecutionCapabilities,
+  supportsThirdwebInAppExecutionCapabilities,
   thirdwebClient,
 } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
@@ -32,6 +32,7 @@ type FreeTransactionAllowanceResponse = {
 };
 
 type SponsorshipMode = "sponsored" | "self-funded";
+type SponsorshipSyncMode = SponsorshipMode | "eoa";
 
 function getClientFreeTransactionEnvironmentScope() {
   if (typeof window === "undefined") {
@@ -152,7 +153,7 @@ function markExhaustionToastShown(params: { chainId: number; raterIdentityKey: s
 export function buildSponsorshipSyncAttemptKey(params: {
   address: string;
   chainId: number;
-  sponsorshipMode: SponsorshipMode;
+  sponsorshipMode: SponsorshipSyncMode;
 }) {
   return `${params.address.toLowerCase()}:${params.chainId}:${params.sponsorshipMode}`;
 }
@@ -174,6 +175,7 @@ export function useFreeTransactionAllowance() {
   const previousRemainingRef = useRef<number | null>(null);
   const sponsorshipSyncAttemptRef = useRef<string | null>(null);
   const resolvedChainId = resolveWalletExecutionChainId(chain?.id, activeWalletChain?.id);
+  const supportsInAppExecution = supportsThirdwebInAppExecutionCapabilities(resolvedChainId);
 
   const query = useQuery({
     queryKey: getFreeTransactionAllowanceQueryKey(address, resolvedChainId),
@@ -215,7 +217,7 @@ export function useFreeTransactionAllowance() {
 
   const allowance = useMemo(() => {
     const summary = query.data ?? fallbackSummary;
-    const canUseFreeTransactions = Boolean(summary?.verified && summary.remaining > 0);
+    const canUseFreeTransactions = Boolean(supportsInAppExecution && summary?.verified && summary.remaining > 0);
 
     return {
       ...query,
@@ -228,18 +230,18 @@ export function useFreeTransactionAllowance() {
       verified: Boolean(summary?.verified),
       raterIdentityKey: summary?.raterIdentityKey ?? null,
     };
-  }, [fallbackSummary, query]);
+  }, [fallbackSummary, query, supportsInAppExecution]);
 
   const desiredSponsorshipMode = useMemo(() => {
-    if (!resolvedChainId || !supportsThirdwebExecutionCapabilities(resolvedChainId) || !allowance.isResolved) {
+    if (!resolvedChainId || !supportsInAppExecution || !allowance.isResolved) {
       return null;
     }
 
     return allowance.canUseFreeTransactions ? "sponsored" : "self-funded";
-  }, [allowance.canUseFreeTransactions, allowance.isResolved, resolvedChainId]);
+  }, [allowance.canUseFreeTransactions, allowance.isResolved, resolvedChainId, supportsInAppExecution]);
 
   useEffect(() => {
-    if (!resolvedChainId || !supportsThirdwebExecutionCapabilities(resolvedChainId)) {
+    if (!resolvedChainId || !supportsInAppExecution) {
       setStoredThirdwebSponsorshipMode(null);
       return;
     }
@@ -249,7 +251,7 @@ export function useFreeTransactionAllowance() {
     }
 
     setStoredThirdwebSponsorshipMode(desiredSponsorshipMode);
-  }, [desiredSponsorshipMode, resolvedChainId]);
+  }, [desiredSponsorshipMode, resolvedChainId, supportsInAppExecution]);
 
   useEffect(() => {
     if (
@@ -301,6 +303,50 @@ export function useFreeTransactionAllowance() {
       }
     })();
   }, [activeWallet, address, desiredSponsorshipMode, resolvedChainId, setActiveWallet, syncWalletToWagmi]);
+
+  useEffect(() => {
+    if (
+      !thirdwebClient ||
+      !address ||
+      !resolvedChainId ||
+      supportsInAppExecution ||
+      !activeWallet ||
+      !isThirdwebInAppWalletId(activeWallet.id) ||
+      getThirdwebWalletSponsorshipMode(activeWallet) === null
+    ) {
+      return;
+    }
+
+    const attemptKey = buildSponsorshipSyncAttemptKey({
+      address,
+      chainId: resolvedChainId,
+      sponsorshipMode: "eoa",
+    });
+    if (sponsorshipSyncAttemptRef.current === attemptKey) {
+      return;
+    }
+
+    sponsorshipSyncAttemptRef.current = attemptKey;
+
+    void (async () => {
+      try {
+        const replacementWallet = createThirdwebInAppWallet(resolvedChainId);
+
+        await replacementWallet.autoConnect({
+          chain: defineChain(resolvedChainId),
+          client: thirdwebClient,
+        });
+        await syncWalletToWagmi(replacementWallet, resolvedChainId, { reconnect: true });
+        await setActiveWallet(replacementWallet);
+      } catch (error) {
+        sponsorshipSyncAttemptRef.current = clearSponsorshipSyncAttemptAfterFailure(
+          sponsorshipSyncAttemptRef.current,
+          attemptKey,
+        );
+        console.error("Failed to sync thirdweb EOA mode:", error);
+      }
+    })();
+  }, [activeWallet, address, resolvedChainId, setActiveWallet, supportsInAppExecution, syncWalletToWagmi]);
 
   useEffect(() => {
     if (!allowance.verified || !resolvedChainId || !allowance.raterIdentityKey) {

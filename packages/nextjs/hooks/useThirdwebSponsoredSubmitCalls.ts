@@ -24,6 +24,7 @@ import {
   createThirdwebInAppWallet,
   isThirdwebInAppWalletId,
   supportsThirdwebExecutionCapabilities,
+  supportsThirdwebInAppExecutionCapabilities,
   thirdwebClient,
 } from "~~/services/thirdweb/client";
 
@@ -85,11 +86,15 @@ export function shouldExpectThirdwebBatchCalls(params: {
     typeof params.connectorId === "string" &&
     params.activeWalletId === params.connectorId;
 
-  return (
-    (hasSettledInAppConnector || hasSettledExternalConnector) &&
-    typeof params.chainId === "number" &&
-    supportsThirdwebExecutionCapabilities(params.chainId)
-  );
+  if (typeof params.chainId !== "number") {
+    return false;
+  }
+
+  if (hasSettledInAppConnector) {
+    return supportsThirdwebInAppExecutionCapabilities(params.chainId);
+  }
+
+  return hasSettledExternalConnector && supportsThirdwebExecutionCapabilities(params.chainId);
 }
 
 function shouldExpectSponsoredThirdwebBatchCalls(params: {
@@ -100,7 +105,7 @@ function shouldExpectSponsoredThirdwebBatchCalls(params: {
   return (
     (params.connectorId === "in-app-wallet" || (!params.connectorId && params.isThirdwebInApp === true)) &&
     typeof params.chainId === "number" &&
-    supportsThirdwebExecutionCapabilities(params.chainId)
+    supportsThirdwebInAppExecutionCapabilities(params.chainId)
   );
 }
 

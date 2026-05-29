@@ -9,7 +9,7 @@ import {
   resolveWalletExecutionChainId,
   useWalletExecutionCapabilities,
 } from "~~/hooks/useWalletExecutionCapabilities";
-import { supportsThirdwebExecutionCapabilities } from "~~/services/thirdweb/client";
+import { supportsThirdwebInAppExecutionCapabilities } from "~~/services/thirdweb/client";
 
 type GasBalanceStatusOptions = {
   includeExternalSendCalls?: boolean;
@@ -25,7 +25,7 @@ export function shouldExpectThirdwebGasMode(params: {
     params.includeExternalSendCalls &&
     (params.connectorId === "in-app-wallet" || (!params.connectorId && params.isThirdwebInApp)) &&
     typeof params.chainId === "number" &&
-    supportsThirdwebExecutionCapabilities(params.chainId)
+    supportsThirdwebInAppExecutionCapabilities(params.chainId)
   );
 }
 
