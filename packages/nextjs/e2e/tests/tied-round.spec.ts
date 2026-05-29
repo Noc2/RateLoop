@@ -12,9 +12,7 @@ import {
 } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
-import { waitForSettlementIndexed } from "../helpers/keeper";
 import { getContentById, getContentList } from "../helpers/ponder-api";
-import { PONDER_URL } from "../helpers/ponder-url";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -43,19 +41,16 @@ test.describe("Tied round lifecycle", () => {
   const VOTING_ENGINE = CONTRACT_ADDRESSES.RoundVotingEngine;
   const LREP_TOKEN = CONTRACT_ADDRESSES.LoopReputation;
   const EPOCH_DURATION = 60;
+  const MIN_TIE_VOTERS = 4;
   const STAKE = BigInt(10e6);
   const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
   test.beforeAll(async () => {
-    const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION);
+    const ok = await setTestConfig(VOTING_ENGINE, DEPLOYER.address, EPOCH_DURATION, 86400, MIN_TIE_VOTERS);
     if (!ok) throw new Error("Failed to set test config");
   });
 
-  let newContentId: string | null = null;
-
-  test("ask a fresh question for tie test", async () => {
-    test.setTimeout(120_000);
-
+  async function submitTieTestContent(): Promise<string> {
     const submitter = ANVIL_ACCOUNTS.account10;
     const uniqueId = Date.now();
     const url = `https://www.youtube.com/watch?v=tie_test_${uniqueId}`;
@@ -74,12 +69,13 @@ test.describe("Tied round lifecycle", () => {
     await waitForPonderSync(60_000);
 
     // Find the newly submitted content via Ponder
+    let contentId: string | null = null;
     const indexed = await waitForPonderIndexed(
       async () => {
         const { items } = await getContentList({ status: "all", sortBy: "newest", limit: 5 });
         const match = items.find(item => item.url.includes(`tie_test_${uniqueId}`));
         if (match) {
-          newContentId = match.id;
+          contentId = match.id;
           return true;
         }
         return false;
@@ -89,17 +85,14 @@ test.describe("Tied round lifecycle", () => {
       "tied-round:findContent",
     );
 
-    if (!indexed) {
-      test.skip(true, "Ponder not indexing new content — skipping tie test");
-      return;
-    }
-
-    expect(newContentId).toBeTruthy();
-  });
+    expect(indexed, "Ponder did not index the fresh tied-round content").toBe(true);
+    expect(contentId).toBeTruthy();
+    return contentId!;
+  }
 
   test("4 voters create a tie (2 up, 2 down, equal stakes)", async () => {
-    test.setTimeout(240_000);
-    test.skip(!newContentId, "No content from previous test");
+    test.setTimeout(300_000);
+    const contentId = await submitTieTestContent();
 
     // 2 UP + 2 DOWN = equal pools → tie
     const voters = [
@@ -117,7 +110,7 @@ test.describe("Tied round lifecycle", () => {
       expect(approved, `Vote approval failed for ${voter.account.address}`).toBe(true);
 
       const result = await commitVoteDirect(
-        BigInt(newContentId!),
+        BigInt(contentId),
         isUp,
         STAKE,
         ZERO_ADDRESS,
@@ -129,18 +122,18 @@ test.describe("Tied round lifecycle", () => {
     }
 
     // Snapshot the pre-settlement rating
-    const preData = await getContentById(newContentId!);
+    const preData = await getContentById(contentId);
     const preRating = preData.content.rating;
 
     // Get the active round ID before settlement
-    const roundId = await getActiveRoundId(BigInt(newContentId!), VOTING_ENGINE);
+    const roundId = await getActiveRoundId(BigInt(contentId), VOTING_ENGINE);
 
     // Fast-forward past epoch duration so votes become revealable
     await evmIncreaseTime(EPOCH_DURATION + 1);
 
     for (let i = 0; i < commits.length; i++) {
       const revealed = await revealVoteDirect(
-        BigInt(newContentId!),
+        BigInt(contentId),
         roundId,
         commits[i].commitKey,
         commits[i].isUp,
@@ -157,17 +150,26 @@ test.describe("Tied round lifecycle", () => {
 
     // Try to settle
     if (roundId > 0n) {
-      const settledTx = await settleRoundDirect(BigInt(newContentId!), roundId, ANVIL_ACCOUNTS.account1.address, VOTING_ENGINE);
+      const settledTx = await settleRoundDirect(BigInt(contentId), roundId, ANVIL_ACCOUNTS.account1.address, VOTING_ENGINE);
       expect(settledTx, "Settlement tx failed").toBe(true);
     }
 
-    // Wait for settlement in Ponder
-    const settled = await waitForSettlementIndexed(newContentId!, PONDER_URL, 60_000);
-    expect(settled).toBe(true);
+    // Wait for the exact tied round state in Ponder.
+    const tiedIndexed = await waitForPonderIndexed(
+      async () => {
+        const data = await getContentById(contentId);
+        const round = data.rounds.find(item => item.roundId === String(roundId));
+        return round?.state === 3;
+      },
+      90_000,
+      2_000,
+      "tied-round:tied",
+    );
+    expect(tiedIndexed, "Ponder did not index the target round as tied").toBe(true);
 
     // Verify round state — must be Tied (state=3) since pools are equal
-    const postData = await getContentById(newContentId!);
-    const tiedRound = postData.rounds.find(r => r.state === 3);
+    const postData = await getContentById(contentId);
+    const tiedRound = postData.rounds.find(r => r.roundId === String(roundId) && r.state === 3);
 
     expect(tiedRound, "Round should be Tied (state=3) when upPool === downPool").toBeTruthy();
 
