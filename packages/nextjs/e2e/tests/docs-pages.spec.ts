@@ -27,27 +27,19 @@ test.describe("Documentation pages", () => {
     });
   }
 
-  test("docs sidebar navigation works", async ({ page }) => {
+  test("docs navigation links work", async ({ page }) => {
     await page.goto("/docs");
     await page.waitForLoadState("domcontentloaded");
 
-    // Wait for docs page to load
     const h1 = page.locator("h1");
     await expect(h1.first()).toBeVisible({ timeout: 15_000 });
 
-    // Find a sidebar link and click it
-    const sidebarLink = page.getByRole("link", { name: /How It Works/i });
-    const hasLink = await sidebarLink
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .then(() => true)
-      .catch(() => false);
-    test.skip(!hasLink, "Sidebar link not found — layout may differ");
+    const howItWorksLink = page.locator('a[href="/docs/how-it-works"]').first();
+    await expect(howItWorksLink).toBeVisible({ timeout: 10_000 });
 
-    await sidebarLink.click();
-    await page.waitForURL(/how-it-works/, { timeout: 10_000 });
-
-    // Verify the new page loaded
-    await expect(page.locator("h1").first()).toBeVisible({ timeout: 10_000 });
+    await howItWorksLink.click();
+    await page.waitForURL(/\/docs\/how-it-works$/, { timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: /How It Works/i }).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("docs section headings open the first page in each section", async ({ page }) => {
