@@ -37,7 +37,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     address public owner = address(1);
     address public submitter = address(2);
-    address public funder = address(3);
+    uint256 internal constant FUNDER_KEY = 0xF00D;
+    uint256 internal constant X402_AGENT_KEY = 0xA11CE;
+    uint256 internal constant WRONG_AUTHORIZATION_SIGNER_KEY = 0xB0B;
+    address public funder;
     address public voter1 = address(4);
     address public voter2 = address(5);
     address public voter3 = address(6);
@@ -127,6 +130,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function setUp() public {
         vm.warp(1000);
         vm.roll(100);
+        funder = vm.addr(FUNDER_KEY);
 
         vm.startPrank(owner);
 
@@ -294,6 +298,22 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertTrue(usdc.authorizationState(funder, authorization.nonce));
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + params.amount);
         assertEq(usdc.balanceOf(funder), funderBalanceBefore - params.amount);
+    }
+
+    function testCreateRewardPoolWithAuthorizationRejectsInvalidSignature() public {
+        uint256 contentId = _submitQuestion("authorized-reward-pool-bad-signature");
+        AuthorizedRewardPoolParams memory params = _authorizedRewardPoolParams(contentId);
+        Eip3009Authorization memory authorization = _rewardPoolAuthorization(funder, params);
+        _signAuthorization(authorization, WRONG_AUTHORIZATION_SIGNER_KEY);
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+
+        vm.expectRevert("MockERC20: invalid authorization signature");
+        rewardPoolEscrow.createRewardPoolWithAuthorization(params, authorization);
+
+        assertFalse(usdc.authorizationState(funder, authorization.nonce));
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore);
     }
 
     function testCreateRewardPoolWithAuthorizationRejectsBadNonceBeforeTransfer() public {
@@ -3816,7 +3836,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testAgentWalletQuestionSubmissionFundsEscrowFromSigningWallet() public {
-        address agentWallet = address(0xA11CE);
+        address agentWallet = _x402AgentWallet();
         string memory contextUrl = "https://example.com/agent-funded-context";
         string memory title = "Which supplier should the agent shortlist?";
         string memory description = "Check that direct agent submissions fund escrow from the signer.";
@@ -3890,7 +3910,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testUndelegatedAgentQuestionSubmissionWithUsdcRewardAllowsOpenSubmitter() public {
-        address agentWallet = address(0xA11CE);
+        address agentWallet = _x402AgentWallet();
         uint256 nextContentIdBefore = registry.nextContentId();
         uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
 
@@ -3903,7 +3923,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testX402QuestionSubmissionAllowsOpenSubmitter() public {
-        address agentWallet = address(0xA11CE);
+        address agentWallet = _x402AgentWallet();
         X402TestQuestion memory question = _x402TestQuestion();
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
 
@@ -3940,7 +3960,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testX402QuestionSubmissionRequiresReservationBeforeUsdcAuthorization() public {
-        address agentWallet = address(0xA11CE);
+        address agentWallet = _x402AgentWallet();
         X402TestQuestion memory question = _x402TestQuestion();
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
 
@@ -3974,7 +3994,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testX402QuestionSubmissionRejectsTooNewReservationBeforeUsdcAuthorization() public {
-        address agentWallet = address(0xA11CE);
+        address agentWallet = _x402AgentWallet();
         X402TestQuestion memory question = _x402TestQuestion();
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
 
@@ -4010,7 +4030,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testX402QuestionSubmissionRejectsStaleEscrowBeforeUsdcAuthorization() public {
-        address agentWallet = address(0xA11CE);
+        address agentWallet = _x402AgentWallet();
         X402TestQuestion memory question = _x402TestQuestion();
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
 
@@ -4072,7 +4092,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testX402QuestionSubmissionConsumesUsdcAuthorizationWithDelegatedRaterIdentity() public {
-        address agentWallet = address(0xA11CE);
+        address agentWallet = _x402AgentWallet();
         X402TestQuestion memory question = _x402TestQuestion();
         Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
 
@@ -4113,7 +4133,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testDelegatedAgentSubmitterHolderCannotClaimQuestionReward() public {
-        address agentWallet = address(0xA11CE);
+        address agentWallet = _x402AgentWallet();
         vm.prank(submitter);
         raterIdentityRegistry.setDelegate(agentWallet);
 
@@ -4412,6 +4432,25 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             r: bytes32(0),
             s: bytes32(0)
         });
+        _signAuthorization(authorization, FUNDER_KEY);
+    }
+
+    function _signAuthorization(Eip3009Authorization memory authorization, uint256 signerKey) internal view {
+        (authorization.v, authorization.r, authorization.s) = vm.sign(
+            signerKey,
+            usdc.receiveWithAuthorizationDigest(
+                authorization.from,
+                authorization.to,
+                authorization.value,
+                authorization.validAfter,
+                authorization.validBefore,
+                authorization.nonce
+            )
+        );
+    }
+
+    function _x402AgentWallet() internal pure returns (address) {
+        return vm.addr(X402_AGENT_KEY);
     }
 
     function _reserveX402Question(address agentWallet, X402TestQuestion memory question)
@@ -4483,6 +4522,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             r: bytes32(0),
             s: bytes32(0)
         });
+        _signAuthorization(authorization, X402_AGENT_KEY);
     }
 
     function _submitAgentQuestionWithUsdcReward(address agentWallet, string memory path)

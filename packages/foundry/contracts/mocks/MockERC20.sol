@@ -3,15 +3,20 @@
 pragma solidity ^0.8.34;
 
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /// @title MockERC20
 /// @notice Mock ERC20 token for testing (simulates USDC/USDT with 6 decimals)
-contract MockERC20 is ERC20 {
+contract MockERC20 is ERC20, EIP712 {
     uint8 private immutable _decimals;
+    bytes32 public constant RECEIVE_WITH_AUTHORIZATION_TYPEHASH = keccak256(
+        "ReceiveWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+    );
     mapping(address => mapping(bytes32 => bool)) public authorizationState;
     mapping(address => bool) public blockedRecipients;
 
-    constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) {
+    constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) EIP712(name, "2") {
         _decimals = decimals_;
     }
 
@@ -28,6 +33,23 @@ contract MockERC20 is ERC20 {
         blockedRecipients[recipient] = blocked;
     }
 
+    function DOMAIN_SEPARATOR() external view returns (bytes32) {
+        return _domainSeparatorV4();
+    }
+
+    function receiveWithAuthorizationDigest(
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce
+    ) public view returns (bytes32) {
+        return _hashTypedDataV4(
+            keccak256(abi.encode(RECEIVE_WITH_AUTHORIZATION_TYPEHASH, from, to, value, validAfter, validBefore, nonce))
+        );
+    }
+
     function receiveWithAuthorization(
         address from,
         address to,
@@ -35,14 +57,19 @@ contract MockERC20 is ERC20 {
         uint256 validAfter,
         uint256 validBefore,
         bytes32 nonce,
-        uint8,
-        bytes32,
-        bytes32
+        uint8 v,
+        bytes32 r,
+        bytes32 s
     ) external {
         require(to == msg.sender, "MockERC20: caller must be payee");
         require(block.timestamp > validAfter, "MockERC20: authorization not yet valid");
         require(block.timestamp < validBefore, "MockERC20: authorization expired");
         require(!authorizationState[from][nonce], "MockERC20: authorization used");
+        require(
+            ECDSA.recover(receiveWithAuthorizationDigest(from, to, value, validAfter, validBefore, nonce), v, r, s)
+                == from,
+            "MockERC20: invalid authorization signature"
+        );
         authorizationState[from][nonce] = true;
         _transfer(from, to, value);
     }

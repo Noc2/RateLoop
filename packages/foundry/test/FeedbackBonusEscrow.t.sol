@@ -83,7 +83,9 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
 
     address public owner = address(1);
     address public submitter = address(2);
-    address public funder = address(3);
+    uint256 internal constant FUNDER_KEY = 0xF00D;
+    uint256 internal constant WRONG_AUTHORIZATION_SIGNER_KEY = 0xB0B;
+    address public funder;
     address public voter1 = address(4);
     address public voter2 = address(5);
     address public voter3 = address(6);
@@ -126,6 +128,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     function setUp() public {
         vm.warp(1000);
         vm.roll(100);
+        funder = vm.addr(FUNDER_KEY);
 
         vm.startPrank(owner);
 
@@ -323,6 +326,22 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertTrue(usdc.authorizationState(funder, authorization.nonce));
         assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore + params.amount);
         assertEq(usdc.balanceOf(funder), funderBalanceBefore - params.amount);
+    }
+
+    function testCreateFeedbackBonusPoolWithAuthorizationRejectsInvalidSignature() public {
+        uint256 contentId = _submitQuestion("authorized-feedback-bonus-bad-signature");
+        FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params = _authorizedFeedbackBonusParams(contentId);
+        Eip3009Authorization memory authorization = _feedbackBonusAuthorization(funder, params);
+        _signAuthorization(authorization, WRONG_AUTHORIZATION_SIGNER_KEY);
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(feedbackBonusEscrow));
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+
+        vm.expectRevert("MockERC20: invalid authorization signature");
+        feedbackBonusEscrow.createFeedbackBonusPoolWithAuthorization(params, authorization);
+
+        assertFalse(usdc.authorizationState(funder, authorization.nonce));
+        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore);
     }
 
     function testCreateFeedbackBonusPoolWithAuthorizationRejectsBadNonceBeforeTransfer() public {
@@ -940,6 +959,21 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             r: bytes32(0),
             s: bytes32(0)
         });
+        _signAuthorization(authorization, FUNDER_KEY);
+    }
+
+    function _signAuthorization(Eip3009Authorization memory authorization, uint256 signerKey) internal view {
+        (authorization.v, authorization.r, authorization.s) = vm.sign(
+            signerKey,
+            usdc.receiveWithAuthorizationDigest(
+                authorization.from,
+                authorization.to,
+                authorization.value,
+                authorization.validAfter,
+                authorization.validBefore,
+                authorization.nonce
+            )
+        );
     }
 
     function _settleRoundWith(address[] memory voters, uint256 contentId, bool[] memory directions)
