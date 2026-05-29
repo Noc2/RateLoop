@@ -55,9 +55,9 @@ test("content registry submission minimum includes default turnout coverage", ()
   assert.equal(
     getContentRegistrySubmissionRewardMinimum({
       configuredMinimum: 1_000_000n,
-      defaultMaxVoters: 200n,
+      defaultMaxVoters: 100n,
     }),
-    2_000_000n,
+    1_000_000n,
   );
 });
 

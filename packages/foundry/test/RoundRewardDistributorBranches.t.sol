@@ -124,7 +124,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         config.setCategoryRegistry(address(mockCategoryRegistry));
         config.setTreasury(treasury);
         // 4 params: epochDuration, maxDuration, minVoters, maxVoters
-        _setTlockRoundConfig(config, EPOCH_DURATION, 7 days, 3, 200);
+        _setTlockRoundConfig(config, EPOCH_DURATION, 7 days, 3, 100);
 
         worldIdRouter = new MockWorldIDRouter();
         raterRegistry = new RaterRegistry(owner, owner, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);

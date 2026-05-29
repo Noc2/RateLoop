@@ -256,7 +256,7 @@ function submitQuestionWithRewardCall(
         feedbackClosesAt: 0n,
         bountyEligibility: 0,
       },
-      { epochDuration: 1200, maxDuration: 604800, minVoters: 3, maxVoters: 200 },
+      { epochDuration: 1200, maxDuration: 604800, minVoters: 3, maxVoters: 100 },
       {
         questionMetadataHash: `0x${"6".repeat(64)}`,
         resultSpecHash: `0x${"7".repeat(64)}`,

@@ -34,7 +34,7 @@ const DEFAULT_ROUND_CONFIG = {
   epochDuration: 20 * 60,
   maxDuration: 20 * 60,
   minVoters: 3,
-  maxVoters: 200,
+  maxVoters: 100,
 };
 
 const MAX_SUBMISSION_IMAGE_URLS = 4;

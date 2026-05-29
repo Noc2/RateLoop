@@ -780,7 +780,7 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(epochDuration, 20 minutes);
         assertEq(maxDuration, 20 minutes);
         assertEq(minVoters, 3);
-        assertEq(maxVoters, 200);
+        assertEq(maxVoters, 100);
     }
 
     function test_ValidateRoundConfig_AcceptsGovernedCreatorChoice() public {
@@ -846,7 +846,7 @@ contract ProtocolConfigBranchesTest is Test {
     function test_SetConfig_RaisesRevealGraceToDefaultEpochDuration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        config.setConfig(2 hours, 2 hours, 3, 200);
+        config.setConfig(2 hours, 2 hours, 3, 100);
 
         assertEq(config.revealGracePeriod(), 2 hours);
     }
@@ -855,7 +855,7 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setConfig(20 minutes, 20 minutes, 3, 201);
+        config.setConfig(20 minutes, 20 minutes, 3, 101);
     }
 
     function test_SetRoundConfigBounds_RevalidatesStoredDrandPeriod() public {

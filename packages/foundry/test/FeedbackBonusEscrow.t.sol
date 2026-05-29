@@ -243,7 +243,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         protocolConfig.setTreasury(treasury);
         protocolConfig.setRaterRegistry(address(raterRegistry));
         _setTlockDrandConfig(protocolConfig, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
-        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 3, 200);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 3, 100);
 
         address[7] memory humans = [submitter, funder, voter1, voter2, voter3, voter4, frontend1];
         for (uint256 i = 0; i < humans.length; i++) {

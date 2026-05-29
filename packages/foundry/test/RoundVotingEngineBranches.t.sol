@@ -138,8 +138,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             DEFAULT_DRAND_PERIOD
         );
 
-        // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=200
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 200);
+        // epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=100
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 100);
 
         mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
 
@@ -2813,7 +2813,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryVoteAfterExpiredBelowQuorum_RevertsWithoutRollingStaleRound() public {
         vm.prank(owner);
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 1 hours, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 1 hours, 3, 100);
 
         uint256 contentId = _submitContent();
         _commit(voter1, contentId, true, STAKE);
@@ -2835,7 +2835,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryVoteAtBlindEpochBoundary_RevertsWhileRoundOpen() public {
         vm.prank(owner);
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 1 hours, 7 days, 3, 100);
 
         uint256 contentId = _submitContent();
         _openStakedRound(voter2, contentId, "advisory-boundary-open");
@@ -3754,7 +3754,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_Commit_TargetRoundCannotDelayLongCustomEpoch_Reverts() public {
         vm.prank(owner);
-        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 7 days, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(protocolConfigAddress), 7 days, 7 days, 3, 100);
         uint256 contentId = _submitContent();
 
         bytes32 salt = keccak256(abi.encodePacked(voter1, block.timestamp, "long target drift"));

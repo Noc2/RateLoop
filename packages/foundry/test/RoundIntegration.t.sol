@@ -188,7 +188,7 @@ contract RoundIntegrationTest is VotingTestBase {
 
         // setConfig(epochDuration, maxDuration, minVoters, maxVoters)
         // Use short 10-minute epochs for tests.
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
 
         // Mint LREP to all test users
         address[7] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6];
@@ -539,7 +539,7 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(round.startTime, block.timestamp, "start time");
         assertEq(roundCfg.epochDuration, EPOCH_DURATION, "epoch duration");
         assertEq(roundCfg.maxDuration, 7 days, "max duration");
-        assertEq(roundCfg.maxVoters, 200, "max voters");
+        assertEq(roundCfg.maxVoters, 100, "max voters");
         assertEq(roundReferenceRatingBps, _defaultRatingReferenceBps(), "reference rating");
         assertEq(drandChainHash, _tlockDrandChainHash(), "drand hash");
         assertEq(drandGenesisTime, _tlockDrandGenesisTime(), "drand genesis");
@@ -2190,7 +2190,7 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.startPrank(owner);
         registry.setTreasury(treasury);
         protocolConfig.setSlashConfig(4_000, 1, 2 days, 1e6);
-        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 6, 200);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 6, 100);
         vm.stopPrank();
 
         uint256 contentId = _submitContentWithoutOpeningRound();
@@ -2342,7 +2342,7 @@ contract RoundIntegrationTest is VotingTestBase {
         // Change config: increase minVoters to 10
         ProtocolConfig protoCfg = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.prank(owner);
-        _setTlockRoundConfig(protoCfg, EPOCH_DURATION, 7 days, 10, 200);
+        _setTlockRoundConfig(protoCfg, EPOCH_DURATION, 7 days, 10, 100);
 
         // Snapshot unchanged
         cfg = RoundEngineReadHelpers.roundConfig(votingEngine, contentId, roundId);

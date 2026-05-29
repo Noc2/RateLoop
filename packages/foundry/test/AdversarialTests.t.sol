@@ -115,7 +115,7 @@ contract AdversarialTests is VotingTestBase {
             DEFAULT_DRAND_GENESIS_TIME,
             DEFAULT_DRAND_PERIOD
         );
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
 
         // Fund actors
         address[6] memory users = [submitter, voter1, voter2, voter3, voter4, voter5];
@@ -223,7 +223,7 @@ contract AdversarialTests is VotingTestBase {
     function test_RewardExhaustion_MultipleWinners_CantExceedPool() public {
         ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 5, 200);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, 7 days, 5, 100);
         vm.stopPrank();
 
         uint256 contentId = _submitContent();
@@ -673,7 +673,7 @@ contract AdversarialTests is VotingTestBase {
             DEFAULT_DRAND_GENESIS_TIME,
             DEFAULT_DRAND_PERIOD
         );
-        _setTlockRoundConfig(ProtocolConfig(address(eng2.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(eng2.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
 
         token2.mint(submitter, 100_000e6);
         token2.mint(voter1, 100_000e6);

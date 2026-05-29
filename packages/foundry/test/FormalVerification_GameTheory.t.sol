@@ -89,8 +89,8 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasuryAddr);
 
-        // Config: epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=200
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, MAX_DURATION, MIN_VOTERS, 200);
+        // Config: epochDuration=1h, maxDuration=7d, minVoters=3, maxVoters=100
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), 1 hours, MAX_DURATION, MIN_VOTERS, 100);
 
         // Fund submitter and voters
         lrepToken.mint(submitter, 100_000e6);
@@ -119,7 +119,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
     function _setRoundMinVoters(uint16 minVoters) internal {
         ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(protocolConfig, 1 hours, MAX_DURATION, minVoters, 200);
+        _setTlockRoundConfig(protocolConfig, 1 hours, MAX_DURATION, minVoters, 100);
         vm.stopPrank();
     }
 

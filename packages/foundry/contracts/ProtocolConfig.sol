@@ -23,7 +23,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint256 public constant ABSOLUTE_MAX_ROUND_DURATION = 60 days;
     uint256 public constant MIN_SUBMISSION_LREP_POOL_FLOOR = 1e6;
     uint256 public constant MIN_SUBMISSION_USDC_POOL_FLOOR = 1e6;
-    uint16 internal constant MAX_DEFAULT_ROUND_VOTERS = 200;
+    uint16 internal constant MAX_DEFAULT_ROUND_VOTERS = 100;
     uint16 internal constant MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP = 100;
     uint16 internal constant MAX_CREATOR_ROUND_VOTERS = 1_000;
     uint8 internal constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;

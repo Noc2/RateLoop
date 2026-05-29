@@ -329,7 +329,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         if (!isLocalDev) {
             categoryRegistry.renounceRole(categoryRegistry.ADMIN_ROLE(), deployer);
         }
-        protocolConfig.setConfig(20 minutes, 20 minutes, 3, 200);
+        protocolConfig.setConfig(20 minutes, 20 minutes, 3, 100);
 
         lrepToken.mint(governance, TREASURY_AMOUNT);
         console.log("Minted 25M LREP to governance treasury");

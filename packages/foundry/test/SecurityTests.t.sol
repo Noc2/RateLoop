@@ -103,7 +103,7 @@ abstract contract SecurityHarnessBase is VotingTestBase {
         config.setCategoryRegistry(address(mockCategoryRegistry));
         config.setTreasury(treasury);
         _setTlockDrandConfig(config, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
-        _setTlockRoundConfig(config, epochDuration, 7 days, 3, 200);
+        _setTlockRoundConfig(config, epochDuration, 7 days, 3, 100);
     }
 }
 
@@ -577,7 +577,7 @@ contract SecurityAccessControlTest is Test {
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(protocolConfigAddress).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(protocolConfigAddress).setTreasury(treasury);
-        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 3, 200);
+        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 3, 100);
 
         vm.stopPrank();
 
@@ -624,7 +624,7 @@ contract SecurityAccessControlTest is Test {
     function test_ACL_Engine_setConfig_Unauthorized() public {
         vm.prank(attacker);
         _expectUnauthorized(attacker, CONFIG_ROLE_ENGINE);
-        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 3, 200);
+        ProtocolConfig(protocolConfigAddress).setConfig(5 minutes, 7 days, 3, 100);
     }
 
     function test_ACL_Engine_setRaterRegistry_Unauthorized() public {

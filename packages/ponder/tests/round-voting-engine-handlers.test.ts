@@ -50,7 +50,7 @@ vi.mock("@rateloop/contracts/protocol", () => ({
     epochDurationSeconds: 1200,
     maxDurationSeconds: 1200,
     minVoters: 3,
-    maxVoters: 200,
+    maxVoters: 100,
   },
   ROUND_STATE: {
     Open: 0,

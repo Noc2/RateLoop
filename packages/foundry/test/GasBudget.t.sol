@@ -191,7 +191,7 @@ contract GasBudgetTest is RoundIntegrationTest {
 
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(config, 5 minutes, 7 days, 3, 200);
+        _setTlockRoundConfig(config, 5 minutes, 7 days, 3, 100);
         vm.stopPrank();
 
         uint256 contentId = _submitContent();

@@ -90,7 +90,7 @@ contract InvariantSolvency is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setRewardDistributor(address(distributor));
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasury);
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
 
         // Create voters
         for (uint256 i = 0; i < NUM_VOTERS; i++) {

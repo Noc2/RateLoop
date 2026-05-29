@@ -27,7 +27,7 @@ const DEFAULT_DRAFT = {
     epochDuration: 1200n,
     maxDuration: 604800n,
     minVoters: 3n,
-    maxVoters: 200n,
+    maxVoters: 100n,
   },
   rewardAmount: 1_000_000n,
   rewardAsset: 0,

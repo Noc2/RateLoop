@@ -108,7 +108,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.setTreasury(treasury);
         ProtocolConfig(address(votingEngine.protocolConfig())).setRewardDistributor(address(rewardDistributor));
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
-        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), 1 hours, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), 1 hours, 7 days, 3, 100);
 
         raterRegistry = _deployRaterRegistry(owner);
         mockCategoryRegistry = new MockCategoryRegistry();
@@ -274,7 +274,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             bountyEligibility: 0
         });
         reservation.roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 200 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
         return _reserveQuestionSubmission(reservation);
     }
 
@@ -325,7 +325,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function _defaultContentRoundConfig() internal pure returns (RoundLib.RoundConfig memory) {
-        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 200 });
+        return RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
     }
 
     function _bundleContentRoundConfig() internal pure returns (RoundLib.RoundConfig memory) {
@@ -2291,7 +2291,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
         vm.startPrank(owner);
-        _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 7 days, 3, 100);
         ProtocolConfig(address(replacementEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
         registry.pause();
         registry.setVotingEngine(address(replacementEngine));
@@ -2774,7 +2774,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
         vm.startPrank(owner);
-        _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(replacementEngine.protocolConfig())), 1 hours, 7 days, 3, 100);
         ProtocolConfig(address(replacementEngine.protocolConfig())).setRaterRegistry(address(raterRegistry));
         registry.pause();
         registry.setVotingEngine(address(replacementEngine));

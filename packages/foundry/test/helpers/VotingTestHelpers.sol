@@ -339,7 +339,7 @@ abstract contract ContentSubmissionTestBase {
             epochDuration: uint32(20 minutes),
             maxDuration: uint32(20 minutes),
             minVoters: uint16(3),
-            maxVoters: uint16(200)
+            maxVoters: uint16(100)
         });
     }
 
@@ -376,7 +376,7 @@ abstract contract ContentSubmissionTestBase {
     function _defaultSubmissionRewardAmount(ContentRegistry registry) internal view returns (uint256) {
         ProtocolConfig config = registry.protocolConfig();
         uint256 minimum = DEFAULT_SUBMISSION_REWARD_POOL;
-        uint16 maxVoters = 200;
+        uint16 maxVoters = 100;
         if (address(config) != address(0)) {
             uint256 configuredMinimum = config.minSubmissionLrepPool();
             if (configuredMinimum != 0) minimum = configuredMinimum;

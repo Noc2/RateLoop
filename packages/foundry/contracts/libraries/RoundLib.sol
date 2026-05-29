@@ -28,7 +28,7 @@ library RoundLib {
         uint32 epochDuration; // Duration of each voting epoch (default: 20 minutes)
         uint32 maxDuration; // Max time before round expires (default: 20 minutes)
         uint16 minVoters; // Minimum revealed votes to trigger settlement (default: 3)
-        uint16 maxVoters; // Gas safety cap (default: 200)
+        uint16 maxVoters; // Gas safety cap (default: 100)
     }
 
     struct Round {

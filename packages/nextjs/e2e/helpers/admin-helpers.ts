@@ -40,7 +40,7 @@ type SubmissionMediaInput = { imageUrls?: readonly string[]; videoUrl?: string }
 type SubmissionRoundConfig = { epochDuration: number; maxDuration: number; minVoters: number; maxVoters: number };
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
-const DEFAULT_SUBMISSION_REWARD_AMOUNT = 2_000_000n;
+const DEFAULT_SUBMISSION_REWARD_AMOUNT = 1_000_000n;
 const DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS = 3n;
 const DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS = 1n;
 const DEFAULT_SUBMISSION_REWARD_EXPIRES_AT = 0n;
@@ -50,7 +50,7 @@ const DEFAULT_SUBMISSION_ROUND_CONFIG: SubmissionRoundConfig = {
   epochDuration: 20 * 60,
   maxDuration: 20 * 60,
   minVoters: 3,
-  maxVoters: 200,
+  maxVoters: 100,
 };
 const UPLOADED_IMAGE_URL_PATTERN =
   /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;

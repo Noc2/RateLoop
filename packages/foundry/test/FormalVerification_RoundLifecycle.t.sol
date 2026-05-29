@@ -88,9 +88,9 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasuryAddr);
 
-        // Config: epochDuration=5min, maxDuration=7d, minVoters=3, maxVoters=200
+        // Config: epochDuration=5min, maxDuration=7d, minVoters=3, maxVoters=100
         _setTlockRoundConfig(
-            ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 200
+            ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 100
         );
 
         // Fund submitter and voters
@@ -120,7 +120,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
     function _setRoundMinVoters(uint16 minVoters) internal {
         ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, MAX_DURATION, minVoters, 200);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, MAX_DURATION, minVoters, 100);
         vm.stopPrank();
     }
 
@@ -476,7 +476,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
     function test_RevealFailed_RefundsOnlyRevealedVotes() public {
         ProtocolConfig cfg = ProtocolConfig(address(engine.protocolConfig()));
         vm.prank(owner);
-        _setTlockRoundConfig(cfg, EPOCH_DURATION, MAX_DURATION, 3, 200);
+        _setTlockRoundConfig(cfg, EPOCH_DURATION, MAX_DURATION, 3, 100);
 
         MockRaterIdentityRegistry mockRaterIdentityRegistry = new MockRaterIdentityRegistry();
         mockRaterIdentityRegistry.setHolder(v[0]);
@@ -550,7 +550,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
     function test_RefundFlow_CancelledRound() public {
         ProtocolConfig cfg = ProtocolConfig(address(engine.protocolConfig()));
         vm.prank(owner);
-        _setTlockRoundConfig(cfg, EPOCH_DURATION, MAX_DURATION, 4, 200);
+        _setTlockRoundConfig(cfg, EPOCH_DURATION, MAX_DURATION, 4, 100);
 
         uint256 cid = _submit();
 

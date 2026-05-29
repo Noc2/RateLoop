@@ -95,7 +95,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setRewardDistributor(address(rewardDistributor));
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasury);
-        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH, 7 days, 3, 200);
+        _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH, 7 days, 3, 100);
         ProtocolConfig(address(engine.protocolConfig())).setRevealGracePeriod(GRACE_PERIOD);
 
         lrepToken.mint(owner, 2_000_000e6);

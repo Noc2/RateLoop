@@ -95,9 +95,9 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         ProtocolConfig(address(engine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(engine.protocolConfig())).setTreasury(treasuryAddr);
 
-        // Override config: 1-hour epochs, 7-day max, minVoters=3, maxVoters=200
+        // Override config: 1-hour epochs, 7-day max, minVoters=3, maxVoters=100
         _setTlockRoundConfig(
-            ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 200
+            ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, MAX_DURATION, MIN_VOTERS, 100
         );
 
         // Fund submitter and voters
@@ -129,7 +129,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     function _setRoundMinVoters(uint16 minVoters) internal {
         ProtocolConfig protocolConfig = ProtocolConfig(address(engine.protocolConfig()));
         vm.startPrank(owner);
-        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, MAX_DURATION, minVoters, 200);
+        _setTlockRoundConfig(protocolConfig, EPOCH_DURATION, MAX_DURATION, minVoters, 100);
         vm.stopPrank();
     }
 
