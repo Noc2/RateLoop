@@ -25,6 +25,7 @@ library QuestionRewardPoolEscrowRecoveryLib {
     ) external {
         RewardPool storage rewardPool = rewardPools[rewardPoolId];
         require(rewardPool.id != 0, "Bounty not found");
+        require(!rewardPool.refunded, "Bounty refunded");
         require(_usesClusterPayoutSnapshot(rewardPool, rewardPoolClusterPayoutOracle), "Not cluster-snapshot pool");
 
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
