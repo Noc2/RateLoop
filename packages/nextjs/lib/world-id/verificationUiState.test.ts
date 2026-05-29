@@ -1,5 +1,6 @@
 import {
   WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
+  WORLD_ID_RATE_LIMITED_MESSAGE,
   type WorldIdVerificationStep,
   formatWorldIdError,
   getWorldIdCredentialAttestationErrorMessage,
@@ -22,6 +23,15 @@ test("formats already-used World ID attestation reverts for display", () => {
       'The contract function "attestHumanCredentialWithProof" reverted. Error: NullifierAlreadyAssigned()',
     ),
     WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
+  );
+});
+
+test("formats RPC rate-limit errors as retry guidance", () => {
+  assert.equal(
+    getWorldIdCredentialAttestationErrorMessage(
+      "Request exceeds defined limit. Request Arguments: from: 0xf51BA40d80c7687A6A46c6A279ec145069A9da10 to: 0x8eB8B6eF4B7D4C862DE727777994Be7e6a96fa4F Details: Request is being rate limited.",
+    ),
+    WORLD_ID_RATE_LIMITED_MESSAGE,
   );
 });
 

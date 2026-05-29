@@ -36,6 +36,9 @@ export function formatWorldIdError(errorCode: string) {
 export const WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE =
   "This World ID has already been used to verify another wallet. Use a different World ID or continue with the wallet that was already verified.";
 
+export const WORLD_ID_RATE_LIMITED_MESSAGE =
+  "The network is busy right now. Please wait a moment, then try verifying with World ID again.";
+
 function getErrorText(error: unknown) {
   if (typeof error === "string") {
     return error;
@@ -76,6 +79,10 @@ export function getWorldIdCredentialAttestationErrorMessage(
 
   if (message.includes("NullifierAlreadyAssigned")) {
     return WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE;
+  }
+
+  if (message.includes("Request exceeds defined limit") || message.includes("Request is being rate limited")) {
+    return WORLD_ID_RATE_LIMITED_MESSAGE;
   }
 
   return message || fallback;
