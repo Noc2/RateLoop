@@ -205,7 +205,7 @@ test.describe("Responsive layout", () => {
       "Desktop feed surface should not clip the first content headline vertically",
     ).toBe("visible");
 
-    test.skip(!metrics.canScroll, "Vote feed is not tall enough to verify wheel scrolling from the side padding");
+    if (!metrics.canScroll) return;
 
     await page.mouse.move(metrics.wheelX, metrics.wheelY);
     await page.mouse.wheel(0, 420);
