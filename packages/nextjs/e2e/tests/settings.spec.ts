@@ -65,6 +65,10 @@ test.describe("Settings page", () => {
     await expect(page).toHaveURL(/\/settings#wallet$/);
     await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
     await expect(page.getByRole("heading", { name: "Gas And Wallet Funding" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("wallet-snapshot-address")).toHaveText(ANVIL_ACCOUNTS.account2.address);
+    await expect(page.getByTestId("wallet-snapshot-eth")).toContainText("ETH");
+    await expect(page.getByTestId("wallet-snapshot-lrep")).toContainText("LREP");
+    await expect(page.getByTestId("wallet-snapshot-usdc")).toContainText("USDC");
     await expect(page.getByRole("heading", { name: "Top Up Network Fees" })).toBeVisible();
     await expect(page.getByText("ETH top-up is available on World Chain mainnet deployments.")).toBeVisible();
   });

@@ -8,6 +8,7 @@ import { useAccount, useBalance } from "wagmi";
 import { ArrowsRightLeftIcon, BanknotesIcon, WalletIcon } from "@heroicons/react/24/outline";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import { useWalletSummaryData } from "~~/hooks/useWalletSummaryData";
 import { thirdwebClient } from "~~/services/thirdweb/client";
 
 const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
@@ -25,8 +26,38 @@ function formatEthBalance(value: bigint | undefined) {
   })} ETH`;
 }
 
-function shortAddress(value: string | undefined) {
-  return value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "Not connected";
+function formatMicroBalance(value: bigint | undefined, symbol: string) {
+  if (value === undefined) return "Loading...";
+
+  const whole = value / 1_000_000n;
+  const fractional = value % 1_000_000n;
+  const wholeText = whole.toLocaleString();
+  const fractionalText = fractional.toString().padStart(6, "0").replace(/0+$/, "");
+  return `${fractionalText ? `${wholeText}.${fractionalText}` : wholeText} ${symbol}`;
+}
+
+function WalletSnapshotRow({
+  label,
+  testId,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  testId: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="grid gap-1 py-3 sm:grid-cols-[96px_minmax(0,1fr)] sm:items-baseline">
+      <dt className="text-xs font-semibold uppercase tracking-wide text-base-content/45">{label}</dt>
+      <dd
+        className={`min-w-0 text-sm font-medium text-base-content ${valueClassName ?? "tabular-nums"}`}
+        data-testid={testId}
+      >
+        {value}
+      </dd>
+    </div>
+  );
 }
 
 export function WalletSettingsPanel({ address }: { address?: string }) {
@@ -34,13 +65,15 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
   const { targetNetwork } = useTargetNetwork();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const walletAddress = address && isAddress(address) ? (address as `0x${string}`) : undefined;
+  const nativeBalanceChainId = chain?.id ?? targetNetwork.id;
   const targetIsWorldChain = targetNetwork.id === WORLD_CHAIN_MAINNET_CHAIN_ID;
   const connectedToWorldChain = chain?.id === WORLD_CHAIN_MAINNET_CHAIN_ID;
+  const { lrepBalance, usdcBalance } = useWalletSummaryData(walletAddress);
   const { data: ethBalance } = useBalance({
     address: walletAddress,
-    chainId: WORLD_CHAIN_MAINNET_CHAIN_ID,
+    chainId: nativeBalanceChainId,
     query: {
-      enabled: Boolean(walletAddress && targetIsWorldChain),
+      enabled: Boolean(walletAddress && nativeBalanceChainId),
     },
   });
   const canUseEthTopUp = Boolean(thirdwebClient && walletAddress && targetIsWorldChain && connectedToWorldChain);
@@ -69,12 +102,25 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
             </p>
           </div>
 
-          <div className="rounded-2xl bg-base-300 px-4 py-3 text-sm text-base-content/70">
-            <p className="font-medium text-base-content">{shortAddress(walletAddress)}</p>
-            <p className="mt-1">
-              {targetIsWorldChain ? formatEthBalance(ethBalance?.value) : "World Chain mainnet required"}
-            </p>
-          </div>
+          <dl className="w-full shrink-0 divide-y divide-base-content/10 border-y border-base-content/10 md:max-w-md">
+            <WalletSnapshotRow
+              label="Address"
+              testId="wallet-snapshot-address"
+              value={walletAddress ?? "Not connected"}
+              valueClassName="break-all font-mono text-xs leading-5 text-base-content/80"
+            />
+            <WalletSnapshotRow label="ETH" testId="wallet-snapshot-eth" value={formatEthBalance(ethBalance?.value)} />
+            <WalletSnapshotRow
+              label="LREP"
+              testId="wallet-snapshot-lrep"
+              value={formatMicroBalance(lrepBalance, "LREP")}
+            />
+            <WalletSnapshotRow
+              label="USDC"
+              testId="wallet-snapshot-usdc"
+              value={formatMicroBalance(usdcBalance, "USDC")}
+            />
+          </dl>
         </div>
       </div>
 
