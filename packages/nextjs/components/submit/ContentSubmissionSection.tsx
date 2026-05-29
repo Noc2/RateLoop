@@ -132,7 +132,7 @@ const BOUNTY_ELIGIBILITY_OPTIONS: Array<{
 
 const MAX_QUESTION_BUNDLE_COUNT = 10;
 const MAX_CONTENT_TAGS_LENGTH = 256;
-const DEFAULT_SUBMISSION_BOUNTY_AMOUNT = "1";
+const DEFAULT_SUBMISSION_BOUNTY_AMOUNT = "2";
 const DEFAULT_SUBMISSION_ROUND_MAX_VOTERS = 100;
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
@@ -290,6 +290,10 @@ function formatFrontendFeePercent(frontendFeeBps: number): string {
   return fractional === 0 ? `${whole}%` : `${whole}.${String(fractional).padStart(2, "0").replace(/0+$/, "")}%`;
 }
 
+function formatSubmissionRewardInputAmount(value: bigint, asset: SubmissionRewardAsset): string {
+  return formatSubmissionRewardAmount(value, asset).replace(/ (?:LREP|USDC)$/, "");
+}
+
 function formatShortAddress(address: string | undefined): string {
   return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Connect wallet";
 }
@@ -441,6 +445,7 @@ export function ContentSubmissionSection() {
   const [questionDrafts, setQuestionDrafts] = useState<QuestionDraft[]>([createEmptyQuestionDraft()]);
   const [rewardAsset, setRewardAsset] = useState<SubmissionRewardAsset>("usdc");
   const [rewardAmount, setRewardAmount] = useState(DEFAULT_SUBMISSION_BOUNTY_AMOUNT);
+  const [rewardAmountTouched, setRewardAmountTouched] = useState(false);
   const [rewardRequiredVoters, setRewardRequiredVoters] = useState("3");
   const [rewardRequiredRounds, setRewardRequiredRounds] = useState("1");
   const [bountyEligibility, setBountyEligibility] = useState<BountyEligibilitySelection>("everyone");
@@ -1092,6 +1097,14 @@ export function ContentSubmissionSection() {
           : null;
   const minimumBountyAmount =
     minimumRewardAmount > bountyMinimumCoverageAmount ? minimumRewardAmount : bountyMinimumCoverageAmount;
+  const defaultBountyAmount = useMemo(
+    () => formatSubmissionRewardInputAmount(minimumBountyAmount, rewardAsset),
+    [minimumBountyAmount, rewardAsset],
+  );
+  useEffect(() => {
+    if (rewardAmountTouched) return;
+    setRewardAmount(defaultBountyAmount);
+  }, [defaultBountyAmount, rewardAmountTouched]);
   const rewardRequiredVotersValidationError =
     parsedRewardRequiredVoters < MIN_REWARD_POOL_REQUIRED_VOTERS
       ? `Minimum is ${MIN_REWARD_POOL_REQUIRED_VOTERS} voters.`
@@ -2277,7 +2290,8 @@ export function ContentSubmissionSection() {
       setSelectedCategory(null);
       setSelectedSubcategories([]);
       setCustomSubcategory("");
-      setRewardAmount(DEFAULT_SUBMISSION_BOUNTY_AMOUNT);
+      setRewardAmount(defaultBountyAmount);
+      setRewardAmountTouched(false);
       setRewardRequiredVoters("3");
       setRewardRequiredRounds("1");
       setBountyWindowPreset(DEFAULT_BOUNTY_WINDOW_PRESET);
@@ -2557,7 +2571,10 @@ export function ContentSubmissionSection() {
             type="text"
             inputMode="decimal"
             value={rewardAmount}
-            onChange={e => setRewardAmount(e.target.value)}
+            onChange={e => {
+              setRewardAmountTouched(true);
+              setRewardAmount(e.target.value);
+            }}
             className="grow bg-transparent"
             aria-label="Bounty amount"
           />
