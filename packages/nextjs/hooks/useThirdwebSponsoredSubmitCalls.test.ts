@@ -79,13 +79,13 @@ test("expects thirdweb batch calls for supported in-app wallets", () => {
   );
 });
 
-test("does not expect thirdweb batch calls for in-app wallets on World Chain Sepolia", () => {
+test("expects thirdweb batch calls for in-app wallets on World Chain Sepolia", () => {
   assert.equal(
     shouldExpectThirdwebBatchCalls({
       chainId: 4801,
       connectorId: "in-app-wallet",
     }),
-    false,
+    true,
   );
 });
 
