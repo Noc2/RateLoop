@@ -2,7 +2,15 @@ import { questionImageAttachments } from "../db/schema";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { type Abi, encodeAbiParameters, encodeEventTopics, encodeFunctionData, parseAbi, parseAbiItem } from "viem";
+import {
+  type Abi,
+  concatHex,
+  encodeAbiParameters,
+  encodeEventTopics,
+  encodeFunctionData,
+  parseAbi,
+  parseAbiItem,
+} from "viem";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAppEnv = env.APP_ENV;
@@ -215,21 +223,19 @@ const voteCall = (voteMarker: `0x${string}`) =>
     WALLET,
   ]);
 
-const permitVoteCall = (voteMarker: `0x${string}`) =>
-  encodeCall(votingEngineContract, "commitVoteWithPermit", [
-    1n,
-    1n,
-    1n,
-    `0x${"1".repeat(64)}`,
-    `0x${"2".repeat(64)}`,
-    voteMarker,
-    1n,
-    WALLET,
-    1234n,
-    27,
-    `0x${"3".repeat(64)}`,
-    `0x${"4".repeat(64)}`,
-  ]);
+const permitVoteCall = (voteMarker: `0x${string}`): EncodedCall => {
+  const baseVoteCall = voteCall(voteMarker);
+  return {
+    ...baseVoteCall,
+    data: concatHex([
+      baseVoteCall.data,
+      encodeAbiParameters(
+        [{ type: "uint256" }, { type: "uint8" }, { type: "bytes32" }, { type: "bytes32" }],
+        [1234n, 27, `0x${"3".repeat(64)}`, `0x${"4".repeat(64)}`],
+      ),
+    ]),
+  };
+};
 
 function submitQuestionWithRewardCall(
   overrides: Partial<{

@@ -260,6 +260,41 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         return vm.sign(ownerKey, digest);
     }
 
+    function _commitVoteWithAppendedPermit(
+        address voter,
+        uint256 contentId,
+        TestCommitArtifacts memory artifacts,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) internal {
+        bytes memory callData = abi.encodePacked(
+            abi.encodeCall(
+                RoundVotingEngine.commitVote,
+                (
+                    contentId,
+                    _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+                    artifacts.targetRound,
+                    artifacts.drandChainHash,
+                    artifacts.commitHash,
+                    artifacts.ciphertext,
+                    STAKE,
+                    address(0)
+                )
+            ),
+            abi.encode(deadline, v, r, s)
+        );
+
+        vm.prank(voter);
+        (bool success, bytes memory returnData) = address(engine).call(callData);
+        if (!success) {
+            assembly ("memory-safe") {
+                revert(add(returnData, 32), mload(returnData))
+            }
+        }
+    }
+
     /// @dev Reveal a vote by commit key. Permissionless — no prank needed.
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
@@ -688,28 +723,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 deadline = block.timestamp + 1 hours;
         (uint8 v, bytes32 r, bytes32 s) = _signLrepPermit(voterKey, permitVoter, address(engine), STAKE, deadline);
 
-        vm.prank(permitVoter);
-        engine.commitVoteWithPermit(
-            contentId,
-            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            STAKE,
-            address(0),
-            deadline,
-            v,
-            r,
-            s
-        );
+        _commitVoteWithAppendedPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
 
         assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
         assertEq(lrepToken.balanceOf(address(engine)), STAKE);
         assertEq(engine.voterCommitHash(contentId, artifacts.roundId, permitVoter), artifacts.commitHash);
     }
 
-    function test_CommitVoteWithPermitAcceptsAlreadyConsumedPermitWhenAllowanceCoversStake() public {
+    function test_CommitVoteWithPermitRejectsAlreadyConsumedPermit() public {
         uint256 voterKey = 0xB0B;
         address permitVoter = vm.addr(voterKey);
         vm.prank(owner);
@@ -724,24 +745,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         lrepToken.permit(permitVoter, address(engine), STAKE, deadline, v, r, s);
 
-        vm.prank(permitVoter);
-        engine.commitVoteWithPermit(
-            contentId,
-            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            STAKE,
-            address(0),
-            deadline,
-            v,
-            r,
-            s
-        );
+        vm.expectRevert();
+        _commitVoteWithAppendedPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
 
-        assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
-        assertEq(engine.voterCommitHash(contentId, artifacts.roundId, permitVoter), artifacts.commitHash);
+        assertEq(lrepToken.allowance(permitVoter, address(engine)), STAKE);
+        assertEq(engine.voterCommitHash(contentId, artifacts.roundId, permitVoter), bytes32(0));
     }
 
     function test_PreviewCommitAvailability_OpenRound_AcceptsCurrentRound() public {

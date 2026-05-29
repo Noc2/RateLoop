@@ -32,6 +32,7 @@ type ThirdwebContractCall = {
   address: `0x${string}`;
   functionName: string;
   args?: readonly unknown[];
+  data?: Hex;
   value?: bigint;
 };
 
@@ -286,11 +287,13 @@ export function useThirdwebSponsoredSubmitCalls() {
 
       const chain = defineChain(chainId);
       const encodedCalls = calls.map(call => ({
-        data: encodeFunctionData({
-          abi: call.abi,
-          functionName: call.functionName as never,
-          args: (call.args ?? []) as never,
-        }),
+        data:
+          call.data ??
+          encodeFunctionData({
+            abi: call.abi,
+            functionName: call.functionName as never,
+            args: (call.args ?? []) as never,
+          }),
         to: call.address,
         ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
       }));

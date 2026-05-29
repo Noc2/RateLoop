@@ -325,6 +325,14 @@ function decodeContentRegistryCallData(data: Hex) {
   }) as { functionName: string; args: readonly unknown[] | undefined };
 }
 
+function stripAppendedPermitSuffix(data: Hex): Hex | null {
+  const permitSuffixHexLength = 128 * 2;
+  if (data.length <= 2 + permitSuffixHexLength) {
+    return null;
+  }
+  return `0x${data.slice(2, -permitSuffixHexLength)}`;
+}
+
 function getRpcUrl(chainId: number) {
   const network = getServerTargetNetworkById(chainId);
   if (!network) {
@@ -876,7 +884,20 @@ async function validateSponsoredCalls(
         data: call.data,
       }) as { functionName: string; args: readonly unknown[] | undefined };
     } catch {
-      if (contract.name === "ContentRegistry") {
+      if (contract.name === "RoundVotingEngine") {
+        const commitVoteData = stripAppendedPermitSuffix(call.data);
+        if (!commitVoteData) {
+          return { ok: false, debugCode: "unsupported_operation" };
+        }
+        try {
+          decoded = decodeFunctionData({
+            abi: contract.abi,
+            data: commitVoteData,
+          }) as { functionName: string; args: readonly unknown[] | undefined };
+        } catch {
+          return { ok: false, debugCode: "unsupported_operation" };
+        }
+      } else if (contract.name === "ContentRegistry") {
         try {
           decoded = decodeContentRegistryCallData(call.data);
         } catch {
@@ -929,11 +950,7 @@ async function validateSponsoredCalls(
         }
         return { ok: false, debugCode: "unsupported_operation" };
       case "RoundVotingEngine":
-        if (
-          functionName === "claimCancelledRoundRefund" ||
-          functionName === "commitVote" ||
-          functionName === "commitVoteWithPermit"
-        ) {
+        if (functionName === "claimCancelledRoundRefund" || functionName === "commitVote") {
           continue;
         }
         return { ok: false, debugCode: "unsupported_operation" };

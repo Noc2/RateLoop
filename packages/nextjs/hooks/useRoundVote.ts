@@ -409,6 +409,28 @@ export function useRoundVote() {
         }
       };
       const writePlannedCall = async (call: RoundVoteContractCall, action: string) => {
+        if (call.data) {
+          const estimatedGas = await publicClient.estimateGas({
+            account: address as Address,
+            data: call.data,
+            to: call.address,
+            ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
+          });
+          const request = {
+            account: address as Address,
+            data: call.data,
+            gas: (estimatedGas * 120n) / 100n,
+            to: call.address,
+            ...(typeof call.value !== "undefined" ? { value: call.value } : {}),
+          };
+
+          wagmiTokenWrite.reset();
+          return writeTx(request as any, {
+            action,
+            suppressSuccessToast: true,
+          });
+        }
+
         const request: any = {
           abi: call.abi,
           address: call.address,
