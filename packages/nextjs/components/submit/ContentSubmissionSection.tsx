@@ -66,7 +66,10 @@ import {
   DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS,
   DEFAULT_SUBMISSION_REWARD_POOL,
   ERC20_APPROVAL_ABI,
+  FEEDBACK_BONUS_ASSET_LREP,
+  FEEDBACK_BONUS_ASSET_USDC,
   FEEDBACK_BONUS_ESCROW_ABI,
+  type FeedbackBonusAsset,
   MAX_REWARD_POOL_SETTLED_ROUNDS,
   MIN_REWARD_POOL_REQUIRED_VOTERS,
   MIN_REWARD_POOL_SETTLED_ROUNDS,
@@ -74,12 +77,12 @@ import {
   SUBMISSION_REWARD_ASSET_LREP,
   SUBMISSION_REWARD_ASSET_USDC,
   type SubmissionRewardAsset,
+  formatFeedbackBonusAmount,
   formatSubmissionRewardAmount,
-  formatUsdAmount,
   getConfiguredFeedbackBonusEscrowAddress,
   getDefaultUsdcAddress,
+  parseFeedbackBonusAmount,
   parseSubmissionRewardAmount,
-  parseUsdRewardPoolAmount,
 } from "~~/lib/questionRewardPools";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
@@ -458,6 +461,7 @@ export function ContentSubmissionSection() {
   const [bountyExpiryReferenceTimeMs, setBountyExpiryReferenceTimeMs] = useState<number | null>(null);
   const [feedbackBonusMode, setFeedbackBonusMode] = useState<FeedbackBonusSelection>("none");
   const [feedbackBonusAmount, setFeedbackBonusAmount] = useState("2");
+  const [feedbackBonusAsset, setFeedbackBonusAsset] = useState<FeedbackBonusAsset>("usdc");
   const [feedbackBonusAwarderAddress, setFeedbackBonusAwarderAddress] = useState("");
   const [feedbackBonusAwarderTouched, setFeedbackBonusAwarderTouched] = useState(false);
   const [feedbackBonusStepAttempted, setFeedbackBonusStepAttempted] = useState(false);
@@ -1150,7 +1154,10 @@ export function ContentSubmissionSection() {
           : null;
   const rewardExpiryError = bountyStepAttempted ? rewardExpiryValidationError : null;
   const selectedBountyEligibility = BOUNTY_ELIGIBILITY_OPTIONS.find(option => option.id === bountyEligibility)!;
-  const selectedFeedbackBonusAmount = parseUsdRewardPoolAmount(feedbackBonusAmount);
+  const selectedFeedbackBonusAmount = parseFeedbackBonusAmount(feedbackBonusAmount);
+  const selectedFeedbackBonusAssetId =
+    feedbackBonusAsset === "lrep" ? FEEDBACK_BONUS_ASSET_LREP : FEEDBACK_BONUS_ASSET_USDC;
+  const selectedFeedbackBonusAssetLabel = feedbackBonusAsset === "lrep" ? "LREP" : "USDC";
   const trimmedFeedbackBonusAwarderAddress = feedbackBonusAwarderAddress.trim();
   const selectedFeedbackBonusAwarderAddress = trimmedFeedbackBonusAwarderAddress
     ? isAddress(trimmedFeedbackBonusAwarderAddress)
@@ -1160,7 +1167,7 @@ export function ContentSubmissionSection() {
   const feedbackBonusUnavailableForBundle = questionCount > 1 && feedbackBonusMode === "enabled";
   const feedbackBonusAmountError =
     feedbackBonusStepAttempted && feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount === null
-      ? "Enter a positive USDC feedback bonus amount."
+      ? `Enter a positive ${selectedFeedbackBonusAssetLabel} feedback bonus amount.`
       : null;
   const feedbackBonusAwarderError =
     feedbackBonusStepAttempted && feedbackBonusMode === "enabled" && !selectedFeedbackBonusAwarderAddress
@@ -1216,7 +1223,7 @@ export function ContentSubmissionSection() {
             : "These settings give a clear payout target for a small qualifying round.";
   const usdcAddress = getDefaultUsdcAddress(targetNetwork.id);
   const rewardTokenAddress = rewardAsset === "lrep" ? lrepAddress : usdcAddress;
-  const feedbackBonusUsdcAddress = usdcAddress;
+  const feedbackBonusTokenAddress = feedbackBonusAsset === "lrep" ? lrepAddress : usdcAddress;
   const feedbackBonusEscrowAddress = getConfiguredFeedbackBonusEscrowAddress(targetNetwork.id);
   const { data: lrepBalance, isLoading: isLrepBalanceLoading } = useReadContract({
     address: lrepAddress,
@@ -1249,14 +1256,18 @@ export function ContentSubmissionSection() {
   const feedbackBonusWindowLabel = estimatedBountyExpiresAtLabel;
   const hasNoSupportedBountyFunds =
     hasResolvedLrepBalance && hasResolvedUsdcBalance && lrepBalance === 0n && usdcBalance === 0n;
-  const requiredUsdcFundingAmount =
-    feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount
-      ? rewardAsset === "usdc" && selectedRewardAmount
-        ? selectedRewardAmount + selectedFeedbackBonusAmount
-        : selectedFeedbackBonusAmount
-      : rewardAsset === "usdc" && selectedRewardAmount
-        ? selectedRewardAmount
-        : 0n;
+  const requiredFeedbackBonusFundingAmount =
+    feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount ? selectedFeedbackBonusAmount : 0n;
+  const selectedFeedbackBonusBalance = feedbackBonusAsset === "lrep" ? lrepBalance : usdcBalance;
+  const selectedFeedbackBonusBalanceResolved =
+    feedbackBonusAsset === "lrep" ? hasResolvedLrepBalance : hasResolvedUsdcBalance;
+  const requiredSelectedFeedbackBonusBalance =
+    feedbackBonusMode === "enabled" &&
+    selectedFeedbackBonusAmount &&
+    feedbackBonusAsset === rewardAsset &&
+    selectedRewardAmount
+      ? selectedRewardAmount + selectedFeedbackBonusAmount
+      : requiredFeedbackBonusFundingAmount;
   const hasInsufficientSelectedBountyFunds =
     selectedRewardAmount !== null &&
     selectedRewardBalanceResolved &&
@@ -1266,9 +1277,9 @@ export function ContentSubmissionSection() {
     submissionStep === "feedbackBonus" &&
     feedbackBonusMode === "enabled" &&
     selectedFeedbackBonusAmount !== null &&
-    hasResolvedUsdcBalance &&
-    usdcBalance !== undefined &&
-    usdcBalance < requiredUsdcFundingAmount;
+    selectedFeedbackBonusBalanceResolved &&
+    selectedFeedbackBonusBalance !== undefined &&
+    selectedFeedbackBonusBalance < requiredSelectedFeedbackBonusBalance;
   const bountyFundingWarning = (() => {
     if (!connectedAddress || (!hasResolvedLrepBalance && !hasResolvedUsdcBalance)) {
       return null;
@@ -1294,10 +1305,13 @@ export function ContentSubmissionSection() {
 
     if (hasInsufficientFeedbackBonusFunds) {
       return {
-        title: "Need USDC for funding",
-        message: `You need ${formatUsdAmount(requiredUsdcFundingAmount)} USDC to fund the selected bounty and Feedback Bonus. Your wallet has ${formatUsdAmount(
-          usdcBalance,
-        )} USDC.`,
+        title: `Need ${selectedFeedbackBonusAssetLabel} for funding`,
+        message: `You need ${formatFeedbackBonusAmount(
+          requiredSelectedFeedbackBonusBalance,
+          feedbackBonusAsset,
+        )} to fund the selected Feedback Bonus${
+          feedbackBonusAsset === rewardAsset ? " and bounty" : ""
+        }. Your wallet has ${formatFeedbackBonusAmount(selectedFeedbackBonusBalance, feedbackBonusAsset)}.`,
       };
     }
 
@@ -1703,8 +1717,10 @@ export function ContentSubmissionSection() {
         notification.error("Feedback Bonus escrow is not deployed on this network yet.");
         return;
       }
-      if (!feedbackBonusUsdcAddress) {
-        notification.error("World Chain USDC is not configured for Feedback Bonuses on this network.");
+      if (!feedbackBonusTokenAddress) {
+        notification.error(
+          `${selectedFeedbackBonusAssetLabel} is not configured for Feedback Bonuses on this network.`,
+        );
         return;
       }
       if (!selectedFeedbackBonusAmount) {
@@ -1748,28 +1764,32 @@ export function ContentSubmissionSection() {
       return;
     }
 
-    if (shouldFundFeedbackBonus && selectedFeedbackBonusAmount && feedbackBonusUsdcAddress) {
+    if (shouldFundFeedbackBonus && selectedFeedbackBonusAmount && feedbackBonusTokenAddress) {
       try {
         const feedbackBonusBalance = (await readContract(wagmiConfig, {
-          address: feedbackBonusUsdcAddress,
+          address: feedbackBonusTokenAddress,
           abi: ERC20_APPROVAL_ABI,
           functionName: "balanceOf",
           args: [submitterAddress],
         })) as bigint;
-        const requiredUsdcBalance =
-          rewardAsset === "usdc" && verifiedRewardTokenAddress.toLowerCase() === feedbackBonusUsdcAddress.toLowerCase()
+        const requiredFeedbackBonusBalance =
+          rewardAsset === feedbackBonusAsset &&
+          verifiedRewardTokenAddress.toLowerCase() === feedbackBonusTokenAddress.toLowerCase()
             ? selectedRewardAmount + selectedFeedbackBonusAmount
             : selectedFeedbackBonusAmount;
 
-        if (feedbackBonusBalance < requiredUsdcBalance) {
+        if (feedbackBonusBalance < requiredFeedbackBonusBalance) {
           setSubmissionStep("feedbackBonus");
           notification.error(
-            `You need ${formatUsdAmount(requiredUsdcBalance)} USDC to fund the selected bounty and Feedback Bonus.`,
+            `You need ${formatFeedbackBonusAmount(
+              requiredFeedbackBonusBalance,
+              feedbackBonusAsset,
+            )} to fund the selected Feedback Bonus${feedbackBonusAsset === rewardAsset ? " and bounty" : ""}.`,
           );
           return;
         }
       } catch {
-        notification.error("Could not verify your USDC balance for the Feedback Bonus.");
+        notification.error(`Could not verify your ${selectedFeedbackBonusAssetLabel} balance for the Feedback Bonus.`);
         return;
       }
     }
@@ -2174,7 +2194,7 @@ export function ContentSubmissionSection() {
         selectedFeedbackBonusAmount &&
         selectedFeedbackBonusAwarderAddress &&
         feedbackBonusEscrowAddress &&
-        feedbackBonusUsdcAddress &&
+        feedbackBonusTokenAddress &&
         verifiedVotingEngineAddress &&
         primarySubmittedContentId !== null
       ) {
@@ -2188,7 +2208,7 @@ export function ContentSubmissionSection() {
           const feedbackRoundId = currentFeedbackRoundId > 0n ? currentFeedbackRoundId : 1n;
 
           const feedbackApproveWrite = {
-            address: feedbackBonusUsdcAddress,
+            address: feedbackBonusTokenAddress,
             abi: ERC20_APPROVAL_ABI,
             functionName: "approve",
             args: [feedbackBonusEscrowAddress, selectedFeedbackBonusAmount],
@@ -2196,10 +2216,11 @@ export function ContentSubmissionSection() {
           const feedbackPoolWrite = {
             address: feedbackBonusEscrowAddress,
             abi: FEEDBACK_BONUS_ESCROW_ABI,
-            functionName: "createFeedbackBonusPool",
+            functionName: "createFeedbackBonusPoolWithAsset",
             args: [
               primarySubmittedContentId,
               feedbackRoundId,
+              selectedFeedbackBonusAssetId,
               selectedFeedbackBonusAmount,
               rewardPoolExpiresAt,
               selectedFeedbackBonusAwarderAddress,
@@ -2252,7 +2273,11 @@ export function ContentSubmissionSection() {
         `${questionCount === 1 ? "Question" : "Question bundle"} submitted with a ${formatSubmissionRewardAmount(
           selectedRewardAmount,
           rewardAsset,
-        )} voter bounty${feedbackBonusFunded ? ` and a ${formatUsdAmount(selectedFeedbackBonusAmount)} Feedback Bonus` : ""}.`,
+        )} voter bounty${
+          feedbackBonusFunded
+            ? ` and a ${formatFeedbackBonusAmount(selectedFeedbackBonusAmount, feedbackBonusAsset)} Feedback Bonus`
+            : ""
+        }.`,
       );
       if (feedbackBonusFundingError) {
         notification.error(`Question submitted, but Feedback Bonus funding failed: ${feedbackBonusFundingError}`);
@@ -3073,7 +3098,7 @@ export function ContentSubmissionSection() {
       <div>
         <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
           Feedback Bonus <span className="text-base-content/55">(optional)</span>
-          <InfoTooltip text="Optional USDC pool for useful hidden feedback from revealed raters. The awarder pays selected feedback after settlement, with the default frontend fee reserved when eligible." />
+          <InfoTooltip text="Optional LREP or USDC pool for useful hidden feedback from revealed raters. The awarder pays selected feedback after settlement, with the default frontend fee reserved when eligible." />
         </p>
       </div>
 
@@ -3115,13 +3140,30 @@ export function ContentSubmissionSection() {
 
       {feedbackBonusMode === "enabled" ? (
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2 sm:max-w-md">
+            <button
+              type="button"
+              aria-pressed={feedbackBonusAsset === "usdc"}
+              onClick={() => setFeedbackBonusAsset("usdc")}
+              className={`btn btn-sm ${feedbackBonusAsset === "usdc" ? "btn-primary" : "btn-outline"}`}
+            >
+              USDC
+            </button>
+            <button
+              type="button"
+              aria-pressed={feedbackBonusAsset === "lrep"}
+              onClick={() => setFeedbackBonusAsset("lrep")}
+              className={`btn btn-sm ${feedbackBonusAsset === "lrep" ? "btn-primary" : "btn-outline"}`}
+            >
+              LREP
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <label
               className={`input input-bordered flex min-w-0 flex-1 items-center gap-2 bg-base-100 ${
                 feedbackBonusAmountError ? "input-error" : ""
               }`}
             >
-              <span className="shrink-0 text-base-content/50">$</span>
               <input
                 type="text"
                 inputMode="decimal"
@@ -3130,9 +3172,11 @@ export function ContentSubmissionSection() {
                 className="grow bg-transparent"
                 aria-label="Feedback Bonus amount"
               />
-              <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-base-content/50">USDC</span>
+              <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-base-content/50">
+                {selectedFeedbackBonusAssetLabel}
+              </span>
             </label>
-            <InfoTooltip text="Feedback Bonuses use World Chain USDC. The selected awarder later chooses which eligible feedback to pay." />
+            <InfoTooltip text="Feedback Bonuses can use LREP or World Chain USDC. The selected awarder later chooses which eligible feedback to pay." />
           </div>
           {feedbackBonusAmountError ? <p className="text-base text-error">{feedbackBonusAmountError}</p> : null}
 
@@ -3224,8 +3268,8 @@ export function ContentSubmissionSection() {
             </p>
             <p className="mt-1 text-base font-medium text-base-content">
               {feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount
-                ? `${formatUsdAmount(selectedFeedbackBonusAmount)} USDC`
-                : "$0 USDC"}
+                ? formatFeedbackBonusAmount(selectedFeedbackBonusAmount, feedbackBonusAsset)
+                : formatFeedbackBonusAmount(0n, feedbackBonusAsset)}
             </p>
           </div>
 
@@ -3236,8 +3280,8 @@ export function ContentSubmissionSection() {
             </p>
             <p className="mt-1 text-base font-medium text-base-content">
               {feedbackBonusMode === "enabled"
-                ? `${formatUsdAmount(estimatedFeedbackBonusRecipientAmount)} USDC`
-                : "$0 USDC"}
+                ? formatFeedbackBonusAmount(estimatedFeedbackBonusRecipientAmount, feedbackBonusAsset)
+                : formatFeedbackBonusAmount(0n, feedbackBonusAsset)}
             </p>
           </div>
 

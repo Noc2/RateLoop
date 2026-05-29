@@ -594,10 +594,14 @@ export function filterModeratedContentItems(feed: ContentItem[]): ContentItem[] 
 }
 
 function getRewardPoolAmount(item: ContentItem) {
-  return (
-    (item.rewardPoolSummary?.totalAvailable ?? item.rewardPoolSummary?.totalFunded ?? 0n) +
-    (item.feedbackBonusSummary?.totalRemaining ?? 0n)
-  );
+  const rewardAmount = item.rewardPoolSummary?.totalAvailable ?? item.rewardPoolSummary?.totalFunded ?? 0n;
+  const feedbackAmount = item.feedbackBonusSummary?.totalRemaining ?? 0n;
+  if (rewardAmount <= 0n) return feedbackAmount;
+  if (feedbackAmount <= 0n) return rewardAmount;
+  if (item.rewardPoolSummary?.currency && item.rewardPoolSummary.currency === item.feedbackBonusSummary?.currency) {
+    return rewardAmount + feedbackAmount;
+  }
+  return rewardAmount > feedbackAmount ? rewardAmount : feedbackAmount;
 }
 
 function getSearchTokens(value: string): string[] {

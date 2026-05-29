@@ -12,8 +12,11 @@ export const DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS = 300;
 export const DEFAULT_SUBMISSION_REWARD_POOL = 1_000_000n;
 export const SUBMISSION_REWARD_ASSET_LREP = 0;
 export const SUBMISSION_REWARD_ASSET_USDC = 1;
+export const FEEDBACK_BONUS_ASSET_LREP = SUBMISSION_REWARD_ASSET_LREP;
+export const FEEDBACK_BONUS_ASSET_USDC = SUBMISSION_REWARD_ASSET_USDC;
 
 export type SubmissionRewardAsset = "lrep" | "usdc";
+export type FeedbackBonusAsset = SubmissionRewardAsset;
 
 export const QUESTION_SUBMISSION_ABI = ContentRegistryAbi;
 export const QUESTION_REWARD_POOL_ESCROW_ABI = QuestionRewardPoolEscrowAbi;
@@ -116,6 +119,10 @@ export function getDefaultUsdcAddress(chainId: number): `0x${string}` | undefine
   );
 }
 
+export function getDefaultLrepAddress(chainId: number): `0x${string}` | undefined {
+  return getDeployedContractAddress(chainId, "LoopReputation");
+}
+
 export function getDefaultUsdcDisplayName(chainId: number): string {
   if (!getPublicUsdcAddressOverride() && getDeployedContractAddress(chainId, LOCAL_MOCK_USDC_CONTRACT_NAME)) {
     return "Mock USDC";
@@ -129,6 +136,10 @@ export function parseUsdRewardPoolAmount(value: string): bigint | null {
 }
 
 export function parseSubmissionRewardAmount(value: string): bigint | null {
+  return parseTokenAmount6(value);
+}
+
+export function parseFeedbackBonusAmount(value: string): bigint | null {
   return parseTokenAmount6(value);
 }
 
@@ -161,6 +172,13 @@ export function formatSubmissionRewardAmount(
   asset: SubmissionRewardAsset,
 ): string {
   return `${formatTokenAmount6(value)} ${asset === "lrep" ? "LREP" : "USDC"}`;
+}
+
+export function formatFeedbackBonusAmount(
+  value: bigint | number | string | undefined | null,
+  asset: FeedbackBonusAsset,
+): string {
+  return formatSubmissionRewardAmount(value, asset);
 }
 
 export function formatUsdAmount(value: bigint | number | string | undefined | null): string {

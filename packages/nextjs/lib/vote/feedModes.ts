@@ -2,7 +2,7 @@
 
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { DEFAULT_VOTING_CONFIG } from "~~/lib/contracts/roundVotingEngine";
-import { getVisibleFeedbackBonusAmount, getVisibleRewardPoolAmount } from "~~/lib/vote/discoverFeedFilter";
+import { getVisibleRewardOpportunityAmount } from "~~/lib/vote/discoverFeedFilter";
 
 export type DiscoverFeedMode = "for_you" | "trending" | "highest_rewards" | "contested" | "latest" | "near_settlement";
 
@@ -92,7 +92,7 @@ function getRoundCloseness(item: ContentItem): number {
 }
 
 function getRewardPoolAmount(item: ContentItem, nowSeconds: number) {
-  return getVisibleRewardPoolAmount(item, nowSeconds) + getVisibleFeedbackBonusAmount(item, nowSeconds);
+  return getVisibleRewardOpportunityAmount(item, nowSeconds);
 }
 
 function getRoundMinVoters(item: ContentItem) {

@@ -136,6 +136,17 @@ export function getVisibleFeedbackBonusAmount(item: ContentItem, nowSeconds = Ma
   return hasActiveFeedbackBonus(item, nowSeconds) ? (item.feedbackBonusSummary?.totalRemaining ?? 0n) : 0n;
 }
 
+export function getVisibleRewardOpportunityAmount(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const rewardAmount = getVisibleRewardPoolAmount(item, nowSeconds);
+  const feedbackAmount = getVisibleFeedbackBonusAmount(item, nowSeconds);
+  if (rewardAmount <= 0n) return feedbackAmount;
+  if (feedbackAmount <= 0n) return rewardAmount;
+  if (item.rewardPoolSummary?.currency && item.rewardPoolSummary.currency === item.feedbackBonusSummary?.currency) {
+    return rewardAmount + feedbackAmount;
+  }
+  return rewardAmount > feedbackAmount ? rewardAmount : feedbackAmount;
+}
+
 export function filterDiscoverCategoryItems(
   feed: ContentItem[],
   activeCategory: string,

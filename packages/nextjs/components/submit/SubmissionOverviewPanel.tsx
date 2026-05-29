@@ -116,7 +116,7 @@ function getFeedbackLabel(item: ContentItem): string {
     return "-";
   }
 
-  return formatUsdAmount(summary.totalRemaining);
+  return formatCompactAmount(summary.totalRemaining, summary.currency);
 }
 
 function getRatingLabel(item: ContentItem): string {

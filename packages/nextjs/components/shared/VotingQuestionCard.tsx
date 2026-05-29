@@ -61,7 +61,13 @@ const LREP_REWARD_POOL_TOOLTIP_TEXT =
 const MIXED_REWARD_POOL_TOOLTIP_TEXT =
   "This question's bounty includes multiple assets on World Chain. Eligible revealed raters can claim from qualified rounds, with 3% reserved for the eligible frontend operator.";
 const FEEDBACK_BONUS_TOOLTIP_TEXT =
-  "Feedback Bonuses are optional USDC rewards for useful rater feedback. Awarded feedback pays raters after settlement, with 3% reserved for the eligible frontend operator.";
+  "Feedback Bonuses are optional rewards for useful rater feedback. Awarded feedback pays raters after settlement, with 3% reserved for the eligible frontend operator.";
+const LREP_FEEDBACK_BONUS_TOOLTIP_TEXT =
+  "This Feedback Bonus is funded in LREP. The awarder pays selected revealed feedback after settlement, with 3% reserved for the eligible frontend operator.";
+const USDC_FEEDBACK_BONUS_TOOLTIP_TEXT =
+  "This Feedback Bonus is funded in USDC. The awarder pays selected revealed feedback after settlement, with 3% reserved for the eligible frontend operator.";
+const MIXED_FEEDBACK_BONUS_TOOLTIP_TEXT =
+  "This question has Feedback Bonus pools in multiple assets. The awarder pays selected revealed feedback after settlement, with 3% reserved for the eligible frontend operator.";
 export const VOTING_SURFACE_BACKGROUND = "var(--rateloop-surface-elevated)";
 const STATUS_PILL_CLASS_NAME = "reward-chip reward-chip-muted inline-flex items-center gap-2 px-4 py-2";
 const DOCK_STATUS_TEXT_CLASS_NAME =
@@ -297,12 +303,27 @@ export function RewardPoolAmountDisplay({ amount, currency }: { amount: bigint; 
   );
 }
 
-export function FeedbackBonusAmountDisplay({ amount }: { amount: bigint }) {
+export function FeedbackBonusAmountDisplay({ amount, currency }: { amount: bigint; currency?: RewardPoolCurrency }) {
+  const amountLabel =
+    currency === "LREP"
+      ? formatSubmissionRewardAmount(amount, "lrep")
+      : currency === "MIXED"
+        ? "Mixed"
+        : formatSubmissionRewardAmount(amount, "usdc");
+  const tooltip =
+    currency === "LREP"
+      ? LREP_FEEDBACK_BONUS_TOOLTIP_TEXT
+      : currency === "MIXED"
+        ? MIXED_FEEDBACK_BONUS_TOOLTIP_TEXT
+        : currency === "USDC"
+          ? USDC_FEEDBACK_BONUS_TOOLTIP_TEXT
+          : FEEDBACK_BONUS_TOOLTIP_TEXT;
   return (
     <RewardAmountDisplay
       amount={amount}
+      amountLabel={amountLabel}
       label="Feedback Bonus"
-      tooltip={FEEDBACK_BONUS_TOOLTIP_TEXT}
+      tooltip={tooltip}
       ariaLabel="Feedback Bonus"
       tone="green"
     />

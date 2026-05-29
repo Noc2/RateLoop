@@ -11,6 +11,7 @@ import {
   getActiveBountyClosesAt,
   getActiveFeedbackClosesAt,
   getVisibleFeedbackBonusAmount,
+  getVisibleRewardOpportunityAmount,
   getVisibleRewardPoolAmount,
   hasActiveFeedbackBonus,
   shouldShowBountyExpiredStatus,
@@ -382,6 +383,60 @@ test("feedback bonuses stay active without an indexed open round when the award 
   assert.equal(shouldShowFeedbackClosedStatus(item, 10_000), false);
   assert.equal(getVisibleRewardPoolAmount(item, 10_000), 12_000_000n);
   assert.equal(getVisibleFeedbackBonusAmount(item, 10_000), 100_000_000n);
+});
+
+test("reward opportunity ranking avoids summing different feedback bonus assets", () => {
+  const sameAsset = makeContentItem({
+    id: 1n,
+    url: "https://example.com/same-asset",
+    title: "Same asset rewards",
+    rewardPoolSummary: {
+      currency: "LREP",
+      totalFunded: 12_000_000n,
+      totalAvailable: 12_000_000n,
+      activeRewardPoolCount: 1,
+      hasActiveBounty: true,
+    },
+    feedbackBonusSummary: {
+      asset: 0,
+      currency: "LREP",
+      totalFunded: 5_000_000n,
+      totalRemaining: 5_000_000n,
+      totalAwarded: 0n,
+      activePoolCount: 1,
+      expiredPoolCount: 0,
+      awardCount: 0,
+      hasActiveFeedbackBonus: true,
+      nextFeedbackClosesAt: 12_000n,
+    },
+  });
+  const mixedAsset = makeContentItem({
+    id: 2n,
+    url: "https://example.com/mixed-asset",
+    title: "Mixed asset rewards",
+    rewardPoolSummary: {
+      currency: "USDC",
+      totalFunded: 12_000_000n,
+      totalAvailable: 12_000_000n,
+      activeRewardPoolCount: 1,
+      hasActiveBounty: true,
+    },
+    feedbackBonusSummary: {
+      asset: 0,
+      currency: "LREP",
+      totalFunded: 5_000_000n,
+      totalRemaining: 5_000_000n,
+      totalAwarded: 0n,
+      activePoolCount: 1,
+      expiredPoolCount: 0,
+      awardCount: 0,
+      hasActiveFeedbackBonus: true,
+      nextFeedbackClosesAt: 12_000n,
+    },
+  });
+
+  assert.equal(getVisibleRewardOpportunityAmount(sameAsset, 10_000), 17_000_000n);
+  assert.equal(getVisibleRewardOpportunityAmount(mixedAsset, 10_000), 12_000_000n);
 });
 
 test("feedback bonuses are closed when the award window has elapsed", () => {

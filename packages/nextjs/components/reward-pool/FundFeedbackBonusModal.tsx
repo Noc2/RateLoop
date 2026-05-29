@@ -22,11 +22,15 @@ import {
 import {
   DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS,
   ERC20_APPROVAL_ABI,
+  FEEDBACK_BONUS_ASSET_LREP,
+  FEEDBACK_BONUS_ASSET_USDC,
   FEEDBACK_BONUS_ESCROW_ABI,
-  formatUsdAmount,
+  type FeedbackBonusAsset,
+  formatFeedbackBonusAmount,
   getConfiguredFeedbackBonusEscrowAddress,
+  getDefaultLrepAddress,
   getDefaultUsdcAddress,
-  parseUsdRewardPoolAmount,
+  parseFeedbackBonusAmount,
 } from "~~/lib/questionRewardPools";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -39,7 +43,7 @@ type FundFeedbackBonusModalProps = {
 };
 
 const FRONTEND_FEE_PERCENT = DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS / 100;
-const FEEDBACK_BONUS_AMOUNT_TOOLTIP = `Paid in USDC on World Chain. Awarded feedback reserves ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to selected revealed raters after settlement.`;
+const FEEDBACK_BONUS_AMOUNT_TOOLTIP = `Paid in LREP or USDC on World Chain. Awarded feedback reserves ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to selected revealed raters after settlement.`;
 const FEEDBACK_WINDOW_TOOLTIP =
   "Feedback can earn this bonus only inside the selected window. The bonus is attached to the current active round.";
 
@@ -70,6 +74,7 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
   const amountInputId = useId();
   const awarderInputId = useId();
   const [amount, setAmount] = useState("2");
+  const [asset, setAsset] = useState<FeedbackBonusAsset>("usdc");
   const [awarderAddress, setAwarderAddress] = useState("");
   const [awarderTouched, setAwarderTouched] = useState(false);
   const [feedbackWindowPreset, setFeedbackWindowPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
@@ -82,7 +87,11 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
   const chainId = chain?.id ?? wagmiConfig.chains[0]?.id ?? 0;
   const escrowAddress = useMemo(() => getConfiguredFeedbackBonusEscrowAddress(chainId), [chainId]);
   const fallbackUsdcAddress = useMemo(() => getDefaultUsdcAddress(chainId), [chainId]);
-  const parsedAmount = useMemo(() => parseUsdRewardPoolAmount(amount), [amount]);
+  const fallbackLrepAddress = useMemo(() => getDefaultLrepAddress(chainId), [chainId]);
+  const parsedAmount = useMemo(() => parseFeedbackBonusAmount(amount), [amount]);
+  const selectedTokenAddress = asset === "lrep" ? fallbackLrepAddress : fallbackUsdcAddress;
+  const selectedAssetId = asset === "lrep" ? FEEDBACK_BONUS_ASSET_LREP : FEEDBACK_BONUS_ASSET_USDC;
+  const selectedAssetLabel = asset === "lrep" ? "LREP" : "USDC";
   const trimmedAwarderAddress = awarderAddress.trim();
   const selectedAwarderAddress = trimmedAwarderAddress
     ? isAddress(trimmedAwarderAddress)
@@ -104,7 +113,13 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
     feedbackWindowSeconds !== null && feedbackWindowAmount >= (feedbackWindowPreset === "custom" ? 1 : 0);
   const hasActiveRound = roundId > 0n;
   const canSubmit = Boolean(
-    address && escrowAddress && parsedAmount && selectedAwarderAddress && hasActiveRound && hasValidFeedbackWindow,
+    address &&
+      escrowAddress &&
+      selectedTokenAddress &&
+      parsedAmount &&
+      selectedAwarderAddress &&
+      hasActiveRound &&
+      hasValidFeedbackWindow,
   );
 
   useEffect(() => {
@@ -137,7 +152,7 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
       return;
     }
     if (!parsedAmount) {
-      notification.warning("Enter a positive USD amount.");
+      notification.warning(`Enter a positive ${selectedAssetLabel} amount.`);
       return;
     }
     if (!hasValidFeedbackWindow) {
@@ -151,35 +166,35 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
 
     setIsFunding(true);
     try {
-      const usdcAddress = fallbackUsdcAddress;
-      if (!usdcAddress) {
-        notification.error("World Chain USDC is not configured for this network.");
+      const tokenAddress = selectedTokenAddress;
+      if (!tokenAddress) {
+        notification.error(`${selectedAssetLabel} funding is not configured for this network.`);
         return;
       }
 
-      const readUsdcAllowance = async () =>
+      const readTokenAllowance = async () =>
         (await readContract(wagmiConfig, {
-          address: usdcAddress,
+          address: tokenAddress,
           abi: ERC20_APPROVAL_ABI,
           functionName: "allowance",
           args: [address, escrowAddress],
         })) as bigint;
 
-      const initialAllowance = await readUsdcAllowance();
+      const initialAllowance = await readTokenAllowance();
 
       if (initialAllowance < parsedAmount) {
         const approveHash = await writeContractAsync({
-          address: usdcAddress,
+          address: tokenAddress,
           abi: ERC20_APPROVAL_ABI,
           functionName: "approve",
           args: [escrowAddress, parsedAmount],
         });
         await waitForTransactionReceipt(wagmiConfig, { hash: approveHash });
 
-        const allowanceAfterApprove = await readUsdcAllowance();
+        const allowanceAfterApprove = await readTokenAllowance();
         if (allowanceAfterApprove < parsedAmount) {
           throw new Error(
-            "USDC allowance dropped below the required amount before the Feedback Bonus could be funded. Please try again.",
+            `${selectedAssetLabel} allowance dropped below the required amount before the Feedback Bonus could be funded. Please try again.`,
           );
         }
       }
@@ -198,12 +213,12 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
       const feedbackBonusHash = await writeContractAsync({
         address: escrowAddress,
         abi: FEEDBACK_BONUS_ESCROW_ABI,
-        functionName: "createFeedbackBonusPool",
-        args: [contentId, roundId, parsedAmount, feedbackClosesAt, selectedAwarderAddress],
+        functionName: "createFeedbackBonusPoolWithAsset",
+        args: [contentId, roundId, selectedAssetId, parsedAmount, feedbackClosesAt, selectedAwarderAddress],
       });
       await waitForTransactionReceipt(wagmiConfig, { hash: feedbackBonusHash });
 
-      notification.success(`Feedback Bonus funded with ${formatUsdAmount(parsedAmount)}. Paid in USDC on World Chain.`);
+      notification.success(`Feedback Bonus funded with ${formatFeedbackBonusAmount(parsedAmount, asset)}.`);
       onCreated?.();
       onClose();
     } catch (error) {
@@ -254,8 +269,25 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
             <FeedbackBonusFieldLabel htmlFor={amountInputId} tooltip={FEEDBACK_BONUS_AMOUNT_TOOLTIP}>
               Feedback Bonus amount
             </FeedbackBonusFieldLabel>
+            <div className="mb-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                aria-pressed={asset === "usdc"}
+                onClick={() => setAsset("usdc")}
+                className={`btn btn-sm ${asset === "usdc" ? "btn-primary" : "btn-outline"}`}
+              >
+                USDC
+              </button>
+              <button
+                type="button"
+                aria-pressed={asset === "lrep"}
+                onClick={() => setAsset("lrep")}
+                className={`btn btn-sm ${asset === "lrep" ? "btn-primary" : "btn-outline"}`}
+              >
+                LREP
+              </button>
+            </div>
             <div className="input input-bordered flex items-center gap-2 bg-base-100">
-              <span className="text-base-content/50">$</span>
               <input
                 id={amountInputId}
                 inputMode="decimal"
@@ -264,7 +296,7 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
                 className="grow"
                 placeholder="2"
               />
-              <span className="text-base-content/50">USDC</span>
+              <span className="text-base-content/50">{selectedAssetLabel}</span>
             </div>
           </div>
 

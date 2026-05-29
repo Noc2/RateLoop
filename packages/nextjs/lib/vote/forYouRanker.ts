@@ -3,7 +3,7 @@
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { InterestProfile } from "~~/hooks/useInterestProfile";
 import { DEFAULT_VOTING_CONFIG } from "~~/lib/contracts/roundVotingEngine";
-import { getVisibleFeedbackBonusAmount, getVisibleRewardPoolAmount } from "~~/lib/vote/discoverFeedFilter";
+import { getVisibleRewardOpportunityAmount } from "~~/lib/vote/discoverFeedFilter";
 import { detectPlatform } from "~~/utils/platforms";
 
 interface RankForYouFeedOptions {
@@ -144,7 +144,7 @@ function getVoteAffinity(item: ContentItem, profile: InterestProfile) {
 }
 
 function getBountyOpportunityScore(item: ContentItem, nowSeconds: number) {
-  const amount = getVisibleRewardPoolAmount(item, nowSeconds) + getVisibleFeedbackBonusAmount(item, nowSeconds);
+  const amount = getVisibleRewardOpportunityAmount(item, nowSeconds);
   if (amount <= 0n) return 0;
   const cappedAmount = amount > 100_000_000n ? 100_000_000n : amount;
   return getLogScore(Number(cappedAmount) / 1_000_000, 100);

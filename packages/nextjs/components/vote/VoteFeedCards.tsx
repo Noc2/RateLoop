@@ -512,6 +512,7 @@ function FeedContentMetaCard({
   const rewardPoolTotal = getVisibleRewardPoolAmount(item);
   const rewardPoolCurrency = item.rewardPoolSummary?.currency;
   const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item);
+  const feedbackBonusCurrency = item.feedbackBonusSummary?.currency;
   const rewardDeadlineChips = getRewardDeadlineChips(item);
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;
@@ -562,7 +563,9 @@ function FeedContentMetaCard({
               {rewardPoolTotal > 0n ? (
                 <RewardPoolAmountDisplay amount={rewardPoolTotal} currency={rewardPoolCurrency} />
               ) : null}
-              {feedbackBonusTotal > 0n ? <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} /> : null}
+              {feedbackBonusTotal > 0n ? (
+                <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} currency={feedbackBonusCurrency} />
+              ) : null}
               {rewardDeadlineChips.map(chip => (
                 <div
                   key={chip.label}

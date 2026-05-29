@@ -8,9 +8,10 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import type { ContentFeedbackBonusPool, ContentFeedbackItem } from "~~/lib/feedback/types";
 import {
   FEEDBACK_BONUS_ESCROW_ABI,
-  formatUsdAmount,
+  type FeedbackBonusAsset,
+  formatFeedbackBonusAmount,
   getConfiguredFeedbackBonusEscrowAddress,
-  parseUsdRewardPoolAmount,
+  parseFeedbackBonusAmount,
 } from "~~/lib/questionRewardPools";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -21,7 +22,7 @@ type AwardFeedbackBonusModalProps = {
   onClose: () => void;
 };
 
-function formatUsdInput(value: bigint): string {
+function formatBonusInput(value: bigint): string {
   const dollars = value / 1_000_000n;
   const micros = value % 1_000_000n;
   if (micros === 0n) return dollars.toString();
@@ -31,8 +32,8 @@ function formatUsdInput(value: bigint): string {
 function getDefaultAwardAmount(pools: ContentFeedbackBonusPool[]) {
   const firstRemaining = BigInt(pools[0]?.remainingAmount ?? 0);
   if (firstRemaining <= 0n) return "";
-  const oneUsdc = 1_000_000n;
-  return formatUsdInput(firstRemaining < oneUsdc ? firstRemaining : oneUsdc);
+  const oneToken = 1_000_000n;
+  return formatBonusInput(firstRemaining < oneToken ? firstRemaining : oneToken);
 }
 
 function isHexHash(value: string | null | undefined): value is `0x${string}` {
@@ -40,7 +41,11 @@ function isHexHash(value: string | null | undefined): value is `0x${string}` {
 }
 
 function getPoolLabel(pool: ContentFeedbackBonusPool) {
-  return `Round ${pool.roundId} · ${formatUsdAmount(pool.remainingAmount)} left`;
+  return `Round ${pool.roundId} · ${formatFeedbackBonusAmount(pool.remainingAmount, getPoolAsset(pool))} left`;
+}
+
+function getPoolAsset(pool: ContentFeedbackBonusPool): FeedbackBonusAsset {
+  return pool.asset === 0 ? "lrep" : "usdc";
 }
 
 export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: AwardFeedbackBonusModalProps) {
@@ -60,17 +65,19 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
     () => pools.find(pool => pool.id === selectedPoolId) ?? pools[0] ?? null,
     [pools, selectedPoolId],
   );
-  const parsedAmount = useMemo(() => parseUsdRewardPoolAmount(amount), [amount]);
+  const parsedAmount = useMemo(() => parseFeedbackBonusAmount(amount), [amount]);
   const remainingAmount = selectedPool ? BigInt(selectedPool.remainingAmount) : 0n;
+  const selectedAsset = selectedPool ? getPoolAsset(selectedPool) : "usdc";
+  const selectedAssetLabel = selectedAsset === "lrep" ? "LREP" : "USDC";
   const frontendFee =
     parsedAmount && selectedPool ? (parsedAmount * BigInt(selectedPool.frontendFeeBps)) / 10_000n : 0n;
   const recipientAmount = parsedAmount ? parsedAmount - frontendFee : 0n;
   const feedbackHash = isHexHash(item.feedbackHash) ? item.feedbackHash : null;
   const amountError =
     parsedAmount === null
-      ? "Enter a positive USDC amount."
+      ? `Enter a positive ${selectedAssetLabel} amount.`
       : parsedAmount > remainingAmount
-        ? `This pool has ${formatUsdAmount(remainingAmount)} left.`
+        ? `This pool has ${formatFeedbackBonusAmount(remainingAmount, selectedAsset)} left.`
         : null;
   const canAward = Boolean(address && escrowAddress && selectedPool && feedbackHash && parsedAmount && !amountError);
 
@@ -104,7 +111,7 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
       return;
     }
     if (!parsedAmount || amountError) {
-      notification.warning(amountError || "Enter a positive USDC amount.");
+      notification.warning(amountError || `Enter a positive ${selectedAssetLabel} amount.`);
       return;
     }
 
@@ -118,7 +125,7 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
       });
       await waitForTransactionReceipt(wagmiConfig, { hash });
 
-      notification.success(`Awarded ${formatUsdAmount(parsedAmount)} Feedback Bonus.`);
+      notification.success(`Awarded ${formatFeedbackBonusAmount(parsedAmount, selectedAsset)} Feedback Bonus.`);
       onAwarded?.();
       onClose();
     } catch (error) {
@@ -195,7 +202,6 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
             <div
               className={`input input-bordered flex items-center gap-2 bg-base-100 ${amountError ? "input-error" : ""}`}
             >
-              <span className="text-base-content/50">$</span>
               <input
                 id={amountInputId}
                 inputMode="decimal"
@@ -204,7 +210,7 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
                 className="min-w-0 grow"
                 placeholder="1"
               />
-              <span className="text-base-content/50">USDC</span>
+              <span className="text-base-content/50">{selectedAssetLabel}</span>
             </div>
             {amountError ? (
               <span className="label pt-1">
@@ -216,11 +222,15 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
           <div className="grid gap-2 rounded-lg bg-base-100 p-3 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="text-base-content/55">Recipient gets</span>
-              <span className="font-semibold text-base-content">{formatUsdAmount(recipientAmount)}</span>
+              <span className="font-semibold text-base-content">
+                {formatFeedbackBonusAmount(recipientAmount, selectedAsset)}
+              </span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-base-content/55">Frontend fee</span>
-              <span className="font-semibold text-base-content">{formatUsdAmount(frontendFee)}</span>
+              <span className="font-semibold text-base-content">
+                {formatFeedbackBonusAmount(frontendFee, selectedAsset)}
+              </span>
             </div>
           </div>
 
