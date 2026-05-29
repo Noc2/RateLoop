@@ -6,33 +6,8 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
+import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
-
-struct Eip3009Authorization {
-    address from;
-    address to;
-    uint256 value;
-    uint256 validAfter;
-    uint256 validBefore;
-    bytes32 nonce;
-    uint8 v;
-    bytes32 r;
-    bytes32 s;
-}
-
-interface IReceiveWithAuthorizationToken {
-    function receiveWithAuthorization(
-        address from,
-        address to,
-        uint256 value,
-        uint256 validAfter,
-        uint256 validBefore,
-        bytes32 nonce,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
-}
 
 contract X402QuestionSubmitter is Ownable {
     using SafeERC20 for IERC20;

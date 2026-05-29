@@ -18,7 +18,8 @@ import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { RoundSnapshot } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { Eip3009Authorization, X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
+import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
+import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
 import { MockQuestionRewardPoolEscrow } from "./mocks/MockQuestionRewardPoolEscrow.sol";
 import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 
