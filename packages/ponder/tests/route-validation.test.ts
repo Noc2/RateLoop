@@ -1540,6 +1540,7 @@ describe("registerDataRoutes", () => {
         totalVotes: 3,
         totalRoundsSettled: 1,
         totalRewardsClaimed: 0n,
+        totalFrontendFeesClaimed: 7_500_000n,
         totalProfiles: 4,
         totalVoterIds: 5,
         totalVerifiedHumans: 6,
@@ -1564,6 +1565,7 @@ describe("registerDataRoutes", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
+      totalFrontendFeesClaimed: "7500000",
       totalQuestionRewardsPaid: "123450000",
       totalQuestionRewardsPaidToVoters: "119746500",
       totalQuestionRewardsPaidToFrontends: "3703500",

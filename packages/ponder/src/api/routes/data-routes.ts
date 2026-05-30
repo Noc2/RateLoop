@@ -1277,6 +1277,7 @@ export function registerDataRoutes(app: ApiApp) {
       totalVotes: 0,
       totalRoundsSettled: 0,
       totalRewardsClaimed: "0",
+      totalFrontendFeesClaimed: "0",
       totalProfiles: 0,
       totalVoterIds: 0,
       totalVerifiedHumans: 0,
