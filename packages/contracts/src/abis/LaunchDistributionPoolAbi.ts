@@ -2354,6 +2354,12 @@ export const LaunchDistributionPoolAbi = [
         "internalType": "uint32"
       },
       {
+        "name": "qualifyingCreditBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
         "name": "distinctVerifiedAnchorCount",
         "type": "uint32",
         "indexed": false,
@@ -2419,6 +2425,12 @@ export const LaunchDistributionPoolAbi = [
         "type": "uint32",
         "indexed": false,
         "internalType": "uint32"
+      },
+      {
+        "name": "qualifyingCreditBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "rewardedRatingCount",

@@ -27101,6 +27101,12 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint32",
             },
             {
+              name: "qualifyingCreditBps",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
               name: "distinctVerifiedAnchorCount",
               type: "uint32",
               indexed: false,
@@ -27166,6 +27172,12 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint32",
               indexed: false,
               internalType: "uint32",
+            },
+            {
+              name: "qualifyingCreditBps",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
             {
               name: "rewardedRatingCount",
@@ -52427,6 +52439,12 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint32",
             },
             {
+              name: "qualifyingCreditBps",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
               name: "distinctVerifiedAnchorCount",
               type: "uint32",
               indexed: false,
@@ -52492,6 +52510,12 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint32",
               indexed: false,
               internalType: "uint32",
+            },
+            {
+              name: "qualifyingCreditBps",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
             {
               name: "rewardedRatingCount",
