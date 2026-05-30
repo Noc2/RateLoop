@@ -1,6 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getMissingKeeperEnvVars } from "./dev-stack-keeper.mjs";
+import { applyKeeperDevStackEnvDefaults, getMissingKeeperEnvVars } from "./dev-stack-keeper.mjs";
+
+test("defaults the dev-stack keeper to the local Ponder API", () => {
+  const env = applyKeeperDevStackEnvDefaults({
+    RPC_URL: "https://worldchain-sepolia.example",
+    CHAIN_ID: "4801",
+    KEEPER_PRIVATE_KEY: "0xabc",
+  });
+
+  assert.equal(env.PONDER_BASE_URL, "http://localhost:42069");
+  assert.deepEqual(getMissingKeeperEnvVars(env), []);
+});
+
+test("uses the Next.js Ponder URL when defaulting the dev-stack keeper", () => {
+  const env = applyKeeperDevStackEnvDefaults({
+    RPC_URL: "https://worldchain-sepolia.example",
+    CHAIN_ID: "4801",
+    KEEPER_PRIVATE_KEY: "0xabc",
+    NEXT_PUBLIC_PONDER_URL: "http://127.0.0.1:42070",
+  });
+
+  assert.equal(env.PONDER_BASE_URL, "http://127.0.0.1:42070");
+  assert.deepEqual(getMissingKeeperEnvVars(env), []);
+});
 
 test("requires a keystore password when keystore auth is the only keeper wallet path", () => {
   assert.deepEqual(
@@ -31,6 +54,7 @@ test("allows private-key keeper startup even when KEYSTORE_ACCOUNT is still popu
 test("requires Ponder for automatic correlation snapshots", () => {
   assert.deepEqual(
     getMissingKeeperEnvVars({
+      NODE_ENV: "production",
       RPC_URL: "http://localhost:8545",
       CHAIN_ID: "31337",
       KEEPER_PRIVATE_KEY: "0xabc",

@@ -8,7 +8,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { MissingDockerComposeError, ensureLocalDatabase, formatDatabaseTarget, resolveNextDatabaseConfig } from "./dev-db.mjs";
-import { getMissingKeeperEnvVars } from "./dev-stack-keeper.mjs";
+import { applyKeeperDevStackEnvDefaults, getMissingKeeperEnvVars } from "./dev-stack-keeper.mjs";
 
 const currentFile = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFile), "..");
@@ -244,14 +244,21 @@ function resetLocalPonderDataIfDeploymentChanged(env) {
 
 function resolveKeeperStartupStatus() {
   const keeperEnvPath = path.join(repoRoot, "packages", "keeper", ".env.local");
+  const nextEnvPath = path.join(repoRoot, "packages", "nextjs", ".env.local");
+  const nextEnvFromFile = parseEnvFile(nextEnvPath);
   const envFromFile = parseEnvFile(keeperEnvPath);
-  const env = { ...envFromFile, ...process.env };
+  const env = applyKeeperDevStackEnvDefaults({
+    NEXT_PUBLIC_PONDER_URL: nextEnvFromFile.NEXT_PUBLIC_PONDER_URL,
+    ...envFromFile,
+    ...process.env,
+  });
   const missing = getMissingKeeperEnvVars(env);
 
   return {
     keeperEnvPath,
     enabled: missing.length === 0,
     missing,
+    env,
   };
 }
 
@@ -502,7 +509,10 @@ Environment:
   process.on("SIGTERM", () => shutdown(0));
 
   for (const service of services) {
+    const serviceEnv = service.label === "keeper" ? keeperStartup.env : {};
+
     spawnService(service, {
+      ...serviceEnv,
       ...(service.label === "next" ? { DATABASE_URL: databaseConfig.url } : {}),
     });
   }

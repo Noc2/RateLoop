@@ -1,16 +1,32 @@
+const DEFAULT_DEV_STACK_PONDER_BASE_URL = "http://localhost:42069";
+
+export function applyKeeperDevStackEnvDefaults(env) {
+  const resolved = { ...env };
+
+  if (resolved.NODE_ENV !== "production" && !resolved.PONDER_BASE_URL?.trim()) {
+    resolved.PONDER_BASE_URL = resolved.NEXT_PUBLIC_PONDER_URL?.trim() || DEFAULT_DEV_STACK_PONDER_BASE_URL;
+  }
+
+  return resolved;
+}
+
 export function getMissingKeeperEnvVars(env) {
+  const resolvedEnv = applyKeeperDevStackEnvDefaults(env);
   const missing = [];
 
-  if (!env.RPC_URL?.trim()) {
+  if (!resolvedEnv.RPC_URL?.trim()) {
     missing.push("RPC_URL");
   }
-  if (!env.CHAIN_ID?.trim()) {
+  if (!resolvedEnv.CHAIN_ID?.trim()) {
     missing.push("CHAIN_ID");
   }
+  if (!resolvedEnv.PONDER_BASE_URL?.trim()) {
+    missing.push("PONDER_BASE_URL");
+  }
 
-  const hasKeystoreAccount = Boolean(env.KEYSTORE_ACCOUNT?.trim());
-  const hasKeystorePassword = Boolean(env.KEYSTORE_PASSWORD?.trim());
-  const hasPrivateKey = Boolean(env.KEEPER_PRIVATE_KEY?.trim());
+  const hasKeystoreAccount = Boolean(resolvedEnv.KEYSTORE_ACCOUNT?.trim());
+  const hasKeystorePassword = Boolean(resolvedEnv.KEYSTORE_PASSWORD?.trim());
+  const hasPrivateKey = Boolean(resolvedEnv.KEEPER_PRIVATE_KEY?.trim());
 
   if (!hasKeystoreAccount && !hasPrivateKey) {
     missing.push("KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY");
@@ -19,31 +35,29 @@ export function getMissingKeeperEnvVars(env) {
     missing.push("KEYSTORE_PASSWORD");
   }
 
-  const correlationSnapshotsEnabled = isTruthy(env.KEEPER_CORRELATION_SNAPSHOTS_ENABLED);
+  const correlationSnapshotsEnabled = isTruthy(resolvedEnv.KEEPER_CORRELATION_SNAPSHOTS_ENABLED);
   if (correlationSnapshotsEnabled) {
-    const artifactPath = env.KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH?.trim();
-    const mode = env.KEEPER_CORRELATION_SNAPSHOTS_MODE?.trim() || (artifactPath ? "file" : "auto");
+    const artifactPath = resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH?.trim();
+    const mode = resolvedEnv.KEEPER_CORRELATION_SNAPSHOTS_MODE?.trim() || (artifactPath ? "file" : "auto");
     const artifactStorage =
-      env.KEEPER_CORRELATION_ARTIFACT_STORAGE?.trim() || defaultCorrelationArtifactStorage(env.CHAIN_ID);
+      resolvedEnv.KEEPER_CORRELATION_ARTIFACT_STORAGE?.trim() ||
+      defaultCorrelationArtifactStorage(resolvedEnv.CHAIN_ID);
 
     if (mode === "file" && !artifactPath) {
       missing.push("KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH");
     }
-    if (mode === "auto" && !env.PONDER_BASE_URL?.trim()) {
-      missing.push("PONDER_BASE_URL");
-    }
     if (
       mode === "auto" &&
       artifactStorage === "file" &&
-      !env.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL?.trim()
+      !resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL?.trim()
     ) {
       missing.push("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL");
     }
     if (
       mode === "auto" &&
       artifactStorage === "file" &&
-      env.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL?.trim() &&
-      !isHttpsUrl(env.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL)
+      resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL?.trim() &&
+      !isHttpsUrl(resolvedEnv.KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL)
     ) {
       missing.push("KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL must be a valid HTTPS URL");
     }
