@@ -1129,8 +1129,14 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       : won
         ? v.stake
         : 0n;
+    // Fail safe to 0n (not v.stake) when an RBTS vote has no recorded forfeited
+    // stake. In RBTS rounds the forfeited amount is computed and written by the
+    // RbtsRewardsScored handler for every scored vote; a null here means that vote
+    // was skipped during scoring, so the true forfeited amount is unknown. Falling
+    // back to the full stake would overstate voterStats.totalStakeLost, so we treat
+    // an unknown forfeiture as zero rather than inflating losses.
     const stakeLost = rbtsRound
-      ? (v.rbtsForfeitedStake ?? v.stake)
+      ? (v.rbtsForfeitedStake ?? 0n)
       : won
         ? 0n
         : v.stake;
