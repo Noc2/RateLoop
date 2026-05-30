@@ -18,6 +18,7 @@ const VALID_ENV = {
   ROUND_REWARD_DISTRIBUTOR_ADDRESS:
     chain31337?.RoundRewardDistributor?.address ?? "0x3333333333333333333333333333333333333333",
   FRONTEND_REGISTRY_ADDRESS: chain31337?.FrontendRegistry?.address ?? "0x4444444444444444444444444444444444444444",
+  PONDER_BASE_URL: "https://ponder.example.com",
   KEYSTORE_ACCOUNT: "keeper",
   KEYSTORE_PASSWORD: "secret",
 };
@@ -138,12 +139,18 @@ describe("keeper config", () => {
     ).rejects.toThrow("KEEPER_CLEANUP_BATCH_SIZE must be a positive integer");
   });
 
-  it("loads an optional Ponder API base URL", async () => {
+  it("loads and normalizes the Ponder API base URL", async () => {
     const { config } = await loadKeeperConfig({
       PONDER_BASE_URL: "https://ponder.example.com/",
     });
 
     expect(config.ponderBaseUrl).toBe("https://ponder.example.com");
+  });
+
+  it("requires a Ponder API base URL", async () => {
+    await expect(
+      loadKeeperConfig({}, ["PONDER_BASE_URL"]),
+    ).rejects.toThrow("PONDER_BASE_URL is required");
   });
 
   it("rejects an invalid Ponder API base URL", async () => {

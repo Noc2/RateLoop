@@ -354,6 +354,10 @@ function loadConfig() {
     "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
     errors,
   );
+  const ponderBaseUrl = readOptionalUrlEnv("PONDER_BASE_URL", errors, {
+    rejectLocalhostInProduction: true,
+    requireHttpsInProduction: true,
+  });
 
   if (!keystoreAccount && !privateKey) {
     errors.push("KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY is required");
@@ -363,6 +367,9 @@ function loadConfig() {
     errors.push(
       "KEYSTORE_PASSWORD is required when KEYSTORE_ACCOUNT is configured without KEEPER_PRIVATE_KEY",
     );
+  }
+  if (!readEnv("PONDER_BASE_URL")) {
+    errors.push("PONDER_BASE_URL is required");
   }
 
   const frontendFeeContracts =
@@ -443,10 +450,7 @@ function loadConfig() {
 
     // Keeper behavior
     intervalMs: readPositiveIntEnv("KEEPER_INTERVAL_MS", "30000", errors),
-    ponderBaseUrl: readOptionalUrlEnv("PONDER_BASE_URL", errors, {
-      rejectLocalhostInProduction: true,
-      requireHttpsInProduction: true,
-    }),
+    ponderBaseUrl,
     startupJitterMs: readNonNegativeIntEnv(
       "KEEPER_STARTUP_JITTER_MS",
       "0",
