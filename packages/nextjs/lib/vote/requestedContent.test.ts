@@ -23,6 +23,7 @@ function buildItem(id: bigint): ContentItem {
     totalVotes: 0,
     totalRounds: 0,
     openRound: null,
+    latestRound: null,
     isValidUrl: true,
     thumbnailUrl: null,
   };

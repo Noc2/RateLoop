@@ -353,6 +353,7 @@ export interface PonderContentItem {
   roundMinVoters?: number | string | null;
   roundMaxVoters?: number | string | null;
   openRound: PonderContentOpenRoundSummary | null;
+  latestRound?: PonderContentOpenRoundSummary | null;
   rewardPoolSummary?: PonderRewardPoolSummary | null;
   feedbackBonusSummary?: PonderFeedbackBonusSummary | null;
 }

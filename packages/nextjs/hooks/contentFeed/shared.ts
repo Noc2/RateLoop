@@ -95,6 +95,7 @@ export interface ContentItem {
   } | null;
   roundConfig?: VotingConfig | null;
   openRound: ContentOpenRoundSummary | null;
+  latestRound: ContentOpenRoundSummary | null;
   isValidUrl: boolean | null;
   thumbnailUrl: string | null;
   contentMetadata?: ContentMetadataResult;
@@ -228,6 +229,70 @@ function normalizeRewardPoolDisplayCurrency(
   return "USD";
 }
 
+function mapRoundSummary(
+  round:
+    | {
+        roundId: string;
+        state?: number;
+        voteCount: number;
+        revealedCount: number;
+        totalStake: string;
+        upPool: string;
+        downPool: string;
+        upCount?: number;
+        downCount?: number;
+        referenceRatingBps?: number;
+        ratingBps?: number;
+        conservativeRatingBps?: number;
+        confidenceMass?: string;
+        effectiveEvidence?: string;
+        settledRounds?: number;
+        lowSince?: string;
+        startTime: string | null;
+        epochDuration?: number;
+        maxDuration?: number;
+        minVoters?: number;
+        maxVoters?: number;
+        hasHumanVerifiedCommit?: boolean;
+        lastCommitRevealableAfter?: string | null;
+        revealGracePeriod?: string | null;
+        estimatedSettlementTime: string | null;
+      }
+    | null
+    | undefined,
+  roundConfig: VotingConfig,
+): ContentOpenRoundSummary | null {
+  if (!round) return null;
+
+  return {
+    roundId: BigInt(round.roundId),
+    state: round.state,
+    voteCount: round.voteCount,
+    revealedCount: round.revealedCount,
+    totalStake: BigInt(round.totalStake),
+    upPool: BigInt(round.upPool),
+    downPool: BigInt(round.downPool),
+    upCount: round.upCount,
+    downCount: round.downCount,
+    referenceRatingBps: round.referenceRatingBps !== undefined ? BigInt(round.referenceRatingBps) : undefined,
+    ratingBps: round.ratingBps !== undefined ? BigInt(round.ratingBps) : undefined,
+    conservativeRatingBps: round.conservativeRatingBps !== undefined ? BigInt(round.conservativeRatingBps) : undefined,
+    confidenceMass: round.confidenceMass !== undefined ? BigInt(round.confidenceMass) : undefined,
+    effectiveEvidence: round.effectiveEvidence !== undefined ? BigInt(round.effectiveEvidence) : undefined,
+    settledRounds: round.settledRounds,
+    lowSince: round.lowSince !== undefined ? BigInt(round.lowSince) : undefined,
+    startTime: round.startTime ? BigInt(round.startTime) : null,
+    epochDuration: numberOrDefault(round.epochDuration, roundConfig.epochDuration),
+    maxDuration: numberOrDefault(round.maxDuration, roundConfig.maxDuration),
+    minVoters: numberOrDefault(round.minVoters, roundConfig.minVoters),
+    maxVoters: numberOrDefault(round.maxVoters, roundConfig.maxVoters),
+    hasHumanVerifiedCommit: round.hasHumanVerifiedCommit,
+    lastCommitRevealableAfter: round.lastCommitRevealableAfter ? BigInt(round.lastCommitRevealableAfter) : null,
+    revealGracePeriod: round.revealGracePeriod ? BigInt(round.revealGracePeriod) : null,
+    estimatedSettlementTime: round.estimatedSettlementTime ? BigInt(round.estimatedSettlementTime) : null,
+  };
+}
+
 export function isContentItemActive(item: Pick<ContentItem, "status">): boolean {
   return item.status === CONTENT_STATUS.Active;
 }
@@ -325,6 +390,33 @@ export function mapContentItem(
       revealGracePeriod?: string | null;
       estimatedSettlementTime: string | null;
     } | null;
+    latestRound?: {
+      roundId: string;
+      state?: number;
+      voteCount: number;
+      revealedCount: number;
+      totalStake: string;
+      upPool: string;
+      downPool: string;
+      upCount?: number;
+      downCount?: number;
+      referenceRatingBps?: number;
+      ratingBps?: number;
+      conservativeRatingBps?: number;
+      confidenceMass?: string;
+      effectiveEvidence?: string;
+      settledRounds?: number;
+      lowSince?: string;
+      startTime: string | null;
+      epochDuration?: number;
+      maxDuration?: number;
+      minVoters?: number;
+      maxVoters?: number;
+      hasHumanVerifiedCommit?: boolean;
+      lastCommitRevealableAfter?: string | null;
+      revealGracePeriod?: string | null;
+      estimatedSettlementTime: string | null;
+    } | null;
     rewardPoolSummary?: {
       asset?: number | string | bigint | null;
       currency?: string | null;
@@ -375,42 +467,8 @@ export function mapContentItem(
     minVoters: numberOrDefault(item.roundMinVoters, DEFAULT_VOTING_CONFIG.minVoters),
     maxVoters: numberOrDefault(item.roundMaxVoters, DEFAULT_VOTING_CONFIG.maxVoters),
   };
-  const mappedOpenRound = item.openRound
-    ? {
-        roundId: BigInt(item.openRound.roundId),
-        state: item.openRound.state,
-        voteCount: item.openRound.voteCount,
-        revealedCount: item.openRound.revealedCount,
-        totalStake: BigInt(item.openRound.totalStake),
-        upPool: BigInt(item.openRound.upPool),
-        downPool: BigInt(item.openRound.downPool),
-        upCount: item.openRound.upCount,
-        downCount: item.openRound.downCount,
-        referenceRatingBps:
-          item.openRound.referenceRatingBps !== undefined ? BigInt(item.openRound.referenceRatingBps) : undefined,
-        ratingBps: item.openRound.ratingBps !== undefined ? BigInt(item.openRound.ratingBps) : undefined,
-        conservativeRatingBps:
-          item.openRound.conservativeRatingBps !== undefined ? BigInt(item.openRound.conservativeRatingBps) : undefined,
-        confidenceMass: item.openRound.confidenceMass !== undefined ? BigInt(item.openRound.confidenceMass) : undefined,
-        effectiveEvidence:
-          item.openRound.effectiveEvidence !== undefined ? BigInt(item.openRound.effectiveEvidence) : undefined,
-        settledRounds: item.openRound.settledRounds,
-        lowSince: item.openRound.lowSince !== undefined ? BigInt(item.openRound.lowSince) : undefined,
-        startTime: item.openRound.startTime ? BigInt(item.openRound.startTime) : null,
-        epochDuration: numberOrDefault(item.openRound.epochDuration, roundConfig.epochDuration),
-        maxDuration: numberOrDefault(item.openRound.maxDuration, roundConfig.maxDuration),
-        minVoters: numberOrDefault(item.openRound.minVoters, roundConfig.minVoters),
-        maxVoters: numberOrDefault(item.openRound.maxVoters, roundConfig.maxVoters),
-        hasHumanVerifiedCommit: item.openRound.hasHumanVerifiedCommit,
-        lastCommitRevealableAfter: item.openRound.lastCommitRevealableAfter
-          ? BigInt(item.openRound.lastCommitRevealableAfter)
-          : null,
-        revealGracePeriod: item.openRound.revealGracePeriod ? BigInt(item.openRound.revealGracePeriod) : null,
-        estimatedSettlementTime: item.openRound.estimatedSettlementTime
-          ? BigInt(item.openRound.estimatedSettlementTime)
-          : null,
-      }
-    : null;
+  const mappedOpenRound = mapRoundSummary(item.openRound, roundConfig);
+  const mappedLatestRound = mapRoundSummary(item.latestRound, roundConfig);
   const ratingBps = item.ratingBps !== undefined ? BigInt(item.ratingBps) : undefined;
   const conservativeRatingBps =
     item.conservativeRatingBps !== undefined ? BigInt(item.conservativeRatingBps) : undefined;
@@ -491,6 +549,7 @@ export function mapContentItem(
         : null,
     roundConfig,
     openRound: mappedOpenRound,
+    latestRound: mappedLatestRound,
     isValidUrl: null,
     thumbnailUrl: null,
     rewardPoolSummary: item.rewardPoolSummary

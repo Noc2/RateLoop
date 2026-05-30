@@ -135,6 +135,7 @@ export function useContentFeed(voterAddress?: string, options: UseContentFeedOpt
           totalVotes: 0,
           totalRounds: 0,
           openRound: null,
+          latestRound: null,
           isValidUrl: null,
           thumbnailUrl: null,
           rewardPoolSummary: null,

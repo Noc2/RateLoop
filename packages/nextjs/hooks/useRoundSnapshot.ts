@@ -20,6 +20,7 @@ export function useRoundSnapshot(
   contentId?: bigint,
   fallbackOpenRound?: OpenRoundFallbackData,
   fallbackRoundConfig?: VotingConfig | null,
+  options?: { preferCurrentRound?: boolean },
 ) {
   const { clearOptimisticVote, getOptimisticDelta } = useOptimisticVote();
   const optimisticDelta = contentId !== undefined ? getOptimisticDelta(contentId) : undefined;
@@ -38,7 +39,8 @@ export function useRoundSnapshot(
       refetchInterval,
     },
   } as any);
-  const currentRoundId = (rawCurrentRoundId as unknown as bigint | undefined) ?? 0n;
+  const fallbackRoundId = fallbackOpenRound?.roundId ?? 0n;
+  const currentRoundId = (rawCurrentRoundId as unknown as bigint | undefined) ?? fallbackRoundId;
 
   const { data: rawRoundData, isLoading: isRoundLoading } = useScaffoldReadContract({
     contractName: "RoundVotingEngine" as any,
@@ -86,9 +88,14 @@ export function useRoundSnapshot(
     roundId: mergedRound.roundId,
   });
   const effectiveOptimisticDelta = optimisticDeltaReflected ? undefined : optimisticDelta;
-  const previewStartsNewRound = previewRoundId > 0n && (currentRoundId === 0n || previewRoundId !== currentRoundId);
+  const previewStartsNewRound =
+    !options?.preferCurrentRound && previewRoundId > 0n && (currentRoundId === 0n || previewRoundId !== currentRoundId);
   const currentOpenRoundId = currentRoundId > 0n ? currentRoundId : 0n;
-  const roundId = previewStartsNewRound ? previewRoundId : currentOpenRoundId;
+  const roundId = previewStartsNewRound
+    ? previewRoundId
+    : currentOpenRoundId > 0n
+      ? currentOpenRoundId
+      : fallbackRoundId;
   const round = roundId === mergedRound.roundId ? mergedRound.round : undefined;
   const fallbackConfig =
     fallbackRoundConfig ?? (fallbackOpenRound ? parseVotingConfig(fallbackOpenRound) : protocolConfig);

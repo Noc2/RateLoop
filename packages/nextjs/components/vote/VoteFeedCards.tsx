@@ -590,6 +590,7 @@ function FeedContentMetaCard({
             contentId={item.id}
             categoryId={item.categoryId}
             openRound={item.openRound}
+            latestRound={item.latestRound}
             roundConfig={item.roundConfig}
             compact={compact}
             active={isActive}

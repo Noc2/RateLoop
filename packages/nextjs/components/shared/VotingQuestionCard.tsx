@@ -395,6 +395,7 @@ export function VotingQuestionContextDetails({
   contentId,
   categoryId,
   openRound,
+  latestRound,
   roundConfig,
   compact = false,
   active = true,
@@ -402,14 +403,17 @@ export function VotingQuestionContextDetails({
   contentId: bigint;
   categoryId: bigint;
   openRound?: ContentOpenRoundSummary | null;
+  latestRound?: ContentOpenRoundSummary | null;
   roundConfig?: VotingConfig | null;
   compact?: boolean;
   active?: boolean;
 }) {
+  const roundSummary = openRound ?? latestRound;
   const roundSnapshot = useRoundSnapshot(
     active ? contentId : undefined,
-    active ? (openRound ?? undefined) : undefined,
+    active ? (roundSummary ?? undefined) : undefined,
     active ? (roundConfig ?? undefined) : undefined,
+    { preferCurrentRound: true },
   );
   const showInlineVotingSummary = roundSnapshot.phase === "voting" || roundSnapshot.round.revealedCount > 0;
   const progressMessaging = getRoundProgressMessaging(roundSnapshot);

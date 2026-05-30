@@ -23,6 +23,7 @@ function makeContentItem(overrides: Partial<ContentItem> & Pick<ContentItem, "id
     totalVotes: overrides.totalVotes ?? 0,
     totalRounds: overrides.totalRounds ?? 0,
     openRound: overrides.openRound ?? null,
+    latestRound: overrides.latestRound ?? null,
     isValidUrl: overrides.isValidUrl ?? true,
     thumbnailUrl: overrides.thumbnailUrl ?? null,
     contentMetadata: overrides.contentMetadata,

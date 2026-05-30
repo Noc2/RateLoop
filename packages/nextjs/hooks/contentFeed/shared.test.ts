@@ -8,6 +8,7 @@ import {
   mapContentItem,
   sortRpcFeed,
 } from "./shared";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildFallbackMediaItems } from "~~/lib/contentMedia";
@@ -38,6 +39,7 @@ function buildItem(
     totalVotes: 0,
     totalRounds: 0,
     openRound: null,
+    latestRound: null,
     isValidUrl: true,
     thumbnailUrl: null,
     rewardPoolSummary: null,
@@ -261,6 +263,44 @@ test("mapContentItem exposes settled ratings without using the open round refere
 
   assert.equal(item.rating, 72);
   assert.equal(getVisibleContentRating(item), 72);
+});
+
+test("mapContentItem preserves the latest terminal round separately from the open round", () => {
+  const item = mapContentItem({
+    id: "7",
+    url: "https://example.com/reveal-failed",
+    title: "Reveal failed question",
+    description: "Commit quorum was reached, but nothing revealed.",
+    tags: "",
+    submitter: "0x00000000000000000000000000000000000000aa",
+    contentHash: "hash-7",
+    categoryId: "1",
+    rating: 50,
+    ratingBps: 5_000,
+    ratingSettledRounds: 0,
+    openRound: null,
+    latestRound: {
+      roundId: "1",
+      state: ROUND_STATE.RevealFailed,
+      voteCount: 3,
+      revealedCount: 0,
+      totalStake: "8500000",
+      upPool: "0",
+      downPool: "0",
+      referenceRatingBps: 5_000,
+      ratingBps: 5_000,
+      conservativeRatingBps: 5_000,
+      settledRounds: 0,
+      startTime: "1780077334",
+      estimatedSettlementTime: null,
+    },
+  });
+
+  assert.equal(item.openRound, null);
+  assert.equal(item.latestRound?.state, ROUND_STATE.RevealFailed);
+  assert.equal(item.latestRound?.voteCount, 3);
+  assert.equal(item.latestRound?.revealedCount, 0);
+  assert.equal(getVisibleContentRating(item), null);
 });
 
 test("mapContentItem preserves inactive Ponder content status", () => {

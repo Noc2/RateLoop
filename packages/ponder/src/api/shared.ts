@@ -87,6 +87,7 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
       rewardPoolSummary: emptyRewardPoolSummary(),
       feedbackBonusSummary: emptyFeedbackBonusSummary(),
       openRound: null,
+      latestRound: null,
     }));
   }
 
@@ -162,36 +163,44 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
     feedbackBonusSummaryByContentId.set(contentId, formatFeedbackBonusSummaryRows(rows));
   }
 
+  const roundSummarySelection = {
+    contentId: round.contentId,
+    roundId: round.roundId,
+    state: round.state,
+    voteCount: round.voteCount,
+    revealedCount: round.revealedCount,
+    totalStake: round.totalStake,
+    upPool: round.upPool,
+    downPool: round.downPool,
+    upCount: round.upCount,
+    downCount: round.downCount,
+    referenceRatingBps: round.referenceRatingBps,
+    ratingBps: round.ratingBps,
+    conservativeRatingBps: round.conservativeRatingBps,
+    confidenceMass: round.confidenceMass,
+    effectiveEvidence: round.effectiveEvidence,
+    settledRounds: round.settledRounds,
+    lowSince: round.lowSince,
+    startTime: round.startTime,
+    epochDuration: round.epochDuration,
+    maxDuration: round.maxDuration,
+    minVoters: round.minVoters,
+    maxVoters: round.maxVoters,
+    hasHumanVerifiedCommit: round.hasHumanVerifiedCommit,
+    lastCommitRevealableAfter: round.lastCommitRevealableAfter,
+    revealGracePeriod: round.revealGracePeriod,
+  };
+
   const openRounds = await db
-    .select({
-      contentId: round.contentId,
-      roundId: round.roundId,
-      state: round.state,
-      voteCount: round.voteCount,
-      revealedCount: round.revealedCount,
-      totalStake: round.totalStake,
-      upPool: round.upPool,
-      downPool: round.downPool,
-      upCount: round.upCount,
-      downCount: round.downCount,
-      referenceRatingBps: round.referenceRatingBps,
-      ratingBps: round.ratingBps,
-      conservativeRatingBps: round.conservativeRatingBps,
-      confidenceMass: round.confidenceMass,
-      effectiveEvidence: round.effectiveEvidence,
-      settledRounds: round.settledRounds,
-      lowSince: round.lowSince,
-      startTime: round.startTime,
-      epochDuration: round.epochDuration,
-      maxDuration: round.maxDuration,
-      minVoters: round.minVoters,
-      maxVoters: round.maxVoters,
-      hasHumanVerifiedCommit: round.hasHumanVerifiedCommit,
-      lastCommitRevealableAfter: round.lastCommitRevealableAfter,
-      revealGracePeriod: round.revealGracePeriod,
-    })
+    .select(roundSummarySelection)
     .from(round)
     .where(and(inArray(round.contentId, contentIds), eq(round.state, ROUND_STATE.Open)))
+    .orderBy(desc(round.roundId));
+
+  const latestRounds = await db
+    .select(roundSummarySelection)
+    .from(round)
+    .where(inArray(round.contentId, contentIds))
     .orderBy(desc(round.roundId));
 
   const latestOpenRoundByContentId = new Map<bigint, (typeof openRounds)[number]>();
@@ -201,8 +210,16 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
     }
   }
 
+  const latestRoundByContentId = new Map<bigint, (typeof latestRounds)[number]>();
+  for (const row of latestRounds) {
+    if (!latestRoundByContentId.has(row.contentId)) {
+      latestRoundByContentId.set(row.contentId, row);
+    }
+  }
+
   return items.map(item => {
     const openRound = latestOpenRoundByContentId.get(item.id);
+    const latestRound = latestRoundByContentId.get(item.id);
     const rewardPoolSummary = rewardPoolSummaryByContentId.get(item.id) ?? emptyRewardPoolSummary();
     const feedbackBonusSummary = feedbackBonusSummaryByContentId.get(item.id) ?? emptyFeedbackBonusSummary();
 
@@ -213,37 +230,66 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
       link: "url" in item ? item.url || null : undefined,
       rewardPoolSummary,
       feedbackBonusSummary,
-      openRound: openRound
-        ? {
-            roundId: openRound.roundId,
-            state: openRound.state,
-            voteCount: openRound.voteCount,
-            revealedCount: openRound.revealedCount,
-            totalStake: openRound.totalStake,
-            upPool: openRound.upPool,
-            downPool: openRound.downPool,
-            upCount: openRound.upCount,
-            downCount: openRound.downCount,
-            referenceRatingBps: openRound.referenceRatingBps,
-            ratingBps: openRound.ratingBps,
-            conservativeRatingBps: openRound.conservativeRatingBps,
-            confidenceMass: openRound.confidenceMass,
-            effectiveEvidence: openRound.effectiveEvidence,
-            settledRounds: openRound.settledRounds,
-            lowSince: openRound.lowSince,
-            startTime: openRound.startTime,
-            epochDuration: openRound.epochDuration,
-            maxDuration: openRound.maxDuration,
-            minVoters: openRound.minVoters,
-            maxVoters: openRound.maxVoters,
-            hasHumanVerifiedCommit: openRound.hasHumanVerifiedCommit,
-            lastCommitRevealableAfter: openRound.lastCommitRevealableAfter,
-            revealGracePeriod: openRound.revealGracePeriod,
-            estimatedSettlementTime: getEstimatedSettlementTime(openRound.startTime, openRound.epochDuration),
-          }
-        : null,
+      openRound: openRound ? formatRoundSummary(openRound) : null,
+      latestRound: latestRound ? formatRoundSummary(latestRound) : null,
     };
   });
+}
+
+function formatRoundSummary(row: {
+  roundId: bigint;
+  state: number;
+  voteCount: number;
+  revealedCount: number;
+  totalStake: bigint;
+  upPool: bigint;
+  downPool: bigint;
+  upCount: number;
+  downCount: number;
+  referenceRatingBps: number;
+  ratingBps: number;
+  conservativeRatingBps: number;
+  confidenceMass: bigint;
+  effectiveEvidence: bigint;
+  settledRounds: number;
+  lowSince: bigint;
+  startTime: bigint | null;
+  epochDuration: number;
+  maxDuration: number;
+  minVoters: number;
+  maxVoters: number;
+  hasHumanVerifiedCommit: boolean;
+  lastCommitRevealableAfter: bigint | null;
+  revealGracePeriod: bigint | null;
+}) {
+  return {
+    roundId: row.roundId,
+    state: row.state,
+    voteCount: row.voteCount,
+    revealedCount: row.revealedCount,
+    totalStake: row.totalStake,
+    upPool: row.upPool,
+    downPool: row.downPool,
+    upCount: row.upCount,
+    downCount: row.downCount,
+    referenceRatingBps: row.referenceRatingBps,
+    ratingBps: row.ratingBps,
+    conservativeRatingBps: row.conservativeRatingBps,
+    confidenceMass: row.confidenceMass,
+    effectiveEvidence: row.effectiveEvidence,
+    settledRounds: row.settledRounds,
+    lowSince: row.lowSince,
+    startTime: row.startTime,
+    epochDuration: row.epochDuration,
+    maxDuration: row.maxDuration,
+    minVoters: row.minVoters,
+    maxVoters: row.maxVoters,
+    hasHumanVerifiedCommit: row.hasHumanVerifiedCommit,
+    lastCommitRevealableAfter: row.lastCommitRevealableAfter,
+    revealGracePeriod: row.revealGracePeriod,
+    estimatedSettlementTime:
+      row.state === ROUND_STATE.Open ? getEstimatedSettlementTime(row.startTime, row.epochDuration) : null,
+  };
 }
 
 function emptyRewardPoolSummary() {
