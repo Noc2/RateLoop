@@ -95,6 +95,14 @@ ponder.on(
       .values({
         ...buildLaunchProgressDefaults(rater, event.block.timestamp),
         qualifyingRatingCount: Number(event.args.qualifyingRatingCount),
+        // KNOWN LIMITATION: this event carries only qualifyingRatingCount, so we
+        // reconstruct qualifyingCreditBps as count * 10_000. This is EXACT for the
+        // standard path where every qualifying rating contributes 10_000 bps. For
+        // the cluster-oracle path (weighted effectiveCreditBps), the precise value
+        // is written by EarnedRaterRewardCreditFinalized, which is emitted last and
+        // overwrites this. The only imprecise case is a rater mixing cluster and
+        // non-cluster qualifying ratings across rounds; fully fixing it requires the
+        // contract to emit the precise qualifyingCreditBps on this event (follow-up).
         qualifyingCreditBps: BigInt(event.args.qualifyingRatingCount) * 10_000n,
         rewardedRatingCount: Number(event.args.rewardedRatingCount),
         distinctVerifiedAnchorCount: Number(
@@ -286,6 +294,9 @@ ponder.on(
       .values({
         ...buildLaunchProgressDefaults(rater, event.block.timestamp),
         qualifyingRatingCount: Number(qualifyingRatingCount),
+        // Best-effort reconstruction (count * 10_000); see the note in the
+        // EarnedRaterRewardPaid handler. EarnedRaterRewardCreditFinalized writes the
+        // precise value for the cluster-oracle path.
         qualifyingCreditBps: BigInt(qualifyingRatingCount) * 10_000n,
         distinctVerifiedAnchorCount: Number(distinctVerifiedAnchorCount),
         distinctAnchorRoundCount: Number(distinctAnchorRoundCount),
