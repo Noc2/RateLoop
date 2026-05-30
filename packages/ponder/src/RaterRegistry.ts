@@ -60,7 +60,12 @@ ponder.on("RaterRegistry:ProfileUnfollowed", async ({ event, context }) => {
       follower,
       target,
       active: false,
-      createdAt: unfollowedAt,
+      // Fallback createdAt for an unfollow seen before its ProfileFollowed (e.g. the
+      // follow predates the indexer start block). The true follow time is unknown
+      // here; use the block timestamp. If ProfileFollowed is later indexed, its
+      // onConflictDoUpdate restores the real createdAt — and the unfollow path's
+      // onConflictDoUpdate below intentionally omits createdAt so it never clobbers it.
+      createdAt: event.block.timestamp,
       unfollowedAt,
       updatedAt: event.block.timestamp,
     })
