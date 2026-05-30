@@ -427,7 +427,7 @@ export const roundPayoutSnapshot = onchainTable(
 export const questionRewardPoolClaim = onchainTable(
   "question_reward_pool_claim",
   (t) => ({
-    id: t.text().primaryKey(), // `${rewardPoolId}-${roundId}-${identityKey}`
+    id: t.text().primaryKey(), // `${rewardPoolId}-${roundId}-${claimant}-${identityKey}`
     rewardPoolId: t.bigint().notNull(),
     contentId: t.bigint().notNull(),
     roundId: t.bigint().notNull(),
@@ -555,7 +555,7 @@ export const questionBundleRoundSet = onchainTable(
 export const questionBundleClaim = onchainTable(
   "question_bundle_claim",
   (t) => ({
-    id: t.text().primaryKey(), // `${bundleId}-${roundSetIndex}-${identityKey}`
+    id: t.text().primaryKey(), // `${bundleId}-${roundSetIndex}-${claimant}-${identityKey}`
     bundleId: t.bigint().notNull(),
     roundSetIndex: t.integer().notNull(),
     claimant: t.hex().notNull(),
@@ -929,6 +929,9 @@ export const globalStats = onchainTable("global_stats", (t) => ({
   totalVotes: t.integer().notNull(),
   totalRoundsSettled: t.integer().notNull(),
   totalRewardsClaimed: t.bigint().notNull(),
+  // Frontend fees are a distinct flow from voter reward claims and must not
+  // inflate totalRewardsClaimed. Tracked separately here.
+  totalFrontendFeesClaimed: t.bigint().notNull().default(0n),
   totalProfiles: t.integer().notNull(),
   totalVoterIds: t.integer().notNull(),
 }));

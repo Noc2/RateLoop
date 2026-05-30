@@ -1310,6 +1310,7 @@ export const ponderApi = {
       totalVotes: number;
       totalRoundsSettled: number;
       totalRewardsClaimed: string;
+      totalFrontendFeesClaimed: string;
       totalQuestionRewardsPaid: string;
       totalQuestionRewardsPaidToVoters: string;
       totalQuestionRewardsPaidToFrontends: string;

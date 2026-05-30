@@ -128,6 +128,8 @@ export async function getStats(baseURL = PONDER_URL): Promise<{
   totalContent: number;
   totalVotes: number;
   totalRoundsSettled: number;
+  totalRewardsClaimed: string;
+  totalFrontendFeesClaimed: string;
   totalQuestionRewardsPaid: string;
   totalQuestionRewardsPaidToVoters: string;
   totalQuestionRewardsPaidToFrontends: string;

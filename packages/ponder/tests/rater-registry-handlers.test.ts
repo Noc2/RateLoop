@@ -145,7 +145,7 @@ describe("RaterRegistry ponder handlers", () => {
           follower: "0x0000000000000000000000000000000000001234",
           target: "0x0000000000000000000000000000000000009999",
           active: false,
-          createdAt: 120n,
+          createdAt: 0n,
           unfollowedAt: 120n,
           updatedAt: 120n,
         },

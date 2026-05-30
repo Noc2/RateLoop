@@ -126,7 +126,15 @@ export function useLegacyClaim() {
   };
 
   const claim = async () => {
-    if (!writeArgs || (claimableRaw as bigint | undefined) === 0n) return;
+    // Guard against firing the claim before the on-chain claimable read resolves.
+    // `claimableRaw` and `writeArgs` are gated by the same eligibility condition but
+    // resolve through independent React Query reads, so there is a window where
+    // `writeArgs` is defined while `claimableRaw` is still `undefined`. The previous
+    // guard only checked `=== 0n` (and `undefined === 0n` is false), so a programmatic
+    // call could submit a transaction mid-load. Treat undefined (loading) and any
+    // non-positive amount as "nothing to claim".
+    const claimableAmount = claimableRaw as bigint | undefined;
+    if (!writeArgs || claimableAmount === undefined || claimableAmount <= 0n) return;
 
     const preflightError = getClaimPreflightErrorMessage({
       canShowFreeTransactionAllowance,

@@ -180,6 +180,7 @@ contract LaunchDistributionPool is
         bytes32 commitKey,
         uint16 scoreBps,
         uint32 qualifyingRatingCount,
+        uint256 qualifyingCreditBps,
         uint32 distinctVerifiedAnchorCount,
         uint32 distinctAnchorRoundCount,
         bool payoutEligible
@@ -216,6 +217,7 @@ contract LaunchDistributionPool is
         uint256 amount,
         uint16 scoreBps,
         uint32 qualifyingRatingCount,
+        uint256 qualifyingCreditBps,
         uint32 rewardedRatingCount,
         uint32 distinctVerifiedAnchorCount,
         uint32 distinctAnchorRoundCount
@@ -731,6 +733,7 @@ contract LaunchDistributionPool is
             commitKey,
             scoreBps,
             qualifyingCount,
+            updatedCreditBps,
             raterDistinctVerifiedAnchorCount[rater],
             raterDistinctAnchorRoundCount[rater],
             payoutEligible
@@ -795,6 +798,7 @@ contract LaunchDistributionPool is
             paidAmount,
             scoreBps,
             qualifyingCount,
+            updatedCreditBps,
             rewardedRatingCount[rater],
             raterDistinctVerifiedAnchorCount[rater],
             raterDistinctAnchorRoundCount[rater]

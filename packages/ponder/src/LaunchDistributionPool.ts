@@ -60,6 +60,7 @@ async function creditLaunchReward(
       totalVotes: 0,
       totalRoundsSettled: 0,
       totalRewardsClaimed: amount,
+      totalFrontendFeesClaimed: 0n,
       totalProfiles: 0,
       totalVoterIds: 0,
     })
@@ -94,7 +95,7 @@ ponder.on(
       .values({
         ...buildLaunchProgressDefaults(rater, event.block.timestamp),
         qualifyingRatingCount: Number(event.args.qualifyingRatingCount),
-        qualifyingCreditBps: BigInt(event.args.qualifyingRatingCount) * 10_000n,
+        qualifyingCreditBps: event.args.qualifyingCreditBps,
         rewardedRatingCount: Number(event.args.rewardedRatingCount),
         distinctVerifiedAnchorCount: Number(
           event.args.distinctVerifiedAnchorCount,
@@ -113,7 +114,7 @@ ponder.on(
       })
       .onConflictDoUpdate((row: any) => ({
         qualifyingRatingCount: Number(event.args.qualifyingRatingCount),
-        qualifyingCreditBps: BigInt(event.args.qualifyingRatingCount) * 10_000n,
+        qualifyingCreditBps: event.args.qualifyingCreditBps,
         rewardedRatingCount: Number(event.args.rewardedRatingCount),
         distinctVerifiedAnchorCount: Number(
           event.args.distinctVerifiedAnchorCount,
@@ -277,6 +278,7 @@ ponder.on(
       qualifyingRatingCount,
       distinctVerifiedAnchorCount,
       distinctAnchorRoundCount,
+      qualifyingCreditBps,
       payoutEligible,
     } = event.args;
 
@@ -285,7 +287,7 @@ ponder.on(
       .values({
         ...buildLaunchProgressDefaults(rater, event.block.timestamp),
         qualifyingRatingCount: Number(qualifyingRatingCount),
-        qualifyingCreditBps: BigInt(qualifyingRatingCount) * 10_000n,
+        qualifyingCreditBps,
         distinctVerifiedAnchorCount: Number(distinctVerifiedAnchorCount),
         distinctAnchorRoundCount: Number(distinctAnchorRoundCount),
         payoutEligible,
@@ -299,7 +301,7 @@ ponder.on(
       })
       .onConflictDoUpdate((row: any) => ({
         qualifyingRatingCount: Number(qualifyingRatingCount),
-        qualifyingCreditBps: BigInt(qualifyingRatingCount) * 10_000n,
+        qualifyingCreditBps,
         distinctVerifiedAnchorCount: Number(distinctVerifiedAnchorCount),
         distinctAnchorRoundCount: Number(distinctAnchorRoundCount),
         payoutEligible,

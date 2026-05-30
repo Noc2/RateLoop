@@ -60,7 +60,9 @@ ponder.on("RaterRegistry:ProfileUnfollowed", async ({ event, context }) => {
       follower,
       target,
       active: false,
-      createdAt: unfollowedAt,
+      // Unknown for an unfollow-only row; ProfileFollowed restores the true
+      // follow timestamp if that event is later indexed.
+      createdAt: 0n,
       unfollowedAt,
       updatedAt: event.block.timestamp,
     })

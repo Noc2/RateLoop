@@ -101,6 +101,7 @@ describe("LaunchDistributionPool ponder handlers", () => {
           commitKey: `0x${"11".repeat(32)}`,
           scoreBps: 8_000,
           qualifyingRatingCount: 4,
+          qualifyingCreditBps: 37_500n,
           distinctVerifiedAnchorCount: 2,
           distinctAnchorRoundCount: 4,
           payoutEligible: false,
@@ -118,6 +119,7 @@ describe("LaunchDistributionPool ponder handlers", () => {
       values: expect.objectContaining({
         rater: "0x0000000000000000000000000000000000001234",
         qualifyingRatingCount: 4,
+        qualifyingCreditBps: 37_500n,
         distinctVerifiedAnchorCount: 2,
         distinctAnchorRoundCount: 4,
         payoutEligible: false,
@@ -153,6 +155,7 @@ describe("LaunchDistributionPool ponder handlers", () => {
           amount: 1_000_000n,
           scoreBps: 8_500,
           qualifyingRatingCount: 5,
+          qualifyingCreditBps: 47_500n,
           rewardedRatingCount: 1,
           distinctVerifiedAnchorCount: 2,
           distinctAnchorRoundCount: 5,
@@ -195,6 +198,7 @@ describe("LaunchDistributionPool ponder handlers", () => {
       values: expect.objectContaining({
         rater: "0x0000000000000000000000000000000000001234",
         qualifyingRatingCount: 5,
+        qualifyingCreditBps: 47_500n,
         rewardedRatingCount: 1,
         payoutEligible: true,
         launchPaid: 1_000_000n,

@@ -42,6 +42,7 @@ contract LaunchDistributionPoolTest is Test {
         bytes32 commitKey,
         uint16 scoreBps,
         uint32 qualifyingRatingCount,
+        uint256 qualifyingCreditBps,
         uint32 distinctVerifiedAnchorCount,
         uint32 distinctAnchorRoundCount,
         bool payoutEligible
@@ -1527,7 +1528,7 @@ contract LaunchDistributionPoolTest is Test {
 
     function test_RecordEarnedRaterRewardEmitsCreditProgressBeforeAndAtEligibility() public {
         vm.expectEmit(true, true, true, true);
-        emit EarnedRaterRewardCreditRecorded(alice, 1, 1, _commitKey(1), 8_000, 1, 1, 1, false);
+        emit EarnedRaterRewardCreditRecorded(alice, 1, 1, _commitKey(1), 8_000, 1, 10_000, 1, 1, false);
         assertEq(
             pool.recordEarnedRaterRewardWithSourceReady(
                 alice,
@@ -1561,7 +1562,7 @@ contract LaunchDistributionPoolTest is Test {
         }
 
         vm.expectEmit(true, true, true, true);
-        emit EarnedRaterRewardCreditRecorded(alice, 1, 5, _commitKey(5), 8_000, 5, 2, 5, true);
+        emit EarnedRaterRewardCreditRecorded(alice, 1, 5, _commitKey(5), 8_000, 5, 50_000, 2, 5, true);
         assertEq(
             pool.recordEarnedRaterRewardWithSourceReady(
                 alice,
