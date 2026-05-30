@@ -37,6 +37,7 @@ ponder.on("ProfileRegistry:ProfileCreated", async ({ event, context }) => {
       totalVotes: 0,
       totalRoundsSettled: 0,
       totalRewardsClaimed: 0n,
+      totalFrontendFeesClaimed: 0n,
       totalProfiles: 1,
       totalVoterIds: 0,
     })

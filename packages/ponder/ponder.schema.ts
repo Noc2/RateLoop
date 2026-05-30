@@ -929,6 +929,9 @@ export const globalStats = onchainTable("global_stats", (t) => ({
   totalVotes: t.integer().notNull(),
   totalRoundsSettled: t.integer().notNull(),
   totalRewardsClaimed: t.bigint().notNull(),
+  // Frontend fees are a distinct flow from voter reward claims and must not
+  // inflate totalRewardsClaimed. Tracked separately here.
+  totalFrontendFeesClaimed: t.bigint().notNull().default(0n),
   totalProfiles: t.integer().notNull(),
   totalVoterIds: t.integer().notNull(),
 }));

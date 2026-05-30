@@ -67,6 +67,7 @@ ponder.on(
         totalVotes: 0,
         totalRoundsSettled: 0,
         totalRewardsClaimed: totalPayout,
+        totalFrontendFeesClaimed: 0n,
         totalProfiles: 0,
         totalVoterIds: 0,
       })
@@ -88,12 +89,13 @@ ponder.on(
         totalContent: 0,
         totalVotes: 0,
         totalRoundsSettled: 0,
-        totalRewardsClaimed: amount,
+        totalRewardsClaimed: 0n,
+        totalFrontendFeesClaimed: amount,
         totalProfiles: 0,
         totalVoterIds: 0,
       })
       .onConflictDoUpdate((row) => ({
-        totalRewardsClaimed: row.totalRewardsClaimed + amount,
+        totalFrontendFeesClaimed: row.totalFrontendFeesClaimed + amount,
       }));
   },
 );

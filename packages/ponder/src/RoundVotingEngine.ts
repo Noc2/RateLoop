@@ -738,6 +738,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       totalVotes: 1,
       totalRoundsSettled: 0,
       totalRewardsClaimed: 0n,
+      totalFrontendFeesClaimed: 0n,
       totalProfiles: 0,
       totalVoterIds: 0,
     })
@@ -1091,6 +1092,7 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       totalVotes: 0,
       totalRoundsSettled: 1,
       totalRewardsClaimed: 0n,
+      totalFrontendFeesClaimed: 0n,
       totalProfiles: 0,
       totalVoterIds: 0,
     })

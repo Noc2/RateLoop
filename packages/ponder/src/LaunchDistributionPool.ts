@@ -60,6 +60,7 @@ async function creditLaunchReward(
       totalVotes: 0,
       totalRoundsSettled: 0,
       totalRewardsClaimed: amount,
+      totalFrontendFeesClaimed: 0n,
       totalProfiles: 0,
       totalVoterIds: 0,
     })

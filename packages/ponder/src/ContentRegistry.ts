@@ -168,6 +168,7 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
       totalVotes: 0,
       totalRoundsSettled: 0,
       totalRewardsClaimed: 0n,
+      totalFrontendFeesClaimed: 0n,
       totalProfiles: 0,
       totalVoterIds: 0,
     })
