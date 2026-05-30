@@ -1942,6 +1942,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(claimable, REWARD_POOL_AMOUNT / 3);
     }
 
+    function testBundleRewardRejectsDelegateStitchingDifferentHolders() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundle(contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3);
+        vm.prank(owner);
+        lrepToken.mint(delegate1, 10_000e6);
+
+        vm.prank(voter2);
+        raterIdentityRegistry.setDelegate(delegate1);
+        _settleRoundWith(_voters(delegate1, voter1, voter4), contentIds[0], _directions(true, true, false));
+
+        vm.prank(voter2);
+        raterIdentityRegistry.removeDelegate();
+        vm.prank(voter3);
+        raterIdentityRegistry.setDelegate(delegate1);
+
+        address[] memory secondQuestionVoters = new address[](4);
+        secondQuestionVoters[0] = delegate1;
+        secondQuestionVoters[1] = voter1;
+        secondQuestionVoters[2] = voter2;
+        secondQuestionVoters[3] = voter4;
+        _settleRoundWith(secondQuestionVoters, contentIds[1], _directions(true, true, true, false));
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, delegate1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter4), 0);
+
+        vm.prank(delegate1);
+        vm.expectRevert("Bundle incomplete");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+    }
+
     function testBundleRewardPaysRaterIdentityHolderWhenNewDelegateClaims() public {
         address newDelegate = address(0xD1E);
         uint256[] memory contentIds = _submitBundleQuestions();

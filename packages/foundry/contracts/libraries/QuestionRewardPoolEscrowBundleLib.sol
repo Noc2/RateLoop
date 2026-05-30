@@ -71,57 +71,161 @@ library QuestionRewardPoolEscrowBundleLib {
         bool requireCleanupComplete_,
         bool trackFrontend
     ) external view returns (bool completed, address frontend, bytes32 firstCommitKey) {
+        (completed, firstCommitKey) = _bundleRoundSetCompletion(
+            bundleQuestions,
+            bundleRoundIds,
+            votingEngine,
+            protocolConfig,
+            bountyClosesAt,
+            bundleId,
+            roundSetIndex,
+            account,
+            requireCleanupComplete_
+        );
+        if (!completed) return (false, address(0), bytes32(0));
+        if (trackFrontend) {
+            frontend = _bundleRoundSetFrontend(
+                bundleQuestions,
+                bundleRoundIds,
+                votingEngine,
+                protocolConfig,
+                bountyClosesAt,
+                bundleId,
+                roundSetIndex,
+                account
+            );
+        }
+        return (true, frontend, firstCommitKey);
+    }
+
+    function _bundleRoundSetCompletion(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(
+            uint256
+                => mapping(
+                uint256 => mapping(uint256 => uint64)
+            )
+        ) storage bundleRoundIds,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint64 bountyClosesAt,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        address account,
+        bool requireCleanupComplete_
+    ) private view returns (bool completed, bytes32 firstCommitKey) {
         BundleQuestion[] storage questions = bundleQuestions[bundleId];
-        address frontendRecipient;
+        bytes32 firstCompleterKey;
         for (uint256 i = 0; i < questions.length;) {
-            BundleQuestion storage question = questions[i];
             uint256 roundId = bundleRoundIds[bundleId][i][roundSetIndex];
-            if (roundId == 0) return (false, address(0), bytes32(0));
-            if (
-                requireCleanupComplete_ && votingEngine.roundUnrevealedCleanupRemaining(question.contentId, roundId) > 0
-            ) {
-                return (false, address(0), bytes32(0));
+            uint256 contentId = questions[i].contentId;
+            (bytes32 commitKey, bytes32 completerKey) =
+                _bundleQuestionCompletion(votingEngine, protocolConfig, contentId, roundId, account, bountyClosesAt);
+            if (commitKey == bytes32(0)) return (false, bytes32(0));
+            if (requireCleanupComplete_ && votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) > 0) {
+                return (false, bytes32(0));
             }
-            (, bytes32 commitKey,) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
-                votingEngine, protocolConfig, question.contentId, roundId, account
-            );
-            if (commitKey == bytes32(0)) return (false, address(0), bytes32(0));
-            (bool revealed, address questionFrontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
-                votingEngine, question.contentId, roundId, commitKey, bountyClosesAt
-            );
-            if (!revealed) return (false, address(0), bytes32(0));
-            if (trackFrontend) {
-                address questionFrontendRecipient;
-                if (questionFrontend != address(0)) {
-                    questionFrontendRecipient = QuestionRewardPoolEscrowClaimLib.frontendRewardRecipient(
-                        votingEngine, question.contentId, roundId, questionFrontend
-                    );
-                }
-                if (i == 0) {
-                    frontend = questionFrontend;
-                    firstCommitKey = commitKey;
-                    frontendRecipient = questionFrontendRecipient;
-                } else if (questionFrontend != frontend) {
-                    frontend = address(0);
-                }
-                if (
-                    questionFrontend != address(0)
-                        && !votingEngine.frontendEligibleAtCommit(question.contentId, roundId, commitKey)
-                ) {
-                    frontend = address(0);
-                }
-                if (
-                    questionFrontend != address(0)
-                        && (questionFrontendRecipient == address(0) || questionFrontendRecipient != frontendRecipient)
-                ) {
-                    frontend = address(0);
-                }
+            if (i == 0) {
+                firstCompleterKey = completerKey;
+                firstCommitKey = commitKey;
+            } else if (completerKey != firstCompleterKey) {
+                return (false, bytes32(0));
             }
             unchecked {
                 ++i;
             }
         }
-        return (true, frontend, firstCommitKey);
+        return (true, firstCommitKey);
+    }
+
+    function _bundleQuestionCompletion(
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 contentId,
+        uint256 roundId,
+        address account,
+        uint64 bountyClosesAt
+    ) private view returns (bytes32 commitKey, bytes32 completerKey) {
+        if (roundId == 0) return (bytes32(0), bytes32(0));
+        (commitKey, completerKey) = _resolveBundleCompleter(votingEngine, protocolConfig, contentId, roundId, account);
+        if (commitKey == bytes32(0)) return (bytes32(0), bytes32(0));
+        (bool revealed,) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
+            votingEngine, contentId, roundId, commitKey, bountyClosesAt
+        );
+        if (!revealed) return (bytes32(0), bytes32(0));
+    }
+
+    function _bundleRoundSetFrontend(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(
+            uint256
+                => mapping(
+                uint256 => mapping(uint256 => uint64)
+            )
+        ) storage bundleRoundIds,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint64 bountyClosesAt,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        address account
+    ) private view returns (address frontend) {
+        BundleQuestion[] storage questions = bundleQuestions[bundleId];
+        address frontendRecipient;
+        for (uint256 i = 0; i < questions.length;) {
+            BundleQuestion storage question = questions[i];
+            uint256 roundId = bundleRoundIds[bundleId][i][roundSetIndex];
+            (bytes32 commitKey,) =
+                _resolveBundleCompleter(votingEngine, protocolConfig, question.contentId, roundId, account);
+            (bool revealed, address questionFrontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
+                votingEngine, question.contentId, roundId, commitKey, bountyClosesAt
+            );
+            if (!revealed) return address(0);
+            address questionFrontendRecipient;
+            if (questionFrontend != address(0)) {
+                questionFrontendRecipient = QuestionRewardPoolEscrowClaimLib.frontendRewardRecipient(
+                    votingEngine, question.contentId, roundId, questionFrontend
+                );
+            }
+            if (i == 0) {
+                frontend = questionFrontend;
+                frontendRecipient = questionFrontendRecipient;
+            } else if (questionFrontend != frontend) {
+                frontend = address(0);
+            }
+            if (
+                questionFrontend != address(0)
+                    && !votingEngine.frontendEligibleAtCommit(question.contentId, roundId, commitKey)
+            ) {
+                frontend = address(0);
+            }
+            if (
+                questionFrontend != address(0)
+                    && (questionFrontendRecipient == address(0) || questionFrontendRecipient != frontendRecipient)
+            ) {
+                frontend = address(0);
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _resolveBundleCompleter(
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 contentId,
+        uint256 roundId,
+        address account
+    ) private view returns (bytes32 commitKey, bytes32 completerKey) {
+        bytes32 identityKey;
+        address rewardRecipient;
+        (identityKey, commitKey, rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
+            votingEngine, protocolConfig, contentId, roundId, account
+        );
+        if (commitKey != bytes32(0)) {
+            completerKey = keccak256(abi.encodePacked(identityKey, rewardRecipient));
+        }
     }
 
     function isRoundSetComplete(
