@@ -348,12 +348,11 @@ contract RoundVotingEngine is
     /// @notice Open the current rating round before preparing a blind vote.
     /// @dev Commits no vote and records no stake; it only fixes the round start/config/drand
     ///      snapshots so the caller can encrypt against deterministic commit timing.
-    function openRound(uint256 contentId) external whenNotPaused {
+    function openRound(uint256 contentId) external whenNotPaused nonReentrant {
         VotePreflightLib.validateRoundOpener(
             IRaterIdentityRegistry(protocolConfig.raterRegistry()), registry, msg.sender, contentId
         );
-        uint256 roundId;
-        (roundId,) = _getOrCreateRound(contentId);
+        uint256 roundId = _getOrCreateRound(contentId);
         RoundLib.Round storage round = rounds[contentId][roundId];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
@@ -715,8 +714,8 @@ contract RoundVotingEngine is
     }
 
     /// @dev Get or create the active round for a content item.
-    function _getOrCreateRound(uint256 contentId) internal returns (uint256 roundId, bool opened) {
-        roundId = currentRoundId[contentId];
+    function _getOrCreateRound(uint256 contentId) internal returns (uint256) {
+        uint256 roundId = currentRoundId[contentId];
         if (roundId > 0 && !RoundLib.isTerminal(rounds[contentId][roundId])) {
             RoundLib.Round storage round = rounds[contentId][roundId];
             RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
@@ -727,7 +726,7 @@ contract RoundVotingEngine is
             } else if (_canFinalizeRevealFailedRound(contentId, roundId, round)) {
                 _markRoundRevealFailed(contentId, roundId, round);
             } else {
-                return (roundId, false);
+                return roundId;
             }
         }
 
@@ -753,7 +752,7 @@ contract RoundVotingEngine is
             contentId,
             roundId
         );
-        return (roundId, true);
+        return roundId;
     }
 
     function _markRoundRevealFailed(uint256 contentId, uint256 roundId, RoundLib.Round storage round) internal {
@@ -1079,11 +1078,12 @@ contract RoundVotingEngine is
         );
     }
 
-    function _getRoundDrandChainHash(uint256 contentId, uint256 roundId) internal view returns (bytes32 chainHash) {
-        chainHash = roundDrandChainHashSnapshot[contentId][roundId];
+    function _getRoundDrandChainHash(uint256 contentId, uint256 roundId) internal view returns (bytes32) {
+        bytes32 chainHash = roundDrandChainHashSnapshot[contentId][roundId];
         if (chainHash == bytes32(0)) {
-            chainHash = protocolConfig.drandChainHash();
+            return protocolConfig.drandChainHash();
         }
+        return chainHash;
     }
 
     function _currentConfig() internal view returns (RoundLib.RoundConfig memory cfg) {
@@ -1155,7 +1155,7 @@ contract RoundVotingEngine is
     function _getRoundRaterRegistry(uint256 contentId, uint256 roundId) internal view returns (IRaterIdentityRegistry) {
         address snapshot = roundRaterRegistrySnapshot[contentId][roundId];
         if (snapshot == address(0)) {
-            snapshot = protocolConfig.raterRegistry();
+            return IRaterIdentityRegistry(protocolConfig.raterRegistry());
         }
         return IRaterIdentityRegistry(snapshot);
     }
@@ -1455,11 +1455,12 @@ contract RoundVotingEngine is
         return commitRbtsWeight[contentId][roundId][commitKey];
     }
 
-    function activeRoundId(uint256 contentId) external view returns (uint256 roundId) {
-        roundId = currentRoundId[contentId];
+    function activeRoundId(uint256 contentId) external view returns (uint256) {
+        uint256 roundId = currentRoundId[contentId];
         if (roundId == 0) return 0;
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open || _isEmptyRoundStaleSinceActivity(contentId, round)) return 0;
+        return roundId;
     }
 
     function isDormancyBlocked(uint256 contentId) external view returns (bool) {
