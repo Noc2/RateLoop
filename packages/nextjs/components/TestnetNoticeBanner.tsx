@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { useTargetNetwork } from "~~/hooks/scaffold-eth";
 
 const TESTNET_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:testnet-notice-dismissed";
 
@@ -12,9 +11,8 @@ const TESTNET_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:testnet-notice-dismissed"
 // (4801) keep showing the notice.
 const NON_MAINNET_TARGET_CHAIN_IDS = new Set<number>([31337, 4801]);
 
-export function TestnetNoticeBanner() {
-  const { targetNetwork } = useTargetNetwork();
-  const isMainnetTarget = !NON_MAINNET_TARGET_CHAIN_IDS.has(targetNetwork.id);
+export function TestnetNoticeBanner({ targetChainId }: { targetChainId: number }) {
+  const isMainnetTarget = !NON_MAINNET_TARGET_CHAIN_IDS.has(targetChainId);
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {

@@ -41,7 +41,7 @@ const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
     <MobileHeaderVisibilityProvider>
       <div className={`flex min-h-screen flex-col ${isVoteFeedRoute ? "xl:h-screen xl:overflow-hidden" : ""}`.trim()}>
         <div className="xl:pl-52">
-          <TestnetNoticeBanner />
+          <TestnetNoticeBanner targetChainId={targetNetwork.id} />
         </div>
         <Header />
         {/* Main content: offset by left sidebar on desktop (208px at xl) */}
