@@ -85,7 +85,7 @@ const HeaderNavLink = ({ className, compact = false, href, icon: Icon, isActive,
   );
 };
 
-const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "desktop" }) => {
+export const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "desktop" }) => {
   const pathname = usePathname() ?? "";
   const isDocsPage = pathname.startsWith("/docs");
   const compact = variant === "mobile";
@@ -93,7 +93,7 @@ const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "desktop
   return (
     <>
       {menuLinks.map(({ label, href, icon: Icon }) => {
-        const isActive = pathname.startsWith(href);
+        const isActive = pathname === "/" && href === RATE_ROUTE ? true : pathname.startsWith(href);
         const isDocs = href === "/docs";
 
         // If we're on docs page, show Docs as header with submenu, otherwise show as regular link
@@ -190,7 +190,7 @@ const MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE = "data-mobile-header-scroll-source"
 const MOBILE_HEADER_SCROLL_SYNC_ATTRIBUTE = "data-mobile-header-scroll-sync";
 const MOBILE_HEADER_SCROLL_SYNC_OFFSET_ATTRIBUTE = "data-mobile-header-scroll-sync-offset";
 
-const HeaderBrand = ({
+export const HeaderBrand = ({
   brandIdPrefix,
   className,
   compact = false,
@@ -219,7 +219,7 @@ const HeaderBrand = ({
   </Link>
 );
 
-const HeaderSearchBar = ({ className }: { className?: string }) => {
+export const HeaderSearchBar = ({ className }: { className?: string }) => {
   const { activeQuery, commitSearch } = useVoteSearch();
   const [inputValue, setInputValue] = useState(activeQuery);
   const isSidebar = className?.includes("sidebar");

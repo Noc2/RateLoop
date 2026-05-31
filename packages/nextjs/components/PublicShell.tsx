@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { FooterLinks } from "~~/components/FooterLinks";
-import { RateLoopLogo } from "~~/components/RateLoopLogo";
+import { HeaderBrand, HeaderMenuLinks, HeaderSearchBar } from "~~/components/Header";
 import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
 import { GradientActionInner, getGradientActionClassName } from "~~/components/shared/GradientAction";
@@ -15,20 +15,6 @@ const publicNavLinks = [
   { href: GOVERNANCE_ROUTE, label: "Reputation", heavy: true },
   { href: "/docs", label: "Docs", heavy: false },
 ] as const;
-
-function PublicBrand({ idPrefix }: { idPrefix: string }) {
-  return (
-    <Link href="/?landing=1" className="flex min-w-0 items-center gap-2">
-      <RateLoopLogo className="h-9 w-9 shrink-0" idPrefix={idPrefix} />
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="font-display whitespace-nowrap text-[1.2rem] leading-none tracking-normal text-base-content">
-          RateLoop
-        </span>
-        <span className="hidden text-sm text-base-content/75 sm:block">Level Up Your Agent</span>
-      </div>
-    </Link>
-  );
-}
 
 function PublicSignInButton({ className = "" }: { className?: string }) {
   return (
@@ -47,7 +33,7 @@ function PublicMobileHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl sm:px-6 lg:hidden">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-        <PublicBrand idPrefix="rateloop-public-header-logo" />
+        <HeaderBrand brandIdPrefix="rateloop-public-header-logo" compact />
 
         <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
           {publicNavLinks.map(link => (
@@ -70,27 +56,22 @@ function PublicMobileHeader() {
 
 function PublicDesktopSidebar() {
   return (
-    <aside className="fixed left-0 top-0 z-20 hidden h-screen w-52 shrink-0 flex-col items-stretch border-r border-white/10 bg-black py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] lg:flex">
-      <div className="px-4">
-        <PublicBrand idPrefix="rateloop-public-sidebar-logo" />
+    <aside className="fixed left-0 top-0 z-20 hidden h-screen w-52 shrink-0 flex-col items-stretch border-r border-[color:var(--rateloop-shell-border-strong)] bg-black py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] lg:flex">
+      <HeaderBrand brandIdPrefix="rateloop-public-sidebar-logo" className="mb-4 shrink-0 px-4" />
+      <div className="mb-4 w-full min-w-0 px-2.5">
+        <Suspense>
+          <HeaderSearchBar className="sidebar" />
+        </Suspense>
       </div>
-      <nav aria-label="Primary" className="mt-6 flex flex-1 flex-col overflow-y-auto px-2.5">
-        <ul className="flex flex-col gap-1">
-          {publicNavLinks.map(link => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                prefetch={link.heavy ? false : undefined}
-                className="block rounded-xl px-4 py-3 text-base font-medium text-base-content/75 transition-colors hover:bg-base-content/[0.04] hover:text-base-content"
-              >
-                {link.label}
-              </Link>
-            </li>
-          ))}
+      <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 overflow-y-auto">
+        <ul className="menu menu-vertical w-full gap-0.5 p-0">
+          <HeaderMenuLinks variant="desktop" />
         </ul>
       </nav>
-      <div className="mt-auto border-t border-white/10 px-2.5 pt-4">
-        <PublicSignInButton className="w-full" />
+      <div className="mt-auto flex w-full shrink-0 flex-col items-stretch gap-2 border-t border-[color:var(--rateloop-shell-border-strong)] px-2.5 pt-4">
+        <div className="flex w-full justify-stretch">
+          <PublicSignInButton />
+        </div>
       </div>
     </aside>
   );
