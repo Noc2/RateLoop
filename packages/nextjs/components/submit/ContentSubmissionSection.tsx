@@ -11,6 +11,7 @@ import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/reac
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -3328,10 +3329,12 @@ export function ContentSubmissionSection() {
       >
         Back
       </button>
-      <button
-        type="button"
+      <GradientActionButton
         onClick={handleFinalSubmit}
-        className="btn btn-submit w-full sm:flex-1"
+        className="w-full sm:flex-1"
+        motion={getGradientActionMotion(
+          isSubmitting || isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls,
+        )}
         disabled={
           isSubmitting || isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls || isMissingGasBalance
         }
@@ -3344,7 +3347,7 @@ export function ContentSubmissionSection() {
         ) : (
           "Submit"
         )}
-      </button>
+      </GradientActionButton>
     </div>
   );
 

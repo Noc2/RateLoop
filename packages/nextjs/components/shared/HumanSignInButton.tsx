@@ -3,6 +3,11 @@
 import { type ButtonHTMLAttributes, type ReactNode, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
+import {
+  GradientActionButton,
+  type GradientActionMotion,
+  type GradientActionSize,
+} from "~~/components/shared/GradientAction";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
@@ -10,9 +15,20 @@ import { HUMAN_SIGN_IN_LABEL, getHumanSignInRoute } from "~~/lib/home/humanSignI
 
 type HumanSignInButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "onClick" | "type"> & {
   children?: ReactNode;
+  gradientMotion?: GradientActionMotion | false;
+  gradientPill?: boolean;
+  gradientSize?: GradientActionSize;
 };
 
-export function HumanSignInButton({ children, className, disabled, ...props }: HumanSignInButtonProps) {
+export function HumanSignInButton({
+  children,
+  className,
+  disabled,
+  gradientMotion = false,
+  gradientPill = false,
+  gradientSize = "default",
+  ...props
+}: HumanSignInButtonProps) {
   const router = useRouter();
   const { address } = useAccount();
   const { openConnectModal, isConnecting } = useRateLoopConnectModal();
@@ -60,18 +76,39 @@ export function HumanSignInButton({ children, className, disabled, ...props }: H
     }
   }, [openConnectModal, routeSignedInRater]);
 
+  const isBusy = isConnecting || shouldRouteAfterSignIn;
+  const isDisabled = disabled || isBusy;
+  const buttonContent = children ?? HUMAN_SIGN_IN_LABEL;
+  const onClick = () => {
+    void handleClick();
+  };
+
+  if (gradientMotion) {
+    return (
+      <GradientActionButton
+        {...props}
+        className={className}
+        disabled={isDisabled}
+        motion={isBusy ? "processing" : gradientMotion}
+        pill={gradientPill}
+        size={gradientSize}
+        onClick={onClick}
+      >
+        {buttonContent}
+      </GradientActionButton>
+    );
+  }
+
   return (
     <button
       {...props}
       type="button"
       className={className}
-      disabled={disabled || isConnecting || shouldRouteAfterSignIn}
-      aria-busy={isConnecting || shouldRouteAfterSignIn || undefined}
-      onClick={() => {
-        void handleClick();
-      }}
+      disabled={isDisabled}
+      aria-busy={isBusy || undefined}
+      onClick={onClick}
     >
-      {children ?? HUMAN_SIGN_IN_LABEL}
+      {buttonContent}
     </button>
   );
 }

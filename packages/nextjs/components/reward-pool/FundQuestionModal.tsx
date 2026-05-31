@@ -6,6 +6,7 @@ import { zeroHash } from "viem";
 import { useAccount, useConfig, useSignTypedData, useWriteContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import {
   BOUNTY_WINDOW_PRESETS,
@@ -438,14 +439,13 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
         </div>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
-          <button
-            type="button"
+          <GradientActionButton
             onClick={handleFundQuestion}
             disabled={!canSubmit || isFunding}
-            className="btn btn-primary"
+            motion={getGradientActionMotion(isFunding)}
           >
             {isFunding ? "Funding..." : "Fund bounty"}
-          </button>
+          </GradientActionButton>
           <button type="button" onClick={onClose} className="btn btn-ghost">
             Cancel
           </button>

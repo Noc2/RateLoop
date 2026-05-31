@@ -4,6 +4,7 @@ import { FooterLinks } from "~~/components/FooterLinks";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
 import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
+import { GradientActionInner, getGradientActionClassName } from "~~/components/shared/GradientAction";
 import { ASK_ROUTE, GOVERNANCE_ROUTE, RATE_ROUTE } from "~~/constants/routes";
 import { HUMAN_SIGN_IN_FAUCET_ROUTE, HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
 import scaffoldConfig from "~~/scaffold.config";
@@ -42,8 +43,13 @@ function PublicHeader() {
           ))}
         </nav>
 
-        <Link href={HUMAN_SIGN_IN_FAUCET_ROUTE} className="btn btn-sm btn-primary border-none">
-          {HUMAN_SIGN_IN_LABEL}
+        <Link
+          href={HUMAN_SIGN_IN_FAUCET_ROUTE}
+          className={getGradientActionClassName("rateloop-gradient-action-pill")}
+          data-motion="idle"
+          data-size="sm"
+        >
+          <GradientActionInner>{HUMAN_SIGN_IN_LABEL}</GradientActionInner>
         </Link>
       </div>
     </header>

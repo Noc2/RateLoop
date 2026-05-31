@@ -7,16 +7,18 @@ import {
   WalletIcon,
 } from "@heroicons/react/24/outline";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
+import {
+  GradientActionButton,
+  type GradientActionMotion,
+  type GradientActionSize,
+} from "~~/components/shared/GradientAction";
 
 export const metadata: Metadata = {
   title: "Gradient Button Study | RateLoop",
   description: "A RateLoop gradient-border button motion study.",
 };
 
-type MotionState = "idle" | "intro" | "processing";
-type ButtonSize = "default" | "lg";
-
-function GradientActionButton({
+function StudyGradientActionButton({
   children,
   icon,
   motion = "idle",
@@ -28,32 +30,28 @@ function GradientActionButton({
 }: {
   children: React.ReactNode;
   icon?: React.ReactNode;
-  motion?: MotionState;
-  size?: ButtonSize;
+  motion?: GradientActionMotion;
+  size?: GradientActionSize;
   disabled?: boolean;
   className?: string;
   voteDirection?: "up" | "down";
   spinIcon?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      className={`rateloop-gradient-action ${voteDirection ? "rateloop-gradient-vote" : ""} ${className}`}
-      data-motion={motion}
-      data-size={size}
+    <GradientActionButton
+      className={`${voteDirection ? "rateloop-gradient-vote" : ""} ${className}`}
+      motion={motion}
+      size={size}
       data-direction={voteDirection}
       disabled={disabled}
-      aria-busy={motion === "processing" || undefined}
     >
-      <span className="rateloop-gradient-action-inner">
-        {icon ? (
-          <span className="rateloop-gradient-action-icon" data-spin={spinIcon || undefined}>
-            {icon}
-          </span>
-        ) : null}
-        <span>{children}</span>
-      </span>
-    </button>
+      {icon ? (
+        <span className="rateloop-gradient-action-icon" data-spin={spinIcon || undefined}>
+          {icon}
+        </span>
+      ) : null}
+      <span>{children}</span>
+    </GradientActionButton>
   );
 }
 
@@ -87,13 +85,13 @@ export default function ButtonMotionStudyPage() {
         <div className="relative flex min-h-[20rem] items-center justify-center overflow-hidden rounded-lg bg-base-200 p-8 shadow-[0_36px_80px_rgb(0_0_0/0.45)] ring-1 ring-white/10">
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgb(53_158_238/0.13),transparent_34%,rgb(3_206_164/0.1)_56%,rgb(239_71_111/0.11))]" />
           <div className="relative flex flex-col items-center gap-5 text-center">
-            <GradientActionButton
+            <StudyGradientActionButton
               motion="intro"
               size="lg"
               icon={<SparklesIcon aria-hidden className="h-full w-full" />}
             >
               Sign in
-            </GradientActionButton>
+            </StudyGradientActionButton>
             <p className="max-w-sm text-sm leading-6 text-base-content/58">
               The same button settles into a static gradient border after the opening pass.
             </p>
@@ -103,39 +101,42 @@ export default function ButtonMotionStudyPage() {
 
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StudyCard number="01" title="Initial page load">
-          <GradientActionButton motion="intro" icon={<SparklesIcon aria-hidden className="h-full w-full" />}>
+          <StudyGradientActionButton motion="intro" icon={<SparklesIcon aria-hidden className="h-full w-full" />}>
             Sign in
-          </GradientActionButton>
+          </StudyGradientActionButton>
         </StudyCard>
 
         <StudyCard number="02" title="Transaction signing">
-          <GradientActionButton
+          <StudyGradientActionButton
             motion="processing"
             disabled
             spinIcon
             icon={<ArrowPathIcon aria-hidden className="h-full w-full" />}
           >
             Signing
-          </GradientActionButton>
+          </StudyGradientActionButton>
         </StudyCard>
 
         <StudyCard number="03" title="Static sign-in">
-          <GradientActionButton icon={<WalletIcon aria-hidden className="h-full w-full" />}>
+          <StudyGradientActionButton icon={<WalletIcon aria-hidden className="h-full w-full" />}>
             Sign in
-          </GradientActionButton>
+          </StudyGradientActionButton>
         </StudyCard>
 
         <StudyCard number="04" title="Static vote choice">
           <div className="flex flex-wrap gap-3">
-            <GradientActionButton voteDirection="up" icon={<HandThumbUpIcon aria-hidden className="h-full w-full" />}>
+            <StudyGradientActionButton
+              voteDirection="up"
+              icon={<HandThumbUpIcon aria-hidden className="h-full w-full" />}
+            >
               Up
-            </GradientActionButton>
-            <GradientActionButton
+            </StudyGradientActionButton>
+            <StudyGradientActionButton
               voteDirection="down"
               icon={<HandThumbDownIcon aria-hidden className="h-full w-full" />}
             >
               Down
-            </GradientActionButton>
+            </StudyGradientActionButton>
           </div>
         </StudyCard>
       </section>

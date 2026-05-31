@@ -245,7 +245,7 @@ body {
   animation: rateloop-gradient-border-orbit 2.8s linear infinite;
 }
 
-.rateloop-gradient-action:hover:not(:disabled) {
+.rateloop-gradient-action:hover:not(:disabled):not([aria-disabled="true"]) {
   box-shadow:
     0 0 0 1px rgb(245 245 245 / 0.13),
     0 22px 42px rgb(0 0 0 / 0.38);
@@ -253,7 +253,7 @@ body {
   transform: translateY(-1px);
 }
 
-.rateloop-gradient-action:active:not(:disabled) {
+.rateloop-gradient-action:active:not(:disabled):not([aria-disabled="true"]) {
   transform: translateY(0);
 }
 
@@ -271,12 +271,25 @@ body {
   opacity: 1;
 }
 
+.rateloop-gradient-action:disabled:not([aria-busy="true"]),
+.rateloop-gradient-action[aria-disabled="true"]:not([aria-busy="true"]) {
+  filter: grayscale(0.4) brightness(0.72);
+}
+
 .rateloop-gradient-action[aria-busy="true"] {
   cursor: wait;
 }
 
 .rateloop-gradient-action[data-size="lg"] {
   min-height: 3.45rem;
+}
+
+.rateloop-gradient-action[data-size="sm"] {
+  min-height: 2.5rem;
+}
+
+.rateloop-gradient-action-pill {
+  --rateloop-gradient-button-radius: var(--rateloop-radius-pill);
 }
 
 .rateloop-gradient-action-inner {
@@ -298,6 +311,11 @@ body {
 .rateloop-gradient-action[data-size="lg"] .rateloop-gradient-action-inner {
   min-height: 3.2rem;
   padding-inline: 1.35rem;
+}
+
+.rateloop-gradient-action[data-size="sm"] .rateloop-gradient-action-inner {
+  min-height: 2.25rem;
+  padding: 0.56rem 0.9rem;
 }
 
 .rateloop-gradient-action-icon {
@@ -328,7 +346,7 @@ body {
     animation: none;
   }
 
-  .rateloop-gradient-action:hover:not(:disabled) {
+  .rateloop-gradient-action:hover:not(:disabled):not([aria-disabled="true"]) {
     transform: none;
   }
 }

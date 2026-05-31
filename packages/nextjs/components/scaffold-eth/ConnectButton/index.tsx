@@ -21,14 +21,11 @@ export const RateLoopConnectButton = ({
   const { address, chain } = useAccount();
   const activeThirdwebChain = useActiveWalletChain();
   const resolvedChain = chain ?? activeThirdwebChain;
+  const signInMotion = compact || inlineMenu ? "idle" : "intro";
 
   if (!address || !resolvedChain) {
     return (
-      <HumanSignInButton
-        className="btn btn-sm btn-primary border-none"
-        data-testid="auth-connect-button"
-        style={{ fontSize: "16px" }}
-      >
+      <HumanSignInButton gradientMotion={signInMotion} gradientSize="sm" data-testid="auth-connect-button">
         {HUMAN_SIGN_IN_LABEL}
       </HumanSignInButton>
     );

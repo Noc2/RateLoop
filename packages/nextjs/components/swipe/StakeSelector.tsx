@@ -5,6 +5,7 @@ import { EPOCH_WEIGHT_BPS, USER_PREDICTION_PERCENT } from "@rateloop/contracts/p
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { HandThumbDownIcon, HandThumbUpIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useContentLabel } from "~~/hooks/useCategoryRegistry";
@@ -458,9 +459,10 @@ export function StakeSelector({
               >
                 Cancel
               </button>
-              <button
+              <GradientActionButton
                 onClick={() => onConfirm(amount, isUp, normalizeStakeSelectorPredictedUpPercent(predictedUpPercent))}
-                className="btn flex-1 action-orange-control"
+                className="flex-1"
+                motion={getGradientActionMotion(Boolean(isConfirming))}
                 disabled={confirmDisabled}
               >
                 {isConfirming ? (
@@ -473,7 +475,7 @@ export function StakeSelector({
                 ) : (
                   `Stake ${amount} ${symbol}`
                 )}
-              </button>
+              </GradientActionButton>
             </div>
 
             {(confirmError || roundNotAcceptingMessage) && !isConfirming && (

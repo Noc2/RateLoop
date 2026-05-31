@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAccount } from "wagmi";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { RATE_ROUTE, buildRateContentHref } from "~~/constants/routes";
 import { formatTimeRemaining } from "~~/hooks/useActiveVotesWithDeadlines";
@@ -39,9 +40,14 @@ function RevealVoteCard({
         </div>
       </div>
       {vote.isReady ? (
-        <button className="btn btn-primary min-w-36" disabled={isPending} onClick={() => onReveal(vote)}>
+        <GradientActionButton
+          className="min-w-36"
+          disabled={isPending}
+          motion={getGradientActionMotion(isPending)}
+          onClick={() => onReveal(vote)}
+        >
           {isPending ? "Revealing..." : "Reveal"}
-        </button>
+        </GradientActionButton>
       ) : (
         <div className="text-sm text-base-content/70 font-mono tabular-nums">
           opens in {formatTimeRemaining(vote.secondsUntilReveal)}
