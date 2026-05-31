@@ -1487,27 +1487,8 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.raterFullLaunchCapUnlocked(alice));
 
         _configureWorldIdV4();
+        vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
         _verifyV4(bob, bytes32("shared-human"));
-        for (uint256 i = 0; i < 5; i++) {
-            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
-            pool.recordEarnedRaterRewardWithSourceReady(
-                bob,
-                2,
-                i + 1,
-                _commitKey(100 + i),
-                8_000,
-                3,
-                true,
-                pool.MIN_LAUNCH_CREDIT_STAKE(),
-                _singleAnchor(anchorId),
-                uint64(block.timestamp)
-            );
-        }
-
-        assertEq(pool.raterLaunchCap(bob), 2_500_000);
-        assertFalse(pool.raterFullLaunchCapUnlocked(bob));
-        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
-        pool.unlockFullEarnedRaterCap(bob);
     }
 
     function test_UnlockFullEarnedRaterCapRequiresActiveCredential() public {
@@ -2156,11 +2137,8 @@ contract LaunchDistributionPoolTest is Test {
         pool.claimVerifiedBonus(address(0));
 
         _configureWorldIdV4();
+        vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
         _verifyV4(bob, bytes32("shared-human"));
-
-        vm.prank(bob);
-        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
-        pool.claimVerifiedBonus(address(0));
     }
 
     function _recordLaunchReward(address rater, uint256 roundId, bytes32 anchorId) internal returns (uint256) {
