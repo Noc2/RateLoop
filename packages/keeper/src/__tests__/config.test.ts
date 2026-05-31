@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 type DeploymentChain = Record<string, { address: `0x${string}` }>;
 
 const sharedDeployments = deployedContracts as Record<number, DeploymentChain | undefined>;
+const chain4801 = sharedDeployments[4801];
 const chain480 = sharedDeployments[480];
 const chain31337 = sharedDeployments[31337];
 const itWithWorldChainArtifacts = chain480 ? it : it.skip;
@@ -256,6 +257,21 @@ describe("keeper config", () => {
     expect(config.chainName).toBe("World Chain");
     expect(config.contracts.votingEngine).toBe(chain480!.RoundVotingEngine.address);
     expect(config.contracts.contentRegistry).toBe(chain480!.ContentRegistry.address);
+  });
+
+  it("derives World Chain Sepolia contract addresses from shared deployment artifacts", async () => {
+    const { config } = await loadKeeperConfig(
+      {
+        CHAIN_ID: "4801",
+      },
+      ["VOTING_ENGINE_ADDRESS", "CONTENT_REGISTRY_ADDRESS", "ADVISORY_VOTE_RECORDER_ADDRESS"],
+    );
+
+    expect(config.chainId).toBe(4801);
+    expect(config.chainName).toBe("World Chain Sepolia");
+    expect(config.contracts.votingEngine).toBe(chain4801!.RoundVotingEngine.address);
+    expect(config.contracts.contentRegistry).toBe(chain4801!.ContentRegistry.address);
+    expect(config.contracts.advisoryVoteRecorder).toBe(chain4801!.AdvisoryVoteRecorder.address);
   });
 
   it("prefers local hardhat contract env values over shared deployment artifacts", async () => {

@@ -15,7 +15,14 @@ const TOO_EARLY_TLOCK_ERROR =
   "It's too early to decrypt the ciphertext - decryptable at round 27013021";
 const zeroHash = `0x${"0".repeat(64)}` as const;
 
-const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
+const {
+  mockConfig,
+  timelockDecrypt,
+  mainnetClient,
+  testnetClient,
+  httpCachingChain,
+  httpChainClient,
+} = vi.hoisted(() => ({
   mockConfig: {
     contracts: {
       votingEngine: "0x1111111111111111111111111111111111111111",
@@ -27,6 +34,27 @@ const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
     cleanupBatchSize: 25,
   },
   timelockDecrypt: vi.fn(),
+  mainnetClient: vi.fn(() => ({ kind: "mainnet" })),
+  testnetClient: vi.fn(() => ({ kind: "testnet" })),
+  httpCachingChain: vi.fn(function (
+    this: { url?: string; options?: unknown },
+    url: string,
+    options: unknown,
+  ) {
+    this.url = url;
+    this.options = options;
+  }),
+  httpChainClient: vi.fn(function (
+    this: { kind?: string; chain?: unknown; options?: unknown; httpOptions?: unknown },
+    chain: unknown,
+    options: unknown,
+    httpOptions: unknown,
+  ) {
+    this.kind = "quicknet-t";
+    this.chain = chain;
+    this.options = options;
+    this.httpOptions = httpOptions;
+  }),
 }));
 
 vi.mock("../config.js", () => ({
@@ -35,7 +63,10 @@ vi.mock("../config.js", () => ({
 
 vi.mock("tlock-js", () => ({
   timelockDecrypt,
-  mainnetClient: vi.fn(() => ({})),
+  mainnetClient,
+  testnetClient,
+  HttpCachingChain: httpCachingChain,
+  HttpChainClient: httpChainClient,
 }));
 
 import { resolveRounds, resetKeeperStateForTests } from "../keeper.js";
@@ -64,6 +95,11 @@ interface CommitData {
   isUp: boolean;
   epochIndex: number;
 }
+
+const MAINNET_QUICKNET_DRAND_CHAIN_HASH =
+  "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971" as const;
+const QUICKNET_T_DRAND_CHAIN_HASH =
+  "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5" as const;
 
 function makeLogger() {
   return {
@@ -161,14 +197,10 @@ function makeTlockCiphertext(params: {
 
 function makeCommit(overrides: Partial<CommitData> = {}): CommitData {
   const salt = `0x${"aa".repeat(32)}` as `0x${string}`;
-  const targetRound = 123n;
-  // Mainnet quicknet beacon hash — the keeper resolves its tlock client from
-  // this on-chain hash, so it must be a beacon the resolver recognizes (here it
-  // maps to the mocked mainnetClient). An arbitrary placeholder hash would be
-  // (correctly) rejected as an unsupported drand chain.
+  const targetRound = overrides.targetRound ?? 123n;
   const drandChainHash =
-    "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971" as `0x${string}`;
-  const ciphertext = makeTlockCiphertext({
+    overrides.drandChainHash ?? MAINNET_QUICKNET_DRAND_CHAIN_HASH;
+  const ciphertext = overrides.ciphertext ?? makeTlockCiphertext({
     isUp: true,
     salt,
     targetRound,
@@ -575,6 +607,54 @@ describe("resolveRounds", () => {
     expect(commits[COMMIT_KEY_2].revealed).toBe(true);
     expect(round.state).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reveals a World Chain Sepolia quicknet-t commit with the quicknet-t client", async () => {
+    timelockDecrypt.mockResolvedValueOnce(makePlaintext(true, 1));
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 1n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient, commits } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: makeCommit({
+          revealableAfter: 100n,
+          drandChainHash: QUICKNET_T_DRAND_CHAIN_HASH,
+        }),
+      },
+      now: 1_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.votesRevealed).toBe(1);
+    expect(commits[COMMIT_KEY_1].revealed).toBe(true);
+    expect(vi.mocked(timelockDecrypt).mock.calls[0]?.[1]).toMatchObject({
+      kind: "quicknet-t",
+    });
+    expect(httpChainClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: expect.stringContaining(QUICKNET_T_DRAND_CHAIN_HASH.slice(2)),
+      }),
+      expect.any(Object),
+      { userAgent: "rateloop-keeper" },
+    );
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
+    );
   });
 
   it("paginates indexed vote ciphertexts beyond the first Ponder page", async () => {

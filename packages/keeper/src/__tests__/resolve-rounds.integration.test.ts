@@ -44,7 +44,14 @@ const CHAIN = defineChain({
   },
 });
 
-const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
+const {
+  mockConfig,
+  timelockDecrypt,
+  mainnetClient,
+  testnetClient,
+  httpCachingChain,
+  httpChainClient,
+} = vi.hoisted(() => ({
   mockConfig: {
     contracts: {
       votingEngine: "0x0000000000000000000000000000000000000000",
@@ -74,6 +81,27 @@ const { mockConfig, timelockDecrypt } = vi.hoisted(() => ({
     Buffer.from((saltHex ?? "").slice(0, 64), "hex").copy(plaintext, 4);
     return plaintext;
   }),
+  mainnetClient: vi.fn(() => ({ kind: "mainnet" })),
+  testnetClient: vi.fn(() => ({ kind: "testnet" })),
+  httpCachingChain: vi.fn(function (
+    this: { url?: string; options?: unknown },
+    url: string,
+    options: unknown,
+  ) {
+    this.url = url;
+    this.options = options;
+  }),
+  httpChainClient: vi.fn(function (
+    this: { kind?: string; chain?: unknown; options?: unknown; httpOptions?: unknown },
+    chain: unknown,
+    options: unknown,
+    httpOptions: unknown,
+  ) {
+    this.kind = "quicknet-t";
+    this.chain = chain;
+    this.options = options;
+    this.httpOptions = httpOptions;
+  }),
 }));
 
 vi.mock("../config.js", () => ({
@@ -82,7 +110,10 @@ vi.mock("../config.js", () => ({
 
 vi.mock("tlock-js", () => ({
   timelockDecrypt,
-  mainnetClient: vi.fn(() => ({})),
+  mainnetClient,
+  testnetClient,
+  HttpCachingChain: httpCachingChain,
+  HttpChainClient: httpChainClient,
 }));
 
 import { resetKeeperStateForTests, resolveRounds } from "../keeper.js";

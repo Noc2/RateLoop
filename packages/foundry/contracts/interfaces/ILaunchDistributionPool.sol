@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import { RaterRegistry } from "../RaterRegistry.sol";
+
 interface ILaunchDistributionPool {
     struct LaunchRewardPolicy {
         uint16 minQualifyingScoreBps;
@@ -19,7 +21,27 @@ interface ILaunchDistributionPool {
     }
 
     function launchAnchorCredentialAgeSeconds() external view returns (uint32);
+    function launchRewardPolicy()
+        external
+        view
+        returns (
+            uint16 minQualifyingScoreBps,
+            uint16 minVoters,
+            uint16 minVerifiedHumans,
+            uint16 minDistinctVerifiedAnchors,
+            uint16 minDistinctAnchorRounds,
+            uint64 minLaunchCreditStake,
+            uint16 maxDistinctRatersPerVerifiedAnchor,
+            uint16 maxUnverifiedCreditsPerRound,
+            uint16 unverifiedEarnedRaterCapBps,
+            uint32 minAnchorCredentialAgeSeconds,
+            uint32 eligibilityRatingCount,
+            uint32 rewardingRatingCount,
+            bool requireNoPendingCleanup
+        );
+    function raterRegistry() external view returns (RaterRegistry);
     function raterRoundCreditRecorded(address rater, uint256 contentId, uint256 roundId) external view returns (bool);
+    function roundUnverifiedLaunchCreditCount(uint256 contentId, uint256 roundId) external view returns (uint16);
 
     function claimLegacyContributorAllocation(uint256 allocation, bytes32[] calldata proof)
         external

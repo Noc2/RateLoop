@@ -612,6 +612,54 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(pendingStake, 0, "policy no-op stores no retry stake");
     }
 
+    function test_ClaimReward_StoresRetryWhenUnverifiedCapNoopCanClearAfterVerification() public {
+        _verifyHuman(voter2, bytes32("anchor-voter-2"));
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+        bytes32 voter1CommitKey =
+            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+
+        bytes32[] memory anchorIds = new bytes32[](1);
+        anchorIds[0] = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("anchor-voter-2"));
+        uint256 maxCredits = launchPool.MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND();
+        for (uint256 i = 0; i < maxCredits; i++) {
+            vm.prank(address(rewardDistributor));
+            launchPool.recordEarnedRaterRewardWithSourceReady(
+                address(uint160(0x5000 + i)),
+                contentId,
+                roundId,
+                keccak256(abi.encode("unverified-cap", i)),
+                8_000,
+                3,
+                true,
+                STAKE,
+                anchorIds,
+                uint64(block.timestamp)
+            );
+            assertEq(launchPool.roundUnverifiedLaunchCreditCount(contentId, roundId), i + 1);
+        }
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertFalse(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
+        (address pendingRecipient, uint96 pendingStake) =
+            rewardDistributor.pendingLaunchCreditRetry(contentId, roundId, voter1CommitKey);
+        assertEq(pendingRecipient, voter1, "unverified cap miss should remain retryable");
+        assertEq(pendingStake, STAKE, "retry captures stake");
+
+        _verifyHumanFresh(voter1, bytes32("voter-1-verified-after-claim"));
+
+        rewardDistributor.retryLaunchRaterRewardCredit(contentId, roundId, voter1CommitKey);
+
+        assertTrue(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
+        assertTrue(launchPool.raterRoundCreditRecorded(voter1, contentId, roundId));
+        assertEq(launchPool.roundUnverifiedLaunchCreditCount(contentId, roundId), maxCredits);
+        (pendingRecipient, pendingStake) =
+            rewardDistributor.pendingLaunchCreditRetry(contentId, roundId, voter1CommitKey);
+        assertEq(pendingRecipient, address(0), "retry clears recipient");
+        assertEq(pendingStake, 0, "retry clears stake");
+    }
+
     function test_ClaimReward_DoesNotRecordLaunchCreditWithoutIndependentVerifiedAnchor() public {
         _verifyHuman(voter1, bytes32("claimant-voter-1"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
