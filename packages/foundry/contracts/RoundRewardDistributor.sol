@@ -11,8 +11,10 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { RaterRegistry } from "./RaterRegistry.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { FrontendFeeDustLib } from "./libraries/FrontendFeeDustLib.sol";
 import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
@@ -340,16 +342,25 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 ) returns (
                 uint256
             ) {
-                // M-Retry-1: a non-reverting call does not prove the launch pool actually
-                // advanced its state. `_recordEarnedRaterRewardCredit` returns 0 silently when
-                // the policy gate fails (anchors expired / saturated, stake under floor,
-                // unverified-cap exceeded). Require the pool to flag the commit as recorded
-                // before reporting success. A successful no-op is deterministic under the
-                // current policy, so do not persist it as retryable work.
                 if (!ILaunchDistributionPool(launchPool).earnedRewardCreditRecorded(contentId, roundId, commitKey)) {
                     emit LaunchRaterRewardCreditFailed(
                         contentId, roundId, commitKey, rewardRecipient, launchPool, bytes("policy-gate")
                     );
+                    // Unverified-cap no-ops can become recordable after the rater verifies.
+                    if (_retryableLaunchCreditPolicyNoop(
+                            launchPool,
+                            rewardRecipient,
+                            contentId,
+                            roundId,
+                            commitKey,
+                            scoreBps,
+                            round.revealedCount,
+                            votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
+                            stakeAmount,
+                            verifiedAnchorIds.length
+                        )) {
+                        return LaunchCreditAttempt.RetryableFailure;
+                    }
                     return LaunchCreditAttempt.DeterministicNoop;
                 }
                 return LaunchCreditAttempt.Recorded;
@@ -361,6 +372,101 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             emit LaunchRaterRewardCreditFailed(contentId, roundId, commitKey, rewardRecipient, launchPool, reason);
             return LaunchCreditAttempt.RetryableFailure;
         }
+    }
+
+    function _retryableLaunchCreditPolicyNoop(
+        address launchPool,
+        address rewardRecipient,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint16 scoreBps,
+        uint16 revealedRaterCount,
+        bool noPendingCleanup,
+        uint256 stakeAmount,
+        uint256 distinctRoundAnchors
+    ) internal view returns (bool) {
+        (bool policyRead, ILaunchDistributionPool.LaunchRewardPolicy memory policy) =
+            _readLaunchRewardPolicy(launchPool);
+        if (!policyRead) {
+            return false;
+        }
+
+        if (rewardRecipient == address(0) || commitKey == bytes32(0)) return false;
+        if (scoreBps < policy.minQualifyingScoreBps) return false;
+        if (revealedRaterCount < policy.minVoters) return false;
+        if (policy.requireNoPendingCleanup && !noPendingCleanup) return false;
+        if (stakeAmount < policy.minLaunchCreditStake) return false;
+        if (distinctRoundAnchors < policy.minVerifiedHumans) return false;
+
+        try ILaunchDistributionPool(launchPool).raterRoundCreditRecorded(rewardRecipient, contentId, roundId) returns (
+            bool alreadyRecorded
+        ) {
+            if (alreadyRecorded) return false;
+        } catch {
+            return false;
+        }
+
+        try ILaunchDistributionPool(launchPool).roundUnverifiedLaunchCreditCount(contentId, roundId) returns (
+            uint16 unverifiedCount
+        ) {
+            if (unverifiedCount < policy.maxUnverifiedCreditsPerRound) return false;
+        } catch {
+            return false;
+        }
+
+        try ILaunchDistributionPool(launchPool).raterRegistry() returns (RaterRegistry raterRegistryContract) {
+            address raterRegistryAddress = address(raterRegistryContract);
+            if (raterRegistryAddress == address(0)) return false;
+            try IRaterIdentityRegistry(raterRegistryAddress).hasActiveHumanCredential(rewardRecipient) returns (
+                bool active
+            ) {
+                return !active;
+            } catch {
+                return false;
+            }
+        } catch {
+            return false;
+        }
+    }
+
+    function _readLaunchRewardPolicy(address launchPool)
+        internal
+        view
+        returns (bool success, ILaunchDistributionPool.LaunchRewardPolicy memory policy)
+    {
+        try ILaunchDistributionPool(launchPool).launchRewardPolicy() returns (
+            uint16 minQualifyingScoreBps,
+            uint16 minVoters,
+            uint16 minVerifiedHumans,
+            uint16 minDistinctVerifiedAnchors,
+            uint16 minDistinctAnchorRounds,
+            uint64 minLaunchCreditStake,
+            uint16 maxDistinctRatersPerVerifiedAnchor,
+            uint16 maxUnverifiedCreditsPerRound,
+            uint16 unverifiedEarnedRaterCapBps,
+            uint32 minAnchorCredentialAgeSeconds,
+            uint32 eligibilityRatingCount,
+            uint32 rewardingRatingCount,
+            bool requireNoPendingCleanup
+        ) {
+            policy = ILaunchDistributionPool.LaunchRewardPolicy({
+                minQualifyingScoreBps: minQualifyingScoreBps,
+                minVoters: minVoters,
+                minVerifiedHumans: minVerifiedHumans,
+                minDistinctVerifiedAnchors: minDistinctVerifiedAnchors,
+                minDistinctAnchorRounds: minDistinctAnchorRounds,
+                minLaunchCreditStake: minLaunchCreditStake,
+                maxDistinctRatersPerVerifiedAnchor: maxDistinctRatersPerVerifiedAnchor,
+                maxUnverifiedCreditsPerRound: maxUnverifiedCreditsPerRound,
+                unverifiedEarnedRaterCapBps: unverifiedEarnedRaterCapBps,
+                minAnchorCredentialAgeSeconds: minAnchorCredentialAgeSeconds,
+                eligibilityRatingCount: eligibilityRatingCount,
+                rewardingRatingCount: rewardingRatingCount,
+                requireNoPendingCleanup: requireNoPendingCleanup
+            });
+            success = true;
+        } catch { }
     }
 
     /// @notice L-Funds-B: permissionless retry for a launch-credit record that failed on the
