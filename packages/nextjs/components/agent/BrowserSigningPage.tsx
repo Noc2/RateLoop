@@ -434,16 +434,24 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
         await switchToChain(intent.chainId);
       }
 
+      // Coerce null -> undefined for wagmi; binding chainId makes viem re-assert
+      // the live wallet chain per call instead of trusting the pre-loop switch.
+      const intentChainId = intent.chainId ?? undefined;
       for (const [index, call] of intent.transactionPlan.calls.entries()) {
         const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
         const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
         const value = assertZeroValue(call.value, `transactionPlan.calls[${index}].value`);
-        const hash = await sendTransaction(wagmiConfig, { data, to, value });
+        // Bind every call to the intent's chain. Without an explicit chainId,
+        // wagmi/viem skip the live eth_chainId assertion, so a switch that the
+        // wallet silently ignored (or the user reverted) would broadcast these
+        // approve + escrow-funding calls on the wrong chain. Passing chainId
+        // makes viem throw ChainMismatchError instead of misfiring.
+        const hash = await sendTransaction(wagmiConfig, { chainId: intentChainId, data, to, value });
         hashes.push(hash);
         setSteps(current =>
           current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "sent" } : step)),
         );
-        await waitForTransactionReceipt(wagmiConfig, { hash });
+        await waitForTransactionReceipt(wagmiConfig, { chainId: intentChainId, hash });
         setSteps(current =>
           current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "confirmed" } : step)),
         );
