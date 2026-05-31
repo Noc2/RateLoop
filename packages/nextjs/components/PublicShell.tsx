@@ -34,7 +34,7 @@ function PublicSignInButton({ className = "" }: { className?: string }) {
   return (
     <Link
       href={HUMAN_SIGN_IN_FAUCET_ROUTE}
-      className={getGradientActionClassName(`rateloop-gradient-action-pill ${className}`)}
+      className={getGradientActionClassName(className)}
       data-motion="idle"
       data-size="sm"
     >

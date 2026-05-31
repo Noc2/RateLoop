@@ -11,7 +11,7 @@ export function LandingPageActions() {
       <Link
         href={HUMAN_SIGN_IN_DISCOVER_ROUTE}
         prefetch={false}
-        className={getGradientActionClassName(`rateloop-gradient-action-pill ${styles.cta} ${styles.primary}`)}
+        className={getGradientActionClassName(`${styles.cta} ${styles.primary}`)}
         data-motion="intro"
       >
         <GradientActionInner className={styles.primaryInner}>

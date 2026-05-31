@@ -1,7 +1,7 @@
 .cta {
   height: 2.75rem;
   min-height: 2.75rem;
-  border-radius: 9999px;
+  border-radius: var(--rateloop-radius-control);
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: 0;
@@ -16,7 +16,7 @@
   min-height: calc(2.75rem - (var(--rateloop-gradient-border-size) * 2));
   padding-block: 0;
   padding-inline: 1.1rem;
-  border-radius: 9999px;
+  border-radius: calc(var(--rateloop-radius-control) - var(--rateloop-gradient-border-size));
 }
 
 .arrow {
