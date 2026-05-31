@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { IAdvisoryVoteRecorder } from "./interfaces/IAdvisoryVoteRecorder.sol";
-import { IRoundRewardDistributor } from "./interfaces/IRoundRewardDistributor.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {IAdvisoryVoteRecorder} from "./interfaces/IAdvisoryVoteRecorder.sol";
+import {IRoundRewardDistributor} from "./interfaces/IRoundRewardDistributor.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
+import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
+import {RaterRegistry} from "./RaterRegistry.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
 
 /// @title ProtocolConfig
 /// @notice Governance-controlled configuration and address book for RoundVotingEngine.
@@ -453,7 +454,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function _setCategoryRegistry(address value) internal {
         if (value == address(0)) revert InvalidAddress();
         if (value.code.length == 0) revert InvalidAddress();
-        try ICategoryRegistry(value).isCategory(0) returns (bool) { }
+        try ICategoryRegistry(value).isCategory(0) returns (bool) {}
         catch {
             revert InvalidConfig();
         }
@@ -511,11 +512,15 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         } catch {
             revert InvalidConfig();
         }
+        try RaterRegistry(value).getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) {}
+        catch {
+            revert InvalidConfig();
+        }
     }
 
     function _validateLaunchDistributionPool(address value) internal view {
         if (value.code.length == 0) revert InvalidAddress();
-        try ILaunchDistributionPool(value).launchAnchorCredentialAgeSeconds() returns (uint32) { }
+        try ILaunchDistributionPool(value).launchAnchorCredentialAgeSeconds() returns (uint32) {}
         catch {
             revert InvalidConfig();
         }
@@ -523,11 +528,11 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function _validateClusterPayoutOracle(address value) internal view {
         if (value.code.length == 0) revert InvalidAddress();
-        try IClusterPayoutOracle(value).roundPayoutSnapshotKey(0, 0, 0, 0) returns (bytes32) { }
+        try IClusterPayoutOracle(value).roundPayoutSnapshotKey(0, 0, 0, 0) returns (bytes32) {}
         catch {
             revert InvalidConfig();
         }
-        try IClusterPayoutOracle(value).roundPayoutSnapshotProposedAt(0, 0, 0, 0) returns (uint64) { }
+        try IClusterPayoutOracle(value).roundPayoutSnapshotProposedAt(0, 0, 0, 0) returns (uint64) {}
         catch {
             revert InvalidConfig();
         }
@@ -555,11 +560,11 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     function _validateFrontendRegistry(address value) internal view {
         if (value.code.length == 0) revert InvalidAddress();
-        try IFrontendRegistry(value).STAKE_AMOUNT() returns (uint256) { }
+        try IFrontendRegistry(value).STAKE_AMOUNT() returns (uint256) {}
         catch {
             revert InvalidConfig();
         }
-        try IFrontendRegistry(value).getFrontendInfo(address(this)) returns (address, uint256, bool, bool) { }
+        try IFrontendRegistry(value).getFrontendInfo(address(this)) returns (address, uint256, bool, bool) {}
         catch {
             revert InvalidConfig();
         }
@@ -575,22 +580,22 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             revert InvalidConfig();
         }
 
-        try recorder.advisoryCommitKeyByRater(0, 0, address(this)) returns (bytes32) { }
+        try recorder.advisoryCommitKeyByRater(0, 0, address(this)) returns (bytes32) {}
         catch {
             revert InvalidConfig();
         }
 
-        try recorder.advisoryCommitKeyByIdentity(0, 0, bytes32(0)) returns (bytes32) { }
+        try recorder.advisoryCommitKeyByIdentity(0, 0, bytes32(0)) returns (bytes32) {}
         catch {
             revert InvalidConfig();
         }
 
-        try recorder.lastAdvisoryVoteTimestamp(0, address(this)) returns (uint256) { }
+        try recorder.lastAdvisoryVoteTimestamp(0, address(this)) returns (uint256) {}
         catch {
             revert InvalidConfig();
         }
 
-        try recorder.lastAdvisoryVoteTimestampByIdentity(0, bytes32(0)) returns (uint256) { }
+        try recorder.lastAdvisoryVoteTimestampByIdentity(0, bytes32(0)) returns (uint256) {}
         catch {
             revert InvalidConfig();
         }

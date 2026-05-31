@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RatingLib } from "../contracts/libraries/RatingLib.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {RatingLib} from "../contracts/libraries/RatingLib.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {deployInitializedProtocolConfig} from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
     address public votingEngine;
@@ -18,7 +19,7 @@ contract MockRewardDistributorForConfig {
     }
 }
 
-contract MockRewardDistributorWithoutEngineForConfig { }
+contract MockRewardDistributorWithoutEngineForConfig {}
 
 contract MockRewardDistributorRevertingEngineForConfig {
     function votingEngine() external pure returns (address) {
@@ -79,6 +80,27 @@ contract WeakRaterRegistryForConfig {
     function addressIdentityKey(address account) external pure returns (bytes32) {
         if (account == address(0)) return bytes32(0);
         return bytes32(uint256(1));
+    }
+}
+
+contract RaterRegistryWithoutCredentialAbiForConfig is IRaterIdentityRegistry {
+    function addressIdentityKey(address account) external pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
+    }
+
+    function resolveRater(address actor) external pure returns (ResolvedRater memory resolved) {
+        resolved = ResolvedRater({
+            holder: actor,
+            identityKey: keccak256(abi.encodePacked("rateloop.address-identity-v1", actor)),
+            humanNullifier: bytes32(0),
+            hasActiveHumanCredential: false,
+            delegated: false
+        });
+    }
+
+    function hasActiveHumanCredential(address) external pure returns (bool) {
+        return false;
     }
 }
 
@@ -221,6 +243,14 @@ contract ProtocolConfigBranchesTest is Test {
     function test_SetRaterRegistry_RejectsWeakAbiShape() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         WeakRaterRegistryForConfig weakRegistry = new WeakRaterRegistryForConfig();
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRaterRegistry(address(weakRegistry));
+    }
+
+    function test_SetRaterRegistry_RejectsMissingGetHumanCredentialAbi() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        RaterRegistryWithoutCredentialAbiForConfig weakRegistry = new RaterRegistryWithoutCredentialAbiForConfig();
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setRaterRegistry(address(weakRegistry));
