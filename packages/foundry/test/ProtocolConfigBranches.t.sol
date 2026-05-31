@@ -832,14 +832,15 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectEmit(true, true, true, true);
-        emit RoundConfigBoundsUpdated(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 500);
+        emit RoundConfigBoundsUpdated(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 200);
 
-        config.setRoundConfigBounds(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 500);
+        config.setRoundConfigBounds(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 200);
 
         ProtocolConfig.RoundConfigBounds memory bounds = config.getRoundConfigBounds();
         assertEq(bounds.minEpochDuration, 10 minutes);
         assertEq(bounds.maxEpochDuration, 2 hours);
         assertEq(bounds.maxRoundDuration, 14 days);
+        assertEq(bounds.maxVoterCap, 200);
         assertEq(config.revealGracePeriod(), 60 minutes);
     }
 
