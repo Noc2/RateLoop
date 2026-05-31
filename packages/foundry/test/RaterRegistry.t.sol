@@ -540,7 +540,7 @@ contract RaterRegistryTest is Test {
         assertEq(uint256(credential.provider), uint256(RaterRegistry.HumanCredentialProvider.WorldIdV4));
         assertEq(credential.nullifierHash, NULLIFIER_HASH);
         assertEq(credential.scope, registry.worldIdV4CredentialScope());
-        assertEq(credential.expiresAt, uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL));
+        assertEq(credential.expiresAt, expiresAtMin);
         assertEq(
             credential.evidenceHash,
             keccak256(
@@ -551,7 +551,8 @@ contract RaterRegistryTest is Test {
                     WORLD_ID_V4_RP_ID,
                     WORLD_ID_V4_ACTION,
                     nonce,
-                    signalHash
+                    signalHash,
+                    expiresAtMin
                 )
             )
         );
@@ -560,6 +561,32 @@ contract RaterRegistryTest is Test {
             rater
         );
         assertTrue(registry.hasActiveHumanCredential(rater));
+    }
+
+    function test_AttestHumanCredentialWithV4ProofCapsExpiryAtConfiguredTtl() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[5] memory proof;
+        uint256 nonce = 99;
+        uint64 expiresAtMin = uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL + 1 days);
+
+        _configureV4Verifier(verifier);
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), nonce, expiresAtMin, proof);
+
+        RaterRegistry.HumanCredential memory credential = registry.getHumanCredential(rater);
+        assertEq(credential.expiresAt, uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL));
+    }
+
+    function test_AttestHumanCredentialWithV4ProofRejectsExpiredFreshnessFloor() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[5] memory proof;
+
+        _configureV4Verifier(verifier);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), 99, uint64(block.timestamp), proof);
     }
 
     function test_WorldIdAndV4SharedNullifierResolveToSameHumanIdentity() public {

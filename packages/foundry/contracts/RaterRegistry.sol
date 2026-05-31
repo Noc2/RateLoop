@@ -537,8 +537,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             proof
         );
 
-        uint256 expiresAt = block.timestamp + worldIdV4CredentialTtl;
-        if (expiresAt > type(uint64).max) revert InvalidCredential();
+        if (expiresAtMin <= block.timestamp) revert InvalidCredential();
+        uint256 ttlExpiresAt = block.timestamp + worldIdV4CredentialTtl;
+        if (ttlExpiresAt > type(uint64).max) revert InvalidCredential();
+        uint64 expiresAt = expiresAtMin < ttlExpiresAt ? expiresAtMin : uint64(ttlExpiresAt);
 
         bytes32 evidenceHash = keccak256(
             abi.encodePacked(
@@ -548,14 +550,15 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
                 worldIdV4RpId,
                 worldIdV4Action,
                 nonce,
-                signalHash
+                signalHash,
+                expiresAtMin
             )
         );
         _attestHumanCredential(
             msg.sender,
             storedNullifier,
             worldIdV4CredentialScope(),
-            uint64(expiresAt),
+            expiresAt,
             HumanCredentialProvider.WorldIdV4,
             evidenceHash
         );
