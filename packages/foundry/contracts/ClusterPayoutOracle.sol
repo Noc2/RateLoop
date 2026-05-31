@@ -268,6 +268,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (block.timestamp >= uint256(snapshot.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
+        if (msg.sender == snapshot.proposer) revert InvalidSnapshot();
         uint256 bond = challengeBond;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
@@ -446,6 +447,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (block.timestamp >= uint256(proposal.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
+        if (msg.sender == proposal.proposer) revert InvalidSnapshot();
         uint256 bond = challengeBond;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
