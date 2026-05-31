@@ -6,6 +6,7 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
@@ -541,13 +542,16 @@ contract RoundVotingEngine is
         }
         if (!hasPermit) return;
 
-        // Front-run-tolerant permit: a mempool observer can replay this permit
-        // to consume the nonce and revert a bare permit() call, which would
-        // brick the single-transaction permit-backed commit. permitStake
-        // swallows that revert when the allowance is already sufficient.
-        VotePreflightLib.permitStake(
-            address(lrepToken), msg.sender, address(this), stakeAmount, permitDeadline, v, r, s
-        );
+        // Front-run-tolerant permit. The permit signature is public in the
+        // mempool, so an observer can replay it to consume the owner's nonce and
+        // make a bare permit() call revert -- which would brick the
+        // single-transaction permit-backed commit. Swallow the permit revert:
+        // the replay still grants the allowance we need, and if it didn't, the
+        // stake safeTransferFrom in _commitVote fails closed. (Kept inline
+        // rather than in a library to avoid embedding another library-address
+        // push in RoundVotingEngine's EIP-170-constrained bytecode.)
+        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) { }
+            catch { }
     }
 
     function _computeCommitEpoch(RoundLib.Round storage round, RoundLib.RoundConfig memory roundCfg)

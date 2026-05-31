@@ -2,8 +2,6 @@
 pragma solidity ^0.8.34;
 
 import { ContentRegistry } from "../ContentRegistry.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { IAdvisoryVoteRecorder } from "../interfaces/IAdvisoryVoteRecorder.sol";
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
 import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
@@ -90,33 +88,6 @@ library VotePreflightLib {
     function addressIdentityKey(address account) public pure returns (bytes32) {
         if (account == address(0)) return bytes32(0);
         return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
-    }
-
-    /// @notice Apply an appended ERC-2612 permit in a front-run-tolerant way.
-    /// @dev The permit signature is public in the mempool, so a third party can
-    ///      replay it to consume the owner's nonce and make a bare permit() call
-    ///      revert. That replay still sets the allowance we need, so swallow the
-    ///      permit revert and only require that the resulting allowance covers
-    ///      the stake. Kept as an external library function so the try/catch
-    ///      bytecode stays out of RoundVotingEngine's EIP-170 budget.
-    function permitStake(
-        address token,
-        address owner,
-        address spender,
-        uint256 amount,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external {
-        try IERC20Permit(token).permit(owner, spender, amount, deadline, v, r, s) {
-        // Happy path: signature consumed cleanly.
-        }
-            catch {
-            // Front-runner consumed the nonce, or the signature was otherwise
-            // rejected. Continue only if the existing allowance is sufficient.
-        }
-        require(IERC20(token).allowance(owner, spender) >= amount, "Insufficient allowance");
     }
 
     function isFrontendEligible(IFrontendRegistry frontendRegistry, address frontend)
