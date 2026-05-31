@@ -43,9 +43,6 @@ contract DeployRateLoopHarness is DeployRateLoop {
         _activateLegacyContributorRoot(launchPool);
     }
 
-    function grantBootstrapTimelockRoles(TimelockController timelock, address bootstrapProposer) external {
-        _grantBootstrapTimelockRoles(timelock, bootstrapProposer);
-    }
 }
 
 contract RevertingDecimalsToken {
@@ -160,31 +157,34 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(holders[2], address(0x1007));
     }
 
-    function test_GrantBootstrapTimelockRolesAddsOnlyProposerAndCanceller() public {
+    function test_GovernanceTimelockRolesStayGovernorOnly() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         address[] memory proposers = new address[](0);
         address[] memory executors = new address[](1);
         executors[0] = address(0);
         TimelockController timelock =
             new TimelockController(deployScript.TIMELOCK_MIN_DELAY(), proposers, executors, address(deployScript));
-        address bootstrapProposer = address(new RevertingDecimalsToken());
+        address governor = address(0xA11CE);
+        address nonGovernor = address(new RevertingDecimalsToken());
+        bytes32 proposerRole = timelock.PROPOSER_ROLE();
+        bytes32 cancellerRole = timelock.CANCELLER_ROLE();
+        bytes32 executorRole = timelock.EXECUTOR_ROLE();
+        bytes32 defaultAdminRole = timelock.DEFAULT_ADMIN_ROLE();
 
-        deployScript.grantBootstrapTimelockRoles(timelock, bootstrapProposer);
+        vm.prank(address(deployScript));
+        timelock.grantRole(proposerRole, governor);
+        vm.prank(address(deployScript));
+        timelock.grantRole(cancellerRole, governor);
+        vm.prank(address(deployScript));
+        timelock.renounceRole(defaultAdminRole, address(deployScript));
 
-        assertTrue(timelock.hasRole(timelock.PROPOSER_ROLE(), bootstrapProposer));
-        assertTrue(timelock.hasRole(timelock.CANCELLER_ROLE(), bootstrapProposer));
-        assertFalse(timelock.hasRole(timelock.DEFAULT_ADMIN_ROLE(), bootstrapProposer));
-    }
-
-    function test_GrantBootstrapTimelockRolesRequiresContractProposer() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        address[] memory proposers = new address[](0);
-        address[] memory executors = new address[](1);
-        executors[0] = address(0);
-        TimelockController timelock =
-            new TimelockController(deployScript.TIMELOCK_MIN_DELAY(), proposers, executors, address(deployScript));
-
-        vm.expectRevert(bytes("Bootstrap proposer has no code"));
-        deployScript.grantBootstrapTimelockRoles(timelock, address(0xB007));
+        assertTrue(timelock.hasRole(proposerRole, governor));
+        assertTrue(timelock.hasRole(cancellerRole, governor));
+        assertTrue(timelock.hasRole(executorRole, address(0)));
+        assertFalse(timelock.hasRole(proposerRole, nonGovernor));
+        assertFalse(timelock.hasRole(cancellerRole, nonGovernor));
+        assertFalse(timelock.hasRole(proposerRole, address(0)));
+        assertFalse(timelock.hasRole(cancellerRole, address(0)));
+        assertFalse(timelock.hasRole(defaultAdminRole, address(deployScript)));
     }
 }
