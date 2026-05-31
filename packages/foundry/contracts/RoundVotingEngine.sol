@@ -542,7 +542,16 @@ contract RoundVotingEngine is
         }
         if (!hasPermit) return;
 
-        IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s);
+        // Front-run-tolerant permit. The permit signature is public in the
+        // mempool, so an observer can replay it to consume the owner's nonce and
+        // make a bare permit() call revert -- which would brick the
+        // single-transaction permit-backed commit. Swallow the permit revert:
+        // the replay still grants the allowance we need, and if it didn't, the
+        // stake safeTransferFrom in _commitVote fails closed. (Kept inline
+        // rather than in a library to avoid embedding another library-address
+        // push in RoundVotingEngine's EIP-170-constrained bytecode.)
+        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) { }
+            catch { }
     }
 
     function _computeCommitEpoch(RoundLib.Round storage round, RoundLib.RoundConfig memory roundCfg)

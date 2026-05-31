@@ -191,4 +191,45 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
       ]),
     );
   });
+
+  it("indexes the funder-refund forfeiture fallback identically to a treasury forfeit", async () => {
+    const { db, updates } = createDb({
+      'feedbackBonusPool:{"id":"7"}': { id: 7n, contentId: 1n, asset: 0 },
+      content: { id: 1n },
+    });
+    const registeredHandlers = await loadHandlers();
+
+    const handler = registeredHandlers.get(
+      "FeedbackBonusEscrow:FeedbackBonusFunderRefunded",
+    );
+    expect(handler).toBeDefined();
+
+    // Emitted when ProtocolConfig has no treasury set, so the expired pool's
+    // residue is refunded to the original funder instead of the treasury.
+    await handler!({
+      event: {
+        args: {
+          poolId: 7n,
+          funder: "0x0000000000000000000000000000000000000001",
+          amount: 90_000_000n,
+        },
+        block: { number: 12n, timestamp: 1_900n },
+      },
+      context: { db },
+    });
+
+    // Drives the same terminal state as FeedbackBonusForfeited: drained and forfeited.
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "feedbackBonusPool",
+        key: { id: 7n },
+        values: expect.objectContaining({
+          remainingAmount: 0n,
+          forfeitedAmount: 90_000_000n,
+          forfeited: true,
+        }),
+      }),
+    );
+    expect(updates).toContainEqual(expect.objectContaining({ table: "content" }));
+  });
 });

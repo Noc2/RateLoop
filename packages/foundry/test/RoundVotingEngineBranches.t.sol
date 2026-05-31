@@ -730,7 +730,11 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(engine.voterCommitHash(contentId, artifacts.roundId, permitVoter), artifacts.commitHash);
     }
 
-    function test_CommitVoteWithPermitRejectsAlreadyConsumedPermit() public {
+    function test_CommitVoteWithPermitToleratesFrontRunConsumedPermit() public {
+        // A mempool observer front-runs the public permit, consuming the voter's
+        // nonce. The appended-permit commit must still succeed (the front-run
+        // already set the allowance) rather than reverting and bricking the
+        // single-transaction permit-backed commit.
         uint256 voterKey = 0xB0B;
         address permitVoter = vm.addr(voterKey);
         vm.prank(owner);
@@ -743,12 +747,39 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 deadline = block.timestamp + 1 hours;
         (uint8 v, bytes32 r, bytes32 s) = _signLrepPermit(voterKey, permitVoter, address(engine), STAKE, deadline);
 
+        // Front-runner replays the permit, consuming the nonce and setting allowance.
         lrepToken.permit(permitVoter, address(engine), STAKE, deadline, v, r, s);
+        assertEq(lrepToken.allowance(permitVoter, address(engine)), STAKE);
+
+        // The commit still goes through: the stale permit reverts internally but
+        // is swallowed, and the already-granted allowance covers the stake.
+        _commitVoteWithAppendedPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
+
+        assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
+        assertEq(lrepToken.balanceOf(address(engine)), STAKE);
+        assertEq(engine.voterCommitHash(contentId, artifacts.roundId, permitVoter), artifacts.commitHash);
+    }
+
+    function test_CommitVoteWithPermitRevertsWhenNoAllowanceAfterFailedPermit() public {
+        // If the appended permit is invalid AND there is no pre-existing
+        // allowance, the commit must still revert (fail-closed, no free stake).
+        uint256 voterKey = 0xB0BB1E;
+        address permitVoter = vm.addr(voterKey);
+        vm.prank(owner);
+        lrepToken.mint(permitVoter, 10_000e6);
+        uint256 contentId = _submitContent();
+        bytes32 salt = keccak256("permit-invalid");
+        _openRoundForTest(engine, contentId, permitVoter);
+        TestCommitArtifacts memory artifacts =
+            _buildTestCommitArtifacts(address(engine), permitVoter, true, salt, contentId);
+        uint256 deadline = block.timestamp + 1 hours;
+        // Sign a permit for a different spender so it never grants an allowance to the engine.
+        (uint8 v, bytes32 r, bytes32 s) = _signLrepPermit(voterKey, permitVoter, address(0xdead), STAKE, deadline);
 
         vm.expectRevert();
         _commitVoteWithAppendedPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
 
-        assertEq(lrepToken.allowance(permitVoter, address(engine)), STAKE);
+        assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
         assertEq(engine.voterCommitHash(contentId, artifacts.roundId, permitVoter), bytes32(0));
     }
 
