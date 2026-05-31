@@ -3706,6 +3706,61 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(reward, expectedReward);
     }
 
+    function testClusterRewardPoolPaysAllMerkleProofClaimantsWithEffectiveWeights() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        address[] memory voters = _fourVoters();
+        uint256 roundId = _settleRoundWith(voters, contentId, _directions(true, true, false, true));
+
+        uint16[4] memory independenceBps = [uint16(10_000), uint16(10_000), uint16(6_000), uint16(4_000)];
+        uint256[4] memory expectedRewards =
+            [uint256(33_333_333), uint256(33_333_333), uint256(20_000_000), uint256(13_333_334)];
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](4);
+        bytes32[] memory leaves = new bytes32[](4);
+        uint32 effectiveParticipantUnits;
+        uint256 totalClaimWeight;
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            payoutWeights[i] = _clusterPayoutWeight(rewardPoolId, contentId, roundId, i);
+            payoutWeights[i].independenceBps = independenceBps[i];
+            payoutWeights[i].effectiveWeight = (payoutWeights[i].baseWeight * uint256(independenceBps[i])) / 10_000;
+            payoutWeights[i].reasonHash = keccak256(abi.encodePacked("multi-claim-cluster-payout", i));
+            leaves[i] = oracle.payoutWeightLeaf(payoutWeights[i]);
+            effectiveParticipantUnits += independenceBps[i];
+            totalClaimWeight += payoutWeights[i].effectiveWeight;
+        }
+
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            uint32(voters.length),
+            effectiveParticipantUnits,
+            totalClaimWeight,
+            _merkleRoot(leaves)
+        );
+
+        uint256 totalClaimed;
+        for (uint256 i = 0; i < voters.length; i++) {
+            bytes32[] memory proof = _merkleProof(leaves, leaves[i]);
+            uint256 claimable = rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+                rewardPoolId, roundId, voters[i], payoutWeights[i], proof
+            );
+            assertEq(claimable, expectedRewards[i], "claimable weighted reward");
+
+            vm.prank(voters[i]);
+            uint256 claimed = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeights[i], proof);
+            assertEq(claimed, expectedRewards[i], "claimed weighted reward");
+            totalClaimed += claimed;
+        }
+
+        assertEq(totalClaimed, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
+    }
+
     function testClusterRewardPoolSkipsRawIneligibleRoundWithoutOracleSnapshot() public {
         _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
@@ -4917,6 +4972,73 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             effectiveWeight: baseWeight,
             reasonHash: keccak256("cluster-payout")
         });
+    }
+
+    function _merkleRoot(bytes32[] memory leaves) internal pure returns (bytes32) {
+        bytes32[] memory level = _sortedLeaves(leaves);
+        while (level.length > 1) {
+            level = _nextMerkleLevel(level);
+        }
+        return level.length == 0 ? bytes32(0) : level[0];
+    }
+
+    function _merkleProof(bytes32[] memory leaves, bytes32 leaf) internal pure returns (bytes32[] memory proof) {
+        bytes32[] memory level = _sortedLeaves(leaves);
+        uint256 leafIndex = _findLeafIndex(level, leaf);
+        proof = new bytes32[](_merkleDepth(level.length));
+        uint256 proofIndex;
+
+        while (level.length > 1) {
+            uint256 siblingIndex = leafIndex % 2 == 0 ? leafIndex + 1 : leafIndex - 1;
+            proof[proofIndex++] = siblingIndex < level.length ? level[siblingIndex] : level[leafIndex];
+            leafIndex = leafIndex / 2;
+            level = _nextMerkleLevel(level);
+        }
+    }
+
+    function _sortedLeaves(bytes32[] memory leaves) internal pure returns (bytes32[] memory sorted) {
+        sorted = new bytes32[](leaves.length);
+        for (uint256 i = 0; i < leaves.length; i++) {
+            sorted[i] = leaves[i];
+        }
+        for (uint256 i = 0; i < sorted.length; i++) {
+            for (uint256 j = i + 1; j < sorted.length; j++) {
+                if (uint256(sorted[j]) < uint256(sorted[i])) {
+                    bytes32 current = sorted[i];
+                    sorted[i] = sorted[j];
+                    sorted[j] = current;
+                }
+            }
+        }
+    }
+
+    function _nextMerkleLevel(bytes32[] memory level) internal pure returns (bytes32[] memory next) {
+        next = new bytes32[]((level.length + 1) / 2);
+        for (uint256 i = 0; i < level.length; i += 2) {
+            bytes32 right = i + 1 < level.length ? level[i + 1] : level[i];
+            next[i / 2] = _hashSortedPair(level[i], right);
+        }
+    }
+
+    function _hashSortedPair(bytes32 left, bytes32 right) internal pure returns (bytes32) {
+        return
+            uint256(left) <= uint256(right)
+                ? keccak256(bytes.concat(left, right))
+                : keccak256(bytes.concat(right, left));
+    }
+
+    function _findLeafIndex(bytes32[] memory level, bytes32 leaf) internal pure returns (uint256) {
+        for (uint256 i = 0; i < level.length; i++) {
+            if (level[i] == leaf) return i;
+        }
+        revert("Leaf not found");
+    }
+
+    function _merkleDepth(uint256 leafCount) internal pure returns (uint256 depth) {
+        while (leafCount > 1) {
+            leafCount = (leafCount + 1) / 2;
+            depth++;
+        }
     }
 
     function _createRewardPoolWithEligibility(
