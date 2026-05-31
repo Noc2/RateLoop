@@ -9,7 +9,7 @@ import { getRevertReason } from "./revert-utils.js";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const PROTOCOL_FRONTEND_FEE_DISPOSITION = 2;
 
-interface FrontendFeeBackfillCursor {
+interface FrontendFeeSweepCursor {
   contentId: bigint;
   roundId: bigint;
 }
@@ -21,22 +21,48 @@ interface FrontendFeeSweepResult {
   withdrawnAmount: bigint;
 }
 
-const backfillCursors = new Map<string, FrontendFeeBackfillCursor>();
+const recentCursors = new Map<string, FrontendFeeSweepCursor>();
+const backfillCursors = new Map<string, FrontendFeeSweepCursor>();
 
 export function resetFrontendFeeSweepStateForTests(): void {
+  recentCursors.clear();
   backfillCursors.clear();
 }
 
-function backfillCursorKey(params: {
+function sweepCursorKey(params: {
   frontendAddress: `0x${string}`;
   distributorAddress: `0x${string}`;
+  scope: "recent" | "backfill";
 }): string {
-  return `${params.distributorAddress.toLowerCase()}:${params.frontendAddress.toLowerCase()}`;
+  return `${params.scope}:${params.distributorAddress.toLowerCase()}:${params.frontendAddress.toLowerCase()}`;
 }
 
-function nextBackfillContentId(contentId: bigint, nextContentId: bigint): bigint {
+function nextSweepContentId(contentId: bigint, nextContentId: bigint): bigint {
   const next = contentId + 1n;
   return next < nextContentId ? next : 1n;
+}
+
+async function readLatestRoundId(params: {
+  publicClient: PublicClient;
+  contentId: bigint;
+  cache: Map<bigint, bigint | null>;
+}): Promise<bigint | null> {
+  if (params.cache.has(params.contentId)) {
+    return params.cache.get(params.contentId) ?? null;
+  }
+
+  try {
+    const { latestRoundId } = await readCurrentRoundIds(
+      params.publicClient,
+      config.contracts.votingEngine,
+      params.contentId,
+    );
+    params.cache.set(params.contentId, latestRoundId);
+    return latestRoundId;
+  } catch {
+    params.cache.set(params.contentId, null);
+    return null;
+  }
 }
 
 async function previewAndClaimFrontendFee(params: {
@@ -102,6 +128,111 @@ async function previewAndClaimFrontendFee(params: {
   }
 }
 
+async function scanFrontendFeeWindow(params: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  chain: Chain;
+  account: Account;
+  logger: Logger;
+  contracts: NonNullable<typeof config.frontendFees.contracts>;
+  frontendAddress: `0x${string}`;
+  nextContentId: bigint;
+  lookbackRounds: bigint;
+  maxRounds: number;
+  scope: "recent" | "backfill";
+  cursors: Map<string, FrontendFeeSweepCursor>;
+  latestRoundIdsByContent: Map<bigint, bigint | null>;
+}): Promise<number> {
+  if (params.maxRounds <= 0 || params.nextContentId <= 1n) {
+    return 0;
+  }
+
+  const cursorKey = sweepCursorKey({
+    frontendAddress: params.frontendAddress,
+    distributorAddress: params.contracts.roundRewardDistributor,
+    scope: params.scope,
+  });
+  const contentCount = params.nextContentId - 1n;
+  let cursor = params.cursors.get(cursorKey) ?? { contentId: 1n, roundId: 1n };
+  let scannedSlots = 0;
+  let contentWithoutSweepWork = 0n;
+  let roundsClaimed = 0;
+
+  while (scannedSlots < params.maxRounds && contentWithoutSweepWork < contentCount) {
+    if (cursor.contentId < 1n || cursor.contentId >= params.nextContentId) {
+      cursor = { contentId: 1n, roundId: 1n };
+    }
+
+    const latestRoundId = await readLatestRoundId({
+      publicClient: params.publicClient,
+      contentId: cursor.contentId,
+      cache: params.latestRoundIdsByContent,
+    });
+
+    if (!latestRoundId || latestRoundId === 0n) {
+      scannedSlots++;
+      cursor = {
+        contentId: nextSweepContentId(cursor.contentId, params.nextContentId),
+        roundId: 1n,
+      };
+      contentWithoutSweepWork++;
+      continue;
+    }
+
+    const recentStartRoundId =
+      latestRoundId > params.lookbackRounds ? latestRoundId - params.lookbackRounds + 1n : 1n;
+    const windowStart = params.scope === "recent" ? recentStartRoundId : 1n;
+    const windowEnd = params.scope === "recent" ? latestRoundId : recentStartRoundId - 1n;
+
+    if (windowEnd < windowStart) {
+      scannedSlots++;
+      cursor = {
+        contentId: nextSweepContentId(cursor.contentId, params.nextContentId),
+        roundId: 1n,
+      };
+      contentWithoutSweepWork++;
+      continue;
+    }
+
+    const roundId = cursor.roundId >= windowStart && cursor.roundId <= windowEnd ? cursor.roundId : windowStart;
+    scannedSlots++;
+    contentWithoutSweepWork = 0n;
+
+    if (
+      await previewAndClaimFrontendFee({
+        publicClient: params.publicClient,
+        walletClient: params.walletClient,
+        chain: params.chain,
+        account: params.account,
+        logger: params.logger,
+        contracts: params.contracts,
+        frontendAddress: params.frontendAddress,
+        contentId: cursor.contentId,
+        roundId,
+      })
+    ) {
+      roundsClaimed++;
+    }
+
+    const nextRoundId = roundId + 1n;
+    if (nextRoundId <= windowEnd) {
+      cursor = {
+        contentId: cursor.contentId,
+        roundId: nextRoundId,
+      };
+    } else {
+      cursor = {
+        contentId: nextSweepContentId(cursor.contentId, params.nextContentId),
+        roundId: 1n,
+      };
+      contentWithoutSweepWork++;
+    }
+  }
+
+  params.cursors.set(cursorKey, cursor);
+  return roundsClaimed;
+}
+
 export async function claimConfiguredFrontendFees(
   publicClient: PublicClient,
   walletClient: WalletClient,
@@ -156,113 +287,39 @@ export async function claimConfiguredFrontendFees(
 
   let roundsClaimed = 0;
   const lookbackRounds = BigInt(Math.max(1, config.frontendFees.lookbackRounds));
-  const latestRoundIdsByContent = new Map<bigint, bigint>();
-
-  for (let contentId = 1n; contentId < nextContentId; contentId++) {
-    let latestRoundId: bigint;
-    try {
-      ({ latestRoundId } = await readCurrentRoundIds(publicClient, config.contracts.votingEngine, contentId));
-    } catch {
-      continue;
-    }
-
-    if (latestRoundId === 0n) {
-      continue;
-    }
-    latestRoundIdsByContent.set(contentId, latestRoundId);
-
-    const recentStartRoundId = latestRoundId > lookbackRounds ? latestRoundId - lookbackRounds + 1n : 1n;
-    for (let roundId = recentStartRoundId; roundId <= latestRoundId; roundId++) {
-      if (
-        await previewAndClaimFrontendFee({
-          publicClient,
-          walletClient,
-          chain,
-          account,
-          logger,
-          contracts,
-          frontendAddress,
-          contentId,
-          roundId,
-        })
-      ) {
-        roundsClaimed++;
-      }
-    }
-  }
+  const latestRoundIdsByContent = new Map<bigint, bigint | null>();
+  roundsClaimed += await scanFrontendFeeWindow({
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+    contracts,
+    frontendAddress,
+    nextContentId,
+    lookbackRounds,
+    maxRounds: config.frontendFees.recentRoundsPerTick,
+    scope: "recent",
+    cursors: recentCursors,
+    latestRoundIdsByContent,
+  });
 
   const backfillBudget = config.frontendFees.backfillRoundsPerTick;
-  if (backfillBudget > 0 && nextContentId > 1n) {
-    const cursorKey = backfillCursorKey({
-      frontendAddress,
-      distributorAddress: contracts.roundRewardDistributor,
-    });
-    let cursor = backfillCursors.get(cursorKey) ?? { contentId: 1n, roundId: 1n };
-    let scannedRounds = 0;
-    let contentWithoutBackfillRounds = 0n;
-    const contentCount = nextContentId - 1n;
-
-    while (scannedRounds < backfillBudget && contentWithoutBackfillRounds < contentCount) {
-      if (cursor.contentId < 1n || cursor.contentId >= nextContentId) {
-        cursor = { contentId: 1n, roundId: 1n };
-      }
-
-      const latestRoundId = latestRoundIdsByContent.get(cursor.contentId);
-      if (!latestRoundId || latestRoundId === 0n) {
-        cursor = {
-          contentId: nextBackfillContentId(cursor.contentId, nextContentId),
-          roundId: 1n,
-        };
-        contentWithoutBackfillRounds++;
-        continue;
-      }
-
-      const recentStartRoundId = latestRoundId > lookbackRounds ? latestRoundId - lookbackRounds + 1n : 1n;
-      if (recentStartRoundId <= 1n) {
-        cursor = {
-          contentId: nextBackfillContentId(cursor.contentId, nextContentId),
-          roundId: 1n,
-        };
-        contentWithoutBackfillRounds++;
-        continue;
-      }
-
-      const roundId = cursor.roundId > 0n && cursor.roundId < recentStartRoundId ? cursor.roundId : 1n;
-      scannedRounds++;
-      contentWithoutBackfillRounds = 0n;
-      if (
-        await previewAndClaimFrontendFee({
-          publicClient,
-          walletClient,
-          chain,
-          account,
-          logger,
-          contracts,
-          frontendAddress,
-          contentId: cursor.contentId,
-          roundId,
-        })
-      ) {
-        roundsClaimed++;
-      }
-
-      const nextRoundId = roundId + 1n;
-      if (nextRoundId < recentStartRoundId) {
-        cursor = {
-          contentId: cursor.contentId,
-          roundId: nextRoundId,
-        };
-      } else {
-        cursor = {
-          contentId: nextBackfillContentId(cursor.contentId, nextContentId),
-          roundId: 1n,
-        };
-        contentWithoutBackfillRounds++;
-      }
-    }
-
-    backfillCursors.set(cursorKey, cursor);
-  }
+  roundsClaimed += await scanFrontendFeeWindow({
+    publicClient,
+    walletClient,
+    chain,
+    account,
+    logger,
+    contracts,
+    frontendAddress,
+    nextContentId,
+    lookbackRounds,
+    maxRounds: backfillBudget,
+    scope: "backfill",
+    cursors: backfillCursors,
+    latestRoundIdsByContent,
+  });
 
   let withdrawals = 0;
   let withdrawnAmount = 0n;

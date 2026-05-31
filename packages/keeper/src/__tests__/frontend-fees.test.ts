@@ -24,6 +24,7 @@ const {
       enabled: true,
       frontendAddress: undefined as `0x${string}` | undefined,
       lookbackRounds: 8,
+      recentRoundsPerTick: 50,
       backfillRoundsPerTick: 50,
       withdrawEnabled: true,
       contracts: {
@@ -83,6 +84,7 @@ describe("claimConfiguredFrontendFees", () => {
     mockConfig.frontendFees.enabled = true;
     mockConfig.frontendFees.frontendAddress = undefined;
     mockConfig.frontendFees.lookbackRounds = 8;
+    mockConfig.frontendFees.recentRoundsPerTick = 50;
     mockConfig.frontendFees.backfillRoundsPerTick = 50;
     mockConfig.frontendFees.withdrawEnabled = true;
     mockConfig.frontendFees.contracts = {
@@ -251,6 +253,90 @@ describe("claimConfiguredFrontendFees", () => {
         address: ROUND_REWARD_DISTRIBUTOR,
         functionName: "claimFrontendFee",
         args: [1n, 3n, ACCOUNT],
+      }),
+    );
+  });
+
+  it("bounds recent frontend fee scans and resumes from the cursor", async () => {
+    mockConfig.frontendFees.lookbackRounds = 3;
+    mockConfig.frontendFees.recentRoundsPerTick = 2;
+    mockConfig.frontendFees.backfillRoundsPerTick = 0;
+    mockConfig.frontendFees.withdrawEnabled = false;
+    const logger = makeLogger();
+    const publicClient = {
+      readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
+        switch (functionName) {
+          case "nextContentId":
+            return 3n;
+          case "previewFrontendFee":
+            return [15n, 0, ACCOUNT, false] as const;
+          default:
+            throw new Error(`Unexpected readContract(${functionName})`);
+        }
+      }),
+    };
+
+    readCurrentRoundIds.mockResolvedValue({
+      activeRoundId: 0n,
+      latestRoundId: 3n,
+    });
+    readRound.mockResolvedValue({
+      state: 1,
+    });
+    writeContractAndConfirm.mockResolvedValue("0xabc");
+
+    const firstResult = await claimConfiguredFrontendFees(
+      publicClient as never,
+      {} as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger as never,
+    );
+
+    const secondResult = await claimConfiguredFrontendFees(
+      publicClient as never,
+      {} as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger as never,
+    );
+
+    expect(firstResult.roundsClaimed).toBe(2);
+    expect(secondResult.roundsClaimed).toBe(2);
+    expect(writeContractAndConfirm).toHaveBeenNthCalledWith(
+      1,
+      publicClient,
+      {},
+      expect.objectContaining({
+        functionName: "claimFrontendFee",
+        args: [1n, 1n, ACCOUNT],
+      }),
+    );
+    expect(writeContractAndConfirm).toHaveBeenNthCalledWith(
+      2,
+      publicClient,
+      {},
+      expect.objectContaining({
+        functionName: "claimFrontendFee",
+        args: [1n, 2n, ACCOUNT],
+      }),
+    );
+    expect(writeContractAndConfirm).toHaveBeenNthCalledWith(
+      3,
+      publicClient,
+      {},
+      expect.objectContaining({
+        functionName: "claimFrontendFee",
+        args: [1n, 3n, ACCOUNT],
+      }),
+    );
+    expect(writeContractAndConfirm).toHaveBeenNthCalledWith(
+      4,
+      publicClient,
+      {},
+      expect.objectContaining({
+        functionName: "claimFrontendFee",
+        args: [2n, 1n, ACCOUNT],
       }),
     );
   });
