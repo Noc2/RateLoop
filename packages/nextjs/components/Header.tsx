@@ -467,7 +467,9 @@ export const Header = () => {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const voteMobileLayoutQuery = window.matchMedia(VOTE_MOBILE_LAYOUT_MEDIA_QUERY);
+    const voteMobileLayoutQuery = shouldUseVoteLayoutCollapse
+      ? window.matchMedia(VOTE_MOBILE_LAYOUT_MEDIA_QUERY)
+      : null;
     let explicitScrollSource: HTMLElement | null = null;
 
     const readScrollOffset = (source: Window | HTMLElement) =>
@@ -506,7 +508,11 @@ export const Header = () => {
         return window;
       }
 
-      if (target instanceof HTMLElement && target.getAttribute(MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE) === "true") {
+      if (
+        shouldUseVoteLayoutCollapse &&
+        target instanceof HTMLElement &&
+        target.getAttribute(MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE) === "true"
+      ) {
         return target;
       }
 
@@ -543,7 +549,7 @@ export const Header = () => {
       if (
         scrollSource === window &&
         shouldUseVoteLayoutCollapse &&
-        voteMobileLayoutQuery.matches &&
+        voteMobileLayoutQuery?.matches &&
         explicitScrollSource &&
         !mobileSearchOpen &&
         !isMobileMenuOpen
@@ -722,24 +728,27 @@ export const Header = () => {
       });
     };
 
-    const mutationObserver = new MutationObserver(requestExplicitScrollSourceBind);
+    let mutationObserver: MutationObserver | null = null;
 
     setInitialScrollState(window);
-    bindExplicitScrollSource();
+    if (shouldUseVoteLayoutCollapse) {
+      bindExplicitScrollSource();
+      mutationObserver = new MutationObserver(requestExplicitScrollSourceBind);
+      mutationObserver.observe(document.body, {
+        attributeFilter: [MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE],
+        attributes: true,
+        childList: true,
+        subtree: true,
+      });
+    }
     window.addEventListener("scroll", handleScroll, { capture: true, passive: true });
-    mutationObserver.observe(document.body, {
-      attributeFilter: [MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE],
-      attributes: true,
-      childList: true,
-      subtree: true,
-    });
 
     return () => {
       if (bindFrameId !== 0) {
         window.cancelAnimationFrame(bindFrameId);
       }
       clearDeferredVoteLayoutVisibility();
-      mutationObserver.disconnect();
+      mutationObserver?.disconnect();
       if (explicitScrollSource) {
         explicitScrollSource.removeEventListener("scroll", handleScroll);
       }
