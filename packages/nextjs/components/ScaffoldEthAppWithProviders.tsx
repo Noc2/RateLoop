@@ -15,7 +15,7 @@ import { NavigationProgressDiagnostics } from "~~/components/NavigationProgressD
 import { RouteScopedNotifiers } from "~~/components/RouteScopedNotifiers";
 import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
-import { FaucetModal, FaucetTrigger } from "~~/components/scaffold-eth";
+import { FaucetTrigger } from "~~/components/scaffold-eth/FaucetTrigger";
 import { LocalTestWalletBridge } from "~~/components/thirdweb/LocalTestWalletBridge";
 import { ThirdwebAutoConnectBridge } from "~~/components/thirdweb/ThirdwebAutoConnectBridge";
 import { ThirdwebConnectorWalletBridge } from "~~/components/thirdweb/ThirdwebConnectorWalletBridge";
@@ -31,11 +31,16 @@ const TermsAcceptanceModal = dynamic(
   { ssr: false },
 );
 
+const FaucetModal = dynamic(() => import("~~/components/scaffold-eth/Faucet").then(m => m.FaucetModal), {
+  ssr: false,
+});
+
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname() ?? "";
   const isVoteFeedRoute = pathname === RATE_ROUTE;
   const { targetNetwork } = useTargetNetwork();
-  const showVoteFeedMobileFaucet = isVoteFeedRoute && targetNetwork.id === hardhat.id;
+  const showHardhatFaucet = targetNetwork.id === hardhat.id;
+  const showVoteFeedMobileFaucet = isVoteFeedRoute && showHardhatFaucet;
 
   return (
     <MobileHeaderVisibilityProvider>
@@ -69,7 +74,7 @@ const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
       </div>
       <Toaster />
       <RouteScopedNotifiers />
-      <FaucetModal />
+      {showHardhatFaucet ? <FaucetModal /> : null}
     </MobileHeaderVisibilityProvider>
   );
 };

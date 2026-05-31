@@ -8,6 +8,7 @@ import { Address as AddressType, createPublicClient, createWalletClient, http, p
 import { hardhat } from "viem/chains";
 import { useAccount } from "wagmi";
 import { GiftIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { FAUCET_MODAL_ID } from "~~/components/scaffold-eth/FaucetTrigger";
 import { useTransactor } from "~~/hooks/scaffold-eth";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { notification } from "~~/utils/scaffold-eth";
@@ -70,16 +71,6 @@ const questionRewardPoolEscrowAbi = [
   },
 ] as const;
 
-/**
- * Shared ID used by faucet triggers and the single app-level modal.
- */
-const FAUCET_MODAL_ID = "faucet-modal";
-
-type FaucetTriggerProps = {
-  className?: string;
-  textClassName?: string;
-};
-
 async function resolveFundedLrepFaucetAddress(
   lrepTokenAddress: AddressType | undefined,
   requiredAmount = 1n,
@@ -107,24 +98,6 @@ async function resolveFundedLrepFaucetAddress(
     .filter(({ balance }) => balance >= requiredAmount)
     .sort((left, right) => (left.balance === right.balance ? 0 : left.balance > right.balance ? -1 : 1))[0]?.account;
 }
-
-export const FaucetTrigger = ({
-  className = "flex items-center justify-center xl:justify-start gap-3 xl:px-4 py-3 rounded-xl transition-colors text-base-content/60 hover:text-base-content hover:bg-base-200 w-full cursor-pointer",
-  textClassName = "hidden xl:inline",
-}: FaucetTriggerProps) => {
-  const { chain: connectedChain } = useAccount();
-
-  if (connectedChain?.id !== hardhat.id) {
-    return null;
-  }
-
-  return (
-    <label htmlFor={FAUCET_MODAL_ID} className={className}>
-      <GiftIcon className="w-6 h-6 shrink-0" />
-      <span className={textClassName}>Faucet</span>
-    </label>
-  );
-};
 
 /**
  * Faucet modal which lets you send ETH and claim LREP tokens on local testnet.
