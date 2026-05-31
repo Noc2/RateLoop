@@ -238,7 +238,7 @@ body {
 }
 
 .rateloop-gradient-action[data-motion="intro"] {
-  animation: rateloop-gradient-border-intro 2.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rateloop-gradient-border-intro 4.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .rateloop-gradient-action[data-motion="processing"] {
