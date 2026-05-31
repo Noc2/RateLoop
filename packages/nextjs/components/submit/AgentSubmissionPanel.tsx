@@ -18,6 +18,7 @@ import {
   PlayCircleIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
@@ -1090,14 +1091,13 @@ export function AgentSubmissionPanel() {
             <button type="button" className="btn btn-outline btn-sm" onClick={handleResetSetup}>
               Reset
             </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
+            <GradientActionButton
+              size="sm"
               disabled={!agentWalletAddress || agentWalletInputInvalid}
               onClick={() => setActiveSetupStep("fund")}
             >
               Continue
-            </button>
+            </GradientActionButton>
           </div>
         </div>
       ) : null}
@@ -1147,8 +1147,7 @@ export function AgentSubmissionPanel() {
                       </span>
                     </div>
                   </label>
-                  <button
-                    type="button"
+                  <GradientActionButton
                     onClick={() => void handleTransferUsdc()}
                     disabled={
                       !address ||
@@ -1157,11 +1156,12 @@ export function AgentSubmissionPanel() {
                       agentWalletMatchesConnectedWallet ||
                       isTransferringUsdc
                     }
-                    className="btn btn-primary btn-sm"
+                    size="sm"
+                    motion={getGradientActionMotion(isTransferringUsdc)}
                   >
                     <WalletIcon className="h-4 w-4" />
                     {isTransferringUsdc ? "Transferring..." : "Transfer USDC"}
-                  </button>
+                  </GradientActionButton>
                 </div>
                 {agentWalletMatchesConnectedWallet ? (
                   <p className="mt-3 text-sm text-base-content/60">
@@ -1205,13 +1205,12 @@ export function AgentSubmissionPanel() {
             <button type="button" className="btn btn-outline btn-sm" onClick={() => setActiveSetupStep("wallet")}>
               Back
             </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
+            <GradientActionButton
+              size="sm"
               onClick={() => setActiveSetupStep(policyControlsEnabled ? "policy" : "mcp")}
             >
               Continue
-            </button>
+            </GradientActionButton>
           </div>
         </div>
       ) : null}

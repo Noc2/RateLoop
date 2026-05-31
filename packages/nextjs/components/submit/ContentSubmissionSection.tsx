@@ -3093,14 +3093,9 @@ export function ContentSubmissionSection() {
       >
         Back
       </button>
-      <button
-        type="button"
-        onClick={handleGoToFeedbackBonusStep}
-        className="btn btn-submit w-full sm:flex-1"
-        disabled={isSubmitting}
-      >
+      <GradientActionButton onClick={handleGoToFeedbackBonusStep} className="w-full sm:flex-1" disabled={isSubmitting}>
         Continue
-      </button>
+      </GradientActionButton>
     </div>
   );
 
@@ -3777,11 +3772,11 @@ export function ContentSubmissionSection() {
                     Back to Q{activeQuestionIndex}
                   </button>
                 ) : null}
-                <button type="button" onClick={handleContinueToBounty} className="btn btn-primary w-full">
+                <GradientActionButton onClick={handleContinueToBounty} className="w-full">
                   {activeQuestionIndex < questionCount - 1
                     ? `Next Question (${activeQuestionIndex + 2}/${questionCount})`
                     : "Continue to Bounty"}
-                </button>
+                </GradientActionButton>
               </div>
             </div>
           ) : submissionStep === "bounty" ? (
