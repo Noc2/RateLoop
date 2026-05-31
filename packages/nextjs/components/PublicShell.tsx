@@ -31,7 +31,7 @@ function PublicSignInButton({ className = "" }: { className?: string }) {
 
 function PublicMobileHeader() {
   return (
-    <header className="sticky top-0 z-20 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl sm:px-6 lg:hidden">
+    <header className="sticky top-0 z-20 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl sm:px-6 xl:hidden">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
         <HeaderBrand brandIdPrefix="rateloop-public-header-logo" compact />
 
@@ -56,7 +56,7 @@ function PublicMobileHeader() {
 
 function PublicDesktopSidebar() {
   return (
-    <aside className="fixed left-0 top-0 z-20 hidden h-screen w-52 shrink-0 flex-col items-stretch border-r border-[color:var(--rateloop-shell-border-strong)] bg-black py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] lg:flex">
+    <aside className="fixed left-0 top-0 z-20 hidden h-screen w-52 shrink-0 flex-col items-stretch border-r border-[color:var(--rateloop-shell-border-strong)] bg-black py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] xl:flex">
       <HeaderBrand brandIdPrefix="rateloop-public-sidebar-logo" className="mb-4 shrink-0 px-4" />
       <div className="mb-4 w-full min-w-0 px-2.5">
         <Suspense>
@@ -82,15 +82,15 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-base-100 text-base-content">
-      <div className="lg:pl-52">
+      <div className="xl:pl-52">
         <TestnetNoticeBanner targetChainId={publicTargetChainId} />
       </div>
       <PublicMobileHeader />
       <PublicDesktopSidebar />
-      <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden lg:pl-52">
+      <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden xl:pl-52">
         {children}
       </main>
-      <footer className="shrink-0 border-t border-white/10 px-4 py-10 lg:pl-52">
+      <footer className="shrink-0 border-t border-white/10 px-4 py-10 xl:pl-52">
         <FooterLinks
           className="w-full"
           listClassName="w-full justify-center text-sm lg:text-base"
