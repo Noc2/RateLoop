@@ -881,10 +881,13 @@ contract RoundVotingEngine is
         // past-epoch stakes stay locked until they are cleaned up.
         // Loop is bounded: votes can only be committed during maxDuration, so no
         // epochUnrevealedCount entries exist beyond startTime + maxDuration + epochDuration.
-        uint256 unrevealedPastEpochCount = _pastEpochUnrevealedCount(contentId, roundId, round, roundCfg);
-        if (unrevealedPastEpochCount > 0) {
-            if (!_isSettlementRevealGraceElapsed(contentId, roundId, round)) revert UnrevealedPastEpochVotes();
-            roundUnrevealedCleanupRemaining[contentId][roundId] = unrevealedPastEpochCount;
+        uint256 unrevealedPastEpochCount;
+        if (round.voteCount > round.revealedCount) {
+            unrevealedPastEpochCount = _pastEpochUnrevealedCount(contentId, roundId, round, roundCfg);
+            if (unrevealedPastEpochCount > 0) {
+                if (!_isSettlementRevealGraceElapsed(contentId, roundId, round)) revert UnrevealedPastEpochVotes();
+                roundUnrevealedCleanupRemaining[contentId][roundId] = unrevealedPastEpochCount;
+            }
         }
 
         uint256 weightedRewardStake;
