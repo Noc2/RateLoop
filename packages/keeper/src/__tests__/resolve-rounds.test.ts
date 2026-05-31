@@ -162,7 +162,12 @@ function makeTlockCiphertext(params: {
 function makeCommit(overrides: Partial<CommitData> = {}): CommitData {
   const salt = `0x${"aa".repeat(32)}` as `0x${string}`;
   const targetRound = 123n;
-  const drandChainHash = `0x${"ab".repeat(32)}` as `0x${string}`;
+  // Mainnet quicknet beacon hash — the keeper resolves its tlock client from
+  // this on-chain hash, so it must be a beacon the resolver recognizes (here it
+  // maps to the mocked mainnetClient). An arbitrary placeholder hash would be
+  // (correctly) rejected as an unsupported drand chain.
+  const drandChainHash =
+    "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971" as `0x${string}`;
   const ciphertext = makeTlockCiphertext({
     isUp: true,
     salt,

@@ -252,6 +252,21 @@ function resolveTlockClientForRuntime(
   );
 }
 
+/**
+ * Resolve the tlock client for a round's on-chain drand chain hash. Off-chain
+ * consumers (e.g. the keeper) must decrypt each commit with the same beacon the
+ * round committed to — mainnet `quicknet`, testnet `quicknet-t`, or tlock-js
+ * testnet — rather than hardcoding a single network. Returns the live drand
+ * `ChainClient` (typed here as the minimal `TlockClient` surface used by this
+ * module); pass `undefined`/`null` to fall back to mainnet quicknet.
+ */
+export async function resolveTlockClientForChainHash(
+  drandChainHash?: VoteDrandChainHash | null,
+): Promise<TlockClient> {
+  const tlockModule = await loadTlockModule();
+  return resolveTlockClientForRuntime(tlockModule, { drandChainHash });
+}
+
 function assertTlockChainInfoMatchesRuntime(
   chainInfo: TlockChainInfo,
   runtime: VoteTlockRuntime = {},

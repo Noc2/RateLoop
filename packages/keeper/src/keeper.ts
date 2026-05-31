@@ -17,7 +17,7 @@
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
  */
 import { keccak256, type PublicClient, type WalletClient, type Chain, type Account } from "viem";
-import { timelockDecrypt, mainnetClient } from "tlock-js";
+import { timelockDecrypt, type ChainClient } from "tlock-js";
 import {
   AdvisoryVoteRecorderAbi,
   ContentRegistryAbi,
@@ -27,6 +27,7 @@ import {
 import {
   decodeRbtsVotePlaintext,
   parseTlockCiphertextMetadata,
+  resolveTlockClientForChainHash,
 } from "@rateloop/contracts/voting";
 import {
   type CommitData,
@@ -45,7 +46,31 @@ import type { Logger } from "./logger.js";
 import { incrementCounter } from "./metrics.js";
 import { getRevertReason, isExpectedRevert } from "./revert-utils.js";
 
-const tlockClient = mainnetClient();
+// Each round commits to a specific drand beacon (mainnet quicknet, testnet
+// quicknet-t, or tlock-js testnet) via its on-chain drandChainHash. The keeper
+// must decrypt with that same beacon — using one hardcoded client silently
+// bricks reveals on any deployment that does not use mainnet quicknet (e.g.
+// World Chain Sepolia / 4801, which commits to quicknet-t). Resolve and cache a
+// client per drand chain hash; `undefined` falls back to mainnet quicknet. The
+// resolved object is the live drand ChainClient, typed minimally by voting.ts.
+const tlockClientCache = new Map<string, Promise<ChainClient>>();
+
+function getTlockClient(
+  drandChainHash?: `0x${string}` | null,
+): Promise<ChainClient> {
+  const key = drandChainHash ? drandChainHash.toLowerCase() : "default";
+  let client = tlockClientCache.get(key);
+  if (!client) {
+    client = resolveTlockClientForChainHash(drandChainHash) as Promise<
+      unknown
+    > as Promise<ChainClient>;
+    // Don't cache a rejected resolution (e.g. an unsupported chain hash) so a
+    // later valid commit can retry instead of inheriting the failure.
+    client.catch(() => tlockClientCache.delete(key));
+    tlockClientCache.set(key, client);
+  }
+  return client;
+}
 
 // --- Types ---
 export interface KeeperResult {
@@ -329,6 +354,7 @@ const MAX_CIPHERTEXT_BYTES = 4096;
 
 export async function decryptTlockVoteCiphertext(
   ciphertext: `0x${string}`,
+  drandChainHash?: `0x${string}` | null,
 ): Promise<{
   isUp: boolean;
   predictedUpBps: number;
@@ -340,6 +366,8 @@ export async function decryptTlockVoteCiphertext(
   // Convert hex bytes back to UTF-8 armored string
   const armored = Buffer.from(hex, "hex").toString("utf-8");
 
+  // Decrypt with the beacon the round actually committed to, not a hardcoded one.
+  const tlockClient = await getTlockClient(drandChainHash);
   const plaintext = await timelockDecrypt(armored, tlockClient);
   return decodeRbtsVotePlaintext(plaintext);
 }
@@ -934,7 +962,10 @@ async function _revealCommits(
         salt: `0x${string}`;
       } | null;
       try {
-        decrypted = await decryptTlockVoteCiphertext(ciphertext);
+        decrypted = await decryptTlockVoteCiphertext(
+          ciphertext,
+          commit.drandChainHash,
+        );
       } catch (err: unknown) {
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
@@ -1132,7 +1163,10 @@ async function _revealAdvisoryCommits(
         salt: `0x${string}`;
       } | null;
       try {
-        decrypted = await decryptTlockVoteCiphertext(ciphertext);
+        decrypted = await decryptTlockVoteCiphertext(
+          ciphertext,
+          commit.drandChainHash,
+        );
       } catch (err: unknown) {
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
