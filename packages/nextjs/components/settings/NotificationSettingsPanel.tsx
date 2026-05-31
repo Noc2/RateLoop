@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BellAlertIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton } from "~~/components/shared/GradientAction";
 import { useEmailNotificationSettings } from "~~/hooks/useEmailNotificationSettings";
 import { type NotificationPreferences, useNotificationPreferences } from "~~/hooks/useNotificationPreferences";
 import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
@@ -250,17 +251,16 @@ export function NotificationSettingsPanel({
               Sign in to choose which in-app, browser, and email alerts you want to receive.
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary px-6"
+          <GradientActionButton
+            className="sm:min-w-40"
             disabled={isConnecting}
-            aria-busy={isConnecting || undefined}
+            motion={isConnecting ? "processing" : "idle"}
             onClick={() => {
               void openConnectModal();
             }}
           >
             {HUMAN_SIGN_IN_LABEL}
-          </button>
+          </GradientActionButton>
         </div>
       </div>
     );

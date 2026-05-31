@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {Test} from "forge-std/Test.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RateLoopGovernor} from "../contracts/governance/RateLoopGovernor.sol";
 
 contract GovernanceGasBudgetTest is Test {
     uint256 internal constant MAX_QUORUM_MAX_EXCLUDED_HOLDERS_GAS = 250_000;
@@ -29,15 +29,14 @@ contract GovernanceGasBudgetTest is Test {
         LoopReputation token = new LoopReputation(DEPLOYER, DEPLOYER);
         token.grantRole(token.MINTER_ROLE(), DEPLOYER);
 
-        TimelockController timelock = new TimelockController(2 days, new address[](0), new address[](0), DEPLOYER);
-        RateLoopGovernor governor = new RateLoopGovernor(IVotes(address(token)), timelock);
-
-        uint256 holderCount = governor.MAX_EXCLUDED_HOLDERS();
+        uint256 holderCount = 64;
         address[] memory holders = new address[](holderCount);
         for (uint256 i = 0; i < holderCount; i++) {
             holders[i] = address(uint160(100 + i));
         }
-        governor.initializePools(holders);
+
+        TimelockController timelock = new TimelockController(2 days, new address[](0), new address[](0), DEPLOYER);
+        RateLoopGovernor governor = new RateLoopGovernor(IVotes(address(token)), timelock, holders);
 
         for (uint256 i = 0; i < holderCount; i++) {
             token.mint(holders[i], 1_000_000e6);

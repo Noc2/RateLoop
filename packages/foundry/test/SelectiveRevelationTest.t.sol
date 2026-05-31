@@ -547,6 +547,36 @@ contract SelectiveRevelationTest is VotingTestBase {
         }
     }
 
+    function test_PostThresholdRevealAfterFinalGrace_RevertsAndLeavesStakeForCleanup() public {
+        uint256 contentId = _submitContent();
+
+        bytes32[4] memory commitKeys;
+        bytes32[4] memory salts;
+        bool[4] memory directions = [true, true, true, false];
+
+        for (uint256 i = 0; i < 4; i++) {
+            (commitKeys[i], salts[i]) = _commit(voters[i], contentId, directions[i], STAKE);
+        }
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
+
+        _reveal(contentId, roundId, commitKeys[0], true, salts[0]);
+        _reveal(contentId, roundId, commitKeys[1], true, salts[1]);
+        _reveal(contentId, roundId, commitKeys[2], true, salts[2]);
+
+        uint256 revealGraceDeadline = engine.lastCommitRevealableAfter(contentId, roundId) + GRACE_PERIOD;
+        vm.warp(revealGraceDeadline + 1);
+
+        vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
+        _reveal(contentId, roundId, commitKeys[3], false, salts[3]);
+
+        _settleAfterRbtsSeed(engine, contentId, roundId);
+        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, commitKeys[3]), 0);
+    }
+
     /// @notice Within grace period, unrevealed votes still block settlement.
     function test_WithinGracePeriod_SettlementBlocked() public {
         uint256 contentId = _submitContent();

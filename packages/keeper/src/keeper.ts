@@ -410,26 +410,30 @@ interface IndexedCiphertextRecord {
   ciphertext?: `0x${string}`;
 }
 
-async function fetchIndexedCiphertext(params: {
+type IndexedCiphertextMap = Map<string, IndexedCiphertextRecord>;
+
+function indexedCiphertextKey(commitKey: `0x${string}`): string {
+  return commitKey.toLowerCase();
+}
+
+async function fetchIndexedCiphertextsForRound(params: {
   kind: "vote" | "advisory";
   contentId: bigint;
   roundId: bigint;
-  commitKey: `0x${string}`;
-  expectedCiphertextHash: `0x${string}`;
   logger: Logger;
-}): Promise<`0x${string}` | null> {
+}): Promise<IndexedCiphertextMap | null> {
   if (!config.ponderBaseUrl) {
-    params.logger.warn("PONDER_BASE_URL is not configured; cannot fetch indexed vote ciphertext", {
+    params.logger.warn("PONDER_BASE_URL is not configured; cannot fetch indexed vote ciphertexts", {
       kind: params.kind,
       contentId: Number(params.contentId),
       roundId: Number(params.roundId),
-      commitKey: params.commitKey,
     });
     return null;
   }
 
   try {
     const path = params.kind === "vote" ? "/votes" : "/advisory-votes";
+    const indexedCiphertexts: IndexedCiphertextMap = new Map();
     for (let page = 0; page < MAX_INDEXED_CIPHERTEXT_PAGES; page++) {
       const url = new URL(path, config.ponderBaseUrl);
       url.searchParams.set("contentId", params.contentId.toString());
@@ -452,41 +456,52 @@ async function fetchIndexedCiphertext(params: {
 
       const body = (await response.json()) as { items?: IndexedCiphertextRecord[] };
       const items = body.items ?? [];
-      const record = items.find(
-        item => item.commitKey?.toLowerCase() === params.commitKey.toLowerCase(),
-      );
-      if (!record?.ciphertext || !record.ciphertextHash) {
-        if (items.length < INDEXED_CIPHERTEXT_PAGE_SIZE) return null;
-        continue;
+      for (const item of items) {
+        if (item.commitKey) {
+          indexedCiphertexts.set(indexedCiphertextKey(item.commitKey), item);
+        }
       }
-      if (record.ciphertextHash.toLowerCase() !== params.expectedCiphertextHash.toLowerCase()) {
-        params.logger.error("Indexed ciphertext hash does not match on-chain commit hash", {
-          kind: params.kind,
-          commitKey: params.commitKey,
-          indexedCiphertextHash: record.ciphertextHash,
-          expectedCiphertextHash: params.expectedCiphertextHash,
-        });
-        return null;
-      }
-      if (keccak256(record.ciphertext) !== params.expectedCiphertextHash) {
-        params.logger.error("Indexed ciphertext bytes do not hash to on-chain ciphertext hash", {
-          kind: params.kind,
-          commitKey: params.commitKey,
-          expectedCiphertextHash: params.expectedCiphertextHash,
-        });
-        return null;
-      }
-      return record.ciphertext;
+      if (items.length < INDEXED_CIPHERTEXT_PAGE_SIZE) return indexedCiphertexts;
     }
-    return null;
+    return indexedCiphertexts;
   } catch (err: unknown) {
-    params.logger.warn("Failed to resolve indexed vote ciphertext", {
+    params.logger.warn("Failed to resolve indexed vote ciphertexts", {
       kind: params.kind,
-      commitKey: params.commitKey,
       error: err instanceof Error ? err.message : String(err),
     });
     return null;
   }
+}
+
+function getIndexedCiphertext(params: {
+  indexedCiphertexts: IndexedCiphertextMap;
+  kind: "vote" | "advisory";
+  commitKey: `0x${string}`;
+  expectedCiphertextHash: `0x${string}`;
+  logger: Logger;
+}): `0x${string}` | null {
+  const record = params.indexedCiphertexts.get(indexedCiphertextKey(params.commitKey));
+  if (!record?.ciphertext || !record.ciphertextHash) {
+    return null;
+  }
+  if (record.ciphertextHash.toLowerCase() !== params.expectedCiphertextHash.toLowerCase()) {
+    params.logger.error("Indexed ciphertext hash does not match on-chain commit hash", {
+      kind: params.kind,
+      commitKey: params.commitKey,
+      indexedCiphertextHash: record.ciphertextHash,
+      expectedCiphertextHash: params.expectedCiphertextHash,
+    });
+    return null;
+  }
+  if (keccak256(record.ciphertext) !== params.expectedCiphertextHash) {
+    params.logger.error("Indexed ciphertext bytes do not hash to on-chain ciphertext hash", {
+      kind: params.kind,
+      commitKey: params.commitKey,
+      expectedCiphertextHash: params.expectedCiphertextHash,
+    });
+    return null;
+  }
+  return record.ciphertext;
 }
 
 /**
@@ -911,6 +926,7 @@ async function _revealCommits(
     return 0;
   }
 
+  let indexedCiphertexts: IndexedCiphertextMap | null | undefined;
   for (const commitKey of commitKeys) {
     try {
       // Read commit data
@@ -930,10 +946,19 @@ async function _revealCommits(
       const priorFailures = decryptFailureCount.get(commitKey) ?? 0;
       if (priorFailures >= MAX_DECRYPT_RETRIES) continue;
 
-      const ciphertext = await fetchIndexedCiphertext({
+      if (indexedCiphertexts === undefined) {
+        indexedCiphertexts = await fetchIndexedCiphertextsForRound({
+          kind: "vote",
+          contentId,
+          roundId,
+          logger,
+        });
+      }
+      if (!indexedCiphertexts) continue;
+
+      const ciphertext = getIndexedCiphertext({
+        indexedCiphertexts,
         kind: "vote",
-        contentId,
-        roundId,
         commitKey,
         expectedCiphertextHash: commit.ciphertextHash,
         logger,
@@ -1117,6 +1142,7 @@ async function _revealAdvisoryCommits(
     return 0;
   }
 
+  let indexedCiphertexts: IndexedCiphertextMap | null | undefined;
   for (const commitKey of commitKeys) {
     try {
       const rawCommit = await publicClient.readContract({
@@ -1132,10 +1158,19 @@ async function _revealAdvisoryCommits(
       const priorFailures = decryptFailureCount.get(commitKey) ?? 0;
       if (priorFailures >= MAX_DECRYPT_RETRIES) continue;
 
-      const ciphertext = await fetchIndexedCiphertext({
+      if (indexedCiphertexts === undefined) {
+        indexedCiphertexts = await fetchIndexedCiphertextsForRound({
+          kind: "advisory",
+          contentId,
+          roundId,
+          logger,
+        });
+      }
+      if (!indexedCiphertexts) continue;
+
+      const ciphertext = getIndexedCiphertext({
+        indexedCiphertexts,
         kind: "advisory",
-        contentId,
-        roundId,
         commitKey,
         expectedCiphertextHash: commit.ciphertextHash,
         logger,

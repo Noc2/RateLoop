@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRightIcon, ChartBarSquareIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { GradientActionInner, getGradientActionClassName } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { RATE_ROUTE, SETTINGS_ROUTE } from "~~/constants/routes";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -16,7 +17,6 @@ const DEFAULT_ELIGIBILITY_RATING_COUNT = 5;
 const DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS = 2_500;
 const actionCardClassName = "surface-card flex h-full flex-col rounded-3xl p-6";
 const actionButtonFooterClassName = "mt-auto flex justify-end pt-6";
-const actionButtonClassName = "btn btn-primary gap-2";
 const LAUNCH_CREDITS_TOOLTIP =
   "Eligible settled advisory rounds can count toward starter LREP after launch-reward checks.";
 const EARNED_RATER_CAP_TOOLTIP =
@@ -147,9 +147,11 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
             <ActionStat label="Credential" value={humanVerified ? "Active" : "Not verified"} />
           </div>
           <div className={actionButtonFooterClassName}>
-            <Link href={`${SETTINGS_ROUTE}#identity`} className={actionButtonClassName}>
-              Verify As Human
-              <ArrowRightIcon className="h-4 w-4" />
+            <Link href={`${SETTINGS_ROUTE}#identity`} className={getGradientActionClassName()} data-motion="idle">
+              <GradientActionInner>
+                Verify As Human
+                <ArrowRightIcon className="h-4 w-4" />
+              </GradientActionInner>
             </Link>
           </div>
         </section>
@@ -187,9 +189,11 @@ export function GetLrepOnboarding({ address }: GetLrepOnboardingProps) {
             />
           </div>
           <div className={actionButtonFooterClassName}>
-            <Link href={RATE_ROUTE} className={actionButtonClassName}>
-              Earn LREP By Voting
-              <ArrowRightIcon className="h-4 w-4" />
+            <Link href={RATE_ROUTE} className={getGradientActionClassName()} data-motion="idle">
+              <GradientActionInner>
+                Earn LREP By Voting
+                <ArrowRightIcon className="h-4 w-4" />
+              </GradientActionInner>
             </Link>
           </div>
         </section>

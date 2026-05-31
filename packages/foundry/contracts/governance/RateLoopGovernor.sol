@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Governor } from "@openzeppelin/contracts/governance/Governor.sol";
-import { GovernorCountingSimple } from "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
-import { GovernorVotes } from "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
+import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
+import {GovernorCountingSimple} from "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
+import {GovernorVotes} from "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 import {
     GovernorVotesQuorumFraction
 } from "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
-import { GovernorTimelockControl } from "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
-import { GovernorSettings } from "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
+import {GovernorTimelockControl} from "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
+import {GovernorSettings} from "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 interface IGovernanceLockableVotes is IVotes {
     function lockForGovernance(address account, uint256 amount) external;
@@ -36,8 +36,6 @@ contract RateLoopGovernor is
 {
     /// @notice LREP token used for historical locked-balance checks
     IGovernanceLockableVotes public immutable reputationToken;
-    /// @notice Address authorized to perform one-time quorum exclusion initialization
-    address public immutable poolsInitializer;
     /// @notice Protocol-controlled holders whose balances are excluded from quorum calculation.
     address[] private _excludedHolders;
     mapping(address => bool) public isExcludedHolder;
@@ -81,10 +79,11 @@ contract RateLoopGovernor is
 
     event ExcludedHolderReplaced(address indexed oldHolder, address indexed newHolder);
 
-    /// @notice Deploy the governor with the reputation token and timelock
+    /// @notice Deploy the governor with the reputation token, timelock, and genesis quorum exclusions.
     /// @param _reputationToken The LREP voting token address
     /// @param _timelock The timelock controller address
-    constructor(IVotes _reputationToken, TimelockController _timelock)
+    /// @param excludedHolders Protocol-controlled holders excluded from circulating-supply quorum at genesis
+    constructor(IVotes _reputationToken, TimelockController _timelock, address[] memory excludedHolders)
         Governor("RateLoopGovernor")
         GovernorSettings(
             86_400, // Voting delay: ~1 day on World Chain blocks
@@ -96,15 +95,11 @@ contract RateLoopGovernor is
         GovernorTimelockControl(_timelock)
     {
         reputationToken = IGovernanceLockableVotes(address(_reputationToken));
-        poolsInitializer = msg.sender;
+        _initializeExcludedHolders(excludedHolders);
     }
 
-    /// @notice One-time initialization of protocol-controlled holders excluded from dynamic quorum.
-    /// @dev Can only be called once by the deployment initializer.
-    ///      Initial holders are effective for all historical quorum lookups.
-    function initializePools(address[] calldata excludedHolders) external {
-        require(!poolsInitialized, "Pools already initialized");
-        require(msg.sender == poolsInitializer || msg.sender == timelock(), "Only pools initializer");
+    /// @dev Initial holders are effective for all historical quorum lookups.
+    function _initializeExcludedHolders(address[] memory excludedHolders) private {
         require(excludedHolders.length > 0, "No excluded holders");
         require(excludedHolders.length <= MAX_EXCLUDED_HOLDERS, "Too many excluded holders");
 
@@ -124,7 +119,7 @@ contract RateLoopGovernor is
     ///      past quorum snapshots keep their original exclusion set and dust cannot block migration.
     function replaceExcludedHolder(address oldHolder, address newHolder) external onlyGovernance {
         if (
-            !poolsInitialized || !isExcludedHolder[oldHolder] || newHolder == address(0) || isExcludedHolder[newHolder]
+            !isExcludedHolder[oldHolder] || newHolder == address(0) || isExcludedHolder[newHolder]
                 || newHolder.code.length == 0
         ) {
             revert InvalidExcludedHolder();

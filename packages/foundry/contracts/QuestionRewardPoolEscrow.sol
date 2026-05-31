@@ -23,7 +23,6 @@ import {
     WeightedShareInputs,
     ClaimableQuestionRewardParams
 } from "./libraries/QuestionRewardPoolEscrowClaimLib.sol";
-import { QuestionRewardPoolEscrowEligibilityLib } from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
 import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
@@ -37,7 +36,8 @@ import {
     AuthorizedRewardPoolParams,
     CreateRewardPoolParams,
     CreateSubmissionBundleParams,
-    BOUNTY_ELIGIBILITY_OPEN
+    BOUNTY_ELIGIBILITY_OPEN,
+    BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
 
@@ -104,6 +104,9 @@ contract QuestionRewardPoolEscrow is
     /// @notice Tracks recovered rounds the admin reopened for requalification. The
     ///         qualification path honours this flag to admit `roundId != nextRoundToEvaluate`.
     mapping(uint256 => mapping(uint256 => bool)) public reopenedRecoveredRound;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => mapping(bytes32 => bool)))) private
+        qualifiedQuestionRewardClaimants;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) private qualifiedBundleRoundSetClaimants;
 
     event RewardPoolCreated(
         uint256 indexed rewardPoolId,
@@ -842,8 +845,11 @@ contract QuestionRewardPoolEscrow is
         (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) =
             _resolveQuestionRewardClaim(rewardPool, roundId, msg.sender);
         require(!_isExcludedClaimant(rewardPool, identityKey, rewardRecipient), "Excluded voter");
-        require(_isQuestionBountyEligible(rewardPool, rewardRecipient), "Not bounty eligible");
         require(commitKey != bytes32(0), "No commit");
+        require(
+            _wasQuestionBountyEligibleAtQualification(rewardPool, rewardPoolId, roundId, commitKey),
+            "Not bounty eligible"
+        );
         require(!rewardClaimed[rewardPoolId][roundId][commitKey], "Already claimed");
 
         (bool revealed, address frontend) =
@@ -1106,6 +1112,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             contentBundleId,
             contentBundleIndex,
             registry,
@@ -1127,6 +1134,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             contentBundleId,
             contentBundleIndex,
             registry,
@@ -1150,6 +1158,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
             bundleRoundSetRewardClaimed,
+            qualifiedBundleRoundSetClaimants,
             registry,
             votingEngine,
             votingEngine.protocolConfig(),
@@ -1171,6 +1180,7 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleRoundSetRewardClaimed,
+            qualifiedBundleRoundSetClaimants,
             registry,
             votingEngine,
             votingEngine.protocolConfig(),
@@ -1188,11 +1198,11 @@ contract QuestionRewardPoolEscrow is
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             contentBundleId,
             contentBundleIndex,
             registry,
             votingEngine,
-            votingEngine.protocolConfig(),
             lrepToken,
             usdcToken,
             bundleId
@@ -1223,6 +1233,7 @@ contract QuestionRewardPoolEscrow is
             rewardPools,
             roundSnapshots,
             rewardClaimed,
+            qualifiedQuestionRewardClaimants,
             rewardPoolPayerIdentity,
             rewardPoolPayerIdentityKey,
             votingEngine,
@@ -1245,6 +1256,7 @@ contract QuestionRewardPoolEscrow is
             rewardPools,
             roundSnapshots,
             rewardClaimed,
+            qualifiedQuestionRewardClaimants,
             rewardPoolPayerIdentity,
             rewardPoolPayerIdentityKey,
             rewardPoolClusterPayoutOracle,
@@ -1421,6 +1433,7 @@ contract QuestionRewardPoolEscrow is
         if (_usesClusterPayoutSnapshot(rewardPool)) {
             QuestionRewardPoolEscrowQualificationLib.qualifyRoundWithClusterSnapshot(
                 roundSnapshots,
+                qualifiedQuestionRewardClaimants,
                 rewardPoolPayerIdentity,
                 rewardPoolPayerIdentityKey,
                 rewardPoolClusterPayoutOracle,
@@ -1446,6 +1459,7 @@ contract QuestionRewardPoolEscrow is
             uint256 totalClaimWeight
         ) = QuestionRewardPoolEscrowQualificationLib.qualifyRound(
             roundSnapshots,
+            qualifiedQuestionRewardClaimants,
             rewardPoolPayerIdentity,
             rewardPoolPayerIdentityKey,
             votingEngine,
@@ -1541,10 +1555,15 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    function _isQuestionBountyEligible(RewardPool storage rewardPool, address account) internal view returns (bool) {
-        return QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-            votingEngine.protocolConfig(), rewardPool.bountyEligibility, account
-        );
+    function _wasQuestionBountyEligibleAtQualification(
+        RewardPool storage rewardPool,
+        uint256 rewardPoolId,
+        uint256 roundId,
+        bytes32 commitKey
+    ) internal view returns (bool) {
+        if (rewardPool.bountyEligibility != BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) return true;
+        RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
+        return qualifiedQuestionRewardClaimants[rewardPoolId][roundId][snapshot.clusterSnapshotDigest][commitKey];
     }
 
     function _resolveQuestionRewardClaim(RewardPool storage rewardPool, uint256 roundId, address account)
@@ -1576,5 +1595,5 @@ contract QuestionRewardPoolEscrow is
         }
     }
 
-    uint256[48] private __gap;
+    uint256[46] private __gap;
 }

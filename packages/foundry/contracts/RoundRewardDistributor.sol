@@ -414,8 +414,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         address operator;
         bool registryLookupFailed;
         address snapshotRegistryAddress;
-        fee = _quoteFrontendFee(contentId, roundId, frontend);
-        uint48 roundSettledAt = _readRound(contentId, roundId).settledAt;
+        uint48 roundSettledAt;
+        (fee, roundSettledAt) = _quoteFrontendFee(contentId, roundId, frontend);
         (disposition, operator, registryLookupFailed, snapshotRegistryAddress) =
             _resolveFrontendFeeDisposition(contentId, roundId, frontend, roundSettledAt);
         if (registryLookupFailed) {
@@ -427,7 +427,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         if (msg.sender != expectedCaller) revert UnauthorizedFrontendFeeCaller();
 
         _consumeFrontendFeeClaim(contentId, roundId, frontend, fee);
-        _payoutFrontendFee(contentId, roundId, frontend, fee, disposition);
+        _payoutFrontendFee(contentId, roundId, frontend, fee, disposition, snapshotRegistryAddress);
         emit FrontendFeeClaimed(contentId, roundId, frontend, fee);
     }
 
@@ -438,8 +438,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         nonReentrant
         returns (uint256 fee)
     {
-        fee = _quoteFrontendFee(contentId, roundId, frontend);
-        uint48 roundSettledAt = _readRound(contentId, roundId).settledAt;
+        uint48 roundSettledAt;
+        (fee, roundSettledAt) = _quoteFrontendFee(contentId, roundId, frontend);
         (FrontendFeeDisposition disposition,,,) =
             _resolveFrontendFeeDisposition(contentId, roundId, frontend, roundSettledAt);
         if (disposition != FrontendFeeDisposition.Protocol) revert FrontendFeeNotConfiscatable();
@@ -553,8 +553,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         returns (uint256 fee, FrontendFeeDisposition disposition, address operator, bool alreadyClaimed)
     {
         alreadyClaimed = frontendFeeClaimed[contentId][roundId][frontend];
-        fee = _quoteFrontendFee(contentId, roundId, frontend);
-        uint48 roundSettledAt = _readRound(contentId, roundId).settledAt;
+        uint48 roundSettledAt;
+        (fee, roundSettledAt) = _quoteFrontendFee(contentId, roundId, frontend);
         (disposition, operator,,) = _resolveFrontendFeeDisposition(contentId, roundId, frontend, roundSettledAt);
     }
 
@@ -626,10 +626,11 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     function _quoteFrontendFee(uint256 contentId, uint256 roundId, address frontend)
         internal
         view
-        returns (uint256 fee)
+        returns (uint256 fee, uint48 roundSettledAt)
     {
         RoundLib.Round memory round = _readRound(contentId, roundId);
         if (round.state != RoundLib.RoundState.Settled) revert RoundNotSettled();
+        roundSettledAt = round.settledAt;
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
         if (frontendFeeClaimed[contentId][roundId][frontend]) revert AlreadyClaimed();
 
@@ -716,11 +717,11 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint256 roundId,
         address frontend,
         uint256 fee,
-        FrontendFeeDisposition disposition
+        FrontendFeeDisposition disposition,
+        address snapshotRegistryAddress
     ) internal {
         if (fee == 0) return;
 
-        address snapshotRegistryAddress = votingEngine.roundFrontendRegistrySnapshot(contentId, roundId);
         if (disposition == FrontendFeeDisposition.Direct || snapshotRegistryAddress == address(0)) {
             votingEngine.transferReward(frontend, fee);
             return;

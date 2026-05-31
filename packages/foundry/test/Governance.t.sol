@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
+import {Test} from "forge-std/Test.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RateLoopGovernor} from "../contracts/governance/RateLoopGovernor.sol";
 
 contract GovernanceTest is Test {
     LoopReputation public token;
@@ -85,11 +85,8 @@ contract GovernanceTest is Test {
 
         timelock = new TimelockController(2 days, proposers, executors, deployer);
 
-        // Deploy Governor with LREP directly (no wrapper needed)
-        governor = new RateLoopGovernor(IVotes(address(token)), timelock);
-
-        // Initialize protocol-controlled holders excluded from dynamic quorum
-        governor.initializePools(_excludedHolders());
+        // Deploy Governor with LREP directly (no wrapper needed) and genesis quorum exclusions.
+        governor = new RateLoopGovernor(IVotes(address(token)), timelock, _excludedHolders());
 
         // Set governor on token so it can lock tokens during governance
         token.setGovernor(address(governor));
@@ -321,14 +318,12 @@ contract GovernanceTest is Test {
         LoopReputation smallToken = new LoopReputation(deployer, deployer);
         smallToken.grantRole(smallToken.MINTER_ROLE(), deployer);
 
-        TimelockController smallTimelock = new TimelockController(2 days, new address[](0), new address[](0), deployer);
-        RateLoopGovernor smallGovernor = new RateLoopGovernor(IVotes(address(smallToken)), smallTimelock);
-
         address[] memory holders = new address[](3);
         holders[0] = address(100);
         holders[1] = address(101);
         holders[2] = address(102);
-        smallGovernor.initializePools(holders);
+        TimelockController smallTimelock = new TimelockController(2 days, new address[](0), new address[](0), deployer);
+        RateLoopGovernor smallGovernor = new RateLoopGovernor(IVotes(address(smallToken)), smallTimelock, holders);
 
         // Mint 1M to pool, 100K to a user -> circulating = 100K, 4% = 4K < 100K floor
         smallToken.mint(holders[0], 1_000_000 * 1e6);
@@ -375,110 +370,66 @@ contract GovernanceTest is Test {
         assertEq(governor.quorum(snapshotBlock), snapshotQuorum);
     }
 
-    function test_GovernorPoolsOnlyInitializer() public {
-        vm.startPrank(deployer);
-        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
-        vm.stopPrank();
-
+    function test_GovernorPoolsInitializedInConstructor() public {
         address[] memory holders = new address[](3);
         holders[0] = address(1);
         holders[1] = address(2);
         holders[2] = address(3);
 
-        vm.prank(voter1);
-        vm.expectRevert("Only pools initializer");
-        freshGovernor.initializePools(holders);
-
         vm.prank(deployer);
-        freshGovernor.initializePools(holders);
+        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock, holders);
+
         assertTrue(freshGovernor.poolsInitialized());
+        assertTrue(freshGovernor.isExcludedHolder(address(1)));
+        assertTrue(freshGovernor.isExcludedHolder(address(2)));
+        assertTrue(freshGovernor.isExcludedHolder(address(3)));
+
+        (bool success,) = address(freshGovernor).call(abi.encodeWithSignature("initializePools(address[])", holders));
+        assertFalse(success, "post-deploy initializer selector must not exist");
     }
 
     function test_GovernorPoolsRejectDuplicateAddresses() public {
-        vm.startPrank(deployer);
-        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
         address[] memory holders = new address[](3);
         holders[0] = address(1);
         holders[1] = address(1);
         holders[2] = address(2);
         vm.expectRevert("Duplicate holder");
-        freshGovernor.initializePools(holders);
-        vm.stopPrank();
+        new RateLoopGovernor(IVotes(address(token)), timelock, holders);
     }
 
     function test_GovernorPoolsRejectEmptyArray() public {
-        vm.startPrank(deployer);
-        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
         address[] memory holders = new address[](0);
         vm.expectRevert("No excluded holders");
-        freshGovernor.initializePools(holders);
-        vm.stopPrank();
+        new RateLoopGovernor(IVotes(address(token)), timelock, holders);
     }
 
     function test_GovernorPoolsRejectOversizedArray() public {
-        vm.startPrank(deployer);
-        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
-        uint256 holderCount = freshGovernor.MAX_EXCLUDED_HOLDERS() + 1;
+        uint256 holderCount = governor.MAX_EXCLUDED_HOLDERS() + 1;
         address[] memory holders = new address[](holderCount);
         for (uint256 i = 0; i < holderCount; i++) {
             holders[i] = address(uint160(i + 1));
         }
         vm.expectRevert("Too many excluded holders");
-        freshGovernor.initializePools(holders);
-        vm.stopPrank();
+        new RateLoopGovernor(IVotes(address(token)), timelock, holders);
     }
 
-    function test_GovernorPoolsInitializedOnce() public {
-        // initializePools can only be called once
+    function test_GovernorPoolsRejectZeroAddress() public {
         address[] memory holders = new address[](3);
         holders[0] = address(1);
-        holders[1] = address(2);
+        holders[1] = address(0);
         holders[2] = address(3);
-        vm.prank(deployer);
-        vm.expectRevert("Pools already initialized");
-        governor.initializePools(holders);
+        vm.expectRevert("Invalid address");
+        new RateLoopGovernor(IVotes(address(token)), timelock, holders);
     }
 
-    function test_GovernorBootstrapCanBeRecoveredViaTimelockProposal() public {
-        vm.startPrank(deployer);
-        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
-        token.setGovernor(address(freshGovernor));
-        timelock.grantRole(timelock.PROPOSER_ROLE(), address(freshGovernor));
-        timelock.grantRole(timelock.CANCELLER_ROLE(), address(freshGovernor));
-        vm.stopPrank();
-
-        vm.roll(block.number + 1);
-
+    function test_GovernorConstructorExclusionsAreReadyBeforeTimelockRoles() public {
         address[] memory holders = new address[](3);
         holders[0] = address(100);
         holders[1] = address(101);
         holders[2] = address(102);
 
-        address[] memory targets = new address[](1);
-        targets[0] = address(freshGovernor);
-
-        uint256[] memory values = new uint256[](1);
-        bytes[] memory calldatas = new bytes[](1);
-        calldatas[0] = abi.encodeCall(RateLoopGovernor.initializePools, (holders));
-
-        string memory description = _boundDescription("Recover bootstrap", voter1);
-        vm.prank(voter1);
-        uint256 proposalId = freshGovernor.propose(targets, values, calldatas, description);
-
-        vm.roll(block.number + freshGovernor.votingDelay() + 1);
-        vm.prank(voter1);
-        freshGovernor.castVote(proposalId, 1);
-        vm.prank(voter2);
-        freshGovernor.castVote(proposalId, 1);
-        vm.prank(voter3);
-        freshGovernor.castVote(proposalId, 1);
-
-        vm.roll(block.number + freshGovernor.votingPeriod() + 1);
-        bytes32 descriptionHash = keccak256(bytes(description));
-        freshGovernor.queue(targets, values, calldatas, descriptionHash);
-
-        vm.warp(block.timestamp + 2 days + 1);
-        freshGovernor.execute(targets, values, calldatas, descriptionHash);
+        vm.prank(deployer);
+        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock, holders);
 
         assertTrue(freshGovernor.poolsInitialized());
         assertTrue(freshGovernor.isExcludedHolder(address(100)));
@@ -694,9 +645,12 @@ contract GovernanceTest is Test {
         assertEq(governor.votingPeriod(), periodBefore);
     }
 
-    function test_GovernorAllowsProposalsBeforePoolsInitialization() public {
+    function test_GovernorAllowsProposalsAfterConstructorInitialization() public {
+        address[] memory holders = new address[](1);
+        holders[0] = address(100);
+
         vm.startPrank(deployer);
-        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock);
+        RateLoopGovernor freshGovernor = new RateLoopGovernor(IVotes(address(token)), timelock, holders);
         token.setGovernor(address(freshGovernor));
         vm.stopPrank();
 

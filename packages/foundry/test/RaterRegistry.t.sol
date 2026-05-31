@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import { LaunchRaterRewardLib } from "../contracts/libraries/LaunchRaterRewardLib.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+import {Test} from "forge-std/Test.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {LaunchRaterRewardLib} from "../contracts/libraries/LaunchRaterRewardLib.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract LaunchRaterRewardLibHarness {
     function launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
@@ -540,7 +540,7 @@ contract RaterRegistryTest is Test {
         assertEq(uint256(credential.provider), uint256(RaterRegistry.HumanCredentialProvider.WorldIdV4));
         assertEq(credential.nullifierHash, NULLIFIER_HASH);
         assertEq(credential.scope, registry.worldIdV4CredentialScope());
-        assertEq(credential.expiresAt, uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL));
+        assertEq(credential.expiresAt, expiresAtMin);
         assertEq(
             credential.evidenceHash,
             keccak256(
@@ -551,7 +551,8 @@ contract RaterRegistryTest is Test {
                     WORLD_ID_V4_RP_ID,
                     WORLD_ID_V4_ACTION,
                     nonce,
-                    signalHash
+                    signalHash,
+                    expiresAtMin
                 )
             )
         );
@@ -562,7 +563,33 @@ contract RaterRegistryTest is Test {
         assertTrue(registry.hasActiveHumanCredential(rater));
     }
 
-    function test_WorldIdAndV4SharedNullifierResolveToSameHumanIdentity() public {
+    function test_AttestHumanCredentialWithV4ProofCapsExpiryAtConfiguredTtl() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[5] memory proof;
+        uint256 nonce = 99;
+        uint64 expiresAtMin = uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL + 1 days);
+
+        _configureV4Verifier(verifier);
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), nonce, expiresAtMin, proof);
+
+        RaterRegistry.HumanCredential memory credential = registry.getHumanCredential(rater);
+        assertEq(credential.expiresAt, uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL));
+    }
+
+    function test_AttestHumanCredentialWithV4ProofRejectsExpiredFreshnessFloor() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[5] memory proof;
+
+        _configureV4Verifier(verifier);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), 99, uint64(block.timestamp), proof);
+    }
+
+    function test_WorldIdAndV4SharedNullifierUseSameOwnerSlot() public {
         MockWorldIDVerifier verifier = new MockWorldIDVerifier();
         uint256[8] memory legacyProof;
         uint256[5] memory v4Proof;
@@ -584,17 +611,27 @@ contract RaterRegistryTest is Test {
 
         _configureV4Verifier(verifier);
         vm.prank(otherRater);
+        vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
         registry.attestHumanCredentialWithV4Proof(
             uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), v4Proof
         );
 
-        IRaterIdentityRegistry.ResolvedRater memory legacyResolved = registry.resolveRater(rater);
-        IRaterIdentityRegistry.ResolvedRater memory v4Resolved = registry.resolveRater(otherRater);
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), v4Proof
+        );
 
-        assertEq(legacyResolved.identityKey, legacyKey);
-        assertEq(v4Resolved.identityKey, legacyKey);
-        assertEq(legacyResolved.humanNullifier, NULLIFIER_HASH);
-        assertEq(v4Resolved.humanNullifier, NULLIFIER_HASH);
+        IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
+
+        assertEq(resolved.identityKey, legacyKey);
+        assertEq(resolved.humanNullifier, NULLIFIER_HASH);
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH), rater
+        );
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH),
+            rater
+        );
 
         LaunchRaterRewardLibHarness launchHarness = new LaunchRaterRewardLibHarness();
         assertEq(
@@ -609,11 +646,11 @@ contract RaterRegistryTest is Test {
         );
         assertTrue(
             launchHarness.launchRewardCredentialAnchorId(
-                RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
-            )
-            != launchHarness.launchRewardCredentialAnchorId(
-                RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
-            )
+                    RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
+                )
+                != launchHarness.launchRewardCredentialAnchorId(
+                    RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
+                )
         );
     }
 
@@ -745,6 +782,9 @@ contract RaterRegistryTest is Test {
         assertTrue(
             registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
         );
+        assertTrue(
+            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
+        );
     }
 
     function test_RevokeHumanCredentialBlocksNullifierReuseUntilCleared() public {
@@ -772,6 +812,82 @@ contract RaterRegistryTest is Test {
         assertEq(
             registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
             otherRater
+        );
+    }
+
+    function test_RevokeWorldIdCredentialBlocksV4AliasUntilCleared() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[8] memory legacyProof;
+        uint256[5] memory v4Proof;
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(NULLIFIER_HASH), legacyProof);
+
+        _configureV4Verifier(verifier);
+        assertTrue(registry.hasActiveHumanCredential(rater));
+
+        vm.prank(admin);
+        registry.revokeHumanCredential(rater);
+
+        assertFalse(registry.hasActiveHumanCredential(rater));
+        assertTrue(registry.getHumanCredential(rater).revoked);
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
+            address(0)
+        );
+        assertEq(
+            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH),
+            address(0)
+        );
+        assertTrue(
+            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
+        );
+        assertTrue(
+            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
+        );
+
+        vm.prank(otherRater);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 2, uint64(block.timestamp + 1 hours), v4Proof
+        );
+
+        vm.prank(admin);
+        registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH);
+
+        vm.prank(otherRater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 3, uint64(block.timestamp + 1 hours), v4Proof
+        );
+        assertTrue(registry.hasActiveHumanCredential(otherRater));
+    }
+
+    function test_RevokeV4SetsWorldIdFamilyRevocationSlot() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[5] memory proof;
+
+        _configureV4Verifier(verifier);
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), proof);
+
+        vm.prank(admin);
+        registry.revokeHumanCredential(rater);
+
+        assertTrue(
+            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
+        );
+        assertTrue(
+            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
+        );
+
+        vm.prank(admin);
+        registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
+
+        assertFalse(
+            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
+        );
+        assertFalse(
+            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
         );
     }
 
@@ -1062,13 +1178,21 @@ contract RaterRegistryTest is Test {
         registry.setDelegate(otherRater);
     }
 
-    function test_PendingInboundDelegateCannotOpenOutboundRequest() public {
+    function test_PendingInboundDelegateIsClearedWhenOpeningOutboundRequest() public {
         vm.prank(rater);
         registry.setDelegate(otherRater);
 
         vm.prank(otherRater);
-        vm.expectRevert(RaterRegistry.CallerIsDelegate.selector);
         registry.setDelegate(subject);
+
+        assertEq(registry.pendingDelegateOf(otherRater), address(0));
+        assertEq(registry.pendingDelegateTo(rater), address(0));
+        assertEq(registry.pendingDelegateTo(otherRater), subject);
+        assertEq(registry.pendingDelegateOf(subject), otherRater);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.NoPendingDelegate.selector);
+        registry.acceptDelegate();
     }
 
     function test_AttestingCredentialClearsInboundDelegation() public {

@@ -14,6 +14,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { WorldIdQrCode } from "~~/components/settings/WorldIdQrCode";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import {
   useCopyToClipboard,
@@ -853,15 +854,15 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
                 </p>
               ) : null}
             </div>
-            <button
-              type="button"
-              className="btn btn-primary gap-2 sm:min-w-56"
+            <GradientActionButton
+              className="sm:min-w-56"
               disabled={!canVerify || isWorldIdRequestBusy}
+              motion={getGradientActionMotion(isWorldIdRequestBusy)}
               onClick={() => void handleStart()}
             >
               <ShieldCheckIcon className="h-5 w-5" />
               {isWorldIdRequestBusy ? "Verifying..." : "Verify with World ID"}
-            </button>
+            </GradientActionButton>
           </div>
         </div>
       )}

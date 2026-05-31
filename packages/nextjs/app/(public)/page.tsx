@@ -1,13 +1,9 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { LandingFaq } from "~~/components/home/LandingFaq";
 import { LandingPageActions } from "~~/components/home/LandingPageActions";
 import OrbAnimation from "~~/components/home/OrbAnimation";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
-import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
-import { DOCS_AI_ROUTE } from "~~/constants/routes";
 import { getOptionalPonderUrl } from "~~/lib/env/server";
-import { LANDING_HUMAN_CTA_LABEL } from "~~/lib/home/humanSignInRoute";
 
 const LANDING_STATS_REVALIDATE_SECONDS = 300;
 
@@ -220,19 +216,6 @@ function FeaturesBenefitsSection() {
   );
 }
 
-function LandingPageActionsFallback() {
-  return (
-    <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
-      <HumanSignInButton className="btn btn-primary whitespace-nowrap rounded-lg px-6">
-        {LANDING_HUMAN_CTA_LABEL}
-      </HumanSignInButton>
-      <Link href={DOCS_AI_ROUTE} prefetch={false} className="btn whitespace-nowrap rounded-lg px-6">
-        For Agents
-      </Link>
-    </div>
-  );
-}
-
 function formatUsdcPaidOut(rawAmount: unknown) {
   let amount: bigint;
   try {
@@ -332,9 +315,7 @@ export default async function LandingPage() {
             <p className="mt-4 max-w-[42rem] text-center text-[1.05rem] leading-8 text-base-content/80 sm:text-[1.25rem] lg:text-left lg:text-[1.35rem]">
               Human and AI Raters Guide Decisions and Earn USDC
             </p>
-            <Suspense fallback={<LandingPageActionsFallback />}>
-              <LandingPageActions />
-            </Suspense>
+            <LandingPageActions />
             <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-center text-sm text-base-content/76 sm:text-[0.95rem] lg:justify-start lg:text-left">
               {socialProofItems.map(({ value, label }, index) => (
                 <div key={label} className="flex items-center">

@@ -15,7 +15,7 @@ import { NavigationProgressDiagnostics } from "~~/components/NavigationProgressD
 import { RouteScopedNotifiers } from "~~/components/RouteScopedNotifiers";
 import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
-import { FaucetModal, FaucetTrigger } from "~~/components/scaffold-eth";
+import { FaucetTrigger } from "~~/components/scaffold-eth/FaucetTrigger";
 import { LocalTestWalletBridge } from "~~/components/thirdweb/LocalTestWalletBridge";
 import { ThirdwebAutoConnectBridge } from "~~/components/thirdweb/ThirdwebAutoConnectBridge";
 import { ThirdwebConnectorWalletBridge } from "~~/components/thirdweb/ThirdwebConnectorWalletBridge";
@@ -31,30 +31,35 @@ const TermsAcceptanceModal = dynamic(
   { ssr: false },
 );
 
+const FaucetModal = dynamic(() => import("~~/components/scaffold-eth/Faucet").then(m => m.FaucetModal), {
+  ssr: false,
+});
+
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname() ?? "";
   const isVoteFeedRoute = pathname === RATE_ROUTE;
   const { targetNetwork } = useTargetNetwork();
-  const showVoteFeedMobileFaucet = isVoteFeedRoute && targetNetwork.id === hardhat.id;
+  const showHardhatFaucet = targetNetwork.id === hardhat.id;
+  const showVoteFeedMobileFaucet = isVoteFeedRoute && showHardhatFaucet;
 
   return (
     <MobileHeaderVisibilityProvider>
-      <div className={`flex min-h-screen flex-col ${isVoteFeedRoute ? "xl:h-screen xl:overflow-hidden" : ""}`.trim()}>
-        <div className="xl:pl-52">
-          <TestnetNoticeBanner />
+      <div className={`flex min-h-screen flex-col ${isVoteFeedRoute ? "lg:h-screen lg:overflow-hidden" : ""}`.trim()}>
+        <div className="lg:pl-52">
+          <TestnetNoticeBanner targetChainId={targetNetwork.id} />
         </div>
         <Header />
-        {/* Main content: offset by left sidebar on desktop (208px at xl) */}
-        <div className="flex flex-1 min-h-0 flex-col xl:pl-52">
+        {/* Main content: offset by left sidebar on desktop (208px at lg and up) */}
+        <div className="flex flex-1 min-h-0 flex-col lg:pl-52">
           <div
             className={`relative flex flex-1 flex-col overflow-x-hidden ${
-              isVoteFeedRoute ? "min-h-0 overflow-hidden xl:overflow-hidden" : ""
+              isVoteFeedRoute ? "min-h-0 overflow-hidden lg:overflow-hidden" : ""
             }`}
           >
             {children}
           </div>
           {showVoteFeedMobileFaucet ? (
-            <div className="xl:hidden">
+            <div className="lg:hidden">
               <div className="pointer-events-none fixed bottom-0 left-0 z-10 flex w-full items-center justify-between p-4">
                 <div className="pointer-events-auto">
                   <FaucetTrigger />
@@ -69,7 +74,7 @@ const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
       </div>
       <Toaster />
       <RouteScopedNotifiers />
-      <FaucetModal />
+      {showHardhatFaucet ? <FaucetModal /> : null}
     </MobileHeaderVisibilityProvider>
   );
 };

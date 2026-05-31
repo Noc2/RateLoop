@@ -81,6 +81,8 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
         enabled: options.frontendFeeEnabled ?? false,
         frontendAddress: undefined,
         lookbackRounds: 8,
+        recentRoundsPerTick: 50,
+        backfillRoundsPerTick: 50,
         withdrawEnabled: true,
         contracts: options.frontendFeeEnabled
           ? {

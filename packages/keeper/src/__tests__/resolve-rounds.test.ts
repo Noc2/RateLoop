@@ -286,21 +286,19 @@ function makeHarness(options: {
   const advisoryCommitCores = options.advisoryCommitCores ?? {};
   const round = options.round;
 
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => {
-      const items = Object.entries(commits).map(([commitKey, commit]) => ({
-        commitKey,
-        ciphertextHash: commit.ciphertextHash,
-        ciphertext: commit.ciphertext,
-      }));
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ items }),
-      };
-    }),
-  );
+  const fetchMock = vi.fn(async () => {
+    const items = Object.entries(commits).map(([commitKey, commit]) => ({
+      commitKey,
+      ciphertextHash: commit.ciphertextHash,
+      ciphertext: commit.ciphertext,
+    }));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ items }),
+    };
+  });
+  vi.stubGlobal("fetch", fetchMock);
 
   const publicClient = {
     getBlock: vi.fn().mockResolvedValue({ timestamp: now }),
@@ -465,7 +463,7 @@ function makeHarness(options: {
     ),
   };
 
-  return { publicClient, walletClient, round, commits };
+  return { publicClient, walletClient, round, commits, fetchMock };
 }
 
 describe("resolveRounds", () => {
@@ -535,7 +533,7 @@ describe("resolveRounds", () => {
       voteCount: 3n,
       revealedCount: 0n,
     });
-    const { publicClient, walletClient, commits } = makeHarness({
+    const { publicClient, walletClient, commits, fetchMock } = makeHarness({
       activeRoundId: 1n,
       latestRoundId: 1n,
       round,
@@ -576,6 +574,7 @@ describe("resolveRounds", () => {
     expect(commits[COMMIT_KEY_1].revealed).toBe(true);
     expect(commits[COMMIT_KEY_2].revealed).toBe(true);
     expect(round.state).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("paginates indexed vote ciphertexts beyond the first Ponder page", async () => {

@@ -1,6 +1,6 @@
 import { hardhat } from "viem/chains";
 import { FooterLinks } from "~~/components/FooterLinks";
-import { FaucetTrigger } from "~~/components/scaffold-eth";
+import { FaucetTrigger } from "~~/components/scaffold-eth/FaucetTrigger";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 
 /**

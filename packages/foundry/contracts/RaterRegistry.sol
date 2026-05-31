@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { IWorldIDRouter } from "./interfaces/IWorldIDRouter.sol";
-import { IWorldIDVerifier } from "./interfaces/IWorldIDVerifier.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {IWorldIDRouter} from "./interfaces/IWorldIDRouter.sol";
+import {IWorldIDVerifier} from "./interfaces/IWorldIDVerifier.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 
 /// @title RaterRegistry
 /// @notice Optional rater metadata, human credentials, public follows, and delegation for RateLoop.
@@ -354,7 +354,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         }
 
         _profiles[msg.sender] =
-            RaterProfile({ raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp) });
+            RaterProfile({raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp)});
 
         emit RaterProfileUpdated(msg.sender, raterType, metadataHash, uint64(block.timestamp));
     }
@@ -389,13 +389,13 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (delegate == address(0)) revert InvalidAddress();
         if (delegate == msg.sender) revert CannotDelegateSelf();
         if (delegateOf[msg.sender] != address(0)) revert CallerIsDelegate();
-        if (pendingDelegateOf[msg.sender] != address(0)) revert CallerIsDelegate();
         if (_hasCredentialIdentity(delegate)) revert DelegateIsHolder();
         if (delegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (pendingDelegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (pendingDelegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (delegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
 
+        _clearInboundDelegation(msg.sender);
         _clearPendingDelegateRequest(msg.sender);
 
         pendingDelegateTo[msg.sender] = delegate;
@@ -483,7 +483,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             revert InvalidCredential();
         }
 
-        address currentOwner = _humanNullifierOwnerByProvider[HumanCredentialProvider.WorldId][storedNullifier];
+        address currentOwner = _humanNullifierOwnerByProvider[
+            _humanNullifierSlotProvider(HumanCredentialProvider.WorldId)
+        ][storedNullifier];
         if (currentOwner != address(0) && currentOwner != msg.sender) revert NullifierAlreadyAssigned();
 
         uint256 signalHash = worldIdSignalHash(msg.sender);
@@ -521,7 +523,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             revert InvalidCredential();
         }
 
-        address currentOwner = _humanNullifierOwnerByProvider[HumanCredentialProvider.WorldIdV4][storedNullifier];
+        address currentOwner = _humanNullifierOwnerByProvider[
+            _humanNullifierSlotProvider(HumanCredentialProvider.WorldIdV4)
+        ][storedNullifier];
         if (currentOwner != address(0) && currentOwner != msg.sender) revert NullifierAlreadyAssigned();
 
         uint256 signalHash = worldIdSignalHash(msg.sender);
@@ -537,8 +541,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             proof
         );
 
-        uint256 expiresAt = block.timestamp + worldIdV4CredentialTtl;
-        if (expiresAt > type(uint64).max) revert InvalidCredential();
+        if (expiresAtMin <= block.timestamp) revert InvalidCredential();
+        uint256 ttlExpiresAt = block.timestamp + worldIdV4CredentialTtl;
+        if (ttlExpiresAt > type(uint64).max) revert InvalidCredential();
+        uint64 expiresAt = expiresAtMin < ttlExpiresAt ? expiresAtMin : uint64(ttlExpiresAt);
 
         bytes32 evidenceHash = keccak256(
             abi.encodePacked(
@@ -548,14 +554,15 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
                 worldIdV4RpId,
                 worldIdV4Action,
                 nonce,
-                signalHash
+                signalHash,
+                expiresAtMin
             )
         );
         _attestHumanCredential(
             msg.sender,
             storedNullifier,
             worldIdV4CredentialScope(),
-            uint64(expiresAt),
+            expiresAt,
             HumanCredentialProvider.WorldIdV4,
             evidenceHash
         );
@@ -597,13 +604,8 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         credential.revoked = true;
         bytes32 nullifierHash = credential.nullifierHash;
         HumanCredentialProvider provider = credential.provider;
-        if (
-            nullifierHash != bytes32(0) && provider != HumanCredentialProvider.None
-                && _humanNullifierOwnerByProvider[provider][nullifierHash] == rater
-        ) {
-            delete _humanNullifierOwnerByProvider[provider][nullifierHash];
-            _revokedHumanNullifierByProvider[provider][nullifierHash] = true;
-            _lastRevokedOwnerByProvider[provider][nullifierHash] = rater;
+        if (nullifierHash != bytes32(0) && provider != HumanCredentialProvider.None) {
+            _revokeHumanNullifier(provider, nullifierHash, rater);
         }
 
         // RR-1 (2026-05-20 follow-up audit): the M-Identity-2 sticky-canonical fix preserved
@@ -614,11 +616,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         // two distinct addresses (profile theft, vote-commit DoS, bonus-award shadowing).
         // Clear it here so the next attestation for this rater re-seeds canonical from the
         // new credential's nullifier on first-attestation.
-        bytes32 previousCanonical = _canonicalHumanIdentityKey[rater];
-        if (previousCanonical != bytes32(0)) {
-            delete _canonicalHumanIdentityKey[rater];
-            emit CanonicalHumanIdentityKeyCleared(rater, previousCanonical);
-        }
+        _clearCanonicalHumanIdentity(rater);
 
         emit HumanCredentialRevoked(rater, nullifierHash, provider);
     }
@@ -629,8 +627,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     {
         if (nullifierHash == bytes32(0)) revert InvalidCredential();
         if (provider == HumanCredentialProvider.None) revert InvalidCredential();
-        _revokedHumanNullifierByProvider[provider][nullifierHash] = false;
-        address prevOwner = _lastRevokedOwnerByProvider[provider][nullifierHash];
+        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        _revokedHumanNullifierByProvider[slotProvider][nullifierHash] = false;
+        address prevOwner = _lastRevokedOwnerByProvider[slotProvider][nullifierHash];
         emit HumanNullifierRevocationCleared(nullifierHash, provider, prevOwner);
     }
 
@@ -678,29 +677,30 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     ///      identity -- a credential issued for one scope must not silently authorize another.
     function credentialScope(address rater) external view returns (bytes32) {
         HumanCredential storage credential = _humanCredentials[rater];
-        if (!credential.verified || credential.revoked) return bytes32(0);
+        if (!credential.verified || _isCredentialRevoked(credential)) return bytes32(0);
         return credential.scope;
     }
 
-    /// @notice Returns the address that owns a nullifier hash within a specific provider's namespace.
-    /// @dev Replaces the previous global `humanNullifierOwner(bytes32)` view. Ownership is per-provider
-    ///      so a value seeded under `SeededHuman` does not collide with a WorldID nullifier of
-    ///      the same 32 bytes (L-Identity-1).
+    /// @notice Returns the address that owns a nullifier hash within a credential provider namespace.
+    /// @dev `WorldId` and `WorldIdV4` share the same slot because they map to the same canonical
+    ///      human identity. `SeededHuman` remains provider-separated so a seeded anchor cannot
+    ///      collide with a World ID nullifier of the same bytes (L-Identity-1).
     function humanNullifierOwnerByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
         external
         view
         returns (address)
     {
-        return _humanNullifierOwnerByProvider[provider][nullifierHash];
+        return _humanNullifierOwnerByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
     }
 
-    /// @notice Returns whether a nullifier hash has been revoked within a specific provider's namespace.
+    /// @notice Returns whether a nullifier hash has been revoked within its credential provider namespace.
+    /// @dev `WorldId` and `WorldIdV4` intentionally share revocation state.
     function revokedHumanNullifierByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
         external
         view
         returns (bool)
     {
-        return _revokedHumanNullifierByProvider[provider][nullifierHash];
+        return _revokedHumanNullifierByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
     }
 
     function resolveRater(address actor) public view returns (ResolvedRater memory resolved) {
@@ -751,7 +751,44 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function hasActiveHumanCredential(address rater) public view returns (bool) {
         HumanCredential storage credential = _humanCredentials[rater];
-        return credential.verified && !credential.revoked && credential.expiresAt > block.timestamp;
+        return credential.verified && !_isCredentialRevoked(credential) && credential.expiresAt > block.timestamp;
+    }
+
+    function _isCredentialRevoked(HumanCredential storage credential) private view returns (bool) {
+        if (credential.revoked) return true;
+        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(credential.provider);
+        return _revokedHumanNullifierByProvider[slotProvider][credential.nullifierHash];
+    }
+
+    function _humanNullifierSlotProvider(HumanCredentialProvider provider)
+        private
+        pure
+        returns (HumanCredentialProvider)
+    {
+        if (provider == HumanCredentialProvider.WorldIdV4) return HumanCredentialProvider.WorldId;
+        return provider;
+    }
+
+    function _revokeHumanNullifier(HumanCredentialProvider provider, bytes32 nullifierHash, address revokedRater)
+        private
+    {
+        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        address slotOwner = _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
+        address lastRevokedOwner = slotOwner == address(0) ? revokedRater : slotOwner;
+        if (slotOwner == revokedRater) {
+            delete _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
+        }
+
+        _revokedHumanNullifierByProvider[slotProvider][nullifierHash] = true;
+        _lastRevokedOwnerByProvider[slotProvider][nullifierHash] = lastRevokedOwner;
+    }
+
+    function _clearCanonicalHumanIdentity(address rater) private {
+        bytes32 previousCanonical = _canonicalHumanIdentityKey[rater];
+        if (previousCanonical != bytes32(0)) {
+            delete _canonicalHumanIdentityKey[rater];
+            emit CanonicalHumanIdentityKeyCleared(rater, previousCanonical);
+        }
     }
 
     function _attestHumanCredential(
@@ -766,11 +803,12 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (expiresAt <= block.timestamp) revert InvalidCredential();
         if (provider == HumanCredentialProvider.None) revert InvalidCredential();
         if (nullifierHash == bytes32(0) || scope == bytes32(0)) revert InvalidCredential();
-        if (_revokedHumanNullifierByProvider[provider][nullifierHash]) revert InvalidCredential();
+        HumanCredentialProvider slotProvider = _humanNullifierSlotProvider(provider);
+        if (_revokedHumanNullifierByProvider[slotProvider][nullifierHash]) revert InvalidCredential();
 
         HumanCredential storage previous = _humanCredentials[rater];
-        // Clean up the previous (provider, nullifier) slot when ANY part of the composite key
-        // changes -- including a provider switch that keeps the nullifier bytes the same. The
+        // Clean up the previous storage slot when ANY part of the effective composite key
+        // changes -- including a provider switch outside the aliased WorldID family. The
         // earlier `previous.nullifierHash != nullifierHash` check alone leaked the old provider's
         // slot, so a later revocation only cleared the new provider and the old provider's
         // namespace stayed assigned to this rater (codex PR #10 review).
@@ -784,9 +822,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         // by design, not an oversight.
         if (
             previous.nullifierHash != bytes32(0)
-                && (previous.nullifierHash != nullifierHash || previous.provider != provider)
+                && (previous.nullifierHash != nullifierHash
+                    || _humanNullifierSlotProvider(previous.provider) != slotProvider)
         ) {
-            HumanCredentialProvider previousProvider = previous.provider;
+            HumanCredentialProvider previousProvider = _humanNullifierSlotProvider(previous.provider);
             bool previousOwnerSlotCleared;
             if (
                 previousProvider != HumanCredentialProvider.None
@@ -806,9 +845,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             }
         }
 
-        address currentOwner = _humanNullifierOwnerByProvider[provider][nullifierHash];
+        address currentOwner = _humanNullifierOwnerByProvider[slotProvider][nullifierHash];
         if (currentOwner != address(0) && currentOwner != rater) revert NullifierAlreadyAssigned();
-        _humanNullifierOwnerByProvider[provider][nullifierHash] = rater;
+        _humanNullifierOwnerByProvider[slotProvider][nullifierHash] = rater;
         // M-Identity-2: only seed the canonical identity key on first attestation. The earlier
         // unconditional `provider == SeededHuman` override let SEEDER silently rotate the
         // canonical key of a user who already had a WorldID-bound identity, severing
@@ -859,7 +898,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         returns (bytes32 identityKey, bytes32 humanNullifier, bool hasActiveCredential)
     {
         HumanCredential storage credential = _humanCredentials[holder];
-        if (credential.verified && !credential.revoked && credential.nullifierHash != bytes32(0)) {
+        if (credential.verified && !_isCredentialRevoked(credential) && credential.nullifierHash != bytes32(0)) {
             humanNullifier = credential.nullifierHash;
             identityKey = _canonicalHumanIdentityKey[holder];
             if (identityKey == bytes32(0)) {
@@ -873,7 +912,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function _hasCredentialIdentity(address holder) internal view returns (bool) {
         HumanCredential storage credential = _humanCredentials[holder];
-        return credential.verified && !credential.revoked && credential.nullifierHash != bytes32(0);
+        return credential.verified && !_isCredentialRevoked(credential) && credential.nullifierHash != bytes32(0);
     }
 
     function _clearPendingDelegateRequest(address holder) internal {

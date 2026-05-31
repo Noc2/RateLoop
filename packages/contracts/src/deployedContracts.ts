@@ -7391,13 +7391,7 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "function",
           name: "flushPendingTreasuryForfeit",
           inputs: [],
-          outputs: [
-            {
-              name: "paid",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
+          outputs: [],
           stateMutability: "nonpayable",
         },
         {
@@ -33710,13 +33704,7 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "function",
           name: "flushPendingTreasuryForfeit",
           inputs: [],
-          outputs: [
-            {
-              name: "paid",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
+          outputs: [],
           stateMutability: "nonpayable",
         },
         {

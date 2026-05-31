@@ -85,7 +85,7 @@ const HeaderNavLink = ({ className, compact = false, href, icon: Icon, isActive,
   );
 };
 
-const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "desktop" }) => {
+export const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "desktop" }) => {
   const pathname = usePathname() ?? "";
   const isDocsPage = pathname.startsWith("/docs");
   const compact = variant === "mobile";
@@ -93,7 +93,7 @@ const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "desktop
   return (
     <>
       {menuLinks.map(({ label, href, icon: Icon }) => {
-        const isActive = pathname.startsWith(href);
+        const isActive = pathname === "/" && href === RATE_ROUTE ? true : pathname.startsWith(href);
         const isDocs = href === "/docs";
 
         // If we're on docs page, show Docs as header with submenu, otherwise show as regular link
@@ -184,13 +184,13 @@ const MOBILE_HEADER_HIDE_OFFSET = 72;
 const MOBILE_HEADER_VISIBILITY_STABILIZE_MS = 260;
 const MOBILE_HEADER_VOTE_SAME_CARD_SETTLE_MS = 160;
 const EXPLICIT_LANDING_HREF = "/?landing=1";
-const VOTE_MOBILE_LAYOUT_MEDIA_QUERY = "(max-width: 1279px)";
+const VOTE_MOBILE_LAYOUT_MEDIA_QUERY = "(max-width: 1023px)";
 const VOTE_ROOT_SCROLL_RECOVERY_MIN_PX = 1;
 const MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE = "data-mobile-header-scroll-source";
 const MOBILE_HEADER_SCROLL_SYNC_ATTRIBUTE = "data-mobile-header-scroll-sync";
 const MOBILE_HEADER_SCROLL_SYNC_OFFSET_ATTRIBUTE = "data-mobile-header-scroll-sync-offset";
 
-const HeaderBrand = ({
+export const HeaderBrand = ({
   brandIdPrefix,
   className,
   compact = false,
@@ -219,7 +219,7 @@ const HeaderBrand = ({
   </Link>
 );
 
-const HeaderSearchBar = ({ className }: { className?: string }) => {
+export const HeaderSearchBar = ({ className }: { className?: string }) => {
   const { activeQuery, commitSearch } = useVoteSearch();
   const [inputValue, setInputValue] = useState(activeQuery);
   const isSidebar = className?.includes("sidebar");
@@ -467,7 +467,9 @@ export const Header = () => {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const voteMobileLayoutQuery = window.matchMedia(VOTE_MOBILE_LAYOUT_MEDIA_QUERY);
+    const voteMobileLayoutQuery = shouldUseVoteLayoutCollapse
+      ? window.matchMedia(VOTE_MOBILE_LAYOUT_MEDIA_QUERY)
+      : null;
     let explicitScrollSource: HTMLElement | null = null;
 
     const readScrollOffset = (source: Window | HTMLElement) =>
@@ -506,7 +508,11 @@ export const Header = () => {
         return window;
       }
 
-      if (target instanceof HTMLElement && target.getAttribute(MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE) === "true") {
+      if (
+        shouldUseVoteLayoutCollapse &&
+        target instanceof HTMLElement &&
+        target.getAttribute(MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE) === "true"
+      ) {
         return target;
       }
 
@@ -543,7 +549,7 @@ export const Header = () => {
       if (
         scrollSource === window &&
         shouldUseVoteLayoutCollapse &&
-        voteMobileLayoutQuery.matches &&
+        voteMobileLayoutQuery?.matches &&
         explicitScrollSource &&
         !mobileSearchOpen &&
         !isMobileMenuOpen
@@ -722,24 +728,27 @@ export const Header = () => {
       });
     };
 
-    const mutationObserver = new MutationObserver(requestExplicitScrollSourceBind);
+    let mutationObserver: MutationObserver | null = null;
 
     setInitialScrollState(window);
-    bindExplicitScrollSource();
+    if (shouldUseVoteLayoutCollapse) {
+      bindExplicitScrollSource();
+      mutationObserver = new MutationObserver(requestExplicitScrollSourceBind);
+      mutationObserver.observe(document.body, {
+        attributeFilter: [MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE],
+        attributes: true,
+        childList: true,
+        subtree: true,
+      });
+    }
     window.addEventListener("scroll", handleScroll, { capture: true, passive: true });
-    mutationObserver.observe(document.body, {
-      attributeFilter: [MOBILE_HEADER_SCROLL_SOURCE_ATTRIBUTE],
-      attributes: true,
-      childList: true,
-      subtree: true,
-    });
 
     return () => {
       if (bindFrameId !== 0) {
         window.cancelAnimationFrame(bindFrameId);
       }
       clearDeferredVoteLayoutVisibility();
-      mutationObserver.disconnect();
+      mutationObserver?.disconnect();
       if (explicitScrollSource) {
         explicitScrollSource.removeEventListener("scroll", handleScroll);
       }
@@ -751,7 +760,7 @@ export const Header = () => {
     <>
       {/* Mobile: top bar */}
       <div
-        className={`xl:hidden sticky top-0 z-20 duration-200 ease-out ${
+        className={`lg:hidden sticky top-0 z-20 duration-200 ease-out ${
           shouldUseVoteLayoutCollapse
             ? `transition-[max-height,opacity] will-change-[max-height,opacity] ${
                 isMobileHeaderVisible ? "overflow-visible opacity-100" : "overflow-hidden opacity-0"
@@ -843,7 +852,7 @@ export const Header = () => {
 
       {/* Desktop: left sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-20 hidden h-screen w-52 shrink-0 flex-col items-stretch py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] xl:flex ${desktopSidebarSurfaceClassName} ${headerChromeBorderClassName}`}
+        className={`fixed left-0 top-0 z-20 hidden h-screen w-52 shrink-0 flex-col items-stretch py-4 shadow-[18px_0_48px_rgba(9,10,12,0.24)] lg:flex ${desktopSidebarSurfaceClassName} ${headerChromeBorderClassName}`}
       >
         <HeaderBrand brandIdPrefix="rateloop-sidebar-logo" className="mb-4 shrink-0 px-4" />
         <div className="mb-4 w-full min-w-0 px-2.5">

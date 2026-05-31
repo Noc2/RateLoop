@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useAccount, useConfig, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import type { ContentFeedbackBonusPool, ContentFeedbackItem } from "~~/lib/feedback/types";
 import {
   FEEDBACK_BONUS_ESCROW_ABI,
@@ -242,9 +243,13 @@ export function AwardFeedbackBonusModal({ item, pools, onAwarded, onClose }: Awa
         </div>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
-          <button type="button" onClick={handleAward} disabled={!canAward || isAwarding} className="btn btn-primary">
+          <GradientActionButton
+            onClick={handleAward}
+            disabled={!canAward || isAwarding}
+            motion={getGradientActionMotion(isAwarding)}
+          >
             {isAwarding ? "Awarding..." : "Award Bonus"}
-          </button>
+          </GradientActionButton>
           <button type="button" onClick={onClose} className="btn btn-ghost">
             Cancel
           </button>

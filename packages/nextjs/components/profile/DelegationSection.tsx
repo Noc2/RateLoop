@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { formatUnits, isAddress, parseUnits } from "viem";
 import { useAccount } from "wagmi";
 import { ArrowsRightLeftIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { GOVERNANCE_ROUTE } from "~~/constants/routes";
 import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
@@ -264,9 +265,10 @@ export function DelegationSection() {
           )}
           {isSelfAddress && <p className="text-warning text-base">Cannot delegate to yourself</p>}
 
-          <button
+          <GradientActionButton
             onClick={handleSetDelegate}
-            className="btn btn-submit w-full"
+            className="w-full"
+            motion={getGradientActionMotion(isDelegationPending)}
             disabled={isDelegationPending || !isValidAddress || isSelfAddress}
           >
             {isDelegationPending ? (
@@ -277,7 +279,7 @@ export function DelegationSection() {
             ) : (
               "Set Delegate"
             )}
-          </button>
+          </GradientActionButton>
         </div>
       )}
 
@@ -382,9 +384,10 @@ export function DelegationSection() {
           {parsedTransferAmount === 0n && <p className="text-warning text-base">Amount must be greater than 0</p>}
           {exceedsTransferBalance && <p className="text-warning text-base">Amount exceeds your balance</p>}
 
-          <button
+          <GradientActionButton
             onClick={handleTransfer}
-            className="btn btn-submit w-full"
+            className="w-full"
+            motion={getGradientActionMotion(isTransferPending)}
             disabled={isTransferPending || !canSubmitTransfer}
           >
             {isTransferPending ? (
@@ -395,7 +398,7 @@ export function DelegationSection() {
             ) : (
               "Send LREP"
             )}
-          </button>
+          </GradientActionButton>
         </div>
 
         {transferError && (

@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
+import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
@@ -173,7 +173,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     event ProposerBondUnrecoverable(bytes32 indexed snapshotKey, address indexed proposer, uint256 missingAmount);
 
     constructor(address admin, address newFrontendRegistry, address newChallengeBondToken) {
-        if (admin == address(0) || newChallengeBondToken == address(0)) revert InvalidAddress();
+        if (admin == address(0) || newChallengeBondToken == address(0) || newChallengeBondToken.code.length == 0) {
+            revert InvalidAddress();
+        }
         challengeBondToken = IERC20(newChallengeBondToken);
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(CONFIG_ROLE, admin);
@@ -268,6 +270,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (block.timestamp >= uint256(snapshot.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
+        if (msg.sender == snapshot.proposer) revert InvalidSnapshot();
         uint256 bond = challengeBond;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
@@ -446,6 +449,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (block.timestamp >= uint256(proposal.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
+        if (msg.sender == proposal.proposer) revert InvalidSnapshot();
         uint256 bond = challengeBond;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
@@ -924,7 +928,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         } catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) { }
+        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) {}
         catch {
             revert InvalidAddress();
         }

@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RatingLib } from "../contracts/libraries/RatingLib.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {RatingLib} from "../contracts/libraries/RatingLib.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {deployInitializedProtocolConfig} from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
     address public votingEngine;
@@ -18,7 +19,7 @@ contract MockRewardDistributorForConfig {
     }
 }
 
-contract MockRewardDistributorWithoutEngineForConfig { }
+contract MockRewardDistributorWithoutEngineForConfig {}
 
 contract MockRewardDistributorRevertingEngineForConfig {
     function votingEngine() external pure returns (address) {
@@ -79,6 +80,27 @@ contract WeakRaterRegistryForConfig {
     function addressIdentityKey(address account) external pure returns (bytes32) {
         if (account == address(0)) return bytes32(0);
         return bytes32(uint256(1));
+    }
+}
+
+contract RaterRegistryWithoutCredentialAbiForConfig is IRaterIdentityRegistry {
+    function addressIdentityKey(address account) external pure returns (bytes32) {
+        if (account == address(0)) return bytes32(0);
+        return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
+    }
+
+    function resolveRater(address actor) external pure returns (ResolvedRater memory resolved) {
+        resolved = ResolvedRater({
+            holder: actor,
+            identityKey: keccak256(abi.encodePacked("rateloop.address-identity-v1", actor)),
+            humanNullifier: bytes32(0),
+            hasActiveHumanCredential: false,
+            delegated: false
+        });
+    }
+
+    function hasActiveHumanCredential(address) external pure returns (bool) {
+        return false;
     }
 }
 
@@ -221,6 +243,14 @@ contract ProtocolConfigBranchesTest is Test {
     function test_SetRaterRegistry_RejectsWeakAbiShape() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         WeakRaterRegistryForConfig weakRegistry = new WeakRaterRegistryForConfig();
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRaterRegistry(address(weakRegistry));
+    }
+
+    function test_SetRaterRegistry_RejectsMissingGetHumanCredentialAbi() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        RaterRegistryWithoutCredentialAbiForConfig weakRegistry = new RaterRegistryWithoutCredentialAbiForConfig();
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setRaterRegistry(address(weakRegistry));
@@ -754,7 +784,7 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setConfig(uint256(type(uint32).max) + 1, 30 days, 3, 1000);
+        config.setConfig(uint256(type(uint32).max) + 1, 30 days, 3, 200);
     }
 
     function test_DefaultRoundConfigBounds_ExposeCreatorAllowedRange() public {
@@ -769,7 +799,7 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(bounds.minSettlementVoters, 3);
         assertEq(bounds.maxSettlementVoters, 100);
         assertEq(bounds.minVoterCap, 3);
-        assertEq(bounds.maxVoterCap, 1_000);
+        assertEq(bounds.maxVoterCap, 200);
     }
 
     function test_DefaultRoundConfig_UsesSingleBlindPhaseWindow() public {
@@ -832,14 +862,15 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectEmit(true, true, true, true);
-        emit RoundConfigBoundsUpdated(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 500);
+        emit RoundConfigBoundsUpdated(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 200);
 
-        config.setRoundConfigBounds(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 500);
+        config.setRoundConfigBounds(10 minutes, 2 hours, 10 minutes, 14 days, 3, 50, 3, 200);
 
         ProtocolConfig.RoundConfigBounds memory bounds = config.getRoundConfigBounds();
         assertEq(bounds.minEpochDuration, 10 minutes);
         assertEq(bounds.maxEpochDuration, 2 hours);
         assertEq(bounds.maxRoundDuration, 14 days);
+        assertEq(bounds.maxVoterCap, 200);
         assertEq(config.revealGracePeriod(), 60 minutes);
     }
 
@@ -862,32 +893,32 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         vm.warp(100);
 
-        config.setRoundConfigBounds(10 minutes, 60 minutes, 10 minutes, 30 days, 3, 100, 3, 1_000);
+        config.setRoundConfigBounds(10 minutes, 60 minutes, 10 minutes, 30 days, 3, 100, 3, 200);
         config.setDrandConfig(QUICKNET_CHAIN_HASH, 1, uint64(10 minutes));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(5 minutes, 60 minutes, 5 minutes, 30 days, 3, 100, 3, 1_000);
+        config.setRoundConfigBounds(5 minutes, 60 minutes, 5 minutes, 30 days, 3, 100, 3, 200);
     }
 
     function test_SetRoundConfigBounds_RejectsBoundsThatExcludeCurrentDefault() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(1 minutes, 7 days, 1 minutes, 10 minutes, 3, 100, 3, 1_000);
+        config.setRoundConfigBounds(1 minutes, 7 days, 1 minutes, 10 minutes, 3, 100, 3, 200);
     }
 
     function test_SetRoundConfigBounds_RejectsBundleIncompatibleMinimumVoterCap() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(1 minutes, 7 days, 1 minutes, 30 days, 3, 100, 101, 1_000);
+        config.setRoundConfigBounds(1 minutes, 7 days, 1 minutes, 30 days, 3, 100, 101, 200);
     }
 
     function test_SetRoundConfigBounds_RejectsAbsoluteMaxRoundDuration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.setRoundConfigBounds(1 minutes, 30 days, 1 minutes, 60 days + 1, 3, 100, 3, 1_000);
+        config.setRoundConfigBounds(1 minutes, 30 days, 1 minutes, 60 days + 1, 3, 100, 3, 200);
     }
 
     function test_SetRaterRegistry() public {

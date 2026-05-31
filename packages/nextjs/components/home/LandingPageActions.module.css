@@ -1,13 +1,22 @@
 .cta {
   height: 2.75rem;
   min-height: 2.75rem;
-  padding-block: 0;
-  padding-inline: 1.1rem;
-  border-radius: 9999px;
-  gap: 0.55rem;
+  border-radius: var(--rateloop-radius-control);
   font-size: 1rem;
   font-weight: 600;
   letter-spacing: 0;
+}
+
+.primary {
+  min-height: 2.75rem;
+  box-shadow: none;
+}
+
+.primaryInner {
+  min-height: calc(2.75rem - (var(--rateloop-gradient-border-size) * 2));
+  padding-block: 0;
+  padding-inline: 1.1rem;
+  border-radius: calc(var(--rateloop-radius-control) - var(--rateloop-gradient-border-size));
 }
 
 .arrow {
@@ -21,10 +30,6 @@
 
 .cta:hover .arrow {
   transform: translateX(2px);
-}
-
-.primary {
-  box-shadow: none;
 }
 
 .secondary {

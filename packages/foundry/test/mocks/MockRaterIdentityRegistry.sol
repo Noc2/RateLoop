@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { IRaterIdentityRegistry } from "../../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {IRaterIdentityRegistry} from "../../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {RaterRegistry} from "../../contracts/RaterRegistry.sol";
 
 contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
     mapping(address => bool) public holders;
@@ -48,7 +49,7 @@ contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
         delegateOf[delegate] = msg.sender;
     }
 
-    function acceptDelegate() external { }
+    function acceptDelegate() external {}
 
     function removeDelegate() external {
         address delegate = delegateTo[msg.sender];
@@ -75,6 +76,23 @@ contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
 
     function getCredentialNullifier(uint256 credentialId) external view returns (uint256) {
         return credentialNullifiers[credentialId];
+    }
+
+    function getHumanCredential(address holder)
+        external
+        view
+        returns (RaterRegistry.HumanCredential memory credential)
+    {
+        address resolvedHolder = delegateOf[holder] == address(0) ? holder : delegateOf[holder];
+        uint256 credentialId = credentialIds[resolvedHolder];
+        if (!holders[resolvedHolder] || credentialId == 0) return credential;
+
+        credential.verified = true;
+        credential.provider = RaterRegistry.HumanCredentialProvider.SeededHuman;
+        credential.nullifierHash = bytes32(credentialNullifiers[credentialId]);
+        credential.scope = keccak256("mock-rater-identity-registry");
+        credential.verifiedAt = 1;
+        credential.expiresAt = type(uint64).max;
     }
 
     function hasActiveHumanCredential(address holder) external view returns (bool) {

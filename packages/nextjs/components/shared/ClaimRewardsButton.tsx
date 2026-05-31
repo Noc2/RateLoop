@@ -1,5 +1,6 @@
 "use client";
 
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { useAllClaimableRewards } from "~~/hooks/useAllClaimableRewards";
 import { useClaimAll } from "~~/hooks/useClaimAll";
 import { formatUsdAmount } from "~~/lib/questionRewardPools";
@@ -30,26 +31,44 @@ export function ClaimRewardsButton({ buttonClassName, className, showTokenSymbol
   const handleClaimAll = () => {
     void claimAll(claimableItems, () => refetchClaimable());
   };
+  const label = isPreparingClaim
+    ? "Preparing..."
+    : isClaiming
+      ? `Claim ${progress.current}/${progress.total}`
+      : totalLrepClaimable > 0n && totalUsdcClaimable > 0n
+        ? `Claim ${formatLrepAmount(totalLrepClaimable)}${showTokenSymbol ? " LREP" : ""} + ${formatUsdAmount(
+            totalUsdcClaimable,
+          )}`
+        : totalLrepClaimable > 0n && totalUsdcClaimable <= 0n
+          ? `Claim ${formatLrepAmount(totalLrepClaimable)}${showTokenSymbol ? " LREP" : ""}`
+          : `Claim ${formatUsdAmount(totalUsdcClaimable)}`;
+
+  if (buttonClassName) {
+    return (
+      <div className={className}>
+        <button
+          type="button"
+          onClick={handleClaimAll}
+          disabled={isClaiming || isPreparingClaim}
+          className={buttonClassName}
+        >
+          {label}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className={className}>
-      <button
-        type="button"
+      <GradientActionButton
         onClick={handleClaimAll}
         disabled={isClaiming || isPreparingClaim}
-        className={buttonClassName ?? "btn btn-primary btn-sm w-full"}
+        className="w-full"
+        size="sm"
+        motion={getGradientActionMotion(isClaiming || isPreparingClaim)}
       >
-        {isPreparingClaim ? "Preparing..." : isClaiming ? `Claim ${progress.current}/${progress.total}` : null}
-        {!isPreparingClaim && !isClaiming && totalLrepClaimable > 0n && totalUsdcClaimable > 0n
-          ? `Claim ${formatLrepAmount(totalLrepClaimable)}${showTokenSymbol ? " LREP" : ""} + ${formatUsdAmount(totalUsdcClaimable)}`
-          : null}
-        {!isPreparingClaim && !isClaiming && totalLrepClaimable > 0n && totalUsdcClaimable <= 0n
-          ? `Claim ${formatLrepAmount(totalLrepClaimable)}${showTokenSymbol ? " LREP" : ""}`
-          : null}
-        {!isPreparingClaim && !isClaiming && totalLrepClaimable <= 0n && totalUsdcClaimable > 0n
-          ? `Claim ${formatUsdAmount(totalUsdcClaimable)}`
-          : null}
-      </button>
+        {label}
+      </GradientActionButton>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { Test } from "forge-std/Test.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { DeployRateLoop } from "../script/Deploy.s.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
@@ -41,6 +42,7 @@ contract DeployRateLoopHarness is DeployRateLoop {
     function activateLegacyContributorRoot(LaunchDistributionPool launchPool) external {
         _activateLegacyContributorRoot(launchPool);
     }
+
 }
 
 contract RevertingDecimalsToken {
@@ -153,5 +155,36 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(holders[0], address(0x1001));
         assertEq(holders[1], address(0x1004));
         assertEq(holders[2], address(0x1007));
+    }
+
+    function test_GovernanceTimelockRolesStayGovernorOnly() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        address[] memory proposers = new address[](0);
+        address[] memory executors = new address[](1);
+        executors[0] = address(0);
+        TimelockController timelock =
+            new TimelockController(deployScript.TIMELOCK_MIN_DELAY(), proposers, executors, address(deployScript));
+        address governor = address(0xA11CE);
+        address nonGovernor = address(new RevertingDecimalsToken());
+        bytes32 proposerRole = timelock.PROPOSER_ROLE();
+        bytes32 cancellerRole = timelock.CANCELLER_ROLE();
+        bytes32 executorRole = timelock.EXECUTOR_ROLE();
+        bytes32 defaultAdminRole = timelock.DEFAULT_ADMIN_ROLE();
+
+        vm.prank(address(deployScript));
+        timelock.grantRole(proposerRole, governor);
+        vm.prank(address(deployScript));
+        timelock.grantRole(cancellerRole, governor);
+        vm.prank(address(deployScript));
+        timelock.renounceRole(defaultAdminRole, address(deployScript));
+
+        assertTrue(timelock.hasRole(proposerRole, governor));
+        assertTrue(timelock.hasRole(cancellerRole, governor));
+        assertTrue(timelock.hasRole(executorRole, address(0)));
+        assertFalse(timelock.hasRole(proposerRole, nonGovernor));
+        assertFalse(timelock.hasRole(cancellerRole, nonGovernor));
+        assertFalse(timelock.hasRole(proposerRole, address(0)));
+        assertFalse(timelock.hasRole(cancellerRole, address(0)));
+        assertFalse(timelock.hasRole(defaultAdminRole, address(deployScript)));
     }
 }

@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { CheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
@@ -539,9 +540,10 @@ export function FrontendRegistration() {
             </div>
           </div>
 
-          <button
-            className="btn btn-submit w-full"
+          <GradientActionButton
+            className="w-full"
             onClick={handleRegister}
+            motion={getGradientActionMotion(isRegistering || isAwaitingSponsoredSubmitCalls)}
             disabled={
               isRegistering || isAwaitingSponsoredSubmitCalls || isMissingGasBalance || lrepFormatted < STAKE_AMOUNT
             }
@@ -554,7 +556,7 @@ export function FrontendRegistration() {
             ) : (
               "Register as Frontend Operator"
             )}
-          </button>
+          </GradientActionButton>
         </div>
       ) : (
         // Registered State
@@ -601,9 +603,11 @@ export function FrontendRegistration() {
               </p>
             ) : (
               <div className="space-y-3">
-                <button
-                  className="btn btn-submit btn-sm w-full"
+                <GradientActionButton
+                  className="w-full"
+                  size="sm"
                   onClick={handleClaimAllRoundFees}
+                  motion={getGradientActionMotion(isClaimingAllRoundFees || isAwaitingSponsoredSubmitCalls)}
                   disabled={
                     isClaimingAllRoundFees || isAwaitingSponsoredSubmitCalls || isMissingGasBalance || isSlashed
                   }
@@ -616,7 +620,7 @@ export function FrontendRegistration() {
                   ) : (
                     "Claim All Round Fees"
                   )}
-                </button>
+                </GradientActionButton>
 
                 <div className="space-y-2">
                   {claimableRoundFees.map(item => {
@@ -693,15 +697,17 @@ export function FrontendRegistration() {
                 <p className="text-base text-base-content/60">LREP</p>
                 <p className="text-lg font-bold text-primary">{lrepFees.toFixed(2)}</p>
               </div>
-              <button
-                className="btn btn-submit btn-sm"
+              <GradientActionButton
+                className="min-w-24"
+                size="sm"
                 onClick={handleClaimFees}
+                motion={getGradientActionMotion(isClaiming || isAwaitingSponsoredSubmitCalls)}
                 disabled={
                   isClaiming || isAwaitingSponsoredSubmitCalls || isMissingGasBalance || !hasFees || isExitPending
                 }
               >
                 {isClaiming ? <span className="loading loading-spinner loading-xs" /> : "Claim"}
-              </button>
+              </GradientActionButton>
             </div>
             {isExitPending && (
               <p className="text-sm text-base-content/50 mt-2">Fee withdrawals stay locked until exit is completed.</p>

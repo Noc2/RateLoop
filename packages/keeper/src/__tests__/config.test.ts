@@ -182,6 +182,8 @@ describe("keeper config", () => {
     ["KEEPER_INTERVAL_MS", "30000ms", "KEEPER_INTERVAL_MS must be a positive integer"],
     ["KEEPER_STARTUP_JITTER_MS", "0ms", "KEEPER_STARTUP_JITTER_MS must be a non-negative integer"],
     ["KEEPER_CLEANUP_BATCH_SIZE", "25items", "KEEPER_CLEANUP_BATCH_SIZE must be a positive integer"],
+    ["KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK", "50rounds", "KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK must be a non-negative integer"],
+    ["KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK", "50rounds", "KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK must be a non-negative integer"],
     ["MAX_GAS_PER_TX", "2000000gas", "MAX_GAS_PER_TX must be a positive integer"],
     ["METRICS_PORT", "9090http", "METRICS_PORT must be a positive integer"],
     ["DORMANCY_PERIOD", "2592000s", "DORMANCY_PERIOD must be a positive integer"],
@@ -302,6 +304,8 @@ describe("keeper config", () => {
       KEEPER_FRONTEND_FEE_ENABLED: "true",
       KEEPER_FRONTEND_ADDRESS: "0x7777777777777777777777777777777777777777",
       KEEPER_FRONTEND_FEE_LOOKBACK_ROUNDS: "12",
+      KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK: "7",
+      KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK: "9",
       KEEPER_FRONTEND_FEE_WITHDRAW: "false",
     });
 
@@ -310,6 +314,8 @@ describe("keeper config", () => {
         enabled: true,
         frontendAddress: "0x7777777777777777777777777777777777777777",
         lookbackRounds: 12,
+        recentRoundsPerTick: 7,
+        backfillRoundsPerTick: 9,
         withdrawEnabled: false,
         contracts: expect.objectContaining({
           roundRewardDistributor: expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),

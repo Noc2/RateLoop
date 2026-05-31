@@ -7,7 +7,7 @@ import { hardhat } from "viem/chains";
 import { useAccount } from "wagmi";
 import { ArrowLeftOnRectangleIcon, CheckIcon, ClipboardDocumentIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
-import { FaucetTrigger } from "~~/components/scaffold-eth/Faucet";
+import { FaucetTrigger } from "~~/components/scaffold-eth/FaucetTrigger";
 import { ClaimRewardsButton } from "~~/components/shared/ClaimRewardsButton";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useCopyToClipboard } from "~~/hooks/scaffold-eth";

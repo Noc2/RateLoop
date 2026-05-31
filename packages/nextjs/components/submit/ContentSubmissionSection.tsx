@@ -11,6 +11,7 @@ import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/reac
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -3092,14 +3093,9 @@ export function ContentSubmissionSection() {
       >
         Back
       </button>
-      <button
-        type="button"
-        onClick={handleGoToFeedbackBonusStep}
-        className="btn btn-submit w-full sm:flex-1"
-        disabled={isSubmitting}
-      >
+      <GradientActionButton onClick={handleGoToFeedbackBonusStep} className="w-full sm:flex-1" disabled={isSubmitting}>
         Continue
-      </button>
+      </GradientActionButton>
     </div>
   );
 
@@ -3328,10 +3324,12 @@ export function ContentSubmissionSection() {
       >
         Back
       </button>
-      <button
-        type="button"
+      <GradientActionButton
         onClick={handleFinalSubmit}
-        className="btn btn-submit w-full sm:flex-1"
+        className="w-full sm:flex-1"
+        motion={getGradientActionMotion(
+          isSubmitting || isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls,
+        )}
         disabled={
           isSubmitting || isAwaitingSponsoredSubmitCalls || isAwaitingSelfFundedSubmitCalls || isMissingGasBalance
         }
@@ -3344,7 +3342,7 @@ export function ContentSubmissionSection() {
         ) : (
           "Submit"
         )}
-      </button>
+      </GradientActionButton>
     </div>
   );
 
@@ -3774,11 +3772,11 @@ export function ContentSubmissionSection() {
                     Back to Q{activeQuestionIndex}
                   </button>
                 ) : null}
-                <button type="button" onClick={handleContinueToBounty} className="btn btn-primary w-full">
+                <GradientActionButton onClick={handleContinueToBounty} className="w-full">
                   {activeQuestionIndex < questionCount - 1
                     ? `Next Question (${activeQuestionIndex + 2}/${questionCount})`
                     : "Continue to Bounty"}
-                </button>
+                </GradientActionButton>
               </div>
             </div>
           ) : submissionStep === "bounty" ? (

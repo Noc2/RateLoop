@@ -137,6 +137,12 @@ library QuestionRewardPoolEscrowQualificationLib {
 
     function qualifyRound(
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(
+            uint256
+                => mapping(
+                uint256 => mapping(bytes32 => mapping(bytes32 => bool))
+            )
+        ) storage qualifiedQuestionRewardClaimants,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         RoundVotingEngine votingEngine,
@@ -223,6 +229,26 @@ library QuestionRewardPoolEscrowQualificationLib {
             clusterWeightRoot: bytes32(0),
             clusterSnapshotDigest: bytes32(0)
         });
+        _markEligibleRevealedVoters(
+            QualificationContext({
+                votingEngine: votingEngine,
+                protocolConfig: votingEngine.protocolConfig(),
+                rewardId: rewardPool.id,
+                contentId: rewardPool.contentId,
+                roundId: roundId,
+                bountyClosesAt: rewardPool.bountyClosesAt,
+                requiredVoters: rewardPool.requiredVoters,
+                bountyEligibility: rewardPool.bountyEligibility,
+                funder: rewardPool.funder,
+                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
+                submitterIdentity: rewardPool.submitterIdentity,
+                submitterIdentityKey: rewardPool.submitterIdentityKey
+            }),
+            qualifiedQuestionRewardClaimants,
+            rewardPoolId,
+            bytes32(0)
+        );
 
         effectiveParticipantUnits = effectiveUnits;
         rawEligibleVoters = rawEligible;
@@ -231,6 +257,9 @@ library QuestionRewardPoolEscrowQualificationLib {
 
     function qualifyRoundWithClusterSnapshot(
         mapping(uint256 => mapping(uint256 => RoundSnapshot)) storage roundSnapshots,
+        mapping(
+            uint256 => mapping(uint256 => mapping(bytes32 => mapping(bytes32 => bool)))
+        ) storage qualifiedQuestionRewardClaimants,
         mapping(uint256 => address) storage rewardPoolPayerIdentity,
         mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
         mapping(uint256 => address) storage rewardPoolClusterPayoutOracle,
@@ -325,6 +354,26 @@ library QuestionRewardPoolEscrowQualificationLib {
             clusterWeightRoot: payoutSnapshot.weightRoot,
             clusterSnapshotDigest: clusterSnapshotDigest
         });
+        _markEligibleRevealedVoters(
+            QualificationContext({
+                votingEngine: votingEngine,
+                protocolConfig: votingEngine.protocolConfig(),
+                rewardId: rewardPool.id,
+                contentId: rewardPool.contentId,
+                roundId: roundId,
+                bountyClosesAt: rewardPool.bountyClosesAt,
+                requiredVoters: rewardPool.requiredVoters,
+                bountyEligibility: rewardPool.bountyEligibility,
+                funder: rewardPool.funder,
+                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
+                submitterIdentity: rewardPool.submitterIdentity,
+                submitterIdentityKey: rewardPool.submitterIdentityKey
+            }),
+            qualifiedQuestionRewardClaimants,
+            rewardPoolId,
+            clusterSnapshotDigest
+        );
 
         emit RewardPoolRoundQualified(
             rewardPoolId, rewardPool.contentId, roundId, allocation, effectiveParticipantUnits, frontendFeeAllocation
@@ -514,37 +563,58 @@ library QuestionRewardPoolEscrowQualificationLib {
         (,, uint16 commitCount,,,,,,,,,,,) = ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
-            (address voter, bool bountyEligibleTiming) = _readBountyEligibleRevealedCommit(ctx, commitKey);
-            if (bountyEligibleTiming) {
-                (bytes32 identityKey, address holder) = QuestionRewardPoolEscrowVoterLib.commitIdentity(
-                    ctx.votingEngine, ctx.protocolConfig, ctx.contentId, ctx.roundId, commitKey, voter
-                );
-                if (
-                    !_isExcludedRater(
-                            identityKey,
-                            holder,
-                            ctx.funder,
-                            ctx.funderIdentity,
-                            ctx.funderIdentityKey,
-                            ctx.submitterIdentity,
-                            ctx.submitterIdentityKey
-                        )
-                        && QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-                            ctx.protocolConfig, ctx.bountyEligibility, holder
-                        )
-                ) {
-                    rawEligibleVoters++;
-                    uint256 claimWeight = _claimWeight(ctx.votingEngine, ctx.contentId, ctx.roundId, commitKey);
-                    if (claimWeight > 0) {
-                        totalClaimWeight += claimWeight;
-                        effectiveParticipantUnits += BPS_SCALE;
-                    }
+            if (_isEligibleRevealedCommit(ctx, commitKey)) {
+                rawEligibleVoters++;
+                uint256 claimWeight = _claimWeight(ctx.votingEngine, ctx.contentId, ctx.roundId, commitKey);
+                if (claimWeight > 0) {
+                    totalClaimWeight += claimWeight;
+                    effectiveParticipantUnits += BPS_SCALE;
                 }
             }
             unchecked {
                 ++i;
             }
         }
+    }
+
+    function _markEligibleRevealedVoters(
+        QualificationContext memory ctx,
+        mapping(
+            uint256 => mapping(uint256 => mapping(bytes32 => mapping(bytes32 => bool)))
+        ) storage qualifiedQuestionRewardClaimants,
+        uint256 rewardPoolId,
+        bytes32 snapshotDigest
+    ) private {
+        (,, uint16 commitCount,,,,,,,,,,,) = ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
+        for (uint256 i = 0; i < commitCount;) {
+            bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
+            if (_isEligibleRevealedCommit(ctx, commitKey)) {
+                qualifiedQuestionRewardClaimants[rewardPoolId][ctx.roundId][snapshotDigest][commitKey] = true;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _isEligibleRevealedCommit(QualificationContext memory ctx, bytes32 commitKey) private view returns (bool) {
+        (address voter, bool bountyEligibleTiming) = _readBountyEligibleRevealedCommit(ctx, commitKey);
+        if (!bountyEligibleTiming) return false;
+        (bytes32 identityKey, address holder) = QuestionRewardPoolEscrowVoterLib.commitIdentity(
+            ctx.votingEngine, ctx.protocolConfig, ctx.contentId, ctx.roundId, commitKey, voter
+        );
+        return !_isExcludedRater(
+            identityKey,
+            holder,
+            ctx.funder,
+            ctx.funderIdentity,
+            ctx.funderIdentityKey,
+            ctx.submitterIdentity,
+            ctx.submitterIdentityKey
+        )
+            && QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
+            ctx.protocolConfig, ctx.bountyEligibility, holder
+        );
     }
 
     function _readBountyEligibleRevealedCommit(QualificationContext memory ctx, bytes32 commitKey)

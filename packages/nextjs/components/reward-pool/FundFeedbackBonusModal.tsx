@@ -6,6 +6,7 @@ import { isAddress } from "viem";
 import { useAccount, useConfig, useSignTypedData, useWriteContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt } from "wagmi/actions";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import {
   BOUNTY_WINDOW_PRESETS,
@@ -473,14 +474,13 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
         </div>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
-          <button
-            type="button"
+          <GradientActionButton
             onClick={handleFundFeedbackBonus}
             disabled={!canSubmit || isFunding}
-            className="btn btn-primary"
+            motion={getGradientActionMotion(isFunding)}
           >
             {isFunding ? "Funding..." : "Fund Feedback Bonus"}
-          </button>
+          </GradientActionButton>
           <button type="button" onClick={onClose} className="btn btn-ghost">
             Cancel
           </button>

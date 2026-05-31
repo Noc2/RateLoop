@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { IGovernor } from "@openzeppelin/contracts/governance/IGovernor.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
+import {Test} from "forge-std/Test.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RateLoopGovernor} from "../contracts/governance/RateLoopGovernor.sol";
 
 /// @title Formal Verification: Governance Parameter Audit
 /// @notice 10 scenarios verifying early capture resistance, quorum scaling,
@@ -37,11 +37,10 @@ contract FormalVerification_GovernanceTest is Test {
         address[] memory empty = new address[](0);
         timelock = new TimelockController(2 days, empty, empty, deployer);
 
-        governor = new RateLoopGovernor(IVotes(address(token)), timelock);
         address[] memory holders = new address[](2);
         holders[0] = mockLaunchDistribution;
         holders[1] = mockTreasury;
-        governor.initializePools(holders);
+        governor = new RateLoopGovernor(IVotes(address(token)), timelock, holders);
 
         token.setGovernor(address(governor));
         timelock.grantRole(timelock.PROPOSER_ROLE(), address(governor));

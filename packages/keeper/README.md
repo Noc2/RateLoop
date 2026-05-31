@@ -55,7 +55,9 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `MAX_GAS_PER_TX`                            | `2000000`                                                           | Per-transaction gas cap for keeper writes                                                            |
 | `KEEPER_FRONTEND_FEE_ENABLED`               | `false`                                                             | Enable hosted frontend fee sweep mode                                                                |
 | `KEEPER_FRONTEND_ADDRESS`                   | keeper wallet address                                               | Optional frontend/operator address to claim for. Must match the keeper wallet for fee sweeps to run. |
-| `KEEPER_FRONTEND_FEE_LOOKBACK_ROUNDS`       | `8`                                                                 | Number of recent rounds per content item to prioritize before backfilling older frontend fees        |
+| `KEEPER_FRONTEND_FEE_LOOKBACK_ROUNDS`       | `8`                                                                 | Recent-round window per content item to prioritize before backfilling older frontend fees            |
+| `KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK` | `50`                                                               | Max recent frontend-fee content/round slots to scan per keeper tick                                  |
+| `KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK` | `50`                                                             | Max older frontend-fee content/round slots to scan per keeper tick                                   |
 | `KEEPER_FRONTEND_FEE_WITHDRAW`              | `true`                                                              | Withdraw accumulated `FrontendRegistry` fees after claiming round fees                               |
 | `KEEPER_CORRELATION_SNAPSHOTS_ENABLED`      | `false`                                                             | Publish/finalize correlation epoch and round payout snapshot artifacts from a registered operator     |
 | `KEEPER_CORRELATION_SNAPSHOTS_MODE`         | `auto` without an artifact path, otherwise `file`                   | `auto` builds deterministic artifacts from Ponder; `file` reads a prebuilt artifact                  |
@@ -80,7 +82,7 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 
 Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), and `keeper_unrevealed_cleanup_batches_total` (counter).
 
-When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also withdraw accumulated `FrontendRegistry.claimFees()` credits.
+When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes a bounded cursor through recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also withdraw accumulated `FrontendRegistry.claimFees()` credits.
 
 When `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, the worker checks that the keeper wallet is an eligible `FrontendRegistry` operator, proposes missing correlation epoch and round payout roots from that registered wallet, and finalizes already-proposed roots after the challenge window. In `auto` mode it asks Ponder for settled USDC bounty rounds, builds deterministic payout weights with `@rateloop/node-utils/correlationScoring`, stores the public artifact, then publishes the roots. In `file` mode it reads the same artifact shape from `KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH`.
 

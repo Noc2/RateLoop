@@ -34,6 +34,7 @@ import { CategoryBars } from "~~/components/leaderboard/CategoryBars";
 import { StakeBreakdown } from "~~/components/leaderboard/StakeBreakdown";
 import { WinRateRing } from "~~/components/leaderboard/WinRateRing";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { ProfileImageLightbox } from "~~/components/shared/ProfileImageLightbox";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { SETTINGS_ROUTE, buildRateContentHref } from "~~/constants/routes";
@@ -1219,10 +1220,9 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                   >
                     Cancel
                   </button>
-                  <button
-                    type="button"
+                  <GradientActionButton
                     onClick={() => void handleSaveProfile()}
-                    className="btn btn-submit"
+                    motion={getGradientActionMotion(profileSaveBusy)}
                     disabled={
                       profileSaveBusy ||
                       !nameInput.trim() ||
@@ -1231,13 +1231,11 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                     }
                   >
                     {profileSaveBusy ? "Saving..." : hasLiveProfile ? "Save changes" : "Save profile"}
-                  </button>
+                  </GradientActionButton>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={openEditMode} className="btn btn-submit">
-                    Edit profile
-                  </button>
+                  <GradientActionButton onClick={openEditMode}>Edit profile</GradientActionButton>
                 </div>
               )
             ) : (

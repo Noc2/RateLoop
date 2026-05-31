@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { ScaffoldETHDeploy } from "./DeployHelpers.s.sol";
-import { console } from "forge-std/console.sol";
-import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { CategoryRegistry } from "../contracts/CategoryRegistry.sol";
-import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
-import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
-import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
-import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
+import {ScaffoldETHDeploy} from "./DeployHelpers.s.sol";
+import {console} from "forge-std/console.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {CategoryRegistry} from "../contracts/CategoryRegistry.sol";
+import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
+import {FeedbackRegistry} from "../contracts/FeedbackRegistry.sol";
+import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import {RateLoopGovernor} from "../contracts/governance/RateLoopGovernor.sol";
 
 /// @notice Fresh RateLoop deployment script for World Chain.
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
@@ -104,19 +104,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         LoopReputation lrepToken = new LoopReputation(deployer, governance);
         console.log("LoopReputation deployed at:", address(lrepToken));
-
-        if (!isLocalDev) {
-            governor = new RateLoopGovernor(IVotes(address(lrepToken)), TimelockController(payable(governance)));
-            governorAddr = address(governor);
-            console.log("RateLoopGovernor deployed at:", governorAddr);
-
-            TimelockController tc = TimelockController(payable(governance));
-            tc.grantRole(tc.PROPOSER_ROLE(), governorAddr);
-            tc.grantRole(tc.CANCELLER_ROLE(), governorAddr);
-            tc.renounceRole(tc.DEFAULT_ADMIN_ROLE(), deployer);
-            lrepToken.setGovernor(governorAddr);
-            lrepToken.renounceRole(lrepToken.CONFIG_ROLE(), deployer);
-        }
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine votingEngineImpl = new RoundVotingEngine();
@@ -385,7 +372,18 @@ contract DeployRateLoop is ScaffoldETHDeploy {
                 address(frontendRegistry),
                 address(questionRewardPoolEscrow)
             );
-            RateLoopGovernor(payable(governorAddr)).initializePools(excludedHolders);
+            governor = new RateLoopGovernor(
+                IVotes(address(lrepToken)), TimelockController(payable(governance)), excludedHolders
+            );
+            governorAddr = address(governor);
+            console.log("RateLoopGovernor deployed at:", governorAddr);
+
+            TimelockController tc = TimelockController(payable(governance));
+            tc.grantRole(tc.PROPOSER_ROLE(), governorAddr);
+            tc.grantRole(tc.CANCELLER_ROLE(), governorAddr);
+            tc.renounceRole(tc.DEFAULT_ADMIN_ROLE(), deployer);
+            lrepToken.setGovernor(governorAddr);
+            lrepToken.renounceRole(lrepToken.CONFIG_ROLE(), deployer);
         }
 
         lrepToken.mint(deployer, LAUNCH_DISTRIBUTION_AMOUNT);
@@ -706,4 +704,4 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 }
 
 /// @notice Main deployment entrypoint used by scaffold-eth/yarn deploy.
-contract DeployScript is DeployRateLoop { }
+contract DeployScript is DeployRateLoop {}

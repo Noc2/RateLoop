@@ -474,6 +474,85 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
   });
 
+  it("reuses indexed round voteability state during committed vote handling", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
+    const ciphertext = "0x1234" as `0x${string}`;
+    const ciphertextHash = keccak256(ciphertext);
+    const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
+      if (functionName === "commitIdentityKey") return `0x${"00".repeat(32)}`;
+      if (functionName === "commitIdentityHolder") return "0x0000000000000000000000000000000000000000";
+      if (functionName === "targetRoundRevealableTimestamp") return 2_000n;
+      return null;
+    });
+    const { db, updateCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        startTime: 1_000n,
+        epochDuration: 600,
+        voteCount: 1,
+        totalStake: 10n,
+        hasHumanVerifiedCommit: true,
+        lastCommitRevealableAfter: 1_500n,
+        revealGracePeriod: 3_600n,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:VoteCommitted");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          voter,
+          commitHash,
+          roundReferenceRatingBps: 7200,
+          targetRound: 123n,
+          drandChainHash: `0x${"22".repeat(32)}`,
+          stake: 10n,
+          ciphertextHash,
+          ciphertext,
+        },
+        transaction: {
+          hash: `0x${"44".repeat(32)}`,
+        },
+        block: {
+          number: 43n,
+          timestamp: 1_601n,
+        },
+        log: {
+          logIndex: 9,
+        },
+      },
+      context: {
+        db,
+        client: { readContract },
+        contracts: {
+          RoundVotingEngine: { address: "0x0000000000000000000000000000000000000666" },
+        },
+      },
+    });
+
+    expect(readContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "roundHasHumanVerifiedCommit" }),
+    );
+    expect(readContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "roundRevealGracePeriodSnapshot" }),
+    );
+    expect(updateCalls).toContainEqual({
+      table: "round",
+      key: { id: "7-2" },
+      values: expect.objectContaining({
+        hasHumanVerifiedCommit: true,
+        lastCommitRevealableAfter: 2_200n,
+        revealGracePeriod: 3_600n,
+      }),
+    });
+  });
+
   it("attributes delegated RaterRegistry commits to the holder identity", async () => {
     const delegate = "0x0000000000000000000000000000000000000001";
     const holder = "0x0000000000000000000000000000000000000002";

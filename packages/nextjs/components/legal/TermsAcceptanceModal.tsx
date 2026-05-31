@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ShieldCheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton } from "~~/components/shared/GradientAction";
 import { ActionType, useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 
 const ACTION_TEXT: Record<NonNullable<ActionType>, { title: string; intro: string }> = {
@@ -129,9 +130,9 @@ export const TermsAcceptanceModal = () => {
             <button className="btn btn-ghost" onClick={handleClose}>
               Cancel
             </button>
-            <button className="btn btn-primary" disabled={!canAccept} onClick={handleAccept}>
+            <GradientActionButton disabled={!canAccept} onClick={handleAccept}>
               Accept &amp; Continue
-            </button>
+            </GradientActionButton>
           </div>
         </div>
       </div>
