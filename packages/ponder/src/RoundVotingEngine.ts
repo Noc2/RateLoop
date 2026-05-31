@@ -177,45 +177,68 @@ function roundReferenceFields(referenceRatingBps: number) {
   };
 }
 
+function positiveBigIntOrNull(value: unknown): bigint | null {
+  if (value === null || value === undefined) return null;
+  try {
+    const parsed = typeof value === "bigint" ? value : BigInt(String(value));
+    return parsed > 0n ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveRoundVoteabilityStateAtCommit(params: {
   context: any;
   contentId: bigint;
   roundId: bigint;
   targetRound: bigint;
   epochEnd: bigint;
+  indexedRound?: {
+    hasHumanVerifiedCommit?: boolean | null;
+    revealGracePeriod?: bigint | number | string | null;
+  } | null;
 }) {
   const engineAddress = firstContractAddress(
     params.context.contracts?.RoundVotingEngine?.address,
   );
+  const indexedHasHumanVerifiedCommit =
+    params.indexedRound?.hasHumanVerifiedCommit === true;
+  const indexedRevealGracePeriod = positiveBigIntOrNull(
+    params.indexedRound?.revealGracePeriod,
+  );
+
   if (!params.context.client?.readContract || !engineAddress) {
     return {
-      hasHumanVerifiedCommit: false,
+      hasHumanVerifiedCommit: indexedHasHumanVerifiedCommit,
       lastCommitRevealableAfter: params.epochEnd,
-      revealGracePeriod: null as bigint | null,
+      revealGracePeriod: indexedRevealGracePeriod,
     };
   }
 
   try {
     const [hasHumanVerifiedCommit, targetRoundRevealableAt, revealGracePeriod] =
       await Promise.all([
-        params.context.client.readContract({
-          abi: RoundVotingEngineAbi,
-          address: engineAddress,
-          functionName: "roundHasHumanVerifiedCommit",
-          args: [params.contentId, params.roundId],
-        }),
+        indexedHasHumanVerifiedCommit
+          ? true
+          : params.context.client.readContract({
+              abi: RoundVotingEngineAbi,
+              address: engineAddress,
+              functionName: "roundHasHumanVerifiedCommit",
+              args: [params.contentId, params.roundId],
+            }),
         params.context.client.readContract({
           abi: RoundVotingEngineAbi,
           address: engineAddress,
           functionName: "targetRoundRevealableTimestamp",
           args: [params.contentId, params.roundId, params.targetRound],
         }),
-        params.context.client.readContract({
-          abi: RoundVotingEngineAbi,
-          address: engineAddress,
-          functionName: "roundRevealGracePeriodSnapshot",
-          args: [params.contentId, params.roundId],
-        }),
+        indexedRevealGracePeriod ??
+          params.context.client.readContract({
+            abi: RoundVotingEngineAbi,
+            address: engineAddress,
+            functionName: "roundRevealGracePeriodSnapshot",
+            args: [params.contentId, params.roundId],
+          }),
       ]);
     const revealableAt =
       typeof targetRoundRevealableAt === "bigint"
@@ -234,9 +257,9 @@ async function resolveRoundVoteabilityStateAtCommit(params: {
     };
   } catch {
     return {
-      hasHumanVerifiedCommit: false,
+      hasHumanVerifiedCommit: indexedHasHumanVerifiedCommit,
       lastCommitRevealableAfter: params.epochEnd,
-      revealGracePeriod: null as bigint | null,
+      revealGracePeriod: indexedRevealGracePeriod,
     };
   }
 }
@@ -619,6 +642,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     roundId,
     targetRound,
     epochEnd,
+    indexedRound: existingRound,
   });
 
   if (!existingRound) {
