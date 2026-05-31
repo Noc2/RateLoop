@@ -2981,7 +2981,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryPreRoundUsesShortCustomRoundConfig() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 2 minutes, maxDuration: 2 minutes, minVoters: 3, maxVoters: 1000 });
+            RoundLib.RoundConfig({ epochDuration: 2 minutes, maxDuration: 2 minutes, minVoters: 3, maxVoters: 200 });
         uint256 contentId = _submitContentWithRoundConfig("https://example.com/advisory-short", roundConfig);
 
         uint256 recordedAt = block.timestamp;
@@ -3003,7 +3003,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_AdvisoryPreRoundUsesLongCustomRoundConfig() public {
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 3 days, maxDuration: 3 days, minVoters: 3, maxVoters: 1000 });
+            RoundLib.RoundConfig({ epochDuration: 3 days, maxDuration: 3 days, minVoters: 3, maxVoters: 200 });
         uint256 contentId = _submitContentWithRoundConfig("https://example.com/advisory-long", roundConfig);
 
         uint256 recordedAt = block.timestamp;

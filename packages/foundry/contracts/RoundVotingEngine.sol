@@ -1042,7 +1042,7 @@ contract RoundVotingEngine is
     ///         `processUnrevealedVotes` when treasury was unset or the transfer reverted.
     ///         Decrements `accountedLrepBalance` only on successful transfer; the bucket
     ///         survives failed flushes so callers can retry once treasury is healthy.
-    function flushPendingTreasuryForfeit() external nonReentrant returns (uint256 paid) {
+    function flushPendingTreasuryForfeit() external nonReentrant {
         uint256 amount = _pendingTreasuryForfeitLrep;
         if (amount == 0) revert NothingProcessed();
         address treasuryAddress = protocolConfig.treasury();
@@ -1051,7 +1051,6 @@ contract RoundVotingEngine is
         lrepToken.safeTransfer(treasuryAddress, amount);
         accountedLrepBalance -= amount;
         emit PendingTreasuryForfeitFlushed(treasuryAddress, amount);
-        return amount;
     }
     // =========================================================================
     // INTERNAL HELPERS
@@ -1312,6 +1311,9 @@ contract RoundVotingEngine is
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
         uint256 thresholdBlock = roundThresholdReachedBlock[contentId][roundId];
+        if (thresholdBlock != 0 && _isSettlementRevealGraceElapsed(contentId, roundId, round)) {
+            revert UnrevealedPastEpochVotes();
+        }
         bool countForSettlement = thresholdBlock == 0;
         (
             uint256 eligibleFrontendStake,
