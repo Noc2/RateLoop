@@ -168,6 +168,214 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+@property --rateloop-gradient-border-angle-1 {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@property --rateloop-gradient-border-angle-2 {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 90deg;
+}
+
+@property --rateloop-gradient-border-angle-3 {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 180deg;
+}
+
+@keyframes rateloop-gradient-border-orbit-1 {
+  to {
+    --rateloop-gradient-border-angle-1: 360deg;
+  }
+}
+
+@keyframes rateloop-gradient-border-orbit-2 {
+  to {
+    --rateloop-gradient-border-angle-2: -270deg;
+  }
+}
+
+@keyframes rateloop-gradient-border-orbit-3 {
+  to {
+    --rateloop-gradient-border-angle-3: 540deg;
+  }
+}
+
+@keyframes rateloop-gradient-icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.rateloop-gradient-action {
+  --rateloop-gradient-border-size: 2px;
+  --rateloop-gradient-button-radius: var(--rateloop-radius-control);
+  --rateloop-gradient-inner-bg: linear-gradient(
+    180deg,
+    rgb(var(--rateloop-surface-elevated-rgb) / 0.98),
+    rgb(var(--rateloop-surface-nested-rgb) / 0.96)
+  );
+  --rateloop-gradient-inner-color: var(--rateloop-warm-white);
+  --rateloop-gradient-border-angle-1: 0deg;
+  --rateloop-gradient-border-angle-2: 90deg;
+  --rateloop-gradient-border-angle-3: 180deg;
+  position: relative;
+  display: inline-flex;
+  min-height: 3rem;
+  width: max-content;
+  min-width: 0;
+  align-items: stretch;
+  justify-content: center;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--rateloop-gradient-button-radius);
+  padding: var(--rateloop-gradient-border-size);
+  background-color: transparent;
+  background-image:
+    conic-gradient(
+      from var(--rateloop-gradient-border-angle-1) at 12% 18%,
+      transparent 0 56%,
+      rgb(53 158 238 / 0.95) 64%,
+      transparent 76%
+    ),
+    conic-gradient(
+      from var(--rateloop-gradient-border-angle-2) at 82% 72%,
+      transparent 0 42%,
+      rgb(3 206 164 / 0.95) 56%,
+      transparent 76%
+    ),
+    conic-gradient(
+      from var(--rateloop-gradient-border-angle-3) at 54% 18%,
+      transparent 0 48%,
+      rgb(255 196 61 / 0.95) 58%,
+      rgb(239 71 111 / 0.95) 66%,
+      transparent 82%
+    ),
+    var(--rateloop-spectrum-gradient);
+  box-shadow:
+    0 0 0 1px rgb(245 245 245 / 0.08),
+    0 18px 36px rgb(0 0 0 / 0.32);
+  color: var(--rateloop-gradient-inner-color);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  line-height: 1;
+  isolation: isolate;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease,
+    filter 0.2s ease;
+}
+
+.rateloop-gradient-action[data-motion="active"] {
+  animation:
+    rateloop-gradient-border-orbit-1 3s linear infinite,
+    rateloop-gradient-border-orbit-2 8s linear infinite,
+    rateloop-gradient-border-orbit-3 13s linear infinite;
+}
+
+.rateloop-gradient-action:hover:not(:disabled) {
+  box-shadow:
+    0 0 0 1px rgb(245 245 245 / 0.13),
+    0 22px 42px rgb(0 0 0 / 0.38);
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+
+.rateloop-gradient-action:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.rateloop-gradient-action:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgb(245 245 245 / 0.9),
+    0 0 0 5px rgb(53 158 238 / 0.28),
+    0 18px 36px rgb(0 0 0 / 0.32);
+}
+
+.rateloop-gradient-action:disabled,
+.rateloop-gradient-action[aria-disabled="true"] {
+  cursor: wait;
+  opacity: 1;
+}
+
+.rateloop-gradient-action[data-tone="solid"] {
+  --rateloop-gradient-inner-bg: linear-gradient(180deg, #ffffff, var(--rateloop-warm-white));
+  --rateloop-gradient-inner-color: var(--rateloop-action-content);
+}
+
+.rateloop-gradient-action[data-size="lg"] {
+  min-height: 3.45rem;
+}
+
+.rateloop-gradient-action-inner {
+  display: inline-flex;
+  min-height: 2.75rem;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border-radius: calc(var(--rateloop-gradient-button-radius) - var(--rateloop-gradient-border-size));
+  padding: 0.75rem 1.15rem;
+  background: var(--rateloop-gradient-inner-bg);
+  color: inherit;
+  box-shadow: inset 0 1px 0 rgb(245 245 245 / 0.08);
+  white-space: nowrap;
+}
+
+.rateloop-gradient-action[data-size="lg"] .rateloop-gradient-action-inner {
+  min-height: 3.2rem;
+  padding-inline: 1.35rem;
+}
+
+.rateloop-gradient-action-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+}
+
+.rateloop-gradient-action-icon[data-spin="true"] {
+  animation: rateloop-gradient-icon-spin 0.95s linear infinite;
+  transform-origin: center;
+}
+
+.rateloop-gradient-vote {
+  --rateloop-gradient-button-radius: var(--rateloop-radius-pill);
+  min-height: 2.9rem;
+}
+
+.rateloop-gradient-vote .rateloop-gradient-action-inner {
+  min-height: 2.65rem;
+  padding: 0 1rem;
+  border-radius: var(--rateloop-radius-pill);
+}
+
+.rateloop-gradient-vote[data-direction="up"] {
+  --rateloop-gradient-inner-bg: linear-gradient(180deg, #2eeab6, var(--rateloop-green));
+  --rateloop-gradient-inner-color: #050505;
+}
+
+.rateloop-gradient-vote[data-direction="down"] {
+  --rateloop-gradient-inner-bg: linear-gradient(180deg, #ff6b7a, var(--rateloop-pink));
+  --rateloop-gradient-inner-color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rateloop-gradient-action,
+  .rateloop-gradient-action-icon[data-spin="true"] {
+    animation: none;
+  }
+
+  .rateloop-gradient-action:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
 .orb-animation-shell {
   max-width: 1100px;
 }
