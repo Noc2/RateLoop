@@ -17,7 +17,14 @@
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
  */
 import { keccak256, type PublicClient, type WalletClient, type Chain, type Account } from "viem";
-import { timelockDecrypt, mainnetClient } from "tlock-js";
+import {
+  HttpCachingChain,
+  HttpChainClient,
+  mainnetClient,
+  testnetClient,
+  timelockDecrypt,
+  type ChainClient,
+} from "tlock-js";
 import {
   AdvisoryVoteRecorderAbi,
   ContentRegistryAbi,
@@ -45,8 +52,6 @@ import type { Logger } from "./logger.js";
 import { incrementCounter } from "./metrics.js";
 import { getRevertReason, isExpectedRevert } from "./revert-utils.js";
 
-const tlockClient = mainnetClient();
-
 // --- Types ---
 export interface KeeperResult {
   roundsSettled: number;
@@ -73,6 +78,73 @@ const MAX_INDEXED_CIPHERTEXT_PAGES = 6;
 const cleanupQueue = new Map<string, CleanupCursor>();
 const cleanupCompletedRounds = new Set<string>();
 const cleanupDiscoveryRoundByContent = new Map<bigint, bigint>();
+const tlockClientCache = new Map<string, ChainClient>();
+
+const MAINNET_QUICKNET_CHAIN_HASH =
+  "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
+const TLOCK_JS_TESTNET_CHAIN_HASH =
+  "7672797f548f3f4748ac4bf3352fc6c6b6468c9ad40ad456a397545c6e2df5bf";
+const QUICKNET_T_CHAIN = {
+  url: "https://testnet-api.drand.cloudflare.com/cc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5",
+  chainHash: "cc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5",
+  publicKey:
+    "b15b65b46fb29104f6a4b5d1e11a8da6344463973d423661bb0804846a0ecd1ef93c25057f1c0baab2ac53e56c662b66072f6d84ee791a3382bfb055afab1e6a375538d8ffc451104ac971d2dc9b168e2d3246b0be2015969cbaac298f6502da",
+} as const;
+const KEEPER_TLOCK_USER_AGENT = "rateloop-keeper";
+
+function normalizeDrandChainHash(
+  drandChainHash: `0x${string}` | string | null | undefined,
+): string | null {
+  if (!drandChainHash) return null;
+  const normalized = drandChainHash.toLowerCase();
+  if (!/^0x[0-9a-f]{64}$/u.test(normalized)) {
+    throw new Error("Invalid drand chain hash");
+  }
+  return normalized.slice(2);
+}
+
+function cachedTlockClient(cacheKey: string, create: () => ChainClient): ChainClient {
+  let client = tlockClientCache.get(cacheKey);
+  if (!client) {
+    client = create();
+    tlockClientCache.set(cacheKey, client);
+  }
+  return client;
+}
+
+function createQuicknetTClient(): ChainClient {
+  const options = {
+    disableBeaconVerification: false,
+    noCache: false,
+    chainVerificationParams: {
+      chainHash: QUICKNET_T_CHAIN.chainHash,
+      publicKey: QUICKNET_T_CHAIN.publicKey,
+    },
+  };
+  const httpChain = new HttpCachingChain(QUICKNET_T_CHAIN.url, options);
+  return new HttpChainClient(httpChain, options, {
+    userAgent: KEEPER_TLOCK_USER_AGENT,
+  });
+}
+
+function resolveTlockClientForDrandChain(
+  drandChainHash: `0x${string}` | string | null | undefined,
+): ChainClient {
+  const normalized = normalizeDrandChainHash(drandChainHash);
+  if (!normalized || normalized === MAINNET_QUICKNET_CHAIN_HASH) {
+    return cachedTlockClient(MAINNET_QUICKNET_CHAIN_HASH, () => mainnetClient());
+  }
+  if (normalized === QUICKNET_T_CHAIN.chainHash) {
+    return cachedTlockClient(QUICKNET_T_CHAIN.chainHash, createQuicknetTClient);
+  }
+  if (normalized === TLOCK_JS_TESTNET_CHAIN_HASH) {
+    return cachedTlockClient(TLOCK_JS_TESTNET_CHAIN_HASH, () => testnetClient());
+  }
+
+  throw new Error(
+    `Unsupported drand chain 0x${normalized}. Update the keeper tlock client allowlist before revealing votes for this deployment.`,
+  );
+}
 
 function emptyResult(): KeeperResult {
   return {
@@ -94,6 +166,7 @@ export function resetKeeperStateForTests(): void {
   cleanupCompletedRounds.clear();
   cleanupDiscoveryRoundByContent.clear();
   decryptFailureCount.clear();
+  tlockClientCache.clear();
 }
 
 // Track repeated decrypt failures per commitKey to stop retrying permanently bad ciphertexts
@@ -329,6 +402,7 @@ const MAX_CIPHERTEXT_BYTES = 4096;
 
 export async function decryptTlockVoteCiphertext(
   ciphertext: `0x${string}`,
+  drandChainHash?: `0x${string}`,
 ): Promise<{
   isUp: boolean;
   predictedUpBps: number;
@@ -339,8 +413,11 @@ export async function decryptTlockVoteCiphertext(
   if (hex.length / 2 > MAX_CIPHERTEXT_BYTES) return null;
   // Convert hex bytes back to UTF-8 armored string
   const armored = Buffer.from(hex, "hex").toString("utf-8");
+  const client = resolveTlockClientForDrandChain(
+    drandChainHash ?? parseTlockCiphertextMetadata(ciphertext)?.drandChainHash,
+  );
 
-  const plaintext = await timelockDecrypt(armored, tlockClient);
+  const plaintext = await timelockDecrypt(armored, client);
   return decodeRbtsVotePlaintext(plaintext);
 }
 
@@ -959,7 +1036,7 @@ async function _revealCommits(
         salt: `0x${string}`;
       } | null;
       try {
-        decrypted = await decryptTlockVoteCiphertext(ciphertext);
+        decrypted = await decryptTlockVoteCiphertext(ciphertext, commit.drandChainHash);
       } catch (err: unknown) {
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
@@ -1167,7 +1244,7 @@ async function _revealAdvisoryCommits(
         salt: `0x${string}`;
       } | null;
       try {
-        decrypted = await decryptTlockVoteCiphertext(ciphertext);
+        decrypted = await decryptTlockVoteCiphertext(ciphertext, commit.drandChainHash);
       } catch (err: unknown) {
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
