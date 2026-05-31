@@ -448,7 +448,8 @@ async function recordVoteReveal({
   revealedAt: bigint;
 }) {
   const roundKey = `${contentId}-${roundId}`;
-  const voteKey = `${contentId}-${roundId}-${voter}`;
+  const normalizedVoter = normalizeAddress(voter) ?? voter;
+  const voteKey = `${contentId}-${roundId}-${normalizedVoter}`;
   const existingVote = await context.db.find(vote, { id: voteKey });
   const shouldCountReveal = existingVote?.revealed !== true;
 

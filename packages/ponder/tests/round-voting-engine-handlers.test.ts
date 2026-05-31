@@ -646,7 +646,8 @@ describe("RoundVotingEngine ponder handlers", () => {
   });
 
   it("stores revealed RBTS votes and updates compatibility pools", async () => {
-    const voter = "0x0000000000000000000000000000000000000001";
+    const voter = "0x90f79bf6eb2c4f870365e785982e1f101e93b906";
+    const eventVoter = "0x90F79bf6EB2c4f870365E785982E1f101E93b906";
     const { db, updateCalls } = createDb({
       existingRound: {
         id: "7-2",
@@ -676,7 +677,7 @@ describe("RoundVotingEngine ponder handlers", () => {
         args: {
           contentId: 7n,
           roundId: 2n,
-          voter,
+          voter: eventVoter,
           isUp: true,
           predictedUpBps: 6800,
           effectiveWeight: 25n,
