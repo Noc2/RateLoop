@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { Test } from "forge-std/Test.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
 import { DeployRateLoop } from "../script/Deploy.s.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
@@ -40,6 +41,10 @@ contract DeployRateLoopHarness is DeployRateLoop {
 
     function activateLegacyContributorRoot(LaunchDistributionPool launchPool) external {
         _activateLegacyContributorRoot(launchPool);
+    }
+
+    function grantBootstrapTimelockRoles(TimelockController timelock, address bootstrapProposer) external {
+        _grantBootstrapTimelockRoles(timelock, bootstrapProposer);
     }
 }
 
@@ -153,5 +158,33 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(holders[0], address(0x1001));
         assertEq(holders[1], address(0x1004));
         assertEq(holders[2], address(0x1007));
+    }
+
+    function test_GrantBootstrapTimelockRolesAddsOnlyProposerAndCanceller() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        address[] memory proposers = new address[](0);
+        address[] memory executors = new address[](1);
+        executors[0] = address(0);
+        TimelockController timelock =
+            new TimelockController(deployScript.TIMELOCK_MIN_DELAY(), proposers, executors, address(deployScript));
+        address bootstrapProposer = address(new RevertingDecimalsToken());
+
+        deployScript.grantBootstrapTimelockRoles(timelock, bootstrapProposer);
+
+        assertTrue(timelock.hasRole(timelock.PROPOSER_ROLE(), bootstrapProposer));
+        assertTrue(timelock.hasRole(timelock.CANCELLER_ROLE(), bootstrapProposer));
+        assertFalse(timelock.hasRole(timelock.DEFAULT_ADMIN_ROLE(), bootstrapProposer));
+    }
+
+    function test_GrantBootstrapTimelockRolesRequiresContractProposer() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        address[] memory proposers = new address[](0);
+        address[] memory executors = new address[](1);
+        executors[0] = address(0);
+        TimelockController timelock =
+            new TimelockController(deployScript.TIMELOCK_MIN_DELAY(), proposers, executors, address(deployScript));
+
+        vm.expectRevert(bytes("Bootstrap proposer has no code"));
+        deployScript.grantBootstrapTimelockRoles(timelock, address(0xB007));
     }
 }

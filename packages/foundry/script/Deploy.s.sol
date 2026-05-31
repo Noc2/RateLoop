@@ -72,6 +72,14 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
     }
 
+    function _grantBootstrapTimelockRoles(TimelockController tc, address bootstrapProposer) internal {
+        if (bootstrapProposer == address(0)) return;
+        require(bootstrapProposer.code.length != 0, "Bootstrap proposer has no code");
+        tc.grantRole(tc.PROPOSER_ROLE(), bootstrapProposer);
+        tc.grantRole(tc.CANCELLER_ROLE(), bootstrapProposer);
+        console.log("Bootstrap governance proposer:", bootstrapProposer);
+    }
+
     function run() external ScaffoldEthDeployerRunner {
         bool isLocalDev = block.chainid == 31337;
 
@@ -113,6 +121,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             TimelockController tc = TimelockController(payable(governance));
             tc.grantRole(tc.PROPOSER_ROLE(), governorAddr);
             tc.grantRole(tc.CANCELLER_ROLE(), governorAddr);
+            _grantBootstrapTimelockRoles(tc, vm.envOr("BOOTSTRAP_GOVERNANCE_PROPOSER", address(0)));
             tc.renounceRole(tc.DEFAULT_ADMIN_ROLE(), deployer);
             lrepToken.setGovernor(governorAddr);
             lrepToken.renounceRole(lrepToken.CONFIG_ROLE(), deployer);
