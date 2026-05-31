@@ -9,11 +9,97 @@ import { getRevertReason } from "./revert-utils.js";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const PROTOCOL_FRONTEND_FEE_DISPOSITION = 2;
 
+interface FrontendFeeBackfillCursor {
+  contentId: bigint;
+  roundId: bigint;
+}
+
 interface FrontendFeeSweepResult {
   frontendAddress: `0x${string}`;
   roundsClaimed: number;
   withdrawals: number;
   withdrawnAmount: bigint;
+}
+
+const backfillCursors = new Map<string, FrontendFeeBackfillCursor>();
+
+export function resetFrontendFeeSweepStateForTests(): void {
+  backfillCursors.clear();
+}
+
+function backfillCursorKey(params: {
+  frontendAddress: `0x${string}`;
+  distributorAddress: `0x${string}`;
+}): string {
+  return `${params.distributorAddress.toLowerCase()}:${params.frontendAddress.toLowerCase()}`;
+}
+
+function nextBackfillContentId(contentId: bigint, nextContentId: bigint): bigint {
+  const next = contentId + 1n;
+  return next < nextContentId ? next : 1n;
+}
+
+async function previewAndClaimFrontendFee(params: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  chain: Chain;
+  account: Account;
+  logger: Logger;
+  contracts: NonNullable<typeof config.frontendFees.contracts>;
+  frontendAddress: `0x${string}`;
+  contentId: bigint;
+  roundId: bigint;
+}): Promise<boolean> {
+  try {
+    const round = await readRound(
+      params.publicClient,
+      config.contracts.votingEngine,
+      params.contentId,
+      params.roundId,
+    );
+    if (round.state !== RoundState.Settled) {
+      return false;
+    }
+
+    const [fee, disposition, operator, alreadyClaimed] = (await params.publicClient.readContract({
+      address: params.contracts.roundRewardDistributor,
+      abi: RoundRewardDistributorAbi,
+      functionName: "previewFrontendFee",
+      args: [params.contentId, params.roundId, params.frontendAddress],
+    })) as readonly [bigint, number, `0x${string}`, boolean];
+
+    if (fee === 0n || alreadyClaimed || disposition === PROTOCOL_FRONTEND_FEE_DISPOSITION) {
+      return false;
+    }
+
+    if (operator !== ZERO_ADDRESS && operator.toLowerCase() !== params.account.address.toLowerCase()) {
+      params.logger.warn("Skipping frontend fee claim because preview operator does not match keeper wallet", {
+        contentId: Number(params.contentId),
+        roundId: Number(params.roundId),
+        frontendAddress: params.frontendAddress,
+        operator,
+        account: params.account.address,
+      });
+      return false;
+    }
+
+    await writeContractAndConfirm(params.publicClient, params.walletClient, {
+      chain: params.chain,
+      account: params.account,
+      address: params.contracts.roundRewardDistributor,
+      abi: RoundRewardDistributorAbi,
+      functionName: "claimFrontendFee",
+      args: [params.contentId, params.roundId, params.frontendAddress],
+    });
+    return true;
+  } catch (error: unknown) {
+    params.logger.debug("Frontend fee preview/claim skipped", {
+      contentId: Number(params.contentId),
+      roundId: Number(params.roundId),
+      error: getRevertReason(error),
+    });
+    return false;
+  }
 }
 
 export async function claimConfiguredFrontendFees(
@@ -70,6 +156,7 @@ export async function claimConfiguredFrontendFees(
 
   let roundsClaimed = 0;
   const lookbackRounds = BigInt(Math.max(1, config.frontendFees.lookbackRounds));
+  const latestRoundIdsByContent = new Map<bigint, bigint>();
 
   for (let contentId = 1n; contentId < nextContentId; contentId++) {
     let latestRoundId: bigint;
@@ -82,105 +169,99 @@ export async function claimConfiguredFrontendFees(
     if (latestRoundId === 0n) {
       continue;
     }
+    latestRoundIdsByContent.set(contentId, latestRoundId);
 
     const recentStartRoundId = latestRoundId > lookbackRounds ? latestRoundId - lookbackRounds + 1n : 1n;
     for (let roundId = recentStartRoundId; roundId <= latestRoundId; roundId++) {
-      try {
-        const round = await readRound(publicClient, config.contracts.votingEngine, contentId, roundId);
-        if (round.state !== RoundState.Settled) {
-          continue;
-        }
-
-        const [fee, disposition, operator, alreadyClaimed] = (await publicClient.readContract({
-          address: contracts.roundRewardDistributor,
-          abi: RoundRewardDistributorAbi,
-          functionName: "previewFrontendFee",
-          args: [contentId, roundId, frontendAddress],
-        })) as readonly [bigint, number, `0x${string}`, boolean];
-
-        if (fee === 0n || alreadyClaimed || disposition === PROTOCOL_FRONTEND_FEE_DISPOSITION) {
-          continue;
-        }
-
-        if (operator !== ZERO_ADDRESS && operator.toLowerCase() !== account.address.toLowerCase()) {
-          logger.warn("Skipping frontend fee claim because preview operator does not match keeper wallet", {
-            contentId: Number(contentId),
-            roundId: Number(roundId),
-            frontendAddress,
-            operator,
-            account: account.address,
-          });
-          continue;
-        }
-
-        await writeContractAndConfirm(publicClient, walletClient, {
+      if (
+        await previewAndClaimFrontendFee({
+          publicClient,
+          walletClient,
           chain,
           account,
-          address: contracts.roundRewardDistributor,
-          abi: RoundRewardDistributorAbi,
-          functionName: "claimFrontendFee",
-          args: [contentId, roundId, frontendAddress],
-        });
+          logger,
+          contracts,
+          frontendAddress,
+          contentId,
+          roundId,
+        })
+      ) {
         roundsClaimed++;
-      } catch (error: unknown) {
-        logger.debug("Frontend fee preview/claim skipped", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
-          error: getRevertReason(error),
-        });
+      }
+    }
+  }
+
+  const backfillBudget = config.frontendFees.backfillRoundsPerTick;
+  if (backfillBudget > 0 && nextContentId > 1n) {
+    const cursorKey = backfillCursorKey({
+      frontendAddress,
+      distributorAddress: contracts.roundRewardDistributor,
+    });
+    let cursor = backfillCursors.get(cursorKey) ?? { contentId: 1n, roundId: 1n };
+    let scannedRounds = 0;
+    let contentWithoutBackfillRounds = 0n;
+    const contentCount = nextContentId - 1n;
+
+    while (scannedRounds < backfillBudget && contentWithoutBackfillRounds < contentCount) {
+      if (cursor.contentId < 1n || cursor.contentId >= nextContentId) {
+        cursor = { contentId: 1n, roundId: 1n };
+      }
+
+      const latestRoundId = latestRoundIdsByContent.get(cursor.contentId);
+      if (!latestRoundId || latestRoundId === 0n) {
+        cursor = {
+          contentId: nextBackfillContentId(cursor.contentId, nextContentId),
+          roundId: 1n,
+        };
+        contentWithoutBackfillRounds++;
+        continue;
+      }
+
+      const recentStartRoundId = latestRoundId > lookbackRounds ? latestRoundId - lookbackRounds + 1n : 1n;
+      if (recentStartRoundId <= 1n) {
+        cursor = {
+          contentId: nextBackfillContentId(cursor.contentId, nextContentId),
+          roundId: 1n,
+        };
+        contentWithoutBackfillRounds++;
+        continue;
+      }
+
+      const roundId = cursor.roundId > 0n && cursor.roundId < recentStartRoundId ? cursor.roundId : 1n;
+      scannedRounds++;
+      contentWithoutBackfillRounds = 0n;
+      if (
+        await previewAndClaimFrontendFee({
+          publicClient,
+          walletClient,
+          chain,
+          account,
+          logger,
+          contracts,
+          frontendAddress,
+          contentId: cursor.contentId,
+          roundId,
+        })
+      ) {
+        roundsClaimed++;
+      }
+
+      const nextRoundId = roundId + 1n;
+      if (nextRoundId < recentStartRoundId) {
+        cursor = {
+          contentId: cursor.contentId,
+          roundId: nextRoundId,
+        };
+      } else {
+        cursor = {
+          contentId: nextBackfillContentId(cursor.contentId, nextContentId),
+          roundId: 1n,
+        };
+        contentWithoutBackfillRounds++;
       }
     }
 
-    if (recentStartRoundId <= 1n) {
-      continue;
-    }
-
-    for (let roundId = 1n; roundId < recentStartRoundId; roundId++) {
-      try {
-        const round = await readRound(publicClient, config.contracts.votingEngine, contentId, roundId);
-        if (round.state !== RoundState.Settled) {
-          continue;
-        }
-
-        const [fee, disposition, operator, alreadyClaimed] = (await publicClient.readContract({
-          address: contracts.roundRewardDistributor,
-          abi: RoundRewardDistributorAbi,
-          functionName: "previewFrontendFee",
-          args: [contentId, roundId, frontendAddress],
-        })) as readonly [bigint, number, `0x${string}`, boolean];
-
-        if (fee === 0n || alreadyClaimed || disposition === PROTOCOL_FRONTEND_FEE_DISPOSITION) {
-          continue;
-        }
-
-        if (operator !== ZERO_ADDRESS && operator.toLowerCase() !== account.address.toLowerCase()) {
-          logger.warn("Skipping frontend fee claim because preview operator does not match keeper wallet", {
-            contentId: Number(contentId),
-            roundId: Number(roundId),
-            frontendAddress,
-            operator,
-            account: account.address,
-          });
-          continue;
-        }
-
-        await writeContractAndConfirm(publicClient, walletClient, {
-          chain,
-          account,
-          address: contracts.roundRewardDistributor,
-          abi: RoundRewardDistributorAbi,
-          functionName: "claimFrontendFee",
-          args: [contentId, roundId, frontendAddress],
-        });
-        roundsClaimed++;
-      } catch (error: unknown) {
-        logger.debug("Frontend fee preview/claim skipped", {
-          contentId: Number(contentId),
-          roundId: Number(roundId),
-          error: getRevertReason(error),
-        });
-      }
-    }
+    backfillCursors.set(cursorKey, cursor);
   }
 
   let withdrawals = 0;

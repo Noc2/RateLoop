@@ -502,6 +502,11 @@ function loadConfig() {
         "8",
         errors,
       ),
+      backfillRoundsPerTick: readNonNegativeIntEnv(
+        "KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK",
+        "50",
+        errors,
+      ),
       withdrawEnabled: parseBooleanEnv(
         readEnv("KEEPER_FRONTEND_FEE_WITHDRAW"),
         true,
