@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import { LaunchRaterRewardLib } from "../contracts/libraries/LaunchRaterRewardLib.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+import {Test} from "forge-std/Test.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {LaunchRaterRewardLib} from "../contracts/libraries/LaunchRaterRewardLib.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract LaunchRaterRewardLibHarness {
     function launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
@@ -646,11 +646,11 @@ contract RaterRegistryTest is Test {
         );
         assertTrue(
             launchHarness.launchRewardCredentialAnchorId(
-                RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
-            )
-            != launchHarness.launchRewardCredentialAnchorId(
-                RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
-            )
+                    RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
+                )
+                != launchHarness.launchRewardCredentialAnchorId(
+                    RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
+                )
         );
     }
 
@@ -1178,13 +1178,21 @@ contract RaterRegistryTest is Test {
         registry.setDelegate(otherRater);
     }
 
-    function test_PendingInboundDelegateCannotOpenOutboundRequest() public {
+    function test_PendingInboundDelegateIsClearedWhenOpeningOutboundRequest() public {
         vm.prank(rater);
         registry.setDelegate(otherRater);
 
         vm.prank(otherRater);
-        vm.expectRevert(RaterRegistry.CallerIsDelegate.selector);
         registry.setDelegate(subject);
+
+        assertEq(registry.pendingDelegateOf(otherRater), address(0));
+        assertEq(registry.pendingDelegateTo(rater), address(0));
+        assertEq(registry.pendingDelegateTo(otherRater), subject);
+        assertEq(registry.pendingDelegateOf(subject), otherRater);
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.NoPendingDelegate.selector);
+        registry.acceptDelegate();
     }
 
     function test_AttestingCredentialClearsInboundDelegation() public {

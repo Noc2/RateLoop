@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { IWorldIDRouter } from "./interfaces/IWorldIDRouter.sol";
-import { IWorldIDVerifier } from "./interfaces/IWorldIDVerifier.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {IWorldIDRouter} from "./interfaces/IWorldIDRouter.sol";
+import {IWorldIDVerifier} from "./interfaces/IWorldIDVerifier.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 
 /// @title RaterRegistry
 /// @notice Optional rater metadata, human credentials, public follows, and delegation for RateLoop.
@@ -354,7 +354,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         }
 
         _profiles[msg.sender] =
-            RaterProfile({ raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp) });
+            RaterProfile({raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp)});
 
         emit RaterProfileUpdated(msg.sender, raterType, metadataHash, uint64(block.timestamp));
     }
@@ -389,13 +389,13 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (delegate == address(0)) revert InvalidAddress();
         if (delegate == msg.sender) revert CannotDelegateSelf();
         if (delegateOf[msg.sender] != address(0)) revert CallerIsDelegate();
-        if (pendingDelegateOf[msg.sender] != address(0)) revert CallerIsDelegate();
         if (_hasCredentialIdentity(delegate)) revert DelegateIsHolder();
         if (delegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (pendingDelegateOf[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (pendingDelegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
         if (delegateTo[delegate] != address(0)) revert DelegateAlreadyAssigned();
 
+        _clearInboundDelegation(msg.sender);
         _clearPendingDelegateRequest(msg.sender);
 
         pendingDelegateTo[msg.sender] = delegate;
