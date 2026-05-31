@@ -89,11 +89,21 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusAwarded", async ({ event, context })
   await touchContent(context, contentId, event.block.timestamp);
 });
 
-ponder.on("FeedbackBonusEscrow:FeedbackBonusForfeited", async ({ event, context }) => {
+// forfeitExpiredFeedbackBonus has two on-chain exit paths that both drain the
+// pool to the same terminal state (remainingAmount=0, forfeited=true): the
+// normal path sends the residue to the protocol treasury and emits
+// FeedbackBonusForfeited, while the fallback (treasury unset) refunds the
+// original funder and emits FeedbackBonusFunderRefunded. Both must drive the
+// identical indexer transition, or a funder-refunded pool would forever report
+// stale remaining funds. Index them through one shared handler.
+async function indexFeedbackBonusForfeiture(
+  event: { args: { poolId: bigint; amount: bigint }; block: { timestamp: bigint } },
+  context: { db: any },
+) {
   const { poolId, amount } = event.args;
   const existingPool = await context.db.find(feedbackBonusPool, { id: poolId });
 
-  await context.db.update(feedbackBonusPool, { id: poolId }).set((row) => ({
+  await context.db.update(feedbackBonusPool, { id: poolId }).set((row: any) => ({
     remainingAmount: 0n,
     forfeitedAmount: row.forfeitedAmount + amount,
     forfeited: true,
@@ -103,4 +113,12 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusForfeited", async ({ event, context 
   if (existingPool) {
     await touchContent(context, existingPool.contentId, event.block.timestamp);
   }
+}
+
+ponder.on("FeedbackBonusEscrow:FeedbackBonusForfeited", async ({ event, context }) => {
+  await indexFeedbackBonusForfeiture(event, context);
+});
+
+ponder.on("FeedbackBonusEscrow:FeedbackBonusFunderRefunded", async ({ event, context }) => {
+  await indexFeedbackBonusForfeiture(event, context);
 });
