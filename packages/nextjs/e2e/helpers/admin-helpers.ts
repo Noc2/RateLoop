@@ -38,8 +38,18 @@ const ANVIL_PRIVATE_KEYS_BY_ADDRESS = new Map(
 type SubmissionMedia = { imageUrls: string[]; videoUrl: string };
 type SubmissionMediaInput = { imageUrls?: readonly string[]; videoUrl?: string };
 type SubmissionRoundConfig = { epochDuration: number; maxDuration: number; minVoters: number; maxVoters: number };
+type SubmissionRewardTerms = {
+  asset: number;
+  amount: bigint;
+  requiredVoters: bigint;
+  requiredSettledRounds: bigint;
+  bountyClosesAt: bigint;
+  feedbackClosesAt: bigint;
+  bountyEligibility: number;
+};
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const DEFAULT_SUBMISSION_REWARD_ASSET_LREP = 0;
+export const SUBMISSION_REWARD_ASSET_USDC = 1;
 const DEFAULT_SUBMISSION_REWARD_AMOUNT = 1_000_000n;
 const DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS = 3n;
 const DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS = 1n;
@@ -225,7 +235,7 @@ async function buildSubmissionReservation(
   fromAddress: string,
   contractAddress: string,
   media: SubmissionMedia,
-  rewardAmount: bigint = DEFAULT_SUBMISSION_REWARD_AMOUNT,
+  rewardTerms: SubmissionRewardTerms,
   roundConfig: SubmissionRoundConfig = DEFAULT_SUBMISSION_ROUND_CONFIG,
 ): Promise<{ revealCommitment: `0x${string}`; salt: `0x${string}` } | null> {
   const { decodeFunctionResult, encodeFunctionData, keccak256, stringToHex } = await import("viem");
@@ -274,14 +284,14 @@ async function buildSubmissionReservation(
     description,
     imageUrls: media.imageUrls,
     questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,
-    rewardAmount,
-    rewardAsset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-    requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-    requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+    rewardAmount: rewardTerms.amount,
+    rewardAsset: rewardTerms.asset,
+    requiredSettledRounds: rewardTerms.requiredSettledRounds,
+    requiredVoters: rewardTerms.requiredVoters,
     resultSpecHash: DEFAULT_RESULT_SPEC_HASH,
-    rewardPoolExpiresAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-    feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-    bountyEligibility: 0,
+    rewardPoolExpiresAt: rewardTerms.bountyClosesAt,
+    feedbackClosesAt: rewardTerms.feedbackClosesAt,
+    bountyEligibility: rewardTerms.bountyEligibility,
     roundConfig,
     salt,
     submissionKey,
@@ -908,12 +918,23 @@ export async function submitContentDirect(
   mediaInput?: SubmissionMediaInput,
   rewardAmount: bigint = DEFAULT_SUBMISSION_REWARD_AMOUNT,
   roundConfig?: SubmissionRoundConfig,
+  rewardAsset: number = DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+  rewardTokenAddress?: string,
 ): Promise<boolean> {
   const { encodeFunctionData } = await import("viem");
   const resolvedCategoryId = BigInt(categoryId);
   const media = toSubmissionMedia(url, mediaInput);
   assertSupportedContextUrl(url, media);
   const resolvedRoundConfig = await resolveSubmissionRoundConfig(contractAddress, roundConfig);
+  const rewardTerms: SubmissionRewardTerms = {
+    asset: rewardAsset,
+    amount: rewardAmount,
+    requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+    requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+    bountyClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+    feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+    bountyEligibility: 0,
+  };
   const reservation = await buildSubmissionReservation(
     url,
     title,
@@ -923,7 +944,7 @@ export async function submitContentDirect(
     fromAddress,
     contractAddress,
     media,
-    rewardAmount,
+    rewardTerms,
     resolvedRoundConfig,
   );
   if (!reservation) return false;
@@ -934,7 +955,11 @@ export async function submitContentDirect(
   ]);
   if (!lrepTokenAddress || !rewardEscrowAddress) return false;
 
-  const rewardApproved = await approveLREP(rewardEscrowAddress, rewardAmount, fromAddress, lrepTokenAddress);
+  const resolvedRewardTokenAddress =
+    rewardTerms.asset === DEFAULT_SUBMISSION_REWARD_ASSET_LREP ? lrepTokenAddress : rewardTokenAddress;
+  if (!resolvedRewardTokenAddress) return false;
+
+  const rewardApproved = await approveLREP(rewardEscrowAddress, rewardAmount, fromAddress, resolvedRewardTokenAddress);
   if (!rewardApproved) return false;
 
   const reserveData = encodeFunctionData({
@@ -1015,15 +1040,7 @@ export async function submitContentDirect(
       tags,
       resolvedCategoryId,
       reservation.salt,
-      {
-        asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-        amount: rewardAmount,
-        requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-        requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-        bountyClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-        feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-        bountyEligibility: 0,
-      },
+      rewardTerms,
       resolvedRoundConfig,
       {
         questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,

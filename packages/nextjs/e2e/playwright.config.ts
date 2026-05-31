@@ -12,9 +12,9 @@ const WORLD_ID_MOCK_TESTS = specFile("world-id-mock");
 const CI_SMOKE_TESTS = specFiles("smoke", "pages-smoke", "docs-pages");
 const CI_API_TESTS = specFiles("nextjs-api", "watchlist-api", "faucet", "contract-boundaries", "ponder-api");
 const CHROMIUM_SPECIAL_TESTS =
-  /round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe|world-id-mock/;
+  /round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|correlation-bounty-payout|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe|world-id-mock/;
 const CI_APP_IGNORED_TESTS =
-  /smoke|pages-smoke|docs-pages|nextjs-api|watchlist-api|faucet|contract-boundaries|ponder-api|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe|world-id-mock/;
+  /smoke|pages-smoke|docs-pages|nextjs-api|watchlist-api|faucet|contract-boundaries|ponder-api|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|correlation-bounty-payout|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe|world-id-mock/;
 
 export default defineConfig({
   globalSetup: "./global-setup.cts",
@@ -99,7 +99,7 @@ export default defineConfig({
       name: "settlement",
       use: { ...devices["Desktop Chrome"] },
       testMatch:
-        /settlement-lifecycle|reward-claim|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal/,
+        /settlement-lifecycle|reward-claim|correlation-bounty-payout|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal/,
       dependencies: ["chromium"],
     },
     {

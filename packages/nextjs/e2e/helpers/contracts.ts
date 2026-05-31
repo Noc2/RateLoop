@@ -12,11 +12,14 @@ const reputationContract = chain31337.LoopReputation;
 
 export const CONTRACT_ADDRESSES = {
   LoopReputation: reputationContract.address,
+  AdvisoryVoteRecorder: chain31337.AdvisoryVoteRecorder.address,
   ContentRegistry: chain31337.ContentRegistry.address,
   RoundVotingEngine: chain31337.RoundVotingEngine.address,
   RoundRewardDistributor: chain31337.RoundRewardDistributor.address,
   FrontendRegistry: chain31337.FrontendRegistry.address,
+  ClusterPayoutOracle: chain31337.ClusterPayoutOracle.address,
   CategoryRegistry: chain31337.CategoryRegistry.address,
   QuestionRewardPoolEscrow: chain31337.QuestionRewardPoolEscrow.address,
   RaterRegistry: chain31337.RaterRegistry.address,
+  MockERC20: chain31337.MockERC20.address,
 } as const;
