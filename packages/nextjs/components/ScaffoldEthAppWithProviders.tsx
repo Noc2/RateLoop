@@ -44,22 +44,22 @@ const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <MobileHeaderVisibilityProvider>
-      <div className={`flex min-h-screen flex-col ${isVoteFeedRoute ? "xl:h-screen xl:overflow-hidden" : ""}`.trim()}>
-        <div className="xl:pl-52">
+      <div className={`flex min-h-screen flex-col ${isVoteFeedRoute ? "lg:h-screen lg:overflow-hidden" : ""}`.trim()}>
+        <div className="lg:pl-52">
           <TestnetNoticeBanner targetChainId={targetNetwork.id} />
         </div>
         <Header />
-        {/* Main content: offset by left sidebar on desktop (208px at xl) */}
-        <div className="flex flex-1 min-h-0 flex-col xl:pl-52">
+        {/* Main content: offset by left sidebar on desktop (208px at lg and up) */}
+        <div className="flex flex-1 min-h-0 flex-col lg:pl-52">
           <div
             className={`relative flex flex-1 flex-col overflow-x-hidden ${
-              isVoteFeedRoute ? "min-h-0 overflow-hidden xl:overflow-hidden" : ""
+              isVoteFeedRoute ? "min-h-0 overflow-hidden lg:overflow-hidden" : ""
             }`}
           >
             {children}
           </div>
           {showVoteFeedMobileFaucet ? (
-            <div className="xl:hidden">
+            <div className="lg:hidden">
               <div className="pointer-events-none fixed bottom-0 left-0 z-10 flex w-full items-center justify-between p-4">
                 <div className="pointer-events-auto">
                   <FaucetTrigger />
