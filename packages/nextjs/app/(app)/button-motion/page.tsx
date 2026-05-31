@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
-import { ArrowPathIcon, CheckIcon, HandThumbDownIcon, HandThumbUpIcon, WalletIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowPathIcon,
+  HandThumbDownIcon,
+  HandThumbUpIcon,
+  SparklesIcon,
+  WalletIcon,
+} from "@heroicons/react/24/outline";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
 
 export const metadata: Metadata = {
@@ -7,15 +13,13 @@ export const metadata: Metadata = {
   description: "A RateLoop gradient-border button motion study.",
 };
 
-type MotionState = "active" | "idle";
-type ButtonTone = "dark" | "solid";
+type MotionState = "idle" | "intro" | "processing";
 type ButtonSize = "default" | "lg";
 
 function GradientActionButton({
   children,
   icon,
   motion = "idle",
-  tone = "dark",
   size = "default",
   disabled = false,
   className = "",
@@ -25,7 +29,6 @@ function GradientActionButton({
   children: React.ReactNode;
   icon?: React.ReactNode;
   motion?: MotionState;
-  tone?: ButtonTone;
   size?: ButtonSize;
   disabled?: boolean;
   className?: string;
@@ -37,11 +40,10 @@ function GradientActionButton({
       type="button"
       className={`rateloop-gradient-action ${voteDirection ? "rateloop-gradient-vote" : ""} ${className}`}
       data-motion={motion}
-      data-tone={tone}
       data-size={size}
       data-direction={voteDirection}
       disabled={disabled}
-      aria-busy={motion === "active" || undefined}
+      aria-busy={motion === "processing" || undefined}
     >
       <span className="rateloop-gradient-action-inner">
         {icon ? (
@@ -78,8 +80,7 @@ export default function ButtonMotionStudyPage() {
             Gradient <span className="rateloop-text-gradient">Action</span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-8 text-base-content/70">
-            The motion feels strongest as feedback for wallet and transaction waits. Idle CTAs can keep a quiet static
-            edge; vote buttons work best when the animation appears only after a click while the vote submits.
+            Quiet by default. Alive for the first glance and for wallet work that needs a clear waiting state.
           </p>
         </div>
 
@@ -87,65 +88,55 @@ export default function ButtonMotionStudyPage() {
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgb(53_158_238/0.13),transparent_34%,rgb(3_206_164/0.1)_56%,rgb(239_71_111/0.11))]" />
           <div className="relative flex flex-col items-center gap-5 text-center">
             <GradientActionButton
-              motion="active"
-              tone="solid"
+              motion="intro"
               size="lg"
-              disabled
-              spinIcon
-              icon={<ArrowPathIcon aria-hidden className="h-full w-full" />}
+              icon={<SparklesIcon aria-hidden className="h-full w-full" />}
             >
-              Submit transaction
+              Sign in
             </GradientActionButton>
             <p className="max-w-sm text-sm leading-6 text-base-content/58">
-              One animated action per surface keeps the brand color useful instead of noisy.
+              The same button settles into a static gradient border after the opening pass.
             </p>
           </div>
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StudyCard number="01" title="Transaction pending">
+        <StudyCard number="01" title="Initial page load">
+          <GradientActionButton motion="intro" icon={<SparklesIcon aria-hidden className="h-full w-full" />}>
+            Sign in
+          </GradientActionButton>
+        </StudyCard>
+
+        <StudyCard number="02" title="Transaction signing">
           <GradientActionButton
-            motion="active"
-            tone="solid"
+            motion="processing"
             disabled
             spinIcon
             icon={<ArrowPathIcon aria-hidden className="h-full w-full" />}
           >
-            Submitting
+            Signing
           </GradientActionButton>
         </StudyCard>
 
-        <StudyCard number="02" title="Sign-in ready">
+        <StudyCard number="03" title="Static sign-in">
           <GradientActionButton icon={<WalletIcon aria-hidden className="h-full w-full" />}>
             Sign in
           </GradientActionButton>
         </StudyCard>
 
-        <StudyCard number="03" title="Vote submitting">
+        <StudyCard number="04" title="Static vote choice">
           <div className="flex flex-wrap gap-3">
-            <GradientActionButton
-              motion="active"
-              disabled
-              voteDirection="up"
-              icon={<HandThumbUpIcon aria-hidden className="h-full w-full" />}
-            >
+            <GradientActionButton voteDirection="up" icon={<HandThumbUpIcon aria-hidden className="h-full w-full" />}>
               Up
             </GradientActionButton>
             <GradientActionButton
-              disabled
               voteDirection="down"
               icon={<HandThumbDownIcon aria-hidden className="h-full w-full" />}
             >
               Down
             </GradientActionButton>
           </div>
-        </StudyCard>
-
-        <StudyCard number="04" title="Success settled">
-          <GradientActionButton tone="dark" icon={<CheckIcon aria-hidden className="h-full w-full" />}>
-            Confirmed
-          </GradientActionButton>
         </StudyCard>
       </section>
     </div>

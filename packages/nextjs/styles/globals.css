@@ -204,6 +204,24 @@ body {
   }
 }
 
+@keyframes rateloop-gradient-border-intro-1 {
+  to {
+    --rateloop-gradient-border-angle-1: 145deg;
+  }
+}
+
+@keyframes rateloop-gradient-border-intro-2 {
+  to {
+    --rateloop-gradient-border-angle-2: -130deg;
+  }
+}
+
+@keyframes rateloop-gradient-border-intro-3 {
+  to {
+    --rateloop-gradient-border-angle-3: 315deg;
+  }
+}
+
 @keyframes rateloop-gradient-icon-spin {
   to {
     transform: rotate(360deg);
@@ -270,7 +288,14 @@ body {
     filter 0.2s ease;
 }
 
-.rateloop-gradient-action[data-motion="active"] {
+.rateloop-gradient-action[data-motion="intro"] {
+  animation:
+    rateloop-gradient-border-intro-1 1.6s cubic-bezier(0.22, 1, 0.36, 1) both,
+    rateloop-gradient-border-intro-2 2.1s cubic-bezier(0.22, 1, 0.36, 1) both,
+    rateloop-gradient-border-intro-3 2.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.rateloop-gradient-action[data-motion="processing"] {
   animation:
     rateloop-gradient-border-orbit-1 3s linear infinite,
     rateloop-gradient-border-orbit-2 8s linear infinite,
@@ -299,13 +324,12 @@ body {
 
 .rateloop-gradient-action:disabled,
 .rateloop-gradient-action[aria-disabled="true"] {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 1;
 }
 
-.rateloop-gradient-action[data-tone="solid"] {
-  --rateloop-gradient-inner-bg: linear-gradient(180deg, #ffffff, var(--rateloop-warm-white));
-  --rateloop-gradient-inner-color: var(--rateloop-action-content);
+.rateloop-gradient-action[aria-busy="true"] {
+  cursor: wait;
 }
 
 .rateloop-gradient-action[data-size="lg"] {
@@ -353,16 +377,6 @@ body {
   min-height: 2.65rem;
   padding: 0 1rem;
   border-radius: var(--rateloop-radius-pill);
-}
-
-.rateloop-gradient-vote[data-direction="up"] {
-  --rateloop-gradient-inner-bg: linear-gradient(180deg, #2eeab6, var(--rateloop-green));
-  --rateloop-gradient-inner-color: #050505;
-}
-
-.rateloop-gradient-vote[data-direction="down"] {
-  --rateloop-gradient-inner-bg: linear-gradient(180deg, #ff6b7a, var(--rateloop-pink));
-  --rateloop-gradient-inner-color: #ffffff;
 }
 
 @media (prefers-reduced-motion: reduce) {
