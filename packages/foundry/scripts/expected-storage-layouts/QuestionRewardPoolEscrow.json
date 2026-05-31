@@ -147,6 +147,18 @@
     {
       "slot": 24,
       "offset": 0,
+      "label": "qualifiedQuestionRewardClaimants",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool))))"
+    },
+    {
+      "slot": 25,
+      "offset": 0,
+      "label": "qualifiedBundleRoundSetClaimants",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_bool)))"
+    },
+    {
+      "slot": 26,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -168,8 +180,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[48]",
-      "numberOfBytes": "1536",
+      "label": "uint256[46]",
+      "numberOfBytes": "1472",
       "base": "t_uint256"
     },
     {
@@ -217,6 +229,14 @@
       "value": "t_bool"
     },
     {
+      "id": "t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool))",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => mapping(bytes32 => bool))",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_mapping(t_bytes32,t_bool)"
+    },
+    {
       "id": "t_mapping(t_uint256,t_address)",
       "encoding": "mapping",
       "label": "mapping(uint256 => address)",
@@ -257,6 +277,14 @@
       "value": "t_mapping(t_bytes32,t_bool)"
     },
     {
+      "id": "t_mapping(t_uint256,t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool)))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(bytes32 => mapping(bytes32 => bool)))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool))"
+    },
+    {
       "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_bool))",
       "encoding": "mapping",
       "label": "mapping(uint256 => mapping(uint256 => bool))",
@@ -271,6 +299,14 @@
       "numberOfBytes": "32",
       "key": "t_uint256",
       "value": "t_mapping(t_uint256,t_mapping(t_bytes32,t_bool))"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool))))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => mapping(bytes32 => mapping(bytes32 => bool))))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_mapping(t_bytes32,t_mapping(t_bytes32,t_bool)))"
     },
     {
       "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_uint256,t_uint64)))",

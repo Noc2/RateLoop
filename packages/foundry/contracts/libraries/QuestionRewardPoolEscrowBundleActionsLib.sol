@@ -17,7 +17,8 @@ import {
     BundleReward,
     BundleQuestion,
     BundleRoundSetSnapshot,
-    CreateSubmissionBundleParams
+    CreateSubmissionBundleParams,
+    BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
 } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { RoundLib } from "./RoundLib.sol";
@@ -270,6 +271,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
@@ -302,6 +304,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             registry,
             votingEngine,
             protocolConfig,
@@ -317,6 +320,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
@@ -332,6 +336,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             contentBundleId,
             contentBundleIndex,
             registry,
@@ -350,6 +355,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage bundleRoundSetRewardClaimed,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
@@ -366,6 +372,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             registry,
             votingEngine,
             protocolConfig,
@@ -390,20 +397,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             ),
             "Excluded voter"
         );
-        require(
-            _isBundleBountyEligible(
-                bundleQuestions,
-                bundleRoundIds,
-                votingEngine,
-                protocolConfig,
-                bundle,
-                bundleId,
-                roundSetIndex,
-                msg.sender
-            ),
-            "Not bounty eligible"
-        );
-
         (address frontend, bytes32 firstCommitKey) = _requireCompletedBundleRoundSet(
             bundleQuestions,
             bundleRoundIds,
@@ -420,6 +413,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             votingEngine, protocolConfig, firstQuestion.contentId, firstRoundId, msg.sender
         );
         require(resolvedFirstCommitKey == firstCommitKey, "Bundle incomplete");
+        require(
+            _wasBundleBountyEligibleAtQualification(
+                bundle, qualifiedBundleRoundSetClaimants, bundleId, roundSetIndex, firstCommitKey
+            ),
+            "Not bounty eligible"
+        );
         require(!bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey], "Already claimed");
         BundleRoundSetSnapshot storage snapshot = bundleRoundSetSnapshots[bundleId][roundSetIndex];
         uint256 grossAmount;
@@ -485,6 +484,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage bundleRoundSetRewardClaimed,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
@@ -507,9 +507,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 roundSetIndex,
                 account
             )) return 0;
-        if (!_isBundleBountyEligible(
-                bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex, account
-            )) return 0;
 
         (bool completed, address frontend, bytes32 firstCommitKey) = _bundleRoundSetCommitStatus(
             bundleQuestions,
@@ -524,6 +521,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             true
         );
         if (!completed) return 0;
+        if (!_wasBundleBountyEligibleAtQualification(
+                bundle, qualifiedBundleRoundSetClaimants, bundleId, roundSetIndex, firstCommitKey
+            )) return 0;
         if (bundleRoundSetRewardClaimed[bundleId][roundSetIndex][firstCommitKey]) return 0;
 
         BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
@@ -551,11 +551,11 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
-        ProtocolConfig protocolConfig,
         IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 bundleId
@@ -571,11 +571,12 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             contentBundleId,
             contentBundleIndex,
             registry,
             votingEngine,
-            protocolConfig,
+            votingEngine.protocolConfig(),
             bundleId,
             BUNDLE_REFUND_SYNC_ROUND_LIMIT
         );
@@ -587,9 +588,10 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             registry,
             votingEngine,
-            protocolConfig,
+            votingEngine.protocolConfig(),
             bundleId,
             bundle
         );
@@ -683,6 +685,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         mapping(uint256 => uint256) storage contentBundleId,
         mapping(uint256 => uint256) storage contentBundleIndex,
         ContentRegistry registry,
@@ -727,6 +730,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             registry,
             votingEngine,
             protocolConfig,
@@ -801,6 +805,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
@@ -818,6 +823,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             bundleRoundSetSnapshots,
             bundleQuestionTerminalSyncCursor,
+            qualifiedBundleRoundSetClaimants,
             registry,
             votingEngine,
             protocolConfig,
@@ -834,6 +840,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         mapping(uint256 => mapping(uint256 => mapping(uint256 => uint64))) storage bundleRoundIds,
         mapping(uint256 => mapping(uint256 => BundleRoundSetSnapshot)) storage bundleRoundSetSnapshots,
         mapping(uint256 => mapping(uint256 => uint256)) storage bundleQuestionTerminalSyncCursor,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
         ContentRegistry registry,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
@@ -888,6 +895,17 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             allocation: allocation,
             frontendFeeAllocation: frontendFeeAllocation
         });
+        _markBundleRoundSetCompleters(
+            bundleQuestions,
+            bundleRoundIds,
+            registry,
+            votingEngine,
+            protocolConfig,
+            qualifiedBundleRoundSetClaimants,
+            bundle,
+            bundleId,
+            roundSetIndex
+        );
         emit QuestionBundleRoundSetQualified(bundleId, roundSetIndex, allocation, frontendFeeAllocation);
     }
 
@@ -914,43 +932,17 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         (,, uint16 commitCount,,,,,,,,,,,) = votingEngine.rounds(firstContentId, firstRoundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = votingEngine.getRoundCommitKey(firstContentId, firstRoundId, i);
-            address voter = QuestionRewardPoolEscrowVoterLib.bundleCompleterAccount(
-                votingEngine, firstContentId, firstRoundId, commitKey
-            );
-            if (
-                voter != address(0)
-                    && !_isBundleExcludedVoter(
-                        bundleQuestions,
-                        bundleRoundIds,
-                        registry,
-                        votingEngine,
-                        protocolConfig,
-                        bundle,
-                        bundleId,
-                        roundSetIndex,
-                        voter
-                    )
-                    && _isBundleBountyEligible(
-                        bundleQuestions,
-                        bundleRoundIds,
-                        votingEngine,
-                        protocolConfig,
-                        bundle,
-                        bundleId,
-                        roundSetIndex,
-                        voter
-                    )
-                    && _completedBundleRoundSetCommitIgnoringCleanup(
-                        bundleQuestions,
-                        bundleRoundIds,
-                        votingEngine,
-                        protocolConfig,
-                        bundle.bountyClosesAt,
-                        bundleId,
-                        roundSetIndex,
-                        voter
-                    )
-            ) {
+            if (_isEligibleBundleRoundSetCompleter(
+                    bundleQuestions,
+                    bundleRoundIds,
+                    registry,
+                    votingEngine,
+                    protocolConfig,
+                    bundle,
+                    bundleId,
+                    roundSetIndex,
+                    commitKey
+                )) {
                 unchecked {
                     completerCount++;
                 }
@@ -959,6 +951,109 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 ++i;
             }
         }
+    }
+
+    function _markBundleRoundSetCompleters(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(
+            uint256
+                => mapping(
+                uint256 => mapping(uint256 => uint64)
+            )
+        ) storage bundleRoundIds,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
+        BundleReward storage bundle,
+        uint256 bundleId,
+        uint256 roundSetIndex
+    ) private {
+        BundleQuestion[] storage questions = bundleQuestions[bundleId];
+        if (questions.length == 0) return;
+
+        uint256 firstContentId = questions[0].contentId;
+        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
+        (,, uint16 commitCount,,,,,,,,,,,) = votingEngine.rounds(firstContentId, firstRoundId);
+        for (uint256 i = 0; i < commitCount;) {
+            bytes32 commitKey = votingEngine.getRoundCommitKey(firstContentId, firstRoundId, i);
+            if (_isEligibleBundleRoundSetCompleter(
+                    bundleQuestions,
+                    bundleRoundIds,
+                    registry,
+                    votingEngine,
+                    protocolConfig,
+                    bundle,
+                    bundleId,
+                    roundSetIndex,
+                    commitKey
+                )) {
+                qualifiedBundleRoundSetClaimants[bundleId][roundSetIndex][commitKey] = true;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _wasBundleBountyEligibleAtQualification(
+        BundleReward storage bundle,
+        mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) storage qualifiedBundleRoundSetClaimants,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        bytes32 firstCommitKey
+    ) private view returns (bool) {
+        if (bundle.bountyEligibility != BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) return true;
+        return qualifiedBundleRoundSetClaimants[bundleId][roundSetIndex][firstCommitKey];
+    }
+
+    function _isEligibleBundleRoundSetCompleter(
+        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
+        mapping(
+            uint256
+                => mapping(
+                uint256 => mapping(uint256 => uint64)
+            )
+        ) storage bundleRoundIds,
+        ContentRegistry registry,
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        BundleReward storage bundle,
+        uint256 bundleId,
+        uint256 roundSetIndex,
+        bytes32 firstCommitKey
+    ) private view returns (bool) {
+        BundleQuestion[] storage questions = bundleQuestions[bundleId];
+        uint256 firstContentId = questions[0].contentId;
+        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
+        address voter = QuestionRewardPoolEscrowVoterLib.bundleCompleterAccount(
+            votingEngine, firstContentId, firstRoundId, firstCommitKey
+        );
+        return voter != address(0)
+            && !_isBundleExcludedVoter(
+            bundleQuestions,
+            bundleRoundIds,
+            registry,
+            votingEngine,
+            protocolConfig,
+            bundle,
+            bundleId,
+            roundSetIndex,
+            voter
+        )
+            && _isBundleBountyEligible(
+            bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex, voter
+        )
+            && _completedBundleRoundSetCommitIgnoringCleanup(
+            bundleQuestions,
+            bundleRoundIds,
+            votingEngine,
+            protocolConfig,
+            bundle.bountyClosesAt,
+            bundleId,
+            roundSetIndex,
+            voter
+        );
     }
 
     function _requireCompletedBundleRoundSet(

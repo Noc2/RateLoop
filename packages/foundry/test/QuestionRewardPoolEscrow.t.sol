@@ -352,6 +352,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
+    function testVerifiedHumanBountyRejectsVoterVerifiedAfterQualification() public {
+        raterIdentityRegistry.revokeHumanCredential(voter4);
+
+        uint256 contentId = _submitQuestion("verified-after-qualification");
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+
+        uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        raterIdentityRegistry.setHolder(voter4);
+
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
+        vm.prank(voter4);
+        vm.expectRevert("Not bounty eligible");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
+    function testVerifiedHumanBountyAllowsQualifiedVoterAfterCredentialRevoked() public {
+        uint256 contentId = _submitQuestion("verified-revoked-after-qualification");
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        raterIdentityRegistry.revokeHumanCredential(voter1);
+
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+    }
+
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
         uint256 contentId = _submitQuestion("");
         uint256 highValueAmount = HIGH_VALUE_REWARD_POOL_THRESHOLD;
@@ -1197,6 +1229,45 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         assertEq(totalClaimed, REWARD_POOL_AMOUNT);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
+    }
+
+    function testVerifiedHumanBundleRejectsCompleterVerifiedAfterRoundSetQualification() public {
+        raterIdentityRegistry.revokeHumanCredential(voter4);
+
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundleWithEligibility(
+            contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
+
+        address[] memory voters = _fourVoters();
+        bool[] memory directions = _directions(true, true, false, true);
+        _settleRoundWith(voters, contentIds[0], directions);
+        _settleRoundWith(voters, contentIds[1], directions);
+
+        raterIdentityRegistry.setHolder(voter4);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter4), 0);
+        vm.prank(voter4);
+        vm.expectRevert("Not bounty eligible");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+    }
+
+    function testVerifiedHumanBundleAllowsQualifiedCompleterAfterCredentialRevoked() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundleWithEligibility(
+            contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        _settleRoundWith(voters, contentIds[0], directions);
+        _settleRoundWith(voters, contentIds[1], directions);
+
+        raterIdentityRegistry.revokeHumanCredential(voter1);
+
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+        vm.prank(voter1);
+        assertGt(rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0), 0);
     }
 
     function testBundleRewardSupportsOpenWalletCompletersWithoutRaterIdentity() public {
@@ -4238,6 +4309,39 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredSettledRounds,
             bountyClosesAt,
             bountyClosesAt
+        );
+    }
+
+    function _createSubmissionBundleWithEligibility(
+        uint256[] memory contentIds,
+        address bundleFunder,
+        uint8 asset,
+        uint256 amount,
+        uint256 requiredCompleters,
+        uint8 bountyEligibility
+    ) internal returns (uint256 bundleId) {
+        bundleId = 1;
+        vm.startPrank(bundleFunder);
+        if (asset == REWARD_ASSET_LREP) {
+            lrepToken.approve(address(rewardPoolEscrow), amount);
+        } else {
+            usdc.approve(address(rewardPoolEscrow), amount);
+        }
+        vm.stopPrank();
+
+        uint256 bountyClosesAt = block.timestamp + 30 days;
+        vm.prank(address(registry));
+        rewardPoolEscrow.createSubmissionBundleFromRegistry(
+            bundleId,
+            contentIds,
+            bundleFunder,
+            asset,
+            amount,
+            requiredCompleters,
+            1,
+            bountyClosesAt,
+            bountyClosesAt,
+            bountyEligibility
         );
     }
 
