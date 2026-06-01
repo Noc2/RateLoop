@@ -391,11 +391,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), highValueAmount);
         vm.expectRevert("High-value floor");
-        rewardPoolEscrow.createRewardPool(contentId, highValueAmount, 3, 1, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, highValueAmount, 3, 1, block.timestamp + 30 days, 30 days, 0);
 
         usdc.approve(address(rewardPoolEscrow), highValueAmount);
         uint256 rewardPoolId = rewardPoolEscrow.createRewardPool(
-            contentId, highValueAmount, MIN_HIGH_VALUE_PARTICIPANTS, 1, block.timestamp + 30 days, 0
+            contentId, highValueAmount, MIN_HIGH_VALUE_PARTICIPANTS, 1, block.timestamp + 30 days, 30 days, 0
         );
         vm.stopPrank();
 
@@ -455,7 +455,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.expectRevert("Stale escrow");
-        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 30 days, 0);
         vm.stopPrank();
     }
 
@@ -489,8 +489,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.expectEmit(false, true, true, true);
         emit RewardPoolPurposeSet(0, 1, 1, reasonHash);
-        uint256 rewardPoolId = rewardPoolEscrow.createChallengeRewardPool(
-            contentId, REWARD_POOL_AMOUNT, 3, 1, reasonHash, bountyClosesAt, 0
+        uint256 rewardPoolId = rewardPoolEscrow.createPurposeRewardPool(
+            contentId, REWARD_POOL_AMOUNT, 3, 1, reasonHash, bountyClosesAt, 30 days, 0, 1, 0
         );
         vm.stopPrank();
 
@@ -649,6 +649,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             /*requiredSettledRounds=*/
             1,
             bountyClosesAt,
+            1 hours,
             0
         );
         vm.stopPrank();
@@ -779,7 +780,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.expectRevert("Voters exceed max");
-        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 5, 1, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 5, 1, block.timestamp + 30 days, 30 days, 0);
         vm.stopPrank();
     }
 
@@ -796,7 +797,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.expectRevert("Voters exceed max");
-        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 30 days, 0);
         vm.stopPrank();
     }
 
@@ -1018,7 +1019,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             3,
             1,
             block.timestamp + 30 days,
-            block.timestamp + 30 days
+            30 days,
+            30 days,
+            0
         );
     }
 
@@ -1837,7 +1840,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Amount too small");
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionBundleFromRegistry(
-            1, contentIds, funder, REWARD_ASSET_USDC, amount, 3, 1, bountyClosesAt, bountyClosesAt
+            1, contentIds, funder, REWARD_ASSET_USDC, amount, 3, 1, bountyClosesAt, 30 days, 30 days, 0
         );
     }
 
@@ -2810,7 +2813,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.expectRevert("Oracle consumer mismatch");
         vm.prank(funder);
-        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 30 days, 0);
     }
 
     function testClusterRewardPoolDoesNotSnapshotBelowFloorOracleWithDifferentConsumer() public {
@@ -2826,7 +2829,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.expectRevert("Oracle consumer mismatch");
         vm.prank(funder);
-        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 30 days, 0);
     }
 
     function testClusterRewardPoolRejectsSnapshotProposedBeforeCleanupComplete() public {
@@ -3912,7 +3915,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionBundleFromRegistry(
-            bundleId, contentIds, submitter, rewardAsset, REWARD_POOL_AMOUNT, 3, 1, bountyClosesAt, bountyClosesAt
+            bundleId, contentIds, submitter, rewardAsset, REWARD_POOL_AMOUNT, 3, 1, bountyClosesAt, 30 days, 30 days, 0
         );
 
         vm.prank(address(votingEngine));
@@ -3927,8 +3930,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
-        vm.expectRevert("Bad close");
-        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, 0, 0);
+        vm.expectRevert("Bounty window required");
+        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, 0, 0, 0);
         vm.stopPrank();
     }
 
@@ -3938,7 +3941,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), 1);
         vm.expectRevert("Amount too small");
-        rewardPoolEscrow.createRewardPool(contentId, 1, 3, 2, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, 1, 3, 2, block.timestamp + 30 days, 30 days, 0);
         vm.stopPrank();
     }
 
@@ -3948,7 +3951,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
         vm.expectRevert("Too many rounds");
-        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 17, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 17, block.timestamp + 30 days, 30 days, 0);
         vm.stopPrank();
     }
 
@@ -3958,7 +3961,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), 199);
         vm.expectRevert("Amount too small");
-        rewardPoolEscrow.createRewardPool(contentId, 199, 3, 1, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, 199, 3, 1, block.timestamp + 30 days, 30 days, 0);
         vm.stopPrank();
     }
 
@@ -3969,11 +3972,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), exactAmount - 1);
         vm.expectRevert("Amount too small");
-        rewardPoolEscrow.createRewardPool(contentId, exactAmount - 1, 3, 1, block.timestamp + 30 days, 0);
+        rewardPoolEscrow.createRewardPool(contentId, exactAmount - 1, 3, 1, block.timestamp + 30 days, 30 days, 0);
 
         usdc.approve(address(rewardPoolEscrow), exactAmount);
         uint256 rewardPoolId =
-            rewardPoolEscrow.createRewardPool(contentId, exactAmount, 3, 1, block.timestamp + 30 days, 0);
+            rewardPoolEscrow.createRewardPool(contentId, exactAmount, 3, 1, block.timestamp + 30 days, 30 days, 0);
         vm.stopPrank();
 
         assertGt(rewardPoolId, 0);
@@ -3986,8 +3989,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.startPrank(unverifiedFunder);
         usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
-        uint256 rewardPoolId =
-            rewardPoolEscrow.createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 0);
+        uint256 rewardPoolId = rewardPoolEscrow.createRewardPool(
+            contentId, REWARD_POOL_AMOUNT, 3, 1, block.timestamp + 30 days, 30 days, 0
+        );
         vm.stopPrank();
         assertGt(rewardPoolId, 0);
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), REWARD_POOL_AMOUNT);
@@ -4009,8 +4013,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             amount: REWARD_POOL_AMOUNT,
             requiredVoters: 3,
             requiredSettledRounds: 1,
-            bountyClosesAt: block.timestamp + 30 days,
-            feedbackClosesAt: block.timestamp + 30 days,
+            bountyStartBy: block.timestamp + 30 days,
+            bountyWindowSeconds: 30 days,
+            feedbackWindowSeconds: 30 days,
             bountyEligibility: 0
         });
         bytes32 salt = keccak256("agent-wallet-usdc-submission-bounty");
@@ -4363,7 +4368,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredCompleters,
             requiredSettledRounds,
             bountyClosesAt,
-            bountyClosesAt
+            30 days,
+            30 days,
+            0
         );
     }
 
@@ -4395,7 +4402,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             requiredCompleters,
             1,
             bountyClosesAt,
-            bountyClosesAt,
+            30 days,
+            30 days,
             bountyEligibility
         );
     }
@@ -4419,7 +4427,17 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.prank(address(registry));
         rewardPoolEscrow.createSubmissionBundleFromRegistry(
-            bundleId, contentIds, bundleFunder, asset, amount, requiredCompleters, 1, bountyClosesAt, bountyClosesAt
+            bundleId,
+            contentIds,
+            bundleFunder,
+            asset,
+            amount,
+            requiredCompleters,
+            1,
+            bountyClosesAt,
+            bountyClosesAt - block.timestamp,
+            bountyClosesAt - block.timestamp,
+            0
         );
     }
 
@@ -4534,8 +4552,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 amount: rewardAmount,
                 requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
                 requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-                bountyClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-                feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+                bountyStartBy: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+                bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+                feedbackWindowSeconds: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
                 bountyEligibility: 0
             }),
             roundConfig
@@ -4576,8 +4595,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             amount: REWARD_POOL_AMOUNT,
             requiredVoters: 3,
             requiredSettledRounds: 1,
-            bountyClosesAt: block.timestamp + 30 days,
-            feedbackClosesAt: block.timestamp + 30 days,
+            bountyStartBy: block.timestamp + 30 days,
+            bountyWindowSeconds: 30 days,
+            feedbackWindowSeconds: 30 days,
             bountyEligibility: 0
         });
         question.spec = ContentRegistry.QuestionSpecCommitment({
@@ -4596,8 +4616,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             amount: REWARD_POOL_AMOUNT,
             requiredVoters: 3,
             requiredSettledRounds: 1,
-            bountyClosesAt: block.timestamp + 30 days,
-            feedbackClosesAt: block.timestamp + 30 days,
+            bountyStartBy: block.timestamp + 30 days,
+            bountyWindowSeconds: 30 days,
+            feedbackWindowSeconds: 30 days,
             bountyEligibility: 0,
             bountyKind: 0,
             relatedRoundId: 0,
@@ -4731,8 +4752,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             amount: REWARD_POOL_AMOUNT,
             requiredVoters: 3,
             requiredSettledRounds: 1,
-            bountyClosesAt: block.timestamp + 30 days,
-            feedbackClosesAt: block.timestamp + 30 days,
+            bountyStartBy: block.timestamp + 30 days,
+            bountyWindowSeconds: 30 days,
+            feedbackWindowSeconds: 30 days,
             bountyEligibility: 0
         });
         bytes32 salt = keccak256(abi.encodePacked(path, agentWallet));
@@ -4823,8 +4845,10 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     ) internal returns (uint256 rewardPoolId) {
         vm.startPrank(poolFunder);
         usdc.approve(address(rewardPoolEscrow), amount);
-        rewardPoolId =
-            rewardPoolEscrow.createRewardPool(contentId, amount, requiredVoters, requiredSettledRounds, expiresAt, 0);
+        uint256 windowSeconds = expiresAt == 0 ? 0 : expiresAt - block.timestamp;
+        rewardPoolId = rewardPoolEscrow.createRewardPool(
+            contentId, amount, requiredVoters, requiredSettledRounds, expiresAt, windowSeconds, 0
+        );
         vm.stopPrank();
     }
 
@@ -5050,10 +5074,22 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     ) internal returns (uint256 rewardPoolId) {
         vm.startPrank(funder);
         usdc.approve(address(rewardPoolEscrow), amount);
-        rewardPoolId = rewardPoolEscrow.createRewardPoolWithEligibility(
-            contentId, amount, requiredVoters, requiredSettledRounds, block.timestamp + 30 days, 0, bountyEligibility
-        );
         vm.stopPrank();
+
+        vm.prank(address(registry));
+        rewardPoolId = rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
+            contentId,
+            funder,
+            address(0),
+            REWARD_ASSET_USDC,
+            amount,
+            requiredVoters,
+            requiredSettledRounds,
+            block.timestamp + 30 days,
+            30 days,
+            0,
+            bountyEligibility
+        );
     }
 
     function _settleRoundWith(address[] memory voters, uint256 contentId, bool[] memory directions)

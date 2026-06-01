@@ -269,8 +269,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             amount: rewardAmount,
             requiredVoters: requiredVoters,
             requiredSettledRounds: requiredSettledRounds,
-            bountyClosesAt: rewardPoolExpiresAt,
-            feedbackClosesAt: rewardPoolExpiresAt,
+            bountyStartBy: rewardPoolExpiresAt,
+            bountyWindowSeconds: rewardPoolExpiresAt == 0 ? 0 : rewardPoolExpiresAt - block.timestamp,
+            feedbackWindowSeconds: rewardPoolExpiresAt == 0 ? 0 : rewardPoolExpiresAt - block.timestamp,
             bountyEligibility: 0
         });
         reservation.roundConfig =
@@ -312,14 +313,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
         uint256 rewardPoolExpiresAt
-    ) internal pure returns (ContentRegistry.SubmissionRewardTerms memory) {
+    ) internal view returns (ContentRegistry.SubmissionRewardTerms memory) {
         return ContentRegistry.SubmissionRewardTerms({
             asset: rewardAsset,
             amount: rewardAmount,
             requiredVoters: requiredVoters,
             requiredSettledRounds: requiredSettledRounds,
-            bountyClosesAt: rewardPoolExpiresAt,
-            feedbackClosesAt: rewardPoolExpiresAt,
+            bountyStartBy: rewardPoolExpiresAt,
+            bountyWindowSeconds: rewardPoolExpiresAt == 0 ? 0 : rewardPoolExpiresAt - block.timestamp,
+            feedbackWindowSeconds: rewardPoolExpiresAt == 0 ? 0 : rewardPoolExpiresAt - block.timestamp,
             bountyEligibility: 0
         });
     }
@@ -410,15 +412,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         bytes32 bundleHash = keccak256(abi.encode("rateloop-question-bundle-v2", questionHashes));
         return keccak256(
             abi.encode(
-                "rateloop-question-bundle-reveal-v3",
+                "rateloop-question-bundle-reveal-v4",
                 bundleHash,
                 submitterAddress,
                 rewardTerms.asset,
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyStartBy,
+                rewardTerms.bountyWindowSeconds,
+                rewardTerms.feedbackWindowSeconds,
                 rewardTerms.bountyEligibility,
                 roundConfig.epochDuration,
                 roundConfig.maxDuration,
@@ -873,8 +876,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(mockQuestionRewardPoolEscrow.lastAmount(), rewardAmount);
         assertEq(mockQuestionRewardPoolEscrow.lastRequiredVoters(), requiredVoters);
         assertEq(mockQuestionRewardPoolEscrow.lastRequiredSettledRounds(), requiredSettledRounds);
-        assertEq(mockQuestionRewardPoolEscrow.lastBountyClosesAt(), rewardTerms.bountyClosesAt, "bounty close");
-        assertEq(mockQuestionRewardPoolEscrow.lastFeedbackClosesAt(), rewardTerms.feedbackClosesAt, "feedback close");
+        assertEq(mockQuestionRewardPoolEscrow.lastBountyStartBy(), rewardTerms.bountyStartBy, "bounty start by");
+        assertEq(
+            mockQuestionRewardPoolEscrow.lastBountyWindowSeconds(), rewardTerms.bountyWindowSeconds, "bounty window"
+        );
+        assertEq(
+            mockQuestionRewardPoolEscrow.lastFeedbackWindowSeconds(),
+            rewardTerms.feedbackWindowSeconds,
+            "feedback window"
+        );
     }
 
     function test_SubmitQuestionWithReward_UsesAgentWalletAsEscrowFunder() public {
@@ -953,8 +963,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             amount: _defaultSubmissionRewardAmount(registry),
             requiredVoters: 5,
             requiredSettledRounds: 2,
-            bountyClosesAt: block.timestamp + 14 days,
-            feedbackClosesAt: block.timestamp + 14 days,
+            bountyStartBy: block.timestamp + 14 days,
+            bountyWindowSeconds: 14 days,
+            feedbackWindowSeconds: 14 days,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
@@ -1010,8 +1021,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             amount: 100e6,
             requiredVoters: 5,
             requiredSettledRounds: 1,
-            bountyClosesAt: block.timestamp + 14 days,
-            feedbackClosesAt: block.timestamp + 14 days,
+            bountyStartBy: block.timestamp + 14 days,
+            bountyWindowSeconds: 14 days,
+            feedbackWindowSeconds: 14 days,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
@@ -1053,8 +1065,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             amount: _defaultSubmissionRewardAmount(registry),
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-            feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+            bountyStartBy: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+            bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+            feedbackWindowSeconds: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory reservedConfig =
@@ -1201,7 +1214,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
 
         vm.startPrank(submitter);
-        vm.expectRevert("Bad close");
+        vm.expectRevert("Bad start-by");
         registry.submitQuestionWithRewardAndRoundConfig(
             "https://example.com/expired-bounty",
             imageUrls,
@@ -1402,7 +1415,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
 
         vm.startPrank(submitter);
-        vm.expectRevert("Bundle bounty close required");
+        vm.expectRevert("Bundle bounty window required");
         registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, _bundleContentRoundConfig());
         vm.stopPrank();
     }

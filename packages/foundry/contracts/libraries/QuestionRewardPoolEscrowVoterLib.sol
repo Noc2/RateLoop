@@ -13,13 +13,25 @@ library QuestionRewardPoolEscrowVoterLib {
         bytes32 commitKey,
         uint64 closesAt
     ) internal view returns (bool revealed, address frontend) {
+        return timelyRevealedCommitFrontend(votingEngine, contentId, roundId, commitKey, 0, closesAt);
+    }
+
+    function timelyRevealedCommitFrontend(
+        RoundVotingEngine votingEngine,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint64 opensAt,
+        uint64 closesAt
+    ) internal view returns (bool revealed, address frontend) {
         // Use the narrow commitCore getter -- this helper is called inside claim/bundle
         // iteration loops, and materializing the full ciphertext on every read is expensive.
         (address voter,, address commitFrontend, uint48 commitRevealedAt, bool commitRevealed,,) =
             votingEngine.commitCore(contentId, roundId, commitKey);
         uint48 committedAt = votingEngine.commitCommittedAt(contentId, roundId, commitKey);
         return (
-            voter != address(0) && commitRevealed && committedByBountyClose(closesAt, committedAt, commitRevealedAt),
+            voter != address(0) && commitRevealed
+                && committedWithinBountyWindow(opensAt, closesAt, committedAt, commitRevealedAt),
             commitFrontend
         );
     }
@@ -32,6 +44,16 @@ library QuestionRewardPoolEscrowVoterLib {
         if (closesAt == 0) return true;
         uint48 eligibilityTimestamp = committedAt == 0 ? revealedAt : committedAt;
         return eligibilityTimestamp <= closesAt;
+    }
+
+    function committedWithinBountyWindow(uint64 opensAt, uint64 closesAt, uint48 committedAt, uint48 revealedAt)
+        internal
+        pure
+        returns (bool)
+    {
+        if (closesAt == 0) return true;
+        uint48 eligibilityTimestamp = committedAt == 0 ? revealedAt : committedAt;
+        return eligibilityTimestamp >= opensAt && eligibilityTimestamp <= closesAt;
     }
 
     function resolveCurrentRater(ProtocolConfig protocolConfig, address account)

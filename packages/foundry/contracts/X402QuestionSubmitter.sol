@@ -179,8 +179,9 @@ contract X402QuestionSubmitter is Ownable {
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyStartBy,
+                rewardTerms.bountyWindowSeconds,
+                rewardTerms.feedbackWindowSeconds,
                 rewardTerms.bountyEligibility
             )
         );

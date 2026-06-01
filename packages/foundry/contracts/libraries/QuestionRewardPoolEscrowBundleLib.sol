@@ -64,6 +64,7 @@ library QuestionRewardPoolEscrowBundleLib {
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
+        uint64 bountyOpensAt,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -76,6 +77,7 @@ library QuestionRewardPoolEscrowBundleLib {
             bundleRoundIds,
             votingEngine,
             protocolConfig,
+            bountyOpensAt,
             bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -89,6 +91,7 @@ library QuestionRewardPoolEscrowBundleLib {
                 bundleRoundIds,
                 votingEngine,
                 protocolConfig,
+                bountyOpensAt,
                 bountyClosesAt,
                 bundleId,
                 roundSetIndex,
@@ -108,6 +111,7 @@ library QuestionRewardPoolEscrowBundleLib {
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
+        uint64 bountyOpensAt,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -119,8 +123,9 @@ library QuestionRewardPoolEscrowBundleLib {
         for (uint256 i = 0; i < questions.length;) {
             uint256 roundId = bundleRoundIds[bundleId][i][roundSetIndex];
             uint256 contentId = questions[i].contentId;
-            (bytes32 commitKey, bytes32 completerKey) =
-                _bundleQuestionCompletion(votingEngine, protocolConfig, contentId, roundId, account, bountyClosesAt);
+            (bytes32 commitKey, bytes32 completerKey) = _bundleQuestionCompletion(
+                votingEngine, protocolConfig, bountyOpensAt, contentId, roundId, account, bountyClosesAt
+            );
             if (commitKey == bytes32(0)) return (false, bytes32(0));
             if (requireCleanupComplete_ && votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) > 0) {
                 return (false, bytes32(0));
@@ -141,6 +146,7 @@ library QuestionRewardPoolEscrowBundleLib {
     function _bundleQuestionCompletion(
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
+        uint64 bountyOpensAt,
         uint256 contentId,
         uint256 roundId,
         address account,
@@ -150,7 +156,7 @@ library QuestionRewardPoolEscrowBundleLib {
         (commitKey, completerKey) = _resolveBundleCompleter(votingEngine, protocolConfig, contentId, roundId, account);
         if (commitKey == bytes32(0)) return (bytes32(0), bytes32(0));
         (bool revealed,) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
-            votingEngine, contentId, roundId, commitKey, bountyClosesAt
+            votingEngine, contentId, roundId, commitKey, bountyOpensAt, bountyClosesAt
         );
         if (!revealed) return (bytes32(0), bytes32(0));
     }
@@ -165,6 +171,7 @@ library QuestionRewardPoolEscrowBundleLib {
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
+        uint64 bountyOpensAt,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -178,7 +185,7 @@ library QuestionRewardPoolEscrowBundleLib {
             (bytes32 commitKey,) =
                 _resolveBundleCompleter(votingEngine, protocolConfig, question.contentId, roundId, account);
             (bool revealed, address questionFrontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
-                votingEngine, question.contentId, roundId, commitKey, bountyClosesAt
+                votingEngine, question.contentId, roundId, commitKey, bountyOpensAt, bountyClosesAt
             );
             if (!revealed) return address(0);
             address questionFrontendRecipient;

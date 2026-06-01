@@ -10,8 +10,10 @@ struct RewardPool {
     uint64 startRoundId;
     uint64 nextRoundToEvaluate;
     uint64 challengedRoundId;
+    uint64 bountyStartBy;
     uint64 bountyOpensAt;
     uint64 bountyClosesAt;
+    uint64 feedbackClosesAt;
     uint64 claimDeadline;
     address funder;
     address funderIdentity;
@@ -28,6 +30,8 @@ struct RewardPool {
     bool refunded;
     bool unallocatedRefunded;
     uint16 frontendFeeBps;
+    uint32 bountyWindowSeconds;
+    uint32 feedbackWindowSeconds;
     uint8 bountyKind;
     uint8 bountyEligibility;
     bool nonRefundable;
@@ -62,9 +66,11 @@ struct RoundSnapshot {
 
 struct BundleReward {
     uint64 id;
+    uint64 bountyStartBy;
     uint64 bountyOpensAt;
     uint64 bountyClosesAt;
     uint64 feedbackClosesAt;
+    uint64 claimDeadline;
     address funder;
     address funderIdentity;
     uint8 asset;
@@ -74,6 +80,8 @@ struct BundleReward {
     uint32 completedRoundSets;
     uint32 claimedCount;
     uint16 frontendFeeBps;
+    uint32 bountyWindowSeconds;
+    uint32 feedbackWindowSeconds;
     uint8 bountyEligibility;
     bytes32 funderIdentityKey;
     uint256 fundedAmount;
@@ -111,8 +119,9 @@ struct CreateRewardPoolParams {
     uint256 amount;
     uint256 requiredVoters;
     uint256 requiredSettledRounds;
-    uint256 bountyClosesAt;
-    uint256 feedbackClosesAt;
+    uint256 bountyStartBy;
+    uint256 bountyWindowSeconds;
+    uint256 feedbackWindowSeconds;
     uint8 bountyEligibility;
     bool nonRefundable;
     uint8 bountyKind;
@@ -127,8 +136,9 @@ struct AuthorizedRewardPoolParams {
     uint256 amount;
     uint256 requiredVoters;
     uint256 requiredSettledRounds;
-    uint256 bountyClosesAt;
-    uint256 feedbackClosesAt;
+    uint256 bountyStartBy;
+    uint256 bountyWindowSeconds;
+    uint256 feedbackWindowSeconds;
     uint8 bountyEligibility;
     uint8 bountyKind;
     uint256 relatedRoundId;
@@ -147,7 +157,8 @@ struct CreateSubmissionBundleParams {
     uint256 amount;
     uint256 requiredCompleters;
     uint256 requiredSettledRounds;
-    uint256 bountyClosesAt;
-    uint256 feedbackClosesAt;
+    uint256 bountyStartBy;
+    uint256 bountyWindowSeconds;
+    uint256 feedbackWindowSeconds;
     uint8 bountyEligibility;
 }

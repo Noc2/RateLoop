@@ -12,6 +12,7 @@ import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscr
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowTransferLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
 import { RewardPool, CreateRewardPoolParams } from "./QuestionRewardPoolEscrowTypes.sol";
 import { RoundLib } from "./RoundLib.sol";
 
@@ -41,9 +42,9 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
         uint256 startRoundId,
-        uint256 bountyOpensAt,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint256 frontendFeeBps,
         uint8 asset,
         uint8 bountyEligibility,
@@ -161,8 +162,13 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             return _refundCompleteRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, claimGrace);
         }
 
-        require(rewardPool.bountyClosesAt != 0 && block.timestamp > rewardPool.bountyClosesAt, "Not expired");
-        return _refundUnallocatedRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool);
+        QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
+            votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
+        );
+        (bool expired, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.rewardPoolExpired(rewardPool);
+        require(expired, "Not expired");
+        return
+            _refundUnallocatedRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, bountyClosesAt);
     }
 
     function refundInactiveRewardPool(
@@ -177,7 +183,12 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         _requireNoPendingRecoveredRounds(rewardPool);
         require(!registry.isContentActive(rewardPool.contentId), "Content active");
         require(block.timestamp > registry.dormantKeyReleasableAt(rewardPool.contentId), "Revival active");
-        return _refundUnallocatedRewardPool(votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool);
+        QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
+            votingEngine, rewardPool, rewardPool.nextRoundToEvaluate
+        );
+        return _refundUnallocatedRewardPool(
+            votingEngine, lrepToken, usdcToken, rewardPoolId, rewardPool, rewardPool.bountyClosesAt
+        );
     }
 
     function _storeRewardPool(
@@ -193,7 +204,9 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     ) private {
         _validateStoreInputs(registry, fundedAmount, params);
 
-        uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(params.bountyClosesAt, params.feedbackClosesAt);
+        uint256 normalizedFeedbackWindowSeconds = QuestionRewardPoolEscrowWindowLib.validateWindow(
+            params.bountyStartBy, params.bountyWindowSeconds, params.feedbackWindowSeconds, params.nonRefundable
+        );
         uint256 startRoundId = _nextStartRoundId(votingEngine, params.contentId);
         ProtocolConfig protocolConfig = votingEngine.protocolConfig();
 
@@ -208,9 +221,10 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         pool.contentId = params.contentId.toUint64();
         pool.startRoundId = startRoundId.toUint64();
         pool.nextRoundToEvaluate = startRoundId.toUint64();
-        pool.bountyOpensAt = uint64(block.timestamp);
-        pool.bountyClosesAt = params.bountyClosesAt.toUint64();
-        pool.claimDeadline = params.bountyClosesAt.toUint64();
+        pool.bountyStartBy = params.bountyStartBy.toUint64();
+        pool.bountyOpensAt = params.bountyWindowSeconds == 0 ? uint64(block.timestamp) : 0;
+        pool.bountyWindowSeconds = params.bountyWindowSeconds.toUint32();
+        pool.feedbackWindowSeconds = normalizedFeedbackWindowSeconds.toUint32();
         pool.funder = params.funder;
         pool.funderIdentity = funderIdentity;
         pool.submitterIdentity = submitterIdentity;
@@ -237,9 +251,9 @@ library QuestionRewardPoolEscrowPoolActionsLib {
             params.requiredVoters,
             params.requiredSettledRounds,
             startRoundId,
-            block.timestamp,
-            params.bountyClosesAt,
-            normalizedFeedbackClosesAt,
+            params.bountyStartBy,
+            params.bountyWindowSeconds,
+            normalizedFeedbackWindowSeconds,
             defaultFrontendFeeBps,
             params.asset,
             params.bountyEligibility,
@@ -262,18 +276,12 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         require(params.requiredSettledRounds >= MIN_REQUIRED_SETTLED_ROUNDS, "Too few rounds");
         require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
         require(fundedAmount >= params.requiredSettledRounds * params.requiredVoters * BPS_SCALE, "Amount too small");
-        if (params.bountyClosesAt != 0) {
-            require(params.bountyClosesAt > block.timestamp, "Bad close");
-        }
         RoundLib.RoundConfig memory contentCfg = registry.getContentRoundConfig(params.contentId);
         require(params.requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
         require(contentCfg.maxVoters <= MAX_REWARD_POOL_ROUND_VOTERS, "Voters exceed max");
         require(
             fundedAmount >= params.requiredSettledRounds * uint256(contentCfg.maxVoters) * BPS_SCALE, "Amount too small"
         );
-        if (!params.nonRefundable) {
-            require(params.bountyClosesAt > block.timestamp, "Bad close");
-        }
     }
 
     function _nextStartRoundId(RoundVotingEngine votingEngine, uint256 contentId) private view returns (uint256) {
@@ -318,14 +326,17 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         IERC20 lrepToken,
         IERC20 usdcToken,
         uint256 rewardPoolId,
-        RewardPool storage rewardPool
+        RewardPool storage rewardPool,
+        uint64 bountyClosesAt
     ) private returns (uint256 refundAmount) {
         require(!rewardPool.refunded, "Already refunded");
         require(!rewardPool.unallocatedRefunded, "Already refunded");
         require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
-        QuestionRewardPoolEscrowQualificationLib.requireNoPendingFinishedRound(
-            votingEngine, rewardPool.contentId, rewardPool.nextRoundToEvaluate, rewardPool.bountyClosesAt
-        );
+        if (bountyClosesAt != 0) {
+            QuestionRewardPoolEscrowQualificationLib.requireNoPendingFinishedRound(
+                votingEngine, rewardPool.contentId, rewardPool.nextRoundToEvaluate, bountyClosesAt
+            );
+        }
         refundAmount = rewardPool.unallocatedAmount;
         require(refundAmount > 0, "No refund");
         rewardPool.unallocatedRefunded = true;
@@ -400,20 +411,5 @@ library QuestionRewardPoolEscrowPoolActionsLib {
 
     function _requiredParticipantFloorForAmount(uint256 amount) private pure returns (uint256) {
         return amount >= HIGH_VALUE_REWARD_POOL_THRESHOLD ? MIN_HIGH_VALUE_PARTICIPANTS : MIN_REWARD_POOL_PARTICIPANTS;
-    }
-
-    function _normalizeFeedbackClosesAt(uint256 bountyClosesAt, uint256 feedbackClosesAt)
-        private
-        view
-        returns (uint256)
-    {
-        if (feedbackClosesAt == 0) {
-            return bountyClosesAt;
-        }
-        require(feedbackClosesAt > block.timestamp, "Bad feedback close");
-        if (bountyClosesAt != 0) {
-            require(feedbackClosesAt <= bountyClosesAt, "Late feedback");
-        }
-        return feedbackClosesAt;
     }
 }

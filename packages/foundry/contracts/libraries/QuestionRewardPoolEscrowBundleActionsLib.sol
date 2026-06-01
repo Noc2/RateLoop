@@ -13,6 +13,7 @@ import { QuestionRewardPoolEscrowClaimLib, EqualShareInputs } from "./QuestionRe
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowTransferLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
 import {
     BundleReward,
     BundleQuestion,
@@ -52,9 +53,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 requiredCompleters,
         uint256 questionCount,
         uint256 requiredSettledRounds,
-        uint256 bountyOpensAt,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint256 frontendFeeBps,
         uint8 asset,
         uint8 bountyEligibility,
@@ -130,8 +131,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         QuestionRewardPoolEscrowBundleLib.requireFundingCoversMaxCompleters(
             registry, params.contentIds, params.amount, params.requiredSettledRounds
         );
-        require(params.bountyClosesAt > block.timestamp, "Bad close");
-        uint256 normalizedFeedbackClosesAt = _normalizeFeedbackClosesAt(params.bountyClosesAt, params.feedbackClosesAt);
+        uint256 normalizedFeedbackWindowSeconds = QuestionRewardPoolEscrowWindowLib.validateWindow(
+            params.bountyStartBy, params.bountyWindowSeconds, params.feedbackWindowSeconds, false
+        );
 
         uint256 fundedAmount = QuestionRewardPoolEscrowTransferLib.pullExactToken(
             _rewardToken(lrepToken, usdcToken, params.asset), params.funder, params.amount
@@ -142,7 +144,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRewards[params.bundleId],
             params,
             fundedAmount,
-            normalizedFeedbackClosesAt,
+            normalizedFeedbackWindowSeconds,
             defaultFrontendFeeBps,
             funderIdentityKey,
             funderIdentity
@@ -167,9 +169,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             params.requiredCompleters,
             params.contentIds.length,
             params.requiredSettledRounds,
-            block.timestamp,
-            params.bountyClosesAt,
-            normalizedFeedbackClosesAt,
+            params.bountyStartBy,
+            params.bountyWindowSeconds,
+            normalizedFeedbackWindowSeconds,
             defaultFrontendFeeBps,
             params.asset,
             params.bountyEligibility,
@@ -183,14 +185,15 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         BundleReward storage bundle,
         CreateSubmissionBundleParams memory params,
         uint256 fundedAmount,
-        uint256 normalizedFeedbackClosesAt,
+        uint256 normalizedFeedbackWindowSeconds,
         uint16 defaultFrontendFeeBps,
         bytes32 funderIdentityKey,
         address funderIdentity
     ) private {
         bundle.id = params.bundleId.toUint64();
-        bundle.bountyClosesAt = params.bountyClosesAt.toUint64();
-        bundle.feedbackClosesAt = normalizedFeedbackClosesAt.toUint64();
+        bundle.bountyStartBy = params.bountyStartBy.toUint64();
+        bundle.bountyWindowSeconds = params.bountyWindowSeconds.toUint32();
+        bundle.feedbackWindowSeconds = normalizedFeedbackWindowSeconds.toUint32();
         bundle.funder = params.funder;
         bundle.funderIdentity = funderIdentity;
         bundle.asset = params.asset;
@@ -402,6 +405,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             votingEngine,
             protocolConfig,
+            bundle.bountyOpensAt,
             bundle.bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -513,6 +517,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             votingEngine,
             protocolConfig,
+            bundle.bountyOpensAt,
             bundle.bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -562,8 +567,9 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     ) external returns (uint256 refundAmount) {
         BundleReward storage bundle = _getExistingBundleReward(bundleRewards, bundleId);
         require(!bundle.refunded, "Already refunded");
-        require(block.timestamp > bundle.bountyClosesAt, "Bundle active");
-        require(block.timestamp > uint256(bundle.bountyClosesAt) + BUNDLE_REFUND_GRACE, "Grace");
+        uint64 refundClock = QuestionRewardPoolEscrowWindowLib.bundleRefundClock(bundle);
+        require(refundClock != 0 && block.timestamp > refundClock, "Bundle active");
+        require(block.timestamp > uint256(refundClock) + BUNDLE_REFUND_GRACE, "Grace");
         (, bool syncComplete) = _syncQuestionBundleTerminals(
             bundleRewards,
             bundleQuestions,
@@ -599,11 +605,11 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             QuestionRewardPoolEscrowBundleLib.requireCleanupComplete(
                 bundleQuestions, bundleRoundIds, votingEngine, bundleId, bundle.completedRoundSets
             );
-            if (bundle.bountyOpensAt == 0) {
-                bundle.bountyOpensAt = uint64(block.timestamp + BUNDLE_CLAIM_GRACE);
+            if (bundle.claimDeadline == 0) {
+                bundle.claimDeadline = uint64(block.timestamp);
                 return 0;
             }
-            require(block.timestamp > bundle.bountyOpensAt, "Grace");
+            require(block.timestamp > uint256(bundle.claimDeadline) + BUNDLE_CLAIM_GRACE, "Grace");
         }
         refundAmount = bundle.fundedAmount - bundle.claimedAmount;
         require(refundAmount > 0, "No refund");
@@ -772,7 +778,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
                 processedRounds++;
                 continue;
             }
-            if (startTime > bundle.bountyClosesAt) {
+            if (bundle.bountyClosesAt != 0 && startTime > bundle.bountyClosesAt) {
                 bundleQuestionTerminalSyncCursor[bundleId][bundleIndex] = currentRoundId + 1;
                 return (processedRounds, true);
             }
@@ -849,6 +855,19 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 roundSetIndex
     ) private {
         if (bundleRoundSetSnapshots[bundleId][roundSetIndex].qualified) return;
+        if (!QuestionRewardPoolEscrowWindowLib.activateBundleWindowForRoundSet(
+                votingEngine, bundle, bundleQuestions[bundleId], bundleRoundIds, bundleId, roundSetIndex
+            )) {
+            QuestionRewardPoolEscrowBundleLib.resetRoundSet(
+                bundleQuestions,
+                bundleQuestionRecordedRounds,
+                bundleRoundIds,
+                bundleQuestionTerminalSyncCursor,
+                bundleId,
+                roundSetIndex
+            );
+            return;
+        }
 
         uint256 completerCount = _bundleRoundSetCompleterCount(
             bundleQuestions, bundleRoundIds, registry, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex
@@ -882,7 +901,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         unchecked {
             bundle.completedRoundSets++;
         }
-        if (bundle.bountyOpensAt != 0) bundle.bountyOpensAt = 0;
         bundle.unallocatedAmount -= allocation;
 
         bundleRoundSetSnapshots[bundleId][roundSetIndex] = BundleRoundSetSnapshot({
@@ -1049,6 +1067,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             votingEngine,
             protocolConfig,
+            bundle.bountyOpensAt,
             bundle.bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -1066,6 +1085,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
+        uint64 bountyOpensAt,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -1076,6 +1096,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             votingEngine,
             protocolConfig,
+            bountyOpensAt,
             bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -1094,6 +1115,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
+        uint64 bountyOpensAt,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -1104,6 +1126,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             votingEngine,
             protocolConfig,
+            bountyOpensAt,
             bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -1123,6 +1146,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         ) storage bundleRoundIds,
         RoundVotingEngine votingEngine,
         ProtocolConfig protocolConfig,
+        uint64 bountyOpensAt,
         uint64 bountyClosesAt,
         uint256 bundleId,
         uint256 roundSetIndex,
@@ -1135,6 +1159,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundleRoundIds,
             votingEngine,
             protocolConfig,
+            bountyOpensAt,
             bountyClosesAt,
             bundleId,
             roundSetIndex,
@@ -1313,20 +1338,5 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
     function _isTerminalRound(RoundLib.RoundState state, uint48 settledAt) private pure returns (bool) {
         return state != RoundLib.RoundState.Open || settledAt != 0;
-    }
-
-    function _normalizeFeedbackClosesAt(uint256 bountyClosesAt, uint256 feedbackClosesAt)
-        private
-        view
-        returns (uint256)
-    {
-        if (feedbackClosesAt == 0) {
-            return bountyClosesAt;
-        }
-        require(feedbackClosesAt > block.timestamp, "Bad feedback close");
-        if (bountyClosesAt != 0) {
-            require(feedbackClosesAt <= bountyClosesAt, "Late feedback");
-        }
-        return feedbackClosesAt;
     }
 }

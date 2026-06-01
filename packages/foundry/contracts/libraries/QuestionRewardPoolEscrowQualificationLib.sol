@@ -9,6 +9,7 @@ import { RoundLib } from "./RoundLib.sol";
 import { RewardPool, RoundSnapshot } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
 
 library QuestionRewardPoolEscrowQualificationLib {
     using SafeCast for uint256;
@@ -48,6 +49,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 rewardId;
         uint256 contentId;
         uint256 roundId;
+        uint64 bountyOpensAt;
         uint64 bountyClosesAt;
         uint32 requiredVoters;
         uint8 bountyEligibility;
@@ -115,6 +117,9 @@ library QuestionRewardPoolEscrowQualificationLib {
 
         nextRoundToEvaluate = rewardPool.nextRoundToEvaluate;
         while (skipped < params.maxRounds) {
+            QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(
+                votingEngine, rewardPool, nextRoundToEvaluate
+            );
             (bool roundFinished, bool canQualify,) = _roundQualificationStatus(
                 rewardPoolPayerIdentity,
                 rewardPoolPayerIdentityKey,
@@ -165,6 +170,10 @@ library QuestionRewardPoolEscrowQualificationLib {
         // Non-cluster rounds always qualify through the sequential cursor. Recovered snapshot
         // requalification is only reachable for cluster-snapshot pools.
         require(roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
+        require(
+            QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(votingEngine, rewardPool, roundId),
+            "Bounty not started"
+        );
 
         (
             bool roundSettled,
@@ -174,21 +183,15 @@ library QuestionRewardPoolEscrowQualificationLib {
             uint256 totalWeight,
             uint48 settledAt
         ) = previewRoundQualification(
-            QualificationContext({
-                votingEngine: votingEngine,
-                protocolConfig: votingEngine.protocolConfig(),
-                rewardId: rewardPool.id,
-                contentId: rewardPool.contentId,
-                roundId: roundId,
-                bountyClosesAt: rewardPool.bountyClosesAt,
-                requiredVoters: rewardPool.requiredVoters,
-                bountyEligibility: rewardPool.bountyEligibility,
-                funder: rewardPool.funder,
-                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
-                submitterIdentity: rewardPool.submitterIdentity,
-                submitterIdentityKey: rewardPool.submitterIdentityKey
-            })
+            _qualificationContext(
+                votingEngine,
+                rewardPool,
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                roundId,
+                rewardPool.bountyOpensAt,
+                rewardPool.bountyClosesAt
+            )
         );
         require(roundSettled, "Round not settled");
         require(canQualify, "Too few eligible voters");
@@ -230,21 +233,15 @@ library QuestionRewardPoolEscrowQualificationLib {
             clusterSnapshotDigest: bytes32(0)
         });
         _markEligibleRevealedVoters(
-            QualificationContext({
-                votingEngine: votingEngine,
-                protocolConfig: votingEngine.protocolConfig(),
-                rewardId: rewardPool.id,
-                contentId: rewardPool.contentId,
-                roundId: roundId,
-                bountyClosesAt: rewardPool.bountyClosesAt,
-                requiredVoters: rewardPool.requiredVoters,
-                bountyEligibility: rewardPool.bountyEligibility,
-                funder: rewardPool.funder,
-                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
-                submitterIdentity: rewardPool.submitterIdentity,
-                submitterIdentityKey: rewardPool.submitterIdentityKey
-            }),
+            _qualificationContext(
+                votingEngine,
+                rewardPool,
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                roundId,
+                rewardPool.bountyOpensAt,
+                rewardPool.bountyClosesAt
+            ),
             qualifiedQuestionRewardClaimants,
             rewardPoolId,
             bytes32(0)
@@ -278,23 +275,21 @@ library QuestionRewardPoolEscrowQualificationLib {
         // when the DEFAULT_ADMIN_ROLE-gated `reopenRecoveredSnapshotRound` ran and verified the
         // oracle has a new finalized snapshot with a non-rejected weight root.
         require(reopened || roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
+        require(
+            QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(votingEngine, rewardPool, roundId),
+            "Bounty not started"
+        );
 
         (bool roundSettled,, uint256 baseRawEligibleVoters,,, uint48 settledAt) = previewRoundQualification(
-            QualificationContext({
-                votingEngine: votingEngine,
-                protocolConfig: votingEngine.protocolConfig(),
-                rewardId: rewardPool.id,
-                contentId: rewardPool.contentId,
-                roundId: roundId,
-                bountyClosesAt: rewardPool.bountyClosesAt,
-                requiredVoters: rewardPool.requiredVoters,
-                bountyEligibility: rewardPool.bountyEligibility,
-                funder: rewardPool.funder,
-                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
-                submitterIdentity: rewardPool.submitterIdentity,
-                submitterIdentityKey: rewardPool.submitterIdentityKey
-            })
+            _qualificationContext(
+                votingEngine,
+                rewardPool,
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                roundId,
+                rewardPool.bountyOpensAt,
+                rewardPool.bountyClosesAt
+            )
         );
         require(roundSettled, "Round not settled");
         require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
@@ -355,21 +350,15 @@ library QuestionRewardPoolEscrowQualificationLib {
             clusterSnapshotDigest: clusterSnapshotDigest
         });
         _markEligibleRevealedVoters(
-            QualificationContext({
-                votingEngine: votingEngine,
-                protocolConfig: votingEngine.protocolConfig(),
-                rewardId: rewardPool.id,
-                contentId: rewardPool.contentId,
-                roundId: roundId,
-                bountyClosesAt: rewardPool.bountyClosesAt,
-                requiredVoters: rewardPool.requiredVoters,
-                bountyEligibility: rewardPool.bountyEligibility,
-                funder: rewardPool.funder,
-                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
-                submitterIdentity: rewardPool.submitterIdentity,
-                submitterIdentityKey: rewardPool.submitterIdentityKey
-            }),
+            _qualificationContext(
+                votingEngine,
+                rewardPool,
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                roundId,
+                rewardPool.bountyOpensAt,
+                rewardPool.bountyClosesAt
+            ),
             qualifiedQuestionRewardClaimants,
             rewardPoolId,
             clusterSnapshotDigest
@@ -455,6 +444,9 @@ library QuestionRewardPoolEscrowQualificationLib {
         (, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(rewardPool.contentId, roundId);
         if (state == RoundLib.RoundState.Open) return (false, false, 0);
         if (state != RoundLib.RoundState.Settled) return (true, false, 0);
+        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
+            QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(votingEngine, rewardPool, roundId);
+        if (!windowActive) return (true, false, 0);
 
         if (rewardPool.asset == rewardAssetUsdc && rewardPoolClusterPayoutOracle[rewardPool.id] != address(0)) {
             return _clusterRoundQualificationStatus(
@@ -470,21 +462,15 @@ library QuestionRewardPoolEscrowQualificationLib {
 
         uint256 effectiveParticipantUnits;
         (, canQualify,, effectiveParticipantUnits,,) = previewRoundQualification(
-            QualificationContext({
-                votingEngine: votingEngine,
-                protocolConfig: votingEngine.protocolConfig(),
-                rewardId: rewardPool.id,
-                contentId: rewardPool.contentId,
-                roundId: roundId,
-                bountyClosesAt: rewardPool.bountyClosesAt,
-                requiredVoters: rewardPool.requiredVoters,
-                bountyEligibility: rewardPool.bountyEligibility,
-                funder: rewardPool.funder,
-                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
-                submitterIdentity: rewardPool.submitterIdentity,
-                submitterIdentityKey: rewardPool.submitterIdentityKey
-            })
+            _qualificationContext(
+                votingEngine,
+                rewardPool,
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                roundId,
+                bountyOpensAt,
+                bountyClosesAt
+            )
         );
         if (canQualify) canQualify = _previewRoundAllocation(rewardPool, false, 0) >= effectiveParticipantUnits;
         return (true, canQualify, effectiveParticipantUnits);
@@ -553,6 +539,33 @@ library QuestionRewardPoolEscrowQualificationLib {
         return _isExcludedRater(
             identityKey, account, funder, funderIdentity, funderIdentityKey, submitterIdentity, submitterIdentityKey
         );
+    }
+
+    function _qualificationContext(
+        RoundVotingEngine votingEngine,
+        RewardPool storage rewardPool,
+        mapping(uint256 => address) storage rewardPoolPayerIdentity,
+        mapping(uint256 => bytes32) storage rewardPoolPayerIdentityKey,
+        uint256 roundId,
+        uint64 bountyOpensAt,
+        uint64 bountyClosesAt
+    ) private view returns (QualificationContext memory ctx) {
+        ctx = QualificationContext({
+            votingEngine: votingEngine,
+            protocolConfig: votingEngine.protocolConfig(),
+            rewardId: rewardPool.id,
+            contentId: rewardPool.contentId,
+            roundId: roundId,
+            bountyOpensAt: bountyOpensAt,
+            bountyClosesAt: bountyClosesAt,
+            requiredVoters: rewardPool.requiredVoters,
+            bountyEligibility: rewardPool.bountyEligibility,
+            funder: rewardPool.funder,
+            funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
+            funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
+            submitterIdentity: rewardPool.submitterIdentity,
+            submitterIdentityKey: rewardPool.submitterIdentityKey
+        });
     }
 
     function _countEligibleRevealedVoters(QualificationContext memory ctx)
@@ -627,8 +640,9 @@ library QuestionRewardPoolEscrowQualificationLib {
         (voter,,, revealedAt, revealed,,) = ctx.votingEngine.commitCore(ctx.contentId, ctx.roundId, commitKey);
         if (voter == address(0) || !revealed) return (voter, false);
         uint48 committedAt = ctx.votingEngine.commitCommittedAt(ctx.contentId, ctx.roundId, commitKey);
-        bountyEligibleTiming =
-            QuestionRewardPoolEscrowVoterLib.committedByBountyClose(ctx.bountyClosesAt, committedAt, revealedAt);
+        bountyEligibleTiming = QuestionRewardPoolEscrowVoterLib.committedWithinBountyWindow(
+            ctx.bountyOpensAt, ctx.bountyClosesAt, committedAt, revealedAt
+        );
     }
 
     function _claimWeight(RoundVotingEngine, uint256, uint256, bytes32) private pure returns (uint256) {
@@ -671,22 +685,19 @@ library QuestionRewardPoolEscrowQualificationLib {
             uint48 settledAt
         )
     {
+        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
+            QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(votingEngine, rewardPool, roundId);
+        if (!windowActive) return (false, false, 0, 0, 0, 0);
         (roundSettled,, rawEligibleVoters,,, settledAt) = previewRoundQualification(
-            QualificationContext({
-                votingEngine: votingEngine,
-                protocolConfig: votingEngine.protocolConfig(),
-                rewardId: rewardPool.id,
-                contentId: rewardPool.contentId,
-                roundId: roundId,
-                bountyClosesAt: rewardPool.bountyClosesAt,
-                requiredVoters: rewardPool.requiredVoters,
-                bountyEligibility: rewardPool.bountyEligibility,
-                funder: rewardPool.funder,
-                funderIdentity: rewardPoolPayerIdentity[rewardPool.id],
-                funderIdentityKey: rewardPoolPayerIdentityKey[rewardPool.id],
-                submitterIdentity: rewardPool.submitterIdentity,
-                submitterIdentityKey: rewardPool.submitterIdentityKey
-            })
+            _qualificationContext(
+                votingEngine,
+                rewardPool,
+                rewardPoolPayerIdentity,
+                rewardPoolPayerIdentityKey,
+                roundId,
+                bountyOpensAt,
+                bountyClosesAt
+            )
         );
         if (!roundSettled) return (false, false, 0, 0, 0, 0);
 

@@ -27,6 +27,7 @@ import { QuestionRewardPoolEscrowQualificationLib } from "./libraries/QuestionRe
 import { QuestionRewardPoolEscrowRecoveryLib } from "./libraries/QuestionRewardPoolEscrowRecoveryLib.sol";
 import { QuestionRewardPoolEscrowPoolActionsLib } from "./libraries/QuestionRewardPoolEscrowPoolActionsLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./libraries/QuestionRewardPoolEscrowTransferLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./libraries/QuestionRewardPoolEscrowWindowLib.sol";
 import {
     RewardPool,
     RoundSnapshot,
@@ -67,7 +68,7 @@ contract QuestionRewardPoolEscrow is
     uint8 internal constant REWARD_ASSET_USDC = 1;
     uint8 internal constant PAYOUT_DOMAIN_QUESTION_REWARD = 1;
     bytes32 internal constant REWARD_POOL_AUTHORIZATION_TYPEHASH = keccak256(
-        "RateLoopRewardPoolAuthorization(uint256 chainId,address escrow,uint256 contentId,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyClosesAt,uint256 feedbackClosesAt,uint8 bountyEligibility,uint8 bountyKind,uint256 relatedRoundId,bytes32 reasonHash,address funder,uint256 validAfter,uint256 validBefore)"
+        "RateLoopRewardPoolAuthorization(uint256 chainId,address escrow,uint256 contentId,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility,uint8 bountyKind,uint256 relatedRoundId,bytes32 reasonHash,address funder,uint256 validAfter,uint256 validBefore)"
     );
 
     error RewardPoolCursorNeedsAdvance();
@@ -117,9 +118,9 @@ contract QuestionRewardPoolEscrow is
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
         uint256 startRoundId,
-        uint256 bountyOpensAt,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint256 frontendFeeBps,
         uint8 asset,
         uint8 bountyEligibility,
@@ -150,6 +151,14 @@ contract QuestionRewardPoolEscrow is
         bytes32 weightRoot
     );
     event RewardPoolClusterPayoutOracleSnapshotted(uint256 indexed rewardPoolId, address indexed clusterPayoutOracle);
+    event RewardPoolWindowActivated(
+        uint256 indexed rewardPoolId,
+        uint256 indexed contentId,
+        uint256 indexed roundId,
+        uint256 bountyOpensAt,
+        uint256 bountyClosesAt,
+        uint256 feedbackClosesAt
+    );
     event RewardPoolClusterPayoutOracleRepointed(
         uint256 indexed rewardPoolId, address indexed oldClusterPayoutOracle, address indexed newClusterPayoutOracle
     );
@@ -191,15 +200,18 @@ contract QuestionRewardPoolEscrow is
         uint256 requiredCompleters,
         uint256 questionCount,
         uint256 requiredSettledRounds,
-        uint256 bountyOpensAt,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint256 frontendFeeBps,
         uint8 asset,
         uint8 bountyEligibility,
         bytes32 bountyEligibilityDataHash
     );
     event QuestionBundleEligibilitySet(uint256 indexed bundleId, uint8 indexed bountyEligibility);
+    event QuestionBundleWindowActivated(
+        uint256 indexed bundleId, uint256 bountyOpensAt, uint256 bountyClosesAt, uint256 feedbackClosesAt
+    );
     event QuestionBundleRoundRecorded(
         uint256 indexed bundleId,
         uint256 indexed contentId,
@@ -275,8 +287,9 @@ contract QuestionRewardPoolEscrow is
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         _requireCurrentRegistryEscrow();
         rewardPoolId = _createRewardPool(
@@ -287,34 +300,10 @@ contract QuestionRewardPoolEscrow is
             amount,
             requiredVoters,
             requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
+            bountyStartBy,
+            bountyWindowSeconds,
+            feedbackWindowSeconds,
             BOUNTY_ELIGIBILITY_OPEN,
-            false
-        );
-    }
-
-    function createRewardPoolWithEligibility(
-        uint256 contentId,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
-        uint8 bountyEligibility
-    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        _requireCurrentRegistryEscrow();
-        rewardPoolId = _createRewardPool(
-            contentId,
-            msg.sender,
-            address(0),
-            REWARD_ASSET_USDC,
-            amount,
-            requiredVoters,
-            requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
-            bountyEligibility,
             false
         );
     }
@@ -344,8 +333,9 @@ contract QuestionRewardPoolEscrow is
             amount: params.amount,
             requiredVoters: params.requiredVoters,
             requiredSettledRounds: params.requiredSettledRounds,
-            bountyClosesAt: params.bountyClosesAt,
-            feedbackClosesAt: params.feedbackClosesAt,
+            bountyStartBy: params.bountyStartBy,
+            bountyWindowSeconds: params.bountyWindowSeconds,
+            feedbackWindowSeconds: params.feedbackWindowSeconds,
             bountyEligibility: params.bountyEligibility,
             nonRefundable: false,
             bountyKind: params.bountyKind,
@@ -381,8 +371,9 @@ contract QuestionRewardPoolEscrow is
                 params.amount,
                 params.requiredVoters,
                 params.requiredSettledRounds,
-                params.bountyClosesAt,
-                params.feedbackClosesAt,
+                params.bountyStartBy,
+                params.bountyWindowSeconds,
+                params.feedbackWindowSeconds,
                 params.bountyEligibility,
                 params.bountyKind,
                 params.relatedRoundId,
@@ -394,92 +385,29 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    function createChallengeRewardPool(
+    function createPurposeRewardPool(
         uint256 contentId,
         uint256 amount,
         uint256 requiredVoters,
-        uint256 challengedRoundId,
+        uint256 relatedRoundId,
         bytes32 reasonHash,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt
-    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        rewardPoolId = _createPurposeRewardPool(
-            contentId,
-            amount,
-            requiredVoters,
-            challengedRoundId,
-            reasonHash,
-            bountyClosesAt,
-            feedbackClosesAt,
-            1,
-            BOUNTY_ELIGIBILITY_OPEN
-        );
-    }
-
-    function createChallengeRewardPoolWithEligibility(
-        uint256 contentId,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 challengedRoundId,
-        bytes32 reasonHash,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
+        uint8 bountyKind,
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
+        require(bountyKind == 1 || bountyKind == 2, "Bad bounty kind");
         rewardPoolId = _createPurposeRewardPool(
             contentId,
             amount,
             requiredVoters,
-            challengedRoundId,
+            relatedRoundId,
             reasonHash,
-            bountyClosesAt,
-            feedbackClosesAt,
-            1,
-            bountyEligibility
-        );
-    }
-
-    function createRerateRewardPool(
-        uint256 contentId,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 previousRoundId,
-        bytes32 reasonHash,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt
-    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        rewardPoolId = _createPurposeRewardPool(
-            contentId,
-            amount,
-            requiredVoters,
-            previousRoundId,
-            reasonHash,
-            bountyClosesAt,
-            feedbackClosesAt,
-            2,
-            BOUNTY_ELIGIBILITY_OPEN
-        );
-    }
-
-    function createRerateRewardPoolWithEligibility(
-        uint256 contentId,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 previousRoundId,
-        bytes32 reasonHash,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
-        uint8 bountyEligibility
-    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        rewardPoolId = _createPurposeRewardPool(
-            contentId,
-            amount,
-            requiredVoters,
-            previousRoundId,
-            reasonHash,
-            bountyClosesAt,
-            feedbackClosesAt,
-            2,
+            bountyStartBy,
+            bountyWindowSeconds,
+            feedbackWindowSeconds,
+            bountyKind,
             bountyEligibility
         );
     }
@@ -490,8 +418,9 @@ contract QuestionRewardPoolEscrow is
         uint256 requiredVoters,
         uint256 relatedRoundId,
         bytes32 reasonHash,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint8 bountyKind,
         uint8 bountyEligibility
     ) private returns (uint256 rewardPoolId) {
@@ -504,8 +433,9 @@ contract QuestionRewardPoolEscrow is
             amount: amount,
             requiredVoters: requiredVoters,
             requiredSettledRounds: MIN_REQUIRED_SETTLED_ROUNDS,
-            bountyClosesAt: bountyClosesAt,
-            feedbackClosesAt: feedbackClosesAt,
+            bountyStartBy: bountyStartBy,
+            bountyWindowSeconds: bountyWindowSeconds,
+            feedbackWindowSeconds: feedbackWindowSeconds,
             bountyEligibility: bountyEligibility,
             nonRefundable: false,
             bountyKind: bountyKind,
@@ -535,37 +465,9 @@ contract QuestionRewardPoolEscrow is
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt
-    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        require(msg.sender == address(registry), "Only registry");
-        _requireRegistryVotingEngine();
-        require(funder != address(0), "Invalid funder");
-        rewardPoolId = _createRewardPool(
-            contentId,
-            funder,
-            payer,
-            asset,
-            amount,
-            requiredVoters,
-            requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
-            BOUNTY_ELIGIBILITY_OPEN,
-            true
-        );
-    }
-
-    function createSubmissionRewardPoolFromRegistry(
-        uint256 contentId,
-        address funder,
-        address payer,
-        uint8 asset,
-        uint256 amount,
-        uint256 requiredVoters,
-        uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
@@ -579,8 +481,9 @@ contract QuestionRewardPoolEscrow is
             amount,
             requiredVoters,
             requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
+            bountyStartBy,
+            bountyWindowSeconds,
+            feedbackWindowSeconds,
             bountyEligibility,
             true
         );
@@ -594,33 +497,9 @@ contract QuestionRewardPoolEscrow is
         uint256 amount,
         uint256 requiredCompleters,
         uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt
-    ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
-        return _createSubmissionBundleFromRegistry(
-            bundleId,
-            contentIds,
-            funder,
-            asset,
-            amount,
-            requiredCompleters,
-            requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
-            BOUNTY_ELIGIBILITY_OPEN
-        );
-    }
-
-    function createSubmissionBundleFromRegistry(
-        uint256 bundleId,
-        uint256[] calldata contentIds,
-        address funder,
-        uint8 asset,
-        uint256 amount,
-        uint256 requiredCompleters,
-        uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint8 bountyEligibility
     ) external nonReentrant whenNotPaused returns (uint256 rewardPoolId) {
         return _createSubmissionBundleFromRegistry(
@@ -631,8 +510,9 @@ contract QuestionRewardPoolEscrow is
             amount,
             requiredCompleters,
             requiredSettledRounds,
-            bountyClosesAt,
-            feedbackClosesAt,
+            bountyStartBy,
+            bountyWindowSeconds,
+            feedbackWindowSeconds,
             bountyEligibility
         );
     }
@@ -645,8 +525,9 @@ contract QuestionRewardPoolEscrow is
         uint256 amount,
         uint256 requiredCompleters,
         uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint8 bountyEligibility
     ) internal returns (uint256 rewardPoolId) {
         require(msg.sender == address(registry), "Only registry");
@@ -661,8 +542,9 @@ contract QuestionRewardPoolEscrow is
             amount: amount,
             requiredCompleters: requiredCompleters,
             requiredSettledRounds: requiredSettledRounds,
-            bountyClosesAt: bountyClosesAt,
-            feedbackClosesAt: feedbackClosesAt,
+            bountyStartBy: bountyStartBy,
+            bountyWindowSeconds: bountyWindowSeconds,
+            feedbackWindowSeconds: feedbackWindowSeconds,
             bountyEligibility: bountyEligibility
         });
 
@@ -690,8 +572,9 @@ contract QuestionRewardPoolEscrow is
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint8 bountyEligibility,
         bool nonRefundable
     ) internal returns (uint256 rewardPoolId) {
@@ -703,8 +586,9 @@ contract QuestionRewardPoolEscrow is
             amount: amount,
             requiredVoters: requiredVoters,
             requiredSettledRounds: requiredSettledRounds,
-            bountyClosesAt: bountyClosesAt,
-            feedbackClosesAt: feedbackClosesAt,
+            bountyStartBy: bountyStartBy,
+            bountyWindowSeconds: bountyWindowSeconds,
+            feedbackWindowSeconds: feedbackWindowSeconds,
             bountyEligibility: bountyEligibility,
             nonRefundable: nonRefundable,
             bountyKind: 0,
@@ -852,8 +736,9 @@ contract QuestionRewardPoolEscrow is
         );
         require(!rewardClaimed[rewardPoolId][roundId][commitKey], "Already claimed");
 
-        (bool revealed, address frontend) =
-            _timelyRevealedCommitFrontend(rewardPool.contentId, roundId, commitKey, rewardPool.bountyClosesAt);
+        (bool revealed, address frontend) = _timelyRevealedCommitFrontend(
+            rewardPool.contentId, roundId, commitKey, rewardPool.bountyOpensAt, rewardPool.bountyClosesAt
+        );
         require(revealed, "Vote not revealed");
 
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
@@ -1488,13 +1373,15 @@ contract QuestionRewardPoolEscrow is
         return roundId >= rewardPool.startRoundId && roundId == rewardPool.nextRoundToEvaluate;
     }
 
-    function _timelyRevealedCommitFrontend(uint256 contentId, uint256 roundId, bytes32 commitKey, uint64 closesAt)
-        internal
-        view
-        returns (bool revealed, address frontend)
-    {
+    function _timelyRevealedCommitFrontend(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        uint64 opensAt,
+        uint64 closesAt
+    ) internal view returns (bool revealed, address frontend) {
         return QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
-            votingEngine, contentId, roundId, commitKey, closesAt
+            votingEngine, contentId, roundId, commitKey, opensAt, closesAt
         );
     }
 

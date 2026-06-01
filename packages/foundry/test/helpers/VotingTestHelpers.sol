@@ -36,9 +36,10 @@ abstract contract ContentSubmissionTestBase {
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_POOL = 1e6;
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS = 3;
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
-    uint256 internal constant DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT = 0;
-    uint256 internal constant DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT = 0;
-    uint256 internal constant DEFAULT_SUBMISSION_REWARD_EXPIRES_AT = DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT;
+    uint256 internal constant DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY = 0;
+    uint256 internal constant DEFAULT_SUBMISSION_REWARD_BOUNTY_WINDOW_SECONDS = 0;
+    uint256 internal constant DEFAULT_SUBMISSION_REWARD_FEEDBACK_WINDOW_SECONDS = 0;
+    uint256 internal constant DEFAULT_SUBMISSION_REWARD_EXPIRES_AT = DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY;
     bytes32 internal constant DEFAULT_QUESTION_METADATA_HASH = keccak256("rateloop.generic.question.metadata.v1");
     bytes32 internal constant DEFAULT_RESULT_SPEC_HASH = keccak256("rateloop.generic.result.spec.v1");
 
@@ -208,8 +209,9 @@ abstract contract ContentSubmissionTestBase {
                 amount: rewardAmount,
                 requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
                 requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-                bountyClosesAt: DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT,
-                feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT,
+                bountyStartBy: DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY,
+                bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_BOUNTY_WINDOW_SECONDS,
+                feedbackWindowSeconds: DEFAULT_SUBMISSION_REWARD_FEEDBACK_WINDOW_SECONDS,
                 bountyEligibility: 0
             });
         return _questionRevealCommitment(
@@ -245,8 +247,9 @@ abstract contract ContentSubmissionTestBase {
             amount: rewardAmount,
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyClosesAt: DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT,
-            feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT,
+            bountyStartBy: DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY,
+            bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_BOUNTY_WINDOW_SECONDS,
+            feedbackWindowSeconds: DEFAULT_SUBMISSION_REWARD_FEEDBACK_WINDOW_SECONDS,
             bountyEligibility: 0
         });
         return _questionRevealCommitment(
@@ -279,7 +282,7 @@ abstract contract ContentSubmissionTestBase {
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "rateloop-question-reveal-v3",
+                "rateloop-question-reveal-v4",
                 submissionKey,
                 mediaHash,
                 keccak256(abi.encode(title, description, tags)),
@@ -397,8 +400,9 @@ abstract contract ContentSubmissionTestBase {
             amount: rewardAmount,
             requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyClosesAt: DEFAULT_SUBMISSION_REWARD_BOUNTY_CLOSES_AT,
-            feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_FEEDBACK_CLOSES_AT,
+            bountyStartBy: DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY,
+            bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_BOUNTY_WINDOW_SECONDS,
+            feedbackWindowSeconds: DEFAULT_SUBMISSION_REWARD_FEEDBACK_WINDOW_SECONDS,
             bountyEligibility: 0
         });
     }
@@ -414,8 +418,9 @@ abstract contract ContentSubmissionTestBase {
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyStartBy,
+                rewardTerms.bountyWindowSeconds,
+                rewardTerms.feedbackWindowSeconds,
                 rewardTerms.bountyEligibility
             )
         );

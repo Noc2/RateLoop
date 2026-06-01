@@ -9,6 +9,7 @@ import { RewardPool, RoundSnapshot, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN } from "./
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
+import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
 
 /// @dev Equal-share inputs shared by `RoundSnapshot` (per-round) and
 ///      `BundleRoundSetSnapshot` (per-bundle) callers. Packed into a single struct so
@@ -200,8 +201,12 @@ library QuestionRewardPoolEscrowClaimLib {
                     rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, rewardRecipient
                 )
         ) return 0;
+        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(
+            votingEngine, rewardPool, params.roundId
+        );
+        if (!windowActive) return 0;
         (bool revealed, address frontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
-            votingEngine, rewardPool.contentId, params.roundId, commitKey, rewardPool.bountyClosesAt
+            votingEngine, rewardPool.contentId, params.roundId, commitKey, bountyOpensAt, bountyClosesAt
         );
         if (!revealed || votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, params.roundId) > 0) {
             return 0;
@@ -350,8 +355,11 @@ library QuestionRewardPoolEscrowClaimLib {
         }
 
         if (rewardClaimed[rewardPoolId][roundId][commitKey]) return 0;
+        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
+            QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(votingEngine, rewardPool, roundId);
+        if (!windowActive) return 0;
         (bool revealed, address frontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
-            votingEngine, rewardPool.contentId, roundId, commitKey, rewardPool.bountyClosesAt
+            votingEngine, rewardPool.contentId, roundId, commitKey, bountyOpensAt, bountyClosesAt
         );
         if (!revealed) return 0;
 
@@ -561,9 +569,10 @@ library QuestionRewardPoolEscrowClaimLib {
             uint48 settledAt
         )
     {
-        (
-            roundSettled, canQualify, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight, settledAt
-        ) =
+        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
+            QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(votingEngine, rewardPool, roundId);
+        if (!windowActive) return (false, false, 0, 0, 0, 0);
+        (roundSettled, canQualify, rawEligibleVoters, effectiveParticipantUnits, totalClaimWeight, settledAt) =
             QuestionRewardPoolEscrowQualificationLib.previewRoundQualification(
                 QuestionRewardPoolEscrowQualificationLib.QualificationContext({
                     votingEngine: votingEngine,
@@ -571,7 +580,8 @@ library QuestionRewardPoolEscrowClaimLib {
                     rewardId: rewardPool.id,
                     contentId: rewardPool.contentId,
                     roundId: roundId,
-                    bountyClosesAt: rewardPool.bountyClosesAt,
+                    bountyOpensAt: bountyOpensAt,
+                    bountyClosesAt: bountyClosesAt,
                     requiredVoters: rewardPool.requiredVoters,
                     bountyEligibility: rewardPool.bountyEligibility,
                     funder: rewardPool.funder,

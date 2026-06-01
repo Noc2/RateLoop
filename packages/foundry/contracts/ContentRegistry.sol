@@ -26,8 +26,9 @@ interface IQuestionRewardPoolEscrow {
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint8 bountyEligibility
     ) external returns (uint256 rewardPoolId);
 
@@ -39,8 +40,9 @@ interface IQuestionRewardPoolEscrow {
         uint256 amount,
         uint256 requiredCompleters,
         uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint8 bountyEligibility
     ) external returns (uint256 rewardPoolId);
 
@@ -140,8 +142,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 amount;
         uint256 requiredVoters;
         uint256 requiredSettledRounds;
-        uint256 bountyClosesAt;
-        uint256 feedbackClosesAt;
+        uint256 bountyStartBy;
+        uint256 bountyWindowSeconds;
+        uint256 feedbackWindowSeconds;
         uint8 bountyEligibility;
     }
 
@@ -246,8 +249,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 amount,
         uint256 requiredVoters,
         uint256 requiredSettledRounds,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint8 bountyEligibility,
         bytes32 bountyEligibilityDataHash,
         uint256 rewardPoolId
@@ -259,8 +263,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint8 indexed rewardAsset,
         uint256 amount,
         uint256 requiredCompleters,
-        uint256 bountyClosesAt,
-        uint256 feedbackClosesAt,
+        uint256 bountyStartBy,
+        uint256 bountyWindowSeconds,
+        uint256 feedbackWindowSeconds,
         uint8 bountyEligibility,
         bytes32 bountyEligibilityDataHash,
         bytes32 bundleHash,
@@ -511,7 +516,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(validatedRoundConfig.maxVoters <= MAX_QUESTION_BUNDLE_ROUND_VOTERS);
         require(rewardTerms.requiredVoters <= validatedRoundConfig.maxVoters);
         _validateSubmissionReward(rewardTerms);
-        require(rewardTerms.bountyClosesAt != 0, "Bundle bounty close required");
+        require(rewardTerms.bountyWindowSeconds != 0, "Bundle bounty window required");
 
         SubmissionMetadata[] memory metadataList = new SubmissionMetadata[](questions.length);
         bytes32[] memory submissionKeys = new bytes32[](questions.length);
@@ -605,8 +610,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyStartBy,
+                rewardTerms.bountyWindowSeconds,
+                rewardTerms.feedbackWindowSeconds,
                 rewardTerms.bountyEligibility
             );
         emit QuestionBundleSubmitted(
@@ -616,8 +622,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             rewardTerms.asset,
             rewardTerms.amount,
             rewardTerms.requiredVoters,
-            rewardTerms.bountyClosesAt,
-            rewardTerms.feedbackClosesAt,
+            rewardTerms.bountyStartBy,
+            rewardTerms.bountyWindowSeconds,
+            rewardTerms.feedbackWindowSeconds,
             rewardTerms.bountyEligibility,
             bytes32(0),
             bundleHash,
@@ -643,8 +650,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             amount: _minimumSubmissionReward(SUBMISSION_REWARD_ASSET_LREP),
             requiredVoters: MIN_SUBMISSION_REWARD_REQUIRED_VOTERS,
             requiredSettledRounds: MIN_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyClosesAt: 0,
-            feedbackClosesAt: 0,
+            bountyStartBy: 0,
+            bountyWindowSeconds: 0,
+            feedbackWindowSeconds: 0,
             bountyEligibility: 0
         });
         SubmissionMetadata memory metadata =
@@ -986,8 +994,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyStartBy,
+                rewardTerms.bountyWindowSeconds,
+                rewardTerms.feedbackWindowSeconds,
                 rewardTerms.bountyEligibility
             );
 
@@ -1010,8 +1019,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             rewardTerms.amount,
             rewardTerms.requiredVoters,
             rewardTerms.requiredSettledRounds,
-            rewardTerms.bountyClosesAt,
-            rewardTerms.feedbackClosesAt,
+            rewardTerms.bountyStartBy,
+            rewardTerms.bountyWindowSeconds,
+            rewardTerms.feedbackWindowSeconds,
             rewardTerms.bountyEligibility,
             bytes32(0),
             rewardPoolId
@@ -1232,7 +1242,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "rateloop-question-reveal-v3",
+                "rateloop-question-reveal-v4",
                 submissionKey,
                 mediaHash,
                 keccak256(abi.encode(title, description, tags)),
@@ -1286,15 +1296,16 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "rateloop-question-bundle-reveal-v3",
+                "rateloop-question-bundle-reveal-v4",
                 bundleHash,
                 submitter,
                 rewardTerms.asset,
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyStartBy,
+                rewardTerms.bountyWindowSeconds,
+                rewardTerms.feedbackWindowSeconds,
                 rewardTerms.bountyEligibility,
                 roundConfig.epochDuration,
                 roundConfig.maxDuration,
@@ -1316,15 +1327,18 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(
             rewardTerms.amount >= rewardTerms.requiredSettledRounds * rewardTerms.requiredVoters, "Reward too small"
         );
-        require(rewardTerms.bountyClosesAt == 0 || rewardTerms.bountyClosesAt > block.timestamp, "Bad close");
-        require(
-            rewardTerms.feedbackClosesAt == 0 || rewardTerms.feedbackClosesAt > block.timestamp, "Bad feedback close"
-        );
-        require(
-            rewardTerms.bountyClosesAt == 0 || rewardTerms.feedbackClosesAt == 0
-                || rewardTerms.feedbackClosesAt <= rewardTerms.bountyClosesAt,
-            "Feedback after bounty"
-        );
+        if (rewardTerms.bountyWindowSeconds == 0) {
+            require(rewardTerms.bountyStartBy == 0, "Bad start-by");
+            require(rewardTerms.feedbackWindowSeconds == 0, "Bad feedback window");
+        } else {
+            require(rewardTerms.bountyStartBy > block.timestamp, "Bad start-by");
+            require(rewardTerms.bountyWindowSeconds <= type(uint32).max, "Bad bounty window");
+            uint256 feedbackWindow = rewardTerms.feedbackWindowSeconds == 0
+                ? rewardTerms.bountyWindowSeconds
+                : rewardTerms.feedbackWindowSeconds;
+            require(feedbackWindow <= type(uint32).max, "Bad feedback window");
+            require(feedbackWindow <= rewardTerms.bountyWindowSeconds, "Feedback after bounty");
+        }
         require(rewardTerms.bountyEligibility <= 1, "Invalid eligibility");
     }
 
@@ -1335,8 +1349,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 rewardTerms.amount,
                 rewardTerms.requiredVoters,
                 rewardTerms.requiredSettledRounds,
-                rewardTerms.bountyClosesAt,
-                rewardTerms.feedbackClosesAt,
+                rewardTerms.bountyStartBy,
+                rewardTerms.bountyWindowSeconds,
+                rewardTerms.feedbackWindowSeconds,
                 rewardTerms.bountyEligibility
             )
         );
