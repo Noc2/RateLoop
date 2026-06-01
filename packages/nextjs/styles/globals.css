@@ -182,6 +182,18 @@ body {
   initial-value: 0deg;
 }
 
+@property --rateloop-gradient-runner-x {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 10%;
+}
+
+@property --rateloop-gradient-runner-y {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
 @keyframes rateloop-gradient-border-orbit {
   to {
     --rateloop-gradient-orbit-angle: 360deg;
@@ -205,6 +217,43 @@ body {
   }
 }
 
+@keyframes rateloop-gradient-runner-path {
+  0% {
+    --rateloop-gradient-runner-x: 10%;
+    --rateloop-gradient-runner-y: 0%;
+  }
+
+  36% {
+    --rateloop-gradient-runner-x: 90%;
+    --rateloop-gradient-runner-y: 0%;
+  }
+
+  42% {
+    --rateloop-gradient-runner-x: 100%;
+    --rateloop-gradient-runner-y: 50%;
+  }
+
+  48% {
+    --rateloop-gradient-runner-x: 90%;
+    --rateloop-gradient-runner-y: 100%;
+  }
+
+  88% {
+    --rateloop-gradient-runner-x: 10%;
+    --rateloop-gradient-runner-y: 100%;
+  }
+
+  94% {
+    --rateloop-gradient-runner-x: 0%;
+    --rateloop-gradient-runner-y: 50%;
+  }
+
+  to {
+    --rateloop-gradient-runner-x: 10%;
+    --rateloop-gradient-runner-y: 0%;
+  }
+}
+
 @keyframes rateloop-gradient-icon-spin {
   to {
     transform: rotate(360deg);
@@ -221,17 +270,6 @@ body {
   );
   --rateloop-gradient-inner-color: var(--rateloop-warm-white);
   --rateloop-gradient-orbit-angle: 0deg;
-  --rateloop-gradient-runner: conic-gradient(
-    from var(--rateloop-gradient-orbit-angle),
-    transparent 0deg 210deg,
-    rgb(53 158 238 / 0) 228deg,
-    rgb(53 158 238 / 0.96) 252deg,
-    rgb(3 206 164 / 0.98) 280deg,
-    rgb(255 196 61 / 0.98) 306deg,
-    rgb(239 71 111 / 0.96) 330deg,
-    rgb(239 71 111 / 0) 354deg,
-    transparent 360deg
-  );
   position: relative;
   display: inline-flex;
   min-height: 3rem;
@@ -268,17 +306,37 @@ body {
   background-image: var(--rateloop-orbit-gradient);
   opacity: 0;
   pointer-events: none;
+  transition: opacity 0.18s ease;
 }
 
 .rateloop-gradient-action[data-motion="intro"] {
   animation: rateloop-gradient-border-intro 4.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.rateloop-gradient-action[data-motion="intro"]::before,
+.rateloop-gradient-action[data-motion="processing"]::before,
+.rateloop-gradient-action[aria-busy="true"]::before {
+  background-image:
+    radial-gradient(
+      5rem 1.45rem at var(--rateloop-gradient-runner-x) var(--rateloop-gradient-runner-y),
+      rgb(245 245 245 / 0.98) 0%,
+      rgb(53 158 238 / 0.98) 18%,
+      rgb(3 206 164 / 0.96) 38%,
+      rgb(255 196 61 / 0.9) 56%,
+      rgb(239 71 111 / 0.5) 72%,
+      transparent 84%
+    ),
+    linear-gradient(
+      180deg,
+      rgb(var(--rateloop-surface-nested-rgb) / 0.86),
+      rgb(var(--rateloop-surface-nested-rgb) / 0.86)
+    );
+}
+
 .rateloop-gradient-action[data-motion="intro"]::before {
-  background-image: var(--rateloop-gradient-runner);
   animation:
-    rateloop-gradient-border-orbit 2.4s linear 2,
-    rateloop-gradient-runner-fade 4.8s ease-out both;
+    rateloop-gradient-runner-path 2.8s linear 2,
+    rateloop-gradient-runner-fade 5.6s ease-out both;
 }
 
 .rateloop-gradient-action[data-motion="processing"] {
@@ -287,8 +345,7 @@ body {
 
 .rateloop-gradient-action[data-motion="processing"]::before,
 .rateloop-gradient-action[aria-busy="true"]::before {
-  background-image: var(--rateloop-gradient-runner);
-  animation: rateloop-gradient-border-orbit 2.4s linear infinite;
+  animation: rateloop-gradient-runner-path 2.8s linear infinite;
   opacity: 1;
 }
 
@@ -416,6 +473,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .rateloop-gradient-action,
   .rateloop-gradient-notification,
+  .rateloop-gradient-action[data-motion="intro"]::before,
   .rateloop-gradient-action[data-motion="processing"]::before,
   .rateloop-gradient-action[aria-busy="true"]::before,
   .rateloop-gradient-action-icon[data-spin="true"] {
