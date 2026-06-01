@@ -319,7 +319,7 @@ export const agentRatingContextInputSchema = {
     },
     walletAddress: agentWalletAddressSchema,
   },
-  required: ["contentId", "walletAddress"],
+  required: ["contentId"],
   type: "object",
 } satisfies JsonSchema;
 
@@ -365,7 +365,6 @@ export const agentPrepareRatingTransactionsInputSchema = {
   },
   required: [
     "contentId",
-    "walletAddress",
     "roundId",
     "roundReferenceRatingBps",
     "targetRound",
@@ -396,7 +395,7 @@ export const agentConfirmRatingTransactionsInputSchema = {
     },
     walletAddress: agentWalletAddressSchema,
   },
-  required: ["contentId", "walletAddress", "transactionHashes"],
+  required: ["contentId", "transactionHashes"],
   type: "object",
 } satisfies JsonSchema;
 
@@ -408,7 +407,7 @@ export const agentRatingStatusInputSchema = {
     roundId: { description: "Optional round id to inspect.", type: ["integer", "string"] },
     walletAddress: agentWalletAddressSchema,
   },
-  required: ["contentId", "walletAddress"],
+  required: ["contentId"],
   type: "object",
 } satisfies JsonSchema;
 

@@ -274,9 +274,21 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   const resultSchema = toolByName.get("rateloop_get_result")?.inputSchema as {
     properties?: Record<string, unknown>;
   };
+  const ratingContextSchema = toolByName.get("rateloop_get_rating_context")?.inputSchema as {
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
+  const ratingPrepareSchema = toolByName.get("rateloop_prepare_rating_transactions")?.inputSchema as {
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
   assert.ok(quoteSchema.properties?.walletAddress);
   assert.ok(statusSchema.properties?.walletAddress);
   assert.ok(resultSchema.properties?.walletAddress);
+  assert.ok(ratingContextSchema.properties?.walletAddress);
+  assert.equal(ratingContextSchema.required?.includes("walletAddress"), false);
+  assert.ok(ratingPrepareSchema.properties?.walletAddress);
+  assert.equal(ratingPrepareSchema.required?.includes("walletAddress"), false);
 });
 
 test("public MCP tools/list excludes managed-only balance tool", async () => {

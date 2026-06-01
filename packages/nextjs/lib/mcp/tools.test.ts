@@ -285,6 +285,25 @@ test("rateloop_get_rating_context returns local encrypted commit instructions an
   assert.match(body.openRoundTransactionPlan.calls[0]?.data ?? "", /^0x/);
 });
 
+test("rateloop_get_rating_context can use a scoped managed agent wallet", async () => {
+  __setMcpToolTestOverridesForTests({
+    getContentById: async () => ratingContent(),
+    readRatingAllowance: async () => 0n,
+    resolveRoundVoteRuntime: async () => ratingRuntime(),
+  });
+
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: {
+      contentId: RATING_CONTENT_ID,
+    },
+    name: "rateloop_get_rating_context",
+  });
+  const body = result as { wallet: { address: string } };
+
+  assert.equal(body.wallet.address, AGENT.walletAddress);
+});
+
 test("rateloop_prepare_rating_transactions rejects plaintext rating fields", async () => {
   await assert.rejects(
     () =>
