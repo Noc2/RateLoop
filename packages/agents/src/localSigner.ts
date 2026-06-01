@@ -1,4 +1,11 @@
-import { createCipheriv, createDecipheriv, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  scrypt as scryptCallback,
+  timingSafeEqual,
+} from "node:crypto";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
@@ -6,11 +13,14 @@ import {
   createWalletClient,
   decodeFunctionData,
   defineChain,
+  encodeAbiParameters,
   erc20Abi,
   http,
   isAddress,
   isHex,
   keccak256,
+  parseSignature,
+  stringToHex,
   type Address,
   type Hex,
   type TransactionReceipt,
@@ -18,6 +28,7 @@ import {
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
+import { DEFAULT_ROUND_CONFIG } from "@rateloop/contracts/protocol";
 import type {
   AskHumansRequest,
   AskHumansResponse,
@@ -26,6 +37,13 @@ import type {
   RateLoopAgentWalletTransactionCall,
   QuestionStatusResponse,
 } from "@rateloop/sdk/agent";
+import {
+  DEFAULT_AGENT_TEMPLATE_ID,
+  DEFAULT_AGENT_TEMPLATE_VERSION,
+  buildQuestionSpecHashes,
+  type AgentQuestionSpecInput,
+} from "./questionSpecs.js";
+import { findAgentResultTemplate } from "./templates.js";
 
 type CliOptions = Record<string, string | boolean | undefined>;
 type JsonRecord = Record<string, unknown>;
@@ -50,6 +68,44 @@ const X402_AUTHORIZATION_FIELDS = [
   { name: "validBefore", type: "uint256" },
   { name: "nonce", type: "bytes32" },
 ] as const;
+const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
+const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
+const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
+const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
+const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
+const X402_QUESTION_PAYMENT_DOMAIN = keccak256(stringToHex("rateloop-x402-question-payment-v2"));
+const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
+const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
+const IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
+const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = new Set([
+  "https://www.rateloop.ai",
+  "https://rateloop.ai",
+  "https://www.rateloop.xyz",
+  "https://rateloop.xyz",
+]);
+const X402_QUESTION_TOP_LEVEL_FIELDS = new Set([
+  "clientRequestId",
+  "questions",
+  "question",
+  "roundConfig",
+  "bounty",
+  "templateId",
+  "templateInputs",
+  "templateVersion",
+  "chainId",
+  "maxPaymentAmount",
+  "paymentMode",
+  "fundingMode",
+  "walletAddress",
+  "agentWalletAddress",
+  "mode",
+  "webhookUrl",
+  "webhookSecret",
+  "webhookEvents",
+  "paymentAuthorization",
+  "signatureMode",
+  "transport",
+]);
 
 type LocalSignerConfig = {
   chainId?: number;
@@ -157,6 +213,7 @@ type X402Authorization = {
 type SignX402AuthorizationOptions = {
   expectedAmount?: bigint | number | string;
   expectedChainId?: number;
+  expectedNonce?: Hex;
   expectedUsdcAddress?: Address;
   expectedX402QuestionSubmitterAddress?: Address;
 };
@@ -170,6 +227,84 @@ type TransactionPlanValidationConfig = Pick<
   | "usdcAddress"
   | "x402QuestionSubmitterAddress"
 >;
+
+type LocalQuestionRoundConfig = {
+  epochDuration: bigint;
+  maxDuration: bigint;
+  minVoters: bigint;
+  maxVoters: bigint;
+};
+
+type LocalQuestionPayload = {
+  bounty: {
+    amount: bigint;
+    asset: "USDC";
+    bountyEligibility: number;
+    feedbackClosesAt: bigint;
+    requiredSettledRounds: bigint;
+    requiredVoters: bigint;
+    rewardPoolExpiresAt: bigint;
+  };
+  chainId: number;
+  clientRequestId: string;
+  questions: LocalQuestionItemPayload[];
+  roundConfig: LocalQuestionRoundConfig;
+};
+
+type LocalQuestionItemPayload = {
+  categoryId: bigint;
+  contextUrl: string;
+  description: string;
+  imageUrls: string[];
+  questionMetadataHash: Hex;
+  resultSpecHash: Hex;
+  tags: string;
+  tagList: string[];
+  targetAudience: AgentQuestionSpecInput["targetAudience"];
+  templateId: string;
+  templateInputs: AgentQuestionSpecInput["templateInputs"];
+  templateVersion: number;
+  title: string;
+  videoUrl: string;
+};
+
+type LocalRewardTerms = {
+  amount: bigint;
+  asset: typeof X402_SUBMISSION_REWARD_ASSET_USDC;
+  bountyClosesAt: bigint;
+  bountyEligibility: number;
+  feedbackClosesAt: bigint;
+  requiredSettledRounds: bigint;
+  requiredVoters: bigint;
+};
+
+type LocalQuestionSubmission = {
+  categoryId: bigint;
+  contextUrl: string;
+  description: string;
+  imageUrls: string[];
+  salt: Hex;
+  spec: {
+    questionMetadataHash: Hex;
+    resultSpecHash: Hex;
+  };
+  submissionKey: Hex;
+  tags: string;
+  title: string;
+  videoUrl: string;
+};
+
+type ExpectedLocalSignerQuestionPlan = {
+  canonicalPayload: ReturnType<typeof toCanonicalLocalQuestionPayload>;
+  isBundleSubmission: boolean;
+  operationKey: Hex;
+  payloadHash: string;
+  primaryQuestion: LocalQuestionSubmission;
+  questions: LocalQuestionSubmission[];
+  revealCommitment: Hex;
+  rewardTerms: LocalRewardTerms;
+  roundConfig: LocalQuestionRoundConfig;
+};
 
 function optionString(options: CliOptions, name: string): string | undefined {
   const value = options[name];
@@ -589,6 +724,902 @@ function assertTrustedX402Authorization(
   ) {
     throw new Error("x402 authorization.validBefore must be greater than validAfter.");
   }
+  if (options.expectedNonce && authorization.nonce?.toLowerCase() !== options.expectedNonce.toLowerCase()) {
+    throw new Error("x402 authorization.nonce does not match the RateLoop ask payload.");
+  }
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readRequiredString(value: unknown, fieldName: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string.`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${fieldName} is required.`);
+  }
+  return trimmed;
+}
+
+function readOptionalString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
+  const rawValue =
+    typeof value === "bigint" || typeof value === "number" || typeof value === "string" ? String(value).trim() : "";
+  if (!/^\d+$/.test(rawValue)) {
+    throw new Error(`${fieldName} must be a non-negative integer.`);
+  }
+  return BigInt(rawValue);
+}
+
+function parsePositiveAtomicAmount(value: unknown, fieldName: string): bigint {
+  const parsed = parseNonNegativeInteger(value, fieldName);
+  if (parsed <= 0n) {
+    throw new Error(`${fieldName} must be greater than zero.`);
+  }
+  return parsed;
+}
+
+function sanitizeHttpsUrl(value: string, fieldName: string): string {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+      throw new Error(`${fieldName} must be a public HTTPS URL.`);
+    }
+    return parsed.toString();
+  } catch (error) {
+    if (error instanceof Error && error.message.includes(fieldName)) throw error;
+    throw new Error(`${fieldName} must be a valid HTTPS URL.`);
+  }
+}
+
+function matchesHostname(hostname: string, domain: string): boolean {
+  const normalizedHost = hostname.toLowerCase();
+  const normalizedDomain = domain.toLowerCase();
+  return normalizedHost === normalizedDomain || normalizedHost.endsWith(`.${normalizedDomain}`);
+}
+
+function extractYouTubeId(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    let id: string | null | undefined;
+    if (matchesHostname(parsed.hostname, "youtube.com") && parsed.pathname === "/watch") {
+      id = parsed.searchParams.get("v");
+    } else if (parsed.hostname.toLowerCase() === "youtu.be") {
+      id = parsed.pathname.slice(1).split("/")[0];
+    } else if (matchesHostname(parsed.hostname, "youtube.com") && parsed.pathname.startsWith("/embed/")) {
+      id = parsed.pathname.split("/embed/")[1]?.split("/")[0];
+    }
+    return id && /^[\w-]+$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+function canonicalizeLocalUrl(url: string): string {
+  const youtubeId = extractYouTubeId(url);
+  if (youtubeId) {
+    return `https://www.youtube.com/watch?v=${youtubeId}`;
+  }
+  try {
+    const parsed = new URL(url);
+    let hostname = parsed.hostname.toLowerCase();
+    if (hostname.startsWith("www.")) hostname = hostname.slice(4);
+    const path = parsed.pathname.replace(/\/+$/, "") || "/";
+    return `https://${hostname}${path}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
+function normalizeQuestionContextUrl(value: string, fieldName: string): string {
+  const sanitized = sanitizeHttpsUrl(value, fieldName);
+  const parsed = new URL(sanitized);
+  if (DIRECT_IMAGE_URL_PATH_PATTERN.test(parsed.pathname)) {
+    throw new Error(`${fieldName} must be a public HTTPS page URL. Upload images through imageUrls.`);
+  }
+  return canonicalizeLocalUrl(sanitized);
+}
+
+function isLocalhostOrigin(origin: string) {
+  try {
+    const parsed = new URL(origin);
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${fieldName} must be a valid image upload URL.`);
+  }
+
+  if (parsed.username || parsed.password || !IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)) {
+    throw new Error("imageUrls must point to approved RateLoop-hosted uploads.");
+  }
+  const configuredOrigins = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL]
+    .map(origin => {
+      try {
+        return origin ? new URL(origin).origin : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter((origin): origin is string => Boolean(origin));
+  const allowedOrigins = new Set([...DEFAULT_IMAGE_ATTACHMENT_ORIGINS, ...configuredOrigins]);
+  const localhostAllowed =
+    process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
+  const isAllowedProtocol = parsed.protocol === "https:" || (localhostAllowed && parsed.protocol === "http:");
+  if (!isAllowedProtocol) {
+    throw new Error("imageUrls must point to approved RateLoop-hosted uploads.");
+  }
+  if (!allowedOrigins.has(parsed.origin) && !(localhostAllowed && isLocalhostOrigin(parsed.origin))) {
+    throw new Error("imageUrls must point to approved RateLoop-hosted uploads.");
+  }
+  return parsed.toString();
+}
+
+function normalizeImageUrls(value: unknown): string[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error("imageUrls must be an array of approved RateLoop-hosted upload URLs.");
+  }
+  if (value.length > 4) {
+    throw new Error("imageUrls supports at most four images.");
+  }
+  return value.map((entry, index) => normalizeImageAttachmentUrl(readRequiredString(entry, `imageUrls[${index}]`), `imageUrls[${index}]`));
+}
+
+function isYouTubeVideoUrl(url: string): boolean {
+  return extractYouTubeId(url) !== null;
+}
+
+function normalizeTags(value: unknown): { tagList: string[]; tags: string } {
+  const rawTags = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  const tagList = rawTags
+    .map(tag => (typeof tag === "string" ? tag.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 4);
+
+  if (tagList.length === 0) {
+    throw new Error("At least one tag is required.");
+  }
+  if (tagList.length > 3) {
+    throw new Error("At most three tags are supported.");
+  }
+  return {
+    tagList,
+    tags: tagList.join(","),
+  };
+}
+
+function cloneJsonObject<T>(value: unknown, fieldName: string, defaultValue: T): T {
+  if (value === undefined || value === null) return defaultValue;
+  if (!isJsonRecord(value)) {
+    throw new Error(`${fieldName} must be an object when provided.`);
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as T;
+  } catch {
+    throw new Error(`${fieldName} must be JSON serializable.`);
+  }
+}
+
+function normalizeTemplateSelection(
+  value: JsonRecord,
+  fieldPrefix: string,
+  defaults: {
+    templateId?: string;
+    templateInputs?: AgentQuestionSpecInput["templateInputs"];
+    templateVersion?: number;
+  },
+) {
+  const rawTemplateId = readOptionalString(value.templateId) || defaults.templateId || DEFAULT_AGENT_TEMPLATE_ID;
+  const template = findAgentResultTemplate(rawTemplateId);
+  if (!template) {
+    throw new Error(`${fieldPrefix}.templateId is not supported.`);
+  }
+
+  const templateVersion =
+    value.templateVersion === undefined || value.templateVersion === null
+      ? (defaults.templateVersion ?? template.version)
+      : Number.parseInt(String(value.templateVersion), 10);
+  if (!Number.isSafeInteger(templateVersion) || templateVersion <= 0) {
+    throw new Error(`${fieldPrefix}.templateVersion must be a positive integer.`);
+  }
+  if (templateVersion !== template.version) {
+    throw new Error(`${fieldPrefix}.templateVersion ${templateVersion} is not supported for ${template.id}.`);
+  }
+
+  return {
+    template,
+    templateId: template.id,
+    templateInputs:
+      value.templateInputs === undefined
+        ? (defaults.templateInputs ?? null)
+        : cloneJsonObject<AgentQuestionSpecInput["templateInputs"]>(
+            value.templateInputs,
+            `${fieldPrefix}.templateInputs`,
+            null,
+          ),
+    templateVersion,
+  };
+}
+
+function normalizeLocalChainId(value: unknown, fallbackChainId?: number): number {
+  const rawValue = value ?? fallbackChainId;
+  const chainId = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? ""), 10);
+  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+    throw new Error("chainId must be a positive integer.");
+  }
+  return chainId;
+}
+
+function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
+  if (!isJsonRecord(value)) {
+    throw new Error("bounty is required.");
+  }
+
+  const asset = readOptionalString(value.asset).toUpperCase() || "USDC";
+  if (asset !== "USDC") {
+    throw new Error("Only USDC bounties are supported for local signer question submissions.");
+  }
+
+  const amount = parsePositiveAtomicAmount(value.amount, "bounty.amount");
+  const requiredVoters = parseNonNegativeInteger(
+    value.requiredVoters ?? X402_MIN_REWARD_POOL_REQUIRED_VOTERS,
+    "bounty.requiredVoters",
+  );
+  const requiredSettledRounds = parseNonNegativeInteger(
+    value.requiredSettledRounds ?? X402_MIN_REWARD_POOL_SETTLED_ROUNDS,
+    "bounty.requiredSettledRounds",
+  );
+  const rewardPoolExpiresAt = parseNonNegativeInteger(value.rewardPoolExpiresAt ?? 0n, "bounty.rewardPoolExpiresAt");
+  const feedbackClosesAt = parseNonNegativeInteger(
+    value.feedbackClosesAt ?? value.rewardPoolExpiresAt ?? 0n,
+    "bounty.feedbackClosesAt",
+  );
+  const bountyEligibility = Number(parseNonNegativeInteger(value.bountyEligibility ?? 0n, "bounty.bountyEligibility"));
+
+  if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
+    throw new Error(`bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`);
+  }
+  if (requiredSettledRounds < X402_MIN_REWARD_POOL_SETTLED_ROUNDS) {
+    throw new Error(`bounty.requiredSettledRounds must be at least ${X402_MIN_REWARD_POOL_SETTLED_ROUNDS}.`);
+  }
+  if (amount < X402_DEFAULT_SUBMISSION_BOUNTY_USDC) {
+    throw new Error("bounty.amount must be at least 1000000 atomic USDC.");
+  }
+  if (amount < requiredVoters * requiredSettledRounds) {
+    throw new Error("bounty.amount is too small for the selected voter requirements.");
+  }
+  if (rewardPoolExpiresAt <= 0n) {
+    throw new Error("bounty.rewardPoolExpiresAt must be greater than zero for local signer submissions.");
+  }
+  if (feedbackClosesAt > rewardPoolExpiresAt) {
+    throw new Error("bounty.feedbackClosesAt cannot be after bounty.rewardPoolExpiresAt.");
+  }
+  if (bountyEligibility > 1) {
+    throw new Error("bounty.bountyEligibility must be 0 or 1.");
+  }
+
+  return {
+    amount,
+    asset: "USDC",
+    bountyEligibility,
+    feedbackClosesAt,
+    requiredSettledRounds,
+    requiredVoters,
+    rewardPoolExpiresAt,
+  };
+}
+
+function normalizeLocalRoundConfig(value: unknown): LocalQuestionRoundConfig {
+  if (value === undefined || value === null) {
+    return {
+      epochDuration: BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
+      maxDuration: BigInt(DEFAULT_ROUND_CONFIG.maxDurationSeconds),
+      minVoters: BigInt(DEFAULT_ROUND_CONFIG.minVoters),
+      maxVoters: BigInt(DEFAULT_ROUND_CONFIG.maxVoters),
+    };
+  }
+  if (!isJsonRecord(value)) {
+    throw new Error("question.roundConfig must be an object.");
+  }
+
+  const epochDuration = parseNonNegativeInteger(
+    value.epochDuration ?? value.blindPhaseSeconds ?? value.blindSeconds,
+    "question.roundConfig.epochDuration",
+  );
+  const maxDuration = parseNonNegativeInteger(
+    value.maxDuration ?? value.maxDurationSeconds ?? value.deadlineSeconds,
+    "question.roundConfig.maxDuration",
+  );
+  const minVoters = parseNonNegativeInteger(value.minVoters, "question.roundConfig.minVoters");
+  const maxVoters = parseNonNegativeInteger(value.maxVoters, "question.roundConfig.maxVoters");
+
+  if (epochDuration <= 0n) {
+    throw new Error("question.roundConfig.epochDuration must be greater than zero.");
+  }
+  if (maxDuration <= 0n) {
+    throw new Error("question.roundConfig.maxDuration must be greater than zero.");
+  }
+  if (minVoters <= 0n || maxVoters <= 0n || maxVoters < minVoters) {
+    throw new Error("question.roundConfig voter values are invalid.");
+  }
+
+  return { epochDuration, maxDuration, minVoters, maxVoters };
+}
+
+function normalizeLocalQuestion(
+  value: unknown,
+  index: number,
+  defaults: {
+    templateId?: string;
+    templateInputs?: AgentQuestionSpecInput["templateInputs"];
+    templateVersion?: number;
+  },
+  bounty: LocalQuestionPayload["bounty"],
+  roundConfig: LocalQuestionRoundConfig,
+): LocalQuestionItemPayload {
+  if (!isJsonRecord(value)) {
+    throw new Error(`questions[${index}] must be an object.`);
+  }
+
+  const fieldPrefix = `questions[${index}]`;
+  const title = readRequiredString(value.title, `${fieldPrefix}.title`);
+  const description = readOptionalString(value.description);
+  const imageUrls = normalizeImageUrls(value.imageUrls);
+  const rawContextUrl = readOptionalString(value.contextUrl);
+  const contextUrl = rawContextUrl ? normalizeQuestionContextUrl(rawContextUrl, `${fieldPrefix}.contextUrl`) : "";
+  const rawVideoUrl = readOptionalString(value.videoUrl);
+  const videoUrl = rawVideoUrl ? sanitizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`) : "";
+  if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {
+    throw new Error(`${fieldPrefix}.videoUrl must be a supported YouTube URL.`);
+  }
+  if (videoUrl && imageUrls.length > 0) {
+    throw new Error("Use imageUrls or videoUrl, not both.");
+  }
+  if (!contextUrl && imageUrls.length === 0 && !videoUrl) {
+    throw new Error(`${fieldPrefix}.contextUrl, imageUrls, or videoUrl is required.`);
+  }
+
+  const { tags, tagList } = normalizeTags(value.tags);
+  const categoryId = parseNonNegativeInteger(value.categoryId, `${fieldPrefix}.categoryId`);
+  const targetAudience = cloneJsonObject<AgentQuestionSpecInput["targetAudience"]>(
+    value.targetAudience,
+    `${fieldPrefix}.targetAudience`,
+    null,
+  );
+  const templateSelection = normalizeTemplateSelection(value, fieldPrefix, defaults);
+  const spec = buildQuestionSpecHashes({
+    bounty: {
+      amount: bounty.amount,
+      asset: bounty.asset,
+      bountyEligibility: bounty.bountyEligibility,
+      requiredSettledRounds: bounty.requiredSettledRounds,
+      requiredVoters: bounty.requiredVoters,
+    },
+    categoryId,
+    contextUrl,
+    description,
+    imageUrls,
+    roundConfig,
+    study: {
+      bundleIndex: index,
+    },
+    tags: tagList,
+    targetAudience,
+    templateId: templateSelection.templateId,
+    templateInputs: templateSelection.templateInputs,
+    templateVersion: templateSelection.templateVersion,
+    title,
+    videoUrl,
+    voteSemantics: templateSelection.template.voteSemantics,
+  });
+
+  return {
+    categoryId,
+    contextUrl,
+    description,
+    imageUrls,
+    questionMetadataHash: spec.questionMetadataHash,
+    resultSpecHash: spec.resultSpecHash,
+    tags,
+    tagList,
+    targetAudience,
+    templateId: templateSelection.templateId,
+    templateInputs: templateSelection.templateInputs,
+    templateVersion: templateSelection.templateVersion,
+    title,
+    videoUrl,
+  };
+}
+
+function parseLocalQuestionRequest(value: unknown, fallbackChainId?: number): LocalQuestionPayload {
+  const request = assertRecord(value, "ask payload");
+  for (const key of Object.keys(request)) {
+    if (!X402_QUESTION_TOP_LEVEL_FIELDS.has(key)) {
+      throw new Error(`Unknown top-level ask payload field: ${key}`);
+    }
+  }
+
+  const clientRequestId = readRequiredString(request.clientRequestId, "clientRequestId");
+  if (!CLIENT_REQUEST_ID_PATTERN.test(clientRequestId)) {
+    throw new Error(
+      "clientRequestId must be 4-160 characters using letters, numbers, dot, dash, colon, or underscore.",
+    );
+  }
+
+  const rawQuestions = Array.isArray(request.questions)
+    ? request.questions
+    : [isJsonRecord(request.question) ? request.question : request];
+  if (rawQuestions.length === 0) {
+    throw new Error("At least one question is required.");
+  }
+  if (rawQuestions.length > X402_MAX_QUESTION_BUNDLE_COUNT) {
+    throw new Error(`At most ${X402_MAX_QUESTION_BUNDLE_COUNT} questions are supported.`);
+  }
+
+  const firstQuestion = isJsonRecord(rawQuestions[0]) ? rawQuestions[0] : {};
+  const roundConfig = normalizeLocalRoundConfig(request.roundConfig ?? firstQuestion.roundConfig);
+  const bounty = normalizeLocalBounty(request.bounty);
+  const topLevelTemplateInputs = cloneJsonObject<AgentQuestionSpecInput["templateInputs"]>(
+    request.templateInputs,
+    "templateInputs",
+    null,
+  );
+  const topLevelTemplateVersion =
+    request.templateVersion === undefined || request.templateVersion === null
+      ? DEFAULT_AGENT_TEMPLATE_VERSION
+      : Number.parseInt(String(request.templateVersion), 10);
+  const templateDefaults = {
+    templateId: readOptionalString(request.templateId) || DEFAULT_AGENT_TEMPLATE_ID,
+    templateInputs: topLevelTemplateInputs,
+    templateVersion: topLevelTemplateVersion,
+  };
+
+  return {
+    bounty,
+    chainId: normalizeLocalChainId(request.chainId ?? firstQuestion.chainId, fallbackChainId),
+    clientRequestId,
+    questions: rawQuestions.map((question, index) =>
+      normalizeLocalQuestion(question, index, templateDefaults, bounty, roundConfig),
+    ),
+    roundConfig,
+  };
+}
+
+function serializeLocalRoundConfig(config: LocalQuestionRoundConfig) {
+  return {
+    epochDuration: config.epochDuration.toString(),
+    maxDuration: config.maxDuration.toString(),
+    minVoters: config.minVoters.toString(),
+    maxVoters: config.maxVoters.toString(),
+  };
+}
+
+function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
+  return {
+    bounty: {
+      amount: payload.bounty.amount.toString(),
+      asset: payload.bounty.asset,
+      requiredSettledRounds: payload.bounty.requiredSettledRounds.toString(),
+      requiredVoters: payload.bounty.requiredVoters.toString(),
+      rewardPoolExpiresAt: payload.bounty.rewardPoolExpiresAt.toString(),
+      feedbackClosesAt: payload.bounty.feedbackClosesAt.toString(),
+      bountyEligibility: String(payload.bounty.bountyEligibility),
+    },
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+    questions: payload.questions.map(question => ({
+      categoryId: question.categoryId.toString(),
+      contextUrl: question.contextUrl,
+      description: question.description,
+      imageUrls: question.imageUrls,
+      questionMetadataHash: question.questionMetadataHash,
+      resultSpecHash: question.resultSpecHash,
+      tags: question.tagList,
+      targetAudience: question.targetAudience,
+      templateId: question.templateId,
+      templateInputs: question.templateInputs,
+      templateVersion: question.templateVersion,
+      title: question.title,
+      videoUrl: question.videoUrl,
+    })),
+    roundConfig: serializeLocalRoundConfig(payload.roundConfig),
+  };
+}
+
+function buildLocalQuestionOperation(payload: LocalQuestionPayload) {
+  const canonicalPayload = toCanonicalLocalQuestionPayload(payload);
+  const payloadHash = createHash("sha256").update(JSON.stringify(canonicalPayload)).digest("hex");
+  const operationKey =
+    `0x${createHash("sha256").update(`rateloop:x402-question:${payloadHash}`).digest("hex")}` as Hex;
+  return {
+    canonicalPayload,
+    operationKey,
+    payloadHash,
+  };
+}
+
+function buildQuestionSubmissionKey(question: LocalQuestionItemPayload): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "string" },
+        { type: "uint256" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+      ],
+      [
+        "rateloop-question-context-v1",
+        question.categoryId,
+        question.contextUrl,
+        question.title,
+        question.description,
+        question.tags,
+      ],
+    ),
+  );
+}
+
+function buildDeterministicQuestionSalt(params: {
+  index: number;
+  operationKey: Hex;
+  payloadHash: string;
+  submissionKey: Hex;
+  walletAddress: Address;
+}): Hex {
+  return `0x${createHash("sha256")
+    .update(
+      [
+        "rateloop",
+        "agent-wallet-question-salt",
+        params.operationKey,
+        params.payloadHash,
+        params.walletAddress.toLowerCase(),
+        params.submissionKey,
+        params.index.toString(),
+      ].join(":"),
+    )
+    .digest("hex")}` as Hex;
+}
+
+function buildSubmissionMediaHash(imageUrls: readonly string[], videoUrl: string): Hex {
+  return keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [[...imageUrls], videoUrl]));
+}
+
+function buildRewardTermsHash(rewardTerms: LocalRewardTerms): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "uint8" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint8" },
+      ],
+      [
+        rewardTerms.asset,
+        rewardTerms.amount,
+        rewardTerms.requiredVoters,
+        rewardTerms.requiredSettledRounds,
+        rewardTerms.bountyClosesAt,
+        rewardTerms.feedbackClosesAt,
+        rewardTerms.bountyEligibility,
+      ],
+    ),
+  );
+}
+
+function buildRoundConfigHash(roundConfig: LocalQuestionRoundConfig): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "uint32" }, { type: "uint32" }, { type: "uint16" }, { type: "uint16" }],
+      [
+        Number(roundConfig.epochDuration),
+        Number(roundConfig.maxDuration),
+        Number(roundConfig.minVoters),
+        Number(roundConfig.maxVoters),
+      ],
+    ),
+  );
+}
+
+function buildSingleQuestionRevealCommitment(params: {
+  question: LocalQuestionSubmission;
+  rewardTerms: LocalRewardTerms;
+  roundConfig: LocalQuestionRoundConfig;
+  submitter: Address;
+}): Hex {
+  const textHash = keccak256(
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "string" }, { type: "string" }],
+      [params.question.title, params.question.description, params.question.tags],
+    ),
+  );
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "string" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "address" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        "rateloop-question-reveal-v3",
+        params.question.submissionKey,
+        buildSubmissionMediaHash(params.question.imageUrls, params.question.videoUrl),
+        textHash,
+        params.question.categoryId,
+        params.question.salt,
+        params.submitter,
+        buildRewardTermsHash(params.rewardTerms),
+        buildRoundConfigHash(params.roundConfig),
+        params.question.spec.questionMetadataHash,
+        params.question.spec.resultSpecHash,
+      ],
+    ),
+  );
+}
+
+function buildQuestionBundleHash(questions: readonly LocalQuestionSubmission[]): Hex {
+  const questionHashes = questions.map((question, index) =>
+    keccak256(
+      encodeAbiParameters(
+        [
+          { type: "string" },
+          { type: "string" },
+          { type: "bytes32" },
+          { type: "string" },
+          { type: "string" },
+          { type: "string" },
+          { type: "uint256" },
+          { type: "bytes32" },
+          { type: "uint256" },
+          { type: "bytes32" },
+          { type: "bytes32" },
+        ],
+        [
+          "rateloop-question-bundle-item-v2",
+          question.contextUrl,
+          buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
+          question.title,
+          question.description,
+          question.tags,
+          question.categoryId,
+          question.salt,
+          BigInt(index),
+          question.spec.questionMetadataHash,
+          question.spec.resultSpecHash,
+        ],
+      ),
+    ),
+  );
+  return keccak256(
+    encodeAbiParameters([{ type: "string" }, { type: "bytes32[]" }], ["rateloop-question-bundle-v2", questionHashes]),
+  );
+}
+
+function buildQuestionBundleRevealCommitment(params: {
+  questions: readonly LocalQuestionSubmission[];
+  rewardTerms: LocalRewardTerms;
+  roundConfig: LocalQuestionRoundConfig;
+  submitter: Address;
+}): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "string" },
+        { type: "bytes32" },
+        { type: "address" },
+        { type: "uint8" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint8" },
+        { type: "uint32" },
+        { type: "uint32" },
+        { type: "uint16" },
+        { type: "uint16" },
+      ],
+      [
+        "rateloop-question-bundle-reveal-v3",
+        buildQuestionBundleHash(params.questions),
+        params.submitter,
+        params.rewardTerms.asset,
+        params.rewardTerms.amount,
+        params.rewardTerms.requiredVoters,
+        params.rewardTerms.requiredSettledRounds,
+        params.rewardTerms.bountyClosesAt,
+        params.rewardTerms.feedbackClosesAt,
+        params.rewardTerms.bountyEligibility,
+        Number(params.roundConfig.epochDuration),
+        Number(params.roundConfig.maxDuration),
+        Number(params.roundConfig.minVoters),
+        Number(params.roundConfig.maxVoters),
+      ],
+    ),
+  );
+}
+
+function buildExpectedLocalSignerQuestionPlan(params: {
+  expectedChainId?: number;
+  payload: AskHumansRequest;
+  walletAddress: Address;
+}): ExpectedLocalSignerQuestionPlan {
+  const payload = parseLocalQuestionRequest(params.payload, params.expectedChainId);
+  const operation = buildLocalQuestionOperation(payload);
+  const rewardTerms = {
+    amount: payload.bounty.amount,
+    asset: X402_SUBMISSION_REWARD_ASSET_USDC,
+    bountyClosesAt: payload.bounty.rewardPoolExpiresAt,
+    bountyEligibility: payload.bounty.bountyEligibility,
+    feedbackClosesAt: payload.bounty.feedbackClosesAt,
+    requiredSettledRounds: payload.bounty.requiredSettledRounds,
+    requiredVoters: payload.bounty.requiredVoters,
+  } as const;
+  const questions = payload.questions.map((question, index) => {
+    const submissionKey = buildQuestionSubmissionKey(question);
+    return {
+      categoryId: question.categoryId,
+      contextUrl: question.contextUrl,
+      description: question.description,
+      imageUrls: question.imageUrls,
+      salt: buildDeterministicQuestionSalt({
+        index,
+        operationKey: operation.operationKey,
+        payloadHash: operation.payloadHash,
+        submissionKey,
+        walletAddress: params.walletAddress,
+      }),
+      spec: {
+        questionMetadataHash: question.questionMetadataHash,
+        resultSpecHash: question.resultSpecHash,
+      },
+      submissionKey,
+      tags: question.tags,
+      title: question.title,
+      videoUrl: question.videoUrl,
+    };
+  });
+  const primaryQuestion = questions[0];
+  if (!primaryQuestion) {
+    throw new Error("Question payload is empty.");
+  }
+  const isBundleSubmission = questions.length > 1;
+  const revealCommitment = isBundleSubmission
+    ? buildQuestionBundleRevealCommitment({
+        questions,
+        rewardTerms,
+        roundConfig: payload.roundConfig,
+        submitter: params.walletAddress,
+      })
+    : buildSingleQuestionRevealCommitment({
+        question: primaryQuestion,
+        rewardTerms,
+        roundConfig: payload.roundConfig,
+        submitter: params.walletAddress,
+      });
+
+  return {
+    canonicalPayload: operation.canonicalPayload,
+    isBundleSubmission,
+    operationKey: operation.operationKey,
+    payloadHash: operation.payloadHash,
+    primaryQuestion,
+    questions,
+    revealCommitment,
+    rewardTerms,
+    roundConfig: payload.roundConfig,
+  };
+}
+
+function buildX402QuestionPaymentNonce(params: {
+  chainId: number;
+  contentRegistryAddress: Address;
+  question: LocalQuestionSubmission;
+  questionRewardPoolEscrowAddress: Address;
+  rewardTerms: LocalRewardTerms;
+  roundConfig: LocalQuestionRoundConfig;
+  x402Authorization: Pick<X402Authorization, "from" | "to" | "validAfter" | "validBefore" | "value">;
+  x402QuestionSubmitterAddress: Address;
+}): Hex {
+  if (!params.x402Authorization.from || !params.x402Authorization.to) {
+    throw new Error("x402 authorization payer and payee are required.");
+  }
+  const submissionPayloadHash = keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+      ],
+      [
+        keccak256(stringToHex(params.question.contextUrl)),
+        buildX402StringArrayHash(params.question.imageUrls),
+        keccak256(stringToHex(params.question.videoUrl)),
+        keccak256(stringToHex(params.question.title)),
+        keccak256(stringToHex(params.question.description)),
+        keccak256(stringToHex(params.question.tags)),
+        params.question.categoryId,
+        params.question.salt,
+      ],
+    ),
+  );
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        X402_QUESTION_PAYMENT_DOMAIN,
+        BigInt(params.chainId),
+        params.contentRegistryAddress,
+        params.questionRewardPoolEscrowAddress,
+        params.x402QuestionSubmitterAddress,
+        params.x402Authorization.from,
+        params.x402Authorization.to,
+        normalizeBigInt(params.x402Authorization.value, "paymentAuthorization.value"),
+        normalizeBigInt(params.x402Authorization.validAfter, "paymentAuthorization.validAfter"),
+        normalizeBigInt(params.x402Authorization.validBefore, "paymentAuthorization.validBefore"),
+        submissionPayloadHash,
+        buildRewardTermsHash(params.rewardTerms),
+        buildRoundConfigHash(params.roundConfig),
+        params.question.spec.questionMetadataHash,
+        params.question.spec.resultSpecHash,
+      ],
+    ),
+  );
+}
+
+function buildX402StringArrayHash(values: readonly string[]): Hex {
+  const packed = values.map(value => keccak256(stringToHex(value)).slice(2)).join("");
+  return keccak256(`0x${packed}` as Hex);
 }
 
 function normalizeCallEnvelope(params: {
@@ -633,17 +1664,132 @@ function decodedCall(
   }
 }
 
-function assertRewardTerms(value: unknown, expectedAmount: bigint, fieldName: string) {
+function readStructField(value: unknown, key: string, index: number, fieldName: string): unknown {
   if (!value || typeof value !== "object") {
     throw new Error(`${fieldName} is required.`);
   }
-  const rewardTerms = value as { amount?: unknown; asset?: unknown };
-  if (normalizeBigInt(rewardTerms.asset, `${fieldName}.asset`) !== 1n) {
+  if (Array.isArray(value)) {
+    return value[index];
+  }
+  return (value as JsonRecord)[key];
+}
+
+function assertEqualBigInt(actual: unknown, expected: bigint, fieldName: string) {
+  if (normalizeBigInt(actual, fieldName) !== expected) {
+    throw new Error(`${fieldName} must match the local signer ask payload.`);
+  }
+}
+
+function assertEqualNumber(actual: unknown, expected: number, fieldName: string) {
+  if (Number(normalizeBigInt(actual, fieldName)) !== expected) {
+    throw new Error(`${fieldName} must match the local signer ask payload.`);
+  }
+}
+
+function assertEqualString(actual: unknown, expected: string, fieldName: string) {
+  if (typeof actual !== "string" || actual !== expected) {
+    throw new Error(`${fieldName} must match the local signer ask payload.`);
+  }
+}
+
+function assertEqualAddress(actual: unknown, expected: Address, fieldName: string) {
+  if (!sameAddress(normalizeAddress(actual, fieldName), expected)) {
+    throw new Error(`${fieldName} must match the local signer ask payload.`);
+  }
+}
+
+function assertEqualBytes32(actual: unknown, expected: Hex, fieldName: string) {
+  if (normalizeBytes32(actual, fieldName).toLowerCase() !== expected.toLowerCase()) {
+    throw new Error(`${fieldName} must match the local signer ask payload.`);
+  }
+}
+
+function assertStringArray(value: unknown, expected: readonly string[], fieldName: string) {
+  if (!Array.isArray(value) || value.length !== expected.length) {
+    throw new Error(`${fieldName} must match the local signer ask payload.`);
+  }
+  for (const [index, entry] of value.entries()) {
+    assertEqualString(entry, expected[index] ?? "", `${fieldName}[${index}]`);
+  }
+}
+
+function assertRewardTerms(value: unknown, expected: LocalRewardTerms, fieldName: string) {
+  if (!value || typeof value !== "object") {
+    throw new Error(`${fieldName} is required.`);
+  }
+  if (normalizeBigInt(readStructField(value, "asset", 0, fieldName), `${fieldName}.asset`) !== 1n) {
     throw new Error(`${fieldName}.asset must be USDC.`);
   }
-  if (normalizeBigInt(rewardTerms.amount, `${fieldName}.amount`) !== expectedAmount) {
-    throw new Error(`${fieldName}.amount must equal the requested bounty amount.`);
-  }
+  assertEqualBigInt(readStructField(value, "amount", 1, fieldName), expected.amount, `${fieldName}.amount`);
+  assertEqualBigInt(
+    readStructField(value, "requiredVoters", 2, fieldName),
+    expected.requiredVoters,
+    `${fieldName}.requiredVoters`,
+  );
+  assertEqualBigInt(
+    readStructField(value, "requiredSettledRounds", 3, fieldName),
+    expected.requiredSettledRounds,
+    `${fieldName}.requiredSettledRounds`,
+  );
+  assertEqualBigInt(
+    readStructField(value, "bountyClosesAt", 4, fieldName),
+    expected.bountyClosesAt,
+    `${fieldName}.bountyClosesAt`,
+  );
+  assertEqualBigInt(
+    readStructField(value, "feedbackClosesAt", 5, fieldName),
+    expected.feedbackClosesAt,
+    `${fieldName}.feedbackClosesAt`,
+  );
+  assertEqualNumber(
+    readStructField(value, "bountyEligibility", 6, fieldName),
+    expected.bountyEligibility,
+    `${fieldName}.bountyEligibility`,
+  );
+}
+
+function assertRoundConfig(value: unknown, expected: LocalQuestionRoundConfig, fieldName: string) {
+  assertEqualBigInt(
+    readStructField(value, "epochDuration", 0, fieldName),
+    expected.epochDuration,
+    `${fieldName}.epochDuration`,
+  );
+  assertEqualBigInt(
+    readStructField(value, "maxDuration", 1, fieldName),
+    expected.maxDuration,
+    `${fieldName}.maxDuration`,
+  );
+  assertEqualBigInt(readStructField(value, "minVoters", 2, fieldName), expected.minVoters, `${fieldName}.minVoters`);
+  assertEqualBigInt(readStructField(value, "maxVoters", 3, fieldName), expected.maxVoters, `${fieldName}.maxVoters`);
+}
+
+function assertQuestionSpec(value: unknown, expected: LocalQuestionSubmission["spec"], fieldName: string) {
+  assertEqualBytes32(
+    readStructField(value, "questionMetadataHash", 0, fieldName),
+    expected.questionMetadataHash,
+    `${fieldName}.questionMetadataHash`,
+  );
+  assertEqualBytes32(
+    readStructField(value, "resultSpecHash", 1, fieldName),
+    expected.resultSpecHash,
+    `${fieldName}.resultSpecHash`,
+  );
+}
+
+function assertQuestionSubmission(value: unknown, expected: LocalQuestionSubmission, fieldName: string) {
+  assertEqualString(readStructField(value, "contextUrl", 0, fieldName), expected.contextUrl, `${fieldName}.contextUrl`);
+  assertStringArray(readStructField(value, "imageUrls", 1, fieldName), expected.imageUrls, `${fieldName}.imageUrls`);
+  assertEqualString(readStructField(value, "videoUrl", 2, fieldName), expected.videoUrl, `${fieldName}.videoUrl`);
+  assertEqualString(readStructField(value, "title", 3, fieldName), expected.title, `${fieldName}.title`);
+  assertEqualString(
+    readStructField(value, "description", 4, fieldName),
+    expected.description,
+    `${fieldName}.description`,
+  );
+  assertEqualString(readStructField(value, "tags", 5, fieldName), expected.tags, `${fieldName}.tags`);
+  assertEqualBigInt(readStructField(value, "categoryId", 6, fieldName), expected.categoryId, `${fieldName}.categoryId`);
+  assertEqualBytes32(readStructField(value, "salt", 7, fieldName), expected.salt, `${fieldName}.salt`);
+  assertQuestionSpec(readStructField(value, "spec", 8, fieldName), expected.spec, `${fieldName}.spec`);
 }
 
 function validateApproveCall(params: {
@@ -676,6 +1822,7 @@ function validateApproveCall(params: {
 function validateReserveSubmissionCall(params: {
   call: RateLoopAgentWalletTransactionCall;
   contentRegistryAddress: Address;
+  expectedRevealCommitment: Hex;
   index: number;
 }) {
   const { data } = normalizeCallEnvelope({
@@ -688,13 +1835,17 @@ function validateReserveSubmissionCall(params: {
   if (decoded.functionName !== "reserveSubmission") {
     throw new Error(`transactionPlan.calls[${params.index}] must call reserveSubmission.`);
   }
-  normalizeBytes32(decoded.args?.[0], `transactionPlan.calls[${params.index}].reserveSubmission.revealCommitment`);
+  assertEqualBytes32(
+    decoded.args?.[0],
+    params.expectedRevealCommitment,
+    `transactionPlan.calls[${params.index}].reserveSubmission.revealCommitment`,
+  );
 }
 
 function validateSubmitQuestionCall(params: {
   call: RateLoopAgentWalletTransactionCall;
   contentRegistryAddress: Address;
-  expectedAmount: bigint;
+  expectedPlan: ExpectedLocalSignerQuestionPlan;
   index: number;
 }) {
   const { data } = normalizeCallEnvelope({
@@ -704,25 +1855,68 @@ function validateSubmitQuestionCall(params: {
     index: params.index,
   });
   const decoded = decodedCall(data, ContentRegistryAbi, `transactionPlan.calls[${params.index}]`);
-  if (
-    decoded.functionName !== "submitQuestionWithRewardAndRoundConfig" &&
-    decoded.functionName !== "submitQuestionBundleWithRewardAndRoundConfig"
-  ) {
-    throw new Error(
-      `transactionPlan.calls[${params.index}] must call a RateLoop rewarded question submission function.`,
+  if (params.expectedPlan.isBundleSubmission) {
+    if (decoded.functionName !== "submitQuestionBundleWithRewardAndRoundConfig") {
+      throw new Error(`transactionPlan.calls[${params.index}] must call submitQuestionBundleWithRewardAndRoundConfig.`);
+    }
+    const questions = decoded.args?.[0];
+    if (!Array.isArray(questions) || questions.length !== params.expectedPlan.questions.length) {
+      throw new Error(`transactionPlan.calls[${params.index}].questions must match the local signer ask payload.`);
+    }
+    for (const [questionIndex, expectedQuestion] of params.expectedPlan.questions.entries()) {
+      assertQuestionSubmission(
+        questions[questionIndex],
+        expectedQuestion,
+        `transactionPlan.calls[${params.index}].questions[${questionIndex}]`,
+      );
+    }
+    assertRewardTerms(
+      decoded.args?.[1],
+      params.expectedPlan.rewardTerms,
+      `transactionPlan.calls[${params.index}].rewardTerms`,
     );
+    assertRoundConfig(
+      decoded.args?.[2],
+      params.expectedPlan.roundConfig,
+      `transactionPlan.calls[${params.index}].roundConfig`,
+    );
+    return;
   }
-  const rewardTerms = decoded.functionName === "submitQuestionBundleWithRewardAndRoundConfig"
-    ? decoded.args?.[1]
-    : decoded.args?.[8];
-  assertRewardTerms(rewardTerms, params.expectedAmount, `transactionPlan.calls[${params.index}].rewardTerms`);
+
+  if (decoded.functionName !== "submitQuestionWithRewardAndRoundConfig") {
+    throw new Error(`transactionPlan.calls[${params.index}] must call submitQuestionWithRewardAndRoundConfig.`);
+  }
+  const args = decoded.args ?? [];
+  assertEqualString(args[0], params.expectedPlan.primaryQuestion.contextUrl, `transactionPlan.calls[${params.index}].contextUrl`);
+  assertStringArray(args[1], params.expectedPlan.primaryQuestion.imageUrls, `transactionPlan.calls[${params.index}].imageUrls`);
+  assertEqualString(args[2], params.expectedPlan.primaryQuestion.videoUrl, `transactionPlan.calls[${params.index}].videoUrl`);
+  assertEqualString(args[3], params.expectedPlan.primaryQuestion.title, `transactionPlan.calls[${params.index}].title`);
+  assertEqualString(
+    args[4],
+    params.expectedPlan.primaryQuestion.description,
+    `transactionPlan.calls[${params.index}].description`,
+  );
+  assertEqualString(args[5], params.expectedPlan.primaryQuestion.tags, `transactionPlan.calls[${params.index}].tags`);
+  assertEqualBigInt(
+    args[6],
+    params.expectedPlan.primaryQuestion.categoryId,
+    `transactionPlan.calls[${params.index}].categoryId`,
+  );
+  assertEqualBytes32(args[7], params.expectedPlan.primaryQuestion.salt, `transactionPlan.calls[${params.index}].salt`);
+  assertRewardTerms(args[8], params.expectedPlan.rewardTerms, `transactionPlan.calls[${params.index}].rewardTerms`);
+  assertRoundConfig(args[9], params.expectedPlan.roundConfig, `transactionPlan.calls[${params.index}].roundConfig`);
+  assertQuestionSpec(args[10], params.expectedPlan.primaryQuestion.spec, `transactionPlan.calls[${params.index}].spec`);
 }
 
 function validateSubmitX402QuestionCall(params: {
   accountAddress: Address;
   call: RateLoopAgentWalletTransactionCall;
-  expectedAmount: bigint;
+  contentRegistryAddress: Address;
+  expectedPaymentAuthorization: X402Authorization;
+  expectedPlan: ExpectedLocalSignerQuestionPlan;
   index: number;
+  questionRewardPoolEscrowAddress: Address;
+  responseChainId: number;
   x402QuestionSubmitterAddress: Address;
 }) {
   const { data } = normalizeCallEnvelope({
@@ -735,21 +1929,98 @@ function validateSubmitX402QuestionCall(params: {
   if (decoded.functionName !== "submitQuestionWithX402Payment") {
     throw new Error(`transactionPlan.calls[${params.index}] must call submitQuestionWithX402Payment.`);
   }
-  assertRewardTerms(decoded.args?.[8], params.expectedAmount, `transactionPlan.calls[${params.index}].rewardTerms`);
+  if (params.expectedPlan.isBundleSubmission) {
+    throw new Error("x402_authorization transaction plans must submit exactly one question.");
+  }
+  const args = decoded.args ?? [];
+  assertEqualString(args[0], params.expectedPlan.primaryQuestion.contextUrl, `transactionPlan.calls[${params.index}].contextUrl`);
+  assertStringArray(args[1], params.expectedPlan.primaryQuestion.imageUrls, `transactionPlan.calls[${params.index}].imageUrls`);
+  assertEqualString(args[2], params.expectedPlan.primaryQuestion.videoUrl, `transactionPlan.calls[${params.index}].videoUrl`);
+  assertEqualString(args[3], params.expectedPlan.primaryQuestion.title, `transactionPlan.calls[${params.index}].title`);
+  assertEqualString(
+    args[4],
+    params.expectedPlan.primaryQuestion.description,
+    `transactionPlan.calls[${params.index}].description`,
+  );
+  assertEqualString(args[5], params.expectedPlan.primaryQuestion.tags, `transactionPlan.calls[${params.index}].tags`);
+  assertEqualBigInt(
+    args[6],
+    params.expectedPlan.primaryQuestion.categoryId,
+    `transactionPlan.calls[${params.index}].categoryId`,
+  );
+  assertEqualBytes32(args[7], params.expectedPlan.primaryQuestion.salt, `transactionPlan.calls[${params.index}].salt`);
+  assertRewardTerms(args[8], params.expectedPlan.rewardTerms, `transactionPlan.calls[${params.index}].rewardTerms`);
+  assertRoundConfig(args[9], params.expectedPlan.roundConfig, `transactionPlan.calls[${params.index}].roundConfig`);
+  assertQuestionSpec(args[10], params.expectedPlan.primaryQuestion.spec, `transactionPlan.calls[${params.index}].spec`);
   const authorization = decoded.args?.[11];
   if (!authorization || typeof authorization !== "object") {
     throw new Error(`transactionPlan.calls[${params.index}].paymentAuthorization is required.`);
   }
-  const parsed = authorization as { from?: unknown; to?: unknown; value?: unknown };
-  if (!sameAddress(normalizeAddress(parsed.from, "paymentAuthorization.from"), params.accountAddress)) {
+  const authorizationFieldName = `transactionPlan.calls[${params.index}].paymentAuthorization`;
+  const parsed = authorization as JsonRecord;
+  if (!sameAddress(normalizeAddress(readStructField(parsed, "from", 0, authorizationFieldName), "paymentAuthorization.from"), params.accountAddress)) {
     throw new Error(`transactionPlan.calls[${params.index}] x402 authorization.from must match the local signer.`);
   }
-  if (!sameAddress(normalizeAddress(parsed.to, "paymentAuthorization.to"), params.x402QuestionSubmitterAddress)) {
+  if (
+    !sameAddress(
+      normalizeAddress(readStructField(parsed, "to", 1, authorizationFieldName), "paymentAuthorization.to"),
+      params.x402QuestionSubmitterAddress,
+    )
+  ) {
     throw new Error(`transactionPlan.calls[${params.index}] x402 authorization.to must be the RateLoop submitter.`);
   }
-  if (normalizeBigInt(parsed.value, "paymentAuthorization.value") !== params.expectedAmount) {
+  if (normalizeBigInt(readStructField(parsed, "value", 2, authorizationFieldName), "paymentAuthorization.value") !== params.expectedPlan.rewardTerms.amount) {
     throw new Error(`transactionPlan.calls[${params.index}] x402 authorization.value must equal the requested bounty.`);
   }
+  const decodedAuthorization: X402Authorization = {
+    from: normalizeAddress(readStructField(parsed, "from", 0, authorizationFieldName), `${authorizationFieldName}.from`),
+    nonce: normalizeBytes32(readStructField(parsed, "nonce", 5, authorizationFieldName), `${authorizationFieldName}.nonce`),
+    to: normalizeAddress(readStructField(parsed, "to", 1, authorizationFieldName), `${authorizationFieldName}.to`),
+    validAfter: normalizeBigInt(readStructField(parsed, "validAfter", 3, authorizationFieldName), `${authorizationFieldName}.validAfter`).toString(),
+    validBefore: normalizeBigInt(readStructField(parsed, "validBefore", 4, authorizationFieldName), `${authorizationFieldName}.validBefore`).toString(),
+    value: normalizeBigInt(readStructField(parsed, "value", 2, authorizationFieldName), `${authorizationFieldName}.value`).toString(),
+  };
+  const expectedNonce = buildX402QuestionPaymentNonce({
+    chainId: params.responseChainId,
+    contentRegistryAddress: params.contentRegistryAddress,
+    question: params.expectedPlan.primaryQuestion,
+    questionRewardPoolEscrowAddress: params.questionRewardPoolEscrowAddress,
+    rewardTerms: params.expectedPlan.rewardTerms,
+    roundConfig: params.expectedPlan.roundConfig,
+    x402Authorization: decodedAuthorization,
+    x402QuestionSubmitterAddress: params.x402QuestionSubmitterAddress,
+  });
+  assertEqualBytes32(decodedAuthorization.nonce, expectedNonce, `${authorizationFieldName}.nonce`);
+  assertEqualAddress(decodedAuthorization.from, normalizeAddress(params.expectedPaymentAuthorization.from, "signed x402 authorization.from"), `${authorizationFieldName}.from`);
+  assertEqualAddress(decodedAuthorization.to, normalizeAddress(params.expectedPaymentAuthorization.to, "signed x402 authorization.to"), `${authorizationFieldName}.to`);
+  assertEqualBigInt(
+    decodedAuthorization.value,
+    normalizeBigInt(params.expectedPaymentAuthorization.value, "signed x402 authorization.value"),
+    `${authorizationFieldName}.value`,
+  );
+  assertEqualBigInt(
+    decodedAuthorization.validAfter,
+    normalizeBigInt(params.expectedPaymentAuthorization.validAfter, "signed x402 authorization.validAfter"),
+    `${authorizationFieldName}.validAfter`,
+  );
+  assertEqualBigInt(
+    decodedAuthorization.validBefore,
+    normalizeBigInt(params.expectedPaymentAuthorization.validBefore, "signed x402 authorization.validBefore"),
+    `${authorizationFieldName}.validBefore`,
+  );
+  assertEqualBytes32(
+    decodedAuthorization.nonce,
+    normalizeBytes32(params.expectedPaymentAuthorization.nonce, "signed x402 authorization.nonce"),
+    `${authorizationFieldName}.nonce`,
+  );
+  if (!params.expectedPaymentAuthorization.signature) {
+    throw new Error("Signed x402 authorization must include a signature before executing the transaction plan.");
+  }
+  const signature = parseSignature(params.expectedPaymentAuthorization.signature);
+  const expectedV = Number(signature.v ?? BigInt(signature.yParity + 27));
+  assertEqualBytes32(readStructField(parsed, "r", 7, authorizationFieldName), signature.r, `${authorizationFieldName}.r`);
+  assertEqualBytes32(readStructField(parsed, "s", 8, authorizationFieldName), signature.s, `${authorizationFieldName}.s`);
+  assertEqualNumber(readStructField(parsed, "v", 6, authorizationFieldName), expectedV, `${authorizationFieldName}.v`);
 }
 
 function validatePaymentMetadata(params: {
@@ -779,6 +2050,8 @@ export function validateLocalSignerTransactionPlan(params: {
   config: TransactionPlanValidationConfig;
   expectedBountyAmount: bigint;
   expectedChainId?: number;
+  expectedPaymentAuthorization?: X402Authorization | null;
+  expectedPayload: AskHumansRequest;
 }): RateLoopAgentWalletTransactionCall[] {
   const calls = params.ask.transactionPlan?.calls ?? [];
   if (calls.length === 0) {
@@ -796,6 +2069,20 @@ export function validateLocalSignerTransactionPlan(params: {
   const walletAddress = normalizeAddress(wallet.address, "ask response wallet.address");
   if (!sameAddress(walletAddress, params.accountAddress)) {
     throw new Error(`RateLoop transaction plan wallet ${walletAddress} does not match local signer ${params.accountAddress}.`);
+  }
+  const expectedPlan = buildExpectedLocalSignerQuestionPlan({
+    expectedChainId: responseChainId,
+    payload: params.expectedPayload,
+    walletAddress: params.accountAddress,
+  });
+  if (expectedPlan.rewardTerms.amount !== params.expectedBountyAmount) {
+    throw new Error("Expected bounty amount must match the local signer ask payload.");
+  }
+  if (normalizeOperationKey(params.ask.operationKey, "operationKey").toLowerCase() !== expectedPlan.operationKey.toLowerCase()) {
+    throw new Error("RateLoop transaction plan operationKey does not match the local signer ask payload.");
+  }
+  if (params.ask.payloadHash !== undefined && params.ask.payloadHash !== expectedPlan.payloadHash) {
+    throw new Error("RateLoop transaction plan payloadHash does not match the local signer ask payload.");
   }
 
   const usdcAddress = requireConfiguredAddress(resolveConfiguredUsdcAddress(params.config, responseChainId), "USDC token");
@@ -827,11 +2114,16 @@ export function validateLocalSignerTransactionPlan(params: {
       expectedToken: usdcAddress,
       index: 0,
     });
-    validateReserveSubmissionCall({ call: calls[1]!, contentRegistryAddress, index: 1 });
+    validateReserveSubmissionCall({
+      call: calls[1]!,
+      contentRegistryAddress,
+      expectedRevealCommitment: expectedPlan.revealCommitment,
+      index: 1,
+    });
     validateSubmitQuestionCall({
       call: calls[2]!,
       contentRegistryAddress,
-      expectedAmount: params.expectedBountyAmount,
+      expectedPlan,
       index: 2,
     });
     return calls;
@@ -845,18 +2137,34 @@ export function validateLocalSignerTransactionPlan(params: {
       resolveConfiguredX402SubmitterAddress(params.config, responseChainId),
       "X402QuestionSubmitter",
     );
+    const questionRewardPoolEscrowAddress = requireConfiguredAddress(
+      resolveConfiguredQuestionRewardPoolEscrowAddress(params.config, responseChainId),
+      "QuestionRewardPoolEscrow",
+    );
+    if (!params.expectedPaymentAuthorization?.signature) {
+      throw new Error("x402_authorization transaction plans require the exact signed local x402 authorization.");
+    }
     validatePaymentMetadata({
       ask: params.ask,
       expectedAmount: params.expectedBountyAmount,
       expectedSpender: x402QuestionSubmitterAddress,
       usdcAddress,
     });
-    validateReserveSubmissionCall({ call: calls[0]!, contentRegistryAddress, index: 0 });
+    validateReserveSubmissionCall({
+      call: calls[0]!,
+      contentRegistryAddress,
+      expectedRevealCommitment: expectedPlan.revealCommitment,
+      index: 0,
+    });
     validateSubmitX402QuestionCall({
       accountAddress: params.accountAddress,
       call: calls[1]!,
-      expectedAmount: params.expectedBountyAmount,
+      contentRegistryAddress,
+      expectedPaymentAuthorization: params.expectedPaymentAuthorization,
+      expectedPlan,
       index: 1,
+      questionRewardPoolEscrowAddress,
+      responseChainId,
       x402QuestionSubmitterAddress,
     });
     return calls;
@@ -1211,16 +2519,59 @@ export async function askHumansWithLocalSigner(params: {
 
   let finalAsk = initialAsk;
   let signedX402Authorization = false;
+  let signedPaymentAuthorization: X402Authorization | null = null;
   if (initialAsk.x402AuthorizationRequest) {
     if (baseAsk.chainId === undefined) {
       throw new Error("Ask payload chainId is required before signing an x402 authorization.");
     }
+    const expectedPlan = buildExpectedLocalSignerQuestionPlan({
+      expectedChainId: baseAsk.chainId,
+      payload: baseAsk,
+      walletAddress: params.account.address,
+    });
+    if (expectedPlan.isBundleSubmission) {
+      throw new Error("x402_authorization local signing supports one question per authorization.");
+    }
+    if (
+      initialAsk.operationKey &&
+      normalizeOperationKey(initialAsk.operationKey, "operationKey").toLowerCase() !== expectedPlan.operationKey.toLowerCase()
+    ) {
+      throw new Error("RateLoop x402 authorization operationKey does not match the local signer ask payload.");
+    }
+    if (initialAsk.payloadHash !== undefined && initialAsk.payloadHash !== expectedPlan.payloadHash) {
+      throw new Error("RateLoop x402 authorization payloadHash does not match the local signer ask payload.");
+    }
+    const { authorization: pendingAuthorization } = parseX402AuthorizationRequest(initialAsk.x402AuthorizationRequest);
+    const contentRegistryAddress = requireConfiguredAddress(
+      resolveConfiguredContentRegistryAddress(params.config, baseAsk.chainId),
+      "ContentRegistry",
+    );
+    const questionRewardPoolEscrowAddress = requireConfiguredAddress(
+      resolveConfiguredQuestionRewardPoolEscrowAddress(params.config, baseAsk.chainId),
+      "QuestionRewardPoolEscrow",
+    );
+    const x402QuestionSubmitterAddress = requireConfiguredAddress(
+      resolveConfiguredX402SubmitterAddress(params.config, baseAsk.chainId),
+      "X402QuestionSubmitter",
+    );
+    const expectedNonce = buildX402QuestionPaymentNonce({
+      chainId: baseAsk.chainId,
+      contentRegistryAddress,
+      question: expectedPlan.primaryQuestion,
+      questionRewardPoolEscrowAddress,
+      rewardTerms: expectedPlan.rewardTerms,
+      roundConfig: expectedPlan.roundConfig,
+      x402Authorization: pendingAuthorization,
+      x402QuestionSubmitterAddress,
+    });
     const paymentAuthorization = await signX402AuthorizationRequest(params.account, initialAsk.x402AuthorizationRequest, {
       expectedChainId: baseAsk.chainId,
       expectedAmount: normalizeBigInt(baseAsk.bounty.amount, "ask payload bounty.amount"),
+      expectedNonce,
       expectedUsdcAddress: resolveConfiguredUsdcAddress(params.config, baseAsk.chainId),
-      expectedX402QuestionSubmitterAddress: resolveConfiguredX402SubmitterAddress(params.config, baseAsk.chainId),
+      expectedX402QuestionSubmitterAddress: x402QuestionSubmitterAddress,
     });
+    signedPaymentAuthorization = paymentAuthorization;
     signedX402Authorization = true;
     params.onProgress?.({ type: "x402_signed" });
 
@@ -1238,6 +2589,8 @@ export async function askHumansWithLocalSigner(params: {
     config: params.config,
     expectedBountyAmount: normalizeBigInt(baseAsk.bounty.amount, "ask payload bounty.amount"),
     expectedChainId: baseAsk.chainId,
+    expectedPaymentAuthorization: signedPaymentAuthorization,
+    expectedPayload: baseAsk,
   });
   if (!calls.length) {
     return {

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
-import { encodeFunctionData, erc20Abi } from "viem";
+import { encodeAbiParameters, encodeFunctionData, erc20Abi, keccak256, parseSignature, stringToHex, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { buildQuestionSpecHashes } from "../questionSpecs.js";
+import { findAgentResultTemplate } from "../templates.js";
 import {
   askHumansWithLocalSigner,
   signX402AuthorizationRequest,
@@ -17,6 +20,14 @@ const X402_USDC_ADDRESS = "0x00000000000000000000000000000000000000cc" as const;
 const CONTENT_REGISTRY_ADDRESS = "0x00000000000000000000000000000000000000dd" as const;
 const QUESTION_REWARD_ESCROW_ADDRESS = "0x00000000000000000000000000000000000000ee" as const;
 const X402_AMOUNT = "1500000";
+const CLIENT_REQUEST_ID = "local-signer-test";
+const QUESTION_CONTEXT_URL = "https://example.com/context";
+const QUESTION_TITLE = "Should this agent proceed?";
+const QUESTION_TAG = "agent";
+const REWARD_POOL_EXPIRES_AT = 1_893_456_000n;
+const X402_VALID_AFTER = "0";
+const X402_VALID_BEFORE = "9999999999";
+const TEST_SIGNATURE = `0x${"1".repeat(64)}${"3".repeat(64)}1b` as const;
 const X402_SIGN_OPTIONS: NonNullable<Parameters<typeof signX402AuthorizationRequest>[2]> = {
   expectedAmount: X402_AMOUNT,
   expectedChainId: 480,
@@ -35,18 +46,25 @@ type TestX402AuthorizationRequest = {
 };
 
 const BYTES32_ONE = `0x${"1".repeat(64)}` as const;
-const BYTES32_TWO = `0x${"2".repeat(64)}` as const;
-const BYTES32_THREE = `0x${"3".repeat(64)}` as const;
 
 function rewardTerms(amount = BigInt(X402_AMOUNT)) {
   return {
     amount,
     asset: 1,
-    bountyClosesAt: 1_893_456_000n,
+    bountyClosesAt: REWARD_POOL_EXPIRES_AT,
     bountyEligibility: 0,
     feedbackClosesAt: 0n,
     requiredSettledRounds: 1n,
     requiredVoters: 3n,
+  };
+}
+
+function roundConfigBigInt() {
+  return {
+    epochDuration: 1_200n,
+    maxDuration: 1_200n,
+    maxVoters: 100n,
+    minVoters: 3n,
   };
 }
 
@@ -60,16 +78,256 @@ function roundConfig() {
 }
 
 function questionSpec() {
+  const template = findAgentResultTemplate("generic_rating");
+  if (!template) throw new Error("Missing generic_rating template.");
+  return buildQuestionSpecHashes({
+    bounty: {
+      amount: BigInt(X402_AMOUNT),
+      asset: "USDC",
+      bountyEligibility: 0,
+      requiredSettledRounds: 1n,
+      requiredVoters: 3n,
+    },
+    categoryId: 1n,
+    contextUrl: QUESTION_CONTEXT_URL,
+    description: "",
+    imageUrls: [],
+    roundConfig: roundConfigBigInt(),
+    study: { bundleIndex: 0 },
+    tags: [QUESTION_TAG],
+    targetAudience: null,
+    templateId: "generic_rating",
+    templateInputs: null,
+    templateVersion: 1,
+    title: QUESTION_TITLE,
+    videoUrl: "",
+    voteSemantics: template.voteSemantics,
+  });
+}
+
+function canonicalPayload() {
+  const spec = questionSpec();
   return {
-    questionMetadataHash: BYTES32_TWO,
-    resultSpecHash: BYTES32_THREE,
+    bounty: {
+      amount: X402_AMOUNT,
+      asset: "USDC",
+      requiredSettledRounds: "1",
+      requiredVoters: "3",
+      rewardPoolExpiresAt: REWARD_POOL_EXPIRES_AT.toString(),
+      feedbackClosesAt: "0",
+      bountyEligibility: "0",
+    },
+    chainId: 480,
+    clientRequestId: CLIENT_REQUEST_ID,
+    questions: [
+      {
+        categoryId: "1",
+        contextUrl: QUESTION_CONTEXT_URL,
+        description: "",
+        imageUrls: [],
+        questionMetadataHash: spec.questionMetadataHash,
+        resultSpecHash: spec.resultSpecHash,
+        tags: [QUESTION_TAG],
+        targetAudience: null,
+        templateId: "generic_rating",
+        templateInputs: null,
+        templateVersion: 1,
+        title: QUESTION_TITLE,
+        videoUrl: "",
+      },
+    ],
+    roundConfig: {
+      epochDuration: "1200",
+      maxDuration: "1200",
+      minVoters: "3",
+      maxVoters: "100",
+    },
   };
 }
 
-function reserveSubmissionData() {
+function expectedPayloadHash() {
+  return createHash("sha256").update(JSON.stringify(canonicalPayload())).digest("hex");
+}
+
+function expectedOperationKey() {
+  return `0x${createHash("sha256").update(`rateloop:x402-question:${expectedPayloadHash()}`).digest("hex")}` as const;
+}
+
+function expectedSubmissionKey() {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "string" },
+        { type: "uint256" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+      ],
+      ["rateloop-question-context-v1", 1n, QUESTION_CONTEXT_URL, QUESTION_TITLE, "", QUESTION_TAG],
+    ),
+  );
+}
+
+function expectedSalt() {
+  return `0x${createHash("sha256")
+    .update(
+      [
+        "rateloop",
+        "agent-wallet-question-salt",
+        expectedOperationKey(),
+        expectedPayloadHash(),
+        account.address.toLowerCase(),
+        expectedSubmissionKey(),
+        "0",
+      ].join(":"),
+    )
+    .digest("hex")}` as const;
+}
+
+function rewardTermsHash() {
+  const terms = rewardTerms();
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "uint8" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint8" },
+      ],
+      [
+        terms.asset,
+        terms.amount,
+        terms.requiredVoters,
+        terms.requiredSettledRounds,
+        terms.bountyClosesAt,
+        terms.feedbackClosesAt,
+        terms.bountyEligibility,
+      ],
+    ),
+  );
+}
+
+function roundConfigHash() {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "uint32" }, { type: "uint32" }, { type: "uint16" }, { type: "uint16" }],
+      [1_200, 1_200, 3, 100],
+    ),
+  );
+}
+
+function expectedRevealCommitment() {
+  const spec = questionSpec();
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "string" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "address" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        "rateloop-question-reveal-v3",
+        expectedSubmissionKey(),
+        keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [[], ""])),
+        keccak256(encodeAbiParameters([{ type: "string" }, { type: "string" }, { type: "string" }], [QUESTION_TITLE, "", QUESTION_TAG])),
+        1n,
+        expectedSalt(),
+        account.address,
+        rewardTermsHash(),
+        roundConfigHash(),
+        spec.questionMetadataHash,
+        spec.resultSpecHash,
+      ],
+    ),
+  );
+}
+
+function x402StringArrayHash(values: readonly string[]) {
+  return keccak256(`0x${values.map(value => keccak256(stringToHex(value)).slice(2)).join("")}` as Hex);
+}
+
+function x402PaymentNonce(from = account.address) {
+  const spec = questionSpec();
+  const submissionPayloadHash = keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+      ],
+      [
+        keccak256(stringToHex(QUESTION_CONTEXT_URL)),
+        x402StringArrayHash([]),
+        keccak256(stringToHex("")),
+        keccak256(stringToHex(QUESTION_TITLE)),
+        keccak256(stringToHex("")),
+        keccak256(stringToHex(QUESTION_TAG)),
+        1n,
+        expectedSalt(),
+      ],
+    ),
+  );
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        keccak256(stringToHex("rateloop-x402-question-payment-v2")),
+        480n,
+        CONTENT_REGISTRY_ADDRESS,
+        QUESTION_REWARD_ESCROW_ADDRESS,
+        X402_SUBMITTER_ADDRESS,
+        from,
+        X402_SUBMITTER_ADDRESS,
+        BigInt(X402_AMOUNT),
+        BigInt(X402_VALID_AFTER),
+        BigInt(X402_VALID_BEFORE),
+        submissionPayloadHash,
+        rewardTermsHash(),
+        roundConfigHash(),
+        spec.questionMetadataHash,
+        spec.resultSpecHash,
+      ],
+    ),
+  );
+}
+
+function reserveSubmissionData(revealCommitment = expectedRevealCommitment()) {
   return encodeFunctionData({
     abi: ContentRegistryAbi,
-    args: [BYTES32_ONE],
+    args: [revealCommitment],
     functionName: "reserveSubmission",
   });
 }
@@ -78,14 +336,14 @@ function submitQuestionData(amount = BigInt(X402_AMOUNT)) {
   return encodeFunctionData({
     abi: ContentRegistryAbi,
     args: [
-      "https://example.com/context",
+      QUESTION_CONTEXT_URL,
       [],
       "",
-      "Should this agent proceed?",
+      QUESTION_TITLE,
       "",
-      "agent",
+      QUESTION_TAG,
       1n,
-      BYTES32_ONE,
+      expectedSalt(),
       rewardTerms(amount),
       roundConfig(),
       questionSpec(),
@@ -95,29 +353,30 @@ function submitQuestionData(amount = BigInt(X402_AMOUNT)) {
 }
 
 function submitX402QuestionData(amount = BigInt(X402_AMOUNT)) {
+  const signature = parseSignature(TEST_SIGNATURE);
   return encodeFunctionData({
     abi: X402QuestionSubmitterAbi,
     args: [
-      "https://example.com/context",
+      QUESTION_CONTEXT_URL,
       [],
       "",
-      "Should this agent proceed?",
+      QUESTION_TITLE,
       "",
-      "agent",
+      QUESTION_TAG,
       1n,
-      BYTES32_ONE,
+      expectedSalt(),
       rewardTerms(amount),
       roundConfig(),
       questionSpec(),
       {
         from: account.address,
-        nonce: BYTES32_TWO,
-        r: BYTES32_ONE,
-        s: BYTES32_THREE,
+        nonce: x402PaymentNonce(),
+        r: signature.r,
+        s: signature.s,
         to: X402_SUBMITTER_ADDRESS,
-        v: 27,
-        validAfter: 0n,
-        validBefore: 9_999_999_999n,
+        v: Number(signature.v ?? BigInt(signature.yParity + 27)),
+        validAfter: BigInt(X402_VALID_AFTER),
+        validBefore: BigInt(X402_VALID_BEFORE),
         value: amount,
       },
     ],
@@ -125,10 +384,18 @@ function submitX402QuestionData(amount = BigInt(X402_AMOUNT)) {
   });
 }
 
+function signedX402Authorization(overrides: Partial<Record<keyof ReturnType<typeof x402AuthorizationRequest>["authorization"], string>> = {}) {
+  return {
+    ...x402AuthorizationRequest().authorization,
+    ...overrides,
+    signature: TEST_SIGNATURE,
+  };
+}
+
 function walletCallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHumansResponse {
   return {
     chainId: 480,
-    operationKey: `0x${"4".repeat(64)}`,
+    operationKey: expectedOperationKey(),
     payment: {
       amount: X402_AMOUNT,
       asset: "USDC",
@@ -136,6 +403,7 @@ function walletCallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHum
       tokenAddress: X402_USDC_ADDRESS,
     },
     paymentMode: "wallet_calls",
+    payloadHash: expectedPayloadHash(),
     status: "awaiting_wallet_signature",
     transactionPlan: {
       calls: [
@@ -162,7 +430,7 @@ function walletCallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHum
 function x402CallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHumansResponse {
   return {
     chainId: 480,
-    operationKey: `0x${"5".repeat(64)}`,
+    operationKey: expectedOperationKey(),
     payment: {
       amount: X402_AMOUNT,
       asset: "USDC",
@@ -170,6 +438,7 @@ function x402CallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHuman
       tokenAddress: X402_USDC_ADDRESS,
     },
     paymentMode: "x402_authorization",
+    payloadHash: expectedPayloadHash(),
     status: "awaiting_wallet_signature",
     transactionPlan: {
       calls: [
@@ -195,10 +464,10 @@ function validationConfig() {
 function x402AuthorizationRequest(from = account.address): TestX402AuthorizationRequest {
   const authorization = {
     from,
-    nonce: `0x${"1".repeat(64)}`,
+    nonce: x402PaymentNonce(from),
     to: X402_SUBMITTER_ADDRESS,
-    validAfter: "0",
-    validBefore: "9999999999",
+    validAfter: X402_VALID_AFTER,
+    validBefore: X402_VALID_BEFORE,
     value: X402_AMOUNT,
   };
 
@@ -229,13 +498,26 @@ function x402AuthorizationRequest(from = account.address): TestX402Authorization
 
 function askPayload(walletAddress?: string): AskHumansRequest {
   return {
-    bounty: { amount: "1500000", requiredVoters: "3" },
-    clientRequestId: "local-signer-test",
+    bounty: {
+      amount: X402_AMOUNT,
+      bountyEligibility: "0",
+      feedbackClosesAt: "0",
+      requiredSettledRounds: "1",
+      requiredVoters: "3",
+      rewardPoolExpiresAt: REWARD_POOL_EXPIRES_AT.toString(),
+    },
+    clientRequestId: CLIENT_REQUEST_ID,
     question: {
       categoryId: "1",
-      contextUrl: "https://example.com",
-      tags: ["agent"],
-      title: "Should this agent proceed?",
+      contextUrl: QUESTION_CONTEXT_URL,
+      tags: [QUESTION_TAG],
+      title: QUESTION_TITLE,
+    },
+    roundConfig: {
+      epochDuration: "1200",
+      maxDuration: "1200",
+      maxVoters: "100",
+      minVoters: "3",
     },
     walletAddress,
   };
@@ -262,10 +544,10 @@ describe("local signer", () => {
 
     expect(paymentAuthorization).toMatchObject({
       from: account.address,
-      nonce: `0x${"1".repeat(64)}`,
+      nonce: x402PaymentNonce(),
       to: X402_SUBMITTER_ADDRESS,
-      validAfter: "0",
-      validBefore: "9999999999",
+      validAfter: X402_VALID_AFTER,
+      validBefore: X402_VALID_BEFORE,
       value: X402_AMOUNT,
     });
     expect(paymentAuthorization.signature).toMatch(/^0x[0-9a-f]{130}$/i);
@@ -333,6 +615,15 @@ describe("local signer", () => {
     );
   });
 
+  it("rejects x402 authorizations whose nonce is not bound to the ask payload", async () => {
+    await expect(
+      signX402AuthorizationRequest(account, x402AuthorizationRequest(), {
+        ...X402_SIGN_OPTIONS,
+        expectedNonce: BYTES32_ONE,
+      }),
+    ).rejects.toThrow(/nonce does not match/);
+  });
+
   it("validates wallet-call transaction plans before execution", () => {
     const calls = validateLocalSignerTransactionPlan({
       accountAddress: account.address,
@@ -340,6 +631,7 @@ describe("local signer", () => {
       config: validationConfig(),
       expectedBountyAmount: BigInt(X402_AMOUNT),
       expectedChainId: 480,
+      expectedPayload: askPayload(),
     });
 
     expect(calls).toHaveLength(3);
@@ -352,9 +644,92 @@ describe("local signer", () => {
       config: validationConfig(),
       expectedBountyAmount: BigInt(X402_AMOUNT),
       expectedChainId: 480,
+      expectedPaymentAuthorization: signedX402Authorization(),
+      expectedPayload: askPayload(),
     });
 
     expect(calls).toHaveLength(2);
+  });
+
+  it("rejects transaction plans whose submission calldata differs from the ask payload", () => {
+    const changedTitleData = encodeFunctionData({
+      abi: ContentRegistryAbi,
+      args: [
+        QUESTION_CONTEXT_URL,
+        [],
+        "",
+        "Changed question title",
+        "",
+        QUESTION_TAG,
+        1n,
+        expectedSalt(),
+        rewardTerms(),
+        roundConfig(),
+        questionSpec(),
+      ],
+      functionName: "submitQuestionWithRewardAndRoundConfig",
+    });
+
+    expect(() =>
+      validateLocalSignerTransactionPlan({
+        accountAddress: account.address,
+        ask: walletCallsResponse({
+          transactionPlan: {
+            ...walletCallsResponse().transactionPlan,
+            calls: [
+              walletCallsResponse().transactionPlan!.calls![0]!,
+              walletCallsResponse().transactionPlan!.calls![1]!,
+              { ...walletCallsResponse().transactionPlan!.calls![2]!, data: changedTitleData },
+            ],
+            requiresOrderedExecution: true,
+          },
+        }),
+        config: validationConfig(),
+        expectedBountyAmount: BigInt(X402_AMOUNT),
+        expectedChainId: 480,
+        expectedPayload: askPayload(),
+      }),
+    ).toThrow(/title must match/);
+  });
+
+  it("rejects transaction plans with reserve commitments not derived from the ask payload", () => {
+    expect(() =>
+      validateLocalSignerTransactionPlan({
+        accountAddress: account.address,
+        ask: walletCallsResponse({
+          transactionPlan: {
+            ...walletCallsResponse().transactionPlan,
+            calls: [
+              walletCallsResponse().transactionPlan!.calls![0]!,
+              { ...walletCallsResponse().transactionPlan!.calls![1]!, data: reserveSubmissionData(BYTES32_ONE) },
+              walletCallsResponse().transactionPlan!.calls![2]!,
+            ],
+            requiresOrderedExecution: true,
+          },
+        }),
+        config: validationConfig(),
+        expectedBountyAmount: BigInt(X402_AMOUNT),
+        expectedChainId: 480,
+        expectedPayload: askPayload(),
+      }),
+    ).toThrow(/revealCommitment must match/);
+  });
+
+  it("rejects x402 transaction plans that do not use the exact signed authorization", () => {
+    expect(() =>
+      validateLocalSignerTransactionPlan({
+        accountAddress: account.address,
+        ask: x402CallsResponse(),
+        config: validationConfig(),
+        expectedBountyAmount: BigInt(X402_AMOUNT),
+        expectedChainId: 480,
+        expectedPaymentAuthorization: {
+          ...signedX402Authorization(),
+          signature: `0x${"2".repeat(64)}${"4".repeat(64)}1c`,
+        },
+        expectedPayload: askPayload(),
+      }),
+    ).toThrow(/paymentAuthorization.r must match/);
   });
 
   it("rejects transaction plans with untrusted targets or spend amounts", () => {
@@ -375,6 +750,7 @@ describe("local signer", () => {
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
         expectedChainId: 480,
+        expectedPayload: askPayload(),
       }),
     ).toThrow(/to must be/);
 
@@ -402,6 +778,7 @@ describe("local signer", () => {
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
         expectedChainId: 480,
+        expectedPayload: askPayload(),
       }),
     ).toThrow(/approve amount must equal/);
   });
@@ -416,6 +793,7 @@ describe("local signer", () => {
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
         expectedChainId: 480,
+        expectedPayload: askPayload(),
       }),
     ).toThrow(/does not match local signer/);
 
@@ -436,6 +814,8 @@ describe("local signer", () => {
         config: validationConfig(),
         expectedBountyAmount: BigInt(X402_AMOUNT),
         expectedChainId: 480,
+        expectedPaymentAuthorization: signedX402Authorization(),
+        expectedPayload: askPayload(),
       }),
     ).toThrow(/unexpected function selector/);
   });
@@ -447,14 +827,15 @@ describe("local signer", () => {
         askCalls.push(request);
         if (!request.paymentAuthorization) {
           return {
-            operationKey: `0x${"2".repeat(64)}`,
+            operationKey: expectedOperationKey(),
+            payloadHash: expectedPayloadHash(),
             paymentMode: "x402_authorization",
             x402AuthorizationRequest: x402AuthorizationRequest(),
           };
         }
 
         return {
-          operationKey: `0x${"2".repeat(64)}`,
+          operationKey: expectedOperationKey(),
           paymentMode: "x402_authorization",
           transactionPlan: { calls: [], requiresOrderedExecution: true },
         };
@@ -470,7 +851,9 @@ describe("local signer", () => {
       config: {
         chainId: 480,
         chainName: "test",
+        contentRegistryAddress: CONTENT_REGISTRY_ADDRESS,
         pollingIntervalMs: 1,
+        questionRewardPoolEscrowAddress: QUESTION_REWARD_ESCROW_ADDRESS,
         receiptTimeoutMs: 1,
         usdcAddress: X402_USDC_ADDRESS,
         x402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
