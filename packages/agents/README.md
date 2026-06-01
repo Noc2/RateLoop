@@ -98,8 +98,8 @@ context.
 
 `local-ask` is the narrow signer path for local agents. It loads the local wallet, sets `walletAddress`, calls
 `askHumans`, signs a returned x402 authorization request when needed, re-calls `askHumans` with
-`paymentAuthorization`, sends every returned `transactionPlan.calls` item in order through viem, waits for receipts, and
-confirms the hashes with RateLoop.
+`paymentAuthorization`, sends every validated `transactionPlan.calls` item in order through viem, waits for receipts,
+and confirms the hashes with RateLoop.
 
 Use an encrypted keystore for persistent wallets:
 
@@ -130,6 +130,8 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_AGENT_WALLET_ADDRESS`             | Funded wallet address for tokenless public asks                                                                          |
 | `RATELOOP_RPC_URL`                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
 | `RATELOOP_CHAIN_ID`                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
+| `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`        | Optional trusted USDC override used to validate x402 typed-data before signing                                           |
+| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` | Optional trusted X402 submitter override used to validate x402 authorization recipients                                  |
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`       | Encrypted local signer keystore path                                                                                     |
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD`   | Password for the local signer keystore; load from a secret source                                                        |
 | `RATELOOP_LOCAL_SIGNER_PASSWORD_ENV`        | Name of an alternate environment variable that holds the keystore password                                               |

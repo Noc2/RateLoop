@@ -14,6 +14,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
+import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import type {
   AskHumansRequest,
   AskHumansResponse,
@@ -33,6 +34,19 @@ const DEFAULT_SCRYPT_PARAMS = {
   p: 1,
   r: 8,
 };
+const X402_USDC_BY_CHAIN_ID: Record<number, Address> = {
+  480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
+  4801: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
+};
+const X402_PRIMARY_TYPE = "ReceiveWithAuthorization";
+const X402_AUTHORIZATION_FIELDS = [
+  { name: "from", type: "address" },
+  { name: "to", type: "address" },
+  { name: "value", type: "uint256" },
+  { name: "validAfter", type: "uint256" },
+  { name: "validBefore", type: "uint256" },
+  { name: "nonce", type: "bytes32" },
+] as const;
 
 type LocalSignerConfig = {
   chainId?: number;
@@ -43,6 +57,8 @@ type LocalSignerConfig = {
   privateKey?: Hex;
   receiptTimeoutMs: number;
   rpcUrl?: string;
+  usdcAddress?: Address;
+  x402QuestionSubmitterAddress?: Address;
 };
 
 type LoadedLocalSignerWallet = {
@@ -131,6 +147,13 @@ type X402Authorization = {
   value?: string;
 };
 
+type SignX402AuthorizationOptions = {
+  expectedAmount?: bigint | number | string;
+  expectedChainId?: number;
+  expectedUsdcAddress?: Address;
+  expectedX402QuestionSubmitterAddress?: Address;
+};
+
 function optionString(options: CliOptions, name: string): string | undefined {
   const value = options[name];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -160,6 +183,14 @@ function parsePrivateKey(value: string | undefined, name: string): Hex | undefin
     throw new Error(`${name} must be a 32-byte hex private key.`);
   }
   return value as Hex;
+}
+
+function parseOptionalAddress(value: string | undefined, name: string): Address | undefined {
+  if (!value) return undefined;
+  if (!isAddress(value, { strict: false })) {
+    throw new Error(`${name} must be an EVM address.`);
+  }
+  return value as Address;
 }
 
 function assertRecord(value: unknown, name: string): JsonRecord {
@@ -226,6 +257,14 @@ function normalizeOptionalChainId(value: unknown, name: string): number | undefi
   return chainId;
 }
 
+function normalizeRequiredChainId(value: unknown, name: string): number {
+  const chainId = normalizeOptionalChainId(value, name);
+  if (chainId === undefined) {
+    throw new Error(`${name} is required.`);
+  }
+  return chainId;
+}
+
 function normalizeZeroNativeValue(value: unknown, name: string): 0n {
   const parsed = normalizeOptionalBigInt(value, name) ?? 0n;
   if (parsed !== 0n) {
@@ -236,6 +275,19 @@ function normalizeZeroNativeValue(value: unknown, name: string): 0n {
 
 function sameAddress(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
+}
+
+function assertExactKeys(record: JsonRecord, expected: readonly string[], name: string) {
+  const expectedSet = new Set(expected);
+  const extras = Object.keys(record).filter(key => !expectedSet.has(key));
+  const missing = expected.filter(key => record[key] === undefined);
+  if (extras.length > 0 || missing.length > 0) {
+    const unexpectedSuffix = extras.length ? `; unexpected ${extras.join(", ")}` : "";
+    const missingSuffix = missing.length ? `; missing ${missing.join(", ")}` : "";
+    throw new Error(
+      `${name} must contain exactly ${expected.join(", ")}${unexpectedSuffix}${missingSuffix}.`,
+    );
+  }
 }
 
 function stripEip712Domain(types: Record<string, TypedDataField[]>): Record<string, TypedDataField[]> {
@@ -310,40 +362,188 @@ function normalizeTypedDataMessage(
   );
 }
 
+function assertReceiveWithAuthorizationTypes(types: Record<string, TypedDataField[]>) {
+  const typeNames = Object.keys(types);
+  if (typeNames.length !== 1 || typeNames[0] !== X402_PRIMARY_TYPE) {
+    throw new Error(`x402 typedData.types must contain only ${X402_PRIMARY_TYPE}.`);
+  }
+  const fields = types[X402_PRIMARY_TYPE];
+  if (!fields || fields.length !== X402_AUTHORIZATION_FIELDS.length) {
+    throw new Error(`x402 typedData.types.${X402_PRIMARY_TYPE} must contain the standard EIP-3009 fields.`);
+  }
+  for (const [index, expected] of X402_AUTHORIZATION_FIELDS.entries()) {
+    const actual = fields[index];
+    if (actual?.name !== expected.name || actual.type !== expected.type) {
+      throw new Error(
+        `x402 typedData.types.${X402_PRIMARY_TYPE}[${index}] must be ${expected.name} ${expected.type}.`,
+      );
+    }
+  }
+}
+
+function normalizeX402Domain(domainRecord: JsonRecord) {
+  assertExactKeys(domainRecord, ["chainId", "name", "verifyingContract", "version"], "x402 typedData.domain");
+  const chainId = normalizeRequiredChainId(domainRecord.chainId, "x402 typedData.domain.chainId");
+  if (domainRecord.name !== "USDC") {
+    throw new Error("x402 typedData.domain.name must be USDC.");
+  }
+  if (domainRecord.version !== "2") {
+    throw new Error("x402 typedData.domain.version must be 2.");
+  }
+  return {
+    chainId,
+    name: "USDC",
+    verifyingContract: normalizeAddress(domainRecord.verifyingContract, "x402 typedData.domain.verifyingContract"),
+    version: "2",
+  };
+}
+
 function parseX402AuthorizationRequest(value: unknown): {
   authorization: X402Authorization;
   typedData: X402TypedData;
+  typedDataDomain: ReturnType<typeof normalizeX402Domain>;
 } {
   const request = assertRecord(value, "x402AuthorizationRequest");
   const typedDataRecord = assertRecord(request.typedData ?? request.eip712, "x402AuthorizationRequest.typedData");
   const primaryType = typedDataRecord.primaryType;
-  if (typeof primaryType !== "string" || !primaryType) {
-    throw new Error("x402 typedData.primaryType is required.");
+  if (primaryType !== X402_PRIMARY_TYPE) {
+    throw new Error(`x402 typedData.primaryType must be ${X402_PRIMARY_TYPE}.`);
   }
 
   const types = stripEip712Domain(readTypedDataFields(typedDataRecord.types));
+  assertReceiveWithAuthorizationTypes(types);
   const rawMessage = assertRecord(typedDataRecord.message, "x402 typedData.message");
+  assertExactKeys(
+    rawMessage,
+    X402_AUTHORIZATION_FIELDS.map(field => field.name),
+    "x402 typedData.message",
+  );
   const normalizedMessage = normalizeTypedDataMessage(rawMessage, primaryType, types);
-  const authorizationSource = assertRecord(request.authorization ?? rawMessage, "x402AuthorizationRequest.authorization");
+  const authorizationSource = assertRecord(
+    request.authorization ?? rawMessage,
+    "x402AuthorizationRequest.authorization",
+  );
+  assertExactKeys(
+    authorizationSource,
+    X402_AUTHORIZATION_FIELDS.map(field => field.name),
+    "x402AuthorizationRequest.authorization",
+  );
+  const typedDataDomain = normalizeX402Domain(assertRecord(typedDataRecord.domain, "x402 typedData.domain"));
 
   const authorization: X402Authorization = {
     from: normalizeAddress(authorizationSource.from ?? rawMessage.from, "paymentAuthorization.from"),
     nonce: normalizeBytes32(authorizationSource.nonce ?? rawMessage.nonce, "paymentAuthorization.nonce"),
     to: normalizeAddress(authorizationSource.to ?? rawMessage.to, "paymentAuthorization.to"),
-    validAfter: normalizeBigInt(authorizationSource.validAfter ?? rawMessage.validAfter, "paymentAuthorization.validAfter").toString(),
-    validBefore: normalizeBigInt(authorizationSource.validBefore ?? rawMessage.validBefore, "paymentAuthorization.validBefore").toString(),
+    validAfter: normalizeBigInt(
+      authorizationSource.validAfter ?? rawMessage.validAfter,
+      "paymentAuthorization.validAfter",
+    ).toString(),
+    validBefore: normalizeBigInt(
+      authorizationSource.validBefore ?? rawMessage.validBefore,
+      "paymentAuthorization.validBefore",
+    ).toString(),
     value: normalizeBigInt(authorizationSource.value ?? rawMessage.value, "paymentAuthorization.value").toString(),
   };
+  assertX402AuthorizationMatchesMessage(authorization, normalizedMessage);
 
   return {
     authorization,
+    typedDataDomain,
     typedData: {
-      domain: assertRecord(typedDataRecord.domain, "x402 typedData.domain"),
+      domain: typedDataDomain,
       message: normalizedMessage,
       primaryType,
       types,
     },
   };
+}
+
+function assertX402AuthorizationMatchesMessage(authorization: X402Authorization, message: JsonRecord) {
+  const messageFrom = normalizeAddress(message.from, "x402 typedData.message.from");
+  const messageTo = normalizeAddress(message.to, "x402 typedData.message.to");
+  if (!authorization.from || !sameAddress(authorization.from, messageFrom)) {
+    throw new Error("x402 authorization.from must match typedData.message.from.");
+  }
+  if (!authorization.to || !sameAddress(authorization.to, messageTo)) {
+    throw new Error("x402 authorization.to must match typedData.message.to.");
+  }
+  const integerFields = ["value", "validAfter", "validBefore"] as const;
+  for (const field of integerFields) {
+    if (
+      normalizeBigInt(authorization[field], `paymentAuthorization.${field}`) !==
+      normalizeBigInt(message[field], `x402 typedData.message.${field}`)
+    ) {
+      throw new Error(`x402 authorization.${field} must match typedData.message.${field}.`);
+    }
+  }
+  if (
+    !authorization.nonce ||
+    authorization.nonce.toLowerCase() !==
+      normalizeBytes32(message.nonce, "x402 typedData.message.nonce").toLowerCase()
+  ) {
+    throw new Error("x402 authorization.nonce must match typedData.message.nonce.");
+  }
+}
+
+function resolveConfiguredUsdcAddress(
+  config: Pick<LocalSignerConfig, "usdcAddress">,
+  chainId: number,
+): Address | undefined {
+  return config.usdcAddress ?? X402_USDC_BY_CHAIN_ID[chainId];
+}
+
+function resolveConfiguredX402SubmitterAddress(
+  config: Pick<LocalSignerConfig, "x402QuestionSubmitterAddress">,
+  chainId: number,
+): Address | undefined {
+  return config.x402QuestionSubmitterAddress ?? getSharedDeploymentAddress(chainId, "X402QuestionSubmitter");
+}
+
+function normalizeExpectedAmount(value: SignX402AuthorizationOptions["expectedAmount"]): bigint | undefined {
+  return value === undefined ? undefined : normalizeBigInt(value, "expected x402 payment amount");
+}
+
+function assertTrustedX402Authorization(
+  account: PrivateKeyAccount,
+  authorization: X402Authorization,
+  typedDataDomain: ReturnType<typeof normalizeX402Domain>,
+  options: SignX402AuthorizationOptions,
+) {
+  if (authorization.from && !sameAddress(authorization.from, account.address)) {
+    throw new Error(`x402 authorization is for ${authorization.from}, but local signer is ${account.address}.`);
+  }
+  if (options.expectedChainId !== undefined && typedDataDomain.chainId !== options.expectedChainId) {
+    throw new Error(
+      `x402 authorization chainId ${typedDataDomain.chainId} does not match local signer chain ${options.expectedChainId}.`,
+    );
+  }
+  if (!options.expectedUsdcAddress) {
+    throw new Error("Cannot validate x402 authorization without a trusted USDC address for this chain.");
+  }
+  if (!sameAddress(typedDataDomain.verifyingContract, options.expectedUsdcAddress)) {
+    throw new Error("x402 typedData.domain.verifyingContract must be the configured USDC token.");
+  }
+  if (!options.expectedX402QuestionSubmitterAddress) {
+    throw new Error(
+      "Cannot validate x402 authorization without a trusted RateLoop x402 submitter address for this chain.",
+    );
+  }
+  if (!authorization.to || !sameAddress(authorization.to, options.expectedX402QuestionSubmitterAddress)) {
+    throw new Error("x402 authorization.to must be the configured RateLoop x402 submitter.");
+  }
+  const expectedAmount = normalizeExpectedAmount(options.expectedAmount);
+  if (
+    expectedAmount !== undefined &&
+    normalizeBigInt(authorization.value, "paymentAuthorization.value") !== expectedAmount
+  ) {
+    throw new Error("x402 authorization.value must equal the requested bounty amount.");
+  }
+  if (
+    normalizeBigInt(authorization.validBefore, "paymentAuthorization.validBefore") <=
+    normalizeBigInt(authorization.validAfter, "paymentAuthorization.validAfter")
+  ) {
+    throw new Error("x402 authorization.validBefore must be greater than validAfter.");
+  }
 }
 
 async function deriveScryptKey(
@@ -457,6 +657,18 @@ export function loadLocalSignerConfig(options: CliOptions = {}, env: NodeJS.Proc
         "RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS",
       ) ?? 120_000,
     rpcUrl: optionString(options, "rpc-url") ?? envString(env, "RATELOOP_RPC_URL"),
+    usdcAddress: parseOptionalAddress(
+      optionString(options, "usdc-address") ??
+        envString(env, "RATELOOP_LOCAL_SIGNER_USDC_ADDRESS") ??
+        envString(env, "RATELOOP_X402_USDC_ADDRESS"),
+      "RATELOOP_LOCAL_SIGNER_USDC_ADDRESS",
+    ),
+    x402QuestionSubmitterAddress: parseOptionalAddress(
+      optionString(options, "x402-submitter-address") ??
+        envString(env, "RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS") ??
+        envString(env, "RATELOOP_X402_QUESTION_SUBMITTER_ADDRESS"),
+      "RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS",
+    ),
   };
 }
 
@@ -534,18 +746,17 @@ function withLocalSignerChainId(request: AskHumansRequest, chainId: number | und
 export async function signX402AuthorizationRequest(
   account: PrivateKeyAccount,
   x402AuthorizationRequest: unknown,
-  options: { expectedChainId?: number } = {},
+  options: SignX402AuthorizationOptions = {},
 ): Promise<X402Authorization> {
-  const { authorization, typedData } = parseX402AuthorizationRequest(x402AuthorizationRequest);
-  if (authorization.from && !sameAddress(authorization.from, account.address)) {
-    throw new Error(`x402 authorization is for ${authorization.from}, but local signer is ${account.address}.`);
-  }
-  const domainChainId = normalizeOptionalChainId(typedData.domain.chainId, "x402 typedData.domain.chainId");
-  if (options.expectedChainId !== undefined && domainChainId !== options.expectedChainId) {
-    throw new Error(
-      `x402 authorization chainId ${domainChainId ?? "missing"} does not match local signer chain ${options.expectedChainId}.`,
-    );
-  }
+  const { authorization, typedData, typedDataDomain } = parseX402AuthorizationRequest(x402AuthorizationRequest);
+  assertTrustedX402Authorization(account, authorization, typedDataDomain, {
+    ...options,
+    expectedChainId: options.expectedChainId ?? typedDataDomain.chainId,
+    expectedUsdcAddress: options.expectedUsdcAddress ?? X402_USDC_BY_CHAIN_ID[typedDataDomain.chainId],
+    expectedX402QuestionSubmitterAddress:
+      options.expectedX402QuestionSubmitterAddress ??
+      getSharedDeploymentAddress(typedDataDomain.chainId, "X402QuestionSubmitter"),
+  });
 
   const signature = await account.signTypedData({
     domain: typedData.domain,
@@ -663,8 +874,14 @@ export async function askHumansWithLocalSigner(params: {
   let finalAsk = initialAsk;
   let signedX402Authorization = false;
   if (initialAsk.x402AuthorizationRequest) {
+    if (baseAsk.chainId === undefined) {
+      throw new Error("Ask payload chainId is required before signing an x402 authorization.");
+    }
     const paymentAuthorization = await signX402AuthorizationRequest(params.account, initialAsk.x402AuthorizationRequest, {
       expectedChainId: baseAsk.chainId,
+      expectedAmount: normalizeBigInt(baseAsk.bounty.amount, "ask payload bounty.amount"),
+      expectedUsdcAddress: resolveConfiguredUsdcAddress(params.config, baseAsk.chainId),
+      expectedX402QuestionSubmitterAddress: resolveConfiguredX402SubmitterAddress(params.config, baseAsk.chainId),
     });
     signedX402Authorization = true;
     params.onProgress?.({ type: "x402_signed" });
