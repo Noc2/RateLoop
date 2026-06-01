@@ -131,6 +131,13 @@
     rgb(239 71 111 / 0.96) 76%,
     rgb(53 158 238 / 0.95)
   );
+  --rateloop-orbit-gradient-static: conic-gradient(
+    rgb(53 158 238 / 0.95),
+    rgb(3 206 164 / 0.95) 28%,
+    rgb(255 196 61 / 0.96) 53%,
+    rgb(239 71 111 / 0.96) 76%,
+    rgb(53 158 238 / 0.95)
+  );
 }
 
 body {
@@ -189,6 +196,16 @@ body {
 
   to {
     --rateloop-gradient-orbit-angle: 1turn;
+  }
+}
+
+@keyframes rateloop-gradient-action-orbit {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  to {
+    transform: translate(-50%, -50%) rotate(1turn);
   }
 }
 
@@ -251,38 +268,44 @@ body {
 .rateloop-gradient-action::before {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background-image: var(--rateloop-orbit-gradient);
+  left: 50%;
+  top: 50%;
+  width: max(250%, 48rem);
+  height: max(1800%, 48rem);
+  border-radius: 50%;
+  background-image: var(--rateloop-orbit-gradient-static);
   opacity: 0;
   pointer-events: none;
+  transform: translate(-50%, -50%) rotate(0deg);
+  transform-origin: center;
   transition: opacity 0.18s ease;
 }
 
 .rateloop-gradient-action[data-motion="intro"] {
-  animation: rateloop-gradient-border-orbit 2.4s linear 2;
+  animation: none;
 }
 
 .rateloop-gradient-action[data-motion="intro"]::before,
 .rateloop-gradient-action[data-motion="processing"]::before,
 .rateloop-gradient-action[aria-busy="true"]::before {
-  background-image: var(--rateloop-orbit-gradient);
+  background-image: var(--rateloop-orbit-gradient-static);
+  will-change: transform;
 }
 
 .rateloop-gradient-action[data-motion="intro"]::before {
   animation:
-    rateloop-gradient-border-orbit 2.4s linear 2,
+    rateloop-gradient-action-orbit 2.4s linear 2,
     rateloop-gradient-runner-fade 4.8s ease-out both;
 }
 
 .rateloop-gradient-action[data-motion="processing"],
 .rateloop-gradient-action[aria-busy="true"] {
-  animation: rateloop-gradient-border-orbit var(--rateloop-gradient-orbit-duration) linear infinite;
+  animation: none;
 }
 
 .rateloop-gradient-action[data-motion="processing"]::before,
 .rateloop-gradient-action[aria-busy="true"]::before {
-  animation: rateloop-gradient-border-orbit var(--rateloop-gradient-orbit-duration) linear infinite;
+  animation: rateloop-gradient-action-orbit var(--rateloop-gradient-orbit-duration) linear infinite;
   filter: saturate(1.22) brightness(1.12);
   opacity: 1;
 }
