@@ -132,6 +132,8 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_CHAIN_ID`                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
 | `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`        | Optional trusted USDC override used to validate x402 typed-data before signing                                           |
 | `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` | Optional trusted X402 submitter override used to validate x402 authorization recipients                                  |
+| `RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS` | Optional trusted ContentRegistry override used to validate wallet-call transaction plans                                 |
+| `RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional trusted QuestionRewardPoolEscrow override used to validate wallet-call approvals                                |
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`       | Encrypted local signer keystore path                                                                                     |
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD`   | Password for the local signer keystore; load from a secret source                                                        |
 | `RATELOOP_LOCAL_SIGNER_PASSWORD_ENV`        | Name of an alternate environment variable that holds the keystore password                                               |

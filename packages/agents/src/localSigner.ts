@@ -4,7 +4,9 @@ import { dirname, resolve } from "node:path";
 import {
   createPublicClient,
   createWalletClient,
+  decodeFunctionData,
   defineChain,
+  erc20Abi,
   http,
   isAddress,
   isHex,
@@ -14,6 +16,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
+import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import type {
   AskHumansRequest,
@@ -51,10 +54,14 @@ const X402_AUTHORIZATION_FIELDS = [
 type LocalSignerConfig = {
   chainId?: number;
   chainName: string;
+  contentRegistryAddress?: Address;
+  feedbackBonusEscrowAddress?: Address;
   keystorePassword?: string;
   keystorePath?: string;
+  lrepAddress?: Address;
   pollingIntervalMs: number;
   privateKey?: Hex;
+  questionRewardPoolEscrowAddress?: Address;
   receiptTimeoutMs: number;
   rpcUrl?: string;
   usdcAddress?: Address;
@@ -153,6 +160,16 @@ type SignX402AuthorizationOptions = {
   expectedUsdcAddress?: Address;
   expectedX402QuestionSubmitterAddress?: Address;
 };
+
+type TransactionPlanValidationConfig = Pick<
+  LocalSignerConfig,
+  | "contentRegistryAddress"
+  | "feedbackBonusEscrowAddress"
+  | "lrepAddress"
+  | "questionRewardPoolEscrowAddress"
+  | "usdcAddress"
+  | "x402QuestionSubmitterAddress"
+>;
 
 function optionString(options: CliOptions, name: string): string | undefined {
   const value = options[name];
@@ -271,6 +288,13 @@ function normalizeZeroNativeValue(value: unknown, name: string): 0n {
     throw new Error(`${name} must be zero for RateLoop agent transaction plans.`);
   }
   return 0n;
+}
+
+function normalizeOperationKey(value: unknown, name: string): Hex {
+  if (typeof value !== "string" || !/^0x[a-fA-F0-9]{64}$/.test(value)) {
+    throw new Error(`${name} must be a 32-byte hex string.`);
+  }
+  return value as Hex;
 }
 
 function sameAddress(left: string, right: string): boolean {
@@ -489,7 +513,7 @@ function resolveConfiguredUsdcAddress(
   config: Pick<LocalSignerConfig, "usdcAddress">,
   chainId: number,
 ): Address | undefined {
-  return config.usdcAddress ?? X402_USDC_BY_CHAIN_ID[chainId];
+  return config.usdcAddress ?? getSharedDeploymentAddress(chainId, "MockERC20") ?? X402_USDC_BY_CHAIN_ID[chainId];
 }
 
 function resolveConfiguredX402SubmitterAddress(
@@ -497,6 +521,27 @@ function resolveConfiguredX402SubmitterAddress(
   chainId: number,
 ): Address | undefined {
   return config.x402QuestionSubmitterAddress ?? getSharedDeploymentAddress(chainId, "X402QuestionSubmitter");
+}
+
+function resolveConfiguredContentRegistryAddress(
+  config: Pick<LocalSignerConfig, "contentRegistryAddress">,
+  chainId: number,
+): Address | undefined {
+  return config.contentRegistryAddress ?? getSharedDeploymentAddress(chainId, "ContentRegistry");
+}
+
+function resolveConfiguredQuestionRewardPoolEscrowAddress(
+  config: Pick<LocalSignerConfig, "questionRewardPoolEscrowAddress">,
+  chainId: number,
+): Address | undefined {
+  return config.questionRewardPoolEscrowAddress ?? getSharedDeploymentAddress(chainId, "QuestionRewardPoolEscrow");
+}
+
+function requireConfiguredAddress(value: Address | undefined, name: string): Address {
+  if (!value) {
+    throw new Error(`Cannot validate transaction plan without a trusted ${name} address for this chain.`);
+  }
+  return value;
 }
 
 function normalizeExpectedAmount(value: SignX402AuthorizationOptions["expectedAmount"]): bigint | undefined {
@@ -544,6 +589,280 @@ function assertTrustedX402Authorization(
   ) {
     throw new Error("x402 authorization.validBefore must be greater than validAfter.");
   }
+}
+
+function normalizeCallEnvelope(params: {
+  call: RateLoopAgentWalletTransactionCall;
+  expectedPhase: string;
+  expectedTo: Address;
+  index: number;
+}): { data: Hex; to: Address } {
+  const to = normalizeAddress(params.call.to, `transactionPlan.calls[${params.index}].to`);
+  if (!sameAddress(to, params.expectedTo)) {
+    throw new Error(`transactionPlan.calls[${params.index}].to must be ${params.expectedTo}.`);
+  }
+  if (params.call.phase !== params.expectedPhase) {
+    throw new Error(`transactionPlan.calls[${params.index}].phase must be ${params.expectedPhase}.`);
+  }
+  const data = normalizeOptionalTransactionData(params.call.data, `transactionPlan.calls[${params.index}].data`);
+  if (data === "0x") {
+    throw new Error(`transactionPlan.calls[${params.index}].data is required.`);
+  }
+  normalizeZeroNativeValue(params.call.value, `transactionPlan.calls[${params.index}].value`);
+  if (params.call.waitAfterMs !== undefined) {
+    if (
+      typeof params.call.waitAfterMs !== "number" ||
+      !Number.isFinite(params.call.waitAfterMs) ||
+      params.call.waitAfterMs < 0
+    ) {
+      throw new Error(`transactionPlan.calls[${params.index}].waitAfterMs must be a non-negative number.`);
+    }
+  }
+  return { data, to };
+}
+
+function decodedCall(
+  data: Hex,
+  abi: typeof erc20Abi | typeof ContentRegistryAbi | typeof X402QuestionSubmitterAbi,
+  fieldName: string,
+) {
+  try {
+    return decodeFunctionData({ abi, data }) as { args?: readonly unknown[]; functionName: string };
+  } catch {
+    throw new Error(`${fieldName} has an unexpected function selector.`);
+  }
+}
+
+function assertRewardTerms(value: unknown, expectedAmount: bigint, fieldName: string) {
+  if (!value || typeof value !== "object") {
+    throw new Error(`${fieldName} is required.`);
+  }
+  const rewardTerms = value as { amount?: unknown; asset?: unknown };
+  if (normalizeBigInt(rewardTerms.asset, `${fieldName}.asset`) !== 1n) {
+    throw new Error(`${fieldName}.asset must be USDC.`);
+  }
+  if (normalizeBigInt(rewardTerms.amount, `${fieldName}.amount`) !== expectedAmount) {
+    throw new Error(`${fieldName}.amount must equal the requested bounty amount.`);
+  }
+}
+
+function validateApproveCall(params: {
+  call: RateLoopAgentWalletTransactionCall;
+  expectedAmount: bigint;
+  expectedSpender: Address;
+  expectedToken: Address;
+  expectedPhase: string;
+  index: number;
+}) {
+  const { data } = normalizeCallEnvelope({
+    call: params.call,
+    expectedPhase: params.expectedPhase,
+    expectedTo: params.expectedToken,
+    index: params.index,
+  });
+  const decoded = decodedCall(data, erc20Abi, `transactionPlan.calls[${params.index}]`);
+  if (decoded.functionName !== "approve") {
+    throw new Error(`transactionPlan.calls[${params.index}] must call ERC20 approve.`);
+  }
+  const [spender, amount] = decoded.args ?? [];
+  if (typeof spender !== "string" || !sameAddress(spender, params.expectedSpender)) {
+    throw new Error(`transactionPlan.calls[${params.index}] approve spender must be the configured RateLoop escrow.`);
+  }
+  if (normalizeBigInt(amount, `transactionPlan.calls[${params.index}].approve.amount`) !== params.expectedAmount) {
+    throw new Error(`transactionPlan.calls[${params.index}] approve amount must equal the requested bounty amount.`);
+  }
+}
+
+function validateReserveSubmissionCall(params: {
+  call: RateLoopAgentWalletTransactionCall;
+  contentRegistryAddress: Address;
+  index: number;
+}) {
+  const { data } = normalizeCallEnvelope({
+    call: params.call,
+    expectedPhase: "reserve_submission",
+    expectedTo: params.contentRegistryAddress,
+    index: params.index,
+  });
+  const decoded = decodedCall(data, ContentRegistryAbi, `transactionPlan.calls[${params.index}]`);
+  if (decoded.functionName !== "reserveSubmission") {
+    throw new Error(`transactionPlan.calls[${params.index}] must call reserveSubmission.`);
+  }
+  normalizeBytes32(decoded.args?.[0], `transactionPlan.calls[${params.index}].reserveSubmission.revealCommitment`);
+}
+
+function validateSubmitQuestionCall(params: {
+  call: RateLoopAgentWalletTransactionCall;
+  contentRegistryAddress: Address;
+  expectedAmount: bigint;
+  index: number;
+}) {
+  const { data } = normalizeCallEnvelope({
+    call: params.call,
+    expectedPhase: "submit_question",
+    expectedTo: params.contentRegistryAddress,
+    index: params.index,
+  });
+  const decoded = decodedCall(data, ContentRegistryAbi, `transactionPlan.calls[${params.index}]`);
+  if (
+    decoded.functionName !== "submitQuestionWithRewardAndRoundConfig" &&
+    decoded.functionName !== "submitQuestionBundleWithRewardAndRoundConfig"
+  ) {
+    throw new Error(
+      `transactionPlan.calls[${params.index}] must call a RateLoop rewarded question submission function.`,
+    );
+  }
+  const rewardTerms = decoded.functionName === "submitQuestionBundleWithRewardAndRoundConfig"
+    ? decoded.args?.[1]
+    : decoded.args?.[8];
+  assertRewardTerms(rewardTerms, params.expectedAmount, `transactionPlan.calls[${params.index}].rewardTerms`);
+}
+
+function validateSubmitX402QuestionCall(params: {
+  accountAddress: Address;
+  call: RateLoopAgentWalletTransactionCall;
+  expectedAmount: bigint;
+  index: number;
+  x402QuestionSubmitterAddress: Address;
+}) {
+  const { data } = normalizeCallEnvelope({
+    call: params.call,
+    expectedPhase: "submit_x402_question",
+    expectedTo: params.x402QuestionSubmitterAddress,
+    index: params.index,
+  });
+  const decoded = decodedCall(data, X402QuestionSubmitterAbi, `transactionPlan.calls[${params.index}]`);
+  if (decoded.functionName !== "submitQuestionWithX402Payment") {
+    throw new Error(`transactionPlan.calls[${params.index}] must call submitQuestionWithX402Payment.`);
+  }
+  assertRewardTerms(decoded.args?.[8], params.expectedAmount, `transactionPlan.calls[${params.index}].rewardTerms`);
+  const authorization = decoded.args?.[11];
+  if (!authorization || typeof authorization !== "object") {
+    throw new Error(`transactionPlan.calls[${params.index}].paymentAuthorization is required.`);
+  }
+  const parsed = authorization as { from?: unknown; to?: unknown; value?: unknown };
+  if (!sameAddress(normalizeAddress(parsed.from, "paymentAuthorization.from"), params.accountAddress)) {
+    throw new Error(`transactionPlan.calls[${params.index}] x402 authorization.from must match the local signer.`);
+  }
+  if (!sameAddress(normalizeAddress(parsed.to, "paymentAuthorization.to"), params.x402QuestionSubmitterAddress)) {
+    throw new Error(`transactionPlan.calls[${params.index}] x402 authorization.to must be the RateLoop submitter.`);
+  }
+  if (normalizeBigInt(parsed.value, "paymentAuthorization.value") !== params.expectedAmount) {
+    throw new Error(`transactionPlan.calls[${params.index}] x402 authorization.value must equal the requested bounty.`);
+  }
+}
+
+function validatePaymentMetadata(params: {
+  ask: AskHumansResponse;
+  expectedAmount: bigint;
+  expectedSpender: Address;
+  usdcAddress: Address;
+}) {
+  const payment = params.ask.payment;
+  if (!payment) {
+    throw new Error("RateLoop transaction plan is missing payment metadata.");
+  }
+  if (!payment.tokenAddress || !sameAddress(normalizeAddress(payment.tokenAddress, "payment.tokenAddress"), params.usdcAddress)) {
+    throw new Error("RateLoop transaction plan payment.tokenAddress must be the configured USDC token.");
+  }
+  if (!payment.spender || !sameAddress(normalizeAddress(payment.spender, "payment.spender"), params.expectedSpender)) {
+    throw new Error("RateLoop transaction plan payment.spender must be the expected RateLoop contract.");
+  }
+  if (normalizeBigInt(payment.amount, "payment.amount") !== params.expectedAmount) {
+    throw new Error("RateLoop transaction plan payment.amount must equal the requested bounty amount.");
+  }
+}
+
+export function validateLocalSignerTransactionPlan(params: {
+  accountAddress: Address;
+  ask: AskHumansResponse;
+  config: TransactionPlanValidationConfig;
+  expectedBountyAmount: bigint;
+  expectedChainId?: number;
+}): RateLoopAgentWalletTransactionCall[] {
+  const calls = params.ask.transactionPlan?.calls ?? [];
+  if (calls.length === 0) {
+    return [];
+  }
+  normalizeOperationKey(params.ask.operationKey, "operationKey");
+  if (params.ask.transactionPlan?.requiresOrderedExecution !== true) {
+    throw new Error("RateLoop transaction plans must require ordered execution.");
+  }
+  const responseChainId = normalizeRequiredChainId(params.ask.chainId, "ask response chainId");
+  if (params.expectedChainId !== undefined && responseChainId !== params.expectedChainId) {
+    throw new Error(`Ask response chainId ${responseChainId} does not match local signer chain ${params.expectedChainId}.`);
+  }
+  const wallet = assertRecord(params.ask.wallet, "ask response wallet");
+  const walletAddress = normalizeAddress(wallet.address, "ask response wallet.address");
+  if (!sameAddress(walletAddress, params.accountAddress)) {
+    throw new Error(`RateLoop transaction plan wallet ${walletAddress} does not match local signer ${params.accountAddress}.`);
+  }
+
+  const usdcAddress = requireConfiguredAddress(resolveConfiguredUsdcAddress(params.config, responseChainId), "USDC token");
+  const contentRegistryAddress = requireConfiguredAddress(
+    resolveConfiguredContentRegistryAddress(params.config, responseChainId),
+    "ContentRegistry",
+  );
+  const paymentMode = typeof params.ask.paymentMode === "string" ? params.ask.paymentMode : "";
+
+  if (paymentMode === "wallet_calls") {
+    if (calls.length !== 3) {
+      throw new Error("wallet_calls transaction plans must contain approve, reserve, and submit calls.");
+    }
+    const escrowAddress = requireConfiguredAddress(
+      resolveConfiguredQuestionRewardPoolEscrowAddress(params.config, responseChainId),
+      "QuestionRewardPoolEscrow",
+    );
+    validatePaymentMetadata({
+      ask: params.ask,
+      expectedAmount: params.expectedBountyAmount,
+      expectedSpender: escrowAddress,
+      usdcAddress,
+    });
+    validateApproveCall({
+      call: calls[0]!,
+      expectedAmount: params.expectedBountyAmount,
+      expectedPhase: "approve_usdc",
+      expectedSpender: escrowAddress,
+      expectedToken: usdcAddress,
+      index: 0,
+    });
+    validateReserveSubmissionCall({ call: calls[1]!, contentRegistryAddress, index: 1 });
+    validateSubmitQuestionCall({
+      call: calls[2]!,
+      contentRegistryAddress,
+      expectedAmount: params.expectedBountyAmount,
+      index: 2,
+    });
+    return calls;
+  }
+
+  if (paymentMode === "x402_authorization") {
+    if (calls.length !== 2) {
+      throw new Error("x402_authorization transaction plans must contain reserve and submit calls.");
+    }
+    const x402QuestionSubmitterAddress = requireConfiguredAddress(
+      resolveConfiguredX402SubmitterAddress(params.config, responseChainId),
+      "X402QuestionSubmitter",
+    );
+    validatePaymentMetadata({
+      ask: params.ask,
+      expectedAmount: params.expectedBountyAmount,
+      expectedSpender: x402QuestionSubmitterAddress,
+      usdcAddress,
+    });
+    validateReserveSubmissionCall({ call: calls[0]!, contentRegistryAddress, index: 0 });
+    validateSubmitX402QuestionCall({
+      accountAddress: params.accountAddress,
+      call: calls[1]!,
+      expectedAmount: params.expectedBountyAmount,
+      index: 1,
+      x402QuestionSubmitterAddress,
+    });
+    return calls;
+  }
+
+  throw new Error("RateLoop transaction plan paymentMode must be wallet_calls or x402_authorization.");
 }
 
 async function deriveScryptKey(
@@ -640,8 +959,22 @@ export function loadLocalSignerConfig(options: CliOptions = {}, env: NodeJS.Proc
   return {
     chainId: parsePositiveInteger(optionString(options, "chain-id") ?? envString(env, "RATELOOP_CHAIN_ID"), "RATELOOP_CHAIN_ID"),
     chainName: optionString(options, "chain-name") ?? envString(env, "RATELOOP_CHAIN_NAME") ?? "RateLoop local signer chain",
+    contentRegistryAddress: parseOptionalAddress(
+      optionString(options, "content-registry-address") ??
+        envString(env, "RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS"),
+      "RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS",
+    ),
+    feedbackBonusEscrowAddress: parseOptionalAddress(
+      optionString(options, "feedback-bonus-escrow-address") ??
+        envString(env, "RATELOOP_LOCAL_SIGNER_FEEDBACK_BONUS_ESCROW_ADDRESS"),
+      "RATELOOP_LOCAL_SIGNER_FEEDBACK_BONUS_ESCROW_ADDRESS",
+    ),
     keystorePassword,
     keystorePath: optionString(options, "keystore") ?? envString(env, "RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH"),
+    lrepAddress: parseOptionalAddress(
+      optionString(options, "lrep-address") ?? envString(env, "RATELOOP_LOCAL_SIGNER_LREP_ADDRESS"),
+      "RATELOOP_LOCAL_SIGNER_LREP_ADDRESS",
+    ),
     pollingIntervalMs:
       parsePositiveInteger(
         optionString(options, "polling-interval-ms") ?? envString(env, "RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS"),
@@ -650,6 +983,11 @@ export function loadLocalSignerConfig(options: CliOptions = {}, env: NodeJS.Proc
     privateKey: parsePrivateKey(
       optionString(options, "private-key") ?? envString(env, "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY"),
       "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY",
+    ),
+    questionRewardPoolEscrowAddress: parseOptionalAddress(
+      optionString(options, "question-reward-pool-escrow-address") ??
+        envString(env, "RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS"),
+      "RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
     ),
     receiptTimeoutMs:
       parsePositiveInteger(
@@ -894,7 +1232,13 @@ export async function askHumansWithLocalSigner(params: {
     params.onProgress?.({ response: finalAsk, type: "x402_resubmitted" });
   }
 
-  const calls = finalAsk.transactionPlan?.calls ?? [];
+  const calls = validateLocalSignerTransactionPlan({
+    accountAddress: params.account.address,
+    ask: finalAsk,
+    config: params.config,
+    expectedBountyAmount: normalizeBigInt(baseAsk.bounty.amount, "ask payload bounty.amount"),
+    expectedChainId: baseAsk.chainId,
+  });
   if (!calls.length) {
     return {
       finalAsk,
