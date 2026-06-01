@@ -103,6 +103,10 @@ export function getConfiguredQuestionRewardPoolEscrowAddress(chainId: number): `
   return deployedAddress;
 }
 
+export function getConfiguredX402QuestionSubmitterAddress(chainId: number): `0x${string}` | undefined {
+  return getDeployedContractAddress(chainId, "X402QuestionSubmitter");
+}
+
 export function getConfiguredFeedbackBonusEscrowAddress(chainId: number): `0x${string}` | undefined {
   return getDeployedContractAddress(chainId, "FeedbackBonusEscrow");
 }

@@ -18,6 +18,11 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { DOCS_AI_ROUTE } from "~~/constants/routes";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import {
+  readBrowserSigningBountyAmount,
+  validateBrowserX402AuthorizationRequest,
+} from "~~/lib/agent/browserSigningValidation";
+import { getConfiguredX402QuestionSubmitterAddress, getDefaultUsdcAddress } from "~~/lib/questionRewardPools";
 import { notification } from "~~/utils/scaffold-eth";
 
 type JsonRecord = Record<string, unknown>;
@@ -132,85 +137,6 @@ function assertZeroValue(value: unknown, field: string) {
   if (value === undefined || value === null || value === "" || value === "0" || value === 0 || value === 0n) return 0n;
   if (typeof value === "string" && /^0x0+$/i.test(value)) return 0n;
   throw new Error(`${field} must be zero.`);
-}
-
-type ValidatedTypedData = {
-  domain: {
-    chainId: number;
-    name?: string;
-    verifyingContract: Address;
-    version?: string;
-    salt?: Hex;
-  };
-  message: JsonRecord;
-  primaryType: string;
-  types: Record<string, Array<{ name: string; type: string }>>;
-};
-
-// H-2 / N-1 (2026-05-22 audit): the domain used to flow through the page as a plain
-// JsonRecord cast via `as never` into signTypedDataAsync, which let a compromised
-// backend slip in any chainId/verifyingContract pair (cross-protocol signature
-// reuse). Validate the structural shape up front and reject anything malformed.
-function readTypedData(request: JsonRecord | null | undefined): ValidatedTypedData {
-  const typedData = request?.typedData ?? request?.eip712;
-  if (!typedData || typeof typedData !== "object" || Array.isArray(typedData)) {
-    throw new Error("RateLoop did not return x402 typed data.");
-  }
-  const candidate = typedData as JsonRecord;
-  const domainRaw = candidate.domain;
-  if (!domainRaw || typeof domainRaw !== "object" || Array.isArray(domainRaw)) {
-    throw new Error("Signing intent is missing an EIP-712 domain.");
-  }
-  const domain = domainRaw as JsonRecord;
-  const chainIdRaw = domain.chainId;
-  const chainId =
-    typeof chainIdRaw === "number"
-      ? chainIdRaw
-      : typeof chainIdRaw === "string"
-        ? Number.parseInt(chainIdRaw, 10)
-        : NaN;
-  if (!Number.isFinite(chainId) || chainId <= 0) {
-    throw new Error("EIP-712 domain.chainId is not a valid chain identifier.");
-  }
-  const verifyingContract = normalizeAddress(domain.verifyingContract, "EIP-712 domain.verifyingContract");
-  if (domain.name !== undefined && typeof domain.name !== "string") {
-    throw new Error("EIP-712 domain.name must be a string when present.");
-  }
-  if (domain.version !== undefined && typeof domain.version !== "string") {
-    throw new Error("EIP-712 domain.version must be a string when present.");
-  }
-  const salt = domain.salt !== undefined ? normalizeHex(domain.salt, "EIP-712 domain.salt") : undefined;
-  const messageRaw = candidate.message;
-  if (!messageRaw || typeof messageRaw !== "object" || Array.isArray(messageRaw)) {
-    throw new Error("Signing intent is missing an EIP-712 message.");
-  }
-  if (typeof candidate.primaryType !== "string" || !candidate.primaryType) {
-    throw new Error("Signing intent is missing primaryType.");
-  }
-  const typesRaw = candidate.types;
-  if (!typesRaw || typeof typesRaw !== "object" || Array.isArray(typesRaw)) {
-    throw new Error("Signing intent is missing types.");
-  }
-  return {
-    domain: {
-      chainId,
-      name: domain.name as string | undefined,
-      verifyingContract,
-      version: domain.version as string | undefined,
-      salt,
-    },
-    message: messageRaw as JsonRecord,
-    primaryType: candidate.primaryType,
-    types: typesRaw as Record<string, Array<{ name: string; type: string }>>,
-  };
-}
-
-function readAuthorization(request: JsonRecord | null | undefined) {
-  const authorization = request?.authorization;
-  if (!authorization || typeof authorization !== "object" || Array.isArray(authorization)) {
-    return readTypedData(request).message;
-  }
-  return authorization as JsonRecord;
 }
 
 // C-2 (2026-05-22 audit): decode the two ERC-20 selectors most commonly seen here
@@ -373,18 +299,25 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
       const authorizationRequest = prepared.x402AuthorizationRequest;
       const calls = prepared.transactionPlan?.calls ?? [];
       if (authorizationRequest && calls.length === 0) {
-        const typedData = readTypedData(authorizationRequest);
-        // H-1 (2026-05-22 audit): refuse to sign typed data whose domain.chainId disagrees
-        // with the chain advertised by the signing intent. Without the cross-check, a
-        // compromised backend could surface a "World Chain Sepolia" intent to the user
-        // while handing them a domain bound to mainnet (or vice versa), enabling
-        // cross-chain signature reuse.
-        if (intent?.chainId && typedData.domain.chainId !== intent.chainId) {
-          throw new Error(
-            `Signing intent advertises chain ${intent.chainId} but the EIP-712 domain is bound to chain ${typedData.domain.chainId}. Refusing to sign.`,
-          );
+        if (!intent?.chainId) {
+          throw new Error("Signing intent is missing a chainId.");
         }
-        const authorization = readAuthorization(authorizationRequest);
+        const expectedUsdcAddress = getDefaultUsdcAddress(intent.chainId);
+        if (!expectedUsdcAddress) {
+          throw new Error("Cannot validate x402 authorization without a configured USDC token.");
+        }
+        const expectedSubmitterAddress = getConfiguredX402QuestionSubmitterAddress(intent.chainId);
+        if (!expectedSubmitterAddress) {
+          throw new Error("Cannot validate x402 authorization without a configured RateLoop x402 submitter.");
+        }
+        const { authorization, typedData } = validateBrowserX402AuthorizationRequest({
+          expectedAmount: readBrowserSigningBountyAmount(intent.requestBody),
+          expectedChainId: intent.chainId,
+          expectedSubmitterAddress,
+          expectedUsdcAddress,
+          expectedWalletAddress: address,
+          request: authorizationRequest,
+        });
         const signature = await signTypedDataAsync({
           domain: typedData.domain,
           message: typedData.message,
@@ -404,7 +337,16 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
     } finally {
       setIsPreparing(false);
     }
-  }, [address, chain?.id, connectedMismatch, intent?.chainId, postPrepare, signTypedDataAsync, switchToChain]);
+  }, [
+    address,
+    chain?.id,
+    connectedMismatch,
+    intent?.chainId,
+    intent?.requestBody,
+    postPrepare,
+    signTypedDataAsync,
+    switchToChain,
+  ]);
 
   const handleExecute = useCallback(async () => {
     if (!intent?.transactionPlan?.calls?.length) {

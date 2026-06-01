@@ -1,0 +1,228 @@
+import { type Address, type Hex, isAddress } from "viem";
+
+type JsonRecord = Record<string, unknown>;
+
+const X402_PRIMARY_TYPE = "ReceiveWithAuthorization";
+const X402_AUTHORIZATION_FIELDS = [
+  { name: "from", type: "address" },
+  { name: "to", type: "address" },
+  { name: "value", type: "uint256" },
+  { name: "validAfter", type: "uint256" },
+  { name: "validBefore", type: "uint256" },
+  { name: "nonce", type: "bytes32" },
+] as const;
+
+export type BrowserX402Authorization = {
+  from: Address;
+  nonce: Hex;
+  to: Address;
+  validAfter: string;
+  validBefore: string;
+  value: string;
+};
+
+export type BrowserX402TypedData = {
+  domain: {
+    chainId: number;
+    name: "USDC";
+    verifyingContract: Address;
+    version: "2";
+  };
+  message: BrowserX402Authorization;
+  primaryType: typeof X402_PRIMARY_TYPE;
+  types: {
+    [X402_PRIMARY_TYPE]: Array<{ name: string; type: string }>;
+  };
+};
+
+function isRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function assertExactKeys(value: JsonRecord, expectedKeys: readonly string[], fieldName: string) {
+  const actualKeys = Object.keys(value).sort();
+  const sortedExpected = [...expectedKeys].sort();
+  if (actualKeys.length !== sortedExpected.length || actualKeys.some((key, index) => key !== sortedExpected[index])) {
+    throw new Error(`${fieldName} has unexpected fields.`);
+  }
+}
+
+function normalizeAddressField(value: unknown, fieldName: string): Address {
+  if (typeof value !== "string" || !isAddress(value, { strict: false })) {
+    throw new Error(`${fieldName} must be an EVM address.`);
+  }
+  return value as Address;
+}
+
+function normalizeBytes32(value: unknown, fieldName: string): Hex {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error(`${fieldName} must be a 32-byte hex value.`);
+  }
+  return value as Hex;
+}
+
+function normalizeUintString(value: unknown, fieldName: string): string {
+  if (typeof value === "bigint") {
+    if (value < 0n) throw new Error(`${fieldName} must be a non-negative integer.`);
+    return value.toString();
+  }
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`${fieldName} must be a non-negative safe integer.`);
+    }
+    return BigInt(value).toString();
+  }
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    return BigInt(value.trim()).toString();
+  }
+  throw new Error(`${fieldName} must be a non-negative integer string.`);
+}
+
+function normalizeChainId(value: unknown, fieldName: string): number {
+  const raw = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${fieldName} must be a positive integer.`);
+  }
+  const chainId = Number(raw);
+  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer.`);
+  }
+  return chainId;
+}
+
+function sameAddress(left: string | undefined | null, right: string | undefined | null) {
+  return Boolean(left && right && left.toLowerCase() === right.toLowerCase());
+}
+
+function readTypedData(request: JsonRecord | null | undefined): BrowserX402TypedData {
+  const typedData = request?.typedData ?? request?.eip712;
+  if (!isRecord(typedData)) {
+    throw new Error("RateLoop did not return x402 typed data.");
+  }
+
+  const domain = typedData.domain;
+  if (!isRecord(domain)) {
+    throw new Error("Signing intent is missing an EIP-712 domain.");
+  }
+  assertExactKeys(domain, ["chainId", "name", "verifyingContract", "version"], "EIP-712 domain");
+  if (domain.name !== "USDC") {
+    throw new Error("EIP-712 domain.name must be USDC.");
+  }
+  if (domain.version !== "2") {
+    throw new Error("EIP-712 domain.version must be 2.");
+  }
+
+  const primaryType = typedData.primaryType;
+  if (primaryType !== X402_PRIMARY_TYPE) {
+    throw new Error(`Signing intent primaryType must be ${X402_PRIMARY_TYPE}.`);
+  }
+
+  const types = typedData.types;
+  if (!isRecord(types)) {
+    throw new Error("Signing intent is missing types.");
+  }
+  assertExactKeys(types, [X402_PRIMARY_TYPE], "x402 typedData.types");
+  const fields = types[X402_PRIMARY_TYPE];
+  if (!Array.isArray(fields) || fields.length !== X402_AUTHORIZATION_FIELDS.length) {
+    throw new Error(`x402 typedData.types.${X402_PRIMARY_TYPE} must contain the standard fields.`);
+  }
+  fields.forEach((field, index) => {
+    const expected = X402_AUTHORIZATION_FIELDS[index];
+    if (!isRecord(field) || field.name !== expected.name || field.type !== expected.type) {
+      throw new Error(`x402 typedData.types.${X402_PRIMARY_TYPE}[${index}] must be ${expected.name} ${expected.type}.`);
+    }
+  });
+
+  const message = normalizeAuthorizationRecord(typedData.message, "x402 typedData.message");
+  return {
+    domain: {
+      chainId: normalizeChainId(domain.chainId, "EIP-712 domain.chainId"),
+      name: "USDC",
+      verifyingContract: normalizeAddressField(domain.verifyingContract, "EIP-712 domain.verifyingContract"),
+      version: "2",
+    },
+    message,
+    primaryType: X402_PRIMARY_TYPE,
+    types: {
+      ReceiveWithAuthorization: X402_AUTHORIZATION_FIELDS.map(field => ({ ...field })),
+    },
+  };
+}
+
+function normalizeAuthorizationRecord(value: unknown, fieldName: string): BrowserX402Authorization {
+  if (!isRecord(value)) {
+    throw new Error(`${fieldName} must be an object.`);
+  }
+  assertExactKeys(value, ["from", "nonce", "to", "validAfter", "validBefore", "value"], fieldName);
+  return {
+    from: normalizeAddressField(value.from, `${fieldName}.from`),
+    nonce: normalizeBytes32(value.nonce, `${fieldName}.nonce`),
+    to: normalizeAddressField(value.to, `${fieldName}.to`),
+    validAfter: normalizeUintString(value.validAfter, `${fieldName}.validAfter`),
+    validBefore: normalizeUintString(value.validBefore, `${fieldName}.validBefore`),
+    value: normalizeUintString(value.value, `${fieldName}.value`),
+  };
+}
+
+function assertAuthorizationMatchesMessage(authorization: BrowserX402Authorization, message: BrowserX402Authorization) {
+  if (!sameAddress(authorization.from, message.from)) {
+    throw new Error("x402 authorization.from must match typedData.message.from.");
+  }
+  if (!sameAddress(authorization.to, message.to)) {
+    throw new Error("x402 authorization.to must match typedData.message.to.");
+  }
+  if (authorization.nonce.toLowerCase() !== message.nonce.toLowerCase()) {
+    throw new Error("x402 authorization.nonce must match typedData.message.nonce.");
+  }
+  for (const field of ["value", "validAfter", "validBefore"] as const) {
+    if (authorization[field] !== message[field]) {
+      throw new Error(`x402 authorization.${field} must match typedData.message.${field}.`);
+    }
+  }
+}
+
+export function readBrowserSigningBountyAmount(requestBody: JsonRecord | null | undefined) {
+  if (!isRecord(requestBody?.bounty)) {
+    throw new Error("Signing intent request body is missing bounty.amount.");
+  }
+  return normalizeUintString(requestBody.bounty.amount, "bounty.amount");
+}
+
+export function validateBrowserX402AuthorizationRequest(params: {
+  expectedAmount: string | bigint | number;
+  expectedChainId: number;
+  expectedSubmitterAddress: Address;
+  expectedUsdcAddress: Address;
+  expectedWalletAddress: Address;
+  request: JsonRecord | null | undefined;
+}): { authorization: BrowserX402Authorization; typedData: BrowserX402TypedData } {
+  const typedData = readTypedData(params.request);
+  const authorizationSource = isRecord(params.request?.authorization)
+    ? params.request.authorization
+    : typedData.message;
+  const authorization = normalizeAuthorizationRecord(authorizationSource, "x402AuthorizationRequest.authorization");
+  assertAuthorizationMatchesMessage(authorization, typedData.message);
+
+  if (typedData.domain.chainId !== params.expectedChainId) {
+    throw new Error(
+      `Signing intent advertises chain ${params.expectedChainId} but the EIP-712 domain is bound to chain ${typedData.domain.chainId}. Refusing to sign.`,
+    );
+  }
+  if (!sameAddress(typedData.domain.verifyingContract, params.expectedUsdcAddress)) {
+    throw new Error("EIP-712 domain.verifyingContract must be the configured USDC token.");
+  }
+  if (!sameAddress(authorization.from, params.expectedWalletAddress)) {
+    throw new Error("x402 authorization.from must match the connected wallet.");
+  }
+  if (!sameAddress(authorization.to, params.expectedSubmitterAddress)) {
+    throw new Error("x402 authorization.to must be the configured RateLoop x402 submitter.");
+  }
+  if (authorization.value !== normalizeUintString(params.expectedAmount, "expected x402 amount")) {
+    throw new Error("x402 authorization.value must equal the requested bounty amount.");
+  }
+  if (BigInt(authorization.validBefore) <= BigInt(authorization.validAfter)) {
+    throw new Error("x402 authorization.validBefore must be greater than validAfter.");
+  }
+
+  return { authorization, typedData };
+}
