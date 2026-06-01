@@ -11,6 +11,11 @@ export const RateLoopGovernorAbi = [
         "name": "_timelock",
         "type": "address",
         "internalType": "contract TimelockController"
+      },
+      {
+        "name": "excludedHolders",
+        "type": "address[]",
+        "internalType": "address[]"
       }
     ],
     "stateMutability": "nonpayable"
@@ -643,19 +648,6 @@ export const RateLoopGovernorAbi = [
   },
   {
     "type": "function",
-    "name": "initializePools",
-    "inputs": [
-      {
-        "name": "excludedHolders",
-        "type": "address[]",
-        "internalType": "address[]"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "isExcludedHolder",
     "inputs": [
       {
@@ -845,19 +837,6 @@ export const RateLoopGovernorAbi = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "poolsInitializer",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "view"

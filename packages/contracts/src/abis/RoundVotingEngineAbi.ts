@@ -29,7 +29,7 @@ export const RoundVotingEngineAbi = [
     ],
     "outputs": [
       {
-        "name": "roundId",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
