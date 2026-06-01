@@ -8,6 +8,15 @@ interface RoundProgressProps {
   snapshot: RoundSnapshot;
 }
 
+const TERMINAL_ROUND_TOOLTIPS = {
+  settled:
+    "The round settled successfully. Rewards are allocated by phase-weighted stake; blind signals earned the 4x early-rater advantage.",
+  cancelled: "The round expired before enough signals were committed. All stakes are refunded.",
+  tied: "The round ended in a tie. All stakes are returned to raters.",
+  revealFailed:
+    "Commit quorum was reached, but not enough signals were revealed before the final reveal grace deadline. Revealed raters can claim refunds; unrevealed signals forfeit.",
+} as const;
+
 /**
  * Displays compact round progress for a content item.
  *
@@ -47,6 +56,7 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
           </svg>
           Resolved
         </span>
+        <InfoTooltip text={TERMINAL_ROUND_TOOLTIPS.settled} position="bottom" />
       </div>
     );
   }
@@ -62,8 +72,9 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
               clipRule="evenodd"
             />
           </svg>
-          Cancelled — full refund
+          Cancelled
         </span>
+        <InfoTooltip text={TERMINAL_ROUND_TOOLTIPS.cancelled} position="bottom" />
       </div>
     );
   }
@@ -75,8 +86,9 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
           <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
           </svg>
-          Tied — stakes returned
+          Tied
         </span>
+        <InfoTooltip text={TERMINAL_ROUND_TOOLTIPS.tied} position="bottom" />
       </div>
     );
   }
@@ -92,8 +104,9 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
               clipRule="evenodd"
             />
           </svg>
-          Reveal failed — only revealed signals refund
+          Reveal failed
         </span>
+        <InfoTooltip text={TERMINAL_ROUND_TOOLTIPS.revealFailed} position="bottom" />
       </div>
     );
   }

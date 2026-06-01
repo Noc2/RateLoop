@@ -175,43 +175,6 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
           </span>
         </div>
       )}
-
-      {phase === "settled" && (
-        <div className="flex items-center gap-1 text-success">
-          <span>Rewards distributed</span>
-          <InfoTooltip
-            text="Rewards are proportional to phase-weighted stake. Blind signals earned the 4x early-rater advantage."
-            position="bottom"
-          />
-        </div>
-      )}
-
-      {phase === "cancelled" && (
-        <div className="flex items-center gap-1 text-warning/80">
-          <span>Round expired — full refund available</span>
-          <InfoTooltip
-            text="The round expired before enough signals were committed. All stakes are refunded."
-            position="bottom"
-          />
-        </div>
-      )}
-
-      {phase === "tied" && (
-        <div className="flex items-center gap-1 text-base-content/60">
-          <span>Tied — all stakes returned</span>
-          <InfoTooltip text="The round ended in a tie. All stakes are returned to raters." position="bottom" />
-        </div>
-      )}
-
-      {phase === "revealFailed" && (
-        <div className="flex items-center gap-1 text-warning/80">
-          <span>Reveal failed — only revealed signals can refund</span>
-          <InfoTooltip
-            text="Commit quorum was reached, but not enough signals were revealed before the final reveal grace deadline. Revealed raters can claim refunds; unrevealed signals forfeit."
-            position="bottom"
-          />
-        </div>
-      )}
     </div>
   );
 }
