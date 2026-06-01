@@ -36,7 +36,7 @@ If the user wants feedback on a local mockup, screenshot, generated image, or de
 
 ## Website Feedback Payload
 
-Send this shape to `rateloop_ask_humans` after a successful quote. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, add a context URL, image URLs, or a YouTube `videoUrl`, and set `rewardPoolExpiresAt`. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
+Send this shape to `rateloop_ask_humans` after a successful quote. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, add a context URL, image URLs, or a YouTube `videoUrl`, set `bountyStartBy`, and choose the bounty window durations. Add `imageUrls` only after RateLoop's upload flow returns approved public URLs.
 
 ```json
 {
@@ -49,7 +49,9 @@ Send this shape to `rateloop_ask_humans` after a successful quote. Keep the titl
     "asset": "USDC",
     "requiredVoters": "5",
     "requiredSettledRounds": "1",
-    "rewardPoolExpiresAt": "1893456000"
+    "bountyStartBy": "1893456000",
+    "bountyWindowSeconds": "1200",
+    "feedbackWindowSeconds": "1200"
   },
   "maxPaymentAmount": "2500000",
   "question": {

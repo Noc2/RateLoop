@@ -29,10 +29,11 @@ function buildPayload(clientRequestId: string): X402QuestionPayload {
       amount: 1_000_000n,
       asset: "USDC" as const,
       bountyEligibility: 0,
-      feedbackClosesAt: 0n,
+      bountyStartBy: 1_762_000_000n,
+      bountyWindowSeconds: 1_200n,
+      feedbackWindowSeconds: 1_200n,
       requiredSettledRounds: 1n,
       requiredVoters: 3n,
-      rewardPoolExpiresAt: 1_762_000_000n,
     },
     chainId: 480,
     clientRequestId,
@@ -71,6 +72,10 @@ function buildPayloadWithImageUrl(clientRequestId: string, imageUrl: string): X4
     ...payload,
     questions: [{ ...question, imageUrls: [imageUrl] }],
   };
+}
+
+function getFeedbackBonusClosesAt(payload: X402QuestionPayload) {
+  return payload.bounty.bountyStartBy + payload.bounty.feedbackWindowSeconds;
 }
 
 async function insertQuestionImageAttachment(params: {
@@ -250,8 +255,9 @@ function buildSubmissionRewardPoolAttachedLog(params: {
         { name: "amount", type: "uint256" },
         { name: "requiredVoters", type: "uint256" },
         { name: "requiredSettledRounds", type: "uint256" },
-        { name: "bountyClosesAt", type: "uint256" },
-        { name: "feedbackClosesAt", type: "uint256" },
+        { name: "bountyStartBy", type: "uint256" },
+        { name: "bountyWindowSeconds", type: "uint256" },
+        { name: "feedbackWindowSeconds", type: "uint256" },
         { name: "bountyEligibility", type: "uint8" },
         { name: "bountyEligibilityDataHash", type: "bytes32" },
         { name: "rewardPoolId", type: "uint256" },
@@ -260,8 +266,9 @@ function buildSubmissionRewardPoolAttachedLog(params: {
         params.payload.bounty.amount,
         params.payload.bounty.requiredVoters,
         params.payload.bounty.requiredSettledRounds,
-        params.payload.bounty.rewardPoolExpiresAt,
-        params.payload.bounty.feedbackClosesAt,
+        params.payload.bounty.bountyStartBy,
+        params.payload.bounty.bountyWindowSeconds,
+        params.payload.bounty.feedbackWindowSeconds,
         params.payload.bounty.bountyEligibility,
         EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
         params.rewardPoolId ?? 77n,
@@ -405,7 +412,7 @@ test("prepareAgentWalletQuestionSubmissionRequest stores optional feedback bonus
       amount: 2_000_000n,
       asset: "USDC",
       awarder: walletAddress,
-      feedbackClosesAt: payload.bounty.rewardPoolExpiresAt,
+      feedbackClosesAt: getFeedbackBonusClosesAt(payload),
     },
     payload,
     walletAddress,
@@ -482,7 +489,7 @@ test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the fund
       amount: 2_000_000n,
       asset: "USDC",
       awarder: walletAddress,
-      feedbackClosesAt: payload.bounty.rewardPoolExpiresAt,
+      feedbackClosesAt: getFeedbackBonusClosesAt(payload),
     },
     payload,
     walletAddress,
@@ -512,7 +519,7 @@ test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the fund
               amount: 2_000_000n,
               awarder: walletAddress,
               contentId: 123n,
-              feedbackClosesAt: payload.bounty.rewardPoolExpiresAt,
+              feedbackClosesAt: getFeedbackBonusClosesAt(payload),
               poolId: 55n,
               roundId: 1n,
             }),
@@ -546,7 +553,7 @@ test("prepareFeedbackBonusQuestionSubmissionRequest targets first round before a
       amount: 2_000_000n,
       asset: "LREP",
       awarder: walletAddress,
-      feedbackClosesAt: payload.bounty.rewardPoolExpiresAt,
+      feedbackClosesAt: getFeedbackBonusClosesAt(payload),
     },
     payload,
     walletAddress,
@@ -561,7 +568,7 @@ test("prepareFeedbackBonusQuestionSubmissionRequest targets first round before a
   setDefaultTestOverrides({
     createPublicQuestionClient: () =>
       ({
-        getBlock: async () => ({ timestamp: payload.bounty.rewardPoolExpiresAt - 60n }),
+        getBlock: async () => ({ timestamp: getFeedbackBonusClosesAt(payload) - 60n }),
         readContract: async ({ functionName }: { functionName: string }) => {
           if (functionName === "votingEngine") {
             return "0x0000000000000000000000000000000000000020";

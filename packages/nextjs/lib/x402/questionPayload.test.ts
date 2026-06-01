@@ -14,7 +14,9 @@ const VALID_REQUEST = {
     asset: "USDC",
     requiredSettledRounds: "1",
     requiredVoters: "3",
-    rewardPoolExpiresAt: "1762000000",
+    bountyStartBy: "1762000000",
+    bountyWindowSeconds: "1200",
+    feedbackWindowSeconds: "1200",
   },
   chainId: 480,
   clientRequestId: "youtube:abc123",
@@ -35,7 +37,9 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.equal(payload.questions.length, 1);
   assert.equal(payload.questions[0].contextUrl, "https://example.com/watch?v=abc123");
   assert.equal(payload.bounty.amount, 1_000_000n);
-  assert.equal(payload.bounty.rewardPoolExpiresAt, 1_762_000_000n);
+  assert.equal(payload.bounty.bountyStartBy, 1_762_000_000n);
+  assert.equal(payload.bounty.bountyWindowSeconds, 1_200n);
+  assert.equal(payload.bounty.feedbackWindowSeconds, 1_200n);
   assert.equal(payload.bounty.requiredVoters, 3n);
   assert.equal(payload.bounty.bountyEligibility, 0);
   assert.equal(payload.roundConfig.epochDuration, 1200n);
@@ -400,12 +404,12 @@ test("parseX402QuestionRequest rejects unsupported bounty scopes", () => {
   );
 });
 
-test("parseX402QuestionRequest rejects bundle payouts without a bounty close", () => {
+test("parseX402QuestionRequest rejects bundle payouts without a start-by deadline", () => {
   assert.throws(
     () =>
       parseX402QuestionRequest({
         ...VALID_REQUEST,
-        bounty: { ...VALID_REQUEST.bounty, rewardPoolExpiresAt: "0" },
+        bounty: { ...VALID_REQUEST.bounty, bountyStartBy: "0" },
       }),
     /must be greater than zero/,
   );

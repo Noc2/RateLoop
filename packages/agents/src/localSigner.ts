@@ -25,8 +25,15 @@ import {
   type Hex,
   type TransactionReceipt,
 } from "viem";
-import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
+import {
+  generatePrivateKey,
+  privateKeyToAccount,
+  type PrivateKeyAccount,
+} from "viem/accounts";
+import {
+  ContentRegistryAbi,
+  X402QuestionSubmitterAbi,
+} from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { DEFAULT_ROUND_CONFIG } from "@rateloop/contracts/protocol";
 import type {
@@ -73,10 +80,13 @@ const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
-const X402_QUESTION_PAYMENT_DOMAIN = keccak256(stringToHex("rateloop-x402-question-payment-v2"));
+const X402_QUESTION_PAYMENT_DOMAIN = keccak256(
+  stringToHex("rateloop-x402-question-payment-v2"),
+);
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
-const IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
+const IMAGE_ATTACHMENT_PATH_PATTERN =
+  /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
 const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = new Set([
   "https://www.rateloop.ai",
   "https://rateloop.ai",
@@ -165,7 +175,12 @@ export type LocalAskProgress =
   | { type: "x402_signed" }
   | { type: "x402_resubmitted"; response: AskHumansResponse }
   | { type: "transaction_sent"; hash: Hex; index: number; phase?: string }
-  | { type: "transaction_confirmed"; hash: Hex; index: number; receipt: LocalTransactionReceiptSummary }
+  | {
+      type: "transaction_confirmed";
+      hash: Hex;
+      index: number;
+      receipt: LocalTransactionReceiptSummary;
+    }
   | { type: "transactions_confirmed"; response: QuestionStatusResponse };
 
 type KeystoreV3 = {
@@ -240,10 +255,11 @@ type LocalQuestionPayload = {
     amount: bigint;
     asset: "USDC";
     bountyEligibility: number;
-    feedbackClosesAt: bigint;
+    bountyStartBy: bigint;
+    bountyWindowSeconds: bigint;
+    feedbackWindowSeconds: bigint;
     requiredSettledRounds: bigint;
     requiredVoters: bigint;
-    rewardPoolExpiresAt: bigint;
   };
   chainId: number;
   clientRequestId: string;
@@ -271,9 +287,10 @@ type LocalQuestionItemPayload = {
 type LocalRewardTerms = {
   amount: bigint;
   asset: typeof X402_SUBMISSION_REWARD_ASSET_USDC;
-  bountyClosesAt: bigint;
+  bountyStartBy: bigint;
+  bountyWindowSeconds: bigint;
   bountyEligibility: number;
-  feedbackClosesAt: bigint;
+  feedbackWindowSeconds: bigint;
   requiredSettledRounds: bigint;
   requiredVoters: bigint;
 };
@@ -316,7 +333,10 @@ function envString(env: NodeJS.ProcessEnv, name: string): string | undefined {
   return value ? value : undefined;
 }
 
-function parsePositiveInteger(value: string | undefined, name: string): number | undefined {
+function parsePositiveInteger(
+  value: string | undefined,
+  name: string,
+): number | undefined {
   if (!value) return undefined;
   if (!/^\d+$/.test(value)) {
     throw new Error(`${name} must be a positive integer.`);
@@ -329,7 +349,10 @@ function parsePositiveInteger(value: string | undefined, name: string): number |
   return parsed;
 }
 
-function parsePrivateKey(value: string | undefined, name: string): Hex | undefined {
+function parsePrivateKey(
+  value: string | undefined,
+  name: string,
+): Hex | undefined {
   if (!value) return undefined;
   if (!/^0x[0-9a-fA-F]{64}$/.test(value)) {
     throw new Error(`${name} must be a 32-byte hex private key.`);
@@ -337,7 +360,10 @@ function parsePrivateKey(value: string | undefined, name: string): Hex | undefin
   return value as Hex;
 }
 
-function parseOptionalAddress(value: string | undefined, name: string): Address | undefined {
+function parseOptionalAddress(
+  value: string | undefined,
+  name: string,
+): Address | undefined {
   if (!value) return undefined;
   if (!isAddress(value, { strict: false })) {
     throw new Error(`${name} must be an EVM address.`);
@@ -385,18 +411,26 @@ function normalizeOptionalTransactionData(value: unknown, name: string): Hex {
 
 function normalizeBigInt(value: unknown, name: string): bigint {
   if (typeof value === "bigint") return value;
-  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
-  if (typeof value === "string" && /^0x[0-9a-fA-F]+$/.test(value)) return BigInt(value);
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0)
+    return BigInt(value);
+  if (typeof value === "string" && /^0x[0-9a-fA-F]+$/.test(value))
+    return BigInt(value);
   if (typeof value === "string" && /^\d+$/.test(value)) return BigInt(value);
   throw new Error(`${name} must be an unsigned integer.`);
 }
 
-function normalizeOptionalBigInt(value: unknown, name: string): bigint | undefined {
+function normalizeOptionalBigInt(
+  value: unknown,
+  name: string,
+): bigint | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   return normalizeBigInt(value, name);
 }
 
-function normalizeOptionalChainId(value: unknown, name: string): number | undefined {
+function normalizeOptionalChainId(
+  value: unknown,
+  name: string,
+): number | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   const parsed = normalizeBigInt(value, name);
   if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -420,7 +454,9 @@ function normalizeRequiredChainId(value: unknown, name: string): number {
 function normalizeZeroNativeValue(value: unknown, name: string): 0n {
   const parsed = normalizeOptionalBigInt(value, name) ?? 0n;
   if (parsed !== 0n) {
-    throw new Error(`${name} must be zero for RateLoop agent transaction plans.`);
+    throw new Error(
+      `${name} must be zero for RateLoop agent transaction plans.`,
+    );
   }
   return 0n;
 }
@@ -436,20 +472,30 @@ function sameAddress(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
 }
 
-function assertExactKeys(record: JsonRecord, expected: readonly string[], name: string) {
+function assertExactKeys(
+  record: JsonRecord,
+  expected: readonly string[],
+  name: string,
+) {
   const expectedSet = new Set(expected);
-  const extras = Object.keys(record).filter(key => !expectedSet.has(key));
-  const missing = expected.filter(key => record[key] === undefined);
+  const extras = Object.keys(record).filter((key) => !expectedSet.has(key));
+  const missing = expected.filter((key) => record[key] === undefined);
   if (extras.length > 0 || missing.length > 0) {
-    const unexpectedSuffix = extras.length ? `; unexpected ${extras.join(", ")}` : "";
-    const missingSuffix = missing.length ? `; missing ${missing.join(", ")}` : "";
+    const unexpectedSuffix = extras.length
+      ? `; unexpected ${extras.join(", ")}`
+      : "";
+    const missingSuffix = missing.length
+      ? `; missing ${missing.join(", ")}`
+      : "";
     throw new Error(
       `${name} must contain exactly ${expected.join(", ")}${unexpectedSuffix}${missingSuffix}.`,
     );
   }
 }
 
-function stripEip712Domain(types: Record<string, TypedDataField[]>): Record<string, TypedDataField[]> {
+function stripEip712Domain(
+  types: Record<string, TypedDataField[]>,
+): Record<string, TypedDataField[]> {
   const { EIP712Domain: _domain, ...rest } = types;
   return rest;
 }
@@ -463,9 +509,17 @@ function readTypedDataFields(types: unknown): Record<string, TypedDataField[]> {
       throw new Error(`x402 typedData.types.${typeName} must be an array.`);
     }
     parsed[typeName] = fields.map((field, index) => {
-      const fieldRecord = assertRecord(field, `x402 typedData.types.${typeName}[${index}]`);
-      if (typeof fieldRecord.name !== "string" || typeof fieldRecord.type !== "string") {
-        throw new Error(`x402 typedData.types.${typeName}[${index}] must include name and type.`);
+      const fieldRecord = assertRecord(
+        field,
+        `x402 typedData.types.${typeName}[${index}]`,
+      );
+      if (
+        typeof fieldRecord.name !== "string" ||
+        typeof fieldRecord.type !== "string"
+      ) {
+        throw new Error(
+          `x402 typedData.types.${typeName}[${index}] must include name and type.`,
+        );
       }
       return { name: fieldRecord.name, type: fieldRecord.type };
     });
@@ -474,11 +528,15 @@ function readTypedDataFields(types: unknown): Record<string, TypedDataField[]> {
   return parsed;
 }
 
-function normalizeTypedDataValue(value: unknown, type: string, types: Record<string, TypedDataField[]>): unknown {
+function normalizeTypedDataValue(
+  value: unknown,
+  type: string,
+  types: Record<string, TypedDataField[]>,
+): unknown {
   if (type.endsWith("[]")) {
     if (!Array.isArray(value)) throw new Error(`Expected ${type} array value.`);
     const itemType = type.slice(0, -2);
-    return value.map(item => normalizeTypedDataValue(item, itemType, types));
+    return value.map((item) => normalizeTypedDataValue(item, itemType, types));
   }
 
   if (/^u?int([0-9]*)$/.test(type)) {
@@ -513,22 +571,33 @@ function normalizeTypedDataMessage(
 ): JsonRecord {
   const fields = types[primaryType];
   if (!fields) {
-    throw new Error(`x402 typedData.types is missing primary type ${primaryType}.`);
+    throw new Error(
+      `x402 typedData.types is missing primary type ${primaryType}.`,
+    );
   }
 
   return Object.fromEntries(
-    fields.map(field => [field.name, normalizeTypedDataValue(message[field.name], field.type, types)]),
+    fields.map((field) => [
+      field.name,
+      normalizeTypedDataValue(message[field.name], field.type, types),
+    ]),
   );
 }
 
-function assertReceiveWithAuthorizationTypes(types: Record<string, TypedDataField[]>) {
+function assertReceiveWithAuthorizationTypes(
+  types: Record<string, TypedDataField[]>,
+) {
   const typeNames = Object.keys(types);
   if (typeNames.length !== 1 || typeNames[0] !== X402_PRIMARY_TYPE) {
-    throw new Error(`x402 typedData.types must contain only ${X402_PRIMARY_TYPE}.`);
+    throw new Error(
+      `x402 typedData.types must contain only ${X402_PRIMARY_TYPE}.`,
+    );
   }
   const fields = types[X402_PRIMARY_TYPE];
   if (!fields || fields.length !== X402_AUTHORIZATION_FIELDS.length) {
-    throw new Error(`x402 typedData.types.${X402_PRIMARY_TYPE} must contain the standard EIP-3009 fields.`);
+    throw new Error(
+      `x402 typedData.types.${X402_PRIMARY_TYPE} must contain the standard EIP-3009 fields.`,
+    );
   }
   for (const [index, expected] of X402_AUTHORIZATION_FIELDS.entries()) {
     const actual = fields[index];
@@ -541,8 +610,15 @@ function assertReceiveWithAuthorizationTypes(types: Record<string, TypedDataFiel
 }
 
 function normalizeX402Domain(domainRecord: JsonRecord) {
-  assertExactKeys(domainRecord, ["chainId", "name", "verifyingContract", "version"], "x402 typedData.domain");
-  const chainId = normalizeRequiredChainId(domainRecord.chainId, "x402 typedData.domain.chainId");
+  assertExactKeys(
+    domainRecord,
+    ["chainId", "name", "verifyingContract", "version"],
+    "x402 typedData.domain",
+  );
+  const chainId = normalizeRequiredChainId(
+    domainRecord.chainId,
+    "x402 typedData.domain.chainId",
+  );
   if (domainRecord.name !== "USDC") {
     throw new Error("x402 typedData.domain.name must be USDC.");
   }
@@ -552,7 +628,10 @@ function normalizeX402Domain(domainRecord: JsonRecord) {
   return {
     chainId,
     name: "USDC",
-    verifyingContract: normalizeAddress(domainRecord.verifyingContract, "x402 typedData.domain.verifyingContract"),
+    verifyingContract: normalizeAddress(
+      domainRecord.verifyingContract,
+      "x402 typedData.domain.verifyingContract",
+    ),
     version: "2",
   };
 }
@@ -563,7 +642,10 @@ function parseX402AuthorizationRequest(value: unknown): {
   typedDataDomain: ReturnType<typeof normalizeX402Domain>;
 } {
   const request = assertRecord(value, "x402AuthorizationRequest");
-  const typedDataRecord = assertRecord(request.typedData ?? request.eip712, "x402AuthorizationRequest.typedData");
+  const typedDataRecord = assertRecord(
+    request.typedData ?? request.eip712,
+    "x402AuthorizationRequest.typedData",
+  );
   const primaryType = typedDataRecord.primaryType;
   if (primaryType !== X402_PRIMARY_TYPE) {
     throw new Error(`x402 typedData.primaryType must be ${X402_PRIMARY_TYPE}.`);
@@ -571,28 +653,46 @@ function parseX402AuthorizationRequest(value: unknown): {
 
   const types = stripEip712Domain(readTypedDataFields(typedDataRecord.types));
   assertReceiveWithAuthorizationTypes(types);
-  const rawMessage = assertRecord(typedDataRecord.message, "x402 typedData.message");
-  assertExactKeys(
-    rawMessage,
-    X402_AUTHORIZATION_FIELDS.map(field => field.name),
+  const rawMessage = assertRecord(
+    typedDataRecord.message,
     "x402 typedData.message",
   );
-  const normalizedMessage = normalizeTypedDataMessage(rawMessage, primaryType, types);
+  assertExactKeys(
+    rawMessage,
+    X402_AUTHORIZATION_FIELDS.map((field) => field.name),
+    "x402 typedData.message",
+  );
+  const normalizedMessage = normalizeTypedDataMessage(
+    rawMessage,
+    primaryType,
+    types,
+  );
   const authorizationSource = assertRecord(
     request.authorization ?? rawMessage,
     "x402AuthorizationRequest.authorization",
   );
   assertExactKeys(
     authorizationSource,
-    X402_AUTHORIZATION_FIELDS.map(field => field.name),
+    X402_AUTHORIZATION_FIELDS.map((field) => field.name),
     "x402AuthorizationRequest.authorization",
   );
-  const typedDataDomain = normalizeX402Domain(assertRecord(typedDataRecord.domain, "x402 typedData.domain"));
+  const typedDataDomain = normalizeX402Domain(
+    assertRecord(typedDataRecord.domain, "x402 typedData.domain"),
+  );
 
   const authorization: X402Authorization = {
-    from: normalizeAddress(authorizationSource.from ?? rawMessage.from, "paymentAuthorization.from"),
-    nonce: normalizeBytes32(authorizationSource.nonce ?? rawMessage.nonce, "paymentAuthorization.nonce"),
-    to: normalizeAddress(authorizationSource.to ?? rawMessage.to, "paymentAuthorization.to"),
+    from: normalizeAddress(
+      authorizationSource.from ?? rawMessage.from,
+      "paymentAuthorization.from",
+    ),
+    nonce: normalizeBytes32(
+      authorizationSource.nonce ?? rawMessage.nonce,
+      "paymentAuthorization.nonce",
+    ),
+    to: normalizeAddress(
+      authorizationSource.to ?? rawMessage.to,
+      "paymentAuthorization.to",
+    ),
     validAfter: normalizeBigInt(
       authorizationSource.validAfter ?? rawMessage.validAfter,
       "paymentAuthorization.validAfter",
@@ -601,7 +701,10 @@ function parseX402AuthorizationRequest(value: unknown): {
       authorizationSource.validBefore ?? rawMessage.validBefore,
       "paymentAuthorization.validBefore",
     ).toString(),
-    value: normalizeBigInt(authorizationSource.value ?? rawMessage.value, "paymentAuthorization.value").toString(),
+    value: normalizeBigInt(
+      authorizationSource.value ?? rawMessage.value,
+      "paymentAuthorization.value",
+    ).toString(),
   };
   assertX402AuthorizationMatchesMessage(authorization, normalizedMessage);
 
@@ -617,11 +720,19 @@ function parseX402AuthorizationRequest(value: unknown): {
   };
 }
 
-function assertX402AuthorizationMatchesMessage(authorization: X402Authorization, message: JsonRecord) {
-  const messageFrom = normalizeAddress(message.from, "x402 typedData.message.from");
+function assertX402AuthorizationMatchesMessage(
+  authorization: X402Authorization,
+  message: JsonRecord,
+) {
+  const messageFrom = normalizeAddress(
+    message.from,
+    "x402 typedData.message.from",
+  );
   const messageTo = normalizeAddress(message.to, "x402 typedData.message.to");
   if (!authorization.from || !sameAddress(authorization.from, messageFrom)) {
-    throw new Error("x402 authorization.from must match typedData.message.from.");
+    throw new Error(
+      "x402 authorization.from must match typedData.message.from.",
+    );
   }
   if (!authorization.to || !sameAddress(authorization.to, messageTo)) {
     throw new Error("x402 authorization.to must match typedData.message.to.");
@@ -632,15 +743,22 @@ function assertX402AuthorizationMatchesMessage(authorization: X402Authorization,
       normalizeBigInt(authorization[field], `paymentAuthorization.${field}`) !==
       normalizeBigInt(message[field], `x402 typedData.message.${field}`)
     ) {
-      throw new Error(`x402 authorization.${field} must match typedData.message.${field}.`);
+      throw new Error(
+        `x402 authorization.${field} must match typedData.message.${field}.`,
+      );
     }
   }
   if (
     !authorization.nonce ||
     authorization.nonce.toLowerCase() !==
-      normalizeBytes32(message.nonce, "x402 typedData.message.nonce").toLowerCase()
+      normalizeBytes32(
+        message.nonce,
+        "x402 typedData.message.nonce",
+      ).toLowerCase()
   ) {
-    throw new Error("x402 authorization.nonce must match typedData.message.nonce.");
+    throw new Error(
+      "x402 authorization.nonce must match typedData.message.nonce.",
+    );
   }
 }
 
@@ -648,39 +766,61 @@ function resolveConfiguredUsdcAddress(
   config: Pick<LocalSignerConfig, "usdcAddress">,
   chainId: number,
 ): Address | undefined {
-  return config.usdcAddress ?? getSharedDeploymentAddress(chainId, "MockERC20") ?? X402_USDC_BY_CHAIN_ID[chainId];
+  return (
+    config.usdcAddress ??
+    getSharedDeploymentAddress(chainId, "MockERC20") ??
+    X402_USDC_BY_CHAIN_ID[chainId]
+  );
 }
 
 function resolveConfiguredX402SubmitterAddress(
   config: Pick<LocalSignerConfig, "x402QuestionSubmitterAddress">,
   chainId: number,
 ): Address | undefined {
-  return config.x402QuestionSubmitterAddress ?? getSharedDeploymentAddress(chainId, "X402QuestionSubmitter");
+  return (
+    config.x402QuestionSubmitterAddress ??
+    getSharedDeploymentAddress(chainId, "X402QuestionSubmitter")
+  );
 }
 
 function resolveConfiguredContentRegistryAddress(
   config: Pick<LocalSignerConfig, "contentRegistryAddress">,
   chainId: number,
 ): Address | undefined {
-  return config.contentRegistryAddress ?? getSharedDeploymentAddress(chainId, "ContentRegistry");
+  return (
+    config.contentRegistryAddress ??
+    getSharedDeploymentAddress(chainId, "ContentRegistry")
+  );
 }
 
 function resolveConfiguredQuestionRewardPoolEscrowAddress(
   config: Pick<LocalSignerConfig, "questionRewardPoolEscrowAddress">,
   chainId: number,
 ): Address | undefined {
-  return config.questionRewardPoolEscrowAddress ?? getSharedDeploymentAddress(chainId, "QuestionRewardPoolEscrow");
+  return (
+    config.questionRewardPoolEscrowAddress ??
+    getSharedDeploymentAddress(chainId, "QuestionRewardPoolEscrow")
+  );
 }
 
-function requireConfiguredAddress(value: Address | undefined, name: string): Address {
+function requireConfiguredAddress(
+  value: Address | undefined,
+  name: string,
+): Address {
   if (!value) {
-    throw new Error(`Cannot validate transaction plan without a trusted ${name} address for this chain.`);
+    throw new Error(
+      `Cannot validate transaction plan without a trusted ${name} address for this chain.`,
+    );
   }
   return value;
 }
 
-function normalizeExpectedAmount(value: SignX402AuthorizationOptions["expectedAmount"]): bigint | undefined {
-  return value === undefined ? undefined : normalizeBigInt(value, "expected x402 payment amount");
+function normalizeExpectedAmount(
+  value: SignX402AuthorizationOptions["expectedAmount"],
+): bigint | undefined {
+  return value === undefined
+    ? undefined
+    : normalizeBigInt(value, "expected x402 payment amount");
 }
 
 function assertTrustedX402Authorization(
@@ -690,42 +830,71 @@ function assertTrustedX402Authorization(
   options: SignX402AuthorizationOptions,
 ) {
   if (authorization.from && !sameAddress(authorization.from, account.address)) {
-    throw new Error(`x402 authorization is for ${authorization.from}, but local signer is ${account.address}.`);
+    throw new Error(
+      `x402 authorization is for ${authorization.from}, but local signer is ${account.address}.`,
+    );
   }
-  if (options.expectedChainId !== undefined && typedDataDomain.chainId !== options.expectedChainId) {
+  if (
+    options.expectedChainId !== undefined &&
+    typedDataDomain.chainId !== options.expectedChainId
+  ) {
     throw new Error(
       `x402 authorization chainId ${typedDataDomain.chainId} does not match local signer chain ${options.expectedChainId}.`,
     );
   }
   if (!options.expectedUsdcAddress) {
-    throw new Error("Cannot validate x402 authorization without a trusted USDC address for this chain.");
+    throw new Error(
+      "Cannot validate x402 authorization without a trusted USDC address for this chain.",
+    );
   }
-  if (!sameAddress(typedDataDomain.verifyingContract, options.expectedUsdcAddress)) {
-    throw new Error("x402 typedData.domain.verifyingContract must be the configured USDC token.");
+  if (
+    !sameAddress(typedDataDomain.verifyingContract, options.expectedUsdcAddress)
+  ) {
+    throw new Error(
+      "x402 typedData.domain.verifyingContract must be the configured USDC token.",
+    );
   }
   if (!options.expectedX402QuestionSubmitterAddress) {
     throw new Error(
       "Cannot validate x402 authorization without a trusted RateLoop x402 submitter address for this chain.",
     );
   }
-  if (!authorization.to || !sameAddress(authorization.to, options.expectedX402QuestionSubmitterAddress)) {
-    throw new Error("x402 authorization.to must be the configured RateLoop x402 submitter.");
+  if (
+    !authorization.to ||
+    !sameAddress(authorization.to, options.expectedX402QuestionSubmitterAddress)
+  ) {
+    throw new Error(
+      "x402 authorization.to must be the configured RateLoop x402 submitter.",
+    );
   }
   const expectedAmount = normalizeExpectedAmount(options.expectedAmount);
   if (
     expectedAmount !== undefined &&
-    normalizeBigInt(authorization.value, "paymentAuthorization.value") !== expectedAmount
+    normalizeBigInt(authorization.value, "paymentAuthorization.value") !==
+      expectedAmount
   ) {
-    throw new Error("x402 authorization.value must equal the requested bounty amount.");
+    throw new Error(
+      "x402 authorization.value must equal the requested bounty amount.",
+    );
   }
   if (
-    normalizeBigInt(authorization.validBefore, "paymentAuthorization.validBefore") <=
+    normalizeBigInt(
+      authorization.validBefore,
+      "paymentAuthorization.validBefore",
+    ) <=
     normalizeBigInt(authorization.validAfter, "paymentAuthorization.validAfter")
   ) {
-    throw new Error("x402 authorization.validBefore must be greater than validAfter.");
+    throw new Error(
+      "x402 authorization.validBefore must be greater than validAfter.",
+    );
   }
-  if (options.expectedNonce && authorization.nonce?.toLowerCase() !== options.expectedNonce.toLowerCase()) {
-    throw new Error("x402 authorization.nonce does not match the RateLoop ask payload.");
+  if (
+    options.expectedNonce &&
+    authorization.nonce?.toLowerCase() !== options.expectedNonce.toLowerCase()
+  ) {
+    throw new Error(
+      "x402 authorization.nonce does not match the RateLoop ask payload.",
+    );
   }
 }
 
@@ -750,7 +919,11 @@ function readOptionalString(value: unknown): string {
 
 function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
   const rawValue =
-    typeof value === "bigint" || typeof value === "number" || typeof value === "string" ? String(value).trim() : "";
+    typeof value === "bigint" ||
+    typeof value === "number" ||
+    typeof value === "string"
+      ? String(value).trim()
+      : "";
   if (!/^\d+$/.test(rawValue)) {
     throw new Error(`${fieldName} must be a non-negative integer.`);
   }
@@ -773,7 +946,8 @@ function sanitizeHttpsUrl(value: string, fieldName: string): string {
     }
     return parsed.toString();
   } catch (error) {
-    if (error instanceof Error && error.message.includes(fieldName)) throw error;
+    if (error instanceof Error && error.message.includes(fieldName))
+      throw error;
     throw new Error(`${fieldName} must be a valid HTTPS URL.`);
   }
 }
@@ -781,18 +955,27 @@ function sanitizeHttpsUrl(value: string, fieldName: string): string {
 function matchesHostname(hostname: string, domain: string): boolean {
   const normalizedHost = hostname.toLowerCase();
   const normalizedDomain = domain.toLowerCase();
-  return normalizedHost === normalizedDomain || normalizedHost.endsWith(`.${normalizedDomain}`);
+  return (
+    normalizedHost === normalizedDomain ||
+    normalizedHost.endsWith(`.${normalizedDomain}`)
+  );
 }
 
 function extractYouTubeId(url: string): string | null {
   try {
     const parsed = new URL(url);
     let id: string | null | undefined;
-    if (matchesHostname(parsed.hostname, "youtube.com") && parsed.pathname === "/watch") {
+    if (
+      matchesHostname(parsed.hostname, "youtube.com") &&
+      parsed.pathname === "/watch"
+    ) {
       id = parsed.searchParams.get("v");
     } else if (parsed.hostname.toLowerCase() === "youtu.be") {
       id = parsed.pathname.slice(1).split("/")[0];
-    } else if (matchesHostname(parsed.hostname, "youtube.com") && parsed.pathname.startsWith("/embed/")) {
+    } else if (
+      matchesHostname(parsed.hostname, "youtube.com") &&
+      parsed.pathname.startsWith("/embed/")
+    ) {
       id = parsed.pathname.split("/embed/")[1]?.split("/")[0];
     }
     return id && /^[\w-]+$/.test(id) ? id : null;
@@ -821,7 +1004,9 @@ function normalizeQuestionContextUrl(value: string, fieldName: string): string {
   const sanitized = sanitizeHttpsUrl(value, fieldName);
   const parsed = new URL(sanitized);
   if (DIRECT_IMAGE_URL_PATH_PATTERN.test(parsed.pathname)) {
-    throw new Error(`${fieldName} must be a public HTTPS page URL. Upload images through imageUrls.`);
+    throw new Error(
+      `${fieldName} must be a public HTTPS page URL. Upload images through imageUrls.`,
+    );
   }
   return canonicalizeLocalUrl(sanitized);
 }
@@ -843,11 +1028,20 @@ function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
     throw new Error(`${fieldName} must be a valid image upload URL.`);
   }
 
-  if (parsed.username || parsed.password || !IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)) {
-    throw new Error("imageUrls must point to approved RateLoop-hosted uploads.");
+  if (
+    parsed.username ||
+    parsed.password ||
+    !IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)
+  ) {
+    throw new Error(
+      "imageUrls must point to approved RateLoop-hosted uploads.",
+    );
   }
-  const configuredOrigins = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL]
-    .map(origin => {
+  const configuredOrigins = [
+    process.env.APP_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+  ]
+    .map((origin) => {
       try {
         return origin ? new URL(origin).origin : null;
       } catch {
@@ -855,15 +1049,28 @@ function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
       }
     })
     .filter((origin): origin is string => Boolean(origin));
-  const allowedOrigins = new Set([...DEFAULT_IMAGE_ATTACHMENT_ORIGINS, ...configuredOrigins]);
+  const allowedOrigins = new Set([
+    ...DEFAULT_IMAGE_ATTACHMENT_ORIGINS,
+    ...configuredOrigins,
+  ]);
   const localhostAllowed =
-    process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
-  const isAllowedProtocol = parsed.protocol === "https:" || (localhostAllowed && parsed.protocol === "http:");
+    process.env.NODE_ENV !== "production" ||
+    process.env.NEXT_PUBLIC_RATELOOP_E2E_PRODUCTION_BUILD === "true";
+  const isAllowedProtocol =
+    parsed.protocol === "https:" ||
+    (localhostAllowed && parsed.protocol === "http:");
   if (!isAllowedProtocol) {
-    throw new Error("imageUrls must point to approved RateLoop-hosted uploads.");
+    throw new Error(
+      "imageUrls must point to approved RateLoop-hosted uploads.",
+    );
   }
-  if (!allowedOrigins.has(parsed.origin) && !(localhostAllowed && isLocalhostOrigin(parsed.origin))) {
-    throw new Error("imageUrls must point to approved RateLoop-hosted uploads.");
+  if (
+    !allowedOrigins.has(parsed.origin) &&
+    !(localhostAllowed && isLocalhostOrigin(parsed.origin))
+  ) {
+    throw new Error(
+      "imageUrls must point to approved RateLoop-hosted uploads.",
+    );
   }
   return parsed.toString();
 }
@@ -873,12 +1080,19 @@ function normalizeImageUrls(value: unknown): string[] {
     return [];
   }
   if (!Array.isArray(value)) {
-    throw new Error("imageUrls must be an array of approved RateLoop-hosted upload URLs.");
+    throw new Error(
+      "imageUrls must be an array of approved RateLoop-hosted upload URLs.",
+    );
   }
   if (value.length > 4) {
     throw new Error("imageUrls supports at most four images.");
   }
-  return value.map((entry, index) => normalizeImageAttachmentUrl(readRequiredString(entry, `imageUrls[${index}]`), `imageUrls[${index}]`));
+  return value.map((entry, index) =>
+    normalizeImageAttachmentUrl(
+      readRequiredString(entry, `imageUrls[${index}]`),
+      `imageUrls[${index}]`,
+    ),
+  );
 }
 
 function isYouTubeVideoUrl(url: string): boolean {
@@ -886,9 +1100,13 @@ function isYouTubeVideoUrl(url: string): boolean {
 }
 
 function normalizeTags(value: unknown): { tagList: string[]; tags: string } {
-  const rawTags = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  const rawTags = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
   const tagList = rawTags
-    .map(tag => (typeof tag === "string" ? tag.trim() : ""))
+    .map((tag) => (typeof tag === "string" ? tag.trim() : ""))
     .filter(Boolean)
     .slice(0, 4);
 
@@ -904,7 +1122,11 @@ function normalizeTags(value: unknown): { tagList: string[]; tags: string } {
   };
 }
 
-function cloneJsonObject<T>(value: unknown, fieldName: string, defaultValue: T): T {
+function cloneJsonObject<T>(
+  value: unknown,
+  fieldName: string,
+  defaultValue: T,
+): T {
   if (value === undefined || value === null) return defaultValue;
   if (!isJsonRecord(value)) {
     throw new Error(`${fieldName} must be an object when provided.`);
@@ -925,7 +1147,10 @@ function normalizeTemplateSelection(
     templateVersion?: number;
   },
 ) {
-  const rawTemplateId = readOptionalString(value.templateId) || defaults.templateId || DEFAULT_AGENT_TEMPLATE_ID;
+  const rawTemplateId =
+    readOptionalString(value.templateId) ||
+    defaults.templateId ||
+    DEFAULT_AGENT_TEMPLATE_ID;
   const template = findAgentResultTemplate(rawTemplateId);
   if (!template) {
     throw new Error(`${fieldPrefix}.templateId is not supported.`);
@@ -936,10 +1161,14 @@ function normalizeTemplateSelection(
       ? (defaults.templateVersion ?? template.version)
       : Number.parseInt(String(value.templateVersion), 10);
   if (!Number.isSafeInteger(templateVersion) || templateVersion <= 0) {
-    throw new Error(`${fieldPrefix}.templateVersion must be a positive integer.`);
+    throw new Error(
+      `${fieldPrefix}.templateVersion must be a positive integer.`,
+    );
   }
   if (templateVersion !== template.version) {
-    throw new Error(`${fieldPrefix}.templateVersion ${templateVersion} is not supported for ${template.id}.`);
+    throw new Error(
+      `${fieldPrefix}.templateVersion ${templateVersion} is not supported for ${template.id}.`,
+    );
   }
 
   return {
@@ -957,9 +1186,15 @@ function normalizeTemplateSelection(
   };
 }
 
-function normalizeLocalChainId(value: unknown, fallbackChainId?: number): number {
+function normalizeLocalChainId(
+  value: unknown,
+  fallbackChainId?: number,
+): number {
   const rawValue = value ?? fallbackChainId;
-  const chainId = typeof rawValue === "number" ? rawValue : Number.parseInt(String(rawValue ?? ""), 10);
+  const chainId =
+    typeof rawValue === "number"
+      ? rawValue
+      : Number.parseInt(String(rawValue ?? ""), 10);
   if (!Number.isSafeInteger(chainId) || chainId <= 0) {
     throw new Error("chainId must be a positive integer.");
   }
@@ -973,7 +1208,9 @@ function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
 
   const asset = readOptionalString(value.asset).toUpperCase() || "USDC";
   if (asset !== "USDC") {
-    throw new Error("Only USDC bounties are supported for local signer question submissions.");
+    throw new Error(
+      "Only USDC bounties are supported for local signer question submissions.",
+    );
   }
 
   const amount = parsePositiveAtomicAmount(value.amount, "bounty.amount");
@@ -985,30 +1222,57 @@ function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
     value.requiredSettledRounds ?? X402_MIN_REWARD_POOL_SETTLED_ROUNDS,
     "bounty.requiredSettledRounds",
   );
-  const rewardPoolExpiresAt = parseNonNegativeInteger(value.rewardPoolExpiresAt ?? 0n, "bounty.rewardPoolExpiresAt");
-  const feedbackClosesAt = parseNonNegativeInteger(
-    value.feedbackClosesAt ?? value.rewardPoolExpiresAt ?? 0n,
-    "bounty.feedbackClosesAt",
+  const bountyStartBy = parseNonNegativeInteger(
+    value.bountyStartBy ?? 0n,
+    "bounty.bountyStartBy",
   );
-  const bountyEligibility = Number(parseNonNegativeInteger(value.bountyEligibility ?? 0n, "bounty.bountyEligibility"));
+  const bountyWindowSeconds = parseNonNegativeInteger(
+    value.bountyWindowSeconds ?? 0n,
+    "bounty.bountyWindowSeconds",
+  );
+  const feedbackWindowSeconds = parseNonNegativeInteger(
+    value.feedbackWindowSeconds ?? value.bountyWindowSeconds ?? 0n,
+    "bounty.feedbackWindowSeconds",
+  );
+  const bountyEligibility = Number(
+    parseNonNegativeInteger(
+      value.bountyEligibility ?? 0n,
+      "bounty.bountyEligibility",
+    ),
+  );
 
   if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
-    throw new Error(`bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`);
+    throw new Error(
+      `bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`,
+    );
   }
   if (requiredSettledRounds < X402_MIN_REWARD_POOL_SETTLED_ROUNDS) {
-    throw new Error(`bounty.requiredSettledRounds must be at least ${X402_MIN_REWARD_POOL_SETTLED_ROUNDS}.`);
+    throw new Error(
+      `bounty.requiredSettledRounds must be at least ${X402_MIN_REWARD_POOL_SETTLED_ROUNDS}.`,
+    );
   }
   if (amount < X402_DEFAULT_SUBMISSION_BOUNTY_USDC) {
     throw new Error("bounty.amount must be at least 1000000 atomic USDC.");
   }
   if (amount < requiredVoters * requiredSettledRounds) {
-    throw new Error("bounty.amount is too small for the selected voter requirements.");
+    throw new Error(
+      "bounty.amount is too small for the selected voter requirements.",
+    );
   }
-  if (rewardPoolExpiresAt <= 0n) {
-    throw new Error("bounty.rewardPoolExpiresAt must be greater than zero for local signer submissions.");
+  if (bountyStartBy <= 0n) {
+    throw new Error(
+      "bounty.bountyStartBy must be greater than zero for local signer submissions.",
+    );
   }
-  if (feedbackClosesAt > rewardPoolExpiresAt) {
-    throw new Error("bounty.feedbackClosesAt cannot be after bounty.rewardPoolExpiresAt.");
+  if (bountyWindowSeconds <= 0n) {
+    throw new Error(
+      "bounty.bountyWindowSeconds must be greater than zero for local signer submissions.",
+    );
+  }
+  if (feedbackWindowSeconds > bountyWindowSeconds) {
+    throw new Error(
+      "bounty.feedbackWindowSeconds cannot exceed bounty.bountyWindowSeconds.",
+    );
   }
   if (bountyEligibility > 1) {
     throw new Error("bounty.bountyEligibility must be 0 or 1.");
@@ -1018,10 +1282,11 @@ function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
     amount,
     asset: "USDC",
     bountyEligibility,
-    feedbackClosesAt,
+    bountyStartBy,
+    bountyWindowSeconds,
+    feedbackWindowSeconds,
     requiredSettledRounds,
     requiredVoters,
-    rewardPoolExpiresAt,
   };
 }
 
@@ -1046,14 +1311,24 @@ function normalizeLocalRoundConfig(value: unknown): LocalQuestionRoundConfig {
     value.maxDuration ?? value.maxDurationSeconds ?? value.deadlineSeconds,
     "question.roundConfig.maxDuration",
   );
-  const minVoters = parseNonNegativeInteger(value.minVoters, "question.roundConfig.minVoters");
-  const maxVoters = parseNonNegativeInteger(value.maxVoters, "question.roundConfig.maxVoters");
+  const minVoters = parseNonNegativeInteger(
+    value.minVoters,
+    "question.roundConfig.minVoters",
+  );
+  const maxVoters = parseNonNegativeInteger(
+    value.maxVoters,
+    "question.roundConfig.maxVoters",
+  );
 
   if (epochDuration <= 0n) {
-    throw new Error("question.roundConfig.epochDuration must be greater than zero.");
+    throw new Error(
+      "question.roundConfig.epochDuration must be greater than zero.",
+    );
   }
   if (maxDuration <= 0n) {
-    throw new Error("question.roundConfig.maxDuration must be greater than zero.");
+    throw new Error(
+      "question.roundConfig.maxDuration must be greater than zero.",
+    );
   }
   if (minVoters <= 0n || maxVoters <= 0n || maxVoters < minVoters) {
     throw new Error("question.roundConfig voter values are invalid.");
@@ -1082,9 +1357,13 @@ function normalizeLocalQuestion(
   const description = readOptionalString(value.description);
   const imageUrls = normalizeImageUrls(value.imageUrls);
   const rawContextUrl = readOptionalString(value.contextUrl);
-  const contextUrl = rawContextUrl ? normalizeQuestionContextUrl(rawContextUrl, `${fieldPrefix}.contextUrl`) : "";
+  const contextUrl = rawContextUrl
+    ? normalizeQuestionContextUrl(rawContextUrl, `${fieldPrefix}.contextUrl`)
+    : "";
   const rawVideoUrl = readOptionalString(value.videoUrl);
-  const videoUrl = rawVideoUrl ? sanitizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`) : "";
+  const videoUrl = rawVideoUrl
+    ? sanitizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`)
+    : "";
   if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {
     throw new Error(`${fieldPrefix}.videoUrl must be a supported YouTube URL.`);
   }
@@ -1092,17 +1371,24 @@ function normalizeLocalQuestion(
     throw new Error("Use imageUrls or videoUrl, not both.");
   }
   if (!contextUrl && imageUrls.length === 0 && !videoUrl) {
-    throw new Error(`${fieldPrefix}.contextUrl, imageUrls, or videoUrl is required.`);
+    throw new Error(
+      `${fieldPrefix}.contextUrl, imageUrls, or videoUrl is required.`,
+    );
   }
 
   const { tags, tagList } = normalizeTags(value.tags);
-  const categoryId = parseNonNegativeInteger(value.categoryId, `${fieldPrefix}.categoryId`);
-  const targetAudience = cloneJsonObject<AgentQuestionSpecInput["targetAudience"]>(
-    value.targetAudience,
-    `${fieldPrefix}.targetAudience`,
-    null,
+  const categoryId = parseNonNegativeInteger(
+    value.categoryId,
+    `${fieldPrefix}.categoryId`,
   );
-  const templateSelection = normalizeTemplateSelection(value, fieldPrefix, defaults);
+  const targetAudience = cloneJsonObject<
+    AgentQuestionSpecInput["targetAudience"]
+  >(value.targetAudience, `${fieldPrefix}.targetAudience`, null);
+  const templateSelection = normalizeTemplateSelection(
+    value,
+    fieldPrefix,
+    defaults,
+  );
   const spec = buildQuestionSpecHashes({
     bounty: {
       amount: bounty.amount,
@@ -1147,7 +1433,10 @@ function normalizeLocalQuestion(
   };
 }
 
-function parseLocalQuestionRequest(value: unknown, fallbackChainId?: number): LocalQuestionPayload {
+function parseLocalQuestionRequest(
+  value: unknown,
+  fallbackChainId?: number,
+): LocalQuestionPayload {
   const request = assertRecord(value, "ask payload");
   for (const key of Object.keys(request)) {
     if (!X402_QUESTION_TOP_LEVEL_FIELDS.has(key)) {
@@ -1155,7 +1444,10 @@ function parseLocalQuestionRequest(value: unknown, fallbackChainId?: number): Lo
     }
   }
 
-  const clientRequestId = readRequiredString(request.clientRequestId, "clientRequestId");
+  const clientRequestId = readRequiredString(
+    request.clientRequestId,
+    "clientRequestId",
+  );
   if (!CLIENT_REQUEST_ID_PATTERN.test(clientRequestId)) {
     throw new Error(
       "clientRequestId must be 4-160 characters using letters, numbers, dot, dash, colon, or underscore.",
@@ -1169,33 +1461,45 @@ function parseLocalQuestionRequest(value: unknown, fallbackChainId?: number): Lo
     throw new Error("At least one question is required.");
   }
   if (rawQuestions.length > X402_MAX_QUESTION_BUNDLE_COUNT) {
-    throw new Error(`At most ${X402_MAX_QUESTION_BUNDLE_COUNT} questions are supported.`);
+    throw new Error(
+      `At most ${X402_MAX_QUESTION_BUNDLE_COUNT} questions are supported.`,
+    );
   }
 
   const firstQuestion = isJsonRecord(rawQuestions[0]) ? rawQuestions[0] : {};
-  const roundConfig = normalizeLocalRoundConfig(request.roundConfig ?? firstQuestion.roundConfig);
-  const bounty = normalizeLocalBounty(request.bounty);
-  const topLevelTemplateInputs = cloneJsonObject<AgentQuestionSpecInput["templateInputs"]>(
-    request.templateInputs,
-    "templateInputs",
-    null,
+  const roundConfig = normalizeLocalRoundConfig(
+    request.roundConfig ?? firstQuestion.roundConfig,
   );
+  const bounty = normalizeLocalBounty(request.bounty);
+  const topLevelTemplateInputs = cloneJsonObject<
+    AgentQuestionSpecInput["templateInputs"]
+  >(request.templateInputs, "templateInputs", null);
   const topLevelTemplateVersion =
     request.templateVersion === undefined || request.templateVersion === null
       ? DEFAULT_AGENT_TEMPLATE_VERSION
       : Number.parseInt(String(request.templateVersion), 10);
   const templateDefaults = {
-    templateId: readOptionalString(request.templateId) || DEFAULT_AGENT_TEMPLATE_ID,
+    templateId:
+      readOptionalString(request.templateId) || DEFAULT_AGENT_TEMPLATE_ID,
     templateInputs: topLevelTemplateInputs,
     templateVersion: topLevelTemplateVersion,
   };
 
   return {
     bounty,
-    chainId: normalizeLocalChainId(request.chainId ?? firstQuestion.chainId, fallbackChainId),
+    chainId: normalizeLocalChainId(
+      request.chainId ?? firstQuestion.chainId,
+      fallbackChainId,
+    ),
     clientRequestId,
     questions: rawQuestions.map((question, index) =>
-      normalizeLocalQuestion(question, index, templateDefaults, bounty, roundConfig),
+      normalizeLocalQuestion(
+        question,
+        index,
+        templateDefaults,
+        bounty,
+        roundConfig,
+      ),
     ),
     roundConfig,
   };
@@ -1217,13 +1521,14 @@ function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
       asset: payload.bounty.asset,
       requiredSettledRounds: payload.bounty.requiredSettledRounds.toString(),
       requiredVoters: payload.bounty.requiredVoters.toString(),
-      rewardPoolExpiresAt: payload.bounty.rewardPoolExpiresAt.toString(),
-      feedbackClosesAt: payload.bounty.feedbackClosesAt.toString(),
+      bountyStartBy: payload.bounty.bountyStartBy.toString(),
+      bountyWindowSeconds: payload.bounty.bountyWindowSeconds.toString(),
+      feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds.toString(),
       bountyEligibility: String(payload.bounty.bountyEligibility),
     },
     chainId: payload.chainId,
     clientRequestId: payload.clientRequestId,
-    questions: payload.questions.map(question => ({
+    questions: payload.questions.map((question) => ({
       categoryId: question.categoryId.toString(),
       contextUrl: question.contextUrl,
       description: question.description,
@@ -1244,7 +1549,9 @@ function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
 
 function buildLocalQuestionOperation(payload: LocalQuestionPayload) {
   const canonicalPayload = toCanonicalLocalQuestionPayload(payload);
-  const payloadHash = createHash("sha256").update(JSON.stringify(canonicalPayload)).digest("hex");
+  const payloadHash = createHash("sha256")
+    .update(JSON.stringify(canonicalPayload))
+    .digest("hex");
   const operationKey =
     `0x${createHash("sha256").update(`rateloop:x402-question:${payloadHash}`).digest("hex")}` as Hex;
   return {
@@ -1299,8 +1606,16 @@ function buildDeterministicQuestionSalt(params: {
     .digest("hex")}` as Hex;
 }
 
-function buildSubmissionMediaHash(imageUrls: readonly string[], videoUrl: string): Hex {
-  return keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [[...imageUrls], videoUrl]));
+function buildSubmissionMediaHash(
+  imageUrls: readonly string[],
+  videoUrl: string,
+): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string[]" }, { type: "string" }],
+      [[...imageUrls], videoUrl],
+    ),
+  );
 }
 
 function buildRewardTermsHash(rewardTerms: LocalRewardTerms): Hex {
@@ -1313,6 +1628,7 @@ function buildRewardTermsHash(rewardTerms: LocalRewardTerms): Hex {
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint256" },
         { type: "uint8" },
       ],
       [
@@ -1320,8 +1636,9 @@ function buildRewardTermsHash(rewardTerms: LocalRewardTerms): Hex {
         rewardTerms.amount,
         rewardTerms.requiredVoters,
         rewardTerms.requiredSettledRounds,
-        rewardTerms.bountyClosesAt,
-        rewardTerms.feedbackClosesAt,
+        rewardTerms.bountyStartBy,
+        rewardTerms.bountyWindowSeconds,
+        rewardTerms.feedbackWindowSeconds,
         rewardTerms.bountyEligibility,
       ],
     ),
@@ -1331,7 +1648,12 @@ function buildRewardTermsHash(rewardTerms: LocalRewardTerms): Hex {
 function buildRoundConfigHash(roundConfig: LocalQuestionRoundConfig): Hex {
   return keccak256(
     encodeAbiParameters(
-      [{ type: "uint32" }, { type: "uint32" }, { type: "uint16" }, { type: "uint16" }],
+      [
+        { type: "uint32" },
+        { type: "uint32" },
+        { type: "uint16" },
+        { type: "uint16" },
+      ],
       [
         Number(roundConfig.epochDuration),
         Number(roundConfig.maxDuration),
@@ -1351,7 +1673,11 @@ function buildSingleQuestionRevealCommitment(params: {
   const textHash = keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "string" }, { type: "string" }],
-      [params.question.title, params.question.description, params.question.tags],
+      [
+        params.question.title,
+        params.question.description,
+        params.question.tags,
+      ],
     ),
   );
   return keccak256(
@@ -1370,9 +1696,12 @@ function buildSingleQuestionRevealCommitment(params: {
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-reveal-v3",
+        "rateloop-question-reveal-v4",
         params.question.submissionKey,
-        buildSubmissionMediaHash(params.question.imageUrls, params.question.videoUrl),
+        buildSubmissionMediaHash(
+          params.question.imageUrls,
+          params.question.videoUrl,
+        ),
         textHash,
         params.question.categoryId,
         params.question.salt,
@@ -1386,7 +1715,9 @@ function buildSingleQuestionRevealCommitment(params: {
   );
 }
 
-function buildQuestionBundleHash(questions: readonly LocalQuestionSubmission[]): Hex {
+function buildQuestionBundleHash(
+  questions: readonly LocalQuestionSubmission[],
+): Hex {
   const questionHashes = questions.map((question, index) =>
     keccak256(
       encodeAbiParameters(
@@ -1420,7 +1751,10 @@ function buildQuestionBundleHash(questions: readonly LocalQuestionSubmission[]):
     ),
   );
   return keccak256(
-    encodeAbiParameters([{ type: "string" }, { type: "bytes32[]" }], ["rateloop-question-bundle-v2", questionHashes]),
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "bytes32[]" }],
+      ["rateloop-question-bundle-v2", questionHashes],
+    ),
   );
 }
 
@@ -1442,6 +1776,7 @@ function buildQuestionBundleRevealCommitment(params: {
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint256" },
         { type: "uint8" },
         { type: "uint32" },
         { type: "uint32" },
@@ -1449,15 +1784,16 @@ function buildQuestionBundleRevealCommitment(params: {
         { type: "uint16" },
       ],
       [
-        "rateloop-question-bundle-reveal-v3",
+        "rateloop-question-bundle-reveal-v4",
         buildQuestionBundleHash(params.questions),
         params.submitter,
         params.rewardTerms.asset,
         params.rewardTerms.amount,
         params.rewardTerms.requiredVoters,
         params.rewardTerms.requiredSettledRounds,
-        params.rewardTerms.bountyClosesAt,
-        params.rewardTerms.feedbackClosesAt,
+        params.rewardTerms.bountyStartBy,
+        params.rewardTerms.bountyWindowSeconds,
+        params.rewardTerms.feedbackWindowSeconds,
         params.rewardTerms.bountyEligibility,
         Number(params.roundConfig.epochDuration),
         Number(params.roundConfig.maxDuration),
@@ -1473,14 +1809,18 @@ function buildExpectedLocalSignerQuestionPlan(params: {
   payload: AskHumansRequest;
   walletAddress: Address;
 }): ExpectedLocalSignerQuestionPlan {
-  const payload = parseLocalQuestionRequest(params.payload, params.expectedChainId);
+  const payload = parseLocalQuestionRequest(
+    params.payload,
+    params.expectedChainId,
+  );
   const operation = buildLocalQuestionOperation(payload);
   const rewardTerms = {
     amount: payload.bounty.amount,
     asset: X402_SUBMISSION_REWARD_ASSET_USDC,
-    bountyClosesAt: payload.bounty.rewardPoolExpiresAt,
+    bountyStartBy: payload.bounty.bountyStartBy,
+    bountyWindowSeconds: payload.bounty.bountyWindowSeconds,
     bountyEligibility: payload.bounty.bountyEligibility,
-    feedbackClosesAt: payload.bounty.feedbackClosesAt,
+    feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds,
     requiredSettledRounds: payload.bounty.requiredSettledRounds,
     requiredVoters: payload.bounty.requiredVoters,
   } as const;
@@ -1547,7 +1887,10 @@ function buildX402QuestionPaymentNonce(params: {
   questionRewardPoolEscrowAddress: Address;
   rewardTerms: LocalRewardTerms;
   roundConfig: LocalQuestionRoundConfig;
-  x402Authorization: Pick<X402Authorization, "from" | "to" | "validAfter" | "validBefore" | "value">;
+  x402Authorization: Pick<
+    X402Authorization,
+    "from" | "to" | "validAfter" | "validBefore" | "value"
+  >;
   x402QuestionSubmitterAddress: Address;
 }): Hex {
   if (!params.x402Authorization.from || !params.x402Authorization.to) {
@@ -1604,9 +1947,18 @@ function buildX402QuestionPaymentNonce(params: {
         params.x402QuestionSubmitterAddress,
         params.x402Authorization.from,
         params.x402Authorization.to,
-        normalizeBigInt(params.x402Authorization.value, "paymentAuthorization.value"),
-        normalizeBigInt(params.x402Authorization.validAfter, "paymentAuthorization.validAfter"),
-        normalizeBigInt(params.x402Authorization.validBefore, "paymentAuthorization.validBefore"),
+        normalizeBigInt(
+          params.x402Authorization.value,
+          "paymentAuthorization.value",
+        ),
+        normalizeBigInt(
+          params.x402Authorization.validAfter,
+          "paymentAuthorization.validAfter",
+        ),
+        normalizeBigInt(
+          params.x402Authorization.validBefore,
+          "paymentAuthorization.validBefore",
+        ),
         submissionPayloadHash,
         buildRewardTermsHash(params.rewardTerms),
         buildRoundConfigHash(params.roundConfig),
@@ -1618,7 +1970,9 @@ function buildX402QuestionPaymentNonce(params: {
 }
 
 function buildX402StringArrayHash(values: readonly string[]): Hex {
-  const packed = values.map(value => keccak256(stringToHex(value)).slice(2)).join("");
+  const packed = values
+    .map((value) => keccak256(stringToHex(value)).slice(2))
+    .join("");
   return keccak256(`0x${packed}` as Hex);
 }
 
@@ -1628,25 +1982,40 @@ function normalizeCallEnvelope(params: {
   expectedTo: Address;
   index: number;
 }): { data: Hex; to: Address } {
-  const to = normalizeAddress(params.call.to, `transactionPlan.calls[${params.index}].to`);
+  const to = normalizeAddress(
+    params.call.to,
+    `transactionPlan.calls[${params.index}].to`,
+  );
   if (!sameAddress(to, params.expectedTo)) {
-    throw new Error(`transactionPlan.calls[${params.index}].to must be ${params.expectedTo}.`);
+    throw new Error(
+      `transactionPlan.calls[${params.index}].to must be ${params.expectedTo}.`,
+    );
   }
   if (params.call.phase !== params.expectedPhase) {
-    throw new Error(`transactionPlan.calls[${params.index}].phase must be ${params.expectedPhase}.`);
+    throw new Error(
+      `transactionPlan.calls[${params.index}].phase must be ${params.expectedPhase}.`,
+    );
   }
-  const data = normalizeOptionalTransactionData(params.call.data, `transactionPlan.calls[${params.index}].data`);
+  const data = normalizeOptionalTransactionData(
+    params.call.data,
+    `transactionPlan.calls[${params.index}].data`,
+  );
   if (data === "0x") {
     throw new Error(`transactionPlan.calls[${params.index}].data is required.`);
   }
-  normalizeZeroNativeValue(params.call.value, `transactionPlan.calls[${params.index}].value`);
+  normalizeZeroNativeValue(
+    params.call.value,
+    `transactionPlan.calls[${params.index}].value`,
+  );
   if (params.call.waitAfterMs !== undefined) {
     if (
       typeof params.call.waitAfterMs !== "number" ||
       !Number.isFinite(params.call.waitAfterMs) ||
       params.call.waitAfterMs < 0
     ) {
-      throw new Error(`transactionPlan.calls[${params.index}].waitAfterMs must be a non-negative number.`);
+      throw new Error(
+        `transactionPlan.calls[${params.index}].waitAfterMs must be a non-negative number.`,
+      );
     }
   }
   return { data, to };
@@ -1654,17 +2023,28 @@ function normalizeCallEnvelope(params: {
 
 function decodedCall(
   data: Hex,
-  abi: typeof erc20Abi | typeof ContentRegistryAbi | typeof X402QuestionSubmitterAbi,
+  abi:
+    | typeof erc20Abi
+    | typeof ContentRegistryAbi
+    | typeof X402QuestionSubmitterAbi,
   fieldName: string,
 ) {
   try {
-    return decodeFunctionData({ abi, data }) as { args?: readonly unknown[]; functionName: string };
+    return decodeFunctionData({ abi, data }) as {
+      args?: readonly unknown[];
+      functionName: string;
+    };
   } catch {
     throw new Error(`${fieldName} has an unexpected function selector.`);
   }
 }
 
-function readStructField(value: unknown, key: string, index: number, fieldName: string): unknown {
+function readStructField(
+  value: unknown,
+  key: string,
+  index: number,
+  fieldName: string,
+): unknown {
   if (!value || typeof value !== "object") {
     throw new Error(`${fieldName} is required.`);
   }
@@ -1674,37 +2054,59 @@ function readStructField(value: unknown, key: string, index: number, fieldName: 
   return (value as JsonRecord)[key];
 }
 
-function assertEqualBigInt(actual: unknown, expected: bigint, fieldName: string) {
+function assertEqualBigInt(
+  actual: unknown,
+  expected: bigint,
+  fieldName: string,
+) {
   if (normalizeBigInt(actual, fieldName) !== expected) {
     throw new Error(`${fieldName} must match the local signer ask payload.`);
   }
 }
 
-function assertEqualNumber(actual: unknown, expected: number, fieldName: string) {
+function assertEqualNumber(
+  actual: unknown,
+  expected: number,
+  fieldName: string,
+) {
   if (Number(normalizeBigInt(actual, fieldName)) !== expected) {
     throw new Error(`${fieldName} must match the local signer ask payload.`);
   }
 }
 
-function assertEqualString(actual: unknown, expected: string, fieldName: string) {
+function assertEqualString(
+  actual: unknown,
+  expected: string,
+  fieldName: string,
+) {
   if (typeof actual !== "string" || actual !== expected) {
     throw new Error(`${fieldName} must match the local signer ask payload.`);
   }
 }
 
-function assertEqualAddress(actual: unknown, expected: Address, fieldName: string) {
+function assertEqualAddress(
+  actual: unknown,
+  expected: Address,
+  fieldName: string,
+) {
   if (!sameAddress(normalizeAddress(actual, fieldName), expected)) {
     throw new Error(`${fieldName} must match the local signer ask payload.`);
   }
 }
 
 function assertEqualBytes32(actual: unknown, expected: Hex, fieldName: string) {
-  if (normalizeBytes32(actual, fieldName).toLowerCase() !== expected.toLowerCase()) {
+  if (
+    normalizeBytes32(actual, fieldName).toLowerCase() !== expected.toLowerCase()
+  ) {
     throw new Error(`${fieldName} must match the local signer ask payload.`);
   }
 }
 
-function assertStringArray(value: unknown, expected: readonly string[], fieldName: string) {
+function assertStringArray(
+  value: unknown,
+  expected: readonly string[],
+  fieldName: string,
+) {
   if (!Array.isArray(value) || value.length !== expected.length) {
     throw new Error(`${fieldName} must match the local signer ask payload.`);
   }
@@ -1713,14 +2115,27 @@ function assertStringArray(value: unknown, expected: readonly string[], fieldNam
   }
 }
 
-function assertRewardTerms(value: unknown, expected: LocalRewardTerms, fieldName: string) {
+function assertRewardTerms(
+  value: unknown,
+  expected: LocalRewardTerms,
+  fieldName: string,
+) {
   if (!value || typeof value !== "object") {
     throw new Error(`${fieldName} is required.`);
   }
-  if (normalizeBigInt(readStructField(value, "asset", 0, fieldName), `${fieldName}.asset`) !== 1n) {
+  if (
+    normalizeBigInt(
+      readStructField(value, "asset", 0, fieldName),
+      `${fieldName}.asset`,
+    ) !== 1n
+  ) {
     throw new Error(`${fieldName}.asset must be USDC.`);
   }
-  assertEqualBigInt(readStructField(value, "amount", 1, fieldName), expected.amount, `${fieldName}.amount`);
+  assertEqualBigInt(
+    readStructField(value, "amount", 1, fieldName),
+    expected.amount,
+    `${fieldName}.amount`,
+  );
   assertEqualBigInt(
     readStructField(value, "requiredVoters", 2, fieldName),
     expected.requiredVoters,
@@ -1732,23 +2147,32 @@ function assertRewardTerms(value: unknown, expected: LocalRewardTerms, fieldName
     `${fieldName}.requiredSettledRounds`,
   );
   assertEqualBigInt(
-    readStructField(value, "bountyClosesAt", 4, fieldName),
-    expected.bountyClosesAt,
-    `${fieldName}.bountyClosesAt`,
+    readStructField(value, "bountyStartBy", 4, fieldName),
+    expected.bountyStartBy,
+    `${fieldName}.bountyStartBy`,
   );
   assertEqualBigInt(
-    readStructField(value, "feedbackClosesAt", 5, fieldName),
-    expected.feedbackClosesAt,
-    `${fieldName}.feedbackClosesAt`,
+    readStructField(value, "bountyWindowSeconds", 5, fieldName),
+    expected.bountyWindowSeconds,
+    `${fieldName}.bountyWindowSeconds`,
+  );
+  assertEqualBigInt(
+    readStructField(value, "feedbackWindowSeconds", 6, fieldName),
+    expected.feedbackWindowSeconds,
+    `${fieldName}.feedbackWindowSeconds`,
   );
   assertEqualNumber(
-    readStructField(value, "bountyEligibility", 6, fieldName),
+    readStructField(value, "bountyEligibility", 7, fieldName),
     expected.bountyEligibility,
     `${fieldName}.bountyEligibility`,
   );
 }
 
-function assertRoundConfig(value: unknown, expected: LocalQuestionRoundConfig, fieldName: string) {
+function assertRoundConfig(
+  value: unknown,
+  expected: LocalQuestionRoundConfig,
+  fieldName: string,
+) {
   assertEqualBigInt(
     readStructField(value, "epochDuration", 0, fieldName),
     expected.epochDuration,
@@ -1759,11 +2183,23 @@ function assertRoundConfig(value: unknown, expected: LocalQuestionRoundConfig, f
     expected.maxDuration,
     `${fieldName}.maxDuration`,
   );
-  assertEqualBigInt(readStructField(value, "minVoters", 2, fieldName), expected.minVoters, `${fieldName}.minVoters`);
-  assertEqualBigInt(readStructField(value, "maxVoters", 3, fieldName), expected.maxVoters, `${fieldName}.maxVoters`);
+  assertEqualBigInt(
+    readStructField(value, "minVoters", 2, fieldName),
+    expected.minVoters,
+    `${fieldName}.minVoters`,
+  );
+  assertEqualBigInt(
+    readStructField(value, "maxVoters", 3, fieldName),
+    expected.maxVoters,
+    `${fieldName}.maxVoters`,
+  );
 }
 
-function assertQuestionSpec(value: unknown, expected: LocalQuestionSubmission["spec"], fieldName: string) {
+function assertQuestionSpec(
+  value: unknown,
+  expected: LocalQuestionSubmission["spec"],
+  fieldName: string,
+) {
   assertEqualBytes32(
     readStructField(value, "questionMetadataHash", 0, fieldName),
     expected.questionMetadataHash,
@@ -1776,20 +2212,56 @@ function assertQuestionSpec(value: unknown, expected: LocalQuestionSubmission["s
   );
 }
 
-function assertQuestionSubmission(value: unknown, expected: LocalQuestionSubmission, fieldName: string) {
-  assertEqualString(readStructField(value, "contextUrl", 0, fieldName), expected.contextUrl, `${fieldName}.contextUrl`);
-  assertStringArray(readStructField(value, "imageUrls", 1, fieldName), expected.imageUrls, `${fieldName}.imageUrls`);
-  assertEqualString(readStructField(value, "videoUrl", 2, fieldName), expected.videoUrl, `${fieldName}.videoUrl`);
-  assertEqualString(readStructField(value, "title", 3, fieldName), expected.title, `${fieldName}.title`);
+function assertQuestionSubmission(
+  value: unknown,
+  expected: LocalQuestionSubmission,
+  fieldName: string,
+) {
+  assertEqualString(
+    readStructField(value, "contextUrl", 0, fieldName),
+    expected.contextUrl,
+    `${fieldName}.contextUrl`,
+  );
+  assertStringArray(
+    readStructField(value, "imageUrls", 1, fieldName),
+    expected.imageUrls,
+    `${fieldName}.imageUrls`,
+  );
+  assertEqualString(
+    readStructField(value, "videoUrl", 2, fieldName),
+    expected.videoUrl,
+    `${fieldName}.videoUrl`,
+  );
+  assertEqualString(
+    readStructField(value, "title", 3, fieldName),
+    expected.title,
+    `${fieldName}.title`,
+  );
   assertEqualString(
     readStructField(value, "description", 4, fieldName),
     expected.description,
     `${fieldName}.description`,
   );
-  assertEqualString(readStructField(value, "tags", 5, fieldName), expected.tags, `${fieldName}.tags`);
-  assertEqualBigInt(readStructField(value, "categoryId", 6, fieldName), expected.categoryId, `${fieldName}.categoryId`);
-  assertEqualBytes32(readStructField(value, "salt", 7, fieldName), expected.salt, `${fieldName}.salt`);
-  assertQuestionSpec(readStructField(value, "spec", 8, fieldName), expected.spec, `${fieldName}.spec`);
+  assertEqualString(
+    readStructField(value, "tags", 5, fieldName),
+    expected.tags,
+    `${fieldName}.tags`,
+  );
+  assertEqualBigInt(
+    readStructField(value, "categoryId", 6, fieldName),
+    expected.categoryId,
+    `${fieldName}.categoryId`,
+  );
+  assertEqualBytes32(
+    readStructField(value, "salt", 7, fieldName),
+    expected.salt,
+    `${fieldName}.salt`,
+  );
+  assertQuestionSpec(
+    readStructField(value, "spec", 8, fieldName),
+    expected.spec,
+    `${fieldName}.spec`,
+  );
 }
 
 function validateApproveCall(params: {
@@ -1806,16 +2278,34 @@ function validateApproveCall(params: {
     expectedTo: params.expectedToken,
     index: params.index,
   });
-  const decoded = decodedCall(data, erc20Abi, `transactionPlan.calls[${params.index}]`);
+  const decoded = decodedCall(
+    data,
+    erc20Abi,
+    `transactionPlan.calls[${params.index}]`,
+  );
   if (decoded.functionName !== "approve") {
-    throw new Error(`transactionPlan.calls[${params.index}] must call ERC20 approve.`);
+    throw new Error(
+      `transactionPlan.calls[${params.index}] must call ERC20 approve.`,
+    );
   }
   const [spender, amount] = decoded.args ?? [];
-  if (typeof spender !== "string" || !sameAddress(spender, params.expectedSpender)) {
-    throw new Error(`transactionPlan.calls[${params.index}] approve spender must be the configured RateLoop escrow.`);
+  if (
+    typeof spender !== "string" ||
+    !sameAddress(spender, params.expectedSpender)
+  ) {
+    throw new Error(
+      `transactionPlan.calls[${params.index}] approve spender must be the configured RateLoop escrow.`,
+    );
   }
-  if (normalizeBigInt(amount, `transactionPlan.calls[${params.index}].approve.amount`) !== params.expectedAmount) {
-    throw new Error(`transactionPlan.calls[${params.index}] approve amount must equal the requested bounty amount.`);
+  if (
+    normalizeBigInt(
+      amount,
+      `transactionPlan.calls[${params.index}].approve.amount`,
+    ) !== params.expectedAmount
+  ) {
+    throw new Error(
+      `transactionPlan.calls[${params.index}] approve amount must equal the requested bounty amount.`,
+    );
   }
 }
 
@@ -1831,9 +2321,15 @@ function validateReserveSubmissionCall(params: {
     expectedTo: params.contentRegistryAddress,
     index: params.index,
   });
-  const decoded = decodedCall(data, ContentRegistryAbi, `transactionPlan.calls[${params.index}]`);
+  const decoded = decodedCall(
+    data,
+    ContentRegistryAbi,
+    `transactionPlan.calls[${params.index}]`,
+  );
   if (decoded.functionName !== "reserveSubmission") {
-    throw new Error(`transactionPlan.calls[${params.index}] must call reserveSubmission.`);
+    throw new Error(
+      `transactionPlan.calls[${params.index}] must call reserveSubmission.`,
+    );
   }
   assertEqualBytes32(
     decoded.args?.[0],
@@ -1854,16 +2350,32 @@ function validateSubmitQuestionCall(params: {
     expectedTo: params.contentRegistryAddress,
     index: params.index,
   });
-  const decoded = decodedCall(data, ContentRegistryAbi, `transactionPlan.calls[${params.index}]`);
+  const decoded = decodedCall(
+    data,
+    ContentRegistryAbi,
+    `transactionPlan.calls[${params.index}]`,
+  );
   if (params.expectedPlan.isBundleSubmission) {
-    if (decoded.functionName !== "submitQuestionBundleWithRewardAndRoundConfig") {
-      throw new Error(`transactionPlan.calls[${params.index}] must call submitQuestionBundleWithRewardAndRoundConfig.`);
+    if (
+      decoded.functionName !== "submitQuestionBundleWithRewardAndRoundConfig"
+    ) {
+      throw new Error(
+        `transactionPlan.calls[${params.index}] must call submitQuestionBundleWithRewardAndRoundConfig.`,
+      );
     }
     const questions = decoded.args?.[0];
-    if (!Array.isArray(questions) || questions.length !== params.expectedPlan.questions.length) {
-      throw new Error(`transactionPlan.calls[${params.index}].questions must match the local signer ask payload.`);
+    if (
+      !Array.isArray(questions) ||
+      questions.length !== params.expectedPlan.questions.length
+    ) {
+      throw new Error(
+        `transactionPlan.calls[${params.index}].questions must match the local signer ask payload.`,
+      );
     }
-    for (const [questionIndex, expectedQuestion] of params.expectedPlan.questions.entries()) {
+    for (const [
+      questionIndex,
+      expectedQuestion,
+    ] of params.expectedPlan.questions.entries()) {
       assertQuestionSubmission(
         questions[questionIndex],
         expectedQuestion,
@@ -1884,28 +2396,66 @@ function validateSubmitQuestionCall(params: {
   }
 
   if (decoded.functionName !== "submitQuestionWithRewardAndRoundConfig") {
-    throw new Error(`transactionPlan.calls[${params.index}] must call submitQuestionWithRewardAndRoundConfig.`);
+    throw new Error(
+      `transactionPlan.calls[${params.index}] must call submitQuestionWithRewardAndRoundConfig.`,
+    );
   }
   const args = decoded.args ?? [];
-  assertEqualString(args[0], params.expectedPlan.primaryQuestion.contextUrl, `transactionPlan.calls[${params.index}].contextUrl`);
-  assertStringArray(args[1], params.expectedPlan.primaryQuestion.imageUrls, `transactionPlan.calls[${params.index}].imageUrls`);
-  assertEqualString(args[2], params.expectedPlan.primaryQuestion.videoUrl, `transactionPlan.calls[${params.index}].videoUrl`);
-  assertEqualString(args[3], params.expectedPlan.primaryQuestion.title, `transactionPlan.calls[${params.index}].title`);
+  assertEqualString(
+    args[0],
+    params.expectedPlan.primaryQuestion.contextUrl,
+    `transactionPlan.calls[${params.index}].contextUrl`,
+  );
+  assertStringArray(
+    args[1],
+    params.expectedPlan.primaryQuestion.imageUrls,
+    `transactionPlan.calls[${params.index}].imageUrls`,
+  );
+  assertEqualString(
+    args[2],
+    params.expectedPlan.primaryQuestion.videoUrl,
+    `transactionPlan.calls[${params.index}].videoUrl`,
+  );
+  assertEqualString(
+    args[3],
+    params.expectedPlan.primaryQuestion.title,
+    `transactionPlan.calls[${params.index}].title`,
+  );
   assertEqualString(
     args[4],
     params.expectedPlan.primaryQuestion.description,
     `transactionPlan.calls[${params.index}].description`,
   );
-  assertEqualString(args[5], params.expectedPlan.primaryQuestion.tags, `transactionPlan.calls[${params.index}].tags`);
+  assertEqualString(
+    args[5],
+    params.expectedPlan.primaryQuestion.tags,
+    `transactionPlan.calls[${params.index}].tags`,
+  );
   assertEqualBigInt(
     args[6],
     params.expectedPlan.primaryQuestion.categoryId,
     `transactionPlan.calls[${params.index}].categoryId`,
   );
-  assertEqualBytes32(args[7], params.expectedPlan.primaryQuestion.salt, `transactionPlan.calls[${params.index}].salt`);
-  assertRewardTerms(args[8], params.expectedPlan.rewardTerms, `transactionPlan.calls[${params.index}].rewardTerms`);
-  assertRoundConfig(args[9], params.expectedPlan.roundConfig, `transactionPlan.calls[${params.index}].roundConfig`);
-  assertQuestionSpec(args[10], params.expectedPlan.primaryQuestion.spec, `transactionPlan.calls[${params.index}].spec`);
+  assertEqualBytes32(
+    args[7],
+    params.expectedPlan.primaryQuestion.salt,
+    `transactionPlan.calls[${params.index}].salt`,
+  );
+  assertRewardTerms(
+    args[8],
+    params.expectedPlan.rewardTerms,
+    `transactionPlan.calls[${params.index}].rewardTerms`,
+  );
+  assertRoundConfig(
+    args[9],
+    params.expectedPlan.roundConfig,
+    `transactionPlan.calls[${params.index}].roundConfig`,
+  );
+  assertQuestionSpec(
+    args[10],
+    params.expectedPlan.primaryQuestion.spec,
+    `transactionPlan.calls[${params.index}].spec`,
+  );
 }
 
 function validateSubmitX402QuestionCall(params: {
@@ -1925,60 +2475,146 @@ function validateSubmitX402QuestionCall(params: {
     expectedTo: params.x402QuestionSubmitterAddress,
     index: params.index,
   });
-  const decoded = decodedCall(data, X402QuestionSubmitterAbi, `transactionPlan.calls[${params.index}]`);
+  const decoded = decodedCall(
+    data,
+    X402QuestionSubmitterAbi,
+    `transactionPlan.calls[${params.index}]`,
+  );
   if (decoded.functionName !== "submitQuestionWithX402Payment") {
-    throw new Error(`transactionPlan.calls[${params.index}] must call submitQuestionWithX402Payment.`);
+    throw new Error(
+      `transactionPlan.calls[${params.index}] must call submitQuestionWithX402Payment.`,
+    );
   }
   if (params.expectedPlan.isBundleSubmission) {
-    throw new Error("x402_authorization transaction plans must submit exactly one question.");
+    throw new Error(
+      "x402_authorization transaction plans must submit exactly one question.",
+    );
   }
   const args = decoded.args ?? [];
-  assertEqualString(args[0], params.expectedPlan.primaryQuestion.contextUrl, `transactionPlan.calls[${params.index}].contextUrl`);
-  assertStringArray(args[1], params.expectedPlan.primaryQuestion.imageUrls, `transactionPlan.calls[${params.index}].imageUrls`);
-  assertEqualString(args[2], params.expectedPlan.primaryQuestion.videoUrl, `transactionPlan.calls[${params.index}].videoUrl`);
-  assertEqualString(args[3], params.expectedPlan.primaryQuestion.title, `transactionPlan.calls[${params.index}].title`);
+  assertEqualString(
+    args[0],
+    params.expectedPlan.primaryQuestion.contextUrl,
+    `transactionPlan.calls[${params.index}].contextUrl`,
+  );
+  assertStringArray(
+    args[1],
+    params.expectedPlan.primaryQuestion.imageUrls,
+    `transactionPlan.calls[${params.index}].imageUrls`,
+  );
+  assertEqualString(
+    args[2],
+    params.expectedPlan.primaryQuestion.videoUrl,
+    `transactionPlan.calls[${params.index}].videoUrl`,
+  );
+  assertEqualString(
+    args[3],
+    params.expectedPlan.primaryQuestion.title,
+    `transactionPlan.calls[${params.index}].title`,
+  );
   assertEqualString(
     args[4],
     params.expectedPlan.primaryQuestion.description,
     `transactionPlan.calls[${params.index}].description`,
   );
-  assertEqualString(args[5], params.expectedPlan.primaryQuestion.tags, `transactionPlan.calls[${params.index}].tags`);
+  assertEqualString(
+    args[5],
+    params.expectedPlan.primaryQuestion.tags,
+    `transactionPlan.calls[${params.index}].tags`,
+  );
   assertEqualBigInt(
     args[6],
     params.expectedPlan.primaryQuestion.categoryId,
     `transactionPlan.calls[${params.index}].categoryId`,
   );
-  assertEqualBytes32(args[7], params.expectedPlan.primaryQuestion.salt, `transactionPlan.calls[${params.index}].salt`);
-  assertRewardTerms(args[8], params.expectedPlan.rewardTerms, `transactionPlan.calls[${params.index}].rewardTerms`);
-  assertRoundConfig(args[9], params.expectedPlan.roundConfig, `transactionPlan.calls[${params.index}].roundConfig`);
-  assertQuestionSpec(args[10], params.expectedPlan.primaryQuestion.spec, `transactionPlan.calls[${params.index}].spec`);
+  assertEqualBytes32(
+    args[7],
+    params.expectedPlan.primaryQuestion.salt,
+    `transactionPlan.calls[${params.index}].salt`,
+  );
+  assertRewardTerms(
+    args[8],
+    params.expectedPlan.rewardTerms,
+    `transactionPlan.calls[${params.index}].rewardTerms`,
+  );
+  assertRoundConfig(
+    args[9],
+    params.expectedPlan.roundConfig,
+    `transactionPlan.calls[${params.index}].roundConfig`,
+  );
+  assertQuestionSpec(
+    args[10],
+    params.expectedPlan.primaryQuestion.spec,
+    `transactionPlan.calls[${params.index}].spec`,
+  );
   const authorization = decoded.args?.[11];
   if (!authorization || typeof authorization !== "object") {
-    throw new Error(`transactionPlan.calls[${params.index}].paymentAuthorization is required.`);
+    throw new Error(
+      `transactionPlan.calls[${params.index}].paymentAuthorization is required.`,
+    );
   }
   const authorizationFieldName = `transactionPlan.calls[${params.index}].paymentAuthorization`;
   const parsed = authorization as JsonRecord;
-  if (!sameAddress(normalizeAddress(readStructField(parsed, "from", 0, authorizationFieldName), "paymentAuthorization.from"), params.accountAddress)) {
-    throw new Error(`transactionPlan.calls[${params.index}] x402 authorization.from must match the local signer.`);
+  if (
+    !sameAddress(
+      normalizeAddress(
+        readStructField(parsed, "from", 0, authorizationFieldName),
+        "paymentAuthorization.from",
+      ),
+      params.accountAddress,
+    )
+  ) {
+    throw new Error(
+      `transactionPlan.calls[${params.index}] x402 authorization.from must match the local signer.`,
+    );
   }
   if (
     !sameAddress(
-      normalizeAddress(readStructField(parsed, "to", 1, authorizationFieldName), "paymentAuthorization.to"),
+      normalizeAddress(
+        readStructField(parsed, "to", 1, authorizationFieldName),
+        "paymentAuthorization.to",
+      ),
       params.x402QuestionSubmitterAddress,
     )
   ) {
-    throw new Error(`transactionPlan.calls[${params.index}] x402 authorization.to must be the RateLoop submitter.`);
+    throw new Error(
+      `transactionPlan.calls[${params.index}] x402 authorization.to must be the RateLoop submitter.`,
+    );
   }
-  if (normalizeBigInt(readStructField(parsed, "value", 2, authorizationFieldName), "paymentAuthorization.value") !== params.expectedPlan.rewardTerms.amount) {
-    throw new Error(`transactionPlan.calls[${params.index}] x402 authorization.value must equal the requested bounty.`);
+  if (
+    normalizeBigInt(
+      readStructField(parsed, "value", 2, authorizationFieldName),
+      "paymentAuthorization.value",
+    ) !== params.expectedPlan.rewardTerms.amount
+  ) {
+    throw new Error(
+      `transactionPlan.calls[${params.index}] x402 authorization.value must equal the requested bounty.`,
+    );
   }
   const decodedAuthorization: X402Authorization = {
-    from: normalizeAddress(readStructField(parsed, "from", 0, authorizationFieldName), `${authorizationFieldName}.from`),
-    nonce: normalizeBytes32(readStructField(parsed, "nonce", 5, authorizationFieldName), `${authorizationFieldName}.nonce`),
-    to: normalizeAddress(readStructField(parsed, "to", 1, authorizationFieldName), `${authorizationFieldName}.to`),
-    validAfter: normalizeBigInt(readStructField(parsed, "validAfter", 3, authorizationFieldName), `${authorizationFieldName}.validAfter`).toString(),
-    validBefore: normalizeBigInt(readStructField(parsed, "validBefore", 4, authorizationFieldName), `${authorizationFieldName}.validBefore`).toString(),
-    value: normalizeBigInt(readStructField(parsed, "value", 2, authorizationFieldName), `${authorizationFieldName}.value`).toString(),
+    from: normalizeAddress(
+      readStructField(parsed, "from", 0, authorizationFieldName),
+      `${authorizationFieldName}.from`,
+    ),
+    nonce: normalizeBytes32(
+      readStructField(parsed, "nonce", 5, authorizationFieldName),
+      `${authorizationFieldName}.nonce`,
+    ),
+    to: normalizeAddress(
+      readStructField(parsed, "to", 1, authorizationFieldName),
+      `${authorizationFieldName}.to`,
+    ),
+    validAfter: normalizeBigInt(
+      readStructField(parsed, "validAfter", 3, authorizationFieldName),
+      `${authorizationFieldName}.validAfter`,
+    ).toString(),
+    validBefore: normalizeBigInt(
+      readStructField(parsed, "validBefore", 4, authorizationFieldName),
+      `${authorizationFieldName}.validBefore`,
+    ).toString(),
+    value: normalizeBigInt(
+      readStructField(parsed, "value", 2, authorizationFieldName),
+      `${authorizationFieldName}.value`,
+    ).toString(),
   };
   const expectedNonce = buildX402QuestionPaymentNonce({
     chainId: params.responseChainId,
@@ -1990,37 +2626,83 @@ function validateSubmitX402QuestionCall(params: {
     x402Authorization: decodedAuthorization,
     x402QuestionSubmitterAddress: params.x402QuestionSubmitterAddress,
   });
-  assertEqualBytes32(decodedAuthorization.nonce, expectedNonce, `${authorizationFieldName}.nonce`);
-  assertEqualAddress(decodedAuthorization.from, normalizeAddress(params.expectedPaymentAuthorization.from, "signed x402 authorization.from"), `${authorizationFieldName}.from`);
-  assertEqualAddress(decodedAuthorization.to, normalizeAddress(params.expectedPaymentAuthorization.to, "signed x402 authorization.to"), `${authorizationFieldName}.to`);
+  assertEqualBytes32(
+    decodedAuthorization.nonce,
+    expectedNonce,
+    `${authorizationFieldName}.nonce`,
+  );
+  assertEqualAddress(
+    decodedAuthorization.from,
+    normalizeAddress(
+      params.expectedPaymentAuthorization.from,
+      "signed x402 authorization.from",
+    ),
+    `${authorizationFieldName}.from`,
+  );
+  assertEqualAddress(
+    decodedAuthorization.to,
+    normalizeAddress(
+      params.expectedPaymentAuthorization.to,
+      "signed x402 authorization.to",
+    ),
+    `${authorizationFieldName}.to`,
+  );
   assertEqualBigInt(
     decodedAuthorization.value,
-    normalizeBigInt(params.expectedPaymentAuthorization.value, "signed x402 authorization.value"),
+    normalizeBigInt(
+      params.expectedPaymentAuthorization.value,
+      "signed x402 authorization.value",
+    ),
     `${authorizationFieldName}.value`,
   );
   assertEqualBigInt(
     decodedAuthorization.validAfter,
-    normalizeBigInt(params.expectedPaymentAuthorization.validAfter, "signed x402 authorization.validAfter"),
+    normalizeBigInt(
+      params.expectedPaymentAuthorization.validAfter,
+      "signed x402 authorization.validAfter",
+    ),
     `${authorizationFieldName}.validAfter`,
   );
   assertEqualBigInt(
     decodedAuthorization.validBefore,
-    normalizeBigInt(params.expectedPaymentAuthorization.validBefore, "signed x402 authorization.validBefore"),
+    normalizeBigInt(
+      params.expectedPaymentAuthorization.validBefore,
+      "signed x402 authorization.validBefore",
+    ),
     `${authorizationFieldName}.validBefore`,
   );
   assertEqualBytes32(
     decodedAuthorization.nonce,
-    normalizeBytes32(params.expectedPaymentAuthorization.nonce, "signed x402 authorization.nonce"),
+    normalizeBytes32(
+      params.expectedPaymentAuthorization.nonce,
+      "signed x402 authorization.nonce",
+    ),
     `${authorizationFieldName}.nonce`,
   );
   if (!params.expectedPaymentAuthorization.signature) {
-    throw new Error("Signed x402 authorization must include a signature before executing the transaction plan.");
+    throw new Error(
+      "Signed x402 authorization must include a signature before executing the transaction plan.",
+    );
   }
-  const signature = parseSignature(params.expectedPaymentAuthorization.signature);
+  const signature = parseSignature(
+    params.expectedPaymentAuthorization.signature,
+  );
   const expectedV = Number(signature.v ?? BigInt(signature.yParity + 27));
-  assertEqualBytes32(readStructField(parsed, "r", 7, authorizationFieldName), signature.r, `${authorizationFieldName}.r`);
-  assertEqualBytes32(readStructField(parsed, "s", 8, authorizationFieldName), signature.s, `${authorizationFieldName}.s`);
-  assertEqualNumber(readStructField(parsed, "v", 6, authorizationFieldName), expectedV, `${authorizationFieldName}.v`);
+  assertEqualBytes32(
+    readStructField(parsed, "r", 7, authorizationFieldName),
+    signature.r,
+    `${authorizationFieldName}.r`,
+  );
+  assertEqualBytes32(
+    readStructField(parsed, "s", 8, authorizationFieldName),
+    signature.s,
+    `${authorizationFieldName}.s`,
+  );
+  assertEqualNumber(
+    readStructField(parsed, "v", 6, authorizationFieldName),
+    expectedV,
+    `${authorizationFieldName}.v`,
+  );
 }
 
 function validatePaymentMetadata(params: {
@@ -2033,14 +2715,34 @@ function validatePaymentMetadata(params: {
   if (!payment) {
     throw new Error("RateLoop transaction plan is missing payment metadata.");
   }
-  if (!payment.tokenAddress || !sameAddress(normalizeAddress(payment.tokenAddress, "payment.tokenAddress"), params.usdcAddress)) {
-    throw new Error("RateLoop transaction plan payment.tokenAddress must be the configured USDC token.");
+  if (
+    !payment.tokenAddress ||
+    !sameAddress(
+      normalizeAddress(payment.tokenAddress, "payment.tokenAddress"),
+      params.usdcAddress,
+    )
+  ) {
+    throw new Error(
+      "RateLoop transaction plan payment.tokenAddress must be the configured USDC token.",
+    );
   }
-  if (!payment.spender || !sameAddress(normalizeAddress(payment.spender, "payment.spender"), params.expectedSpender)) {
-    throw new Error("RateLoop transaction plan payment.spender must be the expected RateLoop contract.");
+  if (
+    !payment.spender ||
+    !sameAddress(
+      normalizeAddress(payment.spender, "payment.spender"),
+      params.expectedSpender,
+    )
+  ) {
+    throw new Error(
+      "RateLoop transaction plan payment.spender must be the expected RateLoop contract.",
+    );
   }
-  if (normalizeBigInt(payment.amount, "payment.amount") !== params.expectedAmount) {
-    throw new Error("RateLoop transaction plan payment.amount must equal the requested bounty amount.");
+  if (
+    normalizeBigInt(payment.amount, "payment.amount") !== params.expectedAmount
+  ) {
+    throw new Error(
+      "RateLoop transaction plan payment.amount must equal the requested bounty amount.",
+    );
   }
 }
 
@@ -2059,16 +2761,31 @@ export function validateLocalSignerTransactionPlan(params: {
   }
   normalizeOperationKey(params.ask.operationKey, "operationKey");
   if (params.ask.transactionPlan?.requiresOrderedExecution !== true) {
-    throw new Error("RateLoop transaction plans must require ordered execution.");
+    throw new Error(
+      "RateLoop transaction plans must require ordered execution.",
+    );
   }
-  const responseChainId = normalizeRequiredChainId(params.ask.chainId, "ask response chainId");
-  if (params.expectedChainId !== undefined && responseChainId !== params.expectedChainId) {
-    throw new Error(`Ask response chainId ${responseChainId} does not match local signer chain ${params.expectedChainId}.`);
+  const responseChainId = normalizeRequiredChainId(
+    params.ask.chainId,
+    "ask response chainId",
+  );
+  if (
+    params.expectedChainId !== undefined &&
+    responseChainId !== params.expectedChainId
+  ) {
+    throw new Error(
+      `Ask response chainId ${responseChainId} does not match local signer chain ${params.expectedChainId}.`,
+    );
   }
   const wallet = assertRecord(params.ask.wallet, "ask response wallet");
-  const walletAddress = normalizeAddress(wallet.address, "ask response wallet.address");
+  const walletAddress = normalizeAddress(
+    wallet.address,
+    "ask response wallet.address",
+  );
   if (!sameAddress(walletAddress, params.accountAddress)) {
-    throw new Error(`RateLoop transaction plan wallet ${walletAddress} does not match local signer ${params.accountAddress}.`);
+    throw new Error(
+      `RateLoop transaction plan wallet ${walletAddress} does not match local signer ${params.accountAddress}.`,
+    );
   }
   const expectedPlan = buildExpectedLocalSignerQuestionPlan({
     expectedChainId: responseChainId,
@@ -2076,28 +2793,51 @@ export function validateLocalSignerTransactionPlan(params: {
     walletAddress: params.accountAddress,
   });
   if (expectedPlan.rewardTerms.amount !== params.expectedBountyAmount) {
-    throw new Error("Expected bounty amount must match the local signer ask payload.");
+    throw new Error(
+      "Expected bounty amount must match the local signer ask payload.",
+    );
   }
-  if (normalizeOperationKey(params.ask.operationKey, "operationKey").toLowerCase() !== expectedPlan.operationKey.toLowerCase()) {
-    throw new Error("RateLoop transaction plan operationKey does not match the local signer ask payload.");
+  if (
+    normalizeOperationKey(
+      params.ask.operationKey,
+      "operationKey",
+    ).toLowerCase() !== expectedPlan.operationKey.toLowerCase()
+  ) {
+    throw new Error(
+      "RateLoop transaction plan operationKey does not match the local signer ask payload.",
+    );
   }
-  if (params.ask.payloadHash !== undefined && params.ask.payloadHash !== expectedPlan.payloadHash) {
-    throw new Error("RateLoop transaction plan payloadHash does not match the local signer ask payload.");
+  if (
+    params.ask.payloadHash !== undefined &&
+    params.ask.payloadHash !== expectedPlan.payloadHash
+  ) {
+    throw new Error(
+      "RateLoop transaction plan payloadHash does not match the local signer ask payload.",
+    );
   }
 
-  const usdcAddress = requireConfiguredAddress(resolveConfiguredUsdcAddress(params.config, responseChainId), "USDC token");
+  const usdcAddress = requireConfiguredAddress(
+    resolveConfiguredUsdcAddress(params.config, responseChainId),
+    "USDC token",
+  );
   const contentRegistryAddress = requireConfiguredAddress(
     resolveConfiguredContentRegistryAddress(params.config, responseChainId),
     "ContentRegistry",
   );
-  const paymentMode = typeof params.ask.paymentMode === "string" ? params.ask.paymentMode : "";
+  const paymentMode =
+    typeof params.ask.paymentMode === "string" ? params.ask.paymentMode : "";
 
   if (paymentMode === "wallet_calls") {
     if (calls.length !== 3) {
-      throw new Error("wallet_calls transaction plans must contain approve, reserve, and submit calls.");
+      throw new Error(
+        "wallet_calls transaction plans must contain approve, reserve, and submit calls.",
+      );
     }
     const escrowAddress = requireConfiguredAddress(
-      resolveConfiguredQuestionRewardPoolEscrowAddress(params.config, responseChainId),
+      resolveConfiguredQuestionRewardPoolEscrowAddress(
+        params.config,
+        responseChainId,
+      ),
       "QuestionRewardPoolEscrow",
     );
     validatePaymentMetadata({
@@ -2131,18 +2871,25 @@ export function validateLocalSignerTransactionPlan(params: {
 
   if (paymentMode === "x402_authorization") {
     if (calls.length !== 2) {
-      throw new Error("x402_authorization transaction plans must contain reserve and submit calls.");
+      throw new Error(
+        "x402_authorization transaction plans must contain reserve and submit calls.",
+      );
     }
     const x402QuestionSubmitterAddress = requireConfiguredAddress(
       resolveConfiguredX402SubmitterAddress(params.config, responseChainId),
       "X402QuestionSubmitter",
     );
     const questionRewardPoolEscrowAddress = requireConfiguredAddress(
-      resolveConfiguredQuestionRewardPoolEscrowAddress(params.config, responseChainId),
+      resolveConfiguredQuestionRewardPoolEscrowAddress(
+        params.config,
+        responseChainId,
+      ),
       "QuestionRewardPoolEscrow",
     );
     if (!params.expectedPaymentAuthorization?.signature) {
-      throw new Error("x402_authorization transaction plans require the exact signed local x402 authorization.");
+      throw new Error(
+        "x402_authorization transaction plans require the exact signed local x402 authorization.",
+      );
     }
     validatePaymentMetadata({
       ask: params.ask,
@@ -2170,7 +2917,9 @@ export function validateLocalSignerTransactionPlan(params: {
     return calls;
   }
 
-  throw new Error("RateLoop transaction plan paymentMode must be wallet_calls or x402_authorization.");
+  throw new Error(
+    "RateLoop transaction plan paymentMode must be wallet_calls or x402_authorization.",
+  );
 }
 
 async function deriveScryptKey(
@@ -2200,13 +2949,24 @@ async function deriveScryptKey(
   });
 }
 
-async function encryptPrivateKey(privateKey: Hex, password: string, address: Address): Promise<KeystoreV3> {
+async function encryptPrivateKey(
+  privateKey: Hex,
+  password: string,
+  address: Address,
+): Promise<KeystoreV3> {
   const salt = randomBytes(32);
   const iv = randomBytes(16);
   const privateKeyBytes = Buffer.from(privateKey.slice(2), "hex");
-  const derivedKey = await deriveScryptKey(password, salt, DEFAULT_SCRYPT_PARAMS);
+  const derivedKey = await deriveScryptKey(
+    password,
+    salt,
+    DEFAULT_SCRYPT_PARAMS,
+  );
   const cipher = createCipheriv("aes-128-ctr", derivedKey.subarray(0, 16), iv);
-  const ciphertext = Buffer.concat([cipher.update(privateKeyBytes), cipher.final()]);
+  const ciphertext = Buffer.concat([
+    cipher.update(privateKeyBytes),
+    cipher.final(),
+  ]);
   const macInput = Buffer.concat([derivedKey.subarray(16, 32), ciphertext]);
 
   return {
@@ -2226,17 +2986,26 @@ async function encryptPrivateKey(privateKey: Hex, password: string, address: Add
   };
 }
 
-async function decryptLocalKeystore(path: string, password: string): Promise<Hex> {
+async function decryptLocalKeystore(
+  path: string,
+  password: string,
+): Promise<Hex> {
   const raw = await readFile(path, "utf8");
   const keystore = JSON.parse(raw) as KeystoreV3;
   if (keystore.version !== KEYSTORE_VERSION) {
-    throw new Error(`Unsupported keystore version: ${String(keystore.version)}.`);
+    throw new Error(
+      `Unsupported keystore version: ${String(keystore.version)}.`,
+    );
   }
   if (keystore.crypto?.kdf !== "scrypt") {
-    throw new Error(`Unsupported keystore KDF: ${String(keystore.crypto?.kdf)}.`);
+    throw new Error(
+      `Unsupported keystore KDF: ${String(keystore.crypto?.kdf)}.`,
+    );
   }
   if (keystore.crypto?.cipher !== "aes-128-ctr") {
-    throw new Error(`Unsupported keystore cipher: ${String(keystore.crypto?.cipher)}.`);
+    throw new Error(
+      `Unsupported keystore cipher: ${String(keystore.crypto?.cipher)}.`,
+    );
   }
 
   const params = keystore.crypto.kdfparams;
@@ -2244,29 +3013,53 @@ async function decryptLocalKeystore(path: string, password: string): Promise<Hex
   const ciphertext = Buffer.from(keystore.crypto.ciphertext, "hex");
   const derivedKey = await deriveScryptKey(password, salt, params);
   const macInput = Buffer.concat([derivedKey.subarray(16, 32), ciphertext]);
-  const computedMac = Buffer.from(keccak256(`0x${macInput.toString("hex")}`).slice(2), "hex");
+  const computedMac = Buffer.from(
+    keccak256(`0x${macInput.toString("hex")}`).slice(2),
+    "hex",
+  );
   const storedMac = Buffer.from(keystore.crypto.mac.replace(/^0x/, ""), "hex");
 
-  if (computedMac.length !== storedMac.length || !timingSafeEqual(computedMac, storedMac)) {
+  if (
+    computedMac.length !== storedMac.length ||
+    !timingSafeEqual(computedMac, storedMac)
+  ) {
     throw new Error("Keystore MAC mismatch. Check the local signer password.");
   }
 
   const iv = Buffer.from(keystore.crypto.cipherparams.iv, "hex");
-  const decipher = createDecipheriv("aes-128-ctr", derivedKey.subarray(0, 16), iv);
-  const privateKey = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  const decipher = createDecipheriv(
+    "aes-128-ctr",
+    derivedKey.subarray(0, 16),
+    iv,
+  );
+  const privateKey = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]);
   return `0x${privateKey.toString("hex")}` as Hex;
 }
 
-export function loadLocalSignerConfig(options: CliOptions = {}, env: NodeJS.ProcessEnv = process.env): LocalSignerConfig {
-  const passwordEnvName = optionString(options, "password-env") ?? envString(env, "RATELOOP_LOCAL_SIGNER_PASSWORD_ENV");
+export function loadLocalSignerConfig(
+  options: CliOptions = {},
+  env: NodeJS.ProcessEnv = process.env,
+): LocalSignerConfig {
+  const passwordEnvName =
+    optionString(options, "password-env") ??
+    envString(env, "RATELOOP_LOCAL_SIGNER_PASSWORD_ENV");
   const keystorePassword =
     optionString(options, "keystore-password") ??
     (passwordEnvName ? envString(env, passwordEnvName) : undefined) ??
     envString(env, "RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD");
 
   return {
-    chainId: parsePositiveInteger(optionString(options, "chain-id") ?? envString(env, "RATELOOP_CHAIN_ID"), "RATELOOP_CHAIN_ID"),
-    chainName: optionString(options, "chain-name") ?? envString(env, "RATELOOP_CHAIN_NAME") ?? "RateLoop local signer chain",
+    chainId: parsePositiveInteger(
+      optionString(options, "chain-id") ?? envString(env, "RATELOOP_CHAIN_ID"),
+      "RATELOOP_CHAIN_ID",
+    ),
+    chainName:
+      optionString(options, "chain-name") ??
+      envString(env, "RATELOOP_CHAIN_NAME") ??
+      "RateLoop local signer chain",
     contentRegistryAddress: parseOptionalAddress(
       optionString(options, "content-registry-address") ??
         envString(env, "RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS"),
@@ -2278,31 +3071,41 @@ export function loadLocalSignerConfig(options: CliOptions = {}, env: NodeJS.Proc
       "RATELOOP_LOCAL_SIGNER_FEEDBACK_BONUS_ESCROW_ADDRESS",
     ),
     keystorePassword,
-    keystorePath: optionString(options, "keystore") ?? envString(env, "RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH"),
+    keystorePath:
+      optionString(options, "keystore") ??
+      envString(env, "RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH"),
     lrepAddress: parseOptionalAddress(
-      optionString(options, "lrep-address") ?? envString(env, "RATELOOP_LOCAL_SIGNER_LREP_ADDRESS"),
+      optionString(options, "lrep-address") ??
+        envString(env, "RATELOOP_LOCAL_SIGNER_LREP_ADDRESS"),
       "RATELOOP_LOCAL_SIGNER_LREP_ADDRESS",
     ),
     pollingIntervalMs:
       parsePositiveInteger(
-        optionString(options, "polling-interval-ms") ?? envString(env, "RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS"),
+        optionString(options, "polling-interval-ms") ??
+          envString(env, "RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS"),
         "RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS",
       ) ?? 2_000,
     privateKey: parsePrivateKey(
-      optionString(options, "private-key") ?? envString(env, "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY"),
+      optionString(options, "private-key") ??
+        envString(env, "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY"),
       "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY",
     ),
     questionRewardPoolEscrowAddress: parseOptionalAddress(
       optionString(options, "question-reward-pool-escrow-address") ??
-        envString(env, "RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS"),
+        envString(
+          env,
+          "RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
+        ),
       "RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS",
     ),
     receiptTimeoutMs:
       parsePositiveInteger(
-        optionString(options, "receipt-timeout-ms") ?? envString(env, "RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS"),
+        optionString(options, "receipt-timeout-ms") ??
+          envString(env, "RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS"),
         "RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS",
       ) ?? 120_000,
-    rpcUrl: optionString(options, "rpc-url") ?? envString(env, "RATELOOP_RPC_URL"),
+    rpcUrl:
+      optionString(options, "rpc-url") ?? envString(env, "RATELOOP_RPC_URL"),
     usdcAddress: parseOptionalAddress(
       optionString(options, "usdc-address") ??
         envString(env, "RATELOOP_LOCAL_SIGNER_USDC_ADDRESS") ??
@@ -2318,24 +3121,38 @@ export function loadLocalSignerConfig(options: CliOptions = {}, env: NodeJS.Proc
   };
 }
 
-export async function loadLocalSignerWallet(config: LocalSignerConfig): Promise<LoadedLocalSignerWallet> {
+export async function loadLocalSignerWallet(
+  config: LocalSignerConfig,
+): Promise<LoadedLocalSignerWallet> {
   if (config.keystorePath && config.privateKey) {
-    throw new Error("Set either RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH or RATELOOP_LOCAL_SIGNER_PRIVATE_KEY, not both.");
+    throw new Error(
+      "Set either RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH or RATELOOP_LOCAL_SIGNER_PRIVATE_KEY, not both.",
+    );
   }
 
   if (config.keystorePath) {
     if (!config.keystorePassword) {
-      throw new Error("Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD to unlock the local signer keystore.");
+      throw new Error(
+        "Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD to unlock the local signer keystore.",
+      );
     }
-    const privateKey = await decryptLocalKeystore(resolve(config.keystorePath), config.keystorePassword);
+    const privateKey = await decryptLocalKeystore(
+      resolve(config.keystorePath),
+      config.keystorePassword,
+    );
     return { account: privateKeyToAccount(privateKey), source: "keystore" };
   }
 
   if (config.privateKey) {
-    return { account: privateKeyToAccount(config.privateKey), source: "private-key" };
+    return {
+      account: privateKeyToAccount(config.privateKey),
+      source: "private-key",
+    };
   }
 
-  throw new Error("No local signer wallet configured. Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH or generate one with `wallet --generate`.");
+  throw new Error(
+    "No local signer wallet configured. Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH or generate one with `wallet --generate`.",
+  );
 }
 
 export async function generateLocalSignerWallet(
@@ -2343,19 +3160,29 @@ export async function generateLocalSignerWallet(
   options: { overwrite?: boolean } = {},
 ): Promise<GeneratedLocalSignerWallet> {
   if (!config.keystorePath) {
-    throw new Error("Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH or pass --keystore before generating a wallet.");
+    throw new Error(
+      "Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH or pass --keystore before generating a wallet.",
+    );
   }
   if (!config.keystorePassword) {
-    throw new Error("Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD before generating a wallet.");
+    throw new Error(
+      "Set RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD before generating a wallet.",
+    );
   }
   if (config.privateKey) {
-    throw new Error("Refusing to generate a keystore while RATELOOP_LOCAL_SIGNER_PRIVATE_KEY is set.");
+    throw new Error(
+      "Refusing to generate a keystore while RATELOOP_LOCAL_SIGNER_PRIVATE_KEY is set.",
+    );
   }
 
   const keystorePath = resolve(config.keystorePath);
   const privateKey = generatePrivateKey();
   const account = privateKeyToAccount(privateKey);
-  const keystore = await encryptPrivateKey(privateKey, config.keystorePassword, account.address);
+  const keystore = await encryptPrivateKey(
+    privateKey,
+    config.keystorePassword,
+    account.address,
+  );
   await mkdir(dirname(keystorePath), { recursive: true });
   await writeFile(keystorePath, `${JSON.stringify(keystore, null, 2)}\n`, {
     flag: options.overwrite ? "w" : "wx",
@@ -2366,24 +3193,43 @@ export async function generateLocalSignerWallet(
   return { account, keystorePath, source: "keystore" };
 }
 
-export function withLocalSignerWallet(payload: unknown, walletAddress: Address): AskHumansRequest {
+export function withLocalSignerWallet(
+  payload: unknown,
+  walletAddress: Address,
+): AskHumansRequest {
   const request = assertRecord(payload, "ask payload") as AskHumansRequest;
   const requestedWallet = request.walletAddress;
-  if (typeof requestedWallet === "string" && requestedWallet.trim() && !sameAddress(requestedWallet, walletAddress)) {
-    throw new Error(`Ask payload walletAddress ${requestedWallet} does not match local signer ${walletAddress}.`);
+  if (
+    typeof requestedWallet === "string" &&
+    requestedWallet.trim() &&
+    !sameAddress(requestedWallet, walletAddress)
+  ) {
+    throw new Error(
+      `Ask payload walletAddress ${requestedWallet} does not match local signer ${walletAddress}.`,
+    );
   }
 
   return { ...request, walletAddress };
 }
 
-function withLocalSignerChainId(request: AskHumansRequest, chainId: number | undefined): AskHumansRequest {
-  const requestedChainId = normalizeOptionalChainId(request.chainId, "ask payload chainId");
+function withLocalSignerChainId(
+  request: AskHumansRequest,
+  chainId: number | undefined,
+): AskHumansRequest {
+  const requestedChainId = normalizeOptionalChainId(
+    request.chainId,
+    "ask payload chainId",
+  );
   if (chainId === undefined) {
-    return requestedChainId === undefined ? request : { ...request, chainId: requestedChainId };
+    return requestedChainId === undefined
+      ? request
+      : { ...request, chainId: requestedChainId };
   }
 
   if (requestedChainId !== undefined && requestedChainId !== chainId) {
-    throw new Error(`Ask payload chainId ${requestedChainId} does not match local signer chain ${chainId}.`);
+    throw new Error(
+      `Ask payload chainId ${requestedChainId} does not match local signer chain ${chainId}.`,
+    );
   }
 
   return { ...request, chainId };
@@ -2394,14 +3240,20 @@ export async function signX402AuthorizationRequest(
   x402AuthorizationRequest: unknown,
   options: SignX402AuthorizationOptions = {},
 ): Promise<X402Authorization> {
-  const { authorization, typedData, typedDataDomain } = parseX402AuthorizationRequest(x402AuthorizationRequest);
+  const { authorization, typedData, typedDataDomain } =
+    parseX402AuthorizationRequest(x402AuthorizationRequest);
   assertTrustedX402Authorization(account, authorization, typedDataDomain, {
     ...options,
     expectedChainId: options.expectedChainId ?? typedDataDomain.chainId,
-    expectedUsdcAddress: options.expectedUsdcAddress ?? X402_USDC_BY_CHAIN_ID[typedDataDomain.chainId],
+    expectedUsdcAddress:
+      options.expectedUsdcAddress ??
+      X402_USDC_BY_CHAIN_ID[typedDataDomain.chainId],
     expectedX402QuestionSubmitterAddress:
       options.expectedX402QuestionSubmitterAddress ??
-      getSharedDeploymentAddress(typedDataDomain.chainId, "X402QuestionSubmitter"),
+      getSharedDeploymentAddress(
+        typedDataDomain.chainId,
+        "X402QuestionSubmitter",
+      ),
   });
 
   const signature = await account.signTypedData({
@@ -2416,13 +3268,17 @@ export async function signX402AuthorizationRequest(
 
 async function resolveChain(config: LocalSignerConfig) {
   if (!config.rpcUrl) {
-    throw new Error("Set RATELOOP_RPC_URL before executing local signer transaction plans.");
+    throw new Error(
+      "Set RATELOOP_RPC_URL before executing local signer transaction plans.",
+    );
   }
 
   const probeClient = createPublicClient({ transport: http(config.rpcUrl) });
   const rpcChainId = await probeClient.getChainId();
   if (config.chainId !== undefined && rpcChainId !== config.chainId) {
-    throw new Error(`RATELOOP_CHAIN_ID is ${config.chainId}, but RATELOOP_RPC_URL reports ${rpcChainId}.`);
+    throw new Error(
+      `RATELOOP_CHAIN_ID is ${config.chainId}, but RATELOOP_RPC_URL reports ${rpcChainId}.`,
+    );
   }
 
   return defineChain({
@@ -2435,14 +3291,18 @@ async function resolveChain(config: LocalSignerConfig) {
   });
 }
 
-async function resolveConfiguredChainId(config: LocalSignerConfig): Promise<number | undefined> {
+async function resolveConfiguredChainId(
+  config: LocalSignerConfig,
+): Promise<number | undefined> {
   if (config.rpcUrl) {
     return (await resolveChain(config)).id;
   }
   return config.chainId;
 }
 
-function summarizeReceipt(receipt: TransactionReceipt): LocalTransactionReceiptSummary {
+function summarizeReceipt(
+  receipt: TransactionReceipt,
+): LocalTransactionReceiptSummary {
   return {
     blockNumber: receipt.blockNumber.toString(),
     gasUsed: receipt.gasUsed.toString(),
@@ -2471,11 +3331,22 @@ async function executeTransactionPlan(params: {
     const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
     const hash = await walletClient.sendTransaction({
       account: params.account,
-      data: normalizeOptionalTransactionData(call.data, `transactionPlan.calls[${index}].data`),
+      data: normalizeOptionalTransactionData(
+        call.data,
+        `transactionPlan.calls[${index}].data`,
+      ),
       to,
-      value: normalizeZeroNativeValue(call.value, `transactionPlan.calls[${index}].value`),
+      value: normalizeZeroNativeValue(
+        call.value,
+        `transactionPlan.calls[${index}].value`,
+      ),
     });
-    params.onProgress?.({ hash, index, phase: call.phase, type: "transaction_sent" });
+    params.onProgress?.({
+      hash,
+      index,
+      phase: call.phase,
+      type: "transaction_sent",
+    });
 
     const receipt = await publicClient.waitForTransactionReceipt({
       hash,
@@ -2483,20 +3354,27 @@ async function executeTransactionPlan(params: {
       timeout: params.config.receiptTimeoutMs,
     });
     const summary = summarizeReceipt(receipt);
-    params.onProgress?.({ hash, index, receipt: summary, type: "transaction_confirmed" });
+    params.onProgress?.({
+      hash,
+      index,
+      receipt: summary,
+      type: "transaction_confirmed",
+    });
     if (receipt.status !== "success") {
       throw new Error(`transactionPlan.calls[${index}] reverted: ${hash}`);
     }
 
     calls.push({ hash, index, phase: call.phase, receipt: summary, to });
     if (typeof call.waitAfterMs === "number" && call.waitAfterMs > 0) {
-      await new Promise(resolveWait => setTimeout(resolveWait, call.waitAfterMs));
+      await new Promise((resolveWait) =>
+        setTimeout(resolveWait, call.waitAfterMs),
+      );
     }
   }
 
   return {
     calls,
-    transactionHashes: calls.map(call => call.hash),
+    transactionHashes: calls.map((call) => call.hash),
   };
 }
 
@@ -2509,7 +3387,10 @@ export async function askHumansWithLocalSigner(params: {
   payload: unknown;
 }): Promise<LocalAskResult> {
   const expectedChainId = await resolveConfiguredChainId(params.config);
-  const baseAsk = withLocalSignerChainId(withLocalSignerWallet(params.payload, params.account.address), expectedChainId);
+  const baseAsk = withLocalSignerChainId(
+    withLocalSignerWallet(params.payload, params.account.address),
+    expectedChainId,
+  );
   if (params.paymentMode) {
     baseAsk.paymentMode = params.paymentMode;
   }
@@ -2522,7 +3403,9 @@ export async function askHumansWithLocalSigner(params: {
   let signedPaymentAuthorization: X402Authorization | null = null;
   if (initialAsk.x402AuthorizationRequest) {
     if (baseAsk.chainId === undefined) {
-      throw new Error("Ask payload chainId is required before signing an x402 authorization.");
+      throw new Error(
+        "Ask payload chainId is required before signing an x402 authorization.",
+      );
     }
     const expectedPlan = buildExpectedLocalSignerQuestionPlan({
       expectedChainId: baseAsk.chainId,
@@ -2530,24 +3413,40 @@ export async function askHumansWithLocalSigner(params: {
       walletAddress: params.account.address,
     });
     if (expectedPlan.isBundleSubmission) {
-      throw new Error("x402_authorization local signing supports one question per authorization.");
+      throw new Error(
+        "x402_authorization local signing supports one question per authorization.",
+      );
     }
     if (
       initialAsk.operationKey &&
-      normalizeOperationKey(initialAsk.operationKey, "operationKey").toLowerCase() !== expectedPlan.operationKey.toLowerCase()
+      normalizeOperationKey(
+        initialAsk.operationKey,
+        "operationKey",
+      ).toLowerCase() !== expectedPlan.operationKey.toLowerCase()
     ) {
-      throw new Error("RateLoop x402 authorization operationKey does not match the local signer ask payload.");
+      throw new Error(
+        "RateLoop x402 authorization operationKey does not match the local signer ask payload.",
+      );
     }
-    if (initialAsk.payloadHash !== undefined && initialAsk.payloadHash !== expectedPlan.payloadHash) {
-      throw new Error("RateLoop x402 authorization payloadHash does not match the local signer ask payload.");
+    if (
+      initialAsk.payloadHash !== undefined &&
+      initialAsk.payloadHash !== expectedPlan.payloadHash
+    ) {
+      throw new Error(
+        "RateLoop x402 authorization payloadHash does not match the local signer ask payload.",
+      );
     }
-    const { authorization: pendingAuthorization } = parseX402AuthorizationRequest(initialAsk.x402AuthorizationRequest);
+    const { authorization: pendingAuthorization } =
+      parseX402AuthorizationRequest(initialAsk.x402AuthorizationRequest);
     const contentRegistryAddress = requireConfiguredAddress(
       resolveConfiguredContentRegistryAddress(params.config, baseAsk.chainId),
       "ContentRegistry",
     );
     const questionRewardPoolEscrowAddress = requireConfiguredAddress(
-      resolveConfiguredQuestionRewardPoolEscrowAddress(params.config, baseAsk.chainId),
+      resolveConfiguredQuestionRewardPoolEscrowAddress(
+        params.config,
+        baseAsk.chainId,
+      ),
       "QuestionRewardPoolEscrow",
     );
     const x402QuestionSubmitterAddress = requireConfiguredAddress(
@@ -2564,13 +3463,23 @@ export async function askHumansWithLocalSigner(params: {
       x402Authorization: pendingAuthorization,
       x402QuestionSubmitterAddress,
     });
-    const paymentAuthorization = await signX402AuthorizationRequest(params.account, initialAsk.x402AuthorizationRequest, {
-      expectedChainId: baseAsk.chainId,
-      expectedAmount: normalizeBigInt(baseAsk.bounty.amount, "ask payload bounty.amount"),
-      expectedNonce,
-      expectedUsdcAddress: resolveConfiguredUsdcAddress(params.config, baseAsk.chainId),
-      expectedX402QuestionSubmitterAddress: x402QuestionSubmitterAddress,
-    });
+    const paymentAuthorization = await signX402AuthorizationRequest(
+      params.account,
+      initialAsk.x402AuthorizationRequest,
+      {
+        expectedChainId: baseAsk.chainId,
+        expectedAmount: normalizeBigInt(
+          baseAsk.bounty.amount,
+          "ask payload bounty.amount",
+        ),
+        expectedNonce,
+        expectedUsdcAddress: resolveConfiguredUsdcAddress(
+          params.config,
+          baseAsk.chainId,
+        ),
+        expectedX402QuestionSubmitterAddress: x402QuestionSubmitterAddress,
+      },
+    );
     signedPaymentAuthorization = paymentAuthorization;
     signedX402Authorization = true;
     params.onProgress?.({ type: "x402_signed" });
@@ -2587,7 +3496,10 @@ export async function askHumansWithLocalSigner(params: {
     accountAddress: params.account.address,
     ask: finalAsk,
     config: params.config,
-    expectedBountyAmount: normalizeBigInt(baseAsk.bounty.amount, "ask payload bounty.amount"),
+    expectedBountyAmount: normalizeBigInt(
+      baseAsk.bounty.amount,
+      "ask payload bounty.amount",
+    ),
     expectedChainId: baseAsk.chainId,
     expectedPaymentAuthorization: signedPaymentAuthorization,
     expectedPayload: baseAsk,
@@ -2602,7 +3514,9 @@ export async function askHumansWithLocalSigner(params: {
   }
 
   if (!finalAsk.operationKey) {
-    throw new Error("RateLoop returned a transaction plan without an operationKey.");
+    throw new Error(
+      "RateLoop returned a transaction plan without an operationKey.",
+    );
   }
 
   const transactions = await executeTransactionPlan({

@@ -20,8 +20,9 @@ const DEFAULT_DRAFT = {
   description: "first description",
   imageUrls: [UPLOADED_IMAGE_URL],
   questionMetadataHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const,
-  rewardPoolExpiresAt: 0n,
-  feedbackClosesAt: 0n,
+  bountyStartBy: 0n,
+  bountyWindowSeconds: 0n,
+  feedbackWindowSeconds: 0n,
   bountyEligibility: 0,
   roundConfig: {
     epochDuration: 1200n,

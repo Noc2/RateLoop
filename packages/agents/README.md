@@ -22,7 +22,7 @@ hard-coded:
 - funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
 - public context URL, image context, or YouTube video context for voters
 - optional extra public image context: RateLoop-hosted uploads for local mockups, screenshots, and generated images
-- USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `rewardPoolExpiresAt`, and optional payout-only `bountyEligibility`
+- USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`
 - optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include USDC bonuses in `maxPaymentAmount` and approve LREP bonuses through wallet calls
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
 - execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing
@@ -124,25 +124,25 @@ If the ask payload already contains `walletAddress`, `local-ask` refuses to cont
 cp packages/agents/.env.example packages/agents/.env
 ```
 
-| Variable                                    | Description                                                                                                              |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `RATELOOP_API_BASE_URL`                     | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                                           |
-| `RATELOOP_AGENT_WALLET_ADDRESS`             | Funded wallet address for tokenless public asks                                                                          |
-| `RATELOOP_RPC_URL`                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
-| `RATELOOP_CHAIN_ID`                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
-| `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`        | Optional trusted USDC override used to validate x402 typed-data before signing                                           |
-| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS` | Optional trusted X402 submitter override used to validate x402 authorization recipients                                  |
-| `RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS` | Optional trusted ContentRegistry override used to validate wallet-call transaction plans                                 |
+| Variable                                                    | Description                                                                                                              |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `RATELOOP_API_BASE_URL`                                     | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                                           |
+| `RATELOOP_AGENT_WALLET_ADDRESS`                             | Funded wallet address for tokenless public asks                                                                          |
+| `RATELOOP_RPC_URL`                                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
+| `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
+| `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`                        | Optional trusted USDC override used to validate x402 typed-data before signing                                           |
+| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS`              | Optional trusted X402 submitter override used to validate x402 authorization recipients                                  |
+| `RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS`            | Optional trusted ContentRegistry override used to validate wallet-call transaction plans                                 |
 | `RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional trusted QuestionRewardPoolEscrow override used to validate wallet-call approvals                                |
-| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`       | Encrypted local signer keystore path                                                                                     |
-| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD`   | Password for the local signer keystore; load from a secret source                                                        |
-| `RATELOOP_LOCAL_SIGNER_PASSWORD_ENV`        | Name of an alternate environment variable that holds the keystore password                                               |
-| `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY`         | Ephemeral CI/test-wallet fallback; prefer a keystore for persistent funded wallets                                       |
-| `RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS` | Optional receipt polling interval for local signer transaction waits                                                     |
-| `RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS`  | Optional local signer transaction receipt timeout                                                                        |
-| `RATELOOP_MCP_TOKEN`                        | Optional managed agent bearer token with quote, ask, read, and balance scopes                                            |
-| `RATELOOP_MCP_API_URL`                      | Optional MCP endpoint override; with `RATELOOP_MCP_TOKEN` SDK clients default to `/api/mcp`, otherwise `/api/mcp/public` |
-| `RATELOOP_MCP_PROTOCOL_VERSION`             | Optional MCP protocol version override                                                                                   |
+| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`                       | Encrypted local signer keystore path                                                                                     |
+| `RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD`                   | Password for the local signer keystore; load from a secret source                                                        |
+| `RATELOOP_LOCAL_SIGNER_PASSWORD_ENV`                        | Name of an alternate environment variable that holds the keystore password                                               |
+| `RATELOOP_LOCAL_SIGNER_PRIVATE_KEY`                         | Ephemeral CI/test-wallet fallback; prefer a keystore for persistent funded wallets                                       |
+| `RATELOOP_LOCAL_SIGNER_POLLING_INTERVAL_MS`                 | Optional receipt polling interval for local signer transaction waits                                                     |
+| `RATELOOP_LOCAL_SIGNER_RECEIPT_TIMEOUT_MS`                  | Optional local signer transaction receipt timeout                                                                        |
+| `RATELOOP_MCP_TOKEN`                                        | Optional managed agent bearer token with quote, ask, read, and balance scopes                                            |
+| `RATELOOP_MCP_API_URL`                                      | Optional MCP endpoint override; with `RATELOOP_MCP_TOKEN` SDK clients default to `/api/mcp`, otherwise `/api/mcp/public` |
+| `RATELOOP_MCP_PROTOCOL_VERSION`                             | Optional MCP protocol version override                                                                                   |
 
 ## Examples
 

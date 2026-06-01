@@ -28,6 +28,7 @@ import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } fr
 import {
   getActiveBountyClosesAt,
   getActiveFeedbackClosesAt,
+  getPendingBountyStartBy,
   getVisibleFeedbackBonusAmount,
   getVisibleRewardPoolAmount,
   hasActiveFeedbackBonus,
@@ -103,9 +104,13 @@ function getRewardDeadlineChips(item: ContentItem) {
   const feedbackSummary = item.feedbackBonusSummary;
 
   const activeBountyClosesAt = getActiveBountyClosesAt(item);
+  const pendingBountyStartBy = getPendingBountyStartBy(item);
   const activeFeedbackClosesAt = getActiveFeedbackClosesAt(item);
   const hasActiveBounty = Boolean(
-    rewardSummary?.hasActiveBounty || (rewardSummary?.activeRewardPoolCount ?? 0) > 0 || activeBountyClosesAt,
+    rewardSummary?.hasActiveBounty ||
+      (rewardSummary?.activeRewardPoolCount ?? 0) > 0 ||
+      activeBountyClosesAt ||
+      pendingBountyStartBy,
   );
   const hasActiveFeedback = hasActiveFeedbackBonus(item);
   const isFeedbackClosed = shouldShowFeedbackClosedStatus(item);
@@ -121,6 +126,12 @@ function getRewardDeadlineChips(item: ContentItem) {
         label: formatDeadlineLabel("Eligibility closes", activeBountyClosesAt),
         tone: "active",
         tooltip: BOUNTY_DEADLINE_TOOLTIP_TEXT,
+      });
+    } else if (pendingBountyStartBy) {
+      chips.push({
+        label: formatDeadlineLabel("Starts by", pendingBountyStartBy),
+        tone: "active",
+        tooltip: "The bounty eligibility window opens when the first private round starts.",
       });
     }
   }

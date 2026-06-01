@@ -87,8 +87,12 @@ export interface ContentItem {
     allocatedAmount: bigint;
     claimedAmount: bigint;
     refundedAmount: bigint;
+    bountyStartBy?: bigint;
+    bountyOpensAt?: bigint;
     bountyClosesAt?: bigint;
     feedbackClosesAt?: bigint;
+    bountyWindowSeconds?: number;
+    feedbackWindowSeconds?: number;
     expiresAt?: bigint;
     failed: boolean;
     refunded: boolean;
@@ -112,6 +116,7 @@ export interface ContentItem {
     activeRewardPoolCount: number;
     expiredRewardPoolCount?: number;
     hasActiveBounty?: boolean;
+    nextBountyStartBy?: bigint | null;
     nextBountyClosesAt?: bigint | null;
     nextFeedbackClosesAt?: bigint | null;
   } | null;
@@ -353,8 +358,12 @@ export function mapContentItem(
       allocatedAmount?: string | number | bigint | null;
       claimedAmount?: string | number | bigint | null;
       refundedAmount?: string | number | bigint | null;
+      bountyStartBy?: string | number | bigint | null;
+      bountyOpensAt?: string | number | bigint | null;
       bountyClosesAt?: string | number | bigint | null;
       feedbackClosesAt?: string | number | bigint | null;
+      bountyWindowSeconds?: string | number | null;
+      feedbackWindowSeconds?: string | number | null;
       expiresAt?: string | number | bigint | null;
       failed?: boolean | null;
       refunded?: boolean | null;
@@ -432,6 +441,7 @@ export function mapContentItem(
       activeRewardPoolCount?: number | null;
       expiredRewardPoolCount?: number | null;
       hasActiveBounty?: boolean | null;
+      nextBountyStartBy?: string | number | bigint | null;
       nextBountyClosesAt?: string | number | bigint | null;
       nextFeedbackClosesAt?: string | number | bigint | null;
     } | null;
@@ -540,8 +550,12 @@ export function mapContentItem(
             allocatedAmount: BigInt(item.bundle.allocatedAmount ?? 0),
             claimedAmount: BigInt(item.bundle.claimedAmount ?? 0),
             refundedAmount: BigInt(item.bundle.refundedAmount ?? 0),
+            bountyStartBy: BigInt(item.bundle.bountyStartBy ?? 0),
+            bountyOpensAt: BigInt(item.bundle.bountyOpensAt ?? 0),
             bountyClosesAt: BigInt(item.bundle.bountyClosesAt ?? 0),
             feedbackClosesAt: BigInt(item.bundle.feedbackClosesAt ?? 0),
+            bountyWindowSeconds: numberOrDefault(item.bundle.bountyWindowSeconds, 0),
+            feedbackWindowSeconds: numberOrDefault(item.bundle.feedbackWindowSeconds, 0),
             expiresAt: BigInt(item.bundle.expiresAt ?? 0),
             failed: item.bundle.failed ?? false,
             refunded: item.bundle.refunded ?? false,
@@ -572,6 +586,10 @@ export function mapContentItem(
           expiredRewardPoolCount: item.rewardPoolSummary.expiredRewardPoolCount ?? 0,
           hasActiveBounty:
             item.rewardPoolSummary.hasActiveBounty ?? (item.rewardPoolSummary.activeRewardPoolCount ?? 0) > 0,
+          nextBountyStartBy:
+            item.rewardPoolSummary.nextBountyStartBy === null || item.rewardPoolSummary.nextBountyStartBy === undefined
+              ? null
+              : BigInt(item.rewardPoolSummary.nextBountyStartBy),
           nextBountyClosesAt:
             item.rewardPoolSummary.nextBountyClosesAt === null ||
             item.rewardPoolSummary.nextBountyClosesAt === undefined

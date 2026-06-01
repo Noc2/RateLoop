@@ -83,8 +83,9 @@ type StoredWalletSubmissionPlanReceipt = {
 type StoredQuestionRewardTerms = {
   amount: string;
   asset: string;
-  bountyClosesAt: string;
-  feedbackClosesAt: string;
+  bountyStartBy: string;
+  bountyWindowSeconds: string;
+  feedbackWindowSeconds: string;
   bountyEligibility: string;
   requiredSettledRounds: string;
   requiredVoters: string;
@@ -324,8 +325,9 @@ function serializeExpectedRewardTerms(payload: X402QuestionPayload): StoredQuest
   return {
     amount: payload.bounty.amount.toString(),
     asset: X402_SUBMISSION_REWARD_ASSET_USDC.toString(),
-    bountyClosesAt: payload.bounty.rewardPoolExpiresAt.toString(),
-    feedbackClosesAt: payload.bounty.feedbackClosesAt.toString(),
+    bountyStartBy: payload.bounty.bountyStartBy.toString(),
+    bountyWindowSeconds: payload.bounty.bountyWindowSeconds.toString(),
+    feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds.toString(),
     bountyEligibility: payload.bounty.bountyEligibility.toString(),
     requiredSettledRounds: payload.bounty.requiredSettledRounds.toString(),
     requiredVoters: payload.bounty.requiredVoters.toString(),
@@ -449,8 +451,9 @@ function sameRewardTerms(left: StoredQuestionRewardTerms | undefined, right: Sto
     left.amount === right.amount &&
     left.requiredVoters === right.requiredVoters &&
     left.requiredSettledRounds === right.requiredSettledRounds &&
-    left.bountyClosesAt === right.bountyClosesAt &&
-    left.feedbackClosesAt === right.feedbackClosesAt &&
+    left.bountyStartBy === right.bountyStartBy &&
+    left.bountyWindowSeconds === right.bountyWindowSeconds &&
+    left.feedbackWindowSeconds === right.feedbackWindowSeconds &&
     left.bountyEligibility === right.bountyEligibility
   );
 }
@@ -556,8 +559,9 @@ const X402QuestionSubmitterAbi = [
           { name: "amount", type: "uint256" },
           { name: "requiredVoters", type: "uint256" },
           { name: "requiredSettledRounds", type: "uint256" },
-          { name: "bountyClosesAt", type: "uint256" },
-          { name: "feedbackClosesAt", type: "uint256" },
+          { name: "bountyStartBy", type: "uint256" },
+          { name: "bountyWindowSeconds", type: "uint256" },
+          { name: "feedbackWindowSeconds", type: "uint256" },
           { name: "bountyEligibility", type: "uint8" },
         ],
         name: "rewardTerms",
@@ -608,8 +612,9 @@ const X402QuestionSubmitterAbi = [
           { name: "amount", type: "uint256" },
           { name: "requiredVoters", type: "uint256" },
           { name: "requiredSettledRounds", type: "uint256" },
-          { name: "bountyClosesAt", type: "uint256" },
-          { name: "feedbackClosesAt", type: "uint256" },
+          { name: "bountyStartBy", type: "uint256" },
+          { name: "bountyWindowSeconds", type: "uint256" },
+          { name: "feedbackWindowSeconds", type: "uint256" },
           { name: "bountyEligibility", type: "uint8" },
         ],
         name: "rewardTerms",
@@ -1044,8 +1049,9 @@ function buildQuestionSubmissionCallContext(params: {
     amount: params.payload.bounty.amount,
     requiredVoters: params.payload.bounty.requiredVoters,
     requiredSettledRounds: params.payload.bounty.requiredSettledRounds,
-    bountyClosesAt: params.payload.bounty.rewardPoolExpiresAt,
-    feedbackClosesAt: params.payload.bounty.feedbackClosesAt,
+    bountyStartBy: params.payload.bounty.bountyStartBy,
+    bountyWindowSeconds: params.payload.bounty.bountyWindowSeconds,
+    feedbackWindowSeconds: params.payload.bounty.feedbackWindowSeconds,
     bountyEligibility: params.payload.bounty.bountyEligibility,
   } as const;
   const roundConfigAbi = questionRoundConfigToAbi(params.payload.roundConfig);
@@ -1063,8 +1069,9 @@ function buildQuestionSubmissionCallContext(params: {
         rewardAsset: X402_SUBMISSION_REWARD_ASSET_USDC,
         requiredSettledRounds: params.payload.bounty.requiredSettledRounds,
         requiredVoters: params.payload.bounty.requiredVoters,
-        rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt,
-        feedbackClosesAt: params.payload.bounty.feedbackClosesAt,
+        bountyStartBy: params.payload.bounty.bountyStartBy,
+        bountyWindowSeconds: params.payload.bounty.bountyWindowSeconds,
+        feedbackWindowSeconds: params.payload.bounty.feedbackWindowSeconds,
         bountyEligibility: params.payload.bounty.bountyEligibility,
         roundConfig: params.payload.roundConfig,
         submitter: params.submitter,
@@ -1079,8 +1086,9 @@ function buildQuestionSubmissionCallContext(params: {
         requiredSettledRounds: params.payload.bounty.requiredSettledRounds,
         requiredVoters: params.payload.bounty.requiredVoters,
         resultSpecHash: primaryQuestion.spec.resultSpecHash,
-        rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt,
-        feedbackClosesAt: params.payload.bounty.feedbackClosesAt,
+        bountyStartBy: params.payload.bounty.bountyStartBy,
+        bountyWindowSeconds: params.payload.bounty.bountyWindowSeconds,
+        feedbackWindowSeconds: params.payload.bounty.feedbackWindowSeconds,
         bountyEligibility: params.payload.bounty.bountyEligibility,
         roundConfig: params.payload.roundConfig,
         salt: primaryQuestion.salt,
@@ -1563,9 +1571,10 @@ function readSubmissionResult(
             amount: toDecimalString(decoded.args.amount),
             asset: toDecimalString(decoded.args.rewardAsset),
             bundleId: typeof decoded.args.bundleId === "bigint" ? decoded.args.bundleId : null,
-            bountyClosesAt: toDecimalString(decoded.args.bountyClosesAt),
+            bountyStartBy: toDecimalString(decoded.args.bountyStartBy),
             contentId: null,
-            feedbackClosesAt: toDecimalString(decoded.args.feedbackClosesAt),
+            bountyWindowSeconds: toDecimalString(decoded.args.bountyWindowSeconds),
+            feedbackWindowSeconds: toDecimalString(decoded.args.feedbackWindowSeconds),
             bountyEligibility: toDecimalString(decoded.args.bountyEligibility),
             questionCount: toDecimalString(decoded.args.questionCount),
             rewardPoolId: typeof decoded.args.rewardPoolId === "bigint" ? decoded.args.rewardPoolId : null,
@@ -1588,9 +1597,10 @@ function readSubmissionResult(
             amount: toDecimalString(decoded.args.amount),
             asset: toDecimalString(decoded.args.rewardAsset),
             bundleId: null,
-            bountyClosesAt: toDecimalString(decoded.args.bountyClosesAt),
+            bountyStartBy: toDecimalString(decoded.args.bountyStartBy),
             contentId: decoded.args.contentId,
-            feedbackClosesAt: toDecimalString(decoded.args.feedbackClosesAt),
+            bountyWindowSeconds: toDecimalString(decoded.args.bountyWindowSeconds),
+            feedbackWindowSeconds: toDecimalString(decoded.args.feedbackWindowSeconds),
             bountyEligibility: toDecimalString(decoded.args.bountyEligibility),
             questionCount: null,
             rewardPoolId: decoded.args.rewardPoolId,
@@ -1686,8 +1696,9 @@ function sameBundleRewardTerms(
     submitted.contentId === null &&
     submitted.asset === expected.asset &&
     submitted.amount === expected.amount &&
-    submitted.bountyClosesAt === expected.bountyClosesAt &&
-    submitted.feedbackClosesAt === expected.feedbackClosesAt &&
+    submitted.bountyStartBy === expected.bountyStartBy &&
+    submitted.bountyWindowSeconds === expected.bountyWindowSeconds &&
+    submitted.feedbackWindowSeconds === expected.feedbackWindowSeconds &&
     submitted.bountyEligibility === expected.bountyEligibility &&
     submitted.questionCount === expectedQuestionCount.toString() &&
     submitted.requiredVoters === bundleCompleterCount(expected)
@@ -1772,8 +1783,9 @@ function x402QuestionSubmissionStatusBody(params: {
       asset: params.payload.bounty.asset,
       requiredSettledRounds: params.payload.bounty.requiredSettledRounds.toString(),
       requiredVoters: params.payload.bounty.requiredVoters.toString(),
-      rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt.toString(),
-      feedbackClosesAt: params.payload.bounty.feedbackClosesAt.toString(),
+      bountyStartBy: params.payload.bounty.bountyStartBy.toString(),
+      bountyWindowSeconds: params.payload.bounty.bountyWindowSeconds.toString(),
+      feedbackWindowSeconds: params.payload.bounty.feedbackWindowSeconds.toString(),
       bountyEligibility: params.payload.bounty.bountyEligibility.toString(),
     },
     chainId: params.payload.chainId,
@@ -2317,8 +2329,9 @@ function agentWalletQuestionSubmissionPlanBody(params: {
       asset: params.payload.bounty.asset,
       requiredSettledRounds: params.payload.bounty.requiredSettledRounds.toString(),
       requiredVoters: params.payload.bounty.requiredVoters.toString(),
-      rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt.toString(),
-      feedbackClosesAt: params.payload.bounty.feedbackClosesAt.toString(),
+      bountyStartBy: params.payload.bounty.bountyStartBy.toString(),
+      bountyWindowSeconds: params.payload.bounty.bountyWindowSeconds.toString(),
+      feedbackWindowSeconds: params.payload.bounty.feedbackWindowSeconds.toString(),
       bountyEligibility: params.payload.bounty.bountyEligibility.toString(),
     },
     chainId: params.payload.chainId,
@@ -2356,8 +2369,9 @@ function nativeX402QuestionSubmissionPlanBody(params: {
       asset: params.payload.bounty.asset,
       requiredSettledRounds: params.payload.bounty.requiredSettledRounds.toString(),
       requiredVoters: params.payload.bounty.requiredVoters.toString(),
-      rewardPoolExpiresAt: params.payload.bounty.rewardPoolExpiresAt.toString(),
-      feedbackClosesAt: params.payload.bounty.feedbackClosesAt.toString(),
+      bountyStartBy: params.payload.bounty.bountyStartBy.toString(),
+      bountyWindowSeconds: params.payload.bounty.bountyWindowSeconds.toString(),
+      feedbackWindowSeconds: params.payload.bounty.feedbackWindowSeconds.toString(),
       bountyEligibility: params.payload.bounty.bountyEligibility.toString(),
     },
     chainId: params.payload.chainId,

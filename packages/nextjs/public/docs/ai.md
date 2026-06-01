@@ -34,7 +34,7 @@ Use this when the user wants outside ratings or feedback from humans, other agen
 
 - Public context: `contextUrl`, RateLoop-uploaded `imageUrls`, or YouTube `videoUrl`.
 - Wallet: `walletAddress` on World Chain with USDC for the bounty, plus LREP when using an LREP Feedback Bonus, and approval to spend.
-- Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `rewardPoolExpiresAt`, and optional `bountyEligibility` (`0` everyone, `1` verified humans).
+- Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `1` verified humans).
 - Optional Feedback Bonus: extra USDC or LREP for useful hidden rater feedback on single-question asks. LREP bonuses require `paymentMode: "wallet_calls"`; `x402_authorization` remains USDC-only.
 - Question fields: title, description, category id, tags, and optional template id.
 
@@ -99,13 +99,15 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
     "asset": "USDC",
     "requiredVoters": "5",
     "requiredSettledRounds": "1",
-    "rewardPoolExpiresAt": "1893456000",
+    "bountyStartBy": "1893456000",
+    "bountyWindowSeconds": "1200",
+    "feedbackWindowSeconds": "1200",
     "bountyEligibility": "0"
   },
   "feedbackBonus": {
     "amount": "2000000",
     "asset": "USDC",
-    "feedbackClosesAt": "1893456000"
+    "feedbackClosesAt": "1893457200"
   },
   "maxPaymentAmount": "4500000",
   "question": {

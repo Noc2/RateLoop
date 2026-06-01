@@ -43,8 +43,9 @@ type SubmissionRewardTerms = {
   amount: bigint;
   requiredVoters: bigint;
   requiredSettledRounds: bigint;
-  bountyClosesAt: bigint;
-  feedbackClosesAt: bigint;
+  bountyStartBy: bigint;
+  bountyWindowSeconds: bigint;
+  feedbackWindowSeconds: bigint;
   bountyEligibility: number;
 };
 const MAX_SUBMISSION_IMAGE_URLS = 4;
@@ -53,7 +54,8 @@ export const SUBMISSION_REWARD_ASSET_USDC = 1;
 const DEFAULT_SUBMISSION_REWARD_AMOUNT = 1_000_000n;
 const DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS = 3n;
 const DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS = 1n;
-const DEFAULT_SUBMISSION_REWARD_EXPIRES_AT = 0n;
+const DEFAULT_SUBMISSION_BOUNTY_START_BY = 4_700_000_000n;
+const DEFAULT_SUBMISSION_BOUNTY_WINDOW_SECONDS = 20n * 60n;
 const DEFAULT_QUESTION_METADATA_HASH = "0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd" as const;
 const DEFAULT_RESULT_SPEC_HASH = "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f" as const;
 const DEFAULT_SUBMISSION_ROUND_CONFIG: SubmissionRoundConfig = {
@@ -289,8 +291,9 @@ async function buildSubmissionReservation(
     requiredSettledRounds: rewardTerms.requiredSettledRounds,
     requiredVoters: rewardTerms.requiredVoters,
     resultSpecHash: DEFAULT_RESULT_SPEC_HASH,
-    rewardPoolExpiresAt: rewardTerms.bountyClosesAt,
-    feedbackClosesAt: rewardTerms.feedbackClosesAt,
+    bountyStartBy: rewardTerms.bountyStartBy,
+    bountyWindowSeconds: rewardTerms.bountyWindowSeconds,
+    feedbackWindowSeconds: rewardTerms.feedbackWindowSeconds,
     bountyEligibility: rewardTerms.bountyEligibility,
     roundConfig,
     salt,
@@ -931,8 +934,9 @@ export async function submitContentDirect(
     amount: rewardAmount,
     requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
     requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-    bountyClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
-    feedbackClosesAt: DEFAULT_SUBMISSION_REWARD_EXPIRES_AT,
+    bountyStartBy: DEFAULT_SUBMISSION_BOUNTY_START_BY,
+    bountyWindowSeconds: DEFAULT_SUBMISSION_BOUNTY_WINDOW_SECONDS,
+    feedbackWindowSeconds: DEFAULT_SUBMISSION_BOUNTY_WINDOW_SECONDS,
     bountyEligibility: 0,
   };
   const reservation = await buildSubmissionReservation(
@@ -1002,8 +1006,9 @@ export async function submitContentDirect(
               { name: "amount", type: "uint256" },
               { name: "requiredVoters", type: "uint256" },
               { name: "requiredSettledRounds", type: "uint256" },
-              { name: "bountyClosesAt", type: "uint256" },
-              { name: "feedbackClosesAt", type: "uint256" },
+              { name: "bountyStartBy", type: "uint256" },
+              { name: "bountyWindowSeconds", type: "uint256" },
+              { name: "feedbackWindowSeconds", type: "uint256" },
               { name: "bountyEligibility", type: "uint8" },
             ],
           },
@@ -1334,7 +1339,6 @@ export async function approveLREP(
   });
   return sendTx(fromAddress, tokenAddress, data);
 }
-
 
 /**
  * Claim frontend fees for a settled round.
@@ -2104,7 +2108,9 @@ export async function waitForPonderIndexedAfterSync(
 ): Promise<boolean> {
   const synced = await waitForPonderSync(maxWaitMs, pollInterval, ponderURL);
   if (!synced) {
-    console.warn(`[${label}] Ponder did not report sync before indexed-data polling; continuing with predicate polling.`);
+    console.warn(
+      `[${label}] Ponder did not report sync before indexed-data polling; continuing with predicate polling.`,
+    );
   }
   return waitForPonderIndexed(pollFn, maxWaitMs, pollInterval, label);
 }

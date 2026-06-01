@@ -15,7 +15,7 @@ import {
   DEFAULT_BOUNTY_WINDOW_PRESET,
   DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT,
   DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT,
-  getBountyClosesAt,
+  getBountyStartBy,
   getBountyWindowSeconds,
   parseBountyWindowAmount,
   resolveBountyReferenceNowSeconds,
@@ -53,7 +53,7 @@ const BOUNTY_AMOUNT_TOOLTIP = `Paid in USDC on World Chain. Qualified claims res
 const REQUIRED_VOTERS_TOOLTIP =
   "How many eligible revealed voters a round needs before that round can count toward this bounty. This cannot exceed the question's selected voter cap.";
 const SETTLED_ROUNDS_TOOLTIP = `How many qualifying settled rounds must complete before the bounty is filled. USDC payouts then wait on finalized payout roots: ${protocolDocFacts.usdcBountyPayoutMinimumDelayLabel} minimum, normally up to ${protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel} on the happy path.`;
-const BOUNTY_WINDOW_TOOLTIP = `Bounty and paid feedback are active only inside this window. The question remains visible after the bounty closes. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
+const BOUNTY_WINDOW_TOOLTIP = `Bounty eligibility opens with the first private round and uses this window duration. The quick fund flow uses the same duration as the start-by deadline. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
 
 function BountyFieldLabel({ htmlFor, children, tooltip }: { htmlFor: string; children: ReactNode; tooltip?: string }) {
   return (
@@ -171,19 +171,21 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
         ?.getBlock({ blockTag: "latest" })
         .then(block => block.timestamp)
         .catch(() => undefined);
-      const bountyClosesAt = getBountyClosesAt(
+      const bountyStartBy = getBountyStartBy(
         bountyWindowPreset,
         customBountyWindowAmount,
         customBountyWindowUnit,
         resolveBountyReferenceNowSeconds(latestBlockTimestamp),
       );
+      const bountyWindowSecondsValue = BigInt(bountyWindowSeconds ?? 0);
       const authorizationParams = {
         amount: parsedAmount,
-        bountyClosesAt,
+        bountyStartBy,
         bountyEligibility: 0,
         bountyKind: 0,
         contentId,
-        feedbackClosesAt: bountyClosesAt,
+        bountyWindowSeconds: bountyWindowSecondsValue,
+        feedbackWindowSeconds: bountyWindowSecondsValue,
         reasonHash: zeroHash,
         relatedRoundId: 0n,
         requiredSettledRounds: BigInt(settledRounds),
@@ -275,7 +277,15 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
         address: escrowAddress,
         abi: QUESTION_REWARD_POOL_ESCROW_ABI,
         functionName: "createRewardPool",
-        args: [contentId, parsedAmount, BigInt(voterCount), BigInt(settledRounds), bountyClosesAt, bountyClosesAt],
+        args: [
+          contentId,
+          parsedAmount,
+          BigInt(voterCount),
+          BigInt(settledRounds),
+          bountyStartBy,
+          bountyWindowSecondsValue,
+          bountyWindowSecondsValue,
+        ],
       });
       await waitForTransactionReceipt(wagmiConfig, { hash: rewardPoolHash });
 
@@ -379,7 +389,7 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
 
           <div className="space-y-2">
             <div className="label justify-start gap-1 px-0 py-0 pb-1">
-              <span className="label-text">Bounty window</span>
+              <span className="label-text">Eligibility window</span>
               <InfoTooltip text={BOUNTY_WINDOW_TOOLTIP} position="top" />
             </div>
             <div className="grid grid-cols-3 gap-2">

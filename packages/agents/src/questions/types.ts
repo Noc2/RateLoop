@@ -1,5 +1,8 @@
 export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+  | JsonPrimitive
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 export type JsonObject = Record<string, unknown>;
 
 export type AgentQuestionExample = {
@@ -20,9 +23,11 @@ export type AgentAskExample = {
     amount: string | number | bigint;
     asset?: "USDC" | "usdc" | string;
     bountyEligibility?: 0 | 1 | string | number;
+    bountyStartBy?: string | number | bigint;
+    bountyWindowSeconds?: string | number | bigint;
+    feedbackWindowSeconds?: string | number | bigint;
     requiredSettledRounds?: string | number | bigint;
     requiredVoters?: string | number | bigint;
-    rewardPoolExpiresAt?: string | number | bigint;
   };
   chainId?: number;
   clientRequestId: string;

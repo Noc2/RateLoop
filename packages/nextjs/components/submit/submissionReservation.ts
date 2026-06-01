@@ -19,8 +19,9 @@ type SubmissionDraft = {
   description: string;
   imageUrls: string[];
   questionMetadataHash: `0x${string}`;
-  rewardPoolExpiresAt: bigint;
-  feedbackClosesAt: bigint;
+  bountyStartBy: bigint;
+  bountyWindowSeconds: bigint;
+  feedbackWindowSeconds: bigint;
   bountyEligibility: number;
   roundConfig: QuestionRoundConfig;
   rewardAmount: bigint;
@@ -41,8 +42,9 @@ type StoredSubmissionReservation = {
   description: string;
   imageUrls: string[];
   questionMetadataHash: `0x${string}`;
-  rewardPoolExpiresAt: string;
-  feedbackClosesAt: string;
+  bountyStartBy: string;
+  bountyWindowSeconds: string;
+  feedbackWindowSeconds: string;
   bountyEligibility: number;
   roundConfig: SerializedQuestionRoundConfig;
   rewardAmount: string;
@@ -116,6 +118,7 @@ export function deriveSubmissionReservationSalt(
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint256" },
         { type: "uint8" },
         { type: "uint32" },
         { type: "uint32" },
@@ -139,8 +142,9 @@ export function deriveSubmissionReservationSalt(
         draft.rewardAmount,
         draft.requiredVoters,
         draft.requiredSettledRounds,
-        draft.rewardPoolExpiresAt,
-        draft.feedbackClosesAt,
+        draft.bountyStartBy,
+        draft.bountyWindowSeconds,
+        draft.feedbackWindowSeconds,
         draft.bountyEligibility,
         Number(draft.roundConfig.epochDuration),
         Number(draft.roundConfig.maxDuration),
@@ -168,8 +172,9 @@ export function buildSubmissionRevealCommitment(
     requiredSettledRounds: draft.requiredSettledRounds,
     requiredVoters: draft.requiredVoters,
     resultSpecHash: draft.resultSpecHash,
-    rewardPoolExpiresAt: draft.rewardPoolExpiresAt,
-    feedbackClosesAt: draft.feedbackClosesAt,
+    bountyStartBy: draft.bountyStartBy,
+    bountyWindowSeconds: draft.bountyWindowSeconds,
+    feedbackWindowSeconds: draft.feedbackWindowSeconds,
     bountyEligibility: draft.bountyEligibility,
     roundConfig: draft.roundConfig,
     salt,
@@ -202,8 +207,9 @@ export function createStoredSubmissionReservation(
     salt,
     requiredSettledRounds: draft.requiredSettledRounds.toString(),
     requiredVoters: draft.requiredVoters.toString(),
-    rewardPoolExpiresAt: draft.rewardPoolExpiresAt.toString(),
-    feedbackClosesAt: draft.feedbackClosesAt.toString(),
+    bountyStartBy: draft.bountyStartBy.toString(),
+    bountyWindowSeconds: draft.bountyWindowSeconds.toString(),
+    feedbackWindowSeconds: draft.feedbackWindowSeconds.toString(),
     bountyEligibility: draft.bountyEligibility,
     submissionKey: draft.submissionKey,
     tags: draft.tags,
@@ -226,8 +232,9 @@ export function submissionReservationMatchesDraft(
     reservation.description === draft.description &&
     reservation.rewardAmount === draft.rewardAmount.toString() &&
     reservation.rewardAsset === draft.rewardAsset &&
-    reservation.rewardPoolExpiresAt === draft.rewardPoolExpiresAt.toString() &&
-    reservation.feedbackClosesAt === draft.feedbackClosesAt.toString() &&
+    reservation.bountyStartBy === draft.bountyStartBy.toString() &&
+    reservation.bountyWindowSeconds === draft.bountyWindowSeconds.toString() &&
+    reservation.feedbackWindowSeconds === draft.feedbackWindowSeconds.toString() &&
     reservation.bountyEligibility === draft.bountyEligibility &&
     questionRoundConfigsEqual(coerceQuestionRoundConfig(reservation.roundConfig), draft.roundConfig) &&
     reservation.requiredSettledRounds === draft.requiredSettledRounds.toString() &&

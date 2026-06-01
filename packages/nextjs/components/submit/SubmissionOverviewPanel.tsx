@@ -64,11 +64,15 @@ function getBundleCurrency(asset: number | null | undefined): RewardPoolCurrency
   return "MIXED";
 }
 
-function hasActiveBundleBounty(item: ContentItem): boolean {
+function hasVisibleBundleBounty(item: ContentItem): boolean {
   const bundle = item.bundle;
   if (!bundle || bundle.failed || bundle.refunded || bundle.unallocatedAmount <= 0n) return false;
+  const now = BigInt(Math.floor(Date.now() / 1000));
   const closesAt = bundle.bountyClosesAt ?? 0n;
-  return closesAt === 0n || closesAt > BigInt(Math.floor(Date.now() / 1000));
+  if (closesAt > 0n) return closesAt > now;
+
+  const startBy = bundle.bountyStartBy ?? bundle.expiresAt ?? 0n;
+  return startBy === 0n || startBy > now;
 }
 
 function getStatus(item: ContentItem): { label: string; className: string } {
@@ -89,12 +93,23 @@ function getStatus(item: ContentItem): { label: string; className: string } {
 
 function getBountyLabel(item: ContentItem): string {
   const summary = item.rewardPoolSummary;
-  if (summary?.hasActiveBounty && summary.totalAvailable > 0n) {
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (
+    summary &&
+    summary.totalAvailable > 0n &&
+    (summary.hasActiveBounty ||
+      (summary.nextBountyClosesAt !== null &&
+        summary.nextBountyClosesAt !== undefined &&
+        summary.nextBountyClosesAt > now) ||
+      (summary.nextBountyStartBy !== null &&
+        summary.nextBountyStartBy !== undefined &&
+        summary.nextBountyStartBy > now))
+  ) {
     return formatCompactAmount(summary.totalAvailable, summary.currency);
   }
 
   const bundle = item.bundle;
-  if (bundle && hasActiveBundleBounty(item)) {
+  if (bundle && hasVisibleBundleBounty(item)) {
     return formatCompactAmount(bundle.unallocatedAmount, getBundleCurrency(bundle.asset));
   }
 
@@ -102,12 +117,23 @@ function getBountyLabel(item: ContentItem): string {
 }
 
 function getBountyExpiry(item: ContentItem): string {
-  const closesAt = item.rewardPoolSummary?.hasActiveBounty
-    ? (item.rewardPoolSummary.nextBountyClosesAt ?? 0n)
-    : hasActiveBundleBounty(item)
-      ? (item.bundle?.bountyClosesAt ?? null)
-      : null;
-  return formatTimestampSeconds(closesAt);
+  const summary = item.rewardPoolSummary;
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (summary && summary.totalAvailable > 0n) {
+    const closesAt = summary.nextBountyClosesAt ?? 0n;
+    if (closesAt > now) return formatTimestampSeconds(closesAt);
+
+    const startBy = summary.nextBountyStartBy ?? 0n;
+    if (startBy > now) return formatTimestampSeconds(startBy);
+  }
+
+  const bundle = item.bundle;
+  if (!bundle || !hasVisibleBundleBounty(item)) return "-";
+
+  const closesAt = bundle.bountyClosesAt ?? 0n;
+  if (closesAt > now) return formatTimestampSeconds(closesAt);
+
+  return formatTimestampSeconds(bundle.bountyStartBy ?? bundle.expiresAt ?? null);
 }
 
 function getFeedbackLabel(item: ContentItem): string {
@@ -133,8 +159,8 @@ function SubmissionOverviewSkeleton() {
           <tr className="text-base-content/60">
             <th>Question</th>
             <th>Status</th>
-            <th className="text-right">Active bounty</th>
-            <th>Bounty closes</th>
+            <th className="text-right">Bounty</th>
+            <th>Bounty deadline</th>
             <th className="text-right">Feedback</th>
             <th className="text-right">Votes</th>
             <th className="text-right">Rounds</th>
@@ -217,8 +243,8 @@ export function SubmissionOverviewPanel() {
                 <tr className="text-base-content/60">
                   <th>Question</th>
                   <th>Status</th>
-                  <th className="text-right">Active bounty</th>
-                  <th>Bounty closes</th>
+                  <th className="text-right">Bounty</th>
+                  <th>Bounty deadline</th>
                   <th className="text-right">Feedback</th>
                   <th className="text-right">Votes</th>
                   <th className="text-right">Rounds</th>

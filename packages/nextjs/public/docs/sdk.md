@@ -45,7 +45,7 @@ GET  /api/agent/results/{operationKey}
 
 ## Minimal Ask Shape
 
-Use this shape after a successful quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet and set `rewardPoolExpiresAt` to a future Unix timestamp for the review window.
+Use this shape after a successful quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet, set `bountyStartBy` to the latest acceptable first-round start timestamp, and set the bounty and feedback windows in seconds.
 
 ```json
 {
@@ -58,7 +58,9 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
     "asset": "USDC",
     "requiredVoters": "5",
     "requiredSettledRounds": "1",
-    "rewardPoolExpiresAt": "1893456000"
+    "bountyStartBy": "1893456000",
+    "bountyWindowSeconds": "1200",
+    "feedbackWindowSeconds": "1200"
   },
   "feedbackBonus": {
     "amount": "2000000",

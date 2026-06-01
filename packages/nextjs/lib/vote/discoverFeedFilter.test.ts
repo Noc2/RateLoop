@@ -10,6 +10,7 @@ import {
   filterDiscoverCategoryItems,
   getActiveBountyClosesAt,
   getActiveFeedbackClosesAt,
+  getPendingBountyStartBy,
   getVisibleFeedbackBonusAmount,
   getVisibleRewardOpportunityAmount,
   getVisibleRewardPoolAmount,
@@ -243,6 +244,28 @@ test("content with a newer active bounty is not treated as expired", () => {
     [1n],
   );
   assert.deepEqual(filterDiscoverCategoryItems(feed, DISCOVER_EXPIRED_BOUNTY_FILTER, undefined, 10_000), []);
+});
+
+test("pending start-by bounty stays visible until it activates or misses the deadline", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/pending",
+    title: "Pending bounty",
+    rewardPoolSummary: {
+      totalFunded: 15_000_000n,
+      totalAvailable: 15_000_000n,
+      activeRewardPoolCount: 0,
+      expiredRewardPoolCount: 0,
+      hasActiveBounty: true,
+      nextBountyStartBy: 12_000n,
+      nextBountyClosesAt: null,
+    },
+  });
+
+  assert.equal(getActiveBountyClosesAt(item, 10_000), null);
+  assert.equal(getPendingBountyStartBy(item, 10_000), 12_000n);
+  assert.equal(shouldShowBountyExpiredStatus(item, 10_000), false);
+  assert.equal(shouldShowBountyExpiredStatus(item, 12_001), true);
 });
 
 test("stale active bounty deadlines are ignored when no bounty remains", () => {

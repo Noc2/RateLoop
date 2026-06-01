@@ -17,8 +17,9 @@ type QuestionSubmissionRevealCommitmentParams = {
   requiredSettledRounds: bigint;
   requiredVoters: bigint;
   resultSpecHash: Hex;
-  rewardPoolExpiresAt: bigint;
-  feedbackClosesAt: bigint;
+  bountyStartBy: bigint;
+  bountyWindowSeconds: bigint;
+  feedbackWindowSeconds: bigint;
   bountyEligibility: number;
   roundConfig: QuestionSubmissionRoundConfig;
   salt: Hex;
@@ -50,8 +51,9 @@ type QuestionBundleRevealCommitmentParams = {
   rewardAsset: number;
   requiredSettledRounds: bigint;
   requiredVoters: bigint;
-  rewardPoolExpiresAt: bigint;
-  feedbackClosesAt: bigint;
+  bountyStartBy: bigint;
+  bountyWindowSeconds: bigint;
+  feedbackWindowSeconds: bigint;
   bountyEligibility: number;
   roundConfig: QuestionSubmissionRoundConfig;
   submitter: Address;
@@ -82,6 +84,7 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint256" },
         { type: "uint8" },
       ],
       [
@@ -89,8 +92,9 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
         params.rewardAmount,
         params.requiredVoters,
         params.requiredSettledRounds,
-        params.rewardPoolExpiresAt,
-        params.feedbackClosesAt,
+        params.bountyStartBy,
+        params.bountyWindowSeconds,
+        params.feedbackWindowSeconds,
         params.bountyEligibility,
       ],
     ),
@@ -122,7 +126,7 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-reveal-v3",
+        "rateloop-question-reveal-v4",
         params.submissionKey,
         mediaHash,
         textHash,
@@ -190,6 +194,7 @@ function buildQuestionBundleRevealCommitment(params: QuestionBundleRevealCommitm
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint256" },
         { type: "uint8" },
         { type: "uint32" },
         { type: "uint32" },
@@ -197,15 +202,16 @@ function buildQuestionBundleRevealCommitment(params: QuestionBundleRevealCommitm
         { type: "uint16" },
       ],
       [
-        "rateloop-question-bundle-reveal-v3",
+        "rateloop-question-bundle-reveal-v4",
         params.bundleHash,
         params.submitter,
         params.rewardAsset,
         params.rewardAmount,
         params.requiredVoters,
         params.requiredSettledRounds,
-        params.rewardPoolExpiresAt,
-        params.feedbackClosesAt,
+        params.bountyStartBy,
+        params.bountyWindowSeconds,
+        params.feedbackWindowSeconds,
         params.bountyEligibility,
         Number(params.roundConfig.epochDuration),
         Number(params.roundConfig.maxDuration),

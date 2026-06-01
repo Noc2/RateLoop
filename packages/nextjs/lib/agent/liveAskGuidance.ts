@@ -54,10 +54,11 @@ export function buildAgentLiveAskGuidance(params: {
       amount: currentBounty,
       asset: "USDC",
       bountyEligibility: 0,
-      feedbackClosesAt: 0n,
+      bountyStartBy: 0n,
+      bountyWindowSeconds: 0n,
+      feedbackWindowSeconds: 0n,
       requiredSettledRounds: 1n,
       requiredVoters: minVoters,
-      rewardPoolExpiresAt: 0n,
     },
     nowSeconds: params.nowSeconds,
     questionCount,
@@ -73,7 +74,9 @@ export function buildAgentLiveAskGuidance(params: {
   const healthyTarget = toBigIntValue(guidanceTarget.suggestedBountyAmountAtomic);
   const suggestedTopUp = healthyTarget > currentBounty ? healthyTarget - currentBounty : 0n;
   const nowSeconds = params.nowSeconds ?? Math.floor(Date.now() / 1000);
-  const bountyClosesAt = toOptionalUnixSeconds(rewardPoolSummary.nextBountyClosesAt);
+  const bountyClosesAt =
+    toOptionalUnixSeconds(rewardPoolSummary.nextBountyClosesAt) ??
+    toOptionalUnixSeconds(rewardPoolSummary.nextBountyStartBy);
   const estimatedSettlementTime = toOptionalUnixSeconds(openRound.estimatedSettlementTime);
   const voteGap = Math.max(Number(minVoters) - Math.max(0, openRound.voteCount), 0);
   const reasonCodes: string[] = [];

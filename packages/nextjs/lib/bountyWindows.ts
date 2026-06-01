@@ -54,6 +54,22 @@ export function getBountyClosesAtFromWindowSeconds(
   return windowSeconds === null || windowSeconds <= 0 ? 0n : BigInt(nowSeconds + windowSeconds);
 }
 
+export function getBountyStartBy(
+  preset: BountyWindowPreset,
+  customAmount: string,
+  customUnit: BountyWindowUnit,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): bigint {
+  return getBountyClosesAt(preset, customAmount, customUnit, nowSeconds);
+}
+
+export function getBountyStartByFromWindowSeconds(
+  windowSeconds: number | null,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): bigint {
+  return getBountyClosesAtFromWindowSeconds(windowSeconds, nowSeconds);
+}
+
 export function resolveBountyReferenceNowSeconds(
   latestBlockTimestamp: bigint | number | null | undefined,
   fallbackNowSeconds = Math.floor(Date.now() / 1000),

@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { ContentRegistryAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
-import { encodeAbiParameters, encodeFunctionData, erc20Abi, keccak256, parseSignature, stringToHex, type Hex } from "viem";
+import {
+  ContentRegistryAbi,
+  X402QuestionSubmitterAbi,
+} from "@rateloop/contracts/abis";
+import {
+  encodeAbiParameters,
+  encodeFunctionData,
+  erc20Abi,
+  keccak256,
+  parseSignature,
+  stringToHex,
+  type Hex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { buildQuestionSpecHashes } from "../questionSpecs.js";
 import { findAgentResultTemplate } from "../templates.js";
@@ -11,24 +22,36 @@ import {
   validateLocalSignerTransactionPlan,
   withLocalSignerWallet,
 } from "../localSigner.js";
-import type { AskHumansRequest, AskHumansResponse, RateLoopAgentClient } from "@rateloop/sdk/agent";
+import type {
+  AskHumansRequest,
+  AskHumansResponse,
+  RateLoopAgentClient,
+} from "@rateloop/sdk/agent";
 
-const PRIVATE_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as const;
+const PRIVATE_KEY =
+  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" as const;
 const account = privateKeyToAccount(PRIVATE_KEY);
-const X402_SUBMITTER_ADDRESS = "0x00000000000000000000000000000000000000bb" as const;
+const X402_SUBMITTER_ADDRESS =
+  "0x00000000000000000000000000000000000000bb" as const;
 const X402_USDC_ADDRESS = "0x00000000000000000000000000000000000000cc" as const;
-const CONTENT_REGISTRY_ADDRESS = "0x00000000000000000000000000000000000000dd" as const;
-const QUESTION_REWARD_ESCROW_ADDRESS = "0x00000000000000000000000000000000000000ee" as const;
+const CONTENT_REGISTRY_ADDRESS =
+  "0x00000000000000000000000000000000000000dd" as const;
+const QUESTION_REWARD_ESCROW_ADDRESS =
+  "0x00000000000000000000000000000000000000ee" as const;
 const X402_AMOUNT = "1500000";
 const CLIENT_REQUEST_ID = "local-signer-test";
 const QUESTION_CONTEXT_URL = "https://example.com/context";
 const QUESTION_TITLE = "Should this agent proceed?";
 const QUESTION_TAG = "agent";
-const REWARD_POOL_EXPIRES_AT = 1_893_456_000n;
+const BOUNTY_START_BY = 1_893_456_000n;
+const BOUNTY_WINDOW_SECONDS = 1_200n;
+const FEEDBACK_WINDOW_SECONDS = 1_200n;
 const X402_VALID_AFTER = "0";
 const X402_VALID_BEFORE = "9999999999";
 const TEST_SIGNATURE = `0x${"1".repeat(64)}${"3".repeat(64)}1b` as const;
-const X402_SIGN_OPTIONS: NonNullable<Parameters<typeof signX402AuthorizationRequest>[2]> = {
+const X402_SIGN_OPTIONS: NonNullable<
+  Parameters<typeof signX402AuthorizationRequest>[2]
+> = {
   expectedAmount: X402_AMOUNT,
   expectedChainId: 480,
   expectedUsdcAddress: X402_USDC_ADDRESS,
@@ -51,9 +74,10 @@ function rewardTerms(amount = BigInt(X402_AMOUNT)) {
   return {
     amount,
     asset: 1,
-    bountyClosesAt: REWARD_POOL_EXPIRES_AT,
+    bountyStartBy: BOUNTY_START_BY,
+    bountyWindowSeconds: BOUNTY_WINDOW_SECONDS,
     bountyEligibility: 0,
-    feedbackClosesAt: 0n,
+    feedbackWindowSeconds: FEEDBACK_WINDOW_SECONDS,
     requiredSettledRounds: 1n,
     requiredVoters: 3n,
   };
@@ -113,8 +137,9 @@ function canonicalPayload() {
       asset: "USDC",
       requiredSettledRounds: "1",
       requiredVoters: "3",
-      rewardPoolExpiresAt: REWARD_POOL_EXPIRES_AT.toString(),
-      feedbackClosesAt: "0",
+      bountyStartBy: BOUNTY_START_BY.toString(),
+      bountyWindowSeconds: BOUNTY_WINDOW_SECONDS.toString(),
+      feedbackWindowSeconds: FEEDBACK_WINDOW_SECONDS.toString(),
       bountyEligibility: "0",
     },
     chainId: 480,
@@ -146,7 +171,9 @@ function canonicalPayload() {
 }
 
 function expectedPayloadHash() {
-  return createHash("sha256").update(JSON.stringify(canonicalPayload())).digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalPayload()))
+    .digest("hex");
 }
 
 function expectedOperationKey() {
@@ -164,7 +191,14 @@ function expectedSubmissionKey() {
         { type: "string" },
         { type: "string" },
       ],
-      ["rateloop-question-context-v1", 1n, QUESTION_CONTEXT_URL, QUESTION_TITLE, "", QUESTION_TAG],
+      [
+        "rateloop-question-context-v1",
+        1n,
+        QUESTION_CONTEXT_URL,
+        QUESTION_TITLE,
+        "",
+        QUESTION_TAG,
+      ],
     ),
   );
 }
@@ -196,6 +230,7 @@ function rewardTermsHash() {
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint256" },
         { type: "uint8" },
       ],
       [
@@ -203,8 +238,9 @@ function rewardTermsHash() {
         terms.amount,
         terms.requiredVoters,
         terms.requiredSettledRounds,
-        terms.bountyClosesAt,
-        terms.feedbackClosesAt,
+        terms.bountyStartBy,
+        terms.bountyWindowSeconds,
+        terms.feedbackWindowSeconds,
         terms.bountyEligibility,
       ],
     ),
@@ -214,7 +250,12 @@ function rewardTermsHash() {
 function roundConfigHash() {
   return keccak256(
     encodeAbiParameters(
-      [{ type: "uint32" }, { type: "uint32" }, { type: "uint16" }, { type: "uint16" }],
+      [
+        { type: "uint32" },
+        { type: "uint32" },
+        { type: "uint16" },
+        { type: "uint16" },
+      ],
       [1_200, 1_200, 3, 100],
     ),
   );
@@ -238,10 +279,20 @@ function expectedRevealCommitment() {
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-reveal-v3",
+        "rateloop-question-reveal-v4",
         expectedSubmissionKey(),
-        keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [[], ""])),
-        keccak256(encodeAbiParameters([{ type: "string" }, { type: "string" }, { type: "string" }], [QUESTION_TITLE, "", QUESTION_TAG])),
+        keccak256(
+          encodeAbiParameters(
+            [{ type: "string[]" }, { type: "string" }],
+            [[], ""],
+          ),
+        ),
+        keccak256(
+          encodeAbiParameters(
+            [{ type: "string" }, { type: "string" }, { type: "string" }],
+            [QUESTION_TITLE, "", QUESTION_TAG],
+          ),
+        ),
         1n,
         expectedSalt(),
         account.address,
@@ -255,7 +306,9 @@ function expectedRevealCommitment() {
 }
 
 function x402StringArrayHash(values: readonly string[]) {
-  return keccak256(`0x${values.map(value => keccak256(stringToHex(value)).slice(2)).join("")}` as Hex);
+  return keccak256(
+    `0x${values.map((value) => keccak256(stringToHex(value)).slice(2)).join("")}` as Hex,
+  );
 }
 
 function x402PaymentNonce(from = account.address) {
@@ -384,7 +437,14 @@ function submitX402QuestionData(amount = BigInt(X402_AMOUNT)) {
   });
 }
 
-function signedX402Authorization(overrides: Partial<Record<keyof ReturnType<typeof x402AuthorizationRequest>["authorization"], string>> = {}) {
+function signedX402Authorization(
+  overrides: Partial<
+    Record<
+      keyof ReturnType<typeof x402AuthorizationRequest>["authorization"],
+      string
+    >
+  > = {},
+) {
   return {
     ...x402AuthorizationRequest().authorization,
     ...overrides,
@@ -392,7 +452,9 @@ function signedX402Authorization(overrides: Partial<Record<keyof ReturnType<type
   };
 }
 
-function walletCallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHumansResponse {
+function walletCallsResponse(
+  overrides: Partial<AskHumansResponse> = {},
+): AskHumansResponse {
   return {
     chainId: 480,
     operationKey: expectedOperationKey(),
@@ -417,8 +479,18 @@ function walletCallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHum
           to: X402_USDC_ADDRESS,
           value: "0",
         },
-        { data: reserveSubmissionData(), phase: "reserve_submission", to: CONTENT_REGISTRY_ADDRESS, value: "0" },
-        { data: submitQuestionData(), phase: "submit_question", to: CONTENT_REGISTRY_ADDRESS, value: "0" },
+        {
+          data: reserveSubmissionData(),
+          phase: "reserve_submission",
+          to: CONTENT_REGISTRY_ADDRESS,
+          value: "0",
+        },
+        {
+          data: submitQuestionData(),
+          phase: "submit_question",
+          to: CONTENT_REGISTRY_ADDRESS,
+          value: "0",
+        },
       ],
       requiresOrderedExecution: true,
     },
@@ -427,7 +499,9 @@ function walletCallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHum
   };
 }
 
-function x402CallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHumansResponse {
+function x402CallsResponse(
+  overrides: Partial<AskHumansResponse> = {},
+): AskHumansResponse {
   return {
     chainId: 480,
     operationKey: expectedOperationKey(),
@@ -442,8 +516,18 @@ function x402CallsResponse(overrides: Partial<AskHumansResponse> = {}): AskHuman
     status: "awaiting_wallet_signature",
     transactionPlan: {
       calls: [
-        { data: reserveSubmissionData(), phase: "reserve_submission", to: CONTENT_REGISTRY_ADDRESS, value: "0" },
-        { data: submitX402QuestionData(), phase: "submit_x402_question", to: X402_SUBMITTER_ADDRESS, value: "0" },
+        {
+          data: reserveSubmissionData(),
+          phase: "reserve_submission",
+          to: CONTENT_REGISTRY_ADDRESS,
+          value: "0",
+        },
+        {
+          data: submitX402QuestionData(),
+          phase: "submit_x402_question",
+          to: X402_SUBMITTER_ADDRESS,
+          value: "0",
+        },
       ],
       requiresOrderedExecution: true,
     },
@@ -461,7 +545,9 @@ function validationConfig() {
   };
 }
 
-function x402AuthorizationRequest(from = account.address): TestX402AuthorizationRequest {
+function x402AuthorizationRequest(
+  from = account.address,
+): TestX402AuthorizationRequest {
   const authorization = {
     from,
     nonce: x402PaymentNonce(from),
@@ -501,10 +587,11 @@ function askPayload(walletAddress?: string): AskHumansRequest {
     bounty: {
       amount: X402_AMOUNT,
       bountyEligibility: "0",
-      feedbackClosesAt: "0",
+      bountyStartBy: BOUNTY_START_BY.toString(),
+      bountyWindowSeconds: BOUNTY_WINDOW_SECONDS.toString(),
+      feedbackWindowSeconds: FEEDBACK_WINDOW_SECONDS.toString(),
       requiredSettledRounds: "1",
       requiredVoters: "3",
-      rewardPoolExpiresAt: REWARD_POOL_EXPIRES_AT.toString(),
     },
     clientRequestId: CLIENT_REQUEST_ID,
     question: {
@@ -525,7 +612,9 @@ function askPayload(walletAddress?: string): AskHumansRequest {
 
 describe("local signer", () => {
   it("sets and guards the ask wallet address", () => {
-    expect(withLocalSignerWallet(askPayload(), account.address).walletAddress).toBe(account.address);
+    expect(
+      withLocalSignerWallet(askPayload(), account.address).walletAddress,
+    ).toBe(account.address);
 
     expect(() =>
       withLocalSignerWallet(
@@ -566,27 +655,28 @@ describe("local signer", () => {
     const request = x402AuthorizationRequest();
     request.typedData.primaryType = "Permit";
 
-    await expect(signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS)).rejects.toThrow(
-      /primaryType must be ReceiveWithAuthorization/,
-    );
+    await expect(
+      signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS),
+    ).rejects.toThrow(/primaryType must be ReceiveWithAuthorization/);
   });
 
   it("rejects x402 authorizations for an untrusted USDC contract", async () => {
     const request = x402AuthorizationRequest();
-    request.typedData.domain.verifyingContract = "0x00000000000000000000000000000000000000dd";
+    request.typedData.domain.verifyingContract =
+      "0x00000000000000000000000000000000000000dd";
 
-    await expect(signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS)).rejects.toThrow(
-      /verifyingContract must be the configured USDC token/,
-    );
+    await expect(
+      signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS),
+    ).rejects.toThrow(/verifyingContract must be the configured USDC token/);
   });
 
   it("rejects x402 authorizations when authorization and message differ", async () => {
     const request = x402AuthorizationRequest();
     request.typedData.message.value = "1500001";
 
-    await expect(signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS)).rejects.toThrow(
-      /authorization.value must match typedData.message.value/,
-    );
+    await expect(
+      signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS),
+    ).rejects.toThrow(/authorization.value must match typedData.message.value/);
   });
 
   it("rejects x402 authorizations for the wrong submitter or amount", async () => {
@@ -600,9 +690,12 @@ describe("local signer", () => {
     await expect(
       signX402AuthorizationRequest(account, x402AuthorizationRequest(), {
         ...X402_SIGN_OPTIONS,
-        expectedX402QuestionSubmitterAddress: "0x00000000000000000000000000000000000000dd",
+        expectedX402QuestionSubmitterAddress:
+          "0x00000000000000000000000000000000000000dd",
       }),
-    ).rejects.toThrow(/authorization.to must be the configured RateLoop x402 submitter/);
+    ).rejects.toThrow(
+      /authorization.to must be the configured RateLoop x402 submitter/,
+    );
   });
 
   it("rejects x402 authorizations with an invalid validity window", async () => {
@@ -610,9 +703,9 @@ describe("local signer", () => {
     request.authorization.validBefore = "0";
     request.typedData.message.validBefore = "0";
 
-    await expect(signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS)).rejects.toThrow(
-      /validBefore must be greater than validAfter/,
-    );
+    await expect(
+      signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS),
+    ).rejects.toThrow(/validBefore must be greater than validAfter/);
   });
 
   it("rejects x402 authorizations whose nonce is not bound to the ask payload", async () => {
@@ -679,7 +772,10 @@ describe("local signer", () => {
             calls: [
               walletCallsResponse().transactionPlan!.calls![0]!,
               walletCallsResponse().transactionPlan!.calls![1]!,
-              { ...walletCallsResponse().transactionPlan!.calls![2]!, data: changedTitleData },
+              {
+                ...walletCallsResponse().transactionPlan!.calls![2]!,
+                data: changedTitleData,
+              },
             ],
             requiresOrderedExecution: true,
           },
@@ -701,7 +797,10 @@ describe("local signer", () => {
             ...walletCallsResponse().transactionPlan,
             calls: [
               walletCallsResponse().transactionPlan!.calls![0]!,
-              { ...walletCallsResponse().transactionPlan!.calls![1]!, data: reserveSubmissionData(BYTES32_ONE) },
+              {
+                ...walletCallsResponse().transactionPlan!.calls![1]!,
+                data: reserveSubmissionData(BYTES32_ONE),
+              },
               walletCallsResponse().transactionPlan!.calls![2]!,
             ],
             requiresOrderedExecution: true,
@@ -737,7 +836,10 @@ describe("local signer", () => {
       transactionPlan: {
         ...walletCallsResponse().transactionPlan,
         calls: [
-          { ...walletCallsResponse().transactionPlan!.calls![0]!, to: "0x00000000000000000000000000000000000000ff" },
+          {
+            ...walletCallsResponse().transactionPlan!.calls![0]!,
+            to: "0x00000000000000000000000000000000000000ff",
+          },
           ...walletCallsResponse().transactionPlan!.calls!.slice(1),
         ],
         requiresOrderedExecution: true,
@@ -802,7 +904,10 @@ describe("local signer", () => {
         ...x402CallsResponse().transactionPlan,
         calls: [
           x402CallsResponse().transactionPlan!.calls![0]!,
-          { ...x402CallsResponse().transactionPlan!.calls![1]!, data: reserveSubmissionData() },
+          {
+            ...x402CallsResponse().transactionPlan!.calls![1]!,
+            data: reserveSubmissionData(),
+          },
         ],
         requiresOrderedExecution: true,
       },
@@ -823,7 +928,9 @@ describe("local signer", () => {
   it("re-calls askHumans with a signed x402 authorization", async () => {
     const askCalls: AskHumansRequest[] = [];
     const agent = {
-      askHumans: async (request: AskHumansRequest): Promise<AskHumansResponse> => {
+      askHumans: async (
+        request: AskHumansRequest,
+      ): Promise<AskHumansResponse> => {
         askCalls.push(request);
         if (!request.paymentAuthorization) {
           return {
@@ -841,9 +948,14 @@ describe("local signer", () => {
         };
       },
       confirmAskTransactions: async () => {
-        throw new Error("confirmAskTransactions should not run without transaction hashes.");
+        throw new Error(
+          "confirmAskTransactions should not run without transaction hashes.",
+        );
       },
-    } satisfies Pick<RateLoopAgentClient, "askHumans" | "confirmAskTransactions">;
+    } satisfies Pick<
+      RateLoopAgentClient,
+      "askHumans" | "confirmAskTransactions"
+    >;
 
     const result = await askHumansWithLocalSigner({
       account,
@@ -869,7 +981,9 @@ describe("local signer", () => {
       paymentMode: "x402_authorization",
       walletAddress: account.address,
     });
-    expect(askCalls[1].paymentAuthorization?.signature).toMatch(/^0x[0-9a-f]{130}$/i);
+    expect(askCalls[1].paymentAuthorization?.signature).toMatch(
+      /^0x[0-9a-f]{130}$/i,
+    );
     expect(result.transactions).toBeUndefined();
   });
 
@@ -879,9 +993,14 @@ describe("local signer", () => {
         throw new Error("askHumans should not run for a chain mismatch.");
       },
       confirmAskTransactions: async () => {
-        throw new Error("confirmAskTransactions should not run for a chain mismatch.");
+        throw new Error(
+          "confirmAskTransactions should not run for a chain mismatch.",
+        );
       },
-    } satisfies Pick<RateLoopAgentClient, "askHumans" | "confirmAskTransactions">;
+    } satisfies Pick<
+      RateLoopAgentClient,
+      "askHumans" | "confirmAskTransactions"
+    >;
 
     await expect(
       askHumansWithLocalSigner({

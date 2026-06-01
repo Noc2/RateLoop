@@ -12,7 +12,9 @@ const websiteFeedbackPayloadExample = `{
     "asset": "USDC",
     "requiredVoters": "5",
     "requiredSettledRounds": "1",
-    "rewardPoolExpiresAt": "1893456000",
+    "bountyStartBy": "1893456000",
+    "bountyWindowSeconds": "1200",
+    "feedbackWindowSeconds": "1200",
     "bountyEligibility": "0"
   },
   "maxPaymentAmount": "2500000",
@@ -120,8 +122,8 @@ export default function AgentUserTestingPage() {
       <p>
         Send this shape to <code>rateloop_ask_humans</code> after a successful quote. Keep the title focused on one user
         judgment. Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the wallet, context
-        URL, and <code>rewardPoolExpiresAt</code>. Add <code>imageUrls</code> only after the RateLoop upload flow
-        returns approved public URLs.
+        URL, <code>bountyStartBy</code>, and the bounty window durations. Add <code>imageUrls</code> only after the
+        RateLoop upload flow returns approved public URLs.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{websiteFeedbackPayloadExample}</code>

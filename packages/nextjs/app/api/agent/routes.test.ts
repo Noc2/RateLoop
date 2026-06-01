@@ -125,7 +125,9 @@ function questionPayload(clientRequestId: string) {
     bounty: {
       amount: "1000000",
       asset: "USDC",
-      rewardPoolExpiresAt: "1762000000",
+      bountyStartBy: "1762000000",
+      bountyWindowSeconds: "1200",
+      feedbackWindowSeconds: "1200",
     },
     chainId: 480,
     clientRequestId,

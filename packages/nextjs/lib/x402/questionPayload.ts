@@ -52,8 +52,9 @@ export type X402QuestionPayload = {
     amount: bigint;
     requiredVoters: bigint;
     requiredSettledRounds: bigint;
-    rewardPoolExpiresAt: bigint;
-    feedbackClosesAt: bigint;
+    bountyStartBy: bigint;
+    bountyWindowSeconds: bigint;
+    feedbackWindowSeconds: bigint;
     bountyEligibility: number;
   };
 };
@@ -81,9 +82,14 @@ export type X402QuestionOperation = {
   canonicalPayload: ReturnType<typeof toCanonicalQuestionPayload>;
 };
 
-export function assertSupportedX402BundleBounty(bounty: Pick<X402QuestionPayload["bounty"], "rewardPoolExpiresAt">) {
-  if (bounty.rewardPoolExpiresAt <= 0n) {
-    throw new X402QuestionInputError("bounty.rewardPoolExpiresAt must be greater than zero for bundle submissions.");
+export function assertSupportedX402BundleBounty(
+  bounty: Pick<X402QuestionPayload["bounty"], "bountyStartBy" | "bountyWindowSeconds">,
+) {
+  if (bounty.bountyStartBy <= 0n) {
+    throw new X402QuestionInputError("bounty.bountyStartBy must be greater than zero for bundle submissions.");
+  }
+  if (bounty.bountyWindowSeconds <= 0n) {
+    throw new X402QuestionInputError("bounty.bountyWindowSeconds must be greater than zero for bundle submissions.");
   }
 }
 
@@ -314,10 +320,11 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
     value.requiredSettledRounds ?? X402_MIN_REWARD_POOL_SETTLED_ROUNDS,
     "bounty.requiredSettledRounds",
   );
-  const rewardPoolExpiresAt = parseNonNegativeInteger(value.rewardPoolExpiresAt ?? 0n, "bounty.rewardPoolExpiresAt");
-  const feedbackClosesAt = parseNonNegativeInteger(
-    value.feedbackClosesAt ?? value.rewardPoolExpiresAt ?? 0n,
-    "bounty.feedbackClosesAt",
+  const bountyStartBy = parseNonNegativeInteger(value.bountyStartBy ?? 0n, "bounty.bountyStartBy");
+  const bountyWindowSeconds = parseNonNegativeInteger(value.bountyWindowSeconds ?? 0n, "bounty.bountyWindowSeconds");
+  const feedbackWindowSeconds = parseNonNegativeInteger(
+    value.feedbackWindowSeconds ?? value.bountyWindowSeconds ?? 0n,
+    "bounty.feedbackWindowSeconds",
   );
   const bountyEligibility = Number(parseNonNegativeInteger(value.bountyEligibility ?? 0n, "bounty.bountyEligibility"));
 
@@ -335,14 +342,15 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   if (amount < requiredVoters * requiredSettledRounds) {
     throw new X402QuestionInputError("bounty.amount is too small for the selected voter requirements.");
   }
-  if (rewardPoolExpiresAt > 0n && feedbackClosesAt > rewardPoolExpiresAt) {
-    throw new X402QuestionInputError("bounty.feedbackClosesAt cannot be after bounty.rewardPoolExpiresAt.");
+  if (feedbackWindowSeconds > bountyWindowSeconds) {
+    throw new X402QuestionInputError("bounty.feedbackWindowSeconds cannot exceed bounty.bountyWindowSeconds.");
   }
   if (bountyEligibility > 1) {
     throw new X402QuestionInputError("bounty.bountyEligibility must be 0 or 1.");
   }
   assertSupportedX402BundleBounty({
-    rewardPoolExpiresAt,
+    bountyStartBy,
+    bountyWindowSeconds,
   });
 
   return {
@@ -350,8 +358,9 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
     amount,
     requiredVoters,
     requiredSettledRounds,
-    rewardPoolExpiresAt,
-    feedbackClosesAt,
+    bountyStartBy,
+    bountyWindowSeconds,
+    feedbackWindowSeconds,
     bountyEligibility,
   };
 }
@@ -603,8 +612,9 @@ export function toCanonicalQuestionPayload(payload: X402QuestionPayload) {
       asset: payload.bounty.asset,
       requiredSettledRounds: payload.bounty.requiredSettledRounds.toString(),
       requiredVoters: payload.bounty.requiredVoters.toString(),
-      rewardPoolExpiresAt: payload.bounty.rewardPoolExpiresAt.toString(),
-      feedbackClosesAt: payload.bounty.feedbackClosesAt.toString(),
+      bountyStartBy: payload.bounty.bountyStartBy.toString(),
+      bountyWindowSeconds: payload.bounty.bountyWindowSeconds.toString(),
+      feedbackWindowSeconds: payload.bounty.feedbackWindowSeconds.toString(),
       bountyEligibility: String(payload.bounty.bountyEligibility),
     },
     chainId: payload.chainId,

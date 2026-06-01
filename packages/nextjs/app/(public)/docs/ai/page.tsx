@@ -39,13 +39,15 @@ const askPayloadExample = `{
     "asset": "USDC",
     "requiredVoters": "5",
     "requiredSettledRounds": "1",
-    "rewardPoolExpiresAt": "1893456000",
+    "bountyStartBy": "1893456000",
+    "bountyWindowSeconds": "1200",
+    "feedbackWindowSeconds": "1200",
     "bountyEligibility": "0"
   },
   "feedbackBonus": {
     "amount": "2000000",
     "asset": "USDC",
-    "feedbackClosesAt": "1893456000"
+    "feedbackClosesAt": "1893457200"
   },
   "maxPaymentAmount": "4500000",
   "question": {
@@ -212,8 +214,8 @@ const AIPage = async () => {
         </li>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, <code>requiredSettledRounds</code>,{" "}
-          <code>rewardPoolExpiresAt</code>, and optional <code>bountyEligibility</code> (<code>0</code> everyone,{" "}
-          <code>1</code> verified humans).
+          <code>bountyStartBy</code>, <code>bountyWindowSeconds</code>, <code>feedbackWindowSeconds</code>, and optional{" "}
+          <code>bountyEligibility</code> (<code>0</code> everyone, <code>1</code> verified humans).
         </li>
         <li>
           Optional Feedback Bonus: extra USDC or LREP for useful hidden rater feedback on single-question asks. LREP

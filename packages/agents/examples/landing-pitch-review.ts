@@ -1,7 +1,8 @@
 import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { pathToFileURL } from "node:url";
 
-const apiBaseUrl = process.env.RATELOOP_API_BASE_URL ?? "https://rateloop.example";
+const apiBaseUrl =
+  process.env.RATELOOP_API_BASE_URL ?? "https://rateloop.example";
 const mcpAccessToken = process.env.RATELOOP_MCP_TOKEN;
 const walletAddress = process.env.RATELOOP_AGENT_WALLET_ADDRESS;
 
@@ -16,12 +17,17 @@ async function writeResultToMemory(memory: {
   answer: string;
   confidence: unknown;
 }) {
-  console.log("Persist this record in your agent memory store:", JSON.stringify(memory, null, 2));
+  console.log(
+    "Persist this record in your agent memory store:",
+    JSON.stringify(memory, null, 2),
+  );
 }
 
 export async function main() {
   if (!mcpAccessToken && !walletAddress) {
-    throw new Error("Set RATELOOP_AGENT_WALLET_ADDRESS for wallet-direct asks, or RATELOOP_MCP_TOKEN for a managed agent.");
+    throw new Error(
+      "Set RATELOOP_AGENT_WALLET_ADDRESS for wallet-direct asks, or RATELOOP_MCP_TOKEN for a managed agent.",
+    );
   }
 
   const agent = createRateLoopAgentClient({
@@ -30,9 +36,14 @@ export async function main() {
   });
 
   const clientRequestId = `landing-pitch-${Date.now()}`;
-  const pitchUrl = process.env.RATELOOP_PITCH_URL ?? "https://example.com/landing-page";
+  const pitchUrl =
+    process.env.RATELOOP_PITCH_URL ?? "https://example.com/landing-page";
   const bountyAmount = process.env.RATELOOP_BOUNTY_AMOUNT ?? "1000000";
-  const rewardPoolExpiresAt = process.env.RATELOOP_REWARD_POOL_EXPIRES_AT ?? "1893456000";
+  const bountyStartBy = process.env.RATELOOP_BOUNTY_START_BY ?? "1893456000";
+  const bountyWindowSeconds =
+    process.env.RATELOOP_BOUNTY_WINDOW_SECONDS ?? "1200";
+  const feedbackWindowSeconds =
+    process.env.RATELOOP_FEEDBACK_WINDOW_SECONDS ?? bountyWindowSeconds;
 
   const question = {
     templateId: "generic_rating",
@@ -53,7 +64,9 @@ export async function main() {
     amount: bountyAmount,
     requiredVoters: "3",
     requiredSettledRounds: "1",
-    rewardPoolExpiresAt,
+    bountyStartBy,
+    bountyWindowSeconds,
+    feedbackWindowSeconds,
   };
 
   const quote = await agent.quoteQuestion({
@@ -79,10 +92,12 @@ export async function main() {
   if (ask.transactionPlan?.calls?.length) {
     const hashes = (process.env.RATELOOP_CONFIRM_TX_HASHES ?? "")
       .split(",")
-      .map(hash => hash.trim())
+      .map((hash) => hash.trim())
       .filter(Boolean);
     if (hashes.length === 0) {
-      console.log("Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES.");
+      console.log(
+        "Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES.",
+      );
       return;
     }
 
@@ -94,7 +109,9 @@ export async function main() {
   }
 
   for (;;) {
-    const status = await agent.getQuestionStatus({ operationKey: ask.operationKey });
+    const status = await agent.getQuestionStatus({
+      operationKey: ask.operationKey,
+    });
     console.log("Current status:", JSON.stringify(status, null, 2));
 
     if (status.ready || status.terminal) {

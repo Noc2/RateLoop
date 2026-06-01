@@ -474,15 +474,16 @@ function parseOptionalFeedbackBonus(
   if (amount <= 0n) {
     throw new McpToolError("feedbackBonus.amount must be greater than zero.");
   }
+  const feedbackWindowClosesAt = payload.bounty.bountyStartBy + payload.bounty.feedbackWindowSeconds;
   const feedbackClosesAt = parseAtomicAmount(
-    value.feedbackClosesAt ?? payload.bounty.rewardPoolExpiresAt,
+    value.feedbackClosesAt ?? feedbackWindowClosesAt,
     "feedbackBonus.feedbackClosesAt",
   );
   if (feedbackClosesAt <= 0n) {
     throw new McpToolError("feedbackBonus.feedbackClosesAt must be greater than zero.");
   }
-  if (payload.bounty.rewardPoolExpiresAt > 0n && feedbackClosesAt > payload.bounty.rewardPoolExpiresAt) {
-    throw new McpToolError("feedbackBonus.feedbackClosesAt cannot be after bounty.rewardPoolExpiresAt.");
+  if (feedbackClosesAt > feedbackWindowClosesAt) {
+    throw new McpToolError("feedbackBonus.feedbackClosesAt cannot be after the feedback window.");
   }
 
   const awarder = typeof value.awarder === "string" && value.awarder.trim() ? value.awarder.trim() : walletAddress;

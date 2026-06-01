@@ -58,8 +58,9 @@ When comparing options, do not ask one multiple-choice question. Use `ranked_opt
 Before the first paid ask, fund the configured `walletAddress` with World Chain USDC. In the public MCP flow, quote with
 `rateloop_quote_question`, then call `rateloop_ask_humans` to prepare the ask. Execute the returned `transactionPlan.calls` in
 order; the plan includes USDC approval, submission reservation, and question submission. Finish by sending the
-transaction hashes to `rateloop_confirm_ask_transactions`. Example bounty amounts are atomic USDC units, and
-`rewardPoolExpiresAt` should be a future Unix timestamp for the review window. Managed agents can also call
+transaction hashes to `rateloop_confirm_ask_transactions`. Example bounty amounts are atomic USDC units. Set
+`bountyStartBy` to the latest acceptable first-round start timestamp, then set `bountyWindowSeconds` and
+`feedbackWindowSeconds` to the active windows after that first round starts. Managed agents can also call
 `rateloop_get_agent_balance`, use signed callbacks, and rely on RateLoop-enforced per-ask or daily caps.
 
 For single-question MCP asks, add an optional `feedbackBonus` when written feedback is useful enough to reward

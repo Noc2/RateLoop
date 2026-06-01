@@ -7,11 +7,12 @@ test("buildAgentFastLaneGuidance estimates bounty and speed from round terms", (
     bounty: {
       amount: 1_000_000n,
       asset: "USDC",
+      bountyStartBy: 0n,
+      bountyWindowSeconds: 0n,
       bountyEligibility: 0,
-      feedbackClosesAt: 0n,
+      feedbackWindowSeconds: 0n,
       requiredSettledRounds: 1n,
       requiredVoters: 3n,
-      rewardPoolExpiresAt: 0n,
     },
     questionCount: 1,
     roundConfig: {
@@ -44,11 +45,12 @@ test("buildAgentFastLaneGuidance warns on slow underfunded asks", () => {
     bounty: {
       amount: 1_000_000n,
       asset: "USDC",
+      bountyStartBy: 0n,
+      bountyWindowSeconds: 0n,
       bountyEligibility: 0,
-      feedbackClosesAt: 0n,
+      feedbackWindowSeconds: 0n,
       requiredSettledRounds: 2n,
       requiredVoters: 5n,
-      rewardPoolExpiresAt: 0n,
     },
     questionCount: 2,
     roundConfig: {

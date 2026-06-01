@@ -8,7 +8,9 @@
     "amount": "1000000",
     "requiredVoters": "3",
     "requiredSettledRounds": "1",
-    "rewardPoolExpiresAt": "1893456000"
+    "bountyStartBy": "1893456000",
+    "bountyWindowSeconds": "1200",
+    "feedbackWindowSeconds": "1200"
   },
   "question": {
     "templateId": "agent_action_go_no_go",

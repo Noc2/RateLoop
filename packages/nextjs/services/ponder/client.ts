@@ -337,7 +337,10 @@ export interface PonderContentItem {
     frontendFeeBps?: number;
     bountyEligibility?: number | null;
     bountyEligibilityDataHash?: string | null;
+    bountyStartBy?: string;
     bountyOpensAt?: string;
+    bountyWindowSeconds?: number;
+    feedbackWindowSeconds?: number;
     questionCount: number;
     completedRoundSetCount: number;
     totalRecordedQuestionRounds: number;
@@ -387,6 +390,7 @@ export interface PonderRewardPoolSummary {
   qualifiedRoundCount: number;
   currentRewardPoolAmount: string;
   hasActiveBounty?: boolean;
+  nextBountyStartBy?: string | null;
   nextBountyClosesAt?: string | null;
   nextFeedbackClosesAt?: string | null;
 }
@@ -468,8 +472,12 @@ export interface PonderQuestionBundleRewardClaimCandidate {
   totalRecordedQuestionRounds: number;
   claimedCount: number;
   roundSetClaimedCount: number;
+  bountyStartBy: string;
+  bountyOpensAt: string;
   bountyClosesAt: string;
   feedbackClosesAt: string;
+  bountyWindowSeconds: number;
+  feedbackWindowSeconds: number;
   expiresAt: string;
   updatedAt: string;
   currency: PonderRewardCurrency;

@@ -37,7 +37,9 @@ Public MCP and direct-agent asks use the World Chain USDC bounty lane. Feedback 
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
-- `bounty.rewardPoolExpiresAt`: future Unix timestamp in seconds for the review window
+- `bounty.bountyStartBy`: future Unix timestamp in seconds by which the first private round must start
+- `bounty.bountyWindowSeconds`: bounty eligibility duration after the first private round starts
+- `bounty.feedbackWindowSeconds`: paid feedback duration after the first private round starts
 - `feedbackBonus`: optional LREP or USDC pool for useful hidden rater feedback on single-question asks
 - `maxPaymentAmount`: maximum USDC spend the user approves; LREP Feedback Bonuses are approved through the returned wallet calls
 - `categoryId`: RateLoop category id

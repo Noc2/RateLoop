@@ -34,7 +34,8 @@ import {
   DEFAULT_BOUNTY_WINDOW_PRESET,
   DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT,
   DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT,
-  getBountyClosesAtFromWindowSeconds,
+  formatBountyWindowDuration,
+  getBountyStartByFromWindowSeconds,
   getBountyWindowSeconds,
   parseBountyWindowAmount,
   resolveBountyReferenceNowSeconds,
@@ -371,8 +372,9 @@ async function assertQuestionBundleSubmissionSelector(
         amount: 0n,
         requiredVoters: 0n,
         requiredSettledRounds: 0n,
-        bountyClosesAt: 0n,
-        feedbackClosesAt: 0n,
+        bountyStartBy: 0n,
+        bountyWindowSeconds: 0n,
+        feedbackWindowSeconds: 0n,
         bountyEligibility: 0,
       },
       {
@@ -469,6 +471,12 @@ export function ContentSubmissionSection() {
     DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT,
   );
   const [bountyWindowOverridden, setBountyWindowOverridden] = useState(false);
+  const [bountyStartByPreset, setBountyStartByPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
+  const [customBountyStartByAmount, setCustomBountyStartByAmount] = useState(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
+  const [customBountyStartByUnit, setCustomBountyStartByUnit] = useState<BountyWindowUnit>(
+    DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT,
+  );
+  const [bountyStartByOverridden, setBountyStartByOverridden] = useState(false);
   const [bountyExpiryReferenceTimeMs, setBountyExpiryReferenceTimeMs] = useState<number | null>(null);
   const [feedbackBonusMode, setFeedbackBonusMode] = useState<FeedbackBonusSelection>("none");
   const [feedbackBonusAmount, setFeedbackBonusAmount] = useState("2");
@@ -506,7 +514,18 @@ export function ContentSubmissionSection() {
 
   useEffect(() => {
     setBountyExpiryReferenceTimeMs(Date.now());
-  }, [bountyWindowOverridden, bountyWindowPreset, customBountyWindowAmount, customBountyWindowUnit, roundBlindMinutes]);
+  }, [
+    bountyStartByOverridden,
+    bountyStartByPreset,
+    bountyWindowOverridden,
+    bountyWindowPreset,
+    customBountyStartByAmount,
+    customBountyStartByUnit,
+    customBountyWindowAmount,
+    customBountyWindowUnit,
+    roundBlindMinutes,
+    roundMaxDurationMinutes,
+  ]);
 
   useEffect(() => {
     if (feedbackBonusAwarderTouched) return;
@@ -1144,15 +1163,50 @@ export function ContentSubmissionSection() {
       ? parsedRoundBlindMinutes * SECONDS_PER_MINUTE
       : null;
   const effectiveBountyWindowSeconds = bountyWindowOverridden ? bountyWindowSeconds : syncedBountyWindowSeconds;
-  const estimatedBountyExpiresAtLabel = formatBountyExpiryDate(
-    effectiveBountyWindowSeconds,
+  const bountyStartByWindowSeconds = getBountyWindowSeconds(
+    bountyStartByPreset,
+    customBountyStartByAmount,
+    customBountyStartByUnit,
+  );
+  const syncedBountyStartByWindowSeconds =
+    parsedRoundMaxDurationMinutes >= roundMaxDurationMinuteBounds.min &&
+    parsedRoundMaxDurationMinutes <= roundMaxDurationMinuteBounds.max
+      ? parsedRoundMaxDurationMinutes * SECONDS_PER_MINUTE
+      : null;
+  const effectiveBountyStartByWindowSeconds = bountyStartByOverridden
+    ? bountyStartByWindowSeconds
+    : syncedBountyStartByWindowSeconds;
+  const estimatedBountyStartByLabel = formatBountyExpiryDate(
+    effectiveBountyStartByWindowSeconds,
     bountyExpiryReferenceTimeMs,
   );
+  const bountyEligibilityWindowLabel = formatBountyWindowDuration(effectiveBountyWindowSeconds);
+  const estimatedFeedbackBonusClosesAtLabel = formatBountyExpiryDate(
+    effectiveBountyStartByWindowSeconds !== null && effectiveBountyWindowSeconds !== null
+      ? effectiveBountyStartByWindowSeconds + effectiveBountyWindowSeconds
+      : null,
+    bountyExpiryReferenceTimeMs,
+  );
+  const parsedCustomBountyStartByAmount = parseBountyWindowAmount(customBountyStartByAmount);
   const parsedCustomBountyWindowAmount = parseBountyWindowAmount(customBountyWindowAmount);
+  const customBountyStartByAmountMax =
+    customBountyStartByUnit === "hours"
+      ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
+      : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
   const customBountyWindowAmountMax =
     customBountyWindowUnit === "hours"
       ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
       : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
+  const rewardStartByValidationError =
+    bountyStartByOverridden && bountyStartByPreset === "custom" && parsedCustomBountyStartByAmount < 1
+      ? `Enter at least 1 ${customBountyStartByUnit === "hours" ? "hour" : "day"}.`
+      : bountyStartByOverridden &&
+          bountyStartByPreset === "custom" &&
+          parsedCustomBountyStartByAmount > customBountyStartByAmountMax
+        ? `Enter ${customBountyStartByAmountMax.toLocaleString()} ${customBountyStartByUnit} or fewer.`
+        : effectiveBountyStartByWindowSeconds === null
+          ? "Choose a start-by deadline."
+          : null;
   const rewardExpiryValidationError =
     bountyWindowOverridden && bountyWindowPreset === "custom" && parsedCustomBountyWindowAmount < 1
       ? `Enter at least 1 ${customBountyWindowUnit === "hours" ? "hour" : "day"}.`
@@ -1164,6 +1218,7 @@ export function ContentSubmissionSection() {
           ? "Choose a bounty window."
           : null;
   const rewardExpiryError = bountyStepAttempted ? rewardExpiryValidationError : null;
+  const rewardStartByError = bountyStepAttempted ? rewardStartByValidationError : null;
   const selectedBountyEligibility = BOUNTY_ELIGIBILITY_OPTIONS.find(option => option.id === bountyEligibility)!;
   const selectedFeedbackBonusAmount = parseFeedbackBonusAmount(feedbackBonusAmount);
   const selectedFeedbackBonusAssetId =
@@ -1194,6 +1249,7 @@ export function ContentSubmissionSection() {
   const bountySettingsValid =
     rewardRequiredVotersValidationError === null &&
     rewardRequiredRoundsValidationError === null &&
+    rewardStartByValidationError === null &&
     rewardExpiryValidationError === null &&
     roundConfigValidationError === null &&
     rewardAmountError === null &&
@@ -1264,7 +1320,7 @@ export function ContentSubmissionSection() {
     feedbackBonusMode === "enabled" && selectedFeedbackBonusAmount
       ? applyEstimatedFrontendFee(selectedFeedbackBonusAmount, frontendFeeBps)
       : 0n;
-  const feedbackBonusWindowLabel = estimatedBountyExpiresAtLabel;
+  const feedbackBonusWindowLabel = estimatedFeedbackBonusClosesAtLabel;
   const hasNoSupportedBountyFunds =
     hasResolvedLrepBalance && hasResolvedUsdcBalance && lrepBalance === 0n && usdcBalance === 0n;
   const requiredFeedbackBonusFundingAmount =
@@ -1883,16 +1939,24 @@ export function ContentSubmissionSection() {
         ?.getBlock({ blockTag: "latest" })
         .then(block => block.timestamp)
         .catch(() => undefined);
-      const rewardPoolExpiresAt = getBountyClosesAtFromWindowSeconds(
-        effectiveBountyWindowSeconds,
-        resolveBountyReferenceNowSeconds(latestBlockTimestamp),
+      const bountyReferenceNowSeconds = resolveBountyReferenceNowSeconds(latestBlockTimestamp);
+      const bountyStartBy = getBountyStartByFromWindowSeconds(
+        effectiveBountyStartByWindowSeconds,
+        bountyReferenceNowSeconds,
       );
-      if (rewardPoolExpiresAt <= 0n) {
+      if (bountyStartBy <= BigInt(bountyReferenceNowSeconds)) {
+        setSubmissionStep("bounty");
+        notification.warning("Choose a start-by deadline before submitting.");
+        return;
+      }
+      if (effectiveBountyWindowSeconds === null || effectiveBountyWindowSeconds <= 0) {
         setSubmissionStep("bounty");
         notification.warning("Choose a bounty window before submitting.");
         return;
       }
-      const feedbackClosesAt = rewardPoolExpiresAt;
+      const bountyWindowSecondsValue = BigInt(effectiveBountyWindowSeconds);
+      const feedbackWindowSeconds = bountyWindowSecondsValue;
+      const feedbackBonusClosesAt = bountyStartBy + bountyWindowSecondsValue;
 
       const bundleQuestions = validatedQuestions.map((question, index) => {
         if (!question.selectedCategory) {
@@ -1940,8 +2004,9 @@ export function ContentSubmissionSection() {
         amount: selectedRewardAmount,
         requiredVoters: selectedRequiredVoters,
         requiredSettledRounds: selectedRequiredSettledRounds,
-        bountyClosesAt: rewardPoolExpiresAt,
-        feedbackClosesAt,
+        bountyStartBy,
+        bountyWindowSeconds: bountyWindowSecondsValue,
+        feedbackWindowSeconds,
         bountyEligibility: selectedBountyEligibility.mode,
       } as const;
       const roundConfigAbi = questionRoundConfigToAbi(selectedRoundConfig);
@@ -1982,8 +2047,9 @@ export function ContentSubmissionSection() {
             rewardAsset: selectedRewardAssetId,
             requiredSettledRounds: selectedRequiredSettledRounds,
             requiredVoters: selectedRequiredVoters,
-            rewardPoolExpiresAt,
-            feedbackClosesAt,
+            bountyStartBy,
+            bountyWindowSeconds: bountyWindowSecondsValue,
+            feedbackWindowSeconds,
             bountyEligibility: selectedBountyEligibility.mode,
             roundConfig: selectedRoundConfig,
             submitter: submitterAddress,
@@ -1998,8 +2064,9 @@ export function ContentSubmissionSection() {
             requiredSettledRounds: selectedRequiredSettledRounds,
             requiredVoters: selectedRequiredVoters,
             resultSpecHash: primaryQuestion.spec.resultSpecHash,
-            rewardPoolExpiresAt,
-            feedbackClosesAt,
+            bountyStartBy,
+            bountyWindowSeconds: bountyWindowSecondsValue,
+            feedbackWindowSeconds,
             bountyEligibility: selectedBountyEligibility.mode,
             roundConfig: selectedRoundConfig,
             salt: primaryQuestion.salt,
@@ -2233,7 +2300,7 @@ export function ContentSubmissionSection() {
               feedbackRoundId,
               selectedFeedbackBonusAssetId,
               selectedFeedbackBonusAmount,
-              rewardPoolExpiresAt,
+              feedbackBonusClosesAt,
               selectedFeedbackBonusAwarderAddress,
             ],
           } as const;
@@ -2334,6 +2401,10 @@ export function ContentSubmissionSection() {
       setCustomBountyWindowAmount(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
       setCustomBountyWindowUnit(DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT);
       setBountyWindowOverridden(false);
+      setBountyStartByPreset(DEFAULT_BOUNTY_WINDOW_PRESET);
+      setCustomBountyStartByAmount(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
+      setCustomBountyStartByUnit(DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT);
+      setBountyStartByOverridden(false);
       setFeedbackBonusMode("none");
       setFeedbackBonusAmount("2");
       setFeedbackBonusAwarderAddress(connectedAddress ?? "");
@@ -2522,7 +2593,7 @@ export function ContentSubmissionSection() {
   const requiredRoundsTooltipText =
     "Each settlement round set requires every bundled question to settle once. Eligible completers can claim a reward for each completed set they fully answered.";
   const roundSettingsTooltipText =
-    "Governance sets the allowed range. Urgent bounties can use shorter rounds; broader questions can wait for more voters.";
+    "Governance sets the allowed range. Bounty timing defaults follow the selected round duration.";
   const blindPhaseTooltipText = [
     "How long answers stay hidden before the result can be revealed and settled.",
     `Current min: ${formatDurationLabel(roundBlindMinuteBounds.min * SECONDS_PER_MINUTE)}.`,
@@ -2552,7 +2623,7 @@ export function ContentSubmissionSection() {
           `Current min: ${roundMaxVoterBounds.min.toLocaleString()}.`,
           `Current max: ${roundMaxVoterBounds.max.toLocaleString()}.`,
         ].join(" ");
-  const bountyExpiryTooltipText = `Bounty and paid feedback match the blind response window by default. Override this if rewards should close at a different time. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
+  const bountyExpiryTooltipText = `Bounty eligibility opens with the first private round and matches the blind response window by default. The start-by deadline defaults to the round max duration. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
   const bountyEstimateTooltipText =
     selectedRewardAmount === null
       ? `Using the current minimum until the bounty amount is valid. ${formatFrontendFeePercent(frontendFeeBps)} may be reserved for an eligible frontend operator. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`
@@ -2782,7 +2853,7 @@ export function ContentSubmissionSection() {
                   className={`h-4 w-4 shrink-0 transition-transform ${showAdvancedRoundSettings ? "rotate-180" : ""}`}
                   aria-hidden="true"
                 />
-                Advanced round settings
+                Advanced bounty settings
               </button>
               <InfoTooltip text={roundSettingsTooltipText} />
             </div>
@@ -2865,7 +2936,127 @@ export function ContentSubmissionSection() {
 
               <div className="space-y-2 sm:col-span-2">
                 <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
-                  Bounty window
+                  Start-by deadline
+                  <InfoTooltip text={bountyExpiryTooltipText} />
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:max-w-md">
+                  <button
+                    type="button"
+                    aria-pressed={!bountyStartByOverridden}
+                    onClick={() => setBountyStartByOverridden(false)}
+                    className={`btn btn-sm ${!bountyStartByOverridden ? "btn-primary" : "btn-outline"}`}
+                  >
+                    Match max duration
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={bountyStartByOverridden}
+                    onClick={() => setBountyStartByOverridden(true)}
+                    className={`btn btn-sm ${bountyStartByOverridden ? "btn-primary" : "btn-outline"}`}
+                  >
+                    Override
+                  </button>
+                </div>
+                {!bountyStartByOverridden ? (
+                  <p className="text-sm text-base-content/60">
+                    Current deadline: {formatDurationLabel((effectiveBountyStartByWindowSeconds ?? 0) || 0)} (
+                    {estimatedBountyStartByLabel})
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      {BOUNTY_WINDOW_PRESETS.map(option => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={bountyStartByPreset === option.id}
+                          onClick={() => {
+                            setBountyStartByOverridden(true);
+                            setBountyStartByPreset(option.id);
+                          }}
+                          className={`btn btn-sm ${bountyStartByPreset === option.id ? "btn-primary" : "btn-outline"}`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        aria-pressed={bountyStartByPreset === "custom"}
+                        onClick={() => {
+                          setBountyStartByOverridden(true);
+                          setBountyStartByPreset("custom");
+                        }}
+                        className={`btn btn-sm ${bountyStartByPreset === "custom" ? "btn-primary" : "btn-outline"}`}
+                      >
+                        Custom
+                      </button>
+                    </div>
+                    {bountyStartByPreset === "custom" ? (
+                      <div className="grid gap-3 sm:grid-cols-[max-content_8rem] sm:items-end sm:gap-x-6">
+                        <label
+                          htmlFor="custom-bounty-start-by-amount"
+                          className="grid gap-2 sm:grid-cols-[max-content_12rem] sm:items-center sm:gap-x-6"
+                        >
+                          <span className="label-text">Deadline length</span>
+                          <input
+                            id="custom-bounty-start-by-amount"
+                            type="number"
+                            min={1}
+                            max={customBountyStartByAmountMax}
+                            step={1}
+                            inputMode="numeric"
+                            value={customBountyStartByAmount}
+                            onChange={e => {
+                              const normalizedValue = normalizeWholeNumberInput(e.target.value);
+                              if (normalizedValue !== null) {
+                                setBountyStartByOverridden(true);
+                                setCustomBountyStartByAmount(normalizedValue);
+                              }
+                            }}
+                            onBlur={() => {
+                              setBountyStartByOverridden(true);
+                              setCustomBountyStartByAmount(current =>
+                                clampWholeNumberInput(current, 1, customBountyStartByAmountMax),
+                              );
+                            }}
+                            className={`input input-bordered bg-base-100 ${
+                              bountyStepAttempted && rewardStartByError ? "input-error" : ""
+                            }`}
+                          />
+                        </label>
+                        <label className="form-control">
+                          <span className="label-text">Unit</span>
+                          <select
+                            value={customBountyStartByUnit}
+                            onChange={e => {
+                              const nextUnit = e.target.value as BountyWindowUnit;
+                              const nextMax =
+                                nextUnit === "hours"
+                                  ? Math.floor(Number.MAX_SAFE_INTEGER / SECONDS_PER_HOUR)
+                                  : Math.floor(Number.MAX_SAFE_INTEGER / (24 * SECONDS_PER_HOUR));
+
+                              setBountyStartByOverridden(true);
+                              setCustomBountyStartByUnit(nextUnit);
+                              setCustomBountyStartByAmount(current => clampWholeNumberInput(current, 1, nextMax));
+                            }}
+                            className="select select-bordered bg-base-100"
+                          >
+                            <option value="hours">Hours</option>
+                            <option value="days">Days</option>
+                          </select>
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+                {bountyStepAttempted && rewardStartByError ? (
+                  <p className="text-base text-error">{rewardStartByError}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2 sm:col-span-2">
+                <p className="flex items-center gap-1.5 text-sm font-medium text-base-content/80">
+                  Eligibility window
                   <InfoTooltip text={bountyExpiryTooltipText} />
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:max-w-md">
@@ -3066,10 +3257,18 @@ export function ContentSubmissionSection() {
 
           <div>
             <p className="flex items-center gap-1.5 text-base text-base-content/70">
-              Bounty expires
-              <InfoTooltip text="Estimated from the selected bounty window and current time. The final timestamp is set when you submit." />
+              Start-by deadline
+              <InfoTooltip text="The first private round must start by this deadline or the bounty can no longer activate." />
             </p>
-            <p className="mt-1 text-base font-medium text-base-content">{estimatedBountyExpiresAtLabel}</p>
+            <p className="mt-1 text-base font-medium text-base-content">{estimatedBountyStartByLabel}</p>
+          </div>
+
+          <div>
+            <p className="flex items-center gap-1.5 text-base text-base-content/70">
+              Eligibility window
+              <InfoTooltip text="This duration starts when the first private round starts, so the exact close time depends on the first vote." />
+            </p>
+            <p className="mt-1 text-base font-medium text-base-content">{bountyEligibilityWindowLabel}</p>
           </div>
         </div>
       </div>
@@ -3191,7 +3390,7 @@ export function ContentSubmissionSection() {
               <div>
                 <p className="flex items-center gap-1.5 text-base text-base-content/70">
                   Feedback window
-                  <InfoTooltip text="The feedback bonus closes with the bounty window selected in the previous step." />
+                  <InfoTooltip text="The optional feedback bonus closes no later than the selected start-by deadline plus the feedback window." />
                 </p>
                 <p className="mt-1 text-base font-medium text-base-content">{feedbackBonusWindowLabel}</p>
               </div>
@@ -3294,7 +3493,7 @@ export function ContentSubmissionSection() {
           <div>
             <p className="flex items-center gap-1.5 text-base text-base-content/70">
               Feedback closes
-              <InfoTooltip text="Matches the bounty expiration for this first version of the creation flow." />
+              <InfoTooltip text="The optional feedback bonus uses a fixed close time based on the latest possible bounty eligibility close." />
             </p>
             <p className="mt-1 text-base font-medium text-base-content">{feedbackBonusWindowLabel}</p>
           </div>

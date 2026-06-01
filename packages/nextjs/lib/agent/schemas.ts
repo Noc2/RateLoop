@@ -107,8 +107,16 @@ const agentBountyInputSchema = {
       enum: ["USDC", "usdc", "LREP", "lrep"],
       type: "string",
     },
-    feedbackClosesAt: {
-      description: "Unix timestamp in seconds when feedback bonuses close. 0 means no explicit close.",
+    bountyStartBy: {
+      description: "Unix timestamp in seconds by which the first private round must start.",
+      type: ["integer", "string"],
+    },
+    bountyWindowSeconds: {
+      description: "Bounty eligibility window duration after the first private round starts.",
+      type: ["integer", "string"],
+    },
+    feedbackWindowSeconds: {
+      description: "Paid feedback window duration after the first private round starts.",
       type: ["integer", "string"],
     },
     bountyEligibility: {
@@ -123,10 +131,6 @@ const agentBountyInputSchema = {
     },
     requiredVoters: {
       description: "Minimum eligible voters required by the bounty.",
-      type: ["integer", "string"],
-    },
-    rewardPoolExpiresAt: {
-      description: "Unix timestamp in seconds when bounty claims expire. 0 means no explicit expiry.",
       type: ["integer", "string"],
     },
   },
@@ -150,7 +154,7 @@ const agentFeedbackBonusInputSchema = {
     },
     feedbackClosesAt: {
       description:
-        "Unix timestamp in seconds when feedback bonus awards close. Defaults to bounty.rewardPoolExpiresAt.",
+        "Unix timestamp in seconds when feedback bonus awards close. Defaults to bounty.bountyStartBy + bounty.feedbackWindowSeconds.",
       type: ["integer", "string"],
     },
   },
