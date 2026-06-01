@@ -994,18 +994,41 @@ async function prepareRatingTransactions(args: JsonObject, agent?: McpAgentAuth)
 }
 
 function decodedRatingLogMatches(params: {
+  advisoryVoteRecorderAddress: Address | null;
   commitHash: Hex | null;
   contentId: bigint;
   log: { address: Address; topics: readonly Hex[]; data: Hex };
   roundId: bigint | null;
+  votingEngineAddress: Address;
   walletAddress: Address;
 }) {
-  const candidates = [
-    { abi: RoundVotingEngineAbi as Abi, eventName: "VoteCommitted" },
-    { abi: AdvisoryVoteRecorderAbi as Abi, eventName: "AdvisoryVoteRecorded" },
+  const candidates: Array<{
+    abi: Abi;
+    address: Address;
+    eventName: "AdvisoryVoteRecorded" | "VoteCommitted";
+    isAdvisoryVote: boolean;
+  }> = [
+    {
+      abi: RoundVotingEngineAbi as Abi,
+      address: params.votingEngineAddress,
+      eventName: "VoteCommitted",
+      isAdvisoryVote: false,
+    },
   ];
+  if (params.advisoryVoteRecorderAddress) {
+    candidates.push({
+      abi: AdvisoryVoteRecorderAbi as Abi,
+      address: params.advisoryVoteRecorderAddress,
+      eventName: "AdvisoryVoteRecorded",
+      isAdvisoryVote: true,
+    });
+  }
 
   for (const candidate of candidates) {
+    if (normalizeHexId(params.log.address) !== normalizeHexId(candidate.address)) {
+      continue;
+    }
+
     try {
       const decoded = decodeEventLog({
         abi: candidate.abi,
@@ -1024,7 +1047,7 @@ function decodedRatingLogMatches(params: {
       }
       return {
         commitHash: typeof args.commitHash === "string" ? args.commitHash : null,
-        isAdvisoryVote: candidate.eventName === "AdvisoryVoteRecorded",
+        isAdvisoryVote: candidate.isAdvisoryVote,
         roundId: String(args.roundId ?? ""),
       };
     } catch {
@@ -1093,6 +1116,7 @@ async function confirmRatingTransactions(args: JsonObject, agent?: McpAgentAuth)
     if (receipt.status !== "success") continue;
     for (const log of receipt.logs) {
       const decoded = decodedRatingLogMatches({
+        advisoryVoteRecorderAddress: context.advisoryVoteRecorder?.address ?? null,
         commitHash,
         contentId,
         log: {
@@ -1101,6 +1125,7 @@ async function confirmRatingTransactions(args: JsonObject, agent?: McpAgentAuth)
           topics: log.topics,
         },
         roundId,
+        votingEngineAddress: context.votingEngine.address,
         walletAddress,
       });
       if (decoded) {
