@@ -5,7 +5,7 @@ import deployedContracts from "@rateloop/contracts/deployedContracts";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { encodeAbiParameters, encodeEventTopics } from "viem";
-import { __setDatabaseResourcesForTests } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
 
@@ -68,6 +68,89 @@ function budgetReservation() {
     status: "reserved",
     updatedAt: new Date(),
   } as const;
+}
+
+async function insertX402SubmissionRecord(params: {
+  agentId?: string;
+  clientRequestId?: string;
+  mode?: string;
+  operationKey?: `0x${string}`;
+}) {
+  const now = new Date();
+  const operationKey = params.operationKey ?? OPERATION_KEY;
+  await dbClient.execute({
+    sql: `
+      INSERT INTO x402_question_submissions (
+        operation_key,
+        client_request_id,
+        payload_hash,
+        chain_id,
+        payer_address,
+        payment_asset,
+        payment_amount,
+        bounty_amount,
+        question_count,
+        status,
+        payment_receipt,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      operationKey,
+      params.clientRequestId ?? "wallet:test-public-operation",
+      "payload-hash",
+      480,
+      AGENT.walletAddress,
+      "0x0000000000000000000000000000000000000001",
+      "1000000",
+      "1000000",
+      1,
+      "awaiting_wallet_signature",
+      JSON.stringify({
+        ...(params.agentId ? { agentId: params.agentId } : {}),
+        mode: params.mode,
+        operationKey,
+        walletAddress: AGENT.walletAddress,
+      }),
+      now,
+      now,
+    ],
+  });
+}
+
+async function insertBudgetReservation(params: { agentId?: string; operationKey?: `0x${string}` } = {}) {
+  const now = new Date();
+  await dbClient.execute({
+    sql: `
+      INSERT INTO mcp_agent_budget_reservations (
+        operation_key,
+        agent_id,
+        client_request_id,
+        payload_hash,
+        chain_id,
+        category_id,
+        payment_amount,
+        status,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      params.operationKey ?? OPERATION_KEY,
+      params.agentId ?? AGENT.id,
+      "ask-bookkeeping-failure",
+      "payload-hash",
+      480,
+      "5",
+      "1000000",
+      "reserved",
+      now,
+      now,
+    ],
+  });
 }
 
 function quoteOverrides() {
@@ -254,6 +337,72 @@ test("rateloop_ask_humans returns a wallet transaction plan without submitting f
   assert.match(body.legalNotice.privacyUrl, /\/legal\/privacy$/);
   assert.equal(body.managedBudget.remainingDailyBudgetAtomic, "4000000");
   assert.equal(prepared.length, 1);
+});
+
+test("public operation-key lookups allow only permissionless ask records", async () => {
+  await insertX402SubmissionRecord({ mode: "permissionless-wallet-plan" });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: { operationKey: OPERATION_KEY },
+    name: "rateloop_get_question_status",
+  });
+  const body = result as unknown as { operationKey: string; status: string };
+
+  assert.equal(body.operationKey, OPERATION_KEY);
+  assert.equal(body.status, "awaiting_wallet_signature");
+});
+
+test("public operation-key lookups reject managed ask records", async () => {
+  await insertX402SubmissionRecord({
+    agentId: AGENT.id,
+    clientRequestId: "mcp:managed-client-request",
+    mode: "agent-wallet-plan",
+  });
+
+  await assert.rejects(
+    () =>
+      callPublicRateLoopMcpTool({
+        arguments: { operationKey: OPERATION_KEY },
+        name: "rateloop_get_question_status",
+      }),
+    /public permissionless wallet flow/,
+  );
+});
+
+test("public operation-key confirms reject records with managed reservations", async () => {
+  await insertX402SubmissionRecord({ mode: "permissionless-wallet-plan" });
+  await insertBudgetReservation();
+
+  await assert.rejects(
+    () =>
+      callPublicRateLoopMcpTool({
+        arguments: {
+          operationKey: OPERATION_KEY,
+          transactionHashes: [`0x${"4".repeat(64)}`],
+        },
+        name: "rateloop_confirm_ask_transactions",
+      }),
+    /public permissionless wallet flow/,
+  );
+});
+
+test("managed operation-key lookups still allow same-agent managed records", async () => {
+  await insertX402SubmissionRecord({
+    agentId: AGENT.id,
+    clientRequestId: "mcp:managed-client-request",
+    mode: "agent-wallet-plan",
+  });
+  await insertBudgetReservation();
+
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: { operationKey: OPERATION_KEY },
+    name: "rateloop_get_question_status",
+  });
+  const body = result as unknown as { operationKey: string; status: string };
+
+  assert.equal(body.operationKey, OPERATION_KEY);
+  assert.equal(body.status, "awaiting_wallet_signature");
 });
 
 test("rateloop_get_rating_context returns local encrypted commit instructions and open-round plan", async () => {

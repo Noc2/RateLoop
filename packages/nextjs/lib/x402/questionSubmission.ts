@@ -68,11 +68,14 @@ type ImageAttachmentSubmissionIdentity = {
 };
 
 type StoredWalletSubmissionPlanReceipt = {
+  agentId?: string;
   expectedContentHashes?: Hex[];
   feedbackBonus?: StoredFeedbackBonusRequest;
   expectedRewardTerms?: StoredQuestionRewardTerms;
   expectedRoundConfig?: ReturnType<typeof serializeQuestionRoundConfig>;
+  mode?: WalletSubmissionReceiptMode;
   operationKey?: string;
+  originalClientRequestId?: string;
   revealCommitment?: Hex;
   walletAddress?: Address;
 };
@@ -399,11 +402,21 @@ function parseStoredSubmissionPlanReceipt(value: string | null): StoredWalletSub
         : undefined;
 
     return {
+      agentId: typeof parsed.agentId === "string" && parsed.agentId ? parsed.agentId : undefined,
       expectedContentHashes,
       feedbackBonus: parseStoredFeedbackBonusRequest(parsed.feedbackBonus),
       expectedRewardTerms,
       expectedRoundConfig,
+      mode:
+        parsed.mode === "agent-wallet-plan" ||
+        parsed.mode === "native-x402-authorization" ||
+        parsed.mode === "permissionless-wallet-plan" ||
+        parsed.mode === "permissionless-x402-authorization"
+          ? parsed.mode
+          : undefined,
       operationKey: typeof parsed.operationKey === "string" ? parsed.operationKey : undefined,
+      originalClientRequestId:
+        typeof parsed.originalClientRequestId === "string" ? parsed.originalClientRequestId : undefined,
       revealCommitment: isBytes32Hex(parsed.revealCommitment) ? parsed.revealCommitment : undefined,
       walletAddress:
         typeof parsed.walletAddress === "string" && isAddress(parsed.walletAddress)
@@ -413,6 +426,19 @@ function parseStoredSubmissionPlanReceipt(value: string | null): StoredWalletSub
   } catch {
     return null;
   }
+}
+
+export function isPublicPermissionlessQuestionSubmissionRecord(record: X402QuestionSubmissionRecord | null) {
+  if (!record) return false;
+  const receipt = parseStoredSubmissionPlanReceipt(record.paymentReceipt);
+  if (!receipt) {
+    return record.clientRequestId.startsWith("wallet:") && Boolean(record.payerAddress);
+  }
+  if (receipt.agentId) return false;
+  if (receipt.mode === "permissionless-wallet-plan" || receipt.mode === "permissionless-x402-authorization") {
+    return true;
+  }
+  return !receipt.mode && record.clientRequestId.startsWith("wallet:") && Boolean(record.payerAddress);
 }
 
 function sameRewardTerms(left: StoredQuestionRewardTerms | undefined, right: StoredQuestionRewardTerms | undefined) {

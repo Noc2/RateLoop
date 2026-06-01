@@ -80,6 +80,7 @@ import {
   confirmFeedbackBonusQuestionSubmissionRequest,
   getX402QuestionSubmissionByClientRequest,
   getX402QuestionSubmissionByOperationKey,
+  isPublicPermissionlessQuestionSubmissionRecord,
   preflightX402QuestionSubmission,
   prepareAgentWalletQuestionSubmissionRequest,
   prepareFeedbackBonusQuestionSubmissionRequest,
@@ -1378,6 +1379,10 @@ async function resolvePublicOperationKey(args: JsonObject): Promise<`0x${string}
     if (!/^0x[a-fA-F0-9]{64}$/.test(operationKey)) {
       throw new McpToolError("operationKey must be a 32-byte hex string.");
     }
+    const record = await getX402QuestionSubmissionByOperationKey(operationKey as `0x${string}`);
+    if (record) {
+      await assertPublicOperationRecord(record);
+    }
     return operationKey as `0x${string}`;
   }
 
@@ -1396,6 +1401,9 @@ async function resolvePublicOperationKey(args: JsonObject): Promise<`0x${string}
     chainId,
     clientRequestId: publicClientRequestId,
   });
+  if (record) {
+    await assertPublicOperationRecord(record);
+  }
   return record?.operationKey ?? null;
 }
 
@@ -1403,6 +1411,19 @@ async function lookupPublicQuestionOperation(args: JsonObject) {
   const operationKey = await resolvePublicOperationKey(args);
   if (!operationKey) return null;
   return getX402QuestionSubmissionByOperationKey(operationKey);
+}
+
+async function assertPublicOperationRecord(
+  record: Awaited<ReturnType<typeof getX402QuestionSubmissionByOperationKey>>,
+) {
+  if (!record) return;
+  if (!isPublicPermissionlessQuestionSubmissionRecord(record)) {
+    throw new McpToolError("Operation was not submitted through a public permissionless wallet flow.", 404);
+  }
+  const reservation = await getMcpBudgetReservation(record.operationKey);
+  if (reservation) {
+    throw new McpToolError("Operation was not submitted through a public permissionless wallet flow.", 404);
+  }
 }
 
 async function loadCallbackDeliveryStatus(operationKey: `0x${string}`, agentId: string) {
