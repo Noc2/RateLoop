@@ -188,6 +188,12 @@ body {
   }
 }
 
+@keyframes rateloop-gradient-border-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 @keyframes rateloop-gradient-border-intro {
   to {
     --rateloop-gradient-orbit-angle: 320deg;
@@ -238,12 +244,30 @@ body {
     filter 0.2s ease;
 }
 
+.rateloop-gradient-action::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  border-radius: inherit;
+  background-image: var(--rateloop-orbit-gradient);
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: center;
+}
+
 .rateloop-gradient-action[data-motion="intro"] {
   animation: rateloop-gradient-border-intro 4.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .rateloop-gradient-action[data-motion="processing"] {
-  animation: rateloop-gradient-border-orbit 2.8s linear infinite;
+  animation: none;
+}
+
+.rateloop-gradient-action[data-motion="processing"]::before,
+.rateloop-gradient-action[aria-busy="true"]::before {
+  animation: rateloop-gradient-border-spin 2.8s linear infinite;
+  opacity: 1;
+  will-change: transform;
 }
 
 .rateloop-gradient-notification {
@@ -318,6 +342,8 @@ body {
 }
 
 .rateloop-gradient-action-inner {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   min-height: 2.75rem;
   width: 100%;
@@ -368,6 +394,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .rateloop-gradient-action,
   .rateloop-gradient-notification,
+  .rateloop-gradient-action[data-motion="processing"]::before,
+  .rateloop-gradient-action[aria-busy="true"]::before,
   .rateloop-gradient-action-icon[data-spin="true"] {
     animation: none;
   }
