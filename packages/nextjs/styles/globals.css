@@ -258,7 +258,17 @@ body {
 
 .rateloop-gradient-action[data-motion="processing"]::before,
 .rateloop-gradient-action[aria-busy="true"]::before {
-  animation: rateloop-gradient-border-orbit 2.8s linear infinite;
+  background-image: conic-gradient(
+    from var(--rateloop-gradient-orbit-angle),
+    transparent 0deg 218deg,
+    rgb(239 71 111 / 0.12) 238deg,
+    rgb(239 71 111 / 0.98) 262deg,
+    rgb(255 196 61 / 0.98) 292deg,
+    rgb(3 206 164 / 0.98) 326deg,
+    rgb(53 158 238 / 0.98) 350deg,
+    transparent 360deg
+  );
+  animation: rateloop-gradient-border-orbit 1.8s linear infinite;
   opacity: 1;
 }
 
