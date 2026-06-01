@@ -183,8 +183,12 @@ body {
 }
 
 @keyframes rateloop-gradient-border-orbit {
+  from {
+    --rateloop-gradient-orbit-angle: 0deg;
+  }
+
   to {
-    --rateloop-gradient-orbit-angle: 360deg;
+    --rateloop-gradient-orbit-angle: 1turn;
   }
 }
 
@@ -208,6 +212,7 @@ body {
 .rateloop-gradient-action {
   --rateloop-gradient-border-size: 1.25px;
   --rateloop-gradient-button-radius: var(--rateloop-radius-control);
+  --rateloop-gradient-orbit-duration: 1.8s;
   --rateloop-gradient-inner-bg: linear-gradient(
     180deg,
     rgb(var(--rateloop-surface-elevated-rgb) / 0.98),
@@ -255,7 +260,7 @@ body {
 }
 
 .rateloop-gradient-action[data-motion="intro"] {
-  animation: none;
+  animation: rateloop-gradient-border-orbit 2.4s linear 2;
 }
 
 .rateloop-gradient-action[data-motion="intro"]::before,
@@ -266,17 +271,19 @@ body {
 
 .rateloop-gradient-action[data-motion="intro"]::before {
   animation:
-    rateloop-gradient-border-orbit 2.8s linear 2,
-    rateloop-gradient-runner-fade 5.6s ease-out both;
+    rateloop-gradient-border-orbit 2.4s linear 2,
+    rateloop-gradient-runner-fade 4.8s ease-out both;
 }
 
-.rateloop-gradient-action[data-motion="processing"] {
-  animation: none;
+.rateloop-gradient-action[data-motion="processing"],
+.rateloop-gradient-action[aria-busy="true"] {
+  animation: rateloop-gradient-border-orbit var(--rateloop-gradient-orbit-duration) linear infinite;
 }
 
 .rateloop-gradient-action[data-motion="processing"]::before,
 .rateloop-gradient-action[aria-busy="true"]::before {
-  animation: rateloop-gradient-border-orbit 2.8s linear infinite;
+  animation: rateloop-gradient-border-orbit var(--rateloop-gradient-orbit-duration) linear infinite;
+  filter: saturate(1.22) brightness(1.12);
   opacity: 1;
 }
 
@@ -297,11 +304,11 @@ body {
 }
 
 .rateloop-gradient-notification[data-motion="intro"] {
-  animation: rateloop-gradient-border-orbit 2.8s linear 2;
+  animation: rateloop-gradient-border-orbit 2.4s linear 2;
 }
 
 .rateloop-gradient-notification[data-motion="processing"] {
-  animation: rateloop-gradient-border-orbit 2.8s linear infinite;
+  animation: rateloop-gradient-border-orbit var(--rateloop-gradient-orbit-duration, 1.8s) linear infinite;
 }
 
 .rateloop-gradient-action:hover:not(:disabled):not([aria-disabled="true"]) {
