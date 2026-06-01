@@ -5928,6 +5928,10 @@ contract MockQuestionRewardOracleFrontendRegistry {
     function isEligible(address frontend) external view returns (bool) {
         return eligible[frontend];
     }
+
+    function authorizedSnapshotFrontend(address proposer) external view returns (address frontend) {
+        return eligible[proposer] ? proposer : address(0);
+    }
 }
 
 contract MockBundleFrontendRegistry {

@@ -12158,6 +12158,13 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "renounceSnapshotProposer",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "requestDeregister",
           inputs: [],
           outputs: [],
@@ -38471,6 +38478,13 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
           ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "renounceSnapshotProposer",
+          inputs: [],
           outputs: [],
           stateMutability: "nonpayable",
         },

@@ -2370,6 +2370,10 @@ contract MockLaunchOracleFrontendRegistry {
     function isEligible(address frontend) external view returns (bool) {
         return eligible[frontend];
     }
+
+    function authorizedSnapshotFrontend(address proposer) external view returns (address frontend) {
+        return eligible[proposer] ? proposer : address(0);
+    }
 }
 
 /// @dev Test source for M-Oracle-1 readiness checks. Always returns 1 (epoch-second 1) so that

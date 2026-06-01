@@ -219,7 +219,10 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @dev Fully bonded, unslashed frontends can earn fees immediately after registration.
     function register() external nonReentrant {
         require(frontends[msg.sender].operator == address(0), "Already registered");
-        require(frontendForSnapshotProposer[msg.sender] == address(0), "Proposer already assigned");
+        address assignedFrontend = frontendForSnapshotProposer[msg.sender];
+        if (assignedFrontend != address(0)) {
+            _clearSnapshotProposer(assignedFrontend);
+        }
 
         lrepToken.safeTransferFrom(msg.sender, address(this), STAKE_AMOUNT);
 
@@ -355,6 +358,14 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     function clearSnapshotProposer() external nonReentrant {
         require(frontends[msg.sender].operator != address(0), "Not registered");
         _clearSnapshotProposer(msg.sender);
+    }
+
+    /// @notice Renounce delegated snapshot proposal authority assigned by a frontend operator.
+    /// @dev Lets an operational wallet opt out without relying on the assigning frontend.
+    function renounceSnapshotProposer() external nonReentrant {
+        address frontend = frontendForSnapshotProposer[msg.sender];
+        require(frontend != address(0), "Proposer not assigned");
+        _clearSnapshotProposer(frontend);
     }
 
     // --- Governance Functions ---

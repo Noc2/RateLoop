@@ -651,6 +651,13 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "renounceSnapshotProposer",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "requestDeregister",
     "inputs": [],
     "outputs": [],
