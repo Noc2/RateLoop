@@ -64,11 +64,17 @@ async function main() {
       config.metricsPort,
       config.metricsBindAddress,
       config.metricsAuthToken,
+      {
+        artifactDirectory:
+          config.correlationSnapshots.artifactStorage.mode === "file"
+            ? config.correlationSnapshots.artifactStorage.outputDir
+            : null,
+      },
     );
     logger.info("Metrics server started", {
       port: config.metricsPort,
       bindAddress: config.metricsBindAddress,
-      endpoints: ["/metrics", "/health"],
+      endpoints: ["/metrics", "/health", "/correlation-artifacts/:artifactHash.json"],
     });
   }
 

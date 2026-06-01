@@ -2,7 +2,9 @@
  * Prometheus-compatible metrics endpoint and health check.
  * Uses only Node.js builtins — no external dependencies.
  */
+import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "http";
+import path from "node:path";
 import type { KeeperResult } from "./keeper.js";
 
 // --- Counters ---
@@ -157,6 +159,19 @@ export function getHealthSnapshot(): { status: number; body: string } {
  * unless an explicit `METRICS_AUTH_TOKEN` is set, and bearer-check it on every request.
  */
 const LOOPBACK_BIND_ADDRESSES = new Set(["127.0.0.1", "::1", "localhost"]);
+const ARTIFACT_ROUTE_PREFIX = "/correlation-artifacts/";
+const ARTIFACT_FILENAME_RE = /^0x[a-fA-F0-9]{64}\.json$/;
+
+interface MetricsServerOptions {
+  artifactDirectory?: string | null;
+}
+
+interface CorrelationArtifactResponse {
+  status: number;
+  headers?: Record<string, string>;
+  body?: Buffer | string;
+}
+
 function isLoopbackBind(addr: string): boolean {
   return LOOPBACK_BIND_ADDRESSES.has(addr) || addr.startsWith("127.");
 }
@@ -174,8 +189,70 @@ function timingSafeBearerMatch(header: string | undefined, expected: string): bo
   return diff === 0;
 }
 
-function makeHandler(authToken: string | null) {
-  return function handler(req: IncomingMessage, res: ServerResponse) {
+async function serveCorrelationArtifact(
+  req: IncomingMessage,
+  res: ServerResponse,
+  artifactDirectory: string | null | undefined,
+): Promise<boolean> {
+  const artifactResponse = await resolveCorrelationArtifactResponse(
+    req.method,
+    req.url,
+    artifactDirectory,
+  );
+  if (!artifactResponse) return false;
+
+  res.writeHead(artifactResponse.status, artifactResponse.headers);
+  res.end(artifactResponse.body);
+  return true;
+}
+
+export async function resolveCorrelationArtifactResponse(
+  method: string | undefined,
+  requestUrl: string | undefined,
+  artifactDirectory: string | null | undefined,
+): Promise<CorrelationArtifactResponse | null> {
+  const url = new URL(requestUrl || "/", "http://keeper.local");
+  if (!url.pathname.startsWith(ARTIFACT_ROUTE_PREFIX)) return null;
+
+  if (method !== "GET" && method !== "HEAD") {
+    return {
+      status: 405,
+      headers: { Allow: "GET, HEAD" },
+      body: "Method Not Allowed\n",
+    };
+  }
+
+  if (!artifactDirectory) {
+    return { status: 404, body: "Not Found\n" };
+  }
+
+  const filename = url.pathname.slice(ARTIFACT_ROUTE_PREFIX.length);
+  if (!ARTIFACT_FILENAME_RE.test(filename)) {
+    return { status: 404, body: "Not Found\n" };
+  }
+
+  try {
+    const artifactPath = path.join(artifactDirectory, filename);
+    const body = await readFile(artifactPath);
+    return {
+      status: 200,
+      headers: {
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Length": String(body.byteLength),
+        "Content-Type": "application/json; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+      },
+      body: method === "HEAD" ? undefined : body,
+    };
+  } catch {
+    return { status: 404, body: "Not Found\n" };
+  }
+}
+
+function makeHandler(authToken: string | null, options: MetricsServerOptions = {}) {
+  return async function handler(req: IncomingMessage, res: ServerResponse) {
+    if (await serveCorrelationArtifact(req, res, options.artifactDirectory)) return;
+
     if (authToken !== null && !timingSafeBearerMatch(req.headers.authorization, authToken)) {
       res.writeHead(401, { "Content-Type": "text/plain" });
       res.end("Unauthorized\n");
@@ -202,14 +279,19 @@ function makeHandler(authToken: string | null) {
   };
 }
 
-export function startMetricsServer(port: number, bindAddress = "127.0.0.1", authToken: string | null = null): Server {
+export function startMetricsServer(
+  port: number,
+  bindAddress = "127.0.0.1",
+  authToken: string | null = null,
+  options: MetricsServerOptions = {},
+): Server {
   if (!isLoopbackBind(bindAddress) && (authToken === null || authToken.length < 16)) {
     throw new Error(
       `Refusing to start metrics server on non-loopback bind '${bindAddress}' without a ` +
         `METRICS_AUTH_TOKEN (>= 16 chars). Either bind to 127.0.0.1 / ::1 or set the env var.`,
     );
   }
-  const server = createServer(makeHandler(authToken));
+  const server = createServer(makeHandler(authToken, options));
   server.listen(port, bindAddress);
   return server;
 }

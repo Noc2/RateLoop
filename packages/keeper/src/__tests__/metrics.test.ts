@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   getHealthSnapshot,
@@ -7,6 +10,7 @@ import {
   recordRun,
   recordError,
   getConsecutiveErrors,
+  resolveCorrelationArtifactResponse,
 } from "../metrics.js";
 import type { KeeperResult } from "../keeper.js";
 
@@ -87,5 +91,44 @@ describe("metrics", () => {
       cleanupBatchesProcessed: 3,
       walletBalanceWei: "4000000000000",
     });
+  });
+
+  it("resolves only hash-named correlation artifacts from the artifact directory", async () => {
+    const artifactDir = await mkdtemp(join(tmpdir(), "keeper-artifacts-"));
+    const artifactFilename = `0x${"a".repeat(64)}.json`;
+    const artifactBody = { ok: true, artifact: "test" };
+    await writeFile(join(artifactDir, artifactFilename), `${JSON.stringify(artifactBody)}\n`, "utf8");
+
+    try {
+      const artifactResponse = await resolveCorrelationArtifactResponse(
+        "GET",
+        `/correlation-artifacts/${artifactFilename}`,
+        artifactDir,
+      );
+      expect(artifactResponse?.status).toBe(200);
+      expect(artifactResponse?.headers?.["Content-Type"]).toContain("application/json");
+      expect(JSON.parse(artifactResponse!.body!.toString())).toEqual(artifactBody);
+
+      const headResponse = await resolveCorrelationArtifactResponse(
+        "HEAD",
+        `/correlation-artifacts/${artifactFilename}`,
+        artifactDir,
+      );
+      expect(headResponse?.status).toBe(200);
+      expect(headResponse?.body).toBeUndefined();
+
+      const invalidArtifactResponse = await resolveCorrelationArtifactResponse(
+        "GET",
+        "/correlation-artifacts/not-an-artifact.json",
+        artifactDir,
+      );
+      expect(invalidArtifactResponse?.status).toBe(404);
+
+      await expect(
+        resolveCorrelationArtifactResponse("GET", "/metrics", artifactDir),
+      ).resolves.toBeNull();
+    } finally {
+      await rm(artifactDir, { recursive: true, force: true });
+    }
   });
 });
