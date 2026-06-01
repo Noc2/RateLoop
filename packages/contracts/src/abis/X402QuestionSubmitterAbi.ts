@@ -102,12 +102,17 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "bountyClosesAt",
+            "name": "bountyStartBy",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "feedbackClosesAt",
+            "name": "bountyWindowSeconds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "feedbackWindowSeconds",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -336,12 +341,17 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "bountyClosesAt",
+            "name": "bountyStartBy",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "feedbackClosesAt",
+            "name": "bountyWindowSeconds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "feedbackWindowSeconds",
             "type": "uint256",
             "internalType": "uint256"
           },
