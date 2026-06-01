@@ -437,6 +437,105 @@ contract FrontendRegistryTest is Test {
         assertFalse(registry.isEligible(frontend1));
     }
 
+    function test_SetSnapshotProposerAuthorizesKeeperAddress() public {
+        address keeper = address(0xBEEF);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setSnapshotProposer(keeper);
+        vm.stopPrank();
+
+        assertEq(registry.snapshotProposerForFrontend(frontend1), keeper);
+        assertEq(registry.frontendForSnapshotProposer(keeper), frontend1);
+        assertEq(registry.authorizedSnapshotFrontend(keeper), frontend1);
+        assertTrue(registry.isAuthorizedSnapshotProposer(frontend1, keeper));
+        assertEq(registry.authorizedSnapshotFrontend(frontend1), frontend1);
+        assertTrue(registry.isAuthorizedSnapshotProposer(frontend1, frontend1));
+    }
+
+    function test_SetSnapshotProposerRotatesAndClearsPreviousKeeper() public {
+        address keeper1 = address(0xBEEF);
+        address keeper2 = address(0xCAFE);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setSnapshotProposer(keeper1);
+        registry.setSnapshotProposer(keeper2);
+        vm.stopPrank();
+
+        assertEq(registry.snapshotProposerForFrontend(frontend1), keeper2);
+        assertEq(registry.frontendForSnapshotProposer(keeper1), address(0));
+        assertEq(registry.frontendForSnapshotProposer(keeper2), frontend1);
+        assertEq(registry.authorizedSnapshotFrontend(keeper1), address(0));
+        assertEq(registry.authorizedSnapshotFrontend(keeper2), frontend1);
+
+        vm.prank(frontend1);
+        registry.clearSnapshotProposer();
+
+        assertEq(registry.snapshotProposerForFrontend(frontend1), address(0));
+        assertEq(registry.frontendForSnapshotProposer(keeper2), address(0));
+        assertEq(registry.authorizedSnapshotFrontend(keeper2), address(0));
+    }
+
+    function test_SnapshotProposerCannotBeAssignedToMultipleFrontends() public {
+        address keeper = address(0xBEEF);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setSnapshotProposer(keeper);
+        vm.stopPrank();
+
+        vm.startPrank(frontend2);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.expectRevert("Proposer already assigned");
+        registry.setSnapshotProposer(keeper);
+        vm.stopPrank();
+    }
+
+    function test_AssignedSnapshotProposerCannotRegisterAsFrontend() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setSnapshotProposer(frontend2);
+        vm.stopPrank();
+
+        vm.startPrank(frontend2);
+        lrepToken.approve(address(registry), STAKE);
+        vm.expectRevert("Proposer already assigned");
+        registry.register();
+        vm.stopPrank();
+    }
+
+    function test_SnapshotProposerAuthorizationDropsWhenFrontendExitsOrIsSlashed() public {
+        address keeper = address(0xBEEF);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setSnapshotProposer(keeper);
+        registry.requestDeregister();
+        vm.stopPrank();
+
+        assertEq(registry.snapshotProposerForFrontend(frontend1), address(0));
+        assertEq(registry.authorizedSnapshotFrontend(keeper), address(0));
+
+        vm.startPrank(frontend2);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setSnapshotProposer(keeper);
+        vm.stopPrank();
+
+        vm.prank(admin);
+        registry.slashFrontend(frontend2, STAKE / 2, "Test");
+
+        assertEq(registry.snapshotProposerForFrontend(frontend2), address(0));
+        assertEq(registry.authorizedSnapshotFrontend(keeper), address(0));
+    }
+
     // --- Slash Tests ---
 
     function test_SlashFrontend() public {

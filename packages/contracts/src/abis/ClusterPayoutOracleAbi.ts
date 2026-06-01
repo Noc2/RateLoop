@@ -1720,6 +1720,12 @@ export const ClusterPayoutOracleAbi = [
         "internalType": "address"
       },
       {
+        "name": "proposer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
         "name": "clusterRoot",
         "type": "bytes32",
         "indexed": false,
@@ -2063,6 +2069,12 @@ export const ClusterPayoutOracleAbi = [
       },
       {
         "name": "frontendOperator",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "proposer",
         "type": "address",
         "indexed": false,
         "internalType": "address"

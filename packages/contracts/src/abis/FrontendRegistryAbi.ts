@@ -123,6 +123,25 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "authorizedSnapshotFrontend",
+    "inputs": [
+      {
+        "name": "proposer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "frontend",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "canClaimFeesForRound",
     "inputs": [
       {
@@ -167,6 +186,13 @@ export const FrontendRegistryAbi = [
   {
     "type": "function",
     "name": "claimFees",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "clearSnapshotProposer",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -256,6 +282,25 @@ export const FrontendRegistryAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "frontendForSnapshotProposer",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -493,6 +538,30 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "isAuthorizedSnapshotProposer",
+    "inputs": [
+      {
+        "name": "frontend",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "proposer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "isEligible",
     "inputs": [
       {
@@ -620,6 +689,19 @@ export const FrontendRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "setSnapshotProposer",
+    "inputs": [
+      {
+        "name": "proposer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setVotingEngine",
     "inputs": [
       {
@@ -653,6 +735,25 @@ export const FrontendRegistryAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "snapshotProposerForFrontend",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1008,6 +1109,31 @@ export const FrontendRegistryAbi = [
       },
       {
         "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SnapshotProposerUpdated",
+    "inputs": [
+      {
+        "name": "frontend",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "previousProposer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newProposer",
         "type": "address",
         "indexed": true,
         "internalType": "address"

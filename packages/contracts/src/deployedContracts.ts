@@ -11630,6 +11630,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "authorizedSnapshotFrontend",
+          inputs: [
+            {
+              name: "proposer",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "frontend",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "canClaimFeesForRound",
           inputs: [
             {
@@ -11674,6 +11693,13 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "claimFees",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "clearSnapshotProposer",
           inputs: [],
           outputs: [],
           stateMutability: "nonpayable",
@@ -11763,6 +11789,25 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "frontendForSnapshotProposer",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -12000,6 +12045,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "isAuthorizedSnapshotProposer",
+          inputs: [
+            {
+              name: "frontend",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "proposer",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "isEligible",
           inputs: [
             {
@@ -12127,6 +12196,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setSnapshotProposer",
+          inputs: [
+            {
+              name: "proposer",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setVotingEngine",
           inputs: [
             {
@@ -12160,6 +12242,25 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "snapshotProposerForFrontend",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -12524,6 +12625,31 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "SnapshotProposerUpdated",
+          inputs: [
+            {
+              name: "frontend",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "previousProposer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newProposer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "VotingEngineUpdated",
           inputs: [
             {
@@ -12611,11 +12737,15 @@ const deployedContracts: GenericContractsDeclaration = {
       ],
       inheritedFunctions: {
         STAKE_AMOUNT: "contracts/interfaces/IFrontendRegistry.sol",
+        authorizedSnapshotFrontend:
+          "contracts/interfaces/IFrontendRegistry.sol",
         canClaimFeesForRound: "contracts/interfaces/IFrontendRegistry.sol",
         canReceiveHistoricalFees: "contracts/interfaces/IFrontendRegistry.sol",
         creditFees: "contracts/interfaces/IFrontendRegistry.sol",
         getAccumulatedFees: "contracts/interfaces/IFrontendRegistry.sol",
         getFrontendInfo: "contracts/interfaces/IFrontendRegistry.sol",
+        isAuthorizedSnapshotProposer:
+          "contracts/interfaces/IFrontendRegistry.sol",
         isEligible: "contracts/interfaces/IFrontendRegistry.sol",
         DEFAULT_ADMIN_ROLE:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
@@ -21578,6 +21708,12 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "proposer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
               name: "clusterRoot",
               type: "bytes32",
               indexed: false,
@@ -21921,6 +22057,12 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "frontendOperator",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+            {
+              name: "proposer",
               type: "address",
               indexed: false,
               internalType: "address",
@@ -37806,6 +37948,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "authorizedSnapshotFrontend",
+          inputs: [
+            {
+              name: "proposer",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "frontend",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "canClaimFeesForRound",
           inputs: [
             {
@@ -37850,6 +38011,13 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "claimFees",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "clearSnapshotProposer",
           inputs: [],
           outputs: [],
           stateMutability: "nonpayable",
@@ -37939,6 +38107,25 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "frontendForSnapshotProposer",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -38176,6 +38363,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "isAuthorizedSnapshotProposer",
+          inputs: [
+            {
+              name: "frontend",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "proposer",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "isEligible",
           inputs: [
             {
@@ -38303,6 +38514,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setSnapshotProposer",
+          inputs: [
+            {
+              name: "proposer",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setVotingEngine",
           inputs: [
             {
@@ -38336,6 +38560,25 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "snapshotProposerForFrontend",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -38700,6 +38943,31 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "SnapshotProposerUpdated",
+          inputs: [
+            {
+              name: "frontend",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "previousProposer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newProposer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "VotingEngineUpdated",
           inputs: [
             {
@@ -38787,11 +39055,15 @@ const deployedContracts: GenericContractsDeclaration = {
       ],
       inheritedFunctions: {
         STAKE_AMOUNT: "contracts/interfaces/IFrontendRegistry.sol",
+        authorizedSnapshotFrontend:
+          "contracts/interfaces/IFrontendRegistry.sol",
         canClaimFeesForRound: "contracts/interfaces/IFrontendRegistry.sol",
         canReceiveHistoricalFees: "contracts/interfaces/IFrontendRegistry.sol",
         creditFees: "contracts/interfaces/IFrontendRegistry.sol",
         getAccumulatedFees: "contracts/interfaces/IFrontendRegistry.sol",
         getFrontendInfo: "contracts/interfaces/IFrontendRegistry.sol",
+        isAuthorizedSnapshotProposer:
+          "contracts/interfaces/IFrontendRegistry.sol",
         isEligible: "contracts/interfaces/IFrontendRegistry.sol",
         DEFAULT_ADMIN_ROLE:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
@@ -54744,6 +55016,12 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
+              name: "proposer",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
               name: "clusterRoot",
               type: "bytes32",
               indexed: false,
@@ -55087,6 +55365,12 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "frontendOperator",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+            {
+              name: "proposer",
               type: "address",
               indexed: false,
               internalType: "address",

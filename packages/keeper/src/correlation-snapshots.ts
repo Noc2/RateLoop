@@ -19,6 +19,7 @@ const STATUS = {
   Finalized: 3,
   Rejected: 4,
 } as const;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
 interface CorrelationSnapshotPublisherResult {
   epochsProposed: number;
@@ -57,6 +58,11 @@ export interface CorrelationSnapshotArtifactFile {
   roundPayoutSnapshots?: RoundPayoutSnapshotArtifact[];
 }
 
+interface SnapshotProposerAuthorization {
+  authorized: boolean;
+  frontendOperator?: Address;
+}
+
 function emptyResult(): CorrelationSnapshotPublisherResult {
   return {
     epochsProposed: 0,
@@ -66,54 +72,56 @@ function emptyResult(): CorrelationSnapshotPublisherResult {
   };
 }
 
-async function readFrontendEligibility(
+async function readSnapshotProposerAuthorization(
   publicClient: PublicClient,
   account: Account,
   logger: Logger,
-): Promise<boolean> {
+): Promise<SnapshotProposerAuthorization> {
   const frontendRegistry = config.correlationSnapshots.frontendRegistry;
   if (!frontendRegistry) {
     logger.warn(
       "Skipping correlation snapshot proposals because no frontend registry is configured",
       {
-        frontendOperator: account.address,
+        snapshotProposer: account.address,
       },
     );
-    return false;
+    return { authorized: false };
   }
 
   try {
-    const eligible = (await publicClient.readContract({
+    const frontendOperator = (await publicClient.readContract({
       address: frontendRegistry,
       abi: FrontendRegistryAbi,
-      functionName: "isEligible",
+      functionName: "authorizedSnapshotFrontend",
       args: [account.address],
-    })) as boolean;
+    })) as Address;
+    const authorized = frontendOperator !== ZERO_ADDRESS;
 
     const data = {
-      frontendOperator: account.address,
+      snapshotProposer: account.address,
+      frontendOperator,
       frontendRegistry,
-      eligible,
+      eligible: authorized,
     };
-    if (eligible) {
-      logger.info("Correlation snapshot frontend eligibility confirmed", data);
+    if (authorized) {
+      logger.info("Correlation snapshot proposer authorization confirmed", data);
     } else {
       logger.warn(
-        "Skipping correlation snapshot proposals because frontend operator is not eligible",
+        "Skipping correlation snapshot proposals because keeper is not authorized by an eligible frontend",
         data,
       );
     }
-    return eligible;
+    return { authorized, frontendOperator: authorized ? frontendOperator : undefined };
   } catch (error: unknown) {
     logger.warn(
-      "Skipping correlation snapshot proposals because frontend eligibility could not be read",
+      "Skipping correlation snapshot proposals because frontend proposer authorization could not be read",
       {
-        frontendOperator: account.address,
+        snapshotProposer: account.address,
         frontendRegistry,
         error: getRevertReason(error),
       },
     );
-    return false;
+    return { authorized: false };
   }
 }
 
@@ -226,7 +234,7 @@ export async function publishConfiguredCorrelationSnapshots(
     return result;
   }
 
-  const frontendEligible = await readFrontendEligibility(
+  const snapshotProposerAuthorization = await readSnapshotProposerAuthorization(
     publicClient,
     account,
     logger,
@@ -243,12 +251,13 @@ export async function publishConfiguredCorrelationSnapshots(
     });
     const status = Number(existing.status);
     if (status === STATUS.None || status === STATUS.Rejected) {
-      if (!frontendEligible) {
+      if (!snapshotProposerAuthorization.authorized) {
         logger.debug(
-          "Skipping correlation epoch proposal until frontend operator is eligible",
+          "Skipping correlation epoch proposal until keeper is authorized by an eligible frontend",
           {
             epochId: epochId.toString(),
-            frontendOperator: account.address,
+            snapshotProposer: account.address,
+            frontendOperator: snapshotProposerAuthorization.frontendOperator,
           },
         );
         continue;
@@ -349,12 +358,13 @@ export async function publishConfiguredCorrelationSnapshots(
     }
 
     if (status === STATUS.None || status === STATUS.Rejected) {
-      if (!frontendEligible) {
+      if (!snapshotProposerAuthorization.authorized) {
         logger.debug(
-          "Skipping round payout snapshot proposal until frontend operator is eligible",
+          "Skipping round payout snapshot proposal until keeper is authorized by an eligible frontend",
           {
             snapshotKey,
-            frontendOperator: account.address,
+            snapshotProposer: account.address,
+            frontendOperator: snapshotProposerAuthorization.frontendOperator,
           },
         );
         continue;

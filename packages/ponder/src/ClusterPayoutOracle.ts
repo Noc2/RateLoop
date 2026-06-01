@@ -12,6 +12,10 @@ function readFrontendOperator(args: Record<string, unknown>): `0x${string}` {
   return (args.frontendOperator ?? args.proposer) as `0x${string}`;
 }
 
+function readProposer(args: Record<string, unknown>): `0x${string}` {
+  return (args.proposer ?? args.frontendOperator) as `0x${string}`;
+}
+
 ponder.on(
   "ClusterPayoutOracle:CorrelationEpochProposed",
   async ({ event, context }) => {
@@ -25,7 +29,7 @@ ponder.on(
       artifactURI,
     } = event.args;
     const frontendOperator = readFrontendOperator(event.args);
-    const proposer = frontendOperator;
+    const proposer = readProposer(event.args);
 
     await context.db
       .insert(correlationEpochSnapshot)
@@ -120,7 +124,7 @@ ponder.on(
       artifactURI,
     } = event.args;
     const frontendOperator = readFrontendOperator(event.args);
-    const proposer = frontendOperator;
+    const proposer = readProposer(event.args);
 
     await context.db
       .insert(roundPayoutSnapshot)

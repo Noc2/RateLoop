@@ -74,7 +74,11 @@ async function loadPublisher(options: {
   vi.mocked(readFile).mockResolvedValue(JSON.stringify(artifact));
 
   const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
-    if (functionName === "isEligible") return options.frontendEligible ?? true;
+    if (functionName === "authorizedSnapshotFrontend") {
+      return (options.frontendEligible ?? true)
+        ? "0x9999999999999999999999999999999999999999"
+        : "0x0000000000000000000000000000000000000000";
+    }
     if (functionName === "correlationEpochSnapshot") return { status: options.epochStatus ?? 0 };
     if (functionName === "roundPayoutSnapshotConsumer") return SNAPSHOT_CONSUMER;
     if (functionName === "roundPayoutSnapshotSourceReadyAt") return 100n;
@@ -138,14 +142,15 @@ describe("correlation snapshot publisher", () => {
     expect(publisher.readContract).toHaveBeenCalledWith(
       expect.objectContaining({
         address: FRONTEND_REGISTRY,
-        functionName: "isEligible",
+        functionName: "authorizedSnapshotFrontend",
         args: [ACCOUNT],
       }),
     );
     expect(publisher.logger.info).toHaveBeenCalledWith(
-      "Correlation snapshot frontend eligibility confirmed",
+      "Correlation snapshot proposer authorization confirmed",
       expect.objectContaining({
-        frontendOperator: ACCOUNT,
+        snapshotProposer: ACCOUNT,
+        frontendOperator: "0x9999999999999999999999999999999999999999",
         eligible: true,
       }),
     );
@@ -210,9 +215,9 @@ describe("correlation snapshot publisher", () => {
     });
     expect(publisher.writeContract).not.toHaveBeenCalled();
     expect(publisher.logger.warn).toHaveBeenCalledWith(
-      "Skipping correlation snapshot proposals because frontend operator is not eligible",
+      "Skipping correlation snapshot proposals because keeper is not authorized by an eligible frontend",
       expect.objectContaining({
-        frontendOperator: ACCOUNT,
+        snapshotProposer: ACCOUNT,
         eligible: false,
       }),
     );

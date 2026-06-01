@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
-import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
-import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
@@ -128,6 +128,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint64 fromRoundId,
         uint64 toRoundId,
         address indexed frontendOperator,
+        address indexed proposer,
         bytes32 clusterRoot,
         bytes32 parameterHash,
         bytes32 artifactHash,
@@ -145,6 +146,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint256 roundId,
         uint64 correlationEpochId,
         address frontendOperator,
+        address proposer,
         uint32 rawEligibleVoters,
         uint32 effectiveParticipantUnits,
         uint256 totalClaimWeight,
@@ -233,7 +235,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             revert InvalidSnapshot();
         }
         if (msg.value != 0) revert InvalidBond();
-        _requireEligibleFrontendProposer();
+        address frontendOperator = _requireEligibleFrontendProposer();
         CorrelationEpochSnapshot storage existing = correlationEpochSnapshots[epochId];
         if (existing.status != SnapshotStatus.None && existing.status != SnapshotStatus.Rejected) {
             revert SnapshotExists();
@@ -258,7 +260,15 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         });
 
         emit CorrelationEpochProposed(
-            epochId, fromRoundId, toRoundId, msg.sender, clusterRoot, parameterHash, artifactHash, artifactURI
+            epochId,
+            fromRoundId,
+            toRoundId,
+            frontendOperator,
+            msg.sender,
+            clusterRoot,
+            parameterHash,
+            artifactHash,
+            artifactURI
         );
     }
 
@@ -347,7 +357,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     function proposeRoundPayoutSnapshot(RoundPayoutSnapshotInput calldata input) external payable {
         _validateRoundPayoutInput(input);
         if (msg.value != 0) revert InvalidBond();
-        _requireEligibleFrontendProposer();
+        address frontendOperator = _requireEligibleFrontendProposer();
         CorrelationEpochSnapshot storage epoch = correlationEpochSnapshots[input.correlationEpochId];
         if (epoch.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
         if (input.roundId < epoch.fromRoundId || input.roundId > epoch.toRoundId) revert InvalidSnapshot();
@@ -430,6 +440,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             input.contentId,
             input.roundId,
             input.correlationEpochId,
+            frontendOperator,
             msg.sender,
             input.rawEligibleVoters,
             input.effectiveParticipantUnits,
@@ -928,7 +939,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         } catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) {}
+        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) { }
+        catch {
+            revert InvalidAddress();
+        }
+        try IFrontendRegistry(newFrontendRegistry).authorizedSnapshotFrontend(address(0)) returns (address) { }
         catch {
             revert InvalidAddress();
         }
@@ -936,9 +951,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         emit FrontendRegistryUpdated(newFrontendRegistry);
     }
 
-    function _requireEligibleFrontendProposer() private view {
-        try frontendRegistry.isEligible(msg.sender) returns (bool eligible) {
-            if (!eligible) revert FrontendNotEligible();
+    function _requireEligibleFrontendProposer() private view returns (address frontendOperator) {
+        try frontendRegistry.authorizedSnapshotFrontend(msg.sender) returns (address resolvedFrontend) {
+            if (resolvedFrontend == address(0)) revert FrontendNotEligible();
+            return resolvedFrontend;
         } catch {
             revert FrontendNotEligible();
         }

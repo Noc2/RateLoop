@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { isAddress } from "viem";
 import { useAccount } from "wagmi";
 import { CheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { BlockieAvatar } from "~~/components/scaffold-eth";
@@ -90,6 +91,9 @@ export function FrontendRegistration() {
   const [isCompletingDeregister, setIsCompletingDeregister] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
   const [isClaimingAllRoundFees, setIsClaimingAllRoundFees] = useState(false);
+  const [snapshotProposerInput, setSnapshotProposerInput] = useState("");
+  const [isSettingSnapshotProposer, setIsSettingSnapshotProposer] = useState(false);
+  const [isClearingSnapshotProposer, setIsClearingSnapshotProposer] = useState(false);
   const [claimingRoundKey, setClaimingRoundKey] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const configuredFrontendCode = scaffoldConfig.frontendCode;
@@ -128,6 +132,12 @@ export function FrontendRegistration() {
     args: [address],
   });
 
+  const { data: snapshotProposerRaw, refetch: refetchSnapshotProposer } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "snapshotProposerForFrontend",
+    args: [address],
+  });
+
   // Read LREP balance
   const { data: lrepBalance, refetch: refetchRateLoop } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
@@ -154,6 +164,15 @@ export function FrontendRegistration() {
   const isExitPending = exitAvailableAt > 0;
   const canCompleteDeregister = isExitPending && nowMs >= exitAvailableAt * 1000;
   const exitAvailableAtLabel = isExitPending ? new Date(exitAvailableAt * 1000).toLocaleString() : "";
+  const snapshotProposer =
+    snapshotProposerRaw && snapshotProposerRaw !== "0x0000000000000000000000000000000000000000"
+      ? snapshotProposerRaw
+      : undefined;
+  const normalizedSnapshotProposerInput = snapshotProposerInput.trim();
+  const snapshotProposerInputIsValid =
+    normalizedSnapshotProposerInput.length > 0 &&
+    isAddress(normalizedSnapshotProposerInput) &&
+    (!address || normalizedSnapshotProposerInput.toLowerCase() !== address.toLowerCase());
   // Parse fees (LREP only)
   const lrepFees = accumulatedFees ? Number(accumulatedFees) / 1e6 : 0;
   const hasFees = lrepFees > 0;
@@ -453,6 +472,76 @@ export function FrontendRegistration() {
     }
   };
 
+  const handleSetSnapshotProposer = async () => {
+    if (!address || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (!ensureGasBalance()) return;
+
+    if (!snapshotProposerInputIsValid) {
+      notification.error("Enter a separate valid keeper wallet address.");
+      return;
+    }
+
+    const snapshotProposerAddress = normalizedSnapshotProposerInput as `0x${string}`;
+
+    setIsSettingSnapshotProposer(true);
+    try {
+      if (canUseSponsoredSubmitCalls) {
+        await executeSponsoredCalls([
+          {
+            abi: frontendRegistryInfo.abi,
+            address: frontendRegistryAddress,
+            args: [snapshotProposerAddress],
+            functionName: "setSnapshotProposer",
+          },
+        ]);
+      } else {
+        await writeFrontendRegistry({
+          functionName: "setSnapshotProposer",
+          args: [snapshotProposerAddress],
+        });
+      }
+
+      notification.success("Keeper address updated.");
+      setSnapshotProposerInput("");
+      refetchSnapshotProposer();
+    } catch (e: any) {
+      console.error("Keeper address update failed:", e);
+      notifyTransactionError(e, "Failed to update keeper address");
+    } finally {
+      setIsSettingSnapshotProposer(false);
+    }
+  };
+
+  const handleClearSnapshotProposer = async () => {
+    if (!address || !snapshotProposer || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (!ensureGasBalance()) return;
+
+    setIsClearingSnapshotProposer(true);
+    try {
+      if (canUseSponsoredSubmitCalls) {
+        await executeSponsoredCalls([
+          {
+            abi: frontendRegistryInfo.abi,
+            address: frontendRegistryAddress,
+            functionName: "clearSnapshotProposer",
+          },
+        ]);
+      } else {
+        await writeFrontendRegistry({
+          functionName: "clearSnapshotProposer",
+        });
+      }
+
+      notification.success("Keeper address cleared.");
+      refetchSnapshotProposer();
+    } catch (e: any) {
+      console.error("Keeper address clear failed:", e);
+      notifyTransactionError(e, "Failed to clear keeper address");
+    } finally {
+      setIsClearingSnapshotProposer(false);
+    }
+  };
+
   // Status badge
   const getStatusBadge = () => {
     if (isSlashed) {
@@ -574,6 +663,73 @@ export function FrontendRegistration() {
               <p className="text-base text-base-content/60">Staked</p>
               <p className="text-lg font-bold">{stakedAmount.toLocaleString()} LREP</p>
             </div>
+          </div>
+
+          <div className="surface-card-nested rounded-xl p-4 space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="flex items-center gap-1.5 font-medium">
+                  Snapshot Keeper
+                  <InfoTooltip text="Optional operational wallet that can publish payout roots for this bonded frontend." />
+                </p>
+                <p className="text-sm text-base-content/60">
+                  Keep the registered frontend wallet offline and rotate the keeper wallet when needed.
+                </p>
+              </div>
+              {snapshotProposer ? (
+                <FrontendOperatorAddressRow address={snapshotProposer} />
+              ) : (
+                <span className="rounded-full bg-base-200 px-2 py-0.5 text-sm text-base-content/60">Not set</span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={snapshotProposerInput}
+                onChange={event => setSnapshotProposerInput(event.target.value)}
+                placeholder="0x keeper address"
+                className="input input-bordered input-sm min-w-0 flex-1 font-mono text-sm"
+                disabled={isExitPending || isSlashed || isSettingSnapshotProposer || isClearingSnapshotProposer}
+              />
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleSetSnapshotProposer}
+                disabled={
+                  isExitPending ||
+                  isSlashed ||
+                  isMissingGasBalance ||
+                  isSettingSnapshotProposer ||
+                  isClearingSnapshotProposer ||
+                  !snapshotProposerInputIsValid
+                }
+              >
+                {isSettingSnapshotProposer ? <span className="loading loading-spinner loading-xs" /> : "Set Keeper"}
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={handleClearSnapshotProposer}
+                disabled={
+                  !snapshotProposer ||
+                  isExitPending ||
+                  isSlashed ||
+                  isMissingGasBalance ||
+                  isSettingSnapshotProposer ||
+                  isClearingSnapshotProposer
+                }
+              >
+                {isClearingSnapshotProposer ? <span className="loading loading-spinner loading-xs" /> : "Clear"}
+              </button>
+            </div>
+
+            {normalizedSnapshotProposerInput &&
+              isAddress(normalizedSnapshotProposerInput) &&
+              address &&
+              normalizedSnapshotProposerInput.toLowerCase() === address.toLowerCase() && (
+                <p className="text-sm text-warning">
+                  Use a separate wallet here, or clear the keeper address to publish from the registered wallet.
+                </p>
+              )}
           </div>
 
           <div className="surface-card-nested rounded-xl p-4 space-y-3">

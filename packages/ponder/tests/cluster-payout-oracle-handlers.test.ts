@@ -77,6 +77,7 @@ describe("ClusterPayoutOracle ponder handlers", () => {
           fromRoundId: 1n,
           toRoundId: 4n,
           frontendOperator: "0x00000000000000000000000000000000000000f1",
+          proposer: "0x00000000000000000000000000000000000000a1",
           clusterRoot: `0x${"1".repeat(64)}`,
           parameterHash: `0x${"2".repeat(64)}`,
           artifactHash: `0x${"3".repeat(64)}`,
@@ -91,12 +92,13 @@ describe("ClusterPayoutOracle ponder handlers", () => {
       table: "correlationEpochSnapshot",
       values: expect.objectContaining({
         id: 1n,
-        proposer: "0x00000000000000000000000000000000000000f1",
+        proposer: "0x00000000000000000000000000000000000000a1",
         frontendOperator: "0x00000000000000000000000000000000000000f1",
       }),
     });
     expect(conflictUpdates).toContainEqual(
       expect.objectContaining({
+        proposer: "0x00000000000000000000000000000000000000a1",
         frontendOperator: "0x00000000000000000000000000000000000000f1",
       }),
     );

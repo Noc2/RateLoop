@@ -567,7 +567,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: "The ClusterPayoutOracle is a governance-managed target for challengeable correlation epoch and round payout roots. Registered frontend operators with a 1,000 LREP bond propose deterministic artifact roots from their registered wallet; independent operators can recompute them and challenge bad roots with the configured USDC ERC20 challenge bond, defaulting to 5 USDC (5_000_000 atomic units). Governance configures oracle challenge terms, arbitrates challenged roots with public reason hashes, and can slash the proposing frontend through the FrontendRegistry when the on-chain-data computation is wrong.",
+            text: "The ClusterPayoutOracle is a governance-managed target for challengeable correlation epoch and round payout roots. Registered frontend operators with a 1,000 LREP bond propose deterministic artifact roots from their registered wallet or a delegated snapshot keeper; independent operators can recompute them and challenge bad roots with the configured USDC ERC20 challenge bond, defaulting to 5 USDC (5_000_000 atomic units). Governance configures oracle challenge terms, arbitrates challenged roots with public reason hashes, and can slash the proposing frontend through the FrontendRegistry when the on-chain-data computation is wrong.",
           },
           {
             type: "paragraph",

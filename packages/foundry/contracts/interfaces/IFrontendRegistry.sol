@@ -15,6 +15,14 @@ interface IFrontendRegistry {
     /// @return True if the frontend is fully bonded, not slashed, and not exiting
     function isEligible(address frontend) external view returns (bool);
 
+    /// @notice Resolve the bonded frontend operator that authorizes `proposer` to publish payout snapshots.
+    /// @dev Returns `proposer` itself when it is an eligible frontend operator, otherwise returns the
+    ///      eligible frontend that delegated snapshot proposal authority to `proposer`, or address(0).
+    function authorizedSnapshotFrontend(address proposer) external view returns (address frontend);
+
+    /// @notice Check whether `proposer` can publish payout snapshots on behalf of `frontend`.
+    function isAuthorizedSnapshotProposer(address frontend, address proposer) external view returns (bool);
+
     /// @notice Credit LREP fees to a frontend operator (called by RoundVotingEngine)
     /// @param frontend The frontend address to credit
     /// @param lrepAmount Amount of LREP fees

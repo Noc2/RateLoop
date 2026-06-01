@@ -35,6 +35,14 @@ contract SlashedFrontendRegistryMock is IFrontendRegistry {
         return frontend_ == frontend;
     }
 
+    function authorizedSnapshotFrontend(address proposer) external view returns (address) {
+        return proposer == frontend ? frontend : address(0);
+    }
+
+    function isAuthorizedSnapshotProposer(address frontend_, address proposer) external view returns (bool) {
+        return frontend_ == frontend && proposer == frontend;
+    }
+
     function creditFees(address, uint256) external { }
 
     function getAccumulatedFees(address) external pure returns (uint256 lrepFees) {

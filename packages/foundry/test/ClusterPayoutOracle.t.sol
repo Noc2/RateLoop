@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Test} from "forge-std/Test.sol";
-import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
-import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import { Test } from "forge-std/Test.sol";
+import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
+import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 
 contract ClusterPayoutOracleTest is Test {
     uint256 internal constant CHALLENGE_BOND = 5e6;
@@ -16,7 +16,7 @@ contract ClusterPayoutOracleTest is Test {
     MockRoundPayoutSnapshotConsumer internal launchConsumer;
     MockERC20 internal usdc;
 
-    receive() external payable {}
+    receive() external payable { }
 
     function setUp() public {
         usdc = new MockERC20("USD Coin", "USDC", 6);
@@ -92,9 +92,44 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
     }
 
+    function test_AuthorizedKeeperCanProposeSnapshotsForEligibleFrontend() public {
+        address frontendOperator = address(0xFEE);
+        address keeper = address(0xCAFE);
+
+        frontendRegistry.setEligible(frontendOperator, true);
+        frontendRegistry.setAuthorizedSnapshotFrontend(keeper, frontendOperator);
+
+        vm.prank(keeper);
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+        );
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory epoch = oracle.correlationEpochSnapshot(1);
+        assertEq(epoch.proposer, keeper);
+
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        vm.prank(keeper);
+        oracle.proposeRoundPayoutSnapshot(input);
+
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(proposal.proposer, keeper);
+
+        frontendRegistry.setEligible(frontendOperator, false);
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory nextInput = _defaultRoundPayoutInput(1);
+        nextInput.contentId = 10;
+        vm.prank(keeper);
+        vm.expectRevert(ClusterPayoutOracle.FrontendNotEligible.selector);
+        oracle.proposeRoundPayoutSnapshot(nextInput);
+    }
+
     function test_ProposalsDoNotAcceptEthBonds() public {
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
-        oracle.proposeCorrelationEpoch{value: 1}(
+        oracle.proposeCorrelationEpoch{ value: 1 }(
             1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
         );
     }
@@ -764,7 +799,7 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.prank(challenger);
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
-        oracle.challengeCorrelationEpoch{value: 1}(1, keccak256("bad-root"));
+        oracle.challengeCorrelationEpoch{ value: 1 }(1, keccak256("bad-root"));
     }
 
     function test_ArbiterCanFinalizeChallengedSnapshots() public {
@@ -1219,7 +1254,7 @@ contract ClusterPayoutOracleProposerBondTest is Test {
 
     event ProposerBondUnrecoverable(bytes32 indexed snapshotKey, address indexed proposer, uint256 missingAmount);
 
-    receive() external payable {}
+    receive() external payable { }
 
     function setUp() public {
         arbiter = address(this);
@@ -1366,13 +1401,24 @@ contract MockFrontendRegistry {
     uint256 public constant STAKE_AMOUNT = 1_000e6;
 
     mapping(address => bool) internal eligible;
+    mapping(address => address) internal snapshotFrontend;
 
     function setEligible(address frontend, bool value) external {
         eligible[frontend] = value;
     }
 
+    function setAuthorizedSnapshotFrontend(address proposer, address frontend) external {
+        snapshotFrontend[proposer] = frontend;
+    }
+
     function isEligible(address frontend) external view returns (bool) {
         return eligible[frontend];
+    }
+
+    function authorizedSnapshotFrontend(address proposer) external view returns (address frontend) {
+        if (eligible[proposer]) return proposer;
+        frontend = snapshotFrontend[proposer];
+        if (!eligible[frontend]) return address(0);
     }
 }
 
@@ -1403,7 +1449,7 @@ contract MockRoundPayoutSnapshotConsumer {
 contract TestableClusterPayoutOracle is ClusterPayoutOracle {
     constructor(address admin, address frontendRegistry, address challengeBondToken)
         ClusterPayoutOracle(admin, frontendRegistry, challengeBondToken)
-    {}
+    { }
 
     /// @dev Sets proposerBond directly via the inherited (private) mapping. Because the storage
     ///      mapping is `private`, we re-declare an internal shim that maps onto the same slot by

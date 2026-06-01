@@ -53,6 +53,8 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     address[] public registeredFrontends;
     mapping(address => uint256) private registeredFrontendIndexPlusOne;
     mapping(address => uint256) public frontendExitAvailableAt;
+    mapping(address => address) public snapshotProposerForFrontend;
+    mapping(address => address) public frontendForSnapshotProposer;
     bool public initialFeeCreditorConfigured;
     address public feeCreditor;
     mapping(address => bool) private authorizedFeeCreditors;
@@ -64,7 +66,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     mapping(address => address) public feeCreditorForEngine;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[44] private __gap;
+    uint256[42] private __gap;
 
     // --- Events ---
     event FrontendRegistered(address indexed frontend, address indexed operator, uint256 stakedAmount);
@@ -77,6 +79,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event FeesClaimed(address indexed frontend, uint256 lrepAmount);
     event FeesConfiscated(address indexed frontend, uint256 lrepAmount);
     event VotingEngineUpdated(address votingEngine);
+    event SnapshotProposerUpdated(
+        address indexed frontend, address indexed previousProposer, address indexed newProposer
+    );
     /// @notice L-Frontend-2: emitted when governance rotates the confiscation recipient.
     event ConfiscationRecipientUpdated(address indexed previous, address indexed current);
     event FeeCreditorUpdated(address indexed oldCreditor, address indexed newCreditor);
@@ -150,6 +155,29 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     }
 
     /// @inheritdoc IFrontendRegistry
+    function authorizedSnapshotFrontend(address proposer) external view override returns (address frontend) {
+        if (proposer == address(0)) return address(0);
+        Frontend storage direct = frontends[proposer];
+        if (_isEligible(proposer, direct)) return proposer;
+
+        frontend = frontendForSnapshotProposer[proposer];
+        if (frontend == address(0)) return address(0);
+        Frontend storage delegated = frontends[frontend];
+        if (!_isEligible(frontend, delegated) || snapshotProposerForFrontend[frontend] != proposer) {
+            return address(0);
+        }
+    }
+
+    /// @inheritdoc IFrontendRegistry
+    function isAuthorizedSnapshotProposer(address frontend, address proposer) external view override returns (bool) {
+        if (proposer == address(0)) return false;
+        Frontend storage f = frontends[frontend];
+        if (!_isEligible(frontend, f)) return false;
+        if (frontend == proposer) return true;
+        return snapshotProposerForFrontend[frontend] == proposer && frontendForSnapshotProposer[proposer] == frontend;
+    }
+
+    /// @inheritdoc IFrontendRegistry
     function getFrontendInfo(address frontend)
         external
         view
@@ -191,6 +219,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @dev Fully bonded, unslashed frontends can earn fees immediately after registration.
     function register() external nonReentrant {
         require(frontends[msg.sender].operator == address(0), "Already registered");
+        require(frontendForSnapshotProposer[msg.sender] == address(0), "Proposer already assigned");
 
         lrepToken.safeTransferFrom(msg.sender, address(this), STAKE_AMOUNT);
 
@@ -305,6 +334,29 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         emit FrontendStakeToppedUp(msg.sender, amount, uint256(f.stakedAmount));
     }
 
+    /// @notice Authorize an operational wallet to publish ClusterPayoutOracle snapshots for this frontend.
+    /// @dev The frontend remains slashable/accountable; the proposer is only the transaction signer.
+    function setSnapshotProposer(address proposer) external nonReentrant {
+        Frontend storage f = frontends[msg.sender];
+        require(f.operator != address(0), "Not registered");
+        require(!f.slashed, "Frontend is slashed");
+        if (frontendExitAvailableAt[msg.sender] != 0) revert FrontendExitPending();
+        require(uint256(f.stakedAmount) >= STAKE_AMOUNT, "Frontend is underbonded");
+        require(proposer != address(0), "Invalid proposer");
+        require(proposer == msg.sender || frontends[proposer].operator == address(0), "Proposer is registered");
+
+        address assignedFrontend = frontendForSnapshotProposer[proposer];
+        require(assignedFrontend == address(0) || assignedFrontend == msg.sender, "Proposer already assigned");
+
+        _setSnapshotProposer(msg.sender, proposer);
+    }
+
+    /// @notice Clear the operational wallet authorized to publish ClusterPayoutOracle snapshots for this frontend.
+    function clearSnapshotProposer() external nonReentrant {
+        require(frontends[msg.sender].operator != address(0), "Not registered");
+        _clearSnapshotProposer(msg.sender);
+    }
+
     // --- Governance Functions ---
 
     /// @notice Slash a frontend's stake (partial or full)
@@ -325,6 +377,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         f.stakedAmount -= amount.toUint64();
         f.lrepFees = 0;
         f.slashed = true;
+        _clearSnapshotProposer(frontend);
 
         // L-Frontend-3: slashing must reset the unbonding clock. Otherwise a slash → unslash →
         // immediate-exit pattern lets governance be coerced into shortening the operator's
@@ -439,11 +492,31 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         require(f.operator != address(0), "Not registered");
         require(!f.slashed, "Frontend is slashed");
         if (frontendExitAvailableAt[frontend] != 0) revert FrontendExitPending();
+        _clearSnapshotProposer(frontend);
 
         uint256 availableAt = block.timestamp + UNBONDING_PERIOD;
         frontendExitAvailableAt[frontend] = availableAt;
 
         emit FrontendExitRequested(frontend, availableAt);
+    }
+
+    function _setSnapshotProposer(address frontend, address proposer) internal {
+        address previousProposer = snapshotProposerForFrontend[frontend];
+        if (previousProposer == proposer) return;
+        if (previousProposer != address(0)) {
+            delete frontendForSnapshotProposer[previousProposer];
+        }
+        snapshotProposerForFrontend[frontend] = proposer;
+        frontendForSnapshotProposer[proposer] = frontend;
+        emit SnapshotProposerUpdated(frontend, previousProposer, proposer);
+    }
+
+    function _clearSnapshotProposer(address frontend) internal {
+        address previousProposer = snapshotProposerForFrontend[frontend];
+        if (previousProposer == address(0)) return;
+        delete snapshotProposerForFrontend[frontend];
+        delete frontendForSnapshotProposer[previousProposer];
+        emit SnapshotProposerUpdated(frontend, previousProposer, address(0));
     }
 
     function _removeRegisteredFrontend(address frontend) internal {

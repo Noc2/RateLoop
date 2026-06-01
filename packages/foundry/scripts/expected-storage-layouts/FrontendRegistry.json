@@ -45,29 +45,41 @@
     {
       "slot": 7,
       "offset": 0,
+      "label": "snapshotProposerForFrontend",
+      "type": "t_mapping(t_address,t_address)"
+    },
+    {
+      "slot": 8,
+      "offset": 0,
+      "label": "frontendForSnapshotProposer",
+      "type": "t_mapping(t_address,t_address)"
+    },
+    {
+      "slot": 9,
+      "offset": 0,
       "label": "initialFeeCreditorConfigured",
       "type": "t_bool"
     },
     {
-      "slot": 7,
+      "slot": 9,
       "offset": 1,
       "label": "feeCreditor",
       "type": "t_address"
     },
     {
-      "slot": 8,
+      "slot": 10,
       "offset": 0,
       "label": "authorizedFeeCreditors",
       "type": "t_mapping(t_address,t_bool)"
     },
     {
-      "slot": 9,
+      "slot": 11,
       "offset": 0,
       "label": "feeCreditorForEngine",
       "type": "t_mapping(t_address,t_address)"
     },
     {
-      "slot": 10,
+      "slot": 12,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -90,8 +102,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[44]",
-      "numberOfBytes": "1408",
+      "label": "uint256[42]",
+      "numberOfBytes": "1344",
       "base": "t_uint256"
     },
     {
