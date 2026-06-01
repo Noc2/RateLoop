@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { Bars3Icon } from "@heroicons/react/24/outline";
 import { FooterLinks } from "~~/components/FooterLinks";
 import { HeaderBrand, HeaderMenuLinks, HeaderSearchBar } from "~~/components/Header";
 import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
@@ -34,7 +35,17 @@ function PublicMobileHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl sm:px-6 xl:hidden">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-        <HeaderBrand brandIdPrefix="rateloop-public-header-logo" compact />
+        <div className="flex min-w-0 items-center gap-2">
+          <details className="dropdown relative z-50">
+            <summary className="btn btn-ghost btn-sm p-1 hover:bg-transparent" aria-label="Open menu">
+              <Bars3Icon className="h-5 w-5" />
+            </summary>
+            <ul className="menu menu-compact dropdown-content z-[80] mt-3 w-64 rounded-xl border border-[color:var(--rateloop-shell-border-strong)] bg-base-200 p-2 shadow-lg">
+              <HeaderMenuLinks />
+            </ul>
+          </details>
+          <HeaderBrand brandIdPrefix="rateloop-public-header-logo" compact />
+        </div>
 
         <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
           {publicNavLinks.map(link => (
