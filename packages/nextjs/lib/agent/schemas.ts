@@ -188,6 +188,123 @@ export const agentOperationLookupInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+const imageAttachmentIdSchema = {
+  description: "RateLoop image attachment id returned by rateloop_prepare_image_upload or rateloop_upload_image.",
+  pattern: "^att_[A-Za-z0-9_-]{16,80}$",
+  type: "string",
+};
+
+const imageUploadMetadataProperties = {
+  attachmentId: {
+    ...imageAttachmentIdSchema,
+    description:
+      "Optional attachment id from rateloop_prepare_image_upload. Omit it for managed-token uploads that do not need a wallet challenge.",
+  },
+  clientRequestId: {
+    description: "Optional idempotency key to associate the upload with a later ask.",
+    pattern: "^[A-Za-z0-9._:-]{4,160}$",
+    type: "string",
+  },
+  filename: { description: "Original image filename, such as generated-mockup.png.", type: "string" },
+  mimeType: {
+    description: "Image MIME type. Supported values are image/jpeg, image/png, and image/webp.",
+    enum: ["image/jpeg", "image/png", "image/webp"],
+    type: "string",
+  },
+  sha256: {
+    description: "Lowercase SHA-256 hash of the raw image bytes. rateloop_upload_image can compute it if omitted.",
+    pattern: "^[a-f0-9]{64}$",
+    type: "string",
+  },
+  sizeBytes: {
+    description: "Raw image byte length. rateloop_upload_image can compute it if omitted.",
+    minimum: 1,
+    type: "integer",
+  },
+  walletAddress: agentWalletAddressSchema,
+} satisfies JsonSchema;
+
+export const agentPrepareImageUploadInputSchema = {
+  additionalProperties: false,
+  properties: imageUploadMetadataProperties,
+  required: ["filename", "mimeType", "sha256", "sizeBytes"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentUploadImageInputSchema = {
+  additionalProperties: false,
+  properties: {
+    ...imageUploadMetadataProperties,
+    challengeId: {
+      description: "Wallet upload challenge id returned by rateloop_prepare_image_upload for public MCP uploads.",
+      type: "string",
+    },
+    dataUrl: {
+      description:
+        "Alternative to imageBase64. A data:image/png;base64,..., data:image/jpeg;base64,..., or data:image/webp;base64,... URL.",
+      type: "string",
+    },
+    imageBase64: {
+      description: "Base64-encoded raw image bytes. Use this when uploading an AI-generated mockup directly.",
+      type: "string",
+    },
+    signature: {
+      description:
+        "Wallet signature over the upload challenge message. Required for public MCP uploads; managed-token uploads may omit it.",
+      pattern: "^0x([a-fA-F0-9]{2})*$",
+      type: "string",
+    },
+  },
+  required: ["filename"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentImageUploadStatusInputSchema = {
+  additionalProperties: false,
+  properties: {
+    attachmentId: imageAttachmentIdSchema,
+  },
+  required: ["attachmentId"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentPrepareImageUploadOutputSchema = {
+  additionalProperties: true,
+  properties: {
+    attachmentId: imageAttachmentIdSchema,
+    authMode: { enum: ["managed_agent", "wallet_signature"], type: "string" },
+    challengeId: { type: ["string", "null"] },
+    expiresAt: { type: ["string", "null"] },
+    maxSizeBytes: { type: "integer" },
+    message: { type: ["string", "null"] },
+    nextTool: { type: "string" },
+    signatureRequired: { type: "boolean" },
+    supportedMimeTypes: { items: { type: "string" }, type: "array" },
+    walletAddress: { type: ["string", "null"] },
+  },
+  required: ["attachmentId", "authMode", "nextTool", "signatureRequired", "supportedMimeTypes", "maxSizeBytes"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentImageUploadOutputSchema = {
+  additionalProperties: true,
+  properties: {
+    attachmentId: imageAttachmentIdSchema,
+    error: { type: ["string", "null"] },
+    height: { type: ["integer", "null"] },
+    imageUrl: { type: ["string", "null"] },
+    moderationStatus: { type: "string" },
+    nextAction: { type: "string" },
+    status: {
+      enum: ["uploading", "processing", "approved", "blocked", "failed", "deleted"],
+      type: "string",
+    },
+    width: { type: ["integer", "null"] },
+  },
+  required: ["attachmentId", "status", "moderationStatus", "imageUrl", "nextAction"],
+  type: "object",
+} satisfies JsonSchema;
+
 const agentAskInputBaseProperties = {
   bounty: agentBountyInputSchema,
   chainId: chainIdSchema,

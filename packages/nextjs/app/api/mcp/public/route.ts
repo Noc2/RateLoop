@@ -9,6 +9,7 @@ export const maxDuration = 300;
 
 const DEFAULT_MCP_PROTOCOL_VERSION = "2025-11-25";
 const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set(["2025-06-18", DEFAULT_MCP_PROTOCOL_VERSION]);
+const MCP_JSON_BODY_MAX_BYTES = 16 * 1024 * 1024;
 const RATE_LIMIT = { limit: 120, windowMs: 60_000 };
 
 type JsonRpcRequest = {
@@ -168,7 +169,7 @@ export async function POST(request: NextRequest) {
   const limited = await checkRateLimit(request, RATE_LIMIT);
   if (limited) return limited;
 
-  const parsedBody = await parseJsonBody(request);
+  const parsedBody = await parseJsonBody(request, { maxBytes: MCP_JSON_BODY_MAX_BYTES });
   if (parsedBody === JSON_BODY_TOO_LARGE) {
     return jsonRpcHttpError(null, -32000, "Request body is too large.", request, 413);
   }
@@ -237,6 +238,7 @@ export async function POST(request: NextRequest) {
     const result = await callPublicRateLoopMcpTool({
       arguments: body.params?.arguments,
       name,
+      requestUrl: request.url,
     }).then(toolResult, toolErrorResult);
 
     return jsonRpcResult(body.id, result, request);

@@ -36,7 +36,11 @@ import {
   agentConfirmAskTransactionsInputSchema,
   agentConfirmFeedbackBonusTransactionsInputSchema,
   agentConfirmRatingTransactionsInputSchema,
+  agentImageUploadOutputSchema,
+  agentImageUploadStatusInputSchema,
   agentOperationLookupInputSchema,
+  agentPrepareImageUploadInputSchema,
+  agentPrepareImageUploadOutputSchema,
   agentPrepareRatingTransactionsInputSchema,
   agentPrepareRatingTransactionsOutputSchema,
   agentQuestionStatusOutputSchema,
@@ -46,11 +50,30 @@ import {
   agentRatingContextOutputSchema,
   agentRatingStatusInputSchema,
   agentRatingStatusOutputSchema,
+  agentUploadImageInputSchema,
   resultPackageOutputSchema,
   templateListOutputSchema,
 } from "~~/lib/agent/schemas";
 import { findAgentResultTemplate, listAgentResultTemplates } from "~~/lib/agent/templates";
-import { attachImagesToOperation } from "~~/lib/attachments/imageAttachments";
+import {
+  attachImagesToOperation,
+  createImageAttachmentFromBuffer,
+  createImageAttachmentId,
+  getAttachmentImageUrl,
+  getImageAttachment,
+  getImageAttachmentUploadMode,
+  isImageAttachmentBlobStorageConfigured,
+} from "~~/lib/attachments/imageAttachments";
+import {
+  IMAGE_UPLOAD_CHALLENGE_TITLE,
+  UPLOAD_IMAGE_ACTION,
+  buildImageUploadChallengeMessage,
+  hashImageUploadChallengePayload,
+  normalizeImageUploadChallengeInput,
+} from "~~/lib/auth/imageUploadChallenge";
+import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
+import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
+import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { buildContentFeedbackRoundContext, listContentFeedback } from "~~/lib/feedback/contentFeedback";
@@ -233,6 +256,48 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     annotations: {
+      idempotentHint: false,
+      openWorldHint: true,
+      readOnlyHint: false,
+    },
+    description:
+      "Prepare a RateLoop-hosted image upload for generated mockups, screenshots, or local visual context. Public MCP callers sign the returned challenge before rateloop_upload_image; managed agents may upload with bearer auth.",
+    inputSchema: agentPrepareImageUploadInputSchema,
+    name: "rateloop_prepare_image_upload",
+    outputSchema: agentPrepareImageUploadOutputSchema,
+    requiredScope: MCP_SCOPES.ask,
+    title: "Prepare Image Upload",
+  },
+  {
+    annotations: {
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+      readOnlyHint: false,
+    },
+    description:
+      "Upload AI-generated or local image bytes to RateLoop, normalize and moderate them, and return an approved imageUrl for question.imageUrls.",
+    inputSchema: agentUploadImageInputSchema,
+    name: "rateloop_upload_image",
+    outputSchema: agentImageUploadOutputSchema,
+    requiredScope: MCP_SCOPES.ask,
+    title: "Upload Image",
+  },
+  {
+    annotations: {
+      idempotentHint: true,
+      openWorldHint: true,
+      readOnlyHint: true,
+    },
+    description: "Get processing or moderation status for a RateLoop-hosted image upload.",
+    inputSchema: agentImageUploadStatusInputSchema,
+    name: "rateloop_get_image_upload_status",
+    outputSchema: agentImageUploadOutputSchema,
+    requiredScope: MCP_SCOPES.read,
+    title: "Get Image Upload Status",
+  },
+  {
+    annotations: {
       idempotentHint: true,
       openWorldHint: true,
       readOnlyHint: true,
@@ -406,6 +471,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
 const PUBLIC_MCP_TOOL_NAMES = new Set([
   "rateloop_list_categories",
   "rateloop_list_result_templates",
+  "rateloop_prepare_image_upload",
+  "rateloop_upload_image",
+  "rateloop_get_image_upload_status",
   "rateloop_quote_question",
   "rateloop_ask_humans",
   "rateloop_confirm_ask_transactions",
@@ -590,6 +658,323 @@ function parsePublicWalletAddress(args: JsonObject): Address {
   }
 
   return rawAddress;
+}
+
+function toolRequestUrl(requestUrl: string | undefined, publicEndpoint = false) {
+  return (
+    requestUrl?.trim() ||
+    process.env.APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    `https://www.rateloop.xyz/api/mcp${publicEndpoint ? "/public" : ""}`
+  );
+}
+
+function assertImageUploadsConfigured() {
+  if (getImageAttachmentUploadMode() === "blob" && !isImageAttachmentBlobStorageConfigured()) {
+    throw new McpToolError(
+      "Image uploads are not configured. Set BLOB_READ_WRITE_TOKEN in the deployment environment.",
+      503,
+    );
+  }
+}
+
+function readOptionalStringField(args: JsonObject, fieldName: string) {
+  const value = args[fieldName];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readRequiredStringField(args: JsonObject, fieldName: string) {
+  const value = readOptionalStringField(args, fieldName);
+  if (!value) {
+    throw new McpToolError(`${fieldName} is required.`);
+  }
+  return value;
+}
+
+function readUploadAttachmentId(args: JsonObject) {
+  const attachmentId = readOptionalStringField(args, "attachmentId") || createImageAttachmentId();
+  if (!/^att_[A-Za-z0-9_-]{16,80}$/.test(attachmentId)) {
+    throw new McpToolError("attachmentId must be a RateLoop image attachment id.");
+  }
+  return attachmentId;
+}
+
+function readUploadMimeType(args: JsonObject, dataUrlMimeType?: string | null) {
+  const mimeType = (dataUrlMimeType || readOptionalStringField(args, "mimeType")).toLowerCase();
+  if (!isSupportedImageUploadMimeType(mimeType)) {
+    throw new McpToolError("mimeType must be image/jpeg, image/png, or image/webp.");
+  }
+  if (
+    dataUrlMimeType &&
+    readOptionalStringField(args, "mimeType") &&
+    readOptionalStringField(args, "mimeType") !== mimeType
+  ) {
+    throw new McpToolError("mimeType must match the dataUrl MIME type.");
+  }
+  return mimeType;
+}
+
+function readPositiveSizeBytes(value: unknown, fieldName: string) {
+  const rawValue =
+    typeof value === "number" || typeof value === "bigint" || typeof value === "string" ? String(value).trim() : "";
+  if (!/^\d+$/.test(rawValue)) {
+    throw new McpToolError(`${fieldName} must be a positive integer.`);
+  }
+  const parsed = Number(rawValue);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > getMaxImageUploadSizeBytes()) {
+    throw new McpToolError(`${fieldName} must be between 1 and ${getMaxImageUploadSizeBytes()}.`);
+  }
+  return parsed;
+}
+
+function readSha256(value: unknown, fieldName: string) {
+  const rawValue = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!/^[a-f0-9]{64}$/.test(rawValue)) {
+    throw new McpToolError(`${fieldName} must be a lowercase SHA-256 hash.`);
+  }
+  return rawValue;
+}
+
+function imageUploadMetadata(args: JsonObject, walletAddress: Address, options: { allowComputedHash: boolean }) {
+  const attachmentId = readUploadAttachmentId(args);
+  const filename = readRequiredStringField(args, "filename").slice(0, 180);
+  const mimeType = readUploadMimeType(args);
+  const sizeBytes = options.allowComputedHash ? args.sizeBytes : readPositiveSizeBytes(args.sizeBytes, "sizeBytes");
+  const sha256 = options.allowComputedHash ? args.sha256 : readSha256(args.sha256, "sha256");
+
+  return {
+    attachmentId,
+    filename,
+    mimeType,
+    sha256,
+    sizeBytes,
+    walletAddress,
+  };
+}
+
+function normalizePreparedUploadMetadata(args: JsonObject, walletAddress: Address) {
+  const metadata = imageUploadMetadata(args, walletAddress, { allowComputedHash: false });
+  const normalized = normalizeImageUploadChallengeInput({
+    address: walletAddress,
+    attachmentId: metadata.attachmentId,
+    filename: metadata.filename,
+    mimeType: metadata.mimeType,
+    sha256: metadata.sha256,
+    sizeBytes: metadata.sizeBytes,
+  });
+  if (!normalized.ok) {
+    throw new McpToolError(normalized.error);
+  }
+  return normalized.payload;
+}
+
+function parseImageBase64(value: string) {
+  const normalized = value.replace(/\s/g, "");
+  if (!normalized || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized) || normalized.length % 4 === 1) {
+    throw new McpToolError("imageBase64 must be valid base64 image bytes.");
+  }
+  const buffer = Buffer.from(normalized, "base64");
+  if (buffer.length === 0 || buffer.toString("base64").replace(/=+$/, "") !== normalized.replace(/=+$/, "")) {
+    throw new McpToolError("imageBase64 must be valid base64 image bytes.");
+  }
+  return buffer;
+}
+
+function parseImageUploadData(args: JsonObject) {
+  const imageBase64 = readOptionalStringField(args, "imageBase64");
+  const dataUrl = readOptionalStringField(args, "dataUrl");
+  if (imageBase64 && dataUrl) {
+    throw new McpToolError("Provide imageBase64 or dataUrl, not both.");
+  }
+  if (!imageBase64 && !dataUrl) {
+    throw new McpToolError("imageBase64 or dataUrl is required.");
+  }
+
+  if (dataUrl) {
+    const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/i);
+    if (!match) {
+      throw new McpToolError("dataUrl must be a supported base64 image data URL.");
+    }
+    return {
+      buffer: parseImageBase64(match[2]),
+      dataUrlMimeType: match[1].toLowerCase(),
+    };
+  }
+
+  return {
+    buffer: parseImageBase64(imageBase64),
+    dataUrlMimeType: null,
+  };
+}
+
+function normalizeUploadImageArgs(args: JsonObject, walletAddress: Address) {
+  const { buffer, dataUrlMimeType } = parseImageUploadData(args);
+  if (buffer.byteLength > getMaxImageUploadSizeBytes()) {
+    throw new McpToolError(`Image is too large. Maximum size is ${getMaxImageUploadSizeBytes()} bytes.`);
+  }
+
+  const attachmentId = readUploadAttachmentId(args);
+  const filename = readRequiredStringField(args, "filename").slice(0, 180);
+  const mimeType = readUploadMimeType(args, dataUrlMimeType);
+  const sizeBytes = readOptionalStringField(args, "sizeBytes")
+    ? readPositiveSizeBytes(args.sizeBytes, "sizeBytes")
+    : buffer.byteLength;
+  if (sizeBytes !== buffer.byteLength) {
+    throw new McpToolError("sizeBytes must match the decoded image byte length.");
+  }
+
+  const computedSha256 = createHash("sha256").update(buffer).digest("hex");
+  const sha256 = readOptionalStringField(args, "sha256") ? readSha256(args.sha256, "sha256") : computedSha256;
+  if (sha256 !== computedSha256) {
+    throw new McpToolError("sha256 must match the decoded image bytes.");
+  }
+
+  const normalized = normalizeImageUploadChallengeInput({
+    address: walletAddress,
+    attachmentId,
+    filename,
+    mimeType,
+    sha256,
+    sizeBytes,
+  });
+  if (!normalized.ok) {
+    throw new McpToolError(normalized.error);
+  }
+
+  return {
+    buffer,
+    payload: normalized.payload,
+  };
+}
+
+function imageUploadStatusBody(params: {
+  attachment: Awaited<ReturnType<typeof getImageAttachment>>;
+  attachmentId: string;
+  requestUrl: string;
+}) {
+  if (!params.attachment) {
+    throw new McpToolError("Image attachment not found.", 404);
+  }
+  return {
+    attachmentId: params.attachmentId,
+    error: params.attachment.error,
+    height: params.attachment.height,
+    imageUrl:
+      params.attachment.status === "approved" ? getAttachmentImageUrl(params.requestUrl, params.attachmentId) : null,
+    moderationStatus: params.attachment.moderationStatus,
+    nextAction:
+      params.attachment.status === "approved"
+        ? "Use imageUrl in question.imageUrls when calling rateloop_quote_question and rateloop_ask_humans."
+        : "Poll rateloop_get_image_upload_status or inspect error before using this attachment.",
+    status: params.attachment.status,
+    width: params.attachment.width,
+  };
+}
+
+async function verifyPublicImageUploadSignature(
+  args: JsonObject,
+  payload: ReturnType<typeof normalizeUploadImageArgs>["payload"],
+) {
+  const challengeId = readOptionalStringField(args, "challengeId");
+  const signature = readOptionalStringField(args, "signature") as `0x${string}`;
+  if (!challengeId || !signature) {
+    throw new McpToolError(
+      "challengeId and signature are required for public image uploads. Call rateloop_prepare_image_upload first.",
+    );
+  }
+  const payloadHash = hashImageUploadChallengePayload(payload);
+  const challengeFailure = await verifySignedActionChallenge({
+    action: UPLOAD_IMAGE_ACTION,
+    buildMessage: ({ nonce, expiresAt }) =>
+      buildImageUploadChallengeMessage({
+        payload,
+        payloadHash,
+        nonce,
+        expiresAt,
+      }),
+    challengeId,
+    payloadHash,
+    signature,
+    walletAddress: payload.normalizedAddress,
+  });
+  if (challengeFailure) {
+    const body = (await challengeFailure.json().catch(() => null)) as { error?: string } | null;
+    throw new McpToolError(body?.error ?? "Invalid signed upload challenge.", challengeFailure.status);
+  }
+}
+
+async function prepareImageUpload(args: JsonObject, requestUrl: string, agent?: McpAgentAuth) {
+  assertImageUploadsConfigured();
+  const walletAddress = agent ? parseAgentWalletAddress(args, agent) : parsePublicWalletAddress(args);
+  const payload = normalizePreparedUploadMetadata(args, walletAddress);
+  const managed = Boolean(agent);
+  const challenge = managed
+    ? null
+    : await issueSignedActionChallenge({
+        action: UPLOAD_IMAGE_ACTION,
+        payloadHash: hashImageUploadChallengePayload(payload),
+        title: IMAGE_UPLOAD_CHALLENGE_TITLE,
+        walletAddress: payload.normalizedAddress,
+      });
+
+  return {
+    attachmentId: payload.attachmentId,
+    authMode: managed ? "managed_agent" : "wallet_signature",
+    challengeId: challenge?.challengeId ?? null,
+    expiresAt: challenge?.expiresAt ?? null,
+    maxSizeBytes: getMaxImageUploadSizeBytes(),
+    message: challenge?.message ?? null,
+    nextAction: managed
+      ? "Call rateloop_upload_image with the image bytes. The managed agent token authorizes the upload."
+      : "Sign message, then call rateloop_upload_image with challengeId, signature, and the image bytes.",
+    nextTool: "rateloop_upload_image",
+    requestUrl,
+    signatureRequired: !managed,
+    supportedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+    walletAddress: payload.normalizedAddress,
+  };
+}
+
+async function uploadImage(args: JsonObject, requestUrl: string, agent?: McpAgentAuth) {
+  assertImageUploadsConfigured();
+  const walletAddress = agent ? parseAgentWalletAddress(args, agent) : parsePublicWalletAddress(args);
+  const upload = normalizeUploadImageArgs(args, walletAddress);
+  if (!agent) {
+    await verifyPublicImageUploadSignature(args, upload.payload);
+  }
+
+  return createImageAttachmentFromBuffer({
+    attachmentId: upload.payload.attachmentId,
+    buffer: upload.buffer,
+    clientRequestId: typeof args.clientRequestId === "string" ? args.clientRequestId.trim() || null : null,
+    filename: upload.payload.filename,
+    mimeType: upload.payload.mimeType,
+    requestUrl,
+    sha256: upload.payload.sha256,
+    sizeBytes: upload.payload.sizeBytes,
+    uploader: agent
+      ? {
+          kind: "agent",
+          agentId: agent.id,
+          ownerWalletAddress: upload.payload.normalizedAddress,
+        }
+      : {
+          kind: "wallet",
+          ownerWalletAddress: upload.payload.normalizedAddress,
+        },
+  });
+}
+
+async function getImageUploadStatus(args: JsonObject, requestUrl: string) {
+  const attachmentId = readRequiredStringField(args, "attachmentId");
+  if (!/^att_[A-Za-z0-9_-]{16,80}$/.test(attachmentId)) {
+    throw new McpToolError("attachmentId must be a RateLoop image attachment id.");
+  }
+  return imageUploadStatusBody({
+    attachment: await getImageAttachment(attachmentId),
+    attachmentId,
+    requestUrl,
+  });
 }
 
 function assertNoPublicWebhook(args: JsonObject) {
@@ -1754,7 +2139,11 @@ async function buildPublicQuestionResult(args: JsonObject) {
   );
 }
 
-export async function callPublicRateLoopMcpTool(params: { arguments: unknown; name: string }): Promise<unknown> {
+export async function callPublicRateLoopMcpTool(params: {
+  arguments: unknown;
+  name: string;
+  requestUrl?: string;
+}): Promise<unknown> {
   if (!PUBLIC_MCP_TOOL_NAMES.has(params.name)) {
     throw new McpToolError(`Tool requires managed MCP authentication: ${params.name}`, 401);
   }
@@ -1768,6 +2157,15 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
 
     case "rateloop_list_result_templates":
       return { templates: listAgentResultTemplates() };
+
+    case "rateloop_prepare_image_upload":
+      return prepareImageUpload(args, toolRequestUrl(params.requestUrl, true));
+
+    case "rateloop_upload_image":
+      return uploadImage(args, toolRequestUrl(params.requestUrl, true));
+
+    case "rateloop_get_image_upload_status":
+      return getImageUploadStatus(args, toolRequestUrl(params.requestUrl, true));
 
     case "rateloop_quote_question":
       return quotePublicQuestion(args);
@@ -1941,6 +2339,7 @@ export async function callRateLoopMcpTool(params: {
   agent: McpAgentAuth;
   arguments: unknown;
   name: string;
+  requestUrl?: string;
   scheduleBackgroundTask?: BackgroundTaskScheduler;
 }) {
   const dependencies = getMcpToolDependencies();
@@ -1952,6 +2351,15 @@ export async function callRateLoopMcpTool(params: {
 
     case "rateloop_list_result_templates":
       return { templates: listAgentResultTemplates() };
+
+    case "rateloop_prepare_image_upload":
+      return prepareImageUpload(args, toolRequestUrl(params.requestUrl), params.agent);
+
+    case "rateloop_upload_image":
+      return uploadImage(args, toolRequestUrl(params.requestUrl), params.agent);
+
+    case "rateloop_get_image_upload_status":
+      return getImageUploadStatus(args, toolRequestUrl(params.requestUrl));
 
     case "rateloop_quote_question":
       return quoteQuestion(args, params.agent);

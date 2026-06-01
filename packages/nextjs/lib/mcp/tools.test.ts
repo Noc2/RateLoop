@@ -3,8 +3,10 @@ import { __setMcpToolTestOverridesForTests, callPublicRateLoopMcpTool, callRateL
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { encodeAbiParameters, encodeEventTopics } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
@@ -31,6 +33,11 @@ const RATING_CIPHERTEXT = `0x${"12".repeat(64)}` as const;
 const RATING_DRAND_CHAIN_HASH = `0x${"5".repeat(64)}` as const;
 const RATING_FRONTEND = "0x00000000000000000000000000000000000000fe" as const;
 const RATING_VOTING_ENGINE_ADDRESS = deployedContracts[31337].RoundVotingEngine.address;
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+  "base64",
+);
+const ONE_PIXEL_PNG_SHA256 = createHash("sha256").update(ONE_PIXEL_PNG).digest("hex");
 
 function askArguments(overrides: Record<string, unknown> = {}) {
   return {
@@ -339,6 +346,90 @@ test("rateloop_ask_humans returns a wallet transaction plan without submitting f
   assert.match(body.legalNotice.privacyUrl, /\/legal\/privacy$/);
   assert.equal(body.managedBudget.remainingDailyBudgetAtomic, "4000000");
   assert.equal(prepared.length, 1);
+});
+
+test("managed agents can upload generated image bytes and get a question imageUrl", async () => {
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: {
+      dataUrl: `data:image/png;base64,${ONE_PIXEL_PNG.toString("base64")}`,
+      filename: "generated-mockup.png",
+      walletAddress: AGENT.walletAddress,
+    },
+    name: "rateloop_upload_image",
+    requestUrl: "https://www.rateloop.xyz/api/mcp",
+  });
+  const body = result as {
+    attachmentId: string;
+    imageUrl: string;
+    nextAction: string;
+    status: string;
+  };
+
+  assert.equal(body.status, "approved");
+  assert.match(body.attachmentId, /^att_[A-Za-z0-9_-]{16,80}$/);
+  assert.match(body.imageUrl, /^https:\/\/www\.rateloop\.xyz\/api\/attachments\/images\/att_/);
+  assert.match(body.nextAction, /question\.imageUrls/);
+});
+
+test("public MCP image upload uses a wallet-signed upload challenge", async () => {
+  const account = privateKeyToAccount(`0x${"1".repeat(64)}`);
+  const attachmentId = "att_mcppublicupload01";
+  const prepared = (await callPublicRateLoopMcpTool({
+    arguments: {
+      attachmentId,
+      filename: "generated-mockup.png",
+      mimeType: "image/png",
+      sha256: ONE_PIXEL_PNG_SHA256,
+      sizeBytes: ONE_PIXEL_PNG.length,
+      walletAddress: account.address,
+    },
+    name: "rateloop_prepare_image_upload",
+    requestUrl: "https://www.rateloop.xyz/api/mcp/public",
+  })) as {
+    challengeId: string;
+    message: string;
+    signatureRequired: boolean;
+  };
+
+  const signature = await account.signMessage({ message: prepared.message });
+  const result = await callPublicRateLoopMcpTool({
+    arguments: {
+      attachmentId,
+      challengeId: prepared.challengeId,
+      filename: "generated-mockup.png",
+      imageBase64: ONE_PIXEL_PNG.toString("base64"),
+      mimeType: "image/png",
+      signature,
+      walletAddress: account.address,
+    },
+    name: "rateloop_upload_image",
+    requestUrl: "https://www.rateloop.xyz/api/mcp/public",
+  });
+  const body = result as {
+    imageUrl: string;
+    status: string;
+  };
+
+  assert.equal(prepared.signatureRequired, true);
+  assert.equal(body.status, "approved");
+  assert.equal(body.imageUrl, `https://www.rateloop.xyz/api/attachments/images/${attachmentId}.webp`);
+});
+
+test("public MCP image upload rejects unsigned image bytes", async () => {
+  await assert.rejects(
+    () =>
+      callPublicRateLoopMcpTool({
+        arguments: {
+          filename: "generated-mockup.png",
+          imageBase64: ONE_PIXEL_PNG.toString("base64"),
+          mimeType: "image/png",
+          walletAddress: AGENT.walletAddress,
+        },
+        name: "rateloop_upload_image",
+      }),
+    /challengeId and signature are required/,
+  );
 });
 
 test("public operation-key lookups allow only permissionless ask records", async () => {

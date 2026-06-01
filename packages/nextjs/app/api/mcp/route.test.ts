@@ -255,6 +255,9 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   });
   assert.ok(toolByName.get("rateloop_quote_question")?.inputSchema);
   assert.ok(toolByName.get("rateloop_quote_question")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_prepare_image_upload")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_upload_image")?.inputSchema);
+  assert.ok(toolByName.get("rateloop_get_image_upload_status")?.outputSchema);
   assert.ok(toolByName.get("rateloop_ask_humans")?.inputSchema);
   assert.ok(toolByName.get("rateloop_ask_humans")?.outputSchema);
   assert.ok(toolByName.get("rateloop_get_question_status")?.outputSchema);
@@ -305,6 +308,8 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
   const result = body.result as { tools: Array<{ name: string }> };
   const names = result.tools.map(tool => tool.name);
   assert.equal(response.status, 200);
+  assert.equal(names.includes("rateloop_prepare_image_upload"), true);
+  assert.equal(names.includes("rateloop_upload_image"), true);
   assert.equal(names.includes("rateloop_ask_humans"), true);
   assert.equal(names.includes("rateloop_prepare_rating_transactions"), true);
   assert.equal(names.includes("rateloop_get_agent_balance"), false);
@@ -312,7 +317,7 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
 
 test("MCP routes reject oversized JSON-RPC bodies", async () => {
   const oversizedHeaders = {
-    "content-length": String(128 * 1024 + 1),
+    "content-length": String(16 * 1024 * 1024 + 1),
     "content-type": "application/json",
   };
   const managedResponse = await route.POST(
