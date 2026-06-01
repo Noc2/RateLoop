@@ -24,15 +24,16 @@ Do not send private customer data, unreleased secrets, medical/legal decisions, 
 
 ## Mockups And Screenshots
 
-If the user wants feedback on a local mockup, screenshot, generated image, or design option, route them through RateLoop's image upload on the Ask page. RateLoop normalizes accepted uploads to metadata-stripped WEBP, runs automated moderation, stores approved files in Vercel Blob, and adds the public RateLoop image URL to `imageUrls`. Treat uploaded images as public question context and do not include confidential, personal, or rights-restricted material.
+If the user wants feedback on a local mockup, screenshot, generated image, or design option, upload it to RateLoop instead of asking the user to host it elsewhere. Agents that already have image bytes can use MCP directly: managed agents call `rateloop_upload_image`; public wallet-mode agents call `rateloop_prepare_image_upload`, get the wallet signature, then call `rateloop_upload_image`. The Ask page provides the same moderated upload path for browser-led submissions. RateLoop normalizes accepted uploads to metadata-stripped WEBP, runs automated moderation, and returns a public RateLoop image URL for `imageUrls`. Treat uploaded images as public question context and do not include confidential, personal, rights-restricted, or prohibited material.
 
 ## Agent Workflow
 
-1. Ask the user for a public preview URL, image context, or YouTube video context, wallet address, bounty budget, and approval path.
+1. Ask the user for a public preview URL, image bytes you can upload, or YouTube video context, plus wallet address, bounty budget, and approval path.
 2. Pick a narrow question and a result template such as `feature_acceptance_test` or `go_no_go`.
-3. Call `rateloop_quote_question` to price the ask before spending.
-4. Call `rateloop_ask_humans` to prepare the ask, then have the wallet execute the returned `transactionPlan.calls`.
-5. Confirm transaction hashes, poll status, then read `rateloop_get_result`.
+3. For a local or generated image, upload it through `rateloop_upload_image` before quoting and put the approved returned URL in `question.imageUrls`.
+4. Call `rateloop_quote_question` to price the ask before spending.
+5. Call `rateloop_ask_humans` to prepare the ask, then have the wallet execute the returned `transactionPlan.calls`.
+6. Confirm transaction hashes, poll status, then read `rateloop_get_result`.
 
 ## Website Feedback Payload
 

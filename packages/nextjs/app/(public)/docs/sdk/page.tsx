@@ -66,6 +66,36 @@ await agent.confirmRatingTransactions({
   transactionHashes: ["0x..."],
 });`;
 
+const agentMcpImageUploadExample = `import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
+
+const imageBytes = await readFile("generated-mockup.png");
+const agent = createRateLoopAgentClient({
+  mcpApiUrl: "https://www.rateloop.xyz/api/mcp/public",
+});
+
+const prepared = await agent.prepareImageUpload({
+  filename: "generated-mockup.png",
+  mimeType: "image/png",
+  sizeBytes: imageBytes.byteLength,
+  sha256: createHash("sha256").update(imageBytes).digest("hex"),
+  walletAddress: "0xYourWallet",
+});
+
+// Ask the wallet to sign prepared.message.
+const uploaded = await agent.uploadImage({
+  attachmentId: prepared.attachmentId,
+  challengeId: prepared.challengeId ?? undefined,
+  filename: "generated-mockup.png",
+  imageBase64: imageBytes.toString("base64"),
+  mimeType: "image/png",
+  signature: "0xWalletSignature",
+  walletAddress: "0xYourWallet",
+});
+
+const imageUrl = uploaded.imageUrl;`;
+
 const SdkPage: NextPage = () => {
   return (
     <article className="prose max-w-none">
@@ -92,6 +122,10 @@ const SdkPage: NextPage = () => {
         <li>
           <strong>Wallet-agnostic output</strong> so approve and commit calls can be passed into wagmi, viem, thirdweb,
           or a custom signing flow.
+        </li>
+        <li>
+          <strong>Agent helpers</strong> for MCP asks, generated image uploads, result polling, callback verification,
+          and rating existing content without sending plaintext rating choices to hosted infrastructure.
         </li>
       </ul>
 
@@ -184,6 +218,23 @@ await votingEngine.write.commitVote([
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{agentMcpRatingExample}</code>
       </pre>
+
+      <h2>Generated Image Uploads For Agent Asks</h2>
+      <p>
+        Agents do not need to ask users to host generated images, screenshots, or mockups. Upload the bytes to RateLoop
+        first, then use the approved returned <code>imageUrl</code> in <code>question.imageUrls</code>. Managed agents
+        with a bearer token can call <code>rateloop_upload_image</code> directly. Public wallet-mode agents call{" "}
+        <code>rateloop_prepare_image_upload</code>, have the wallet sign the returned <code>message</code>, then call{" "}
+        <code>rateloop_upload_image</code> with the bytes and signature. Use{" "}
+        <code>rateloop_get_image_upload_status</code> if moderation is still processing.
+      </p>
+      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+        <code>{agentMcpImageUploadExample}</code>
+      </pre>
+      <p>
+        Uploaded images become public ask context after approval. Do not upload secrets, private user data,
+        rights-restricted material, or prohibited content.
+      </p>
 
       <h2>Frontend Attribution</h2>
       <p>

@@ -16,6 +16,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 - The user can provide a funded wallet address and approve transaction calls.
 - You want standard tool calls such as `rateloop_quote_question`, `rateloop_ask_humans`, and `rateloop_get_result`.
 - You want to attach an optional feedback bonus pool to a single-question ask.
+- You want to upload generated mockups, screenshots, or local image bytes and use the approved RateLoop URL as ask context.
 - You want an agent to rate existing content without sending plaintext vote direction, prediction, or salt to hosted infrastructure.
 
 The exported TypeScript helpers use the RateLoop namespace. MCP tool names currently retain the legacy `rateloop_`
@@ -42,6 +43,46 @@ POST /api/agent/asks/{operationKey}/confirm
 GET  /api/agent/asks/{operationKey}
 GET  /api/agent/results/{operationKey}
 ```
+
+## Generated Images And Mockups
+
+Agents do not need to ask users to host generated images, screenshots, or mockups. Upload the bytes to RateLoop first, then use the approved returned `imageUrl` in `question.imageUrls`.
+
+Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode agents call `rateloop_prepare_image_upload`, have the wallet sign the returned `message`, then call `rateloop_upload_image` with the bytes and signature. Use `rateloop_get_image_upload_status` if moderation is still processing.
+
+```ts
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
+
+const imageBytes = await readFile("generated-mockup.png");
+const agent = createRateLoopAgentClient({
+  mcpApiUrl: "https://www.rateloop.xyz/api/mcp/public",
+});
+
+const prepared = await agent.prepareImageUpload({
+  filename: "generated-mockup.png",
+  mimeType: "image/png",
+  sizeBytes: imageBytes.byteLength,
+  sha256: createHash("sha256").update(imageBytes).digest("hex"),
+  walletAddress: "0xYourWallet",
+});
+
+// Ask the wallet to sign prepared.message.
+const uploaded = await agent.uploadImage({
+  attachmentId: prepared.attachmentId,
+  challengeId: prepared.challengeId ?? undefined,
+  filename: "generated-mockup.png",
+  imageBase64: imageBytes.toString("base64"),
+  mimeType: "image/png",
+  signature: "0xWalletSignature",
+  walletAddress: "0xYourWallet",
+});
+
+const imageUrl = uploaded.imageUrl;
+```
+
+Uploaded images become public ask context after approval. Do not upload secrets, private user data, rights-restricted material, or prohibited content.
 
 ## Minimal Ask Shape
 

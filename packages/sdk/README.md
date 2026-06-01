@@ -26,7 +26,7 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 - typed read client for hosted/indexed HTTP routes
 - `read.getRaterParticipationStatus(address)` for participation lane, human credential state, active/full launch cap progress, and the explicit reward policy flags
 - vote/frontend helpers in `@rateloop/sdk/vote`
-- wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, MCP rating of existing content, non-custodial agent-wallet flows, result parsing, and webhook verification
+- wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, generated image uploads, MCP rating of existing content, non-custodial agent-wallet flows, result parsing, and webhook verification
 
 ## Quick Example
 
@@ -202,6 +202,11 @@ if (handled.status === "duplicate") {
 ```
 
 Question `description` is optional. Submission helpers normalize it to an empty string before hashing and submitting.
+
+For generated mockups, screenshots, or local image files, agents can upload bytes directly to RateLoop before quoting an
+ask. Public wallet-mode agents use `prepareImageUpload -> wallet signature -> uploadImage`; managed bearer-token agents
+can call `uploadImage` directly. Use the approved returned `imageUrl` in `question.imageUrls` instead of asking users to
+host images elsewhere.
 
 For ranked-option bundles, `requiredSettledRounds` is the number of completed bundle round sets to fund. Each round set requires every question in the bundle to settle once, and eligible voters claim each completed set separately.
 

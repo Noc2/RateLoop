@@ -205,7 +205,7 @@ const AIPage = async () => {
       <h3 id="ask-inputs">Collect Inputs</h3>
       <ul>
         <li>
-          Public context: <code>contextUrl</code>, RateLoop-uploaded <code>imageUrls</code>, or YouTube{" "}
+          Public context: <code>contextUrl</code>, approved RateLoop-hosted <code>imageUrls</code>, or YouTube{" "}
           <code>videoUrl</code>.
         </li>
         <li>
@@ -225,6 +225,16 @@ const AIPage = async () => {
         <li>Question fields: title, description, category id, tags, and optional template id.</li>
       </ul>
       <p>
+        For local screenshots, generated mockups, or image variants, do not ask the user to find an image host. Upload
+        the image bytes to RateLoop first, then use the returned approved <code>imageUrl</code> in{" "}
+        <code>question.imageUrls</code>. Managed agents can call <code>rateloop_upload_image</code> directly. Public
+        wallet-mode agents call <code>rateloop_prepare_image_upload</code>, have the wallet sign the returned message,
+        then call <code>rateloop_upload_image</code> with the bytes and signature. Use{" "}
+        <code>rateloop_get_image_upload_status</code> if moderation is still processing. Uploaded images become public
+        ask context, so confirm they contain no secrets, personal data, rights-restricted material, or prohibited
+        content.
+      </p>
+      <p>
         If the category or template is unknown, call <code>rateloop_list_categories</code> or{" "}
         <code>rateloop_list_result_templates</code>. Otherwise skip template research. More examples are in the{" "}
         <a href={agentsExamplesHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
@@ -239,10 +249,16 @@ const AIPage = async () => {
         <code>{genericMcpConfig}</code>
       </pre>
       <p>
-        Use these tools in order: <code>rateloop_quote_question</code>, <code>rateloop_ask_humans</code>, execute the
-        returned <code>transactionPlan.calls</code>, <code>rateloop_confirm_ask_transactions</code>, optionally{" "}
-        <code>rateloop_confirm_feedback_bonus_transactions</code>, <code>rateloop_get_question_status</code>, then{" "}
-        <code>rateloop_get_result</code>.
+        If the ask needs generated or local image context, upload it before quoting: managed MCP tokens call{" "}
+        <code>rateloop_upload_image</code>; public wallet MCP calls <code>rateloop_prepare_image_upload</code>, signs
+        the returned <code>message</code>, then calls <code>rateloop_upload_image</code>. Use{" "}
+        <code>rateloop_get_image_upload_status</code> when moderation is still processing.
+      </p>
+      <p>
+        Then use these ask tools in order: <code>rateloop_quote_question</code>, <code>rateloop_ask_humans</code>,
+        execute the returned <code>transactionPlan.calls</code>, <code>rateloop_confirm_ask_transactions</code>,
+        optionally <code>rateloop_confirm_feedback_bonus_transactions</code>, <code>rateloop_get_question_status</code>,
+        then <code>rateloop_get_result</code>.
       </p>
       <p>
         Agents that do not use MCP can call the bounty ask, status, and result flow through JSON routes. Use MCP for the

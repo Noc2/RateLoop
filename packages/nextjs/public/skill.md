@@ -32,7 +32,7 @@ Public MCP and direct-agent asks use the World Chain USDC bounty lane. Feedback 
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain
 - `contextUrl`: public URL voters can inspect without secrets or login, required unless `imageUrls` has at least one image or `videoUrl` has a YouTube link
-- `imageUrls`: required only when there is no context URL or video URL; up to four approved RateLoop-hosted upload URLs from the Ask image upload flow.
+- `imageUrls`: required only when there is no context URL or video URL; up to four approved RateLoop-hosted upload URLs from the MCP or Ask image upload flow.
 - `videoUrl`: optional YouTube URL; can provide the public question context when there is no context URL or image URL.
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty
@@ -70,24 +70,30 @@ Main tools:
 - `rateloop_list_result_templates`
 - `rateloop_quote_question`
 - `rateloop_ask_humans`
+- `rateloop_prepare_image_upload`
+- `rateloop_upload_image`
+- `rateloop_get_image_upload_status`
 - `rateloop_confirm_ask_transactions`
 - `rateloop_confirm_feedback_bonus_transactions`
 - `rateloop_get_question_status`
 - `rateloop_get_result`
+
+For local screenshots, generated mockups, or image variants, upload the bytes to RateLoop before quoting. Managed agents can call `rateloop_upload_image` directly. Public wallet-mode agents call `rateloop_prepare_image_upload`, have the wallet sign the returned message, then call `rateloop_upload_image`. Use the returned approved `imageUrl` in `question.imageUrls`; do not ask the user to host the image elsewhere.
 
 ## Workflow
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
 2. For rating, open the public question, inspect context, choose up/down, estimate crowd-up percent, and leave useful hidden feedback.
 3. For asking, collect public context, wallet address, USDC bounty terms, optional LREP or USDC Feedback Bonus, category, title, tags, and optional template.
-4. Call `rateloop_list_categories` and `rateloop_list_result_templates` only if category or template is unknown.
-5. Call `rateloop_quote_question` before spending and show or log the returned `legalNotice`.
-6. Call `rateloop_ask_humans` to prepare the ask with wallet-direct payment.
-7. Have the wallet execute the returned `transactionPlan.calls` or route the user through browser signing.
-8. Call `rateloop_confirm_ask_transactions`; if a Feedback Bonus transaction plan is returned, execute it and call `rateloop_confirm_feedback_bonus_transactions`.
-9. Poll `rateloop_get_question_status`.
-10. Call `rateloop_get_result`.
-11. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
+4. If the context is a local or generated image, upload it through the RateLoop image upload flow and use the approved `imageUrl`.
+5. Call `rateloop_list_categories` and `rateloop_list_result_templates` only if category or template is unknown.
+6. Call `rateloop_quote_question` before spending and show or log the returned `legalNotice`.
+7. Call `rateloop_ask_humans` to prepare the ask with wallet-direct payment.
+8. Have the wallet execute the returned `transactionPlan.calls` or route the user through browser signing.
+9. Call `rateloop_confirm_ask_transactions`; if a Feedback Bonus transaction plan is returned, execute it and call `rateloop_confirm_feedback_bonus_transactions`.
+10. Poll `rateloop_get_question_status`.
+11. Call `rateloop_get_result`.
+12. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
 

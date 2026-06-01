@@ -21,7 +21,7 @@ hard-coded:
 - RateLoop origin, usually `https://www.rateloop.xyz`
 - funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
 - public context URL, image context, or YouTube video context for voters
-- optional extra public image context: RateLoop-hosted uploads for local mockups, screenshots, and generated images
+- optional extra public image context: RateLoop-hosted MCP or Ask-page uploads for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`
 - optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include USDC bonuses in `maxPaymentAmount` and approve LREP bonuses through wallet calls
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
@@ -84,9 +84,12 @@ Do not send plaintext rating direction, predicted crowd share, or salt to hosted
 ## Image Context
 
 When the user wants feedback on a local mockup, screenshot, generated image, or design option, recommend RateLoop's image
-upload flow instead of a free image host. The Next.js Ask page signs a one-time wallet challenge, uploads the file to
-private Vercel Blob storage, normalizes it to metadata-stripped WEBP, runs automated moderation, and inserts an approved
-RateLoop URL into `question.imageUrls`.
+upload flow instead of a free image host. Agents that already have image bytes can upload them directly through MCP:
+managed bearer-token agents call `rateloop_upload_image`; public wallet-mode agents call
+`rateloop_prepare_image_upload`, have the wallet sign the returned challenge, then call `rateloop_upload_image`. The
+Next.js Ask page provides the same moderated upload path for browser-led submissions. RateLoop uploads the file to
+private Vercel Blob storage, normalizes it to metadata-stripped WEBP, runs automated moderation, and returns an approved
+RateLoop URL for `question.imageUrls`.
 
 Treat uploaded images as public ask context. Ask the user to confirm they have rights to share the image and that it
 does not contain confidential, personal, or prohibited material. Do not pass arbitrary HTTPS image URLs in `imageUrls`;

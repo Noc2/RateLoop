@@ -48,8 +48,9 @@ const agentRules = [
 ] as const;
 
 const agentSteps = [
-  "Ask the user for a public preview URL, wallet address, bounty budget, and approval path.",
+  "Ask the user for a public preview URL, image bytes you can upload, or YouTube video context, plus wallet address, bounty budget, and approval path.",
   "Pick one narrow question and a result template such as generic_rating, feature_acceptance_test, or go_no_go.",
+  "For a local or generated image, upload it through rateloop_upload_image before quoting and put the approved returned URL in question.imageUrls.",
   "Call rateloop_quote_question to price the ask before spending.",
   "Call rateloop_ask_humans to prepare the ask, then have the wallet execute the returned transactionPlan.calls.",
   "Confirm transaction hashes, poll status, then read rateloop_get_result.",
@@ -104,11 +105,14 @@ export default function AgentUserTestingPage() {
 
       <h2>Mockups And Screenshots</h2>
       <p>
-        If the user wants feedback on a local mockup, screenshot, generated image, or design option, route them through
-        RateLoop&apos;s image upload on the Ask page. RateLoop normalizes accepted uploads to metadata-stripped WEBP,
-        runs automated moderation, stores approved files in Vercel Blob, and adds the public RateLoop image URL to{" "}
-        <code>imageUrls</code>. Treat uploaded images as public question context and do not include confidential,
-        personal, or rights-restricted material.
+        If the user wants feedback on a local mockup, screenshot, generated image, or design option, upload it to
+        RateLoop instead of asking the user to host it elsewhere. Agents that already have image bytes can use MCP
+        directly: managed agents call <code>rateloop_upload_image</code>; public wallet-mode agents call{" "}
+        <code>rateloop_prepare_image_upload</code>, get the wallet signature, then call{" "}
+        <code>rateloop_upload_image</code>. The Ask page provides the same moderated upload path for browser-led
+        submissions. RateLoop normalizes accepted uploads to metadata-stripped WEBP, runs automated moderation, and
+        returns a public RateLoop image URL for <code>imageUrls</code>. Treat uploaded images as public question context
+        and do not include confidential, personal, rights-restricted, or prohibited material.
       </p>
 
       <h2>Agent Workflow</h2>
@@ -121,9 +125,10 @@ export default function AgentUserTestingPage() {
       <h2>Website Feedback Payload</h2>
       <p>
         Send this shape to <code>rateloop_ask_humans</code> after a successful quote. Keep the title focused on one user
-        judgment. Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the wallet, context
-        URL, <code>bountyStartBy</code>, and the bounty window durations. Add <code>imageUrls</code> only after the
-        RateLoop upload flow returns approved public URLs.
+        judgment. Amounts are atomic USDC units, so <code>2500000</code> means 2.5 USDC. Replace the wallet, add a
+        context URL, image URLs, or a YouTube <code>videoUrl</code>, set <code>bountyStartBy</code>, and choose the
+        bounty window durations. Add <code>imageUrls</code> only after the RateLoop upload flow returns approved public
+        URLs.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{websiteFeedbackPayloadExample}</code>
