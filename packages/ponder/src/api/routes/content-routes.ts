@@ -93,7 +93,11 @@ function getRewardAvailableAmount() {
       + case
         when ${questionRewardPool.refunded} = false
           and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
-          and (${questionRewardPool.bountyClosesAt} = 0 or ${questionRewardPool.bountyClosesAt} > ${nowSeconds})
+          and (
+            ${questionRewardPool.bountyWindowSeconds} = 0
+            or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} > ${nowSeconds})
+            or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} > ${nowSeconds})
+          )
           then ${questionRewardPool.unallocatedAmount}
         else 0
       end
@@ -109,7 +113,11 @@ function getRewardAvailableAmount() {
       end
       + case
         when ${questionBundleReward.completedRoundSetCount} < ${questionBundleReward.requiredSettledRounds}
-          and (${questionBundleReward.bountyClosesAt} = 0 or ${questionBundleReward.bountyClosesAt} > ${nowSeconds})
+          and (
+            ${questionBundleReward.bountyWindowSeconds} = 0
+            or (${questionBundleReward.bountyClosesAt} != 0 and ${questionBundleReward.bountyClosesAt} > ${nowSeconds})
+            or (${questionBundleReward.bountyClosesAt} = 0 and ${questionBundleReward.bountyStartBy} > ${nowSeconds})
+          )
           then ${questionBundleReward.unallocatedAmount}
         else 0
       end
@@ -434,7 +442,10 @@ async function attachQuestionBundleSummaries<
             frontendFeeBps: bundle.frontendFeeBps,
             bountyEligibility: bundle.bountyEligibility,
             bountyEligibilityDataHash: bundle.bountyEligibilityDataHash,
+            bountyStartBy: bundle.bountyStartBy,
             bountyOpensAt: bundle.bountyOpensAt,
+            bountyWindowSeconds: bundle.bountyWindowSeconds,
+            feedbackWindowSeconds: bundle.feedbackWindowSeconds,
             questionCount: bundle.questionCount,
             completedRoundSetCount: bundle.completedRoundSetCount,
             totalRecordedQuestionRounds: bundle.totalRecordedQuestionRounds,

@@ -126,9 +126,9 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           requiredVoters: 5n,
           requiredSettledRounds: 2n,
           startRoundId: 3n,
-          bountyOpensAt: 1_700n,
-          bountyClosesAt: 2_592_000n,
-          feedbackClosesAt: 2_592_000n,
+          bountyStartBy: 86_400n,
+          bountyWindowSeconds: 2_592_000n,
+          feedbackWindowSeconds: 2_592_000n,
           frontendFeeBps: 300n,
           asset: 1n,
           bountyEligibility: 1n,
@@ -156,6 +156,13 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         requiredVoters: 5,
         requiredSettledRounds: 2,
         startRoundId: 3n,
+        bountyStartBy: 86_400n,
+        bountyOpensAt: 0n,
+        bountyClosesAt: 0n,
+        feedbackClosesAt: 0n,
+        bountyWindowSeconds: 2_592_000,
+        feedbackWindowSeconds: 2_592_000,
+        expiresAt: 86_400n,
       }),
     });
     expect(updates).toContainEqual(
@@ -248,6 +255,66 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       values: {
         bountyEligibility: 1,
         updatedAt: 2_000n,
+      },
+    });
+  });
+
+  it("indexes activated bounty windows", async () => {
+    const { db, updates } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RewardPoolWindowActivated",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          bountyOpensAt: 1_700n,
+          bountyClosesAt: 3_300n,
+          feedbackClosesAt: 3_300n,
+        },
+        block: { number: 14n, timestamp: 1_710n },
+      },
+      context: { db },
+    });
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:QuestionBundleWindowActivated",
+    )!({
+      event: {
+        args: {
+          bundleId: 9n,
+          bountyOpensAt: 1_800n,
+          bountyClosesAt: 3_400n,
+          feedbackClosesAt: 3_200n,
+        },
+        block: { number: 15n, timestamp: 1_810n },
+      },
+      context: { db },
+    });
+
+    expect(updates).toContainEqual({
+      table: "questionRewardPool",
+      key: { id: 7n },
+      values: {
+        bountyOpensAt: 1_700n,
+        bountyClosesAt: 3_300n,
+        feedbackClosesAt: 3_300n,
+        expiresAt: 3_300n,
+        updatedAt: 1_710n,
+      },
+    });
+    expect(updates).toContainEqual({
+      table: "questionBundleReward",
+      key: { id: 9n },
+      values: {
+        bountyOpensAt: 1_800n,
+        bountyClosesAt: 3_400n,
+        feedbackClosesAt: 3_200n,
+        expiresAt: 3_400n,
+        updatedAt: 1_810n,
       },
     });
   });
@@ -416,9 +483,9 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           requiredCompleters: 3n,
           questionCount: 2n,
           requiredSettledRounds: 2n,
-          bountyOpensAt: 1_700n,
-          bountyClosesAt: 2_592_000n,
-          feedbackClosesAt: 2_592_000n,
+          bountyStartBy: 86_400n,
+          bountyWindowSeconds: 2_592_000n,
+          feedbackWindowSeconds: 2_592_000n,
           frontendFeeBps: 300n,
           asset: 1n,
           bountyEligibility: 1n,

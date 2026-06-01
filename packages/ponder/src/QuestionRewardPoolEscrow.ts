@@ -48,9 +48,9 @@ ponder.on(
       requiredVoters,
       requiredSettledRounds,
       startRoundId,
-      bountyOpensAt,
-      bountyClosesAt,
-      feedbackClosesAt,
+      bountyStartBy,
+      bountyWindowSeconds,
+      feedbackWindowSeconds,
       frontendFeeBps,
       bountyEligibility,
       bountyEligibilityDataHash,
@@ -82,10 +82,13 @@ ponder.on(
         qualifiedRounds: 0,
         frontendFeeBps: Number(frontendFeeBps),
         startRoundId,
-        bountyOpensAt,
-        bountyClosesAt,
-        feedbackClosesAt,
-        expiresAt: bountyClosesAt,
+        bountyStartBy,
+        bountyOpensAt: 0n,
+        bountyClosesAt: 0n,
+        feedbackClosesAt: 0n,
+        bountyWindowSeconds: Number(bountyWindowSeconds),
+        feedbackWindowSeconds: Number(feedbackWindowSeconds),
+        expiresAt: bountyStartBy,
         refunded: false,
         createdAt: event.block.timestamp,
         updatedAt: event.block.timestamp,
@@ -98,6 +101,26 @@ ponder.on(
         lastActivityAt: event.block.timestamp,
       });
     }
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:RewardPoolWindowActivated",
+  async ({ event, context }) => {
+    const {
+      rewardPoolId,
+      bountyOpensAt,
+      bountyClosesAt,
+      feedbackClosesAt,
+    } = event.args;
+
+    await context.db.update(questionRewardPool, { id: rewardPoolId }).set({
+      bountyOpensAt,
+      bountyClosesAt,
+      feedbackClosesAt,
+      expiresAt: bountyClosesAt,
+      updatedAt: event.block.timestamp,
+    });
   },
 );
 
@@ -346,9 +369,9 @@ ponder.on(
       requiredCompleters,
       questionCount,
       requiredSettledRounds,
-      bountyOpensAt,
-      bountyClosesAt,
-      feedbackClosesAt,
+      bountyStartBy,
+      bountyWindowSeconds,
+      feedbackWindowSeconds,
       frontendFeeBps,
       asset,
       bountyEligibility,
@@ -378,10 +401,13 @@ ponder.on(
         frontendFeeBps: Number(frontendFeeBps),
         bountyEligibility: Number(bountyEligibility),
         bountyEligibilityDataHash,
-        bountyOpensAt,
-        bountyClosesAt,
-        feedbackClosesAt,
-        expiresAt: bountyClosesAt,
+        bountyStartBy,
+        bountyOpensAt: 0n,
+        bountyClosesAt: 0n,
+        feedbackClosesAt: 0n,
+        bountyWindowSeconds: Number(bountyWindowSeconds),
+        feedbackWindowSeconds: Number(feedbackWindowSeconds),
+        expiresAt: bountyStartBy,
         failed: false,
         refunded: false,
         createdAt: event.block.timestamp,
@@ -398,10 +424,10 @@ ponder.on(
         frontendFeeBps: Number(frontendFeeBps),
         bountyEligibility: Number(bountyEligibility),
         bountyEligibilityDataHash,
-        bountyOpensAt,
-        bountyClosesAt,
-        feedbackClosesAt,
-        expiresAt: bountyClosesAt,
+        bountyStartBy,
+        bountyWindowSeconds: Number(bountyWindowSeconds),
+        feedbackWindowSeconds: Number(feedbackWindowSeconds),
+        expiresAt: bountyStartBy,
         updatedAt: event.block.timestamp,
         claimedAmount: row.claimedAmount,
         voterClaimedAmount: row.voterClaimedAmount,
@@ -415,6 +441,22 @@ ponder.on(
         failed: row.failed,
         refunded: row.refunded,
       }));
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:QuestionBundleWindowActivated",
+  async ({ event, context }) => {
+    const { bundleId, bountyOpensAt, bountyClosesAt, feedbackClosesAt } =
+      event.args;
+
+    await context.db.update(questionBundleReward, { id: bundleId }).set({
+      bountyOpensAt,
+      bountyClosesAt,
+      feedbackClosesAt,
+      expiresAt: bountyClosesAt,
+      updatedAt: event.block.timestamp,
+    });
   },
 );
 

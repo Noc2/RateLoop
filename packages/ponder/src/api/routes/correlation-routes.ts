@@ -49,7 +49,10 @@ export function registerCorrelationRoutes(app: ApiApp) {
         requiredSettledRounds: questionRewardPool.requiredSettledRounds,
         qualifiedRounds: questionRewardPool.qualifiedRounds,
         bountyEligibility: questionRewardPool.bountyEligibility,
+        bountyStartBy: questionRewardPool.bountyStartBy,
+        bountyOpensAt: questionRewardPool.bountyOpensAt,
         bountyClosesAt: questionRewardPool.bountyClosesAt,
+        bountyWindowSeconds: questionRewardPool.bountyWindowSeconds,
         settledAt: round.settledAt,
         revealedCount: round.revealedCount,
         snapshotStatus: roundPayoutSnapshot.status,
@@ -72,6 +75,18 @@ export function registerCorrelationRoutes(app: ApiApp) {
           sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
           eq(round.state, ROUND_STATE.Settled),
           sql`${round.roundId} >= ${questionRewardPool.startRoundId}`,
+          sql`(
+            ${questionRewardPool.bountyWindowSeconds} = 0
+            or (
+              ${questionRewardPool.bountyClosesAt} != 0
+              and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
+            )
+            or (
+              ${questionRewardPool.bountyClosesAt} = 0
+              and ${round.startTime} is not null
+              and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
+            )
+          )`,
           or(
             sql`${roundPayoutSnapshot.id} is null`,
             eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_PROPOSED),
@@ -151,7 +166,22 @@ export function registerCorrelationRoutes(app: ApiApp) {
           sql`${vote.identityHolder} != ${questionRewardPool.funder}`,
           sql`${vote.identityKey} != ${questionRewardPool.funderIdentityKey}`,
           sql`${vote.identityHolder} != ${content.submitter}`,
-          sql`(${questionRewardPool.bountyClosesAt} = 0 or coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionRewardPool.bountyClosesAt})`,
+          sql`(
+            ${questionRewardPool.bountyWindowSeconds} = 0
+            or (
+              ${questionRewardPool.bountyClosesAt} != 0
+              and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionRewardPool.bountyOpensAt}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionRewardPool.bountyClosesAt}
+            )
+            or (
+              ${questionRewardPool.bountyClosesAt} = 0
+              and ${round.startTime} is not null
+              and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${round.startTime}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${round.startTime} + ${questionRewardPool.bountyWindowSeconds}
+            )
+          )`,
           or(
             eq(questionRewardPool.bountyEligibility, 0),
             and(

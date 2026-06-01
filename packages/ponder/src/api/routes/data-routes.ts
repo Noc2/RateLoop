@@ -289,8 +289,12 @@ export function registerDataRoutes(app: ApiApp) {
           questionBundleReward.totalRecordedQuestionRounds,
         claimedCount: questionBundleReward.claimedCount,
         roundSetClaimedCount: questionBundleRoundSet.claimedCount,
+        bountyStartBy: questionBundleReward.bountyStartBy,
+        bountyOpensAt: questionBundleReward.bountyOpensAt,
         bountyClosesAt: questionBundleReward.bountyClosesAt,
         feedbackClosesAt: questionBundleReward.feedbackClosesAt,
+        bountyWindowSeconds: questionBundleReward.bountyWindowSeconds,
+        feedbackWindowSeconds: questionBundleReward.feedbackWindowSeconds,
         expiresAt: questionBundleReward.expiresAt,
         updatedAt: questionBundleRoundSet.updatedAt,
       })
@@ -340,8 +344,12 @@ export function registerDataRoutes(app: ApiApp) {
         questionBundleReward.totalRecordedQuestionRounds,
         questionBundleReward.claimedCount,
         questionBundleRoundSet.claimedCount,
+        questionBundleReward.bountyStartBy,
+        questionBundleReward.bountyOpensAt,
         questionBundleReward.bountyClosesAt,
         questionBundleReward.feedbackClosesAt,
+        questionBundleReward.bountyWindowSeconds,
+        questionBundleReward.feedbackWindowSeconds,
         questionBundleReward.expiresAt,
         questionBundleRoundSet.updatedAt,
       )
@@ -1058,6 +1066,12 @@ export function registerDataRoutes(app: ApiApp) {
         payoutWeightRoot: roundPayoutSnapshot.weightRoot,
         payoutArtifactHash: roundPayoutSnapshot.artifactHash,
         payoutArtifactUri: roundPayoutSnapshot.artifactUri,
+        bountyStartBy: questionRewardPool.bountyStartBy,
+        bountyOpensAt: questionRewardPool.bountyOpensAt,
+        bountyClosesAt: questionRewardPool.bountyClosesAt,
+        feedbackClosesAt: questionRewardPool.feedbackClosesAt,
+        bountyWindowSeconds: questionRewardPool.bountyWindowSeconds,
+        feedbackWindowSeconds: questionRewardPool.feedbackWindowSeconds,
         commitKey: vote.commitKey,
         identityKey: vote.identityKey,
         qualified: sql<boolean>`${questionRewardPoolRound.rewardPoolId} is not null`,
@@ -1113,7 +1127,18 @@ export function registerDataRoutes(app: ApiApp) {
               eq(questionRewardPool.refunded, false),
               sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
               sql`${round.revealedCount} >= ${questionRewardPool.requiredVoters}`,
-              sql`(${questionRewardPool.bountyClosesAt} = 0 or ${round.settledAt} <= ${questionRewardPool.bountyClosesAt})`,
+              sql`(
+                ${questionRewardPool.bountyWindowSeconds} = 0
+                or (
+                  ${questionRewardPool.bountyClosesAt} != 0
+                  and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
+                )
+                or (
+                  ${questionRewardPool.bountyClosesAt} = 0
+                  and ${round.startTime} is not null
+                  and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
+                )
+              )`,
             ),
           ),
         ),

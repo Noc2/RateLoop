@@ -93,9 +93,23 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
 
   const contentIds = items.map(item => item.id);
   const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+  const pendingOrActiveRewardPool = sql<boolean>`${questionRewardPool.refunded} = false
+    and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
+    and (
+      ${questionRewardPool.bountyWindowSeconds} = 0
+      or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} > ${nowSeconds})
+      or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} > ${nowSeconds})
+    )`;
+  const expiredRewardPool = sql<boolean>`${questionRewardPool.refunded} = false
+    and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
+    and ${questionRewardPool.bountyWindowSeconds} != 0
+    and (
+      (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} <= ${nowSeconds})
+      or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} <= ${nowSeconds})
+    )`;
   const currentRewardPoolAsset = sql<number | null>`case
     when ${questionRewardPool.allocatedAmount} > ${questionRewardPool.claimedAmount}
-      or (${questionRewardPool.refunded} = false and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds} and (${questionRewardPool.bountyClosesAt} = 0 or ${questionRewardPool.bountyClosesAt} > ${nowSeconds}))
+      or ${pendingOrActiveRewardPool}
     then ${questionRewardPool.asset}
     else null
   end`;
@@ -106,12 +120,12 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
       bountyEligibility: sql<number | null>`case when min(${questionRewardPool.bountyEligibility}) = max(${questionRewardPool.bountyEligibility}) then min(${questionRewardPool.bountyEligibility}) else null end`,
       bountyEligibilityDataHash: sql<string | null>`case when min(${questionRewardPool.bountyEligibilityDataHash}) = max(${questionRewardPool.bountyEligibilityDataHash}) then min(${questionRewardPool.bountyEligibilityDataHash}) else null end`,
       rewardPoolCount: sql<number>`count(*)`,
-      activeRewardPoolCount: sql<number>`sum(case when ${questionRewardPool.refunded} = false and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds} and (${questionRewardPool.bountyClosesAt} = 0 or ${questionRewardPool.bountyClosesAt} > ${nowSeconds}) then 1 else 0 end)`,
-      expiredRewardPoolCount: sql<number>`sum(case when ${questionRewardPool.refunded} = false and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds} and ${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} <= ${nowSeconds} then 1 else 0 end)`,
+      activeRewardPoolCount: sql<number>`sum(case when ${pendingOrActiveRewardPool} then 1 else 0 end)`,
+      expiredRewardPoolCount: sql<number>`sum(case when ${expiredRewardPool} then 1 else 0 end)`,
       totalFundedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.fundedAmount}), 0)`,
       totalUnallocatedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.unallocatedAmount}), 0)`,
-      activeUnallocatedAmount: sql<bigint>`coalesce(sum(case when ${questionRewardPool.refunded} = false and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds} and (${questionRewardPool.bountyClosesAt} = 0 or ${questionRewardPool.bountyClosesAt} > ${nowSeconds}) then ${questionRewardPool.unallocatedAmount} else 0 end), 0)`,
-      expiredUnallocatedAmount: sql<bigint>`coalesce(sum(case when ${questionRewardPool.refunded} = false and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds} and ${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} <= ${nowSeconds} then ${questionRewardPool.unallocatedAmount} else 0 end), 0)`,
+      activeUnallocatedAmount: sql<bigint>`coalesce(sum(case when ${pendingOrActiveRewardPool} then ${questionRewardPool.unallocatedAmount} else 0 end), 0)`,
+      expiredUnallocatedAmount: sql<bigint>`coalesce(sum(case when ${expiredRewardPool} then ${questionRewardPool.unallocatedAmount} else 0 end), 0)`,
       totalAllocatedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.allocatedAmount}), 0)`,
       totalClaimedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.claimedAmount}), 0)`,
       claimableAllocatedAmount: sql<bigint>`coalesce(sum(case when ${questionRewardPool.allocatedAmount} > ${questionRewardPool.claimedAmount} then ${questionRewardPool.allocatedAmount} - ${questionRewardPool.claimedAmount} else 0 end), 0)`,
@@ -119,7 +133,8 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
       totalFrontendClaimedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.frontendClaimedAmount}), 0)`,
       totalRefundedAmount: sql<bigint>`coalesce(sum(${questionRewardPool.refundedAmount}), 0)`,
       qualifiedRoundCount: sql<number>`coalesce(sum(${questionRewardPool.qualifiedRounds}), 0)`,
-      nextBountyClosesAt: sql<bigint | null>`min(case when ${questionRewardPool.refunded} = false and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds} and ${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} > ${nowSeconds} then ${questionRewardPool.bountyClosesAt} else null end)`,
+      nextBountyStartBy: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} and ${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyWindowSeconds} != 0 then ${questionRewardPool.bountyStartBy} else null end)`,
+      nextBountyClosesAt: sql<bigint | null>`min(case when ${pendingOrActiveRewardPool} and ${questionRewardPool.bountyClosesAt} != 0 then ${questionRewardPool.bountyClosesAt} else null end)`,
       nextFeedbackClosesAt: sql<bigint | null>`min(case when ${questionRewardPool.feedbackClosesAt} != 0 and ${questionRewardPool.feedbackClosesAt} > ${nowSeconds} then ${questionRewardPool.feedbackClosesAt} else null end)`,
     })
     .from(questionRewardPool)
@@ -316,6 +331,7 @@ function emptyRewardPoolSummary() {
     qualifiedRoundCount: 0,
     currentRewardPoolAmount: 0n,
     hasActiveBounty: false,
+    nextBountyStartBy: null as bigint | null,
     nextBountyClosesAt: null as bigint | null,
     nextFeedbackClosesAt: null as bigint | null,
   };
@@ -465,6 +481,7 @@ function formatRewardPoolSummary(row: {
   totalFrontendClaimedAmount: bigint | string | number | null;
   totalRefundedAmount: bigint | string | number | null;
   qualifiedRoundCount: number | string | bigint | null;
+  nextBountyStartBy: bigint | string | number | null;
   nextBountyClosesAt: bigint | string | number | null;
   nextFeedbackClosesAt: bigint | string | number | null;
 }) {
@@ -497,6 +514,7 @@ function formatRewardPoolSummary(row: {
     qualifiedRoundCount: toNumberValue(row.qualifiedRoundCount),
     currentRewardPoolAmount: activeUnallocatedAmount + claimableAllocatedAmount,
     hasActiveBounty: activeRewardPoolCount > 0,
+    nextBountyStartBy: row.nextBountyStartBy === null ? null : toBigIntValue(row.nextBountyStartBy),
     nextBountyClosesAt: row.nextBountyClosesAt === null ? null : toBigIntValue(row.nextBountyClosesAt),
     nextFeedbackClosesAt: row.nextFeedbackClosesAt === null ? null : toBigIntValue(row.nextFeedbackClosesAt),
   };
