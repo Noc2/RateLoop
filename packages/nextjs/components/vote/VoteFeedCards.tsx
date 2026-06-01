@@ -118,7 +118,7 @@ function getRewardDeadlineChips(item: ContentItem) {
   } else if (!isFeedbackClosed && hasActiveBounty) {
     if (activeBountyClosesAt) {
       chips.push({
-        label: formatDeadlineLabel("Expires", activeBountyClosesAt),
+        label: formatDeadlineLabel("Eligibility closes", activeBountyClosesAt),
         tone: "active",
         tooltip: BOUNTY_DEADLINE_TOOLTIP_TEXT,
       });
