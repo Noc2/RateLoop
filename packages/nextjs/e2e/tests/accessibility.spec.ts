@@ -9,22 +9,49 @@ import {
 } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 
-async function gotoPath(page: Page, path: string, options?: { ensureWalletConnected?: boolean }): Promise<void> {
+type AccessibilityRoute = {
+  path: string;
+  requiresWallet?: boolean;
+};
+
+async function gotoPath(
+  page: Page,
+  path: string,
+  options?: { ensureWalletConnected?: boolean; skipInjectedWalletConnectionCheck?: boolean },
+): Promise<void> {
   await gotoWithRetry(page, new URL(path, E2E_BASE_URL).toString(), options);
 }
 
-const PRIMARY_HEADING_CASES: Array<{ path: string; heading: RegExp }> = [
-  { path: "/ask", heading: /^Submit$|Submit Question/i },
+async function visitAccessibilityRoute(page: Page, route: AccessibilityRoute): Promise<void> {
+  const requiresWallet = route.requiresWallet === true;
+
+  if (requiresWallet) {
+    await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
+  }
+
+  await gotoPath(page, route.path, {
+    ensureWalletConnected: requiresWallet,
+    skipInjectedWalletConnectionCheck: !requiresWallet,
+  });
+}
+
+const PRIMARY_HEADING_CASES: Array<AccessibilityRoute & { heading: RegExp }> = [
+  { path: "/ask", heading: /^Submit$|Submit Question/i, requiresWallet: true },
   { path: "/docs", heading: /RateLoop\s+Introduction|Introduction/i },
   { path: "/legal", heading: /^Legal$/i },
 ];
-const DUPLICATE_ID_PAGES = ["/rate", "/ask", "/governance", "/docs", "/legal"];
+const DUPLICATE_ID_PAGES: AccessibilityRoute[] = [
+  { path: "/rate", requiresWallet: true },
+  { path: "/ask", requiresWallet: true },
+  { path: "/governance", requiresWallet: true },
+  { path: "/docs" },
+  { path: "/legal" },
+];
 
 test.describe("Accessibility basics", () => {
-  for (const { path, heading } of PRIMARY_HEADING_CASES) {
+  for (const { path, heading, requiresWallet } of PRIMARY_HEADING_CASES) {
     test(`${path} exposes a primary heading`, async ({ page }) => {
-      await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
-      await gotoPath(page, path, { ensureWalletConnected: true });
+      await visitAccessibilityRoute(page, { path, requiresWallet });
       await expect(
         page.getByRole("heading", { name: heading }).first(),
         `Page ${path} should have a visible h1 heading`,
@@ -150,10 +177,9 @@ test.describe("Accessibility basics", () => {
     await page.keyboard.press("Escape");
   });
 
-  for (const path of DUPLICATE_ID_PAGES) {
+  for (const { path, requiresWallet } of DUPLICATE_ID_PAGES) {
     test(`${path} has no duplicate element IDs`, async ({ page }) => {
-      await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
-      await gotoPath(page, path, { ensureWalletConnected: true });
+      await visitAccessibilityRoute(page, { path, requiresWallet });
 
       const main = page.locator("main");
       await expect(main).toBeVisible({ timeout: 10_000 });
