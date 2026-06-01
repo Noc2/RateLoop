@@ -229,7 +229,7 @@ body {
 .rateloop-gradient-action {
   --rateloop-gradient-border-size: 1.25px;
   --rateloop-gradient-button-radius: var(--rateloop-radius-control);
-  --rateloop-gradient-orbit-duration: 3s;
+  --rateloop-gradient-orbit-duration: 4s;
   --rateloop-gradient-inner-bg: linear-gradient(
     180deg,
     rgb(var(--rateloop-surface-elevated-rgb) / 0.98),
@@ -331,7 +331,7 @@ body {
 }
 
 .rateloop-gradient-notification[data-motion="processing"] {
-  animation: rateloop-gradient-border-orbit var(--rateloop-gradient-orbit-duration, 3s) linear infinite;
+  animation: rateloop-gradient-border-orbit var(--rateloop-gradient-orbit-duration, 4s) linear infinite;
 }
 
 .rateloop-gradient-action:hover:not(:disabled):not([aria-disabled="true"]) {
