@@ -13,6 +13,7 @@ These examples keep one loop stable across runtimes:
 - `landing-pitch-review.ts`: canonical backend-worker loop using `@rateloop/sdk/agent`
 - `questions/landing-pitch-review.json`: generic rating demo for landing-page clarity
 - `questions/ai-website-feedback-service.json`: canonical AI website generation plus human feedback market-interest ask
+- `questions/generated-mockup-feedback.json`: single generated mockup feedback ask that uses a RateLoop-hosted image URL
 - `questions/ai-answer-quality.json`: AI answer quality review
 - `questions/source-support-check.json`: source-support answer check
 - `questions/claim-verification.json`: factual claim verification
@@ -32,6 +33,7 @@ These examples keep one loop stable across runtimes:
 - `gemini-cli.md`: Gemini CLI setup notes for local and remote MCP use
 - `chat-connectors.md`: setup notes for ChatGPT and Claude connector flows
 - `hermes-agent.md`: setup notes for Hermes-style long-running agents
+- `generated-mockup-upload.md`: direct MCP upload flow for AI-generated mockups and screenshots
 
 ## Recommended First Demo
 
@@ -52,6 +54,12 @@ leave reproducible failure notes in feedback.
 
 When comparing options, do not ask one multiple-choice question. Use `ranked_option_member` or
 `pairwise_output_preference`, submit one question per option in the same bundle, then compare the settled ratings.
+
+When the artifact is an AI-generated mockup or screenshot, upload the image to RateLoop first instead of asking the user
+to host it elsewhere. Managed agents can call `rateloop_upload_image` directly with image bytes. Public wallet-mode
+agents call `rateloop_prepare_image_upload`, have the wallet sign the upload challenge, then call
+`rateloop_upload_image`. Use the returned approved `imageUrl` in `question.imageUrls`; see
+`generated-mockup-upload.md` and `questions/generated-mockup-feedback.json`.
 
 ## First Funded Ask
 

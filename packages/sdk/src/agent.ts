@@ -108,6 +108,64 @@ export interface AskHumansRequest extends RateLoopAgentQuestionRequest {
   transport?: "http" | "mcp";
 }
 
+export interface PrepareImageUploadRequest {
+  attachmentId?: string;
+  clientRequestId?: string;
+  filename: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp" | string;
+  sha256: string;
+  sizeBytes: number;
+  walletAddress?: `0x${string}` | string;
+  [key: string]: unknown;
+}
+
+export interface UploadImageRequest {
+  attachmentId?: string;
+  challengeId?: string;
+  clientRequestId?: string;
+  dataUrl?: string;
+  filename: string;
+  imageBase64?: string;
+  mimeType?: "image/jpeg" | "image/png" | "image/webp" | string;
+  sha256?: string;
+  signature?: `0x${string}` | string;
+  sizeBytes?: number;
+  walletAddress?: `0x${string}` | string;
+  [key: string]: unknown;
+}
+
+export interface ImageUploadStatusLookup {
+  attachmentId: string;
+}
+
+export interface PrepareImageUploadResponse {
+  attachmentId: string;
+  authMode?: "managed_agent" | "wallet_signature" | string;
+  challengeId?: string | null;
+  expiresAt?: string | null;
+  maxSizeBytes?: number;
+  message?: string | null;
+  nextAction?: string;
+  nextTool?: string;
+  requestUrl?: string;
+  signatureRequired?: boolean;
+  supportedMimeTypes?: string[];
+  walletAddress?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ImageUploadResponse {
+  attachmentId: string;
+  error?: string | null;
+  height?: number | null;
+  imageUrl?: string | null;
+  moderationStatus?: string;
+  nextAction?: string;
+  status: "uploading" | "processing" | "approved" | "blocked" | "failed" | "deleted" | string;
+  width?: number | null;
+  [key: string]: unknown;
+}
+
 export interface ConfirmAskTransactionsRequest {
   operationKey: `0x${string}` | string;
   transactionHashes: (`0x${string}` | string)[];
@@ -516,6 +574,13 @@ export interface ListResultTemplatesResponse {
 export interface RateLoopAgentClient {
   quoteQuestion(params: QuoteQuestionRequest): Promise<QuoteQuestionResponse>;
   askHumans(params: AskHumansRequest): Promise<AskHumansResponse>;
+  prepareImageUpload(
+    params: PrepareImageUploadRequest,
+  ): Promise<PrepareImageUploadResponse>;
+  uploadImage(params: UploadImageRequest): Promise<ImageUploadResponse>;
+  getImageUploadStatus(
+    params: ImageUploadStatusLookup,
+  ): Promise<ImageUploadResponse>;
   createSigningIntent(
     params: CreateSigningIntentRequest,
   ): Promise<SigningIntentResponse>;
@@ -629,6 +694,9 @@ export function createRateLoopAgentClient(
   return {
     quoteQuestion: (params) => quoteQuestion(params, config),
     askHumans: (params) => askHumans(params, config),
+    prepareImageUpload: (params) => prepareImageUpload(params, config),
+    uploadImage: (params) => uploadImage(params, config),
+    getImageUploadStatus: (params) => getImageUploadStatus(params, config),
     createSigningIntent: (params) => createSigningIntent(params, config),
     getSigningIntent: (params) => getSigningIntent(params, config),
     prepareSigningIntent: (params) => prepareSigningIntent(params, config),
@@ -705,6 +773,40 @@ export async function askHumans(
   }
 
   throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
+}
+
+export function prepareImageUpload(
+  params: PrepareImageUploadRequest,
+  options: RateLoopAgentClientOptions = {},
+): Promise<PrepareImageUploadResponse> {
+  const config = normalizeAgentConfig(options);
+  return callMcpTool<PrepareImageUploadResponse>(
+    config,
+    "rateloop_prepare_image_upload",
+    { ...params },
+  );
+}
+
+export function uploadImage(
+  params: UploadImageRequest,
+  options: RateLoopAgentClientOptions = {},
+): Promise<ImageUploadResponse> {
+  const config = normalizeAgentConfig(options);
+  return callMcpTool<ImageUploadResponse>(config, "rateloop_upload_image", {
+    ...params,
+  });
+}
+
+export function getImageUploadStatus(
+  params: ImageUploadStatusLookup,
+  options: RateLoopAgentClientOptions = {},
+): Promise<ImageUploadResponse> {
+  const config = normalizeAgentConfig(options);
+  return callMcpTool<ImageUploadResponse>(
+    config,
+    "rateloop_get_image_upload_status",
+    { ...params },
+  );
 }
 
 export async function createSigningIntent(

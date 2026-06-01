@@ -109,6 +109,80 @@ test("agent MCP helpers call tools/call with protocol and bearer headers", async
   assert.equal(quote.clientRequestId, "ask-1");
 });
 
+test("image upload SDK helpers call the MCP image tools", async () => {
+  const calls: any[] = [];
+  const agent = createRateLoopAgentClient({
+    fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      calls.push(body.params);
+      const name = body.params.name;
+      const structuredContent =
+        name === "rateloop_prepare_image_upload"
+          ? {
+              attachmentId: "att_sdkuploadimage01",
+              challengeId: "challenge-1",
+              message: "Sign this RateLoop image upload",
+              nextTool: "rateloop_upload_image",
+              signatureRequired: true,
+            }
+          : {
+              attachmentId: "att_sdkuploadimage01",
+              imageUrl:
+                "https://rateloop.example/api/attachments/images/att_sdkuploadimage01.webp",
+              moderationStatus: "approved",
+              nextAction: "Use imageUrl in question.imageUrls.",
+              status: "approved",
+            };
+      return jsonResponse({
+        id: body.id,
+        jsonrpc: "2.0",
+        result: {
+          content: [],
+          isError: false,
+          structuredContent,
+        },
+      });
+    },
+    mcpApiUrl: "https://rateloop.example/api/mcp/public",
+  });
+
+  const prepared = await agent.prepareImageUpload({
+    attachmentId: "att_sdkuploadimage01",
+    filename: "generated-mockup.png",
+    mimeType: "image/png",
+    sha256: "a".repeat(64),
+    sizeBytes: 1024,
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  });
+  const uploaded = await agent.uploadImage({
+    attachmentId: prepared.attachmentId,
+    challengeId: prepared.challengeId ?? undefined,
+    filename: "generated-mockup.png",
+    imageBase64: "iVBORw0KGgo=",
+    mimeType: "image/png",
+    signature: `0x${"1".repeat(130)}`,
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  });
+  const status = await agent.getImageUploadStatus({
+    attachmentId: prepared.attachmentId,
+  });
+
+  assert.deepEqual(
+    calls.map(call => call.name),
+    [
+      "rateloop_prepare_image_upload",
+      "rateloop_upload_image",
+      "rateloop_get_image_upload_status",
+    ],
+  );
+  assert.equal(calls[0].arguments.filename, "generated-mockup.png");
+  assert.equal(calls[1].arguments.imageBase64, "iVBORw0KGgo=");
+  assert.equal(calls[2].arguments.attachmentId, "att_sdkuploadimage01");
+  assert.equal(prepared.nextTool, "rateloop_upload_image");
+  assert.equal(uploaded.status, "approved");
+  assert.equal(status.imageUrl, "https://rateloop.example/api/attachments/images/att_sdkuploadimage01.webp");
+});
+
 test("rating SDK helpers call the MCP rating tools", async () => {
   const calls: any[] = [];
   const agent = createRateLoopAgentClient({
