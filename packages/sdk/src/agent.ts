@@ -119,7 +119,7 @@ export interface ConfirmFeedbackBonusTransactionsRequest
 export interface RatingContentLookup {
   chainId?: number;
   contentId: string | number | bigint;
-  walletAddress: `0x${string}` | string;
+  walletAddress?: `0x${string}` | string;
 }
 
 export interface GetRatingContextRequest extends RatingContentLookup {
