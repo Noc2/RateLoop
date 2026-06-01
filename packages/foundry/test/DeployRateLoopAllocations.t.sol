@@ -42,7 +42,6 @@ contract DeployRateLoopHarness is DeployRateLoop {
     function activateLegacyContributorRoot(LaunchDistributionPool launchPool) external {
         _activateLegacyContributorRoot(launchPool);
     }
-
 }
 
 contract RevertingDecimalsToken {

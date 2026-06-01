@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Test} from "forge-std/Test.sol";
-import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import {LaunchRaterRewardLib} from "../contracts/libraries/LaunchRaterRewardLib.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
-import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
+import { Test } from "forge-std/Test.sol";
+import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import { LaunchRaterRewardLib } from "../contracts/libraries/LaunchRaterRewardLib.sol";
+import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract LaunchRaterRewardLibHarness {
     function launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
@@ -646,11 +646,11 @@ contract RaterRegistryTest is Test {
         );
         assertTrue(
             launchHarness.launchRewardCredentialAnchorId(
-                    RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
-                )
-                != launchHarness.launchRewardCredentialAnchorId(
-                    RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
-                )
+                RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
+            )
+            != launchHarness.launchRewardCredentialAnchorId(
+                RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
+            )
         );
     }
 

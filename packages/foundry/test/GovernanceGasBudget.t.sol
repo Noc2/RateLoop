@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Test} from "forge-std/Test.sol";
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
-import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import { Test } from "forge-std/Test.sol";
+import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
+import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RateLoopGovernor} from "../contracts/governance/RateLoopGovernor.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 
 contract GovernanceGasBudgetTest is Test {
     uint256 internal constant MAX_QUORUM_MAX_EXCLUDED_HOLDERS_GAS = 250_000;

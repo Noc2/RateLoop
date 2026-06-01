@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {IRaterIdentityRegistry} from "../../contracts/interfaces/IRaterIdentityRegistry.sol";
-import {RaterRegistry} from "../../contracts/RaterRegistry.sol";
+import { IRaterIdentityRegistry } from "../../contracts/interfaces/IRaterIdentityRegistry.sol";
+import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
 
 contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
     mapping(address => bool) public holders;
@@ -49,7 +49,7 @@ contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
         delegateOf[delegate] = msg.sender;
     }
 
-    function acceptDelegate() external {}
+    function acceptDelegate() external { }
 
     function removeDelegate() external {
         address delegate = delegateTo[msg.sender];

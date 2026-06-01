@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Test} from "forge-std/Test.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import {RatingLib} from "../contracts/libraries/RatingLib.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
-import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
-import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
-import {deployInitializedProtocolConfig} from "./helpers/VotingTestHelpers.sol";
+import { Test } from "forge-std/Test.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import { RatingLib } from "../contracts/libraries/RatingLib.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
     address public votingEngine;
@@ -19,7 +19,7 @@ contract MockRewardDistributorForConfig {
     }
 }
 
-contract MockRewardDistributorWithoutEngineForConfig {}
+contract MockRewardDistributorWithoutEngineForConfig { }
 
 contract MockRewardDistributorRevertingEngineForConfig {
     function votingEngine() external pure returns (address) {
