@@ -3,28 +3,21 @@
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppProgressBar as ProgressBar } from "next-nprogress-bar";
-import { Toaster } from "react-hot-toast";
-import { ThirdwebProvider } from "thirdweb/react";
 import { hardhat } from "viem/chains";
-import { WagmiProvider } from "wagmi";
 import { Footer } from "~~/components/Footer";
 import { Header } from "~~/components/Header";
 import { NavigationProgressDiagnostics } from "~~/components/NavigationProgressDiagnostics";
+import { RateLoopWalletProviders } from "~~/components/RateLoopWalletProviders";
 import { RouteScopedNotifiers } from "~~/components/RouteScopedNotifiers";
 import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
 import { FaucetTrigger } from "~~/components/scaffold-eth/FaucetTrigger";
-import { LocalTestWalletBridge } from "~~/components/thirdweb/LocalTestWalletBridge";
-import { ThirdwebAutoConnectBridge } from "~~/components/thirdweb/ThirdwebAutoConnectBridge";
-import { ThirdwebConnectorWalletBridge } from "~~/components/thirdweb/ThirdwebConnectorWalletBridge";
 import { RATE_ROUTE } from "~~/constants/routes";
 import { MobileHeaderVisibilityProvider } from "~~/contexts/MobileHeaderVisibilityContext";
 import { OptimisticVoteProvider } from "~~/contexts/OptimisticVoteContext";
 import { TermsAcceptanceProvider } from "~~/contexts/TermsAcceptanceContext";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
-import { wagmiConfig } from "~~/services/web3/wagmiConfig";
 
 const TermsAcceptanceModal = dynamic(
   () => import("~~/components/legal/TermsAcceptanceModal").then(m => m.TermsAcceptanceModal),
@@ -72,46 +65,28 @@ const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
           </div>
         </div>
       </div>
-      <Toaster />
       <RouteScopedNotifiers />
       {showHardhatFaucet ? <FaucetModal /> : null}
     </MobileHeaderVisibilityProvider>
   );
 };
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      staleTime: 30_000,
-      gcTime: 5 * 60_000,
-    },
-  },
-});
-
 export const ScaffoldEthAppWithProviders = ({ children }: { children: React.ReactNode }) => {
   return (
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
-        <ThirdwebProvider>
-          <LocalTestWalletBridge />
-          <ThirdwebConnectorWalletBridge />
-          <ThirdwebAutoConnectBridge />
-          <Suspense fallback={null}>
-            <ReferralAttributionCapture />
-          </Suspense>
-          <ProgressBar height="3px" color="#f5f5f5" />
-          <Suspense fallback={null}>
-            <NavigationProgressDiagnostics />
-          </Suspense>
-          <TermsAcceptanceProvider>
-            <OptimisticVoteProvider>
-              <ScaffoldEthApp>{children}</ScaffoldEthApp>
-            </OptimisticVoteProvider>
-            <TermsAcceptanceModal />
-          </TermsAcceptanceProvider>
-        </ThirdwebProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <RateLoopWalletProviders>
+      <Suspense fallback={null}>
+        <ReferralAttributionCapture />
+      </Suspense>
+      <ProgressBar height="3px" color="#f5f5f5" />
+      <Suspense fallback={null}>
+        <NavigationProgressDiagnostics />
+      </Suspense>
+      <TermsAcceptanceProvider>
+        <OptimisticVoteProvider>
+          <ScaffoldEthApp>{children}</ScaffoldEthApp>
+        </OptimisticVoteProvider>
+        <TermsAcceptanceModal />
+      </TermsAcceptanceProvider>
+    </RateLoopWalletProviders>
   );
 };

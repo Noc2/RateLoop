@@ -18,6 +18,7 @@ type HumanSignInButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "chi
   gradientMotion?: GradientActionMotion | false;
   gradientPill?: boolean;
   gradientSize?: GradientActionSize;
+  postSignInRoute?: string;
 };
 
 export function HumanSignInButton({
@@ -27,6 +28,7 @@ export function HumanSignInButton({
   gradientMotion = false,
   gradientPill = false,
   gradientSize = "default",
+  postSignInRoute,
   ...props
 }: HumanSignInButtonProps) {
   const router = useRouter();
@@ -37,13 +39,19 @@ export function HumanSignInButton({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
-    query: { enabled: !!address },
+    query: { enabled: !!address && !postSignInRoute },
   });
   const resolvedLrepBalance = typeof lrepBalance === "bigint" ? lrepBalance : undefined;
 
   const routeSignedInRater = useCallback(() => {
     if (!address) {
       return false;
+    }
+
+    if (postSignInRoute) {
+      setShouldRouteAfterSignIn(false);
+      router.push(postSignInRoute);
+      return true;
     }
 
     if (resolvedLrepBalance === undefined) {
@@ -54,7 +62,7 @@ export function HumanSignInButton({
     setShouldRouteAfterSignIn(false);
     router.push(getHumanSignInRoute({ lrepBalance: resolvedLrepBalance }));
     return true;
-  }, [address, resolvedLrepBalance, router]);
+  }, [address, postSignInRoute, resolvedLrepBalance, router]);
 
   useEffect(() => {
     if (!shouldRouteAfterSignIn) {

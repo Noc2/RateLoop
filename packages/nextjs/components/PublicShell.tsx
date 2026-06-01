@@ -4,9 +4,9 @@ import { FooterLinks } from "~~/components/FooterLinks";
 import { HeaderBrand, HeaderMenuLinks, HeaderSearchBar } from "~~/components/Header";
 import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
-import { GradientActionInner, getGradientActionClassName } from "~~/components/shared/GradientAction";
+import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
 import { ASK_ROUTE, GOVERNANCE_ROUTE, RATE_ROUTE } from "~~/constants/routes";
-import { HUMAN_SIGN_IN_FAUCET_ROUTE, HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
+import { HUMAN_SIGN_IN_DISCOVER_ROUTE, HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
 import scaffoldConfig from "~~/scaffold.config";
 
 const publicNavLinks = [
@@ -18,14 +18,15 @@ const publicNavLinks = [
 
 function PublicSignInButton({ className = "" }: { className?: string }) {
   return (
-    <Link
-      href={HUMAN_SIGN_IN_FAUCET_ROUTE}
-      className={getGradientActionClassName(className)}
-      data-motion="idle"
-      data-size="sm"
+    <HumanSignInButton
+      className={className}
+      data-testid="public-auth-connect-button"
+      gradientMotion="idle"
+      gradientSize="sm"
+      postSignInRoute={HUMAN_SIGN_IN_DISCOVER_ROUTE}
     >
-      <GradientActionInner>{HUMAN_SIGN_IN_LABEL}</GradientActionInner>
-    </Link>
+      {HUMAN_SIGN_IN_LABEL}
+    </HumanSignInButton>
   );
 }
 
