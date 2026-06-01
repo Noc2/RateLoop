@@ -182,27 +182,9 @@ body {
   initial-value: 0deg;
 }
 
-@property --rateloop-gradient-runner-x {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 10%;
-}
-
-@property --rateloop-gradient-runner-y {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 0%;
-}
-
 @keyframes rateloop-gradient-border-orbit {
   to {
     --rateloop-gradient-orbit-angle: 360deg;
-  }
-}
-
-@keyframes rateloop-gradient-border-intro {
-  to {
-    --rateloop-gradient-orbit-angle: 320deg;
   }
 }
 
@@ -214,43 +196,6 @@ body {
 
   to {
     opacity: 0;
-  }
-}
-
-@keyframes rateloop-gradient-runner-path {
-  0% {
-    --rateloop-gradient-runner-x: 10%;
-    --rateloop-gradient-runner-y: 0%;
-  }
-
-  36% {
-    --rateloop-gradient-runner-x: 90%;
-    --rateloop-gradient-runner-y: 0%;
-  }
-
-  42% {
-    --rateloop-gradient-runner-x: 100%;
-    --rateloop-gradient-runner-y: 50%;
-  }
-
-  48% {
-    --rateloop-gradient-runner-x: 90%;
-    --rateloop-gradient-runner-y: 100%;
-  }
-
-  88% {
-    --rateloop-gradient-runner-x: 10%;
-    --rateloop-gradient-runner-y: 100%;
-  }
-
-  94% {
-    --rateloop-gradient-runner-x: 0%;
-    --rateloop-gradient-runner-y: 50%;
-  }
-
-  to {
-    --rateloop-gradient-runner-x: 10%;
-    --rateloop-gradient-runner-y: 0%;
   }
 }
 
@@ -310,32 +255,18 @@ body {
 }
 
 .rateloop-gradient-action[data-motion="intro"] {
-  animation: rateloop-gradient-border-intro 4.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: none;
 }
 
 .rateloop-gradient-action[data-motion="intro"]::before,
 .rateloop-gradient-action[data-motion="processing"]::before,
 .rateloop-gradient-action[aria-busy="true"]::before {
-  background-image:
-    radial-gradient(
-      5rem 1.45rem at var(--rateloop-gradient-runner-x) var(--rateloop-gradient-runner-y),
-      rgb(245 245 245 / 0.98) 0%,
-      rgb(53 158 238 / 0.98) 18%,
-      rgb(3 206 164 / 0.96) 38%,
-      rgb(255 196 61 / 0.9) 56%,
-      rgb(239 71 111 / 0.5) 72%,
-      transparent 84%
-    ),
-    linear-gradient(
-      180deg,
-      rgb(var(--rateloop-surface-nested-rgb) / 0.86),
-      rgb(var(--rateloop-surface-nested-rgb) / 0.86)
-    );
+  background-image: var(--rateloop-orbit-gradient);
 }
 
 .rateloop-gradient-action[data-motion="intro"]::before {
   animation:
-    rateloop-gradient-runner-path 2.8s linear 2,
+    rateloop-gradient-border-orbit 2.8s linear 2,
     rateloop-gradient-runner-fade 5.6s ease-out both;
 }
 
@@ -345,7 +276,7 @@ body {
 
 .rateloop-gradient-action[data-motion="processing"]::before,
 .rateloop-gradient-action[aria-busy="true"]::before {
-  animation: rateloop-gradient-runner-path 2.8s linear infinite;
+  animation: rateloop-gradient-border-orbit 2.8s linear infinite;
   opacity: 1;
 }
 
@@ -366,7 +297,7 @@ body {
 }
 
 .rateloop-gradient-notification[data-motion="intro"] {
-  animation: rateloop-gradient-border-intro 4.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rateloop-gradient-border-orbit 2.8s linear 2;
 }
 
 .rateloop-gradient-notification[data-motion="processing"] {
