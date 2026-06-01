@@ -10,12 +10,11 @@ function formatLrepAmount(value: bigint) {
 }
 
 type ClaimRewardsButtonProps = {
-  buttonClassName?: string;
   className?: string;
   showTokenSymbol?: boolean;
 };
 
-export function ClaimRewardsButton({ buttonClassName, className, showTokenSymbol = true }: ClaimRewardsButtonProps) {
+export function ClaimRewardsButton({ className, showTokenSymbol = true }: ClaimRewardsButtonProps) {
   const {
     claimableItems,
     totalLrepClaimable,
@@ -42,21 +41,6 @@ export function ClaimRewardsButton({ buttonClassName, className, showTokenSymbol
         : totalLrepClaimable > 0n && totalUsdcClaimable <= 0n
           ? `Claim ${formatLrepAmount(totalLrepClaimable)}${showTokenSymbol ? " LREP" : ""}`
           : `Claim ${formatUsdAmount(totalUsdcClaimable)}`;
-
-  if (buttonClassName) {
-    return (
-      <div className={className}>
-        <button
-          type="button"
-          onClick={handleClaimAll}
-          disabled={isClaiming || isPreparingClaim}
-          className={buttonClassName}
-        >
-          {label}
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className={className}>
