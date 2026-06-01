@@ -5,6 +5,7 @@ export const MCP_SCOPES = {
   ask: "rateloop:ask",
   balance: "rateloop:balance",
   quote: "rateloop:quote",
+  rate: "rateloop:rate",
   read: "rateloop:read",
 } as const;
 
@@ -96,7 +97,7 @@ export function getConfiguredMcpAgents(): McpAgentAuth[] {
 
   const scopes = process.env.RATELOOP_MCP_BEARER_SCOPES?.split(",")
     .map(scope => scope.trim())
-    .filter(Boolean) ?? [MCP_SCOPES.ask, MCP_SCOPES.balance, MCP_SCOPES.quote, MCP_SCOPES.read];
+    .filter(Boolean) ?? [MCP_SCOPES.ask, MCP_SCOPES.balance, MCP_SCOPES.quote, MCP_SCOPES.rate, MCP_SCOPES.read];
   const dailyBudgetAtomic = parseAtomicAmount(
     process.env.RATELOOP_MCP_DAILY_BUDGET_USDC ?? "0",
     "RATELOOP_MCP_DAILY_BUDGET_USDC",

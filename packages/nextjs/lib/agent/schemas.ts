@@ -18,6 +18,16 @@ const evmAddressSchema = {
   type: "string",
 };
 
+const hexBytesSchema = {
+  pattern: "^0x([a-fA-F0-9]{2})*$",
+  type: "string",
+};
+
+const bytes32Schema = {
+  pattern: "^0x[a-fA-F0-9]{64}$",
+  type: "string",
+};
+
 const agentWalletAddressSchema = {
   ...evmAddressSchema,
   description:
@@ -297,6 +307,111 @@ export const agentConfirmFeedbackBonusTransactionsInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+export const agentRatingContextInputSchema = {
+  additionalProperties: false,
+  properties: {
+    chainId: chainIdSchema,
+    contentId: { description: "RateLoop content id to rate.", type: ["integer", "string"] },
+    stakeWei: {
+      description: "Optional LREP stake in atomic units; when supplied the response includes current allowance.",
+      pattern: "^\\d+$",
+      type: "string",
+    },
+    walletAddress: agentWalletAddressSchema,
+  },
+  required: ["contentId", "walletAddress"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentPrepareRatingTransactionsInputSchema = {
+  additionalProperties: false,
+  properties: {
+    chainId: chainIdSchema,
+    ciphertext: {
+      ...hexBytesSchema,
+      description:
+        "Tlock-encrypted vote payload produced locally by @rateloop/sdk/vote. Do not send plaintext vote fields.",
+    },
+    commitHash: {
+      ...bytes32Schema,
+      description: "Commit hash produced locally by @rateloop/sdk/vote.",
+    },
+    contentId: { description: "RateLoop content id to rate.", type: ["integer", "string"] },
+    drandChainHash: {
+      ...bytes32Schema,
+      description: "Drand chain hash bound into the local commit.",
+    },
+    frontend: {
+      ...evmAddressSchema,
+      description: "Frontend attribution code/address to pass to commitVote.",
+    },
+    roundId: { description: "Open round id returned by rateloop_get_rating_context.", type: ["integer", "string"] },
+    roundReferenceRatingBps: {
+      description: "Round reference rating returned by rateloop_get_rating_context.",
+      maximum: 10000,
+      minimum: 0,
+      type: "integer",
+    },
+    stakeWei: {
+      description: "LREP stake in atomic units. Use 0 for zero-stake advisory votes.",
+      pattern: "^\\d+$",
+      type: "string",
+    },
+    targetRound: {
+      description: "Drand round targeted by the local tlock ciphertext.",
+      type: ["integer", "string"],
+    },
+    walletAddress: agentWalletAddressSchema,
+  },
+  required: [
+    "contentId",
+    "walletAddress",
+    "roundId",
+    "roundReferenceRatingBps",
+    "targetRound",
+    "drandChainHash",
+    "commitHash",
+    "ciphertext",
+    "stakeWei",
+    "frontend",
+  ],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentConfirmRatingTransactionsInputSchema = {
+  additionalProperties: false,
+  properties: {
+    chainId: chainIdSchema,
+    commitHash: {
+      ...bytes32Schema,
+      description: "Optional commit hash expected in the vote transaction receipt.",
+    },
+    contentId: { description: "RateLoop content id that was rated.", type: ["integer", "string"] },
+    roundId: { description: "Round id that was rated.", type: ["integer", "string"] },
+    transactionHashes: {
+      description: "Transaction hashes produced by executing the rating transaction plan.",
+      items: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
+      minItems: 1,
+      type: "array",
+    },
+    walletAddress: agentWalletAddressSchema,
+  },
+  required: ["contentId", "walletAddress", "transactionHashes"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentRatingStatusInputSchema = {
+  additionalProperties: false,
+  properties: {
+    chainId: chainIdSchema,
+    contentId: { description: "RateLoop content id that was rated.", type: ["integer", "string"] },
+    roundId: { description: "Optional round id to inspect.", type: ["integer", "string"] },
+    walletAddress: agentWalletAddressSchema,
+  },
+  required: ["contentId", "walletAddress"],
+  type: "object",
+} satisfies JsonSchema;
+
 export const templateListOutputSchema = {
   additionalProperties: false,
   properties: {
@@ -452,6 +567,96 @@ export const agentAskHumansOutputSchema = {
     x402AuthorizationRequest: { type: ["object", "null"] },
   },
   required: ["status", "operationKey"],
+  type: "object",
+} satisfies JsonSchema;
+
+const ratingTransactionPlanOutputSchema = {
+  additionalProperties: true,
+  properties: {
+    calls: {
+      items: {
+        additionalProperties: true,
+        properties: {
+          data: hexBytesSchema,
+          description: { type: "string" },
+          functionName: { type: "string" },
+          id: { type: "string" },
+          phase: { type: "string" },
+          to: evmAddressSchema,
+          value: { type: "string" },
+        },
+        required: ["id", "to", "data", "functionName", "phase"],
+        type: "object",
+      },
+      type: "array",
+    },
+    requiresOrderedExecution: { type: "boolean" },
+  },
+  required: ["calls", "requiresOrderedExecution"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentRatingContextOutputSchema = {
+  additionalProperties: true,
+  properties: {
+    chainId: { type: "integer" },
+    content: { type: "object" },
+    contracts: { type: "object" },
+    currentAllowance: atomicAmountSchema,
+    openRoundTransactionPlan: { type: ["object", "null"] },
+    privacy: { type: "object" },
+    ratingInputMode: { enum: ["local_encrypted_commit"], type: "string" },
+    runtime: { type: "object" },
+    status: {
+      enum: ["ready", "open_round_required"],
+      type: "string",
+    },
+    wallet: { type: "object" },
+  },
+  required: ["status", "chainId", "content", "contracts", "runtime", "wallet", "ratingInputMode", "privacy"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentPrepareRatingTransactionsOutputSchema = {
+  additionalProperties: true,
+  properties: {
+    chainId: { type: "integer" },
+    confirmTool: { type: "string" },
+    contentId: { type: "string" },
+    isAdvisoryVote: { type: "boolean" },
+    privacy: { type: "object" },
+    publicUrl: { type: ["string", "null"] },
+    roundId: { type: "string" },
+    stakeWei: atomicAmountSchema,
+    status: {
+      enum: ["awaiting_wallet_signature"],
+      type: "string",
+    },
+    statusTool: { type: "string" },
+    transactionPlan: ratingTransactionPlanOutputSchema,
+    wallet: { type: "object" },
+  },
+  required: ["status", "contentId", "roundId", "wallet", "transactionPlan", "confirmTool", "statusTool"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentRatingStatusOutputSchema = {
+  additionalProperties: true,
+  properties: {
+    chainId: { type: "integer" },
+    commitHash: { type: ["string", "null"] },
+    confirmed: { type: "boolean" },
+    contentId: { type: "string" },
+    publicUrl: { type: ["string", "null"] },
+    roundId: { type: ["string", "null"] },
+    status: {
+      enum: ["not_found", "awaiting_reveal", "committed", "revealed"],
+      type: "string",
+    },
+    transactionHashes: { items: { type: "string" }, type: "array" },
+    wallet: { type: "object" },
+  },
+  required: ["status", "contentId", "wallet"],
   type: "object",
 } satisfies JsonSchema;
 

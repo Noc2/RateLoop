@@ -1,6 +1,21 @@
+import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
+import { AdvisoryVoteRecorderAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { createHash } from "crypto";
-import { type Address, type Hex, isAddress } from "viem";
+import {
+  type Abi,
+  type Address,
+  type Hex,
+  type PublicClient,
+  createPublicClient,
+  decodeEventLog,
+  encodeFunctionData,
+  getAddress,
+  http,
+  isAddress,
+  keccak256,
+} from "viem";
 import {
   AGENT_CALLBACK_EVENT_TYPES,
   type AgentCallbackEventType,
@@ -20,15 +35,24 @@ import {
   agentBalanceOutputSchema,
   agentConfirmAskTransactionsInputSchema,
   agentConfirmFeedbackBonusTransactionsInputSchema,
+  agentConfirmRatingTransactionsInputSchema,
   agentOperationLookupInputSchema,
+  agentPrepareRatingTransactionsInputSchema,
+  agentPrepareRatingTransactionsOutputSchema,
   agentQuestionStatusOutputSchema,
   agentQuoteInputSchema,
   agentQuoteOutputSchema,
+  agentRatingContextInputSchema,
+  agentRatingContextOutputSchema,
+  agentRatingStatusInputSchema,
+  agentRatingStatusOutputSchema,
   resultPackageOutputSchema,
   templateListOutputSchema,
 } from "~~/lib/agent/schemas";
 import { findAgentResultTemplate, listAgentResultTemplates } from "~~/lib/agent/templates";
 import { attachImagesToOperation } from "~~/lib/attachments/imageAttachments";
+import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
+import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { buildContentFeedbackRoundContext, listContentFeedback } from "~~/lib/feedback/contentFeedback";
 import { MCP_SCOPES, type McpAgentAuth, type McpScope } from "~~/lib/mcp/auth";
 import {
@@ -39,6 +63,8 @@ import {
   reserveMcpAgentBudget,
   updateMcpBudgetReservation,
 } from "~~/lib/mcp/budget";
+import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
+import { type RoundVoteContractCall, buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
 import {
   X402QuestionInputError,
   type X402QuestionPayload,
@@ -99,6 +125,7 @@ type McpToolDependencies = {
   getAllVotes: typeof ponderApi.getAllVotes;
   getContentById: typeof ponderApi.getContentById;
   getRaterParticipationStatus: typeof ponderApi.getRaterParticipationStatus;
+  getRatingTransactionReceipt: typeof getRatingTransactionReceipt;
   getMcpAgentBudgetSummary: typeof getMcpAgentBudgetSummary;
   prepareAgentWalletQuestionSubmissionRequest: typeof prepareAgentWalletQuestionSubmissionRequest;
   prepareFeedbackBonusQuestionSubmissionRequest: typeof prepareFeedbackBonusQuestionSubmissionRequest;
@@ -106,7 +133,9 @@ type McpToolDependencies = {
   preparePermissionlessNativeX402QuestionSubmissionRequest: typeof preparePermissionlessNativeX402QuestionSubmissionRequest;
   preparePermissionlessWalletQuestionSubmissionRequest: typeof preparePermissionlessWalletQuestionSubmissionRequest;
   preflightX402QuestionSubmission: typeof preflightX402QuestionSubmission;
+  readRatingAllowance: typeof readRatingAllowance;
   reserveMcpAgentBudget: typeof reserveMcpAgentBudget;
+  resolveRoundVoteRuntime: typeof resolveRoundVoteRuntime;
   resolveX402QuestionConfig: typeof resolveX402QuestionConfig;
   updateMcpBudgetReservation: typeof updateMcpBudgetReservation;
   upsertAgentCallbackSubscription: typeof upsertAgentCallbackSubscription;
@@ -126,6 +155,7 @@ function getMcpToolDependencies(): McpToolDependencies {
     getContentById: mcpToolTestOverrides?.getContentById ?? ponderApi.getContentById,
     getRaterParticipationStatus:
       mcpToolTestOverrides?.getRaterParticipationStatus ?? ponderApi.getRaterParticipationStatus,
+    getRatingTransactionReceipt: mcpToolTestOverrides?.getRatingTransactionReceipt ?? getRatingTransactionReceipt,
     getMcpAgentBudgetSummary: mcpToolTestOverrides?.getMcpAgentBudgetSummary ?? getMcpAgentBudgetSummary,
     prepareAgentWalletQuestionSubmissionRequest:
       mcpToolTestOverrides?.prepareAgentWalletQuestionSubmissionRequest ?? prepareAgentWalletQuestionSubmissionRequest,
@@ -142,7 +172,9 @@ function getMcpToolDependencies(): McpToolDependencies {
       preparePermissionlessWalletQuestionSubmissionRequest,
     preflightX402QuestionSubmission:
       mcpToolTestOverrides?.preflightX402QuestionSubmission ?? preflightX402QuestionSubmission,
+    readRatingAllowance: mcpToolTestOverrides?.readRatingAllowance ?? readRatingAllowance,
     reserveMcpAgentBudget: mcpToolTestOverrides?.reserveMcpAgentBudget ?? reserveMcpAgentBudget,
+    resolveRoundVoteRuntime: mcpToolTestOverrides?.resolveRoundVoteRuntime ?? resolveRoundVoteRuntime,
     resolveX402QuestionConfig: mcpToolTestOverrides?.resolveX402QuestionConfig ?? resolveX402QuestionConfig,
     updateMcpBudgetReservation: mcpToolTestOverrides?.updateMcpBudgetReservation ?? updateMcpBudgetReservation,
     upsertAgentCallbackSubscription:
@@ -299,6 +331,61 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   {
     annotations: {
       idempotentHint: true,
+      openWorldHint: true,
+      readOnlyHint: true,
+    },
+    description:
+      "Fetch active round context and contract addresses needed to build a private encrypted rating commit locally.",
+    inputSchema: agentRatingContextInputSchema,
+    name: "rateloop_get_rating_context",
+    outputSchema: agentRatingContextOutputSchema,
+    requiredScope: MCP_SCOPES.read,
+    title: "Get Rating Context",
+  },
+  {
+    annotations: {
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+      readOnlyHint: false,
+    },
+    description:
+      "Prepare wallet calls for an already-encrypted RateLoop rating commit. The hosted MCP server does not accept plaintext vote direction, prediction, or salt.",
+    inputSchema: agentPrepareRatingTransactionsInputSchema,
+    name: "rateloop_prepare_rating_transactions",
+    outputSchema: agentPrepareRatingTransactionsOutputSchema,
+    requiredScope: MCP_SCOPES.rate,
+    title: "Prepare Rating Transactions",
+  },
+  {
+    annotations: {
+      idempotentHint: true,
+      openWorldHint: true,
+      readOnlyHint: true,
+    },
+    description: "Confirm wallet-executed rating transactions and return commit status.",
+    inputSchema: agentConfirmRatingTransactionsInputSchema,
+    name: "rateloop_confirm_rating_transactions",
+    outputSchema: agentRatingStatusOutputSchema,
+    requiredScope: MCP_SCOPES.rate,
+    title: "Confirm Rating Transactions",
+  },
+  {
+    annotations: {
+      idempotentHint: true,
+      openWorldHint: true,
+      readOnlyHint: true,
+    },
+    description: "Get this wallet's rating status for an existing RateLoop content item.",
+    inputSchema: agentRatingStatusInputSchema,
+    name: "rateloop_get_rating_status",
+    outputSchema: agentRatingStatusOutputSchema,
+    requiredScope: MCP_SCOPES.read,
+    title: "Get Rating Status",
+  },
+  {
+    annotations: {
+      idempotentHint: true,
       openWorldHint: false,
       readOnlyHint: true,
     },
@@ -324,6 +411,10 @@ const PUBLIC_MCP_TOOL_NAMES = new Set([
   "rateloop_confirm_feedback_bonus_transactions",
   "rateloop_get_question_status",
   "rateloop_get_result",
+  "rateloop_get_rating_context",
+  "rateloop_prepare_rating_transactions",
+  "rateloop_confirm_rating_transactions",
+  "rateloop_get_rating_status",
 ]);
 
 export const PUBLIC_MCP_TOOLS = MCP_TOOLS.filter(tool => PUBLIC_MCP_TOOL_NAMES.has(tool.name));
@@ -519,6 +610,525 @@ function parseAskHumansPaymentMode(value: unknown): AskHumansPaymentMode {
   if (value === "wallet_calls" || value === "agent_wallet") return "wallet_calls";
   if (value === "x402_authorization" || value === "native_x402" || value === "x402") return "x402_authorization";
   throw new McpToolError("paymentMode must be wallet_calls or x402_authorization.");
+}
+
+type DeployedContractRecord = {
+  address: `0x${string}`;
+  abi: Abi;
+};
+type DeployedContractsMap = Record<number, Record<string, DeployedContractRecord>>;
+type RatingChainContext = {
+  advisoryVoteRecorder: DeployedContractRecord | null;
+  chainId: number;
+  lrep: DeployedContractRecord;
+  publicClient: PublicClient;
+  targetNetwork: NonNullable<ReturnType<typeof getPrimaryServerTargetNetwork>>;
+  votingEngine: DeployedContractRecord;
+};
+
+const PLAINTEXT_RATING_FIELDS = [
+  "direction",
+  "isUp",
+  "predictedUpBps",
+  "predictedUpPercent",
+  "prediction",
+  "salt",
+  "signal",
+  "vote",
+];
+
+function parseChainId(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new McpToolError("chainId must be a positive integer.");
+  }
+  return parsed;
+}
+
+function parseRatingContentId(value: unknown): bigint {
+  const rawValue =
+    typeof value === "number" || typeof value === "bigint" || typeof value === "string" ? String(value).trim() : "";
+  if (!/^\d+$/.test(rawValue)) {
+    throw new McpToolError("contentId must be a non-negative integer string.");
+  }
+  return BigInt(rawValue);
+}
+
+function parseRatingBigInt(value: unknown, fieldName: string): bigint {
+  const rawValue =
+    typeof value === "number" || typeof value === "bigint" || typeof value === "string" ? String(value).trim() : "";
+  if (!/^\d+$/.test(rawValue)) {
+    throw new McpToolError(`${fieldName} must be a non-negative integer string.`);
+  }
+  return BigInt(rawValue);
+}
+
+function parseRatingBps(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 10_000) {
+    throw new McpToolError("roundReferenceRatingBps must be an integer from 0 to 10000.");
+  }
+  return parsed;
+}
+
+function parseRatingHex(value: unknown, fieldName: string, bytes?: number): Hex {
+  if (typeof value !== "string" || !/^0x([a-fA-F0-9]{2})*$/.test(value)) {
+    throw new McpToolError(`${fieldName} must be a hex string.`);
+  }
+  if (bytes !== undefined && value.length !== 2 + bytes * 2) {
+    throw new McpToolError(`${fieldName} must be ${bytes} bytes.`);
+  }
+  return value as Hex;
+}
+
+function parseRatingWalletAddress(args: JsonObject, agent?: McpAgentAuth): Address {
+  return agent ? parseAgentWalletAddress(args, agent) : parsePublicWalletAddress(args);
+}
+
+function assertNoPlaintextRatingFields(args: JsonObject) {
+  const present = PLAINTEXT_RATING_FIELDS.filter(field => args[field] !== undefined);
+  if (present.length > 0) {
+    throw new McpToolError(
+      `Do not send plaintext rating fields to hosted MCP: ${present.join(", ")}. Build the encrypted commit locally with @rateloop/sdk/vote, then call rateloop_prepare_rating_transactions.`,
+    );
+  }
+}
+
+function resolveRatingChainContext(chainIdValue: unknown): RatingChainContext {
+  const requestedChainId = parseChainId(chainIdValue);
+  const targetNetwork =
+    requestedChainId !== null ? getServerTargetNetworkById(requestedChainId) : getPrimaryServerTargetNetwork();
+  if (!targetNetwork) {
+    throw new McpToolError("Rating chain is not configured.", 503);
+  }
+
+  const contractsForChain = (deployedContracts as unknown as Partial<DeployedContractsMap>)[targetNetwork.id];
+  const votingEngine = contractsForChain?.RoundVotingEngine;
+  const lrep = contractsForChain?.[REPUTATION_CONTRACT_NAME];
+  if (!votingEngine || !lrep) {
+    throw new McpToolError("Rating contracts are not deployed for the requested chain.", 503);
+  }
+
+  const rpcOverrides = getServerRpcOverrides();
+  const rpcUrl = rpcOverrides[targetNetwork.id] ?? targetNetwork.rpcUrls.default.http[0];
+  if (!rpcUrl) {
+    throw new McpToolError("Rating RPC is not configured for the requested chain.", 503);
+  }
+
+  return {
+    advisoryVoteRecorder: contractsForChain?.AdvisoryVoteRecorder ?? null,
+    chainId: targetNetwork.id,
+    lrep,
+    publicClient: createPublicClient({
+      chain: targetNetwork,
+      transport: http(rpcUrl),
+    }) as PublicClient,
+    targetNetwork,
+    votingEngine,
+  };
+}
+
+async function readRatingAllowance(params: { context: RatingChainContext; walletAddress: Address }): Promise<bigint> {
+  return BigInt(
+    (await params.context.publicClient.readContract({
+      address: params.context.lrep.address,
+      abi: LoopReputationAbi,
+      functionName: "allowance",
+      args: [params.walletAddress, params.context.votingEngine.address],
+    })) as bigint,
+  );
+}
+
+async function getRatingTransactionReceipt(params: { context: RatingChainContext; transactionHash: Hex }) {
+  return params.context.publicClient.getTransactionReceipt({ hash: params.transactionHash });
+}
+
+function assertCanRateContent(content: PonderContentItem, walletAddress: Address) {
+  if (normalizeHexId(content.submitter) === normalizeHexId(walletAddress)) {
+    throw new McpToolError("Content submitters cannot rate their own submissions.", 403);
+  }
+}
+
+function ratingPublicUrl(contentId: bigint | string) {
+  return getAgentPublicQuestionUrl(String(contentId));
+}
+
+function formatRatingContracts(context: RatingChainContext) {
+  return {
+    advisoryVoteRecorder: context.advisoryVoteRecorder?.address ?? null,
+    lrep: context.lrep.address,
+    votingEngine: context.votingEngine.address,
+  };
+}
+
+function formatRatingRuntime(runtime: Awaited<ReturnType<typeof resolveRoundVoteRuntime>>) {
+  return {
+    baseTotalStake: runtime.baseTotalStake.toString(),
+    baseVoteCount: runtime.baseVoteCount.toString(),
+    drandChainHash: runtime.drandChainHash,
+    drandGenesisTimeSeconds: runtime.drandGenesisTimeSeconds.toString(),
+    drandPeriodSeconds: runtime.drandPeriodSeconds.toString(),
+    epochDuration: runtime.epochDuration,
+    requiresOpenRound: runtime.requiresOpenRound,
+    roundId: runtime.roundId.toString(),
+    roundReferenceRatingBps: runtime.roundReferenceRatingBps,
+    roundStartTimeSeconds: runtime.roundStartTimeSeconds,
+    ...(runtime.targetRound != null ? { targetRound: runtime.targetRound.toString() } : {}),
+  };
+}
+
+function ratingPrivacyNotice() {
+  return {
+    inputMode: "local_encrypted_commit",
+    note: "Do not send plaintext vote direction, prediction, or salt to hosted MCP. Build the encrypted commit locally with @rateloop/sdk/vote and pass only commit material to rateloop_prepare_rating_transactions.",
+  };
+}
+
+function formatRatingContent(content: PonderContentItem) {
+  return {
+    categoryId: content.categoryId,
+    description: content.description,
+    id: content.id,
+    publicUrl: ratingPublicUrl(content.id),
+    submitter: content.submitter,
+    title: content.title,
+  };
+}
+
+function normalizeRatingCall(call: RoundVoteContractCall, index: number) {
+  const data =
+    call.data ??
+    encodeFunctionData({
+      abi: call.abi,
+      args: call.args as never,
+      functionName: call.functionName as never,
+    });
+  const phase =
+    call.kind === "approve"
+      ? "approve_lrep"
+      : call.kind === "recordAdvisoryVote"
+        ? "record_advisory_vote"
+        : "commit_rating";
+
+  return {
+    data,
+    description:
+      call.kind === "approve"
+        ? "Approve LREP stake for the voting engine."
+        : call.kind === "recordAdvisoryVote"
+          ? "Record a zero-stake advisory encrypted rating."
+          : "Submit the encrypted rating commit.",
+    functionName: call.functionName,
+    id: `${index + 1}-${phase}`,
+    phase,
+    to: call.address,
+    value: (call.value ?? 0n).toString(),
+  };
+}
+
+function buildOpenRoundTransactionPlan(context: RatingChainContext, contentId: bigint) {
+  const data = encodeFunctionData({
+    abi: RoundVotingEngineAbi,
+    args: [contentId],
+    functionName: "openRound",
+  });
+
+  return {
+    calls: [
+      {
+        data,
+        description: "Open the current rating round so a private commit can be built against fixed round timing.",
+        functionName: "openRound",
+        id: "1-open_round",
+        phase: "open_round",
+        to: context.votingEngine.address,
+        value: "0",
+      },
+    ],
+    requiresOrderedExecution: true,
+  };
+}
+
+async function buildRatingContext(args: JsonObject, agent?: McpAgentAuth) {
+  const dependencies = getMcpToolDependencies();
+  const walletAddress = parseRatingWalletAddress(args, agent);
+  const contentId = parseRatingContentId(args.contentId);
+  const context = resolveRatingChainContext(args.chainId);
+  const contentResponse = await dependencies.getContentById(contentId.toString());
+  const content = contentResponse.content;
+  assertCanRateContent(content, walletAddress);
+
+  const runtime = await dependencies.resolveRoundVoteRuntime({
+    contentId,
+    fallbackEpochDuration: Number(content.roundEpochDuration ?? content.openRound?.epochDuration ?? 20 * 60),
+    publicClient: context.publicClient,
+    votingEngineAddress: context.votingEngine.address,
+  });
+  const currentAllowance = await dependencies.readRatingAllowance({ context, walletAddress });
+  const openRoundTransactionPlan = runtime.requiresOpenRound ? buildOpenRoundTransactionPlan(context, contentId) : null;
+
+  return {
+    chainId: context.chainId,
+    content: formatRatingContent(content),
+    contracts: formatRatingContracts(context),
+    currentAllowance: currentAllowance.toString(),
+    localCommitInstructions: {
+      helper: "buildCommitVoteParams",
+      package: "@rateloop/sdk/vote",
+      requiredFields: [
+        "voter",
+        "contentId",
+        "isUp",
+        "predictedUpPercent",
+        "stakeAmount",
+        "epochDuration",
+        "roundId",
+        "roundReferenceRatingBps",
+        "frontendCode",
+      ],
+    },
+    openRoundTransactionPlan,
+    privacy: ratingPrivacyNotice(),
+    publicUrl: ratingPublicUrl(contentId),
+    ratingInputMode: "local_encrypted_commit",
+    runtime: formatRatingRuntime(runtime),
+    status: runtime.requiresOpenRound ? "open_round_required" : "ready",
+    wallet: {
+      address: walletAddress,
+    },
+  };
+}
+
+async function prepareRatingTransactions(args: JsonObject, agent?: McpAgentAuth) {
+  assertNoPlaintextRatingFields(args);
+  const dependencies = getMcpToolDependencies();
+  const walletAddress = parseRatingWalletAddress(args, agent);
+  const contentId = parseRatingContentId(args.contentId);
+  const roundId = parseRatingBigInt(args.roundId, "roundId");
+  const roundReferenceRatingBps = parseRatingBps(args.roundReferenceRatingBps);
+  const targetRound = parseRatingBigInt(args.targetRound, "targetRound");
+  const drandChainHash = parseRatingHex(args.drandChainHash, "drandChainHash", 32);
+  const commitHash = parseRatingHex(args.commitHash, "commitHash", 32);
+  const ciphertext = parseRatingHex(args.ciphertext, "ciphertext");
+  const stakeWei = parseRatingBigInt(args.stakeWei, "stakeWei");
+  const frontend =
+    typeof args.frontend === "string" && isAddress(args.frontend) ? (getAddress(args.frontend) as `0x${string}`) : null;
+  if (!frontend) {
+    throw new McpToolError("frontend must be an EVM address.");
+  }
+
+  const context = resolveRatingChainContext(args.chainId);
+  const contentResponse = await dependencies.getContentById(contentId.toString());
+  const content = contentResponse.content;
+  assertCanRateContent(content, walletAddress);
+
+  const runtime = await dependencies.resolveRoundVoteRuntime({
+    contentId,
+    fallbackEpochDuration: Number(content.roundEpochDuration ?? content.openRound?.epochDuration ?? 20 * 60),
+    publicClient: context.publicClient,
+    votingEngineAddress: context.votingEngine.address,
+  });
+  if (runtime.requiresOpenRound) {
+    throw new McpToolError(
+      "Open the rating round first with rateloop_get_rating_context.openRoundTransactionPlan, then rebuild the encrypted commit.",
+      409,
+    );
+  }
+  if (runtime.roundId !== roundId || runtime.roundReferenceRatingBps !== roundReferenceRatingBps) {
+    throw new McpToolError(
+      "Rating round context is stale. Call rateloop_get_rating_context and rebuild the commit.",
+      409,
+    );
+  }
+  if (runtime.drandChainHash.toLowerCase() !== drandChainHash.toLowerCase()) {
+    throw new McpToolError(
+      "Rating drand context is stale. Call rateloop_get_rating_context and rebuild the commit.",
+      409,
+    );
+  }
+
+  const currentAllowance = await dependencies.readRatingAllowance({ context, walletAddress });
+  const roundContext = packVoteRoundContext(roundId, roundReferenceRatingBps);
+  const plan = buildRoundVoteTransactionPlan({
+    advisoryVoteRecorderAddress: context.advisoryVoteRecorder?.address,
+    ciphertext,
+    commitHash,
+    contentId,
+    currentAllowance,
+    drandChainHash,
+    frontend,
+    lrepAddress: context.lrep.address,
+    roundContext,
+    stakeWei,
+    targetRound,
+    votingEngineAddress: context.votingEngine.address,
+  });
+
+  return {
+    chainId: context.chainId,
+    commit: {
+      ciphertextHash: keccak256(ciphertext),
+      commitHash,
+      drandChainHash,
+      targetRound: targetRound.toString(),
+    },
+    confirmTool: "rateloop_confirm_rating_transactions",
+    contentId: contentId.toString(),
+    isAdvisoryVote: plan.isAdvisoryVote,
+    privacy: ratingPrivacyNotice(),
+    publicUrl: ratingPublicUrl(contentId),
+    roundId: roundId.toString(),
+    stakeWei: stakeWei.toString(),
+    status: "awaiting_wallet_signature",
+    statusTool: "rateloop_get_rating_status",
+    transactionPlan: {
+      calls: plan.calls.map(normalizeRatingCall),
+      requiresOrderedExecution: true,
+    },
+    wallet: {
+      address: walletAddress,
+      currentAllowance: currentAllowance.toString(),
+    },
+  };
+}
+
+function decodedRatingLogMatches(params: {
+  commitHash: Hex | null;
+  contentId: bigint;
+  log: { address: Address; topics: readonly Hex[]; data: Hex };
+  roundId: bigint | null;
+  walletAddress: Address;
+}) {
+  const candidates = [
+    { abi: RoundVotingEngineAbi as Abi, eventName: "VoteCommitted" },
+    { abi: AdvisoryVoteRecorderAbi as Abi, eventName: "AdvisoryVoteRecorded" },
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const decoded = decodeEventLog({
+        abi: candidate.abi,
+        data: params.log.data,
+        topics: params.log.topics as [Hex, ...Hex[]],
+      });
+      if (decoded.eventName !== candidate.eventName || !decoded.args || typeof decoded.args !== "object") {
+        continue;
+      }
+      const args = decoded.args as unknown as Record<string, unknown>;
+      if (BigInt(args.contentId as bigint) !== params.contentId) continue;
+      if (params.roundId !== null && BigInt(args.roundId as bigint) !== params.roundId) continue;
+      if (normalizeHexId(args.voter as string) !== normalizeHexId(params.walletAddress)) continue;
+      if (params.commitHash && normalizeHexId(args.commitHash as string) !== normalizeHexId(params.commitHash)) {
+        continue;
+      }
+      return {
+        commitHash: typeof args.commitHash === "string" ? args.commitHash : null,
+        isAdvisoryVote: candidate.eventName === "AdvisoryVoteRecorded",
+        roundId: String(args.roundId ?? ""),
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+async function getRatingStatusFromIndex(args: JsonObject, agent?: McpAgentAuth) {
+  const dependencies = getMcpToolDependencies();
+  const walletAddress = parseRatingWalletAddress(args, agent);
+  const contentId = parseRatingContentId(args.contentId);
+  const chainId = parseChainId(args.chainId) ?? getPrimaryServerTargetNetwork()?.id ?? 0;
+  const roundId = args.roundId !== undefined ? parseRatingBigInt(args.roundId, "roundId") : null;
+  const votes = await dependencies.getAllVotes({
+    contentId: contentId.toString(),
+    voter: walletAddress,
+    ...(roundId !== null ? { roundId: roundId.toString() } : {}),
+  });
+  const vote = votes.find(
+    item =>
+      String(item.contentId) === contentId.toString() &&
+      normalizeHexId(item.voter) === normalizeHexId(walletAddress) &&
+      (roundId === null || String(item.roundId) === roundId.toString()),
+  );
+
+  return {
+    chainId,
+    commitHash: vote?.commitHash ?? null,
+    confirmed: Boolean(vote),
+    contentId: contentId.toString(),
+    publicUrl: ratingPublicUrl(contentId),
+    roundId: vote?.roundId ?? (roundId !== null ? roundId.toString() : null),
+    status: vote ? (vote.revealed ? "revealed" : "committed") : "not_found",
+    transactionHashes: [],
+    wallet: {
+      address: walletAddress,
+    },
+  };
+}
+
+async function confirmRatingTransactions(args: JsonObject, agent?: McpAgentAuth) {
+  const dependencies = getMcpToolDependencies();
+  const walletAddress = parseRatingWalletAddress(args, agent);
+  const contentId = parseRatingContentId(args.contentId);
+  const roundId = args.roundId !== undefined ? parseRatingBigInt(args.roundId, "roundId") : null;
+  const commitHash = args.commitHash !== undefined ? parseRatingHex(args.commitHash, "commitHash", 32) : null;
+  const transactionHashes = Array.isArray(args.transactionHashes)
+    ? args.transactionHashes.filter((hash): hash is Hex => typeof hash === "string" && /^0x[a-fA-F0-9]{64}$/.test(hash))
+    : [];
+  if (transactionHashes.length === 0) {
+    throw new McpToolError("transactionHashes must include at least one transaction hash.");
+  }
+
+  const context = resolveRatingChainContext(args.chainId);
+  let matched: {
+    commitHash: string | null;
+    isAdvisoryVote: boolean;
+    roundId: string;
+  } | null = null;
+
+  for (const transactionHash of transactionHashes) {
+    const receipt = await dependencies.getRatingTransactionReceipt({ context, transactionHash });
+    if (receipt.status !== "success") continue;
+    for (const log of receipt.logs) {
+      const decoded = decodedRatingLogMatches({
+        commitHash,
+        contentId,
+        log: {
+          address: log.address,
+          data: log.data,
+          topics: log.topics,
+        },
+        roundId,
+        walletAddress,
+      });
+      if (decoded) {
+        matched = decoded;
+        break;
+      }
+    }
+    if (matched) break;
+  }
+
+  if (!matched) {
+    throw new McpToolError("No matching successful rating commit was found in the provided transactions.", 409);
+  }
+
+  return {
+    chainId: context.chainId,
+    commitHash: matched.commitHash,
+    confirmed: true,
+    contentId: contentId.toString(),
+    isAdvisoryVote: matched.isAdvisoryVote,
+    publicUrl: ratingPublicUrl(contentId),
+    roundId: matched.roundId || (roundId !== null ? roundId.toString() : null),
+    status: "committed",
+    transactionHashes,
+    wallet: {
+      address: walletAddress,
+    },
+  };
 }
 
 async function parseWebhookOptions(args: JsonObject): Promise<{
@@ -1263,6 +1873,18 @@ export async function callPublicRateLoopMcpTool(params: { arguments: unknown; na
     case "rateloop_get_result":
       return buildPublicQuestionResult(args);
 
+    case "rateloop_get_rating_context":
+      return buildRatingContext(args);
+
+    case "rateloop_prepare_rating_transactions":
+      return prepareRatingTransactions(args);
+
+    case "rateloop_confirm_rating_transactions":
+      return confirmRatingTransactions(args);
+
+    case "rateloop_get_rating_status":
+      return getRatingStatusFromIndex(args);
+
     default:
       throw new McpToolError(`Unknown tool: ${params.name}`, 404);
   }
@@ -1547,6 +2169,18 @@ export async function callRateLoopMcpTool(params: {
 
     case "rateloop_get_result":
       return buildQuestionResult(args, params.agent);
+
+    case "rateloop_get_rating_context":
+      return buildRatingContext(args, params.agent);
+
+    case "rateloop_prepare_rating_transactions":
+      return prepareRatingTransactions(args, params.agent);
+
+    case "rateloop_confirm_rating_transactions":
+      return confirmRatingTransactions(args, params.agent);
+
+    case "rateloop_get_rating_status":
+      return getRatingStatusFromIndex(args, params.agent);
 
     case "rateloop_get_agent_balance":
       return getMcpAgentBudgetSummary(params.agent);

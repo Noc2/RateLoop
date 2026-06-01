@@ -42,7 +42,7 @@ function configureAgent() {
       dailyBudgetAtomic: "5000000",
       id: "route-agent",
       perAskLimitAtomic: "1000000",
-      scopes: ["rateloop:ask", "rateloop:balance", "rateloop:quote", "rateloop:read"],
+      scopes: ["rateloop:ask", "rateloop:balance", "rateloop:quote", "rateloop:rate", "rateloop:read"],
       token: "secret-token",
     },
   ]);
@@ -259,6 +259,10 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.ok(toolByName.get("rateloop_ask_humans")?.outputSchema);
   assert.ok(toolByName.get("rateloop_get_question_status")?.outputSchema);
   assert.ok(toolByName.get("rateloop_get_result")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_get_rating_context")?.inputSchema);
+  assert.ok(toolByName.get("rateloop_prepare_rating_transactions")?.outputSchema);
+  assert.ok(toolByName.get("rateloop_confirm_rating_transactions")?.inputSchema);
+  assert.ok(toolByName.get("rateloop_get_rating_status")?.outputSchema);
   assert.ok(toolByName.get("rateloop_get_agent_balance")?.outputSchema);
 
   const quoteSchema = toolByName.get("rateloop_quote_question")?.inputSchema as {
@@ -290,6 +294,7 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
   const names = result.tools.map(tool => tool.name);
   assert.equal(response.status, 200);
   assert.equal(names.includes("rateloop_ask_humans"), true);
+  assert.equal(names.includes("rateloop_prepare_rating_transactions"), true);
   assert.equal(names.includes("rateloop_get_agent_balance"), false);
 });
 

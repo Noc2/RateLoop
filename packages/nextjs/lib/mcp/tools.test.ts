@@ -1,7 +1,9 @@
 import type { McpAgentAuth } from "./auth";
 import { __setMcpToolTestOverridesForTests, callPublicRateLoopMcpTool, callRateLoopMcpTool } from "./tools";
+import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
+import { encodeAbiParameters, encodeEventTopics } from "viem";
 import { __setDatabaseResourcesForTests } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
@@ -11,7 +13,7 @@ const AGENT: McpAgentAuth = {
   dailyBudgetAtomic: 5_000_000n,
   id: "agent-a",
   perAskLimitAtomic: 2_000_000n,
-  scopes: new Set(["rateloop:ask"]),
+  scopes: new Set(["rateloop:ask", "rateloop:rate"]),
   tokenHash: "a".repeat(64),
   walletAddress: "0x00000000000000000000000000000000000000aa",
 };
@@ -21,6 +23,12 @@ const RESTRICTED_AGENT: McpAgentAuth = {
   id: "restricted-agent",
 };
 const OPERATION_KEY = `0x${"1".repeat(64)}` as const;
+const RATING_CONTENT_ID = "42";
+const RATING_ROUND_ID = 7n;
+const RATING_COMMIT_HASH = `0x${"4".repeat(64)}` as const;
+const RATING_CIPHERTEXT = `0x${"12".repeat(64)}` as const;
+const RATING_DRAND_CHAIN_HASH = `0x${"5".repeat(64)}` as const;
+const RATING_FRONTEND = "0x00000000000000000000000000000000000000fe" as const;
 
 function askArguments(overrides: Record<string, unknown> = {}) {
   return {
@@ -89,6 +97,56 @@ function managedBudgetSummary() {
     perAskLimitAtomic: "2000000",
     remainingDailyBudgetAtomic: "4000000",
     spentTodayAtomic: "1000000",
+  };
+}
+
+function ratingContent(overrides: Record<string, unknown> = {}) {
+  return {
+    content: {
+      categoryId: "5",
+      description: "Rate this existing question",
+      id: RATING_CONTENT_ID,
+      openRound: null,
+      roundEpochDuration: 1200,
+      submitter: "0x00000000000000000000000000000000000000bb",
+      title: "Existing content",
+      ...overrides,
+    },
+    rounds: [],
+  } as never;
+}
+
+function ratingRuntime(overrides: Record<string, unknown> = {}) {
+  return {
+    baseTotalStake: 0n,
+    baseVoteCount: 0n,
+    drandChainHash: RATING_DRAND_CHAIN_HASH,
+    drandGenesisTimeSeconds: 1n,
+    drandPeriodSeconds: 3n,
+    epochDuration: 1200,
+    now: () => Date.now(),
+    requiresOpenRound: false,
+    roundId: RATING_ROUND_ID,
+    roundReferenceRatingBps: 5000,
+    roundStartTimeSeconds: 1_762_000_000,
+    targetRound: 100n,
+    ...overrides,
+  } as never;
+}
+
+function ratingPrepareArguments(overrides: Record<string, unknown> = {}) {
+  return {
+    ciphertext: RATING_CIPHERTEXT,
+    commitHash: RATING_COMMIT_HASH,
+    contentId: RATING_CONTENT_ID,
+    drandChainHash: RATING_DRAND_CHAIN_HASH,
+    frontend: RATING_FRONTEND,
+    roundId: RATING_ROUND_ID.toString(),
+    roundReferenceRatingBps: 5000,
+    stakeWei: "1000000",
+    targetRound: "100",
+    walletAddress: AGENT.walletAddress,
+    ...overrides,
   };
 }
 
@@ -164,6 +222,158 @@ test("rateloop_ask_humans returns a wallet transaction plan without submitting f
   assert.match(body.legalNotice.privacyUrl, /\/legal\/privacy$/);
   assert.equal(body.managedBudget.remainingDailyBudgetAtomic, "4000000");
   assert.equal(prepared.length, 1);
+});
+
+test("rateloop_get_rating_context returns local encrypted commit instructions and open-round plan", async () => {
+  __setMcpToolTestOverridesForTests({
+    getContentById: async () => ratingContent(),
+    readRatingAllowance: async () => 0n,
+    resolveRoundVoteRuntime: async () => ratingRuntime({ requiresOpenRound: true, roundStartTimeSeconds: null }),
+  });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: {
+      contentId: RATING_CONTENT_ID,
+      walletAddress: AGENT.walletAddress,
+    },
+    name: "rateloop_get_rating_context",
+  });
+  const body = result as {
+    openRoundTransactionPlan: { calls: Array<{ data: string; functionName: string; phase: string }> };
+    privacy: { inputMode: string };
+    ratingInputMode: string;
+    status: string;
+  };
+
+  assert.equal(body.status, "open_round_required");
+  assert.equal(body.ratingInputMode, "local_encrypted_commit");
+  assert.equal(body.privacy.inputMode, "local_encrypted_commit");
+  assert.equal(body.openRoundTransactionPlan.calls[0]?.functionName, "openRound");
+  assert.equal(body.openRoundTransactionPlan.calls[0]?.phase, "open_round");
+  assert.match(body.openRoundTransactionPlan.calls[0]?.data ?? "", /^0x/);
+});
+
+test("rateloop_prepare_rating_transactions rejects plaintext rating fields", async () => {
+  await assert.rejects(
+    () =>
+      callPublicRateLoopMcpTool({
+        arguments: ratingPrepareArguments({ isUp: true }),
+        name: "rateloop_prepare_rating_transactions",
+      }),
+    /Do not send plaintext rating fields/i,
+  );
+});
+
+test("rateloop_prepare_rating_transactions returns wallet calls for encrypted commit material", async () => {
+  __setMcpToolTestOverridesForTests({
+    getContentById: async () => ratingContent(),
+    readRatingAllowance: async () => 0n,
+    resolveRoundVoteRuntime: async () => ratingRuntime(),
+  });
+
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: ratingPrepareArguments(),
+    name: "rateloop_prepare_rating_transactions",
+  });
+  const body = result as {
+    commit: { ciphertextHash: string; commitHash: string };
+    confirmTool: string;
+    status: string;
+    statusTool: string;
+    transactionPlan: { calls: Array<{ data: string; functionName: string; phase: string }> };
+  };
+
+  assert.equal(body.status, "awaiting_wallet_signature");
+  assert.equal(body.confirmTool, "rateloop_confirm_rating_transactions");
+  assert.equal(body.statusTool, "rateloop_get_rating_status");
+  assert.equal(body.commit.commitHash, RATING_COMMIT_HASH);
+  assert.match(body.commit.ciphertextHash, /^0x[a-f0-9]{64}$/i);
+  assert.deepEqual(
+    body.transactionPlan.calls.map(call => call.phase),
+    ["approve_lrep", "commit_rating"],
+  );
+  assert.ok(body.transactionPlan.calls.every(call => call.data.startsWith("0x")));
+});
+
+test("rateloop_prepare_rating_transactions can return a zero-stake advisory plan", async () => {
+  __setMcpToolTestOverridesForTests({
+    getContentById: async () => ratingContent(),
+    readRatingAllowance: async () => 0n,
+    resolveRoundVoteRuntime: async () => ratingRuntime(),
+  });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: ratingPrepareArguments({ stakeWei: "0" }),
+    name: "rateloop_prepare_rating_transactions",
+  });
+  const body = result as {
+    isAdvisoryVote: boolean;
+    transactionPlan: { calls: Array<{ functionName: string; phase: string }> };
+  };
+
+  assert.equal(body.isAdvisoryVote, true);
+  assert.deepEqual(
+    body.transactionPlan.calls.map(call => call.phase),
+    ["record_advisory_vote"],
+  );
+  assert.equal(body.transactionPlan.calls[0]?.functionName, "recordAdvisoryVote");
+});
+
+test("rateloop_confirm_rating_transactions confirms matching rating commit receipts", async () => {
+  const topics = encodeEventTopics({
+    abi: RoundVotingEngineAbi,
+    args: {
+      contentId: BigInt(RATING_CONTENT_ID),
+      roundId: RATING_ROUND_ID,
+      voter: AGENT.walletAddress,
+    },
+    eventName: "VoteCommitted",
+  });
+  const data = encodeAbiParameters(
+    [
+      { name: "commitHash", type: "bytes32" },
+      { name: "roundReferenceRatingBps", type: "uint16" },
+      { name: "targetRound", type: "uint64" },
+      { name: "drandChainHash", type: "bytes32" },
+      { name: "stake", type: "uint256" },
+      { name: "ciphertextHash", type: "bytes32" },
+      { name: "ciphertext", type: "bytes" },
+    ],
+    [RATING_COMMIT_HASH, 5000, 100n, RATING_DRAND_CHAIN_HASH, 1_000_000n, `0x${"6".repeat(64)}`, RATING_CIPHERTEXT],
+  );
+
+  __setMcpToolTestOverridesForTests({
+    getRatingTransactionReceipt: async () =>
+      ({
+        logs: [
+          {
+            address: "0x0000000000000000000000000000000000000001",
+            data,
+            topics,
+          },
+        ],
+        status: "success",
+      }) as never,
+  });
+
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: {
+      commitHash: RATING_COMMIT_HASH,
+      contentId: RATING_CONTENT_ID,
+      roundId: RATING_ROUND_ID.toString(),
+      transactionHashes: [`0x${"7".repeat(64)}`],
+      walletAddress: AGENT.walletAddress,
+    },
+    name: "rateloop_confirm_rating_transactions",
+  });
+  const body = result as { confirmed: boolean; commitHash: string | null; roundId: string; status: string };
+
+  assert.equal(body.status, "committed");
+  assert.equal(body.confirmed, true);
+  assert.equal(body.roundId, RATING_ROUND_ID.toString());
+  assert.equal(body.commitHash, RATING_COMMIT_HASH);
 });
 
 test("rateloop_ask_humans carries optional feedback bonus and reserves total spend", async () => {
