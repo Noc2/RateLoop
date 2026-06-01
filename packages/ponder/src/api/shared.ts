@@ -194,6 +194,8 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
     conservativeRatingBps: round.conservativeRatingBps,
     confidenceMass: round.confidenceMass,
     effectiveEvidence: round.effectiveEvidence,
+    upEvidence: round.upEvidence,
+    downEvidence: round.downEvidence,
     settledRounds: round.settledRounds,
     lowSince: round.lowSince,
     startTime: round.startTime,
@@ -266,6 +268,8 @@ function formatRoundSummary(row: {
   conservativeRatingBps: number;
   confidenceMass: bigint;
   effectiveEvidence: bigint;
+  upEvidence: bigint;
+  downEvidence: bigint;
   settledRounds: number;
   lowSince: bigint;
   startTime: bigint | null;
@@ -292,6 +296,8 @@ function formatRoundSummary(row: {
     conservativeRatingBps: row.conservativeRatingBps,
     confidenceMass: row.confidenceMass,
     effectiveEvidence: row.effectiveEvidence,
+    upEvidence: row.upEvidence,
+    downEvidence: row.downEvidence,
     settledRounds: row.settledRounds,
     lowSince: row.lowSince,
     startTime: row.startTime,

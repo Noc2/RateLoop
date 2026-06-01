@@ -85,9 +85,11 @@ function mockPonderModules<T>(result: T) {
       ratingBps: "content.ratingBps",
       ratingConfidenceMass: "content.ratingConfidenceMass",
       rating: "content.rating",
+      ratingDownEvidence: "content.ratingDownEvidence",
       ratingEffectiveEvidence: "content.ratingEffectiveEvidence",
       ratingLowSince: "content.ratingLowSince",
       ratingSettledRounds: "content.ratingSettledRounds",
+      ratingUpEvidence: "content.ratingUpEvidence",
       status: "content.status",
       submitter: "content.submitter",
       tags: "content.tags",
@@ -322,6 +324,7 @@ function mockPonderModules<T>(result: T) {
     ratingChange: {
       confidenceMass: "ratingChange.confidenceMass",
       conservativeRatingBps: "ratingChange.conservativeRatingBps",
+      downEvidence: "ratingChange.downEvidence",
       effectiveEvidence: "ratingChange.effectiveEvidence",
       lowSince: "ratingChange.lowSince",
       newRatingBps: "ratingChange.newRatingBps",
@@ -330,6 +333,7 @@ function mockPonderModules<T>(result: T) {
       roundId: "ratingChange.roundId",
       settledRounds: "ratingChange.settledRounds",
       timestamp: "ratingChange.timestamp",
+      upEvidence: "ratingChange.upEvidence",
     },
     rewardClaim: {
       claimedAt: "rewardClaim.claimedAt",
@@ -341,6 +345,7 @@ function mockPonderModules<T>(result: T) {
     round: {
       confidenceMass: "round.confidenceMass",
       contentId: "round.contentId",
+      downEvidence: "round.downEvidence",
       downPool: "round.downPool",
       conservativeRatingBps: "round.conservativeRatingBps",
       effectiveEvidence: "round.effectiveEvidence",
@@ -360,6 +365,7 @@ function mockPonderModules<T>(result: T) {
       startTime: "round.startTime",
       state: "round.state",
       totalStake: "round.totalStake",
+      upEvidence: "round.upEvidence",
       upPool: "round.upPool",
       upWins: "round.upWins",
       voteCount: "round.voteCount",

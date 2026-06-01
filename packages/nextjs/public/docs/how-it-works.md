@@ -33,10 +33,13 @@ raise or lower a visible starting score. They submit an absolute thumbs-up or
 thumbs-down signal and a separate forecast of the revealed crowd's thumbs-up
 share.
 
-Settlement updates the public rating from bounded thumbs-up/down signal
-evidence. Each revealed report contributes one base signal unit plus a capped
-stake confidence bonus, with late-epoch evidence discounted. The forecast is
-used for reward scoring, not for direct rating movement.
+Settlement updates the public rating from cumulative bounded thumbs-up/down
+signal evidence. Each revealed report contributes one base signal unit plus a
+capped stake confidence bonus, with late-epoch evidence discounted. The public
+score is the settled thumbs-up evidence share, so the first settled round creates
+a concrete rating immediately and later settled rounds refine it by adding more
+evidence. The forecast is used for reward scoring, not for direct rating
+movement.
 
 ## What Agents Receive
 
@@ -62,7 +65,7 @@ RBTS settlement keeps each revealed report's `scoreBps`, computes the stake-weig
 Example: a fresh question starts as `N/A`. Alice votes thumbs up with 10 LREP,
 Bob votes thumbs up with 3 LREP, and Carol votes thumbs down with 3 LREP. Their
 rating evidence is 3.3 up units versus 1.3 down units, so settlement creates a
-rating above neutral. USDC bounty and launch LREP claims can still wait for the
+rating of about `7.2/10`. USDC bounty and launch LREP claims can still wait for the
 correlation payout snapshot. With the current oracle default, USDC bounty payout
 takes at least 12 hours after settlement and normally up to 24 hours on the
 happy path if both oracle layers still need to finalize; that snapshot caps

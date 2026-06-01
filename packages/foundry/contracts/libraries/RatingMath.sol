@@ -5,7 +5,7 @@ import { SD59x18, abs, convert, div, exp, ln, mul, sd, unwrap } from "../../lib/
 import { RatingLib } from "./RatingLib.sol";
 
 /// @title RatingMath
-/// @notice Pure helpers for the score-relative rating system.
+/// @notice Pure helpers for cumulative bounded-evidence ratings.
 library RatingMath {
     error RatingMathOverflow();
 
@@ -22,6 +22,12 @@ library RatingMath {
         uint256 displayRating = (uint256(ratingBps) + 50) / 100;
         if (displayRating > 100) return 100;
         return uint8(displayRating);
+    }
+
+    function evidenceRatingBps(uint256 upEvidence, uint256 downEvidence) internal pure returns (uint16) {
+        uint256 totalEvidence = upEvidence + downEvidence;
+        if (totalEvidence == 0) return RatingLib.DEFAULT_RATING_BPS;
+        return clampRatingBps((upEvidence * RatingLib.BPS_SCALE) / totalEvidence);
     }
 
     function probabilityX18FromBps(uint16 ratingBps) internal pure returns (SD59x18) {
@@ -49,21 +55,25 @@ library RatingMath {
         RatingLib.SlashConfig memory slashConfig,
         uint48 settledAt
     ) internal pure returns (RatingLib.RatingState memory nextState, int256 observedGapX18, int256 ratingDeltaBps) {
-        uint256 roundEvidence = weightedUp + weightedDown;
-        uint256 confidenceMass =
-            previousState.confidenceMass == 0 ? ratingConfig.confidenceMassInitial : previousState.confidenceMass;
-        confidenceMass = _clampConfidenceMass(confidenceMass, ratingConfig);
+        uint256 cumulativeUpEvidence = uint256(previousState.upEvidence) + weightedUp;
+        uint256 cumulativeDownEvidence = uint256(previousState.downEvidence) + weightedDown;
+        uint256 cumulativeEvidence = cumulativeUpEvidence + cumulativeDownEvidence;
 
-        int256 anchorLogitX18 = ratingBpsToLogitX18(referenceRatingBps);
         observedGapX18 = computeObservedGapX18(weightedUp, weightedDown, ratingConfig);
-        int256 deltaLogitX18 = computeDeltaLogitX18(observedGapX18, roundEvidence, confidenceMass, ratingConfig);
-        int256 nextLogitX18 = _clampSigned(anchorLogitX18 + deltaLogitX18, ratingConfig.maxAbsLogitX18);
-        uint16 nextRatingBps = logitX18ToRatingBps(nextLogitX18);
+        uint16 nextRatingBps = cumulativeEvidence == 0
+            ? clampRatingBps(previousState.ratingBps == 0 ? referenceRatingBps : previousState.ratingBps)
+            : evidenceRatingBps(cumulativeUpEvidence, cumulativeDownEvidence);
+        int256 nextLogitX18 = ratingBpsToLogitX18(nextRatingBps);
 
         nextState.ratingLogitX18 = _toInt128(nextLogitX18);
-        nextState.confidenceMass =
-            _toUint128(computeNextConfidenceMass(confidenceMass, roundEvidence, observedGapX18, ratingConfig));
-        nextState.effectiveEvidence = _toUint128(uint256(previousState.effectiveEvidence) + roundEvidence);
+        nextState.confidenceMass = _toUint128(
+            _clampConfidenceMass(
+                cumulativeEvidence == 0 ? ratingConfig.confidenceMassInitial : cumulativeEvidence, ratingConfig
+            )
+        );
+        nextState.effectiveEvidence = _toUint128(cumulativeEvidence);
+        nextState.upEvidence = _toUint128(cumulativeUpEvidence);
+        nextState.downEvidence = _toUint128(cumulativeDownEvidence);
         nextState.settledRounds = previousState.settledRounds + 1;
         nextState.ratingBps = nextRatingBps;
         nextState.conservativeRatingBps =

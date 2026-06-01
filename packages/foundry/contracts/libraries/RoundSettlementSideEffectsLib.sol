@@ -73,14 +73,20 @@ library RoundSettlementSideEffectsLib {
 
     function _applyBinarySettlement(
         uint16 referenceRatingBps,
-        uint64 upPool,
-        uint64 downPool,
+        uint64 upEvidence,
+        uint64 downEvidence,
         RatingLib.RatingState memory previousState,
         RatingLib.RatingConfig memory ratingConfig,
         RatingLib.SlashConfig memory slashConfig
     ) private view returns (RatingLib.RatingState memory nextState) {
         (nextState,,) = RatingMath.applySettlement(
-            referenceRatingBps, upPool, downPool, previousState, ratingConfig, slashConfig, uint48(block.timestamp)
+            referenceRatingBps,
+            upEvidence,
+            downEvidence,
+            previousState,
+            ratingConfig,
+            slashConfig,
+            uint48(block.timestamp)
         );
     }
 }

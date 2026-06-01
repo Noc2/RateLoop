@@ -122,7 +122,7 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
     publicNoteCount: 1,
     sourceUrlCount: 0,
   });
-  assert.match(result.rationaleSummary, /72\/100/);
+  assert.match(result.rationaleSummary, /7\.2\/10/);
   assert.equal(result.methodology.templateId, "generic_rating");
 });
 
@@ -456,7 +456,7 @@ test("buildAgentResultPackage prefers the latest round rating over stale content
   assert.equal(result.distribution.ratingBps, 3900);
   assert.equal(result.distribution.conservativeRatingBps, 3900);
   assert.equal(result.recommendedNextAction, "do_not_proceed");
-  assert.match(result.rationaleSummary, /39\/100/);
+  assert.match(result.rationaleSummary, /3\.9\/10/);
 });
 
 test("buildAgentResultPackage treats tied rounds as ready inconclusive results", () => {

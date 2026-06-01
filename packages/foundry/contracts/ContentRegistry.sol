@@ -283,6 +283,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint16 oldRatingBps,
         uint16 newRatingBps,
         uint16 conservativeRatingBps,
+        uint256 upEvidence,
+        uint256 downEvidence,
         uint256 confidenceMass,
         uint256 effectiveEvidence,
         uint32 settledRounds
@@ -943,16 +945,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         emit ContentRoundConfigSet(
             contentId, roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters
         );
-        _ratingState[contentId] = RatingLib.RatingState({
-            ratingLogitX18: int128(RatingLib.DEFAULT_RATING_LOGIT_X18),
-            confidenceMass: uint128(_getInitialConfidenceMass()),
-            effectiveEvidence: 0,
-            settledRounds: 0,
-            ratingBps: RatingLib.DEFAULT_RATING_BPS,
-            conservativeRatingBps: RatingLib.DEFAULT_RATING_BPS,
-            lastUpdatedAt: 0,
-            lowSince: 0
-        });
+        RatingLib.RatingState storage ratingState = _ratingState[contentId];
+        ratingState.confidenceMass = uint128(_getInitialConfidenceMass());
+        ratingState.ratingBps = RatingLib.DEFAULT_RATING_BPS;
+        ratingState.conservativeRatingBps = RatingLib.DEFAULT_RATING_BPS;
         contentSlashConfigSnapshot[contentId] = _getCurrentSlashConfig();
         dormancyAnchorAt[contentId] = block.timestamp;
         delete dormantKeyReleasableAt[contentId];
@@ -1161,6 +1157,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         state.ratingLogitX18 = nextState.ratingLogitX18;
         state.confidenceMass = nextState.confidenceMass;
         state.effectiveEvidence = nextState.effectiveEvidence;
+        state.upEvidence = nextState.upEvidence;
+        state.downEvidence = nextState.downEvidence;
         state.settledRounds = nextState.settledRounds;
         state.ratingBps = clampedRatingBps;
         state.conservativeRatingBps = clampedConservativeRatingBps;
@@ -1180,6 +1178,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             oldRatingBps,
             clampedRatingBps,
             clampedConservativeRatingBps,
+            nextState.upEvidence,
+            nextState.downEvidence,
             nextState.confidenceMass,
             nextState.effectiveEvidence,
             nextState.settledRounds

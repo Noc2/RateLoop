@@ -244,8 +244,8 @@ test("mapContentItem exposes settled ratings without using the open round refere
     submitter: "0x00000000000000000000000000000000000000aa",
     contentHash: "hash-6",
     categoryId: "1",
-    rating: 72,
-    ratingBps: 7_200,
+    rating: 74,
+    ratingBps: 7_356,
     ratingSettledRounds: 1,
     openRound: {
       roundId: "2",
@@ -261,8 +261,8 @@ test("mapContentItem exposes settled ratings without using the open round refere
     },
   });
 
-  assert.equal(item.rating, 72);
-  assert.equal(getVisibleContentRating(item), 72);
+  assert.equal(item.rating, 74);
+  assert.equal(getVisibleContentRating(item), 73.56);
 });
 
 test("mapContentItem preserves the latest terminal round separately from the open round", () => {

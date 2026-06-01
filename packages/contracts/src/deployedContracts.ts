@@ -4830,6 +4830,16 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint128",
                 },
                 {
+                  name: "upEvidence",
+                  type: "uint128",
+                  internalType: "uint128",
+                },
+                {
+                  name: "downEvidence",
+                  type: "uint128",
+                  internalType: "uint128",
+                },
+                {
                   name: "settledRounds",
                   type: "uint32",
                   internalType: "uint32",
@@ -5998,6 +6008,16 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint128",
                 },
                 {
+                  name: "upEvidence",
+                  type: "uint128",
+                  internalType: "uint128",
+                },
+                {
+                  name: "downEvidence",
+                  type: "uint128",
+                  internalType: "uint128",
+                },
+                {
                   name: "settledRounds",
                   type: "uint32",
                   internalType: "uint32",
@@ -6435,6 +6455,18 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint16",
               indexed: false,
               internalType: "uint16",
+            },
+            {
+              name: "upEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "downEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
             {
               name: "confidenceMass",
@@ -30974,6 +31006,16 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint128",
                 },
                 {
+                  name: "upEvidence",
+                  type: "uint128",
+                  internalType: "uint128",
+                },
+                {
+                  name: "downEvidence",
+                  type: "uint128",
+                  internalType: "uint128",
+                },
+                {
                   name: "settledRounds",
                   type: "uint32",
                   internalType: "uint32",
@@ -32142,6 +32184,16 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint128",
                 },
                 {
+                  name: "upEvidence",
+                  type: "uint128",
+                  internalType: "uint128",
+                },
+                {
+                  name: "downEvidence",
+                  type: "uint128",
+                  internalType: "uint128",
+                },
+                {
                   name: "settledRounds",
                   type: "uint32",
                   internalType: "uint32",
@@ -32579,6 +32631,18 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint16",
               indexed: false,
               internalType: "uint16",
+            },
+            {
+              name: "upEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "downEvidence",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
             {
               name: "confidenceMass",

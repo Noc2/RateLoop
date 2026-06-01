@@ -34,6 +34,8 @@ contract RatingMathFuzzTest is Test {
         int128 ratingLogitX18,
         uint128 confidenceMass,
         uint128 effectiveEvidence,
+        uint128 upEvidence,
+        uint128 downEvidence,
         uint32 settledRounds,
         uint16 ratingBps,
         uint16 conservativeRatingBps,
@@ -44,6 +46,8 @@ contract RatingMathFuzzTest is Test {
             ratingLogitX18: ratingLogitX18,
             confidenceMass: confidenceMass,
             effectiveEvidence: effectiveEvidence,
+            upEvidence: upEvidence,
+            downEvidence: downEvidence,
             settledRounds: settledRounds,
             ratingBps: ratingBps,
             conservativeRatingBps: conservativeRatingBps,
@@ -58,7 +62,7 @@ contract RatingMathFuzzTest is Test {
         assertApproxEqAbs(roundTrip, ratingBps, 1, "round-trip drift too large");
     }
 
-    function testFuzz_AnchorRelativeMovement_PreservesOrdering(
+    function testFuzz_EvidenceSettlement_IgnoresReferenceForPublicScore(
         uint16 referenceA,
         uint16 referenceB,
         uint256 upStake,
@@ -77,14 +81,14 @@ contract RatingMathFuzzTest is Test {
 
         RatingLib.RatingConfig memory cfg = _ratingConfig();
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
-        RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 5_000, 5_000, 0, 0);
+        RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 0, 0, 5_000, 5_000, 0, 0);
 
         (RatingLib.RatingState memory nextA,,) =
             RatingMath.applySettlement(referenceA, upStake, downStake, prev, cfg, slashCfg, 1);
         (RatingLib.RatingState memory nextB,,) =
             RatingMath.applySettlement(referenceB, upStake, downStake, prev, cfg, slashCfg, 1);
 
-        assertLe(nextA.ratingBps, nextB.ratingBps, "higher anchor should not settle lower for same vote mix");
+        assertEq(nextA.ratingBps, nextB.ratingBps, "public score should come from evidence, not prior anchor");
     }
 
     function testFuzz_ConservativePenalty_WeakensWithConfidence(uint16 ratingBps, uint256 confidenceMass) public pure {

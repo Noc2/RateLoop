@@ -53,7 +53,7 @@ interface VotingQuestionCardProps {
 }
 
 const RATING_GUIDANCE_TEXT =
-  "The public rating appears after a round settles. Vote thumbs up when the content is useful for the question, thumbs down when it is unhelpful, broken, misleading, or unsafe. Your separate forecast is the expected share of revealed raters choosing thumbs up.";
+  "The public rating appears after a round settles and is the cumulative share of bounded thumbs-up evidence across settled rounds. Vote thumbs up when the content is useful for the question, thumbs down when it is unhelpful, broken, misleading, or unsafe. Your separate forecast is the expected share of revealed raters choosing thumbs up.";
 const REWARD_POOL_TOOLTIP_TEXT =
   "This question's bounty is shown in USD and backed by USDC on World Chain. Eligible revealed raters can claim from it in qualified rounds, with 3% reserved for the eligible frontend operator.";
 const LREP_REWARD_POOL_TOOLTIP_TEXT =

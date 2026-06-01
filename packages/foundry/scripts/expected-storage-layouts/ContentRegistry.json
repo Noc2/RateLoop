@@ -403,7 +403,7 @@
       "id": "t_struct(RatingState)",
       "encoding": "inplace",
       "label": "struct RatingLib.RatingState",
-      "numberOfBytes": "96",
+      "numberOfBytes": "128",
       "members": [
         {
           "slot": 0,
@@ -426,29 +426,41 @@
         {
           "slot": 1,
           "offset": 16,
+          "label": "upEvidence",
+          "type": "t_uint128"
+        },
+        {
+          "slot": 2,
+          "offset": 0,
+          "label": "downEvidence",
+          "type": "t_uint128"
+        },
+        {
+          "slot": 2,
+          "offset": 16,
           "label": "settledRounds",
           "type": "t_uint32"
         },
         {
-          "slot": 1,
+          "slot": 2,
           "offset": 20,
           "label": "ratingBps",
           "type": "t_uint16"
         },
         {
-          "slot": 1,
+          "slot": 2,
           "offset": 22,
           "label": "conservativeRatingBps",
           "type": "t_uint16"
         },
         {
-          "slot": 1,
+          "slot": 2,
           "offset": 24,
           "label": "lastUpdatedAt",
           "type": "t_uint48"
         },
         {
-          "slot": 2,
+          "slot": 3,
           "offset": 0,
           "label": "lowSince",
           "type": "t_uint48"

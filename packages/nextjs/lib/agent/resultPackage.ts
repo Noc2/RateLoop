@@ -13,6 +13,7 @@ type RoundLike = {
   confidenceMass?: string | bigint | number | null;
   conservativeRatingBps?: string | number | null;
   downCount?: number | null;
+  downEvidence?: string | bigint | number | null;
   downPool?: string | bigint | number | null;
   effectiveEvidence?: string | bigint | number | null;
   ratingBps?: string | number | null;
@@ -23,6 +24,7 @@ type RoundLike = {
   state?: number | null;
   totalStake?: string | bigint | number | null;
   upCount?: number | null;
+  upEvidence?: string | bigint | number | null;
   upPool?: string | bigint | number | null;
   upWins?: boolean | null;
   voteCount?: number | null;
@@ -56,6 +58,11 @@ type AgentResultPackage = {
     rating: number | null;
     ratingBps: number | null;
     conservativeRatingBps: number | null;
+    evidence: {
+      down: string;
+      total: string;
+      up: string;
+    };
     up: {
       count: number;
       stake: string;
@@ -150,11 +157,13 @@ type AgentResultPackage = {
     contentId: string;
     currentRating: number | null;
     currentRatingBps: number | null;
+    downEvidence: string | null;
     effectiveEvidence: string | null;
     latestRound: RoundLike | null;
     question: string;
     ratingSettledRounds: number | null;
     status: number | null;
+    upEvidence: string | null;
   };
 };
 
@@ -279,6 +288,11 @@ function buildDistributionFromVotes(params: {
       count: downCount,
       share: downShare,
       stake: downStake.toString(),
+    },
+    evidence: {
+      down: downStake.toString(),
+      total: totalStake.toString(),
+      up: upStake.toString(),
     },
     rating: ratingBps === null ? null : ratingBps / 100,
     ratingBps,
@@ -445,6 +459,9 @@ export function buildAgentResultPackage(params: {
     latestRoundRatingBps !== null ? latestRoundRatingBps / 100 : toNumberValue(params.content.rating, null);
   const upStake = toBigIntValue(latestRound?.upPool);
   const downStake = toBigIntValue(latestRound?.downPool);
+  const upEvidence = toBigIntValue(latestRound?.upEvidence ?? params.content.ratingUpEvidence);
+  const downEvidence = toBigIntValue(latestRound?.downEvidence ?? params.content.ratingDownEvidence);
+  const totalEvidence = upEvidence + downEvidence;
   const totalStakeFromRound = toBigIntValue(latestRound?.totalStake);
   const stakeTotal = totalStakeFromRound > 0n ? totalStakeFromRound : upStake + downStake;
   const upShare = bigintShare(upStake, stakeTotal);
@@ -478,7 +495,7 @@ export function buildAgentResultPackage(params: {
   const cohortSummary = buildAgentCohortSummary(params.audienceContext);
   const feedbackTypes = summarizeFeedbackTypes(params.feedback);
   const stateLabel = roundState === null ? null : ROUND_STATE_LABEL[roundState as keyof typeof ROUND_STATE_LABEL];
-  const ratingText = ratingBps === null ? "no rating yet" : `${Math.round(ratingBps / 100)}/100`;
+  const ratingText = ratingBps === null ? "no rating yet" : `${(ratingBps / 1000).toFixed(1)}/10`;
   const feedbackText =
     feedbackTypes.length > 0
       ? `Public feedback includes ${feedbackTypes.join(", ")}.`
@@ -491,7 +508,7 @@ export function buildAgentResultPackage(params: {
       : null;
   const limitations = [
     "RateLoop ratings are human judgment signals, not factual proof.",
-    "Confidence is derived from revealed participation, stake margin, and settled history.",
+    "Confidence is derived from revealed participation, bounded evidence, stake margin, and settled history.",
   ];
 
   if (!ready) limitations.push("The latest round is not final, so the result can change.");
@@ -505,6 +522,11 @@ export function buildAgentResultPackage(params: {
       count: latestRound?.downCount ?? 0,
       share: downShare,
       stake: downStake.toString(),
+    },
+    evidence: {
+      down: downEvidence.toString(),
+      total: totalEvidence.toString(),
+      up: upEvidence.toString(),
     },
     rating,
     ratingBps,
@@ -588,11 +610,13 @@ export function buildAgentResultPackage(params: {
       contentId: params.content.id,
       currentRating: rating,
       currentRatingBps: ratingBps,
+      downEvidence: downEvidence > 0n ? downEvidence.toString() : null,
       effectiveEvidence: params.content.ratingEffectiveEvidence ?? latestRound?.effectiveEvidence?.toString?.() ?? null,
       latestRound,
       question: params.content.question ?? params.content.title,
       ratingSettledRounds: settledRounds,
       status: params.content.status ?? null,
+      upEvidence: upEvidence > 0n ? upEvidence.toString() : null,
     },
     publicUrl: params.publicUrl,
     rationaleSummary: `Latest ${stateLabel ?? "unknown"} round has ${ratingText}, ${revealedCount} revealed votes, and ${stakeTotal.toString()} raw stake. ${feedbackText}`,

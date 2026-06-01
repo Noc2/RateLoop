@@ -291,12 +291,14 @@ describe("ContentRegistry ponder handlers", () => {
           confidenceMass: 123n,
           conservativeRatingBps: 5200,
           contentId: 1n,
+          downEvidence: 111n,
           effectiveEvidence: 456n,
           newRatingBps: 5700,
           oldRatingBps: 5000,
           referenceRatingBps: 5000,
           roundId: 2n,
           settledRounds: 3,
+          upEvidence: 345n,
         },
         block: {
           number: 99n,
@@ -325,11 +327,11 @@ describe("ContentRegistry ponder handlers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           table: "content",
-          values: expect.objectContaining({ ratingLowSince: 777n }),
+          values: expect.objectContaining({ ratingDownEvidence: 111n, ratingLowSince: 777n, ratingUpEvidence: 345n }),
         }),
         expect.objectContaining({
           table: "round",
-          values: expect.objectContaining({ lowSince: 777n }),
+          values: expect.objectContaining({ downEvidence: 111n, lowSince: 777n, upEvidence: 345n }),
         }),
       ]),
     );
@@ -338,7 +340,7 @@ describe("ContentRegistry ponder handlers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           table: "ratingChange",
-          values: expect.objectContaining({ lowSince: 777n }),
+          values: expect.objectContaining({ downEvidence: 111n, lowSince: 777n, upEvidence: 345n }),
         }),
       ]),
     );

@@ -316,6 +316,8 @@ export interface PonderContentItem {
   conservativeRatingBps?: number;
   ratingConfidenceMass?: string;
   ratingEffectiveEvidence?: string;
+  ratingUpEvidence?: string;
+  ratingDownEvidence?: string;
   ratingSettledRounds?: number;
   ratingLowSince?: string;
   createdAt: string;
@@ -528,6 +530,8 @@ export interface PonderContentOpenRoundSummary {
   conservativeRatingBps?: number;
   confidenceMass?: string;
   effectiveEvidence?: string;
+  upEvidence?: string;
+  downEvidence?: string;
   settledRounds?: number;
   lowSince?: string;
   startTime: string | null;
@@ -558,6 +562,8 @@ export interface PonderRoundItem {
   conservativeRatingBps?: number;
   confidenceMass?: string;
   effectiveEvidence?: string;
+  upEvidence?: string;
+  downEvidence?: string;
   settledRounds?: number;
   lowSince?: string;
   upWins: boolean | null;
@@ -656,6 +662,8 @@ export interface PonderProfileSubmissionItem {
   conservativeRatingBps?: number;
   ratingConfidenceMass?: string;
   ratingEffectiveEvidence?: string;
+  ratingUpEvidence?: string;
+  ratingDownEvidence?: string;
   ratingSettledRounds?: number;
   ratingLowSince?: string;
   createdAt: string;

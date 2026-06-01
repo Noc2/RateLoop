@@ -97,6 +97,8 @@ contract RatingMathTest is Test {
         int128 ratingLogitX18,
         uint128 confidenceMass,
         uint128 effectiveEvidence,
+        uint128 upEvidence,
+        uint128 downEvidence,
         uint32 settledRounds,
         uint16 ratingBps,
         uint16 conservativeRatingBps,
@@ -107,6 +109,8 @@ contract RatingMathTest is Test {
             ratingLogitX18: ratingLogitX18,
             confidenceMass: confidenceMass,
             effectiveEvidence: effectiveEvidence,
+            upEvidence: upEvidence,
+            downEvidence: downEvidence,
             settledRounds: settledRounds,
             ratingBps: ratingBps,
             conservativeRatingBps: conservativeRatingBps,
@@ -132,16 +136,30 @@ contract RatingMathTest is Test {
         }
     }
 
-    function test_AnchorRelativeMovement_PushesFromTheCurrentReference() public view {
+    function test_EvidenceSettlement_FirstRoundUsesDirectBoundedShare() public view {
         RatingLib.RatingConfig memory cfg = _ratingConfig();
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
-        RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 5_000, 5_000, 0, 0);
+        RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 0, 0, 5_000, 5_000, 0, 0);
 
-        (RatingLib.RatingState memory nextLow,,) = harness.applySettlement(5_000, 60e6, 40e6, prev, cfg, slashCfg, 1);
-        (RatingLib.RatingState memory nextHigh,,) = harness.applySettlement(6_000, 60e6, 40e6, prev, cfg, slashCfg, 1);
+        (RatingLib.RatingState memory next,,) =
+            harness.applySettlement(5_000, 3_200_000, 1_150_000, prev, cfg, slashCfg, 1);
 
-        assertGt(nextLow.ratingBps, 5_000, "positive evidence should move above the anchor");
-        assertGt(nextHigh.ratingBps, nextLow.ratingBps, "higher anchor should settle higher under same evidence");
+        assertEq(next.ratingBps, 7_356, "rating should be direct cumulative up evidence share");
+        assertEq(next.upEvidence, 3_200_000, "up evidence should accumulate");
+        assertEq(next.downEvidence, 1_150_000, "down evidence should accumulate");
+        assertEq(next.effectiveEvidence, 4_350_000, "total evidence should accumulate");
+    }
+
+    function test_EvidenceSettlement_LaterRoundsAggregateWithPriorEvidence() public view {
+        RatingLib.RatingConfig memory cfg = _ratingConfig();
+        RatingLib.SlashConfig memory slashCfg = _slashConfig();
+        RatingLib.RatingState memory prev = _state(0, 50e6, 4_350_000, 3_200_000, 1_150_000, 1, 7_356, 5_856, 1, 0);
+
+        (RatingLib.RatingState memory next,,) = harness.applySettlement(7_356, 0, 4_350_000, prev, cfg, slashCfg, 2);
+
+        assertEq(next.upEvidence, 3_200_000, "prior up evidence should remain");
+        assertEq(next.downEvidence, 5_500_000, "new down evidence should accumulate");
+        assertEq(next.ratingBps, 3_678, "later rounds should refine the cumulative rating");
     }
 
     function test_ConfidenceReopening_ContradictionLowersConfidenceMass() public view {
@@ -171,13 +189,13 @@ contract RatingMathTest is Test {
     function test_LowSinceGating_RequiresEvidenceRoundsAndPersistence() public view {
         RatingLib.RatingConfig memory cfg = _ratingConfig();
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
-        RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 5_000, 5_000, 0, 0);
+        RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 0, 0, 5_000, 5_000, 0, 0);
 
         (RatingLib.RatingState memory notYetSlashable,,) =
             harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 1);
         assertEq(notYetSlashable.lowSince, 0, "insufficient settled rounds should not arm lowSince");
 
-        prev = _state(0, 80e6, 100e6, 1, 5_000, 5_000, 1, 0);
+        prev = _state(0, 80e6, 100e6, 0, 100e6, 1, 1_000, 1_000, 1, 0);
         (RatingLib.RatingState memory slashable,,) = harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 2);
         assertEq(slashable.lowSince, 2, "persistent low rating should arm lowSince once thresholds are met");
 

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.34;
 
 /// @title RatingLib
-/// @notice Shared config and state structs for the score-relative rating system.
+/// @notice Shared config and state structs for the cumulative bounded-evidence rating system.
 library RatingLib {
     uint16 internal constant BPS_SCALE = 10_000;
     uint16 internal constant MIN_RATING_BPS = 100; // 1.0 / 10
@@ -38,6 +38,8 @@ library RatingLib {
         int128 ratingLogitX18;
         uint128 confidenceMass;
         uint128 effectiveEvidence;
+        uint128 upEvidence;
+        uint128 downEvidence;
         uint32 settledRounds;
         uint16 ratingBps;
         uint16 conservativeRatingBps;

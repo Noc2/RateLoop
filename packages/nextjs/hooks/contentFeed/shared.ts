@@ -32,6 +32,8 @@ export interface ContentOpenRoundSummary {
   conservativeRatingBps?: bigint;
   confidenceMass?: bigint;
   effectiveEvidence?: bigint;
+  upEvidence?: bigint;
+  downEvidence?: bigint;
   settledRounds?: number;
   lowSince?: bigint;
   startTime: bigint | null;
@@ -66,6 +68,8 @@ export interface ContentItem {
   rating: number;
   ratingBps?: bigint;
   conservativeRatingBps?: bigint;
+  ratingUpEvidence?: bigint;
+  ratingDownEvidence?: bigint;
   ratingSettledRounds?: number;
   createdAt: string | null;
   lastActivityAt: string | null;
@@ -251,6 +255,8 @@ function mapRoundSummary(
         conservativeRatingBps?: number;
         confidenceMass?: string;
         effectiveEvidence?: string;
+        upEvidence?: string;
+        downEvidence?: string;
         settledRounds?: number;
         lowSince?: string;
         startTime: string | null;
@@ -284,6 +290,8 @@ function mapRoundSummary(
     conservativeRatingBps: round.conservativeRatingBps !== undefined ? BigInt(round.conservativeRatingBps) : undefined,
     confidenceMass: round.confidenceMass !== undefined ? BigInt(round.confidenceMass) : undefined,
     effectiveEvidence: round.effectiveEvidence !== undefined ? BigInt(round.effectiveEvidence) : undefined,
+    upEvidence: round.upEvidence !== undefined ? BigInt(round.upEvidence) : undefined,
+    downEvidence: round.downEvidence !== undefined ? BigInt(round.downEvidence) : undefined,
     settledRounds: round.settledRounds,
     lowSince: round.lowSince !== undefined ? BigInt(round.lowSince) : undefined,
     startTime: round.startTime ? BigInt(round.startTime) : null,
@@ -338,6 +346,8 @@ export function mapContentItem(
     ratingBps?: number;
     conservativeRatingBps?: number;
     ratingSettledRounds?: number;
+    ratingUpEvidence?: string | number | bigint | null;
+    ratingDownEvidence?: string | number | bigint | null;
     createdAt?: string | null;
     lastActivityAt?: string | null;
     totalVotes?: number;
@@ -387,6 +397,8 @@ export function mapContentItem(
       conservativeRatingBps?: number;
       confidenceMass?: string;
       effectiveEvidence?: string;
+      upEvidence?: string;
+      downEvidence?: string;
       settledRounds?: number;
       lowSince?: string;
       startTime: string | null;
@@ -414,6 +426,8 @@ export function mapContentItem(
       conservativeRatingBps?: number;
       confidenceMass?: string;
       effectiveEvidence?: string;
+      upEvidence?: string;
+      downEvidence?: string;
       settledRounds?: number;
       lowSince?: string;
       startTime: string | null;
@@ -482,6 +496,12 @@ export function mapContentItem(
   const ratingBps = item.ratingBps !== undefined ? BigInt(item.ratingBps) : undefined;
   const conservativeRatingBps =
     item.conservativeRatingBps !== undefined ? BigInt(item.conservativeRatingBps) : undefined;
+  const ratingUpEvidence =
+    item.ratingUpEvidence !== undefined && item.ratingUpEvidence !== null ? BigInt(item.ratingUpEvidence) : undefined;
+  const ratingDownEvidence =
+    item.ratingDownEvidence !== undefined && item.ratingDownEvidence !== null
+      ? BigInt(item.ratingDownEvidence)
+      : undefined;
   const rewardPoolCurrency = item.rewardPoolSummary
     ? normalizeRewardPoolCurrency(item.rewardPoolSummary.currency, item.rewardPoolSummary.asset)
     : undefined;
@@ -527,6 +547,8 @@ export function mapContentItem(
     rating: displayedRating,
     ratingBps,
     conservativeRatingBps,
+    ratingUpEvidence,
+    ratingDownEvidence,
     ratingSettledRounds,
     createdAt: item.createdAt ?? null,
     lastActivityAt: item.lastActivityAt ?? null,
@@ -641,8 +663,11 @@ export function mapContentItem(
   };
 }
 
-export function getVisibleContentRating(item: Pick<ContentItem, "rating" | "ratingSettledRounds">): number | null {
-  return (item.ratingSettledRounds ?? 0) > 0 ? item.rating : null;
+export function getVisibleContentRating(
+  item: Pick<ContentItem, "rating" | "ratingBps" | "ratingSettledRounds">,
+): number | null {
+  if ((item.ratingSettledRounds ?? 0) <= 0) return null;
+  return item.ratingBps !== undefined ? Number(item.ratingBps) / 100 : item.rating;
 }
 
 export function mergeContentFeedMetadata(
