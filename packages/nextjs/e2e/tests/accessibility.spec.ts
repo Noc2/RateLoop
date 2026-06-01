@@ -2,6 +2,7 @@ import { type Page, expect, test } from "../fixtures/wallet";
 import { ANVIL_ACCOUNTS } from "../helpers/anvil-accounts";
 import { E2E_BASE_URL } from "../helpers/service-urls";
 import {
+  FEED_EMPTY_STATE_RE,
   VOTE_UP_BUTTON_NAME,
   findVoteableContent,
   gotoWithRetry,
@@ -91,29 +92,16 @@ test.describe("Accessibility basics", () => {
     await setupWallet(page, ANVIL_ACCOUNTS.account2.privateKey);
     await gotoPath(page, "/rate", { ensureWalletConnected: true });
 
-    try {
-      await waitForFeedLoaded(page, 30_000);
-    } catch {
-      test.skip(true, "Vote feed did not stabilize for feed semantics assertions");
-      return;
-    }
+    await waitForFeedLoaded(page, 30_000);
 
-    const emptyState = page.getByText(/No questions have been asked yet|No content found/i);
+    const emptyState = page.getByText(FEED_EMPTY_STATE_RE);
     const feed = page.locator('[role="feed"][aria-label="Content feed"]').first();
-    const isFeedVisible = await feed.isVisible({ timeout: 5_000 }).catch(() => false);
+    await expect(
+      feed.or(emptyState.first()).first(),
+      "Vote route should expose either feed semantics or a recognized empty state",
+    ).toBeVisible({ timeout: 10_000 });
 
-    if (!isFeedVisible) {
-      if (
-        await emptyState
-          .first()
-          .isVisible({ timeout: 3_000 })
-          .catch(() => false)
-      ) {
-        test.skip(true, "Vote feed is empty for feed semantics assertions");
-        return;
-      }
-
-      test.skip(true, "Vote feed did not expose feed semantics");
+    if (!(await feed.isVisible({ timeout: 5_000 }).catch(() => false))) {
       return;
     }
 
