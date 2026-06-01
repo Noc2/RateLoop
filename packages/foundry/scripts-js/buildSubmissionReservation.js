@@ -10,11 +10,11 @@ const args = process.argv.slice(2);
 if (
   args.length < 9 ||
   args.length === 10 ||
-  args.length > 20 ||
-  (args.length > 16 && args.length < 20)
+  args.length > 22 ||
+  (args.length > 18 && args.length < 22)
 ) {
   console.error(
-    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [requiredSettledRounds] [rewardPoolExpiresAt] [epochDuration maxDuration minVoters maxVoters]"
+    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [requiredSettledRounds] [bountyStartBy] [bountyWindowSeconds] [feedbackWindowSeconds] [epochDuration maxDuration minVoters maxVoters]"
   );
   process.exit(1);
 }
@@ -24,7 +24,9 @@ const DEFAULT_REWARD_ASSET = 0n;
 const DEFAULT_REWARD_AMOUNT = 1_000_000n;
 const DEFAULT_REQUIRED_VOTERS = 3n;
 const DEFAULT_REQUIRED_SETTLED_ROUNDS = 1n;
-const DEFAULT_REWARD_POOL_EXPIRES_AT = 0n;
+const DEFAULT_BOUNTY_START_BY = 0n;
+const DEFAULT_BOUNTY_WINDOW_SECONDS = 0n;
+const DEFAULT_FEEDBACK_WINDOW_SECONDS = 0n;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0n;
 const DEFAULT_QUESTION_METADATA_HASH =
   "0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd";
@@ -209,7 +211,9 @@ function parseArgs(rawArgs) {
       rewardAmount: DEFAULT_REWARD_AMOUNT,
       requiredVoters: DEFAULT_REQUIRED_VOTERS,
       requiredSettledRounds: DEFAULT_REQUIRED_SETTLED_ROUNDS,
-      rewardPoolExpiresAt: DEFAULT_REWARD_POOL_EXPIRES_AT,
+      bountyStartBy: DEFAULT_BOUNTY_START_BY,
+      bountyWindowSeconds: DEFAULT_BOUNTY_WINDOW_SECONDS,
+      feedbackWindowSeconds: DEFAULT_FEEDBACK_WINDOW_SECONDS,
       bountyEligibility: DEFAULT_BOUNTY_ELIGIBILITY,
       roundConfig: null,
     };
@@ -231,7 +235,9 @@ function parseArgs(rawArgs) {
     rewardAmount = DEFAULT_REWARD_AMOUNT.toString(),
     requiredVoters = DEFAULT_REQUIRED_VOTERS.toString(),
     requiredSettledRounds = DEFAULT_REQUIRED_SETTLED_ROUNDS.toString(),
-    rewardPoolExpiresAt = DEFAULT_REWARD_POOL_EXPIRES_AT.toString(),
+    bountyStartBy = DEFAULT_BOUNTY_START_BY.toString(),
+    bountyWindowSeconds = DEFAULT_BOUNTY_WINDOW_SECONDS.toString(),
+    feedbackWindowSeconds = DEFAULT_FEEDBACK_WINDOW_SECONDS.toString(),
     epochDuration,
     maxDuration,
     minVoters,
@@ -262,7 +268,9 @@ function parseArgs(rawArgs) {
     rewardAmount: BigInt(rewardAmount),
     requiredVoters: BigInt(requiredVoters),
     requiredSettledRounds: BigInt(requiredSettledRounds),
-    rewardPoolExpiresAt: BigInt(rewardPoolExpiresAt),
+    bountyStartBy: BigInt(bountyStartBy),
+    bountyWindowSeconds: BigInt(bountyWindowSeconds),
+    feedbackWindowSeconds: BigInt(feedbackWindowSeconds),
     bountyEligibility: DEFAULT_BOUNTY_ELIGIBILITY,
     roundConfig:
       epochDuration === undefined
@@ -319,7 +327,9 @@ const {
   rewardAmount,
   requiredVoters,
   requiredSettledRounds,
-  rewardPoolExpiresAt,
+  bountyStartBy,
+  bountyWindowSeconds,
+  feedbackWindowSeconds,
   bountyEligibility,
   roundConfig: roundConfigOverride,
 } = parseArgs(args);
@@ -370,6 +380,7 @@ const rewardTermsHash = keccak256(
       { type: "uint256" },
       { type: "uint256" },
       { type: "uint256" },
+      { type: "uint256" },
       { type: "uint8" },
     ],
     [
@@ -377,8 +388,9 @@ const rewardTermsHash = keccak256(
       rewardAmount,
       requiredVoters,
       requiredSettledRounds,
-      rewardPoolExpiresAt,
-      rewardPoolExpiresAt,
+      bountyStartBy,
+      bountyWindowSeconds,
+      feedbackWindowSeconds,
       Number(bountyEligibility),
     ]
   )
@@ -415,7 +427,7 @@ const revealCommitment = keccak256(
       { type: "bytes32" },
     ],
     [
-      "rateloop-question-reveal-v3",
+      "rateloop-question-reveal-v4",
       submissionKey,
       mediaHash,
       textHash,

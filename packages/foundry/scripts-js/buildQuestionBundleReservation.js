@@ -16,7 +16,7 @@ const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0;
 
 const abi = parseAbi([
-  "function submitQuestionBundleWithRewardAndRoundConfig((string contextUrl,string[] imageUrls,string videoUrl,string title,string description,string tags,uint256 categoryId,bytes32 salt,(bytes32 questionMetadataHash,bytes32 resultSpecHash) spec)[] questions,(uint8 asset,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyClosesAt,uint256 feedbackClosesAt,uint8 bountyEligibility) rewardTerms,(uint32 epochDuration,uint32 maxDuration,uint16 minVoters,uint16 maxVoters) roundConfig)",
+  "function submitQuestionBundleWithRewardAndRoundConfig((string contextUrl,string[] imageUrls,string videoUrl,string title,string description,string tags,uint256 categoryId,bytes32 salt,(bytes32 questionMetadataHash,bytes32 resultSpecHash) spec)[] questions,(uint8 asset,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility) rewardTerms,(uint32 epochDuration,uint32 maxDuration,uint16 minVoters,uint16 maxVoters) roundConfig)",
 ]);
 
 function fail(message) {
@@ -26,7 +26,7 @@ function fail(message) {
 
 function usage() {
   fail(
-    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <requiredSettledRounds> <bountyClosesAt> <feedbackClosesAt> <epochDuration> <maxDuration> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [question args...]"
+    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <requiredSettledRounds> <bountyStartBy> <bountyWindowSeconds> <feedbackWindowSeconds> <epochDuration> <maxDuration> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [question args...]"
   );
 }
 
@@ -182,7 +182,7 @@ function parseQuestionArgs(questionArgs) {
 
 function parseArgs(rawArgs) {
   const separatorIndex = rawArgs.indexOf("--");
-  if (separatorIndex !== 11) {
+  if (separatorIndex !== 12) {
     usage();
   }
 
@@ -192,8 +192,9 @@ function parseArgs(rawArgs) {
     rewardAmount,
     requiredVoters,
     requiredSettledRounds,
-    bountyClosesAt,
-    feedbackClosesAt,
+    bountyStartBy,
+    bountyWindowSeconds,
+    feedbackWindowSeconds,
     epochDuration,
     maxDuration,
     minVoters,
@@ -211,8 +212,9 @@ function parseArgs(rawArgs) {
       amount: BigInt(rewardAmount),
       requiredVoters: BigInt(requiredVoters),
       requiredSettledRounds: BigInt(requiredSettledRounds),
-      bountyClosesAt: BigInt(bountyClosesAt),
-      feedbackClosesAt: BigInt(feedbackClosesAt),
+      bountyStartBy: BigInt(bountyStartBy),
+      bountyWindowSeconds: BigInt(bountyWindowSeconds),
+      feedbackWindowSeconds: BigInt(feedbackWindowSeconds),
       bountyEligibility: DEFAULT_BOUNTY_ELIGIBILITY,
     },
     roundConfig: {
@@ -294,6 +296,7 @@ function buildQuestionBundleRevealCommitment({
         { type: "uint256" },
         { type: "uint256" },
         { type: "uint256" },
+        { type: "uint256" },
         { type: "uint8" },
         { type: "uint32" },
         { type: "uint32" },
@@ -301,15 +304,16 @@ function buildQuestionBundleRevealCommitment({
         { type: "uint16" },
       ],
       [
-        "rateloop-question-bundle-reveal-v3",
+        "rateloop-question-bundle-reveal-v4",
         bundleHash,
         submitter,
         rewardTerms.asset,
         rewardTerms.amount,
         rewardTerms.requiredVoters,
         rewardTerms.requiredSettledRounds,
-        rewardTerms.bountyClosesAt,
-        rewardTerms.feedbackClosesAt,
+        rewardTerms.bountyStartBy,
+        rewardTerms.bountyWindowSeconds,
+        rewardTerms.feedbackWindowSeconds,
         rewardTerms.bountyEligibility,
         roundConfig.epochDuration,
         roundConfig.maxDuration,
@@ -350,8 +354,9 @@ const calldata = encodeFunctionData({
       rewardTerms.amount,
       rewardTerms.requiredVoters,
       rewardTerms.requiredSettledRounds,
-      rewardTerms.bountyClosesAt,
-      rewardTerms.feedbackClosesAt,
+      rewardTerms.bountyStartBy,
+      rewardTerms.bountyWindowSeconds,
+      rewardTerms.feedbackWindowSeconds,
       rewardTerms.bountyEligibility,
     ],
     [
