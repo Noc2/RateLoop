@@ -49,12 +49,13 @@ const Notification = ({
   return toast.custom(
     (t: Toast) => (
       <div
-        className={`relative flex max-w-sm flex-row items-start justify-between space-x-2 overflow-hidden rounded-xl border border-primary/25 bg-base-200 p-4 shadow-[0_18px_44px_rgba(0,0,0,0.48)] transform-gpu transition-all duration-500 ease-in-out
+        className={`rateloop-gradient-notification relative flex max-w-sm flex-row items-start justify-between space-x-2 overflow-hidden rounded-xl p-4 transform-gpu transition-all duration-500 ease-in-out
         ${
           position.substring(0, 3) == "top"
             ? `hover:translate-y-1 ${t.visible ? "top-0" : "-top-96"}`
             : `hover:-translate-y-1 ${t.visible ? "bottom-0" : "-bottom-96"}`
         }`}
+        data-motion={status === "loading" ? "processing" : "intro"}
       >
         <div className="shrink-0 self-center leading-[0]">{icon ? icon : ENUM_STATUSES[status]}</div>
         <div className={`min-w-0 flex-1 break-words whitespace-pre-line ${icon ? "mt-1" : ""}`}>{content}</div>
