@@ -71,6 +71,121 @@ test("agent MCP helpers call tools/call with protocol and bearer headers", async
   assert.equal(quote.clientRequestId, "ask-1");
 });
 
+test("rating SDK helpers call the MCP rating tools", async () => {
+  const calls: any[] = [];
+  const agent = createRateLoopAgentClient({
+    fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      calls.push(body.params);
+      const name = body.params.name;
+      const structuredContent =
+        name === "rateloop_get_rating_context"
+          ? {
+              contentId: "42",
+              ratingInputMode: "local_encrypted_commit",
+              status: "ready",
+            }
+          : name === "rateloop_prepare_rating_transactions"
+            ? {
+                status: "awaiting_wallet_signature",
+                transactionPlan: { calls: [], requiresOrderedExecution: true },
+              }
+            : {
+                contentId: "42",
+                confirmed: name === "rateloop_confirm_rating_transactions",
+                status:
+                  name === "rateloop_confirm_rating_transactions"
+                    ? "committed"
+                    : "not_found",
+              };
+      return jsonResponse({
+        id: body.id,
+        jsonrpc: "2.0",
+        result: {
+          content: [],
+          isError: false,
+          structuredContent,
+        },
+      });
+    },
+    mcpApiUrl: "https://rateloop.example/api/mcp/public",
+  });
+
+  await agent.getRatingContext({
+    chainId: 31337,
+    contentId: 42n,
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  });
+  await agent.prepareRatingTransactions({
+    chainId: 31337,
+    ciphertext: `0x${"ab".repeat(4)}`,
+    commitHash: `0x${"11".repeat(32)}`,
+    contentId: 42n,
+    drandChainHash: `0x${"22".repeat(32)}`,
+    frontend: "0x00000000000000000000000000000000000000bb",
+    roundId: 7n,
+    roundReferenceRatingBps: 5000,
+    stakeWei: 1_000_000n,
+    targetRound: 100n,
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  });
+  await agent.confirmRatingTransactions({
+    commitHash: `0x${"11".repeat(32)}`,
+    contentId: "42",
+    roundId: "7",
+    transactionHashes: [`0x${"33".repeat(32)}`],
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  });
+  await agent.getRatingStatus({
+    contentId: "42",
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  });
+
+  assert.deepEqual(
+    calls.map((call) => call.name),
+    [
+      "rateloop_get_rating_context",
+      "rateloop_prepare_rating_transactions",
+      "rateloop_confirm_rating_transactions",
+      "rateloop_get_rating_status",
+    ],
+  );
+  assert.equal(calls[0].arguments.contentId, "42");
+  assert.equal(calls[1].arguments.stakeWei, "1000000");
+  assert.equal(calls[1].arguments.commitHash, `0x${"11".repeat(32)}`);
+  assert.equal(calls[1].arguments.isUp, undefined);
+  assert.deepEqual(calls[2].arguments.transactionHashes, [
+    `0x${"33".repeat(32)}`,
+  ]);
+});
+
+test("prepareRatingTransactions rejects plaintext rating fields before MCP", async () => {
+  const agent = createRateLoopAgentClient({
+    fetchImpl: async () => {
+      throw new Error("fetch should not be called");
+    },
+    mcpApiUrl: "https://rateloop.example/api/mcp/public",
+  });
+
+  await assert.rejects(
+    agent.prepareRatingTransactions({
+      chainId: 31337,
+      ciphertext: `0x${"ab".repeat(4)}`,
+      commitHash: `0x${"11".repeat(32)}`,
+      contentId: 42,
+      drandChainHash: `0x${"22".repeat(32)}`,
+      frontend: "0x00000000000000000000000000000000000000bb",
+      isUp: true,
+      roundId: 7,
+      roundReferenceRatingBps: 5000,
+      stakeWei: "1000000",
+      targetRound: 100,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    } as any),
+    /Do not send plaintext rating fields/,
+  );
+});
+
 test("quoteQuestion uses direct authenticated agent HTTP when apiBaseUrl and token are configured", async () => {
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;

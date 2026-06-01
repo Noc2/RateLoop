@@ -12,6 +12,16 @@ const DEFAULT_MCP_PATH = "/api/mcp";
 const DEFAULT_PUBLIC_MCP_PATH = "/api/mcp/public";
 const AGENT_AUTH_REQUIRED_MESSAGE =
   "RateLoop agent operations require apiBaseUrl for direct HTTP or mcpApiUrl for MCP. Add mcpAccessToken only for managed agent policies.";
+const PLAINTEXT_RATING_FIELDS = [
+  "direction",
+  "isUp",
+  "predictedUpBps",
+  "predictedUpPercent",
+  "prediction",
+  "salt",
+  "signal",
+  "vote",
+] as const;
 
 export interface RateLoopAgentClientOptions {
   agentApiPath?: string;
@@ -106,6 +116,37 @@ export interface ConfirmAskTransactionsRequest {
 export interface ConfirmFeedbackBonusTransactionsRequest
   extends ConfirmAskTransactionsRequest {}
 
+export interface RatingContentLookup {
+  chainId?: number;
+  contentId: string | number | bigint;
+  walletAddress: `0x${string}` | string;
+}
+
+export interface GetRatingContextRequest extends RatingContentLookup {
+  stakeWei?: string | number | bigint;
+}
+
+export interface PrepareRatingTransactionsRequest extends RatingContentLookup {
+  ciphertext: `0x${string}` | string;
+  commitHash: `0x${string}` | string;
+  drandChainHash: `0x${string}` | string;
+  frontend: `0x${string}` | string;
+  roundId: string | number | bigint;
+  roundReferenceRatingBps: number;
+  stakeWei: string | number | bigint;
+  targetRound: string | number | bigint;
+}
+
+export interface ConfirmRatingTransactionsRequest extends RatingContentLookup {
+  commitHash?: `0x${string}` | string;
+  roundId?: string | number | bigint;
+  transactionHashes: (`0x${string}` | string)[];
+}
+
+export interface RatingStatusLookup extends RatingContentLookup {
+  roundId?: string | number | bigint;
+}
+
 export interface QuestionStatusLookup {
   operationKey?: `0x${string}` | string;
   chainId?: number;
@@ -151,6 +192,10 @@ export interface RateLoopAgentWalletTransactionCall {
   id?: string;
   phase?:
     | "approve_usdc"
+    | "approve_lrep"
+    | "commit_rating"
+    | "open_round"
+    | "record_advisory_vote"
     | "reserve_submission"
     | "submit_question"
     | "submit_x402_question"
@@ -321,6 +366,91 @@ export interface QuestionStatusResponse {
   [key: string]: unknown;
 }
 
+export interface RateLoopRatingPrivacy {
+  inputMode?: "local_encrypted_commit" | string;
+  note?: string;
+  [key: string]: unknown;
+}
+
+export interface RateLoopRatingContent {
+  categoryId?: string | number;
+  description?: string | null;
+  id?: string | number;
+  publicUrl?: string | null;
+  submitter?: `0x${string}` | string;
+  title?: string | null;
+  [key: string]: unknown;
+}
+
+export interface RateLoopRatingContracts {
+  advisoryVoteRecorder?: `0x${string}` | string | null;
+  lrep?: `0x${string}` | string;
+  votingEngine?: `0x${string}` | string;
+  [key: string]: unknown;
+}
+
+export interface RateLoopRatingRuntime {
+  baseTotalStake?: string;
+  baseVoteCount?: string;
+  drandChainHash?: `0x${string}` | string;
+  drandGenesisTimeSeconds?: string;
+  drandPeriodSeconds?: string;
+  epochDuration?: number;
+  requiresOpenRound?: boolean;
+  roundId?: string;
+  roundReferenceRatingBps?: number;
+  roundStartTimeSeconds?: number | null;
+  targetRound?: string;
+  [key: string]: unknown;
+}
+
+export interface RatingContextResponse {
+  chainId?: number;
+  content?: RateLoopRatingContent;
+  contracts?: RateLoopRatingContracts;
+  currentAllowance?: string;
+  localCommitInstructions?: JsonRecord;
+  openRoundTransactionPlan?: RateLoopAgentWalletTransactionPlan | null;
+  privacy?: RateLoopRatingPrivacy;
+  publicUrl?: string | null;
+  ratingInputMode?: "local_encrypted_commit" | string;
+  runtime?: RateLoopRatingRuntime;
+  status: "ready" | "open_round_required" | string;
+  wallet?: RateLoopAgentWalletInfo;
+  [key: string]: unknown;
+}
+
+export interface PrepareRatingTransactionsResponse {
+  chainId?: number;
+  commit?: JsonRecord;
+  confirmTool?: string;
+  contentId?: string;
+  isAdvisoryVote?: boolean;
+  privacy?: RateLoopRatingPrivacy;
+  publicUrl?: string | null;
+  roundId?: string;
+  stakeWei?: string;
+  status: "awaiting_wallet_signature" | string;
+  statusTool?: string;
+  transactionPlan?: RateLoopAgentWalletTransactionPlan;
+  wallet?: RateLoopAgentWalletInfo;
+  [key: string]: unknown;
+}
+
+export interface RatingStatusResponse {
+  chainId?: number;
+  commitHash?: `0x${string}` | string | null;
+  confirmed?: boolean;
+  contentId?: string;
+  isAdvisoryVote?: boolean;
+  publicUrl?: string | null;
+  roundId?: string | null;
+  status: "not_found" | "awaiting_reveal" | "committed" | "revealed" | string;
+  transactionHashes?: string[];
+  wallet?: RateLoopAgentWalletInfo;
+  [key: string]: unknown;
+}
+
 export type RateLoopAgentAnswer =
   | "pending"
   | "proceed"
@@ -402,6 +532,14 @@ export interface RateLoopAgentClient {
   confirmFeedbackBonusTransactions(
     params: ConfirmFeedbackBonusTransactionsRequest,
   ): Promise<QuestionStatusResponse>;
+  getRatingContext(params: GetRatingContextRequest): Promise<RatingContextResponse>;
+  prepareRatingTransactions(
+    params: PrepareRatingTransactionsRequest,
+  ): Promise<PrepareRatingTransactionsResponse>;
+  confirmRatingTransactions(
+    params: ConfirmRatingTransactionsRequest,
+  ): Promise<RatingStatusResponse>;
+  getRatingStatus(params: RatingStatusLookup): Promise<RatingStatusResponse>;
   getQuestionStatus(
     params: QuestionStatusLookup,
   ): Promise<QuestionStatusResponse>;
@@ -455,6 +593,12 @@ export function createRateLoopAgentClient(
     confirmAskTransactions: (params) => confirmAskTransactions(params, config),
     confirmFeedbackBonusTransactions: (params) =>
       confirmFeedbackBonusTransactions(params, config),
+    getRatingContext: (params) => getRatingContext(params, config),
+    prepareRatingTransactions: (params) =>
+      prepareRatingTransactions(params, config),
+    confirmRatingTransactions: (params) =>
+      confirmRatingTransactions(params, config),
+    getRatingStatus: (params) => getRatingStatus(params, config),
     getQuestionStatus: (params) => getQuestionStatus(params, config),
     getResult: (params) => getResult(params, config),
     listResultTemplates: () => listResultTemplates(config),
@@ -657,6 +801,70 @@ export async function confirmFeedbackBonusTransactions(
 
   throw new RateLoopSdkError(
     "mcpApiUrl is required to confirm feedback bonus transactions",
+  );
+}
+
+export async function getRatingContext(
+  params: GetRatingContextRequest,
+  options: RateLoopAgentClientOptions = {},
+): Promise<RatingContextResponse> {
+  const config = normalizeAgentConfig(options);
+  return callMcpTool<RatingContextResponse>(
+    config,
+    "rateloop_get_rating_context",
+    ratingLookupArgs(params),
+  );
+}
+
+export async function prepareRatingTransactions(
+  params: PrepareRatingTransactionsRequest,
+  options: RateLoopAgentClientOptions = {},
+): Promise<PrepareRatingTransactionsResponse> {
+  assertNoPlaintextRatingFields(params as unknown as JsonRecord);
+  const config = normalizeAgentConfig(options);
+  return callMcpTool<PrepareRatingTransactionsResponse>(
+    config,
+    "rateloop_prepare_rating_transactions",
+    {
+      ...ratingLookupArgs(params),
+      ciphertext: params.ciphertext,
+      commitHash: params.commitHash,
+      drandChainHash: params.drandChainHash,
+      frontend: params.frontend,
+      roundId: params.roundId,
+      roundReferenceRatingBps: params.roundReferenceRatingBps,
+      stakeWei: params.stakeWei,
+      targetRound: params.targetRound,
+    },
+  );
+}
+
+export async function confirmRatingTransactions(
+  params: ConfirmRatingTransactionsRequest,
+  options: RateLoopAgentClientOptions = {},
+): Promise<RatingStatusResponse> {
+  const config = normalizeAgentConfig(options);
+  return callMcpTool<RatingStatusResponse>(
+    config,
+    "rateloop_confirm_rating_transactions",
+    {
+      ...ratingLookupArgs(params),
+      commitHash: params.commitHash,
+      roundId: params.roundId,
+      transactionHashes: params.transactionHashes,
+    },
+  );
+}
+
+export async function getRatingStatus(
+  params: RatingStatusLookup,
+  options: RateLoopAgentClientOptions = {},
+): Promise<RatingStatusResponse> {
+  const config = normalizeAgentConfig(options);
+  return callMcpTool<RatingStatusResponse>(
+    config,
+    "rateloop_get_rating_status",
+    ratingLookupArgs(params),
   );
 }
 
@@ -1120,6 +1328,29 @@ function hasDirectAgentHttp(config: NormalizedAgentConfig) {
 
 function hasFeedbackBonus(params: { feedbackBonus?: unknown }) {
   return params.feedbackBonus !== undefined && params.feedbackBonus !== null;
+}
+
+function ratingLookupArgs(
+  params: RatingContentLookup & { roundId?: unknown; stakeWei?: unknown },
+) {
+  return {
+    chainId: params.chainId,
+    contentId: params.contentId,
+    roundId: params.roundId,
+    stakeWei: params.stakeWei,
+    walletAddress: params.walletAddress,
+  } satisfies JsonRecord;
+}
+
+function assertNoPlaintextRatingFields(params: JsonRecord) {
+  const present = PLAINTEXT_RATING_FIELDS.filter(
+    (field) => params[field] !== undefined,
+  );
+  if (present.length === 0) return;
+
+  throw new RateLoopSdkError(
+    `Do not send plaintext rating fields to hosted MCP: ${present.join(", ")}. Build the encrypted commit locally with @rateloop/sdk/vote, then call prepareRatingTransactions.`,
+  );
 }
 
 function agentHeaders(config: NormalizedAgentConfig) {
