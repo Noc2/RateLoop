@@ -3,7 +3,7 @@
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { InterestProfile } from "~~/hooks/useInterestProfile";
 import { DEFAULT_VOTING_CONFIG } from "~~/lib/contracts/roundVotingEngine";
-import { getVisibleRewardOpportunityAmount } from "~~/lib/vote/discoverFeedFilter";
+import { getVisibleRewardOpportunityAmount, isExpiredBountyItem } from "~~/lib/vote/discoverFeedFilter";
 import { detectPlatform } from "~~/utils/platforms";
 
 interface RankForYouFeedOptions {
@@ -12,6 +12,13 @@ interface RankForYouFeedOptions {
   votedContentIds: Set<string>;
   watchedContentIds: Set<string>;
   followedWallets: Set<string>;
+}
+
+interface ScoredForYouItem {
+  expiredBounty: boolean;
+  item: ContentItem;
+  platform: string;
+  score: number;
 }
 
 function clamp01(value: number) {
@@ -255,19 +262,13 @@ function scoreForYouItem(item: ContentItem, options: RankForYouFeedOptions) {
   return score - penalty;
 }
 
-export function rankForYouFeed(items: ContentItem[], options: RankForYouFeedOptions) {
-  const scored = items
-    .map(item => ({
-      item,
-      platform: detectPlatform(item.url).type,
-      score: scoreForYouItem(item, options),
-    }))
-    .sort((a, b) => {
-      if (a.score !== b.score) return b.score - a.score;
-      return Number(b.item.id - a.item.id);
-    });
+function compareScoredForYouItems(a: ScoredForYouItem, b: ScoredForYouItem) {
+  if (a.score !== b.score) return b.score - a.score;
+  return Number(b.item.id - a.item.id);
+}
 
-  const diversified: typeof scored = [];
+function diversifyScoredFeed(scored: ScoredForYouItem[]) {
+  const diversified: ScoredForYouItem[] = [];
   const remaining = [...scored];
   const platformCounts = new Map<string, number>();
   const submitterCounts = new Map<string, number>();
@@ -297,5 +298,21 @@ export function rankForYouFeed(items: ContentItem[], options: RankForYouFeedOpti
     );
   }
 
-  return diversified.map(entry => entry.item);
+  return diversified;
+}
+
+export function rankForYouFeed(items: ContentItem[], options: RankForYouFeedOptions) {
+  const scored = items
+    .map(item => ({
+      expiredBounty: isExpiredBountyItem(item, options.nowSeconds),
+      item,
+      platform: detectPlatform(item.url).type,
+      score: scoreForYouItem(item, options),
+    }))
+    .sort(compareScoredForYouItems);
+
+  const liveItems = scored.filter(entry => !entry.expiredBounty);
+  const expiredItems = scored.filter(entry => entry.expiredBounty);
+
+  return [...diversifyScoredFeed(liveItems), ...diversifyScoredFeed(expiredItems)].map(entry => entry.item);
 }

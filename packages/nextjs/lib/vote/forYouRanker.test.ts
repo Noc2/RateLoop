@@ -202,6 +202,53 @@ test("for-you ranking gives bounty-backed content a priority lift", () => {
   assert.equal(ranked[0]?.id, 2n);
 });
 
+test("for-you ranking defers expired bounty content behind live content", () => {
+  localStorage.clear();
+  setStoredSignals([]);
+
+  const profile = buildInterestProfile({ feed: [], votes: [] });
+  const items = [
+    makeContentItem({
+      id: 1n,
+      url: "https://example.com/expired",
+      title: "Expired but active",
+      createdAt: "9900",
+      lastActivityAt: "9950",
+      totalVotes: 40,
+      totalRounds: 8,
+      rewardPoolSummary: {
+        totalFunded: 15_000_000n,
+        totalAvailable: 0n,
+        activeRewardPoolCount: 0,
+        expiredRewardPoolCount: 1,
+        hasActiveBounty: false,
+      },
+    }),
+    makeContentItem({
+      id: 2n,
+      url: "https://example.com/live",
+      title: "Live fallback",
+      createdAt: "1000",
+      lastActivityAt: "1000",
+      totalVotes: 0,
+      totalRounds: 0,
+    }),
+  ];
+
+  const ranked = rankForYouFeed(items, {
+    nowSeconds: 10_000,
+    profile,
+    votedContentIds: new Set(),
+    watchedContentIds: new Set(),
+    followedWallets: new Set(),
+  });
+
+  assert.deepEqual(
+    ranked.map(item => item.id),
+    [2n, 1n],
+  );
+});
+
 test("already voted content is downranked in For You", () => {
   localStorage.clear();
   setStoredSignals([]);

@@ -2,7 +2,7 @@
 
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { DEFAULT_VOTING_CONFIG } from "~~/lib/contracts/roundVotingEngine";
-import { getVisibleRewardOpportunityAmount } from "~~/lib/vote/discoverFeedFilter";
+import { compareExpiredBountyPriority, getVisibleRewardOpportunityAmount } from "~~/lib/vote/discoverFeedFilter";
 
 export type DiscoverFeedMode = "for_you" | "trending" | "highest_rewards" | "contested" | "latest" | "near_settlement";
 
@@ -191,6 +191,9 @@ export function sortDiscoverFeed(items: ContentItem[], mode: Exclude<DiscoverFee
       }
     })
     .sort((a, b) => {
+      const expiredPriority = compareExpiredBountyPriority(a.item, b.item, nowSeconds);
+      if (expiredPriority !== 0) return expiredPriority;
+
       if (mode === "latest") {
         return compareCreatedAtDesc(a.item, b.item);
       }

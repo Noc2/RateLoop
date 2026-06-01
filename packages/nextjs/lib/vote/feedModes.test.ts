@@ -62,6 +62,46 @@ test("trending favors recent, high-activity content", () => {
   assert.equal(ranked[0]?.id, 2n);
 });
 
+test("trending defers expired bounty content behind live content", () => {
+  const nowSeconds = 10_000;
+  const ranked = sortDiscoverFeed(
+    [
+      makeContentItem({
+        id: 1n,
+        url: "https://example.com/expired",
+        title: "Expired but busy",
+        createdAt: "9900",
+        lastActivityAt: "9950",
+        totalVotes: 40,
+        totalRounds: 8,
+        rewardPoolSummary: {
+          totalFunded: 15_000_000n,
+          totalAvailable: 0n,
+          activeRewardPoolCount: 0,
+          expiredRewardPoolCount: 1,
+          hasActiveBounty: false,
+        },
+      }),
+      makeContentItem({
+        id: 2n,
+        url: "https://example.com/live",
+        title: "Live but quieter",
+        createdAt: "1000",
+        lastActivityAt: "1000",
+        totalVotes: 0,
+        totalRounds: 0,
+      }),
+    ],
+    "trending",
+    nowSeconds,
+  );
+
+  assert.deepEqual(
+    ranked.map(item => item.id),
+    [2n, 1n],
+  );
+});
+
 test("contested keeps only items with an open round and ranks close pools first", () => {
   const nowSeconds = 10_000;
   const ranked = sortDiscoverFeed(

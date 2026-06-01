@@ -130,7 +130,7 @@ test("Broken filter isolates invalid links into the separate feed bucket", () =>
   );
 });
 
-test("default category excludes expired bounties from the main feed", () => {
+test("default category includes expired bounties in the main feed", () => {
   const feed = [
     makeContentItem({
       id: 1n,
@@ -153,7 +153,7 @@ test("default category excludes expired bounties from the main feed", () => {
 
   assert.deepEqual(
     filterDiscoverCategoryItems(feed, DISCOVER_ALL_FILTER, undefined, 10_000).map(item => item.id),
-    [2n],
+    [1n, 2n],
   );
 });
 
@@ -270,7 +270,7 @@ test("stale active bounty deadlines are ignored when no bounty remains", () => {
   assert.equal(getActiveBountyClosesAt(feed[0], 10_000), null);
   assert.deepEqual(
     filterDiscoverCategoryItems(feed, DISCOVER_ALL_FILTER, undefined, 10_000).map(item => item.id),
-    [2n],
+    [1n, 2n],
   );
   assert.deepEqual(
     filterDiscoverCategoryItems(feed, DISCOVER_EXPIRED_BOUNTY_FILTER, undefined, 10_000).map(item => item.id),

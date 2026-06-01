@@ -52,7 +52,7 @@ export function getActiveBountyClosesAt(item: ContentItem, nowSeconds = Math.flo
   return bountyClosesAt;
 }
 
-function isExpiredBountyItem(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
+export function isExpiredBountyItem(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
   const rewardSummary = item.rewardPoolSummary;
   const hasExpiredRewardPool = Boolean(
     rewardSummary &&
@@ -72,6 +72,17 @@ function isExpiredBountyItem(item: ContentItem, nowSeconds = Math.floor(Date.now
   );
 
   return (hasExpiredRewardPool || hasExpiredBundle) && !hasActiveBounty(item, nowSeconds);
+}
+
+export function compareExpiredBountyPriority(
+  left: ContentItem,
+  right: ContentItem,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const leftExpired = isExpiredBountyItem(left, nowSeconds);
+  const rightExpired = isExpiredBountyItem(right, nowSeconds);
+  if (leftExpired === rightExpired) return 0;
+  return leftExpired ? 1 : -1;
 }
 
 export function shouldShowBountyExpiredStatus(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
@@ -160,7 +171,7 @@ export function filterDiscoverCategoryItems(
   } else if (activeCategory === DISCOVER_EXPIRED_BOUNTY_FILTER) {
     items = items.filter(item => item.isValidUrl !== false && isExpiredBountyItem(item, nowSeconds));
   } else {
-    items = items.filter(item => item.isValidUrl !== false && !isExpiredBountyItem(item, nowSeconds));
+    items = items.filter(item => item.isValidUrl !== false);
   }
 
   if (
