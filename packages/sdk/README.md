@@ -185,6 +185,20 @@ const verifier = buildWebhookVerifier({
   secret: process.env.RATELOOP_WEBHOOK_SECRET ?? "",
 });
 await verifier.assertValid({ body: webhookBody, headers: webhookHeaders });
+
+const replaySafeVerifier = buildWebhookVerifier({
+  secret: process.env.RATELOOP_WEBHOOK_SECRET ?? "",
+  replayProtection: {
+    store: webhookEventStore,
+  },
+});
+const handled = await replaySafeVerifier.handleOnce({ body: webhookBody, headers: webhookHeaders }, async event => {
+  // Fetch status/result by operationKey before irreversible side effects.
+  return processCallback(event.body);
+});
+if (handled.status === "duplicate") {
+  return new Response("ok");
+}
 ```
 
 Question `description` is optional. Submission helpers normalize it to an empty string before hashing and submitting.
@@ -194,6 +208,8 @@ For ranked-option bundles, `requiredSettledRounds` is the number of completed bu
 `bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. Use `1` for verified humans. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
 
 For ask flows, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe default. For rating existing content, use `getRatingContext -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, callbacks, balance tooling, and audit surfaces. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet. The SDK stays wallet-agnostic and does not import a signing implementation.
+
+Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `handleOnce` with an atomic replay store for non-idempotent handlers. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry.
 
 ## Agent Examples
 

@@ -8,6 +8,7 @@ import {
   type AskHumansRequest,
   type ListResultTemplatesResponse,
   type QuestionStatusResponse,
+  type WebhookReplayStore,
 } from "./agent";
 
 const API_BASE_URL = "https://rateloop.example";
@@ -17,6 +18,43 @@ function jsonResponse(body: unknown, status = 200) {
     headers: { "content-type": "application/json" },
     status,
   });
+}
+
+function signedWebhookHeaders(params: {
+  body: string;
+  eventId: string;
+  secret?: string;
+  timestamp: string;
+}) {
+  const signature = createHmac("sha256", params.secret ?? "shared-secret")
+    .update(`v1.${params.eventId}.${params.timestamp}.${params.body}`)
+    .digest("hex");
+  return {
+    "x-rateloop-callback-id": params.eventId,
+    "x-rateloop-callback-signature": `v1=${signature}`,
+    "x-rateloop-callback-timestamp": params.timestamp,
+  };
+}
+
+function memoryReplayStore() {
+  const claimed = new Set<string>();
+  const calls: string[] = [];
+  const store: WebhookReplayStore = {
+    claim: async (key) => {
+      calls.push(`claim:${key}`);
+      if (claimed.has(key)) return false;
+      claimed.add(key);
+      return true;
+    },
+    complete: async (key) => {
+      calls.push(`complete:${key}`);
+    },
+    release: async (key) => {
+      calls.push(`release:${key}`);
+      claimed.delete(key);
+    },
+  };
+  return { calls, store };
 }
 
 test("agent MCP helpers call tools/call with protocol and bearer headers", async () => {
@@ -870,4 +908,116 @@ test("buildWebhookVerifier validates timestamped HMAC signatures", async () => {
     }),
     false,
   );
+});
+
+test("buildWebhookVerifier handleOnce processes a signed event once", async () => {
+  const body = JSON.stringify({ operationKey: `0x${"44".repeat(32)}` });
+  const eventId = "event-once";
+  const timestamp = "2026-04-23T12:00:00.000Z";
+  const { calls, store } = memoryReplayStore();
+  const verifier = buildWebhookVerifier({
+    replayProtection: { keyPrefix: "test:", store, ttlSeconds: 60 },
+    secret: "shared-secret",
+  });
+  let handled = 0;
+
+  const first = await verifier.handleOnce(
+    {
+      body,
+      headers: signedWebhookHeaders({ body, eventId, timestamp }),
+      now: new Date("2026-04-23T12:01:00.000Z"),
+    },
+    async event => {
+      handled += 1;
+      return event.eventId;
+    },
+  );
+  const second = await verifier.handleOnce(
+    {
+      body,
+      headers: signedWebhookHeaders({ body, eventId, timestamp }),
+      now: new Date("2026-04-23T12:01:00.000Z"),
+    },
+    async () => {
+      handled += 1;
+      return "duplicate";
+    },
+  );
+
+  assert.equal(first.status, "processed");
+  assert.equal(first.value, eventId);
+  assert.equal(second.status, "duplicate");
+  assert.equal(handled, 1);
+  assert.deepEqual(calls, ["claim:test:event-once", "complete:test:event-once", "claim:test:event-once"]);
+});
+
+test("buildWebhookVerifier handleOnce does not claim invalid callbacks", async () => {
+  const body = JSON.stringify({ operationKey: `0x${"44".repeat(32)}` });
+  const { calls, store } = memoryReplayStore();
+  const verifier = buildWebhookVerifier({
+    replayProtection: { store },
+    secret: "shared-secret",
+  });
+
+  await assert.rejects(
+    () =>
+      verifier.handleOnce(
+        {
+          body,
+          headers: signedWebhookHeaders({
+            body,
+            eventId: "event-invalid",
+            secret: "wrong-secret",
+            timestamp: "2026-04-23T12:00:00.000Z",
+          }),
+          now: new Date("2026-04-23T12:01:00.000Z"),
+        },
+        async () => "unused",
+      ),
+    /Invalid RateLoop webhook signature/,
+  );
+  assert.deepEqual(calls, []);
+});
+
+test("buildWebhookVerifier handleOnce releases failed handler claims for retry", async () => {
+  const body = JSON.stringify({ operationKey: `0x${"44".repeat(32)}` });
+  const eventId = "event-retry";
+  const timestamp = "2026-04-23T12:00:00.000Z";
+  const { calls, store } = memoryReplayStore();
+  const verifier = buildWebhookVerifier({
+    replayProtection: { store },
+    secret: "shared-secret",
+  });
+
+  await assert.rejects(
+    () =>
+      verifier.handleOnce(
+        {
+          body,
+          headers: signedWebhookHeaders({ body, eventId, timestamp }),
+          now: new Date("2026-04-23T12:01:00.000Z"),
+        },
+        async () => {
+          throw new Error("handler failed");
+        },
+      ),
+    /handler failed/,
+  );
+  const retry = await verifier.handleOnce(
+    {
+      body,
+      headers: signedWebhookHeaders({ body, eventId, timestamp }),
+      now: new Date("2026-04-23T12:01:00.000Z"),
+    },
+    async () => "ok",
+  );
+
+  assert.equal(retry.status, "processed");
+  assert.equal(retry.value, "ok");
+  assert.deepEqual(calls, [
+    "claim:rateloop:webhook:event-retry",
+    "release:rateloop:webhook:event-retry",
+    "claim:rateloop:webhook:event-retry",
+    "complete:rateloop:webhook:event-retry",
+  ]);
 });

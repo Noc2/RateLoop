@@ -552,6 +552,7 @@ export interface RateLoopAgentClient {
 export interface WebhookVerifierOptions {
   secret: string;
   eventIdHeader?: string;
+  replayProtection?: WebhookReplayProtectionOptions;
   signatureHeader?: string;
   timestampHeader?: string;
   toleranceSeconds?: number;
@@ -563,9 +564,51 @@ export interface VerifyWebhookParams {
   now?: Date | number;
 }
 
+export interface VerifiedWebhook {
+  body: string;
+  eventId: string;
+  headers: VerifyWebhookParams["headers"];
+  timestamp: string;
+}
+
+export interface WebhookReplayStore {
+  claim(
+    key: string,
+    event: VerifiedWebhook,
+    options: { ttlSeconds: number },
+  ): Promise<boolean>;
+  complete?(
+    key: string,
+    event: VerifiedWebhook,
+    options: { ttlSeconds: number },
+  ): Promise<void>;
+  release?(
+    key: string,
+    event: VerifiedWebhook,
+    options: { ttlSeconds: number },
+  ): Promise<void>;
+}
+
+export interface WebhookReplayProtectionOptions {
+  keyPrefix?: string;
+  store: WebhookReplayStore;
+  ttlSeconds?: number;
+}
+
+export type WebhookHandleOnceResult<T> =
+  | { event: VerifiedWebhook; status: "duplicate" }
+  | { event: VerifiedWebhook; status: "processed"; value: T };
+
 export interface WebhookVerifier {
   verify(params: VerifyWebhookParams): Promise<boolean>;
   assertValid(params: VerifyWebhookParams): Promise<void>;
+}
+
+export interface ReplayProtectedWebhookVerifier extends WebhookVerifier {
+  handleOnce<T>(
+    params: VerifyWebhookParams,
+    handler: (event: VerifiedWebhook) => Promise<T> | T,
+  ): Promise<WebhookHandleOnceResult<T>>;
 }
 
 interface NormalizedAgentConfig {
@@ -963,8 +1006,10 @@ export function parseAgentResult(value: unknown): RateLoopAgentResult {
 }
 
 export function buildWebhookVerifier(
-  options: WebhookVerifierOptions,
-): WebhookVerifier {
+  options: WebhookVerifierOptions & { replayProtection: WebhookReplayProtectionOptions },
+): ReplayProtectedWebhookVerifier;
+export function buildWebhookVerifier(options: WebhookVerifierOptions): WebhookVerifier;
+export function buildWebhookVerifier(options: WebhookVerifierOptions): WebhookVerifier | ReplayProtectedWebhookVerifier {
   if (!options.secret) {
     throw new RateLoopSdkError("Webhook verifier secret is required");
   }
@@ -979,13 +1024,20 @@ export function buildWebhookVerifier(
     options.timestampHeader ?? "x-rateloop-callback-timestamp"
   ).toLowerCase();
   const toleranceSeconds = options.toleranceSeconds ?? 300;
+  const replayProtection = options.replayProtection;
+  const replayTtlSeconds = Math.max(
+    replayProtection?.ttlSeconds ?? 24 * 60 * 60,
+    toleranceSeconds >= 0 ? toleranceSeconds : 0,
+  );
 
-  async function verify(params: VerifyWebhookParams): Promise<boolean> {
+  async function verifyEvent(
+    params: VerifyWebhookParams,
+  ): Promise<VerifiedWebhook | null> {
     const signatureHeaderValue = getHeader(params.headers, signatureHeader);
-    if (!signatureHeaderValue) return false;
+    if (!signatureHeaderValue) return null;
 
     const eventId = getHeader(params.headers, eventIdHeader);
-    if (!eventId) return false;
+    if (!eventId) return null;
 
     const timestamp = getHeader(params.headers, timestampHeader);
     if (
@@ -993,20 +1045,65 @@ export function buildWebhookVerifier(
       (toleranceSeconds >= 0 &&
         !isTimestampFresh(timestamp, toleranceSeconds, params.now))
     ) {
-      return false;
+      return null;
     }
 
     const body = bodyToString(params.body);
     const signedPayload = `v1.${eventId}.${timestamp}.${body}`;
     const expected = await hmacSha256Hex(options.secret, signedPayload);
-    return signatureMatches(signatureHeaderValue, expected);
+    if (!signatureMatches(signatureHeaderValue, expected)) return null;
+    return {
+      body,
+      eventId,
+      headers: params.headers,
+      timestamp,
+    };
+  }
+
+  async function verify(params: VerifyWebhookParams): Promise<boolean> {
+    return Boolean(await verifyEvent(params));
+  }
+
+  const verifier: WebhookVerifier = {
+    verify,
+    assertValid: async (params) => {
+      if (!(await verifyEvent(params))) {
+        throw new RateLoopSdkError("Invalid RateLoop webhook signature");
+      }
+    },
+  };
+  if (!replayProtection) {
+    return verifier;
   }
 
   return {
-    verify,
-    assertValid: async (params) => {
-      if (!(await verify(params))) {
+    ...verifier,
+    handleOnce: async <T>(
+      params: VerifyWebhookParams,
+      handler: (event: VerifiedWebhook) => Promise<T> | T,
+    ): Promise<WebhookHandleOnceResult<T>> => {
+      const event = await verifyEvent(params);
+      if (!event) {
         throw new RateLoopSdkError("Invalid RateLoop webhook signature");
+      }
+      const key = `${replayProtection.keyPrefix ?? "rateloop:webhook:"}${event.eventId}`;
+      const claimed = await replayProtection.store.claim(key, event, {
+        ttlSeconds: replayTtlSeconds,
+      });
+      if (!claimed) {
+        return { event, status: "duplicate" };
+      }
+      try {
+        const value = await handler(event);
+        await replayProtection.store.complete?.(key, event, {
+          ttlSeconds: replayTtlSeconds,
+        });
+        return { event, status: "processed", value };
+      } catch (error) {
+        await replayProtection.store.release?.(key, event, {
+          ttlSeconds: replayTtlSeconds,
+        });
+        throw error;
       }
     },
   };
