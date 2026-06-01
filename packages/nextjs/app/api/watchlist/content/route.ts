@@ -20,6 +20,7 @@ import {
   normalizeWatchlistReadInput,
 } from "~~/lib/auth/watchlistChallenge";
 import type { NormalizedWatchlistChallengePayload } from "~~/lib/auth/watchlistChallenge";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { addWatchedContent, listWatchedContent, removeWatchedContent } from "~~/lib/watchlist/contentWatch";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -43,14 +44,22 @@ async function handleWatchlistWrite(
     mutate: (payload: NormalizedWatchlistChallengePayload) => Promise<void>;
   },
 ) {
+  const preParseLimited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
+    extraKeyParts: ["preparse", params.action],
+  });
+  if (preParseLimited) return preParseLimited;
+
   try {
-    const body = (await request.json()) as WatchlistWriteBody;
+    const body = await parseJsonBody(request);
+    if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body, "Invalid JSON body");
+    const writeBody = body as WatchlistWriteBody;
+
     const limited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
-      extraKeyParts: [typeof body.address === "string" ? body.address : undefined],
+      extraKeyParts: [typeof writeBody.address === "string" ? writeBody.address : undefined],
     });
     if (limited) return limited;
 
-    const normalized = normalizeWatchlistChallengeInput(body);
+    const normalized = normalizeWatchlistChallengeInput(writeBody);
     if (!normalized.ok) {
       return NextResponse.json({ error: normalized.error }, { status: 400 });
     }
@@ -61,8 +70,8 @@ async function handleWatchlistWrite(
       cookieName: WATCHLIST_SIGNED_WRITE_SESSION_COOKIE_NAME,
       walletAddress: payload.normalizedAddress,
       scope: "watchlist",
-      signature: body.signature,
-      challengeId: body.challengeId,
+      signature: writeBody.signature,
+      challengeId: writeBody.challengeId,
       action: params.action,
       payloadHash,
       buildMessage: ({ nonce, expiresAt }) =>
@@ -129,7 +138,9 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const { address, signature, challengeId } = (await request.json()) as Record<string, unknown> & {
+    const body = await parseJsonBody(request);
+    if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body, "Invalid JSON body");
+    const { address, signature, challengeId } = body as Record<string, unknown> & {
       signature?: `0x${string}`;
       challengeId?: string;
     };

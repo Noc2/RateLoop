@@ -14,6 +14,7 @@ import {
   verifySignedReadSession,
 } from "~~/lib/auth/signedReadSessions";
 import { createSignedReadResponse, verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { getNotificationPreferences, upsertNotificationPreferences } from "~~/lib/notifications/preferences";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -57,7 +58,9 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const body = (await request.json()) as Record<string, unknown> & {
+    const parsedBody = await parseJsonBody(request);
+    if (!isJsonObjectBody(parsedBody)) return jsonBodyErrorResponse(parsedBody, "Invalid JSON body");
+    const body = parsedBody as Record<string, unknown> & {
       signature?: `0x${string}`;
       challengeId?: string;
     };
@@ -104,7 +107,9 @@ export async function PUT(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const body = (await request.json()) as Record<string, unknown> & {
+    const parsedBody = await parseJsonBody(request);
+    if (!isJsonObjectBody(parsedBody)) return jsonBodyErrorResponse(parsedBody, "Invalid JSON body");
+    const body = parsedBody as Record<string, unknown> & {
       signature?: `0x${string}`;
       challengeId?: string;
     };

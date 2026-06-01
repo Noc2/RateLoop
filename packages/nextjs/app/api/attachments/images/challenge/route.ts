@@ -10,6 +10,7 @@ import {
   normalizeImageUploadChallengeInput,
 } from "~~/lib/auth/imageUploadChallenge";
 import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
@@ -20,10 +21,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!body) {
-    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
-  }
+  const body = await parseJsonBody(request);
+  if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
 
   const normalized = normalizeImageUploadChallengeInput(body);
   if (!normalized.ok) {

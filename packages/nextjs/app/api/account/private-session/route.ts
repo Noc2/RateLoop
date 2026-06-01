@@ -18,6 +18,7 @@ import {
   setAllSignedWriteSessionCookies,
   verifySignedWriteSession,
 } from "~~/lib/auth/signedWriteSessions";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
@@ -69,32 +70,43 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown> & {
-    signature?: `0x${string}`;
-    challengeId?: string;
-  };
+  const preParseLimited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
+    extraKeyParts: ["preparse"],
+  });
+  if (preParseLimited) return preParseLimited;
+
+  const body = await parseJsonBody(request);
+  if (!isJsonObjectBody(body)) {
+    return jsonBodyErrorResponse(body, "Invalid JSON body");
+  }
+
   const limited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
     extraKeyParts: [typeof body.address === "string" ? body.address : undefined],
   });
   if (limited) return limited;
 
-  if (!body.signature || !body.challengeId) {
+  const typedBody = body as Record<string, unknown> & {
+    signature?: `0x${string}`;
+    challengeId?: string;
+  };
+
+  if (!typedBody.signature || !typedBody.challengeId) {
     return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
   }
 
   try {
-    const normalized = normalizePrivateAccountReadInput(body);
+    const normalized = normalizePrivateAccountReadInput(typedBody);
     if (!normalized.ok) {
       return NextResponse.json({ error: normalized.error }, { status: 400 });
     }
 
     const payloadHash = hashPrivateAccountReadPayload(normalized.payload);
     const challengeFailure = await verifySignedActionChallenge({
-      challengeId: String(body.challengeId),
+      challengeId: String(typedBody.challengeId),
       action: READ_PRIVATE_ACCOUNT_ACTION,
       walletAddress: normalized.payload.normalizedAddress,
       payloadHash,
-      signature: body.signature,
+      signature: typedBody.signature,
       buildMessage: ({ nonce, expiresAt }) =>
         buildPrivateAccountReadChallengeMessage({
           address: normalized.payload.normalizedAddress,

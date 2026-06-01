@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { getThirdwebClientId, getThirdwebServerVerifierSecret } from "~~/lib/env/server";
+import { isJsonObjectBody, parseJsonBody } from "~~/lib/http/jsonBody";
 import {
   type FreeTransactionAllowanceDecision,
   evaluateFreeTransactionAllowance,
@@ -57,12 +58,11 @@ export async function POST(request: NextRequest) {
     return createDeniedResponse("Unauthorized");
   }
 
-  let body: Record<string, unknown>;
-  try {
-    body = (await request.json()) as Record<string, unknown>;
-  } catch {
+  const parsedBody = await parseJsonBody(request);
+  if (!isJsonObjectBody(parsedBody)) {
     return createDeniedResponse("Invalid request.");
   }
+  const body = parsedBody;
 
   const requestSummary = getVerifierRequestSummary(body);
   console.info("[thirdweb-verifier] request received", requestSummary);

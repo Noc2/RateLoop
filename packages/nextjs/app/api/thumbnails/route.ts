@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveContentMetadataBatch } from "~~/lib/contentMetadata/server";
+import { jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
 import { isSafeUrl } from "~~/utils/urlSafety";
 
@@ -10,11 +11,9 @@ export async function POST(request: NextRequest) {
   const limited = await checkRateLimit(request, RATE_LIMIT);
   if (limited) return limited;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  const body = await parseJsonBody(request);
+  if (body === null || typeof body === "symbol") {
+    return jsonBodyErrorResponse(body, "Invalid JSON body");
   }
 
   const urls = Array.isArray((body as { urls?: unknown[] })?.urls)

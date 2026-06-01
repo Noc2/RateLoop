@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isFreeTransactionStoreUnavailableError } from "../session/fallback";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { confirmFreeTransactionReservation } from "~~/lib/thirdweb/freeTransactions";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -13,13 +14,15 @@ type ConfirmFreeTransactionRequest = {
 };
 
 export async function POST(request: NextRequest) {
-  let body: ConfirmFreeTransactionRequest | null = null;
+  const preParseLimited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
+    extraKeyParts: ["preparse"],
+  });
+  if (preParseLimited) return preParseLimited;
 
-  try {
-    body = (await request.json()) as ConfirmFreeTransactionRequest;
-  } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-  }
+  const parsedBody = await parseJsonBody(request);
+  if (!isJsonObjectBody(parsedBody)) return jsonBodyErrorResponse(parsedBody, "Invalid request body");
+  const body = parsedBody as ConfirmFreeTransactionRequest;
 
   const limited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
     // This is post-transaction quota accounting, so keep serving if only the

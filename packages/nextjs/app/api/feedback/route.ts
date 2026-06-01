@@ -24,6 +24,7 @@ import {
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
 import { normalizeContentFeedbackHashMetadata } from "~~/lib/feedback/feedbackHash";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 60, windowMs: 60_000 };
@@ -75,8 +76,16 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const preParseLimited = await checkRateLimit(request, WRITE_RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
+    extraKeyParts: ["preparse"],
+  });
+  if (preParseLimited) return preParseLimited;
+
   try {
-    const body = (await request.json()) as {
+    const parsedBody = await parseJsonBody(request);
+    if (!isJsonObjectBody(parsedBody)) return jsonBodyErrorResponse(parsedBody, "Invalid JSON body");
+    const body = parsedBody as {
       address?: string;
       contentId?: unknown;
       feedbackType?: unknown;

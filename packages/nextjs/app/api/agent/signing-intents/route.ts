@@ -1,5 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { AGENT_WRITE_RATE_LIMIT, handlePublicAgentRoute, parseJsonBody } from "~~/lib/agent/http";
+import { NextRequest } from "next/server";
+import {
+  AGENT_WRITE_RATE_LIMIT,
+  handlePublicAgentRoute,
+  isJsonObjectBody,
+  jsonBodyErrorResponse,
+  parseJsonBody,
+} from "~~/lib/agent/http";
 import { createAgentSigningIntent } from "~~/lib/agent/signingIntents";
 
 export const runtime = "nodejs";
@@ -12,24 +18,24 @@ function readTtlMs(value: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await parseJsonBody(request);
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
-  }
-
-  const hasWrappedRequest = "request" in body;
-  const requestBody = hasWrappedRequest
-    ? (body as { request?: unknown }).request
-    : Object.fromEntries(Object.entries(body).filter(([key]) => key !== "ttlMs"));
   const origin = new URL(request.url).origin;
 
   return handlePublicAgentRoute({
-    handler: () =>
-      createAgentSigningIntent({
+    handler: async () => {
+      const body = await parseJsonBody(request);
+      if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
+
+      const hasWrappedRequest = "request" in body;
+      const requestBody = hasWrappedRequest
+        ? (body as { request?: unknown }).request
+        : Object.fromEntries(Object.entries(body).filter(([key]) => key !== "ttlMs"));
+
+      return createAgentSigningIntent({
         origin,
         requestBody,
         ttlMs: readTtlMs((body as { ttlMs?: unknown }).ttlMs),
-      }),
+      });
+    },
     rateLimit: AGENT_WRITE_RATE_LIMIT,
     request,
   });

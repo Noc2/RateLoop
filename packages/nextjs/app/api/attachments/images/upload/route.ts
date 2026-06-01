@@ -19,6 +19,7 @@ import {
 } from "~~/lib/auth/imageUploadChallenge";
 import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { MCP_SCOPES, authenticateMcpRequest } from "~~/lib/mcp/auth";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -37,6 +38,7 @@ type TokenPayload = {
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 const TOKEN_TTL_MS = 10 * 60 * 1000;
+const UPLOAD_METADATA_MAX_BYTES = 128 * 1024;
 const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const BLOB_STORAGE_CONFIGURATION_ERROR =
   "Image uploads are not configured. Set BLOB_READ_WRITE_TOKEN in the deployment environment.";
@@ -72,6 +74,20 @@ function parseTokenPayload(value: string | null | undefined): TokenPayload {
     throw new Error("Upload token payload is invalid.");
   }
   return parsed;
+}
+
+function uploadTooLargeResponse() {
+  return NextResponse.json({ error: "Upload is too large." }, { status: 413 });
+}
+
+function rejectOversizedUploadBody(request: NextRequest) {
+  const contentLength = request.headers.get("content-length");
+  if (!contentLength || !/^\d+$/.test(contentLength)) return null;
+
+  const maximumBodyBytes = request.headers.get("content-type")?.toLowerCase().includes("multipart/form-data")
+    ? getMaxImageUploadSizeBytes() + UPLOAD_METADATA_MAX_BYTES
+    : UPLOAD_METADATA_MAX_BYTES;
+  return Number(contentLength) > maximumBodyBytes ? uploadTooLargeResponse() : null;
 }
 
 function getBearerToken(request: Request) {
@@ -183,9 +199,6 @@ async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
     }
 
     const payload = parseClientPayload(clientPayload);
-    const limited = await checkRateLimit(request, RATE_LIMIT);
-    if (limited) return limited;
-
     const authorization = await authorizeUploadRequest(request, payload);
     const authorizedLimited = await checkAuthorizedUploadRateLimit(request, authorization);
     if (authorizedLimited) return authorizedLimited;
@@ -228,6 +241,12 @@ async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    const limited = await checkRateLimit(request, RATE_LIMIT);
+    if (limited) return limited;
+
+    const oversizedBody = rejectOversizedUploadBody(request);
+    if (oversizedBody) return oversizedBody;
+
     if (request.headers.get("content-type")?.toLowerCase().includes("multipart/form-data")) {
       return handleLocalUpload(request);
     }
@@ -242,17 +261,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: BLOB_STORAGE_CONFIGURATION_ERROR }, { status: 503 });
     }
 
-    const body = (await request.json()) as HandleUploadBody;
+    const body = await parseJsonBody(request, { maxBytes: UPLOAD_METADATA_MAX_BYTES });
+    if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
+
     const jsonResponse = await handleUpload({
-      body,
+      body: body as unknown as HandleUploadBody,
       request,
       onBeforeGenerateToken: async (_pathname, clientPayload) => {
         const payload = parseClientPayload(clientPayload);
-        const limited = await checkRateLimit(request, RATE_LIMIT);
-        if (limited) {
-          throw new Error("Upload rate limit exceeded.");
-        }
-
         const authorization = await authorizeUploadRequest(request, payload);
         const authorizedLimited = await checkAuthorizedUploadRateLimit(request, authorization);
         if (authorizedLimited) {
@@ -298,7 +314,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
 
-    const parsedPayload = "clientPayload" in body.payload ? parseClientPayload(body.payload.clientPayload) : null;
+    const uploadBody = body as unknown as HandleUploadBody;
+    const uploadPayload = uploadBody.payload;
+    const parsedPayload =
+      uploadPayload && typeof uploadPayload === "object" && "clientPayload" in uploadPayload
+        ? parseClientPayload(typeof uploadPayload.clientPayload === "string" ? uploadPayload.clientPayload : null)
+        : null;
     return NextResponse.json({
       ...jsonResponse,
       attachmentId: parsedPayload?.attachmentId,

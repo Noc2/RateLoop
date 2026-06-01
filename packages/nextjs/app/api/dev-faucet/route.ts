@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 
 // Only available in development on localhost chain
 const DEV_FAUCET_ENABLED = process.env.DEV_FAUCET_ENABLED === "true" && process.env.NODE_ENV === "development";
@@ -53,7 +54,11 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const { address, action, amount } = await request.json();
+    const body = await parseJsonBody(request);
+    if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body, "Invalid JSON body");
+    const address = typeof body.address === "string" ? body.address : "";
+    const action = typeof body.action === "string" ? body.action : "";
+    const amount = body.amount;
 
     if (!address || !action) {
       return NextResponse.json({ error: "Missing address or action" }, { status: 400 });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { JSON_BODY_TOO_LARGE, parseJsonBody } from "~~/lib/http/jsonBody";
 import { PUBLIC_MCP_TOOLS, callPublicRateLoopMcpTool, normalizeToolError } from "~~/lib/mcp/tools";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -69,6 +70,28 @@ function jsonRpcError(id: JsonRpcRequest["id"], code: number, message: string, r
       jsonrpc: "2.0",
     },
     { headers: corsHeaders(request), status: code === -32603 ? 500 : 200 },
+  );
+}
+
+function jsonRpcHttpError(
+  id: JsonRpcRequest["id"],
+  code: number,
+  message: string,
+  request: Request,
+  status: number,
+  data?: unknown,
+) {
+  return NextResponse.json(
+    {
+      error: {
+        code,
+        data,
+        message,
+      },
+      id: id ?? null,
+      jsonrpc: "2.0",
+    },
+    { headers: corsHeaders(request), status },
   );
 }
 
@@ -145,12 +168,14 @@ export async function POST(request: NextRequest) {
   const limited = await checkRateLimit(request, RATE_LIMIT);
   if (limited) return limited;
 
-  let body: JsonRpcRequest;
-  try {
-    body = (await request.json()) as JsonRpcRequest;
-  } catch {
+  const parsedBody = await parseJsonBody(request);
+  if (parsedBody === JSON_BODY_TOO_LARGE) {
+    return jsonRpcHttpError(null, -32000, "Request body is too large.", request, 413);
+  }
+  if (parsedBody === null) {
     return jsonRpcError(null, -32700, "Parse error", request);
   }
+  const body = parsedBody as JsonRpcRequest;
 
   if (body.jsonrpc !== "2.0" || typeof body.method !== "string") {
     return jsonRpcError(body.id, -32600, "Invalid Request", request);

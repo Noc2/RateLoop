@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { JSON_BODY_TOO_LARGE, parseJsonBody } from "~~/lib/http/jsonBody";
 import { McpAuthError, authenticateMcpRequest, buildMcpAuthChallenge } from "~~/lib/mcp/auth";
 import { MCP_TOOLS, callRateLoopMcpTool, getMcpToolRequiredScope, normalizeToolError } from "~~/lib/mcp/tools";
 import { checkRateLimit } from "~~/utils/rateLimit";
@@ -196,12 +197,14 @@ export async function POST(request: NextRequest) {
   const limited = await checkRateLimit(request, RATE_LIMIT, { allowOnStoreUnavailable: false });
   if (limited) return limited;
 
-  let body: JsonRpcRequest;
-  try {
-    body = (await request.json()) as JsonRpcRequest;
-  } catch {
+  const parsedBody = await parseJsonBody(request);
+  if (parsedBody === JSON_BODY_TOO_LARGE) {
+    return jsonRpcHttpError(null, -32000, "Request body is too large.", request, 413);
+  }
+  if (parsedBody === null) {
     return jsonRpcError(null, -32700, "Parse error", request);
   }
+  const body = parsedBody as JsonRpcRequest;
 
   if (body.jsonrpc !== "2.0" || typeof body.method !== "string") {
     return jsonRpcError(body.id, -32600, "Invalid Request", request);

@@ -609,6 +609,22 @@ test("agent asks route returns a tokenless wallet transaction plan response", as
   assert.equal((body.transactionPlan as { calls: unknown[] }).calls.length, 1);
 });
 
+test("agent asks route rejects oversized JSON bodies", async () => {
+  const response = await asksRoute.POST(
+    new NextRequest("https://rateloop.xyz/api/agent/asks", {
+      body: "{}",
+      headers: new Headers({
+        "content-length": String(128 * 1024 + 1),
+        "content-type": "application/json",
+      }),
+      method: "POST",
+    }),
+  );
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "Request body is too large." });
+});
+
 test("agent signing intent routes create and prepare browser handoff asks", async () => {
   installAskOverrides();
 

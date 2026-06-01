@@ -310,6 +310,35 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
   assert.equal(names.includes("rateloop_get_agent_balance"), false);
 });
 
+test("MCP routes reject oversized JSON-RPC bodies", async () => {
+  const oversizedHeaders = {
+    "content-length": String(128 * 1024 + 1),
+    "content-type": "application/json",
+  };
+  const managedResponse = await route.POST(
+    new NextRequest("https://rateloop.xyz/api/mcp", {
+      body: "{}",
+      headers: new Headers({
+        authorization: "Bearer secret-token",
+        ...oversizedHeaders,
+      }),
+      method: "POST",
+    }),
+  );
+  const publicResponse = await publicRoute.POST(
+    new NextRequest("https://rateloop.xyz/api/mcp/public", {
+      body: "{}",
+      headers: new Headers(oversizedHeaders),
+      method: "POST",
+    }),
+  );
+
+  assert.equal(managedResponse.status, 413);
+  assert.equal(((await managedResponse.json()).error as Record<string, unknown>).message, "Request body is too large.");
+  assert.equal(publicResponse.status, 413);
+  assert.equal(((await publicResponse.json()).error as Record<string, unknown>).message, "Request body is too large.");
+});
+
 test("public MCP ask returns a tokenless wallet-call plan", async () => {
   mcpToolsModule.__setMcpToolTestOverridesForTests({
     preparePermissionlessWalletQuestionSubmissionRequest: async params => ({

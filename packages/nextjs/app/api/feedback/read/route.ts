@@ -10,13 +10,22 @@ import {
   normalizeContentFeedbackReadInput,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
 export async function POST(request: NextRequest) {
+  const preParseLimited = await checkRateLimit(request, RATE_LIMIT, {
+    allowOnStoreUnavailable: true,
+    extraKeyParts: ["preparse"],
+  });
+  if (preParseLimited) return preParseLimited;
+
   try {
-    const body = (await request.json()) as {
+    const parsedBody = await parseJsonBody(request);
+    if (!isJsonObjectBody(parsedBody)) return jsonBodyErrorResponse(parsedBody, "Invalid JSON body");
+    const body = parsedBody as {
       address?: string;
       contentId?: unknown;
       signature?: `0x${string}`;

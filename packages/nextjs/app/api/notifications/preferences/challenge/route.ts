@@ -9,6 +9,7 @@ import {
   normalizeNotificationPreferencesReadInput,
 } from "~~/lib/auth/notificationPreferences";
 import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
@@ -18,7 +19,8 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await parseJsonBody(request);
+    if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body, "Invalid JSON body");
     if (body.intent === "read") {
       const normalizedRead = normalizeNotificationPreferencesReadInput(body);
       if (!normalizedRead.ok) {

@@ -39,6 +39,8 @@ type PublicAgentRouteOptions = {
   request: NextRequest;
 };
 
+export { JSON_BODY_TOO_LARGE, isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
+
 function metadataUrl(request: Request) {
   return new URL("/.well-known/oauth-protected-resource", request.url).toString();
 }
@@ -127,14 +129,6 @@ export async function handlePublicAgentRoute(params: PublicAgentRouteOptions) {
   } catch (error) {
     const normalized = normalizeToolError(error);
     return NextResponse.json(normalized, { status: normalized.status });
-  }
-}
-
-export async function parseJsonBody(request: NextRequest) {
-  try {
-    return await request.json();
-  } catch {
-    return null;
   }
 }
 

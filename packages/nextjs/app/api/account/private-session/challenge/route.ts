@@ -6,12 +6,22 @@ import {
   normalizePrivateAccountReadInput,
 } from "~~/lib/auth/privateAccountAccess";
 import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json()) as Record<string, unknown>;
+  const preParseLimited = await checkRateLimit(request, RATE_LIMIT, {
+    extraKeyParts: ["preparse"],
+  });
+  if (preParseLimited) return preParseLimited;
+
+  const body = await parseJsonBody(request);
+  if (!isJsonObjectBody(body)) {
+    return jsonBodyErrorResponse(body, "Invalid JSON body");
+  }
+
   const limited = await checkRateLimit(request, RATE_LIMIT, {
     extraKeyParts: [typeof body.address === "string" ? body.address : undefined],
   });

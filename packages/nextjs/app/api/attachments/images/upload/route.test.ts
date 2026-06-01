@@ -121,3 +121,19 @@ test("MCP image uploads cannot rotate attachment ids around the agent daily quot
     await rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test("image upload route rejects oversized multipart bodies before parsing", async () => {
+  const response = await POST(
+    new NextRequest("https://rateloop.xyz/api/attachments/images/upload", {
+      body: "oversized-placeholder",
+      headers: new Headers({
+        "content-length": String(10 * 1024 * 1024 + 128 * 1024 + 1),
+        "content-type": "multipart/form-data; boundary=rateloop",
+      }),
+      method: "POST",
+    }),
+  );
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: "Upload is too large." });
+});
