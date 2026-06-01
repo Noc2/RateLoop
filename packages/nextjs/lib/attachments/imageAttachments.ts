@@ -1,5 +1,5 @@
 import { del as deleteBlob, get as getBlob, put as putBlob } from "@vercel/blob";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { and, eq } from "drizzle-orm";
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
@@ -12,6 +12,7 @@ import { type QuestionImageAttachment, questionImageAttachments } from "~~/lib/d
 
 const IMAGE_ATTACHMENT_ROUTE_PREFIX = "/api/attachments/images";
 const IMAGE_ATTACHMENT_PUBLIC_EXTENSION = "webp";
+const DIRECT_IMAGE_ATTACHMENT_URI_PREFIX = "direct://";
 const LOCAL_IMAGE_ATTACHMENT_URI_PREFIX = "local://";
 const LOCAL_IMAGE_ATTACHMENT_STORAGE_PREFIX = "question-attachments";
 const DEFAULT_WALLET_DAILY_IMAGE_UPLOAD_LIMIT = 40;
@@ -24,7 +25,7 @@ const DEFAULT_ORPHAN_SWEEP_LIMIT = 100;
 
 type ImageAttachmentStatus = "uploading" | "processing" | "approved" | "blocked" | "failed" | "deleted";
 
-type UploaderIdentity =
+export type UploaderIdentity =
   | {
       kind: "wallet";
       ownerWalletAddress: `0x${string}`;
@@ -44,6 +45,29 @@ type CreatePendingImageAttachmentParams = {
   sha256: string;
   sizeBytes: number;
   uploader: UploaderIdentity;
+};
+
+export type CreateImageAttachmentFromBufferParams = {
+  attachmentId: string;
+  buffer: Buffer;
+  clientRequestId?: string | null;
+  filename: string;
+  mimeType: string;
+  requestUrl: string;
+  sha256: string;
+  sizeBytes: number;
+  uploader: UploaderIdentity;
+};
+
+export type ImageAttachmentUploadResult = {
+  attachmentId: string;
+  error: string | null;
+  height: number | null;
+  imageUrl: string | null;
+  moderationStatus: string;
+  nextAction: string;
+  status: ImageAttachmentStatus;
+  width: number | null;
 };
 
 type ModerationDecision = {
@@ -105,6 +129,10 @@ const BLOCKED_MODERATION_CATEGORIES = new Set([
 
 function nowDate() {
   return new Date();
+}
+
+export function createImageAttachmentId() {
+  return `att_${randomBytes(18).toString("base64url")}`;
 }
 
 function startOfUtcDay(now = nowDate()) {
@@ -342,6 +370,14 @@ export function parseAttachmentIdFromImageUrl(value: string): string | null {
 
 export function isLocalImageAttachmentPathname(pathname: string | null | undefined) {
   return Boolean(pathname?.startsWith(LOCAL_IMAGE_ATTACHMENT_URI_PREFIX));
+}
+
+function isDirectImageAttachmentPathname(pathname: string | null | undefined) {
+  return Boolean(pathname?.startsWith(DIRECT_IMAGE_ATTACHMENT_URI_PREFIX));
+}
+
+function getDirectImageAttachmentPathname(attachmentId: string) {
+  return `${DIRECT_IMAGE_ATTACHMENT_URI_PREFIX}${LOCAL_IMAGE_ATTACHMENT_STORAGE_PREFIX}/${attachmentId}/original`;
 }
 
 export async function readLocalImageAttachment(pathname: string) {
@@ -617,6 +653,10 @@ async function markImageAttachmentProcessingFailed(params: {
 }
 
 async function deleteStoredImage(pathname: string) {
+  if (isDirectImageAttachmentPathname(pathname)) {
+    return;
+  }
+
   if (isLocalImageAttachmentPathname(pathname)) {
     const filePath = resolveLocalImageAttachmentPathname(pathname);
     if (filePath) await unlink(filePath).catch(() => undefined);
@@ -790,6 +830,101 @@ export async function processCompletedLocalImageUpload(params: {
     expectedSha256: attachment.sha256,
     originalBlobPathname: localOriginalPathname,
     saveNormalizedImage: normalizedBuffer => putLocalNormalizedImage(params.attachmentId, normalizedBuffer),
+  });
+}
+
+function imageAttachmentUploadResult(params: {
+  attachment: QuestionImageAttachment;
+  attachmentId: string;
+  requestUrl: string;
+}): ImageAttachmentUploadResult {
+  return {
+    attachmentId: params.attachmentId,
+    error: params.attachment.error,
+    height: params.attachment.height,
+    imageUrl:
+      params.attachment.status === "approved" ? getAttachmentImageUrl(params.requestUrl, params.attachmentId) : null,
+    moderationStatus: params.attachment.moderationStatus,
+    nextAction:
+      params.attachment.status === "approved"
+        ? "Use imageUrl in question.imageUrls when calling rateloop_quote_question and rateloop_ask_humans."
+        : "Inspect status and error before using this attachment in question.imageUrls.",
+    status: params.attachment.status as ImageAttachmentStatus,
+    width: params.attachment.width,
+  };
+}
+
+function getImageAttachmentQuotaSubjects(uploader: UploaderIdentity) {
+  return [
+    ...(uploader.kind === "agent" ? [{ subjectId: uploader.agentId, subjectKind: "agent" as const }] : []),
+    ...(uploader.ownerWalletAddress
+      ? [{ subjectId: uploader.ownerWalletAddress, subjectKind: "wallet" as const }]
+      : []),
+  ];
+}
+
+export async function createImageAttachmentFromBuffer(
+  params: CreateImageAttachmentFromBufferParams,
+): Promise<ImageAttachmentUploadResult> {
+  if (params.buffer.byteLength !== params.sizeBytes) {
+    throw new Error("Uploaded image does not match the signed upload metadata.");
+  }
+
+  await reserveImageUploadDailyQuotas({
+    sizeBytes: params.sizeBytes,
+    subjects: getImageAttachmentQuotaSubjects(params.uploader),
+  });
+  await createPendingImageAttachment({
+    attachmentId: params.attachmentId,
+    clientRequestId: params.clientRequestId,
+    filename: params.filename,
+    mimeType: params.mimeType,
+    sha256: params.sha256,
+    sizeBytes: params.sizeBytes,
+    uploader: params.uploader,
+  });
+
+  const originalBlobPathname = getDirectImageAttachmentPathname(params.attachmentId);
+  const attachment = await markImageAttachmentProcessing({
+    attachmentId: params.attachmentId,
+    blobPathname: originalBlobPathname,
+    blobUrl: null,
+    contentType: params.mimeType,
+  });
+  if (!attachment) {
+    throw new Error("Image attachment is no longer accepting uploads.");
+  }
+
+  await processImageAttachmentBuffer({
+    attachmentId: params.attachmentId,
+    buffer: params.buffer,
+    contentType: params.mimeType,
+    expectedSha256: attachment.sha256,
+    originalBlobPathname,
+    saveNormalizedImage: normalizedBuffer =>
+      getImageAttachmentUploadMode() === "local"
+        ? putLocalNormalizedImage(params.attachmentId, normalizedBuffer)
+        : getImageAttachmentBlobDependencies().putBlob(
+            `question-attachments/${params.attachmentId}/image.webp`,
+            normalizedBuffer,
+            {
+              access: "private",
+              allowOverwrite: true,
+              cacheControlMaxAge: 60 * 60 * 24 * 30,
+              contentType: "image/webp",
+            },
+          ),
+  });
+
+  const completedAttachment = await getImageAttachment(params.attachmentId);
+  if (!completedAttachment) {
+    throw new Error("Image attachment was not found after upload processing.");
+  }
+
+  return imageAttachmentUploadResult({
+    attachment: completedAttachment,
+    attachmentId: params.attachmentId,
+    requestUrl: params.requestUrl,
   });
 }
 
