@@ -4,6 +4,11 @@ import { LandingPageActions } from "~~/components/home/LandingPageActions";
 import OrbAnimation from "~~/components/home/OrbAnimation";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { getOptionalPonderUrl } from "~~/lib/env/server";
+import {
+  FALLBACK_SOCIAL_PROOF_STATS,
+  type LandingSocialProofStats,
+  buildLandingPageSocialProofItems,
+} from "~~/lib/home/socialProof";
 
 const LANDING_STATS_REVALIDATE_SECONDS = 300;
 
@@ -87,13 +92,6 @@ const FEATURE_BENEFITS: {
     ],
   },
 ];
-
-const FALLBACK_SOCIAL_PROOF_STATS = {
-  totalVotes: 3482,
-  totalVerifiedHumans: 287,
-  totalQuestionRewardsPaid: "0",
-  totalFeedbackBonusesPaid: "0",
-};
 
 function SectionHeading({ number, title, gradientText }: { number: string; title: string; gradientText: string }) {
   return (
@@ -216,38 +214,8 @@ function FeaturesBenefitsSection() {
   );
 }
 
-function formatUsdcPaidOut(rawAmount: unknown) {
-  let amount: bigint;
-  try {
-    amount = BigInt(String(rawAmount ?? 0));
-  } catch {
-    amount = 0n;
-  }
-
-  const nonNegativeAmount = amount > 0n ? amount : 0n;
-  const cents = nonNegativeAmount > 0n ? (nonNegativeAmount + 5_000n) / 10_000n : 0n;
-  const dollars = cents / 100n;
-  const centsPart = cents % 100n;
-
-  if (centsPart === 0n) {
-    return `$${dollars.toLocaleString("en-US")}`;
-  }
-
-  return `$${dollars.toLocaleString("en-US")}.${centsPart.toString().padStart(2, "0")}`;
-}
-
 async function getLandingPageSocialProofItems() {
-  const fallbackPaidOut =
-    BigInt(FALLBACK_SOCIAL_PROOF_STATS.totalQuestionRewardsPaid) +
-    BigInt(FALLBACK_SOCIAL_PROOF_STATS.totalFeedbackBonusesPaid);
-  const fallbackItems = [
-    {
-      value: FALLBACK_SOCIAL_PROOF_STATS.totalVerifiedHumans.toLocaleString("en-US"),
-      label: "Verified Humans",
-    },
-    { value: FALLBACK_SOCIAL_PROOF_STATS.totalVotes.toLocaleString("en-US"), label: "Ratings" },
-    { value: formatUsdcPaidOut(fallbackPaidOut), label: "USDC Paid" },
-  ];
+  const fallbackItems = buildLandingPageSocialProofItems(FALLBACK_SOCIAL_PROOF_STATS);
 
   const ponderUrl = getOptionalPonderUrl();
   if (!ponderUrl) {
@@ -263,26 +231,8 @@ async function getLandingPageSocialProofItems() {
       return fallbackItems;
     }
 
-    const stats = (await response.json()) as {
-      totalVotes?: number;
-      totalVerifiedHumans?: number | string;
-      totalQuestionRewardsPaid?: string;
-      totalFeedbackBonusesPaid?: string;
-    };
-    const paidOut =
-      BigInt(String(stats.totalQuestionRewardsPaid ?? 0)) + BigInt(String(stats.totalFeedbackBonusesPaid ?? 0));
-
-    return [
-      {
-        value: Math.max(0, Number(stats.totalVerifiedHumans ?? 0)).toLocaleString("en-US"),
-        label: "Verified Humans",
-      },
-      { value: Math.max(0, Number(stats.totalVotes ?? 0)).toLocaleString("en-US"), label: "Ratings" },
-      {
-        value: formatUsdcPaidOut(paidOut),
-        label: "USDC Paid",
-      },
-    ];
+    const stats = (await response.json()) as LandingSocialProofStats;
+    return buildLandingPageSocialProofItems(stats);
   } catch {
     return fallbackItems;
   }
