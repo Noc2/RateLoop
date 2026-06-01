@@ -443,15 +443,28 @@ contract FrontendRegistryTest is Test {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        registry.approveSnapshotFrontend(frontend1);
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper), frontend1);
+
+        vm.startPrank(frontend1);
         registry.setSnapshotProposer(keeper);
         vm.stopPrank();
 
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper), address(0));
         assertEq(registry.snapshotProposerForFrontend(frontend1), keeper);
         assertEq(registry.frontendForSnapshotProposer(keeper), frontend1);
         assertEq(registry.authorizedSnapshotFrontend(keeper), frontend1);
         assertTrue(registry.isAuthorizedSnapshotProposer(frontend1, keeper));
         assertEq(registry.authorizedSnapshotFrontend(frontend1), frontend1);
         assertTrue(registry.isAuthorizedSnapshotProposer(frontend1, frontend1));
+
+        vm.prank(frontend1);
+        registry.setSnapshotProposer(keeper);
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper), address(0));
+        assertEq(registry.snapshotProposerForFrontend(frontend1), keeper);
     }
 
     function test_SetSnapshotProposerRotatesAndClearsPreviousKeeper() public {
@@ -461,7 +474,18 @@ contract FrontendRegistryTest is Test {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
+        vm.stopPrank();
+
+        vm.prank(keeper1);
+        registry.approveSnapshotFrontend(frontend1);
+        vm.prank(keeper2);
+        registry.approveSnapshotFrontend(frontend1);
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper1), frontend1);
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper2), frontend1);
+
+        vm.startPrank(frontend1);
         registry.setSnapshotProposer(keeper1);
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper1), address(0));
         registry.setSnapshotProposer(keeper2);
         vm.stopPrank();
 
@@ -477,32 +501,91 @@ contract FrontendRegistryTest is Test {
         assertEq(registry.snapshotProposerForFrontend(frontend1), address(0));
         assertEq(registry.frontendForSnapshotProposer(keeper2), address(0));
         assertEq(registry.authorizedSnapshotFrontend(keeper2), address(0));
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper2), address(0));
     }
 
-    function test_SnapshotProposerCannotBeAssignedToMultipleFrontends() public {
+    function test_SetSnapshotProposerRequiresProposerApproval() public {
         address keeper = address(0xBEEF);
 
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
+        vm.expectRevert("Proposer not approved");
         registry.setSnapshotProposer(keeper);
         vm.stopPrank();
+    }
+
+    function test_SnapshotProposerCanRevokeApprovalBeforeAssignment() public {
+        address keeper = address(0xBEEF);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.startPrank(keeper);
+        registry.approveSnapshotFrontend(frontend1);
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper), frontend1);
+        registry.approveSnapshotFrontend(address(0));
+        vm.stopPrank();
+
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper), address(0));
+
+        vm.prank(frontend1);
+        vm.expectRevert("Proposer not approved");
+        registry.setSnapshotProposer(keeper);
+    }
+
+    function test_SnapshotProposerApprovalRotationClearsPreviousFrontend() public {
+        address keeper = address(0xBEEF);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        registry.approveSnapshotFrontend(frontend1);
+        vm.prank(frontend1);
+        registry.setSnapshotProposer(keeper);
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper), address(0));
 
         vm.startPrank(frontend2);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
-        vm.expectRevert("Proposer already assigned");
-        registry.setSnapshotProposer(keeper);
         vm.stopPrank();
+
+        vm.prank(keeper);
+        registry.approveSnapshotFrontend(frontend2);
+
+        assertEq(registry.snapshotProposerForFrontend(frontend1), address(0));
+        assertEq(registry.frontendForSnapshotProposer(keeper), address(0));
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper), frontend2);
+
+        vm.prank(frontend2);
+        registry.setSnapshotProposer(keeper);
+
+        assertEq(registry.snapshotProposerForFrontend(frontend2), keeper);
+        assertEq(registry.frontendForSnapshotProposer(keeper), frontend2);
+        assertEq(registry.approvedSnapshotFrontendForProposer(keeper), address(0));
+        assertEq(registry.authorizedSnapshotFrontend(keeper), frontend2);
     }
 
     function test_AssignedSnapshotProposerCanRegisterAndClearInboundAssignment() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
+        vm.stopPrank();
+
+        vm.prank(frontend2);
+        registry.approveSnapshotFrontend(frontend1);
+        assertEq(registry.approvedSnapshotFrontendForProposer(frontend2), frontend1);
+
+        vm.startPrank(frontend1);
         registry.setSnapshotProposer(frontend2);
         vm.stopPrank();
 
+        assertEq(registry.approvedSnapshotFrontendForProposer(frontend2), address(0));
         assertEq(registry.snapshotProposerForFrontend(frontend1), frontend2);
         assertEq(registry.frontendForSnapshotProposer(frontend2), frontend1);
 
@@ -513,6 +596,7 @@ contract FrontendRegistryTest is Test {
 
         assertEq(registry.snapshotProposerForFrontend(frontend1), address(0));
         assertEq(registry.frontendForSnapshotProposer(frontend2), address(0));
+        assertEq(registry.approvedSnapshotFrontendForProposer(frontend2), address(0));
         assertEq(registry.authorizedSnapshotFrontend(frontend2), frontend2);
         assertTrue(registry.isEligible(frontend2));
     }
@@ -521,6 +605,12 @@ contract FrontendRegistryTest is Test {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
+        vm.stopPrank();
+
+        vm.prank(frontend2);
+        registry.approveSnapshotFrontend(frontend1);
+
+        vm.startPrank(frontend1);
         registry.setSnapshotProposer(frontend2);
         vm.stopPrank();
 
@@ -529,6 +619,7 @@ contract FrontendRegistryTest is Test {
 
         assertEq(registry.snapshotProposerForFrontend(frontend1), address(0));
         assertEq(registry.frontendForSnapshotProposer(frontend2), address(0));
+        assertEq(registry.approvedSnapshotFrontendForProposer(frontend2), address(0));
     }
 
     function test_SnapshotProposerAuthorizationDropsWhenFrontendExitsOrIsSlashed() public {
@@ -537,6 +628,12 @@ contract FrontendRegistryTest is Test {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        registry.approveSnapshotFrontend(frontend1);
+
+        vm.startPrank(frontend1);
         registry.setSnapshotProposer(keeper);
         registry.requestDeregister();
         vm.stopPrank();
@@ -547,6 +644,12 @@ contract FrontendRegistryTest is Test {
         vm.startPrank(frontend2);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        registry.approveSnapshotFrontend(frontend2);
+
+        vm.startPrank(frontend2);
         registry.setSnapshotProposer(keeper);
         vm.stopPrank();
 

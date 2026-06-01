@@ -596,6 +596,10 @@ test("supported sponsored operation families are allowlisted", async () => {
     [submitQuestionWithRewardCall()],
     [encodeCall(frontendRegistryContract, "register")],
     [encodeCall(frontendRegistryContract, "claimFees")],
+    [encodeCall(frontendRegistryContract, "approveSnapshotFrontend", [WALLET])],
+    [encodeCall(frontendRegistryContract, "setSnapshotProposer", [WALLET])],
+    [encodeCall(frontendRegistryContract, "clearSnapshotProposer")],
+    [encodeCall(frontendRegistryContract, "renounceSnapshotProposer")],
     [
       encodeCall(profileRegistryContract, "setProfile", [
         "EthHealth",

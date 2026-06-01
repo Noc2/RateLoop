@@ -160,7 +160,7 @@ If you only want the database helper, use `yarn dev:db`. It starts the local Pos
 
 ### Run the Keeper
 
-The keeper is a lightweight stateless service that calls settleRound() on eligible active rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet delegated by the bonded frontend operator. Anyone can run a keeper — all data is public, and multiple instances provide redundancy with no coordination.
+The keeper is a lightweight stateless service that calls settleRound() on eligible active rounds, cancels expired rounds, marks dormant content, and can publish correlation payout snapshots from deterministic artifacts. Snapshot publishing can use a separate keeper wallet that first approves the bonded frontend operator and is then delegated by that frontend. Anyone can run a keeper — all data is public, and multiple instances provide redundancy with no coordination.
 
 **Configure** by copying `.env.example` and setting contract addresses and a wallet:
 

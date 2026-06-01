@@ -468,11 +468,11 @@ const SmartContracts: NextPage = () => {
           <code>QuestionRewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof)</code> &mdash;
           Claim the USDC-backed bounty for a revealed voter after the round has a finalized correlation payout snapshot.
           Snapshot roots are proposed through <code>ClusterPayoutOracle</code> by registered frontend operators bonded
-          with 1,000 LREP, either directly or through delegated snapshot keepers, then finalized after the challenge
-          window. Bad roots can be challenged with the configured USDC ERC20 bond, which defaults to 5 USDC (5_000_000
-          atomic units). New bounties default to a 3% frontend-operator share, attributed from the vote commit;
-          unpayable frontend shares remain with the voter claim. Bounty eligibility and correlation caps only gate this
-          payout path, not who can answer, reveal, or affect the result.
+          with 1,000 LREP, either directly or through keeper wallets that approved delegation first, then finalized
+          after the challenge window. Bad roots can be challenged with the configured USDC ERC20 bond, which defaults to
+          5 USDC (5_000_000 atomic units). New bounties default to a 3% frontend-operator share, attributed from the
+          vote commit; unpayable frontend shares remain with the voter claim. Bounty eligibility and correlation caps
+          only gate this payout path, not who can answer, reveal, or affect the result.
         </li>
         <li>
           <code>QuestionRewardPoolEscrow.claimQuestionBundleReward(bundleId, roundSetIndex)</code> &mdash; Claim a
@@ -577,7 +577,8 @@ const SmartContracts: NextPage = () => {
           frontend becomes fee-eligible again.
         </li>
         <li>
-          <code>setSnapshotProposer(proposer)</code> / <code>clearSnapshotProposer()</code> &mdash; Delegate or clear a
+          <code>approveSnapshotFrontend(frontend)</code>, <code>setSnapshotProposer(proposer)</code>, and{" "}
+          <code>clearSnapshotProposer()</code> &mdash; Let a keeper wallet consent first, then delegate or clear that
           separate operational wallet for payout-root proposal transactions while the frontend operator remains bonded.
         </li>
         <li>

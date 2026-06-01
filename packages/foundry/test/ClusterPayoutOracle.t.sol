@@ -106,6 +106,7 @@ contract ClusterPayoutOracleTest is Test {
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory epoch = oracle.correlationEpochSnapshot(1);
         assertEq(epoch.proposer, keeper);
+        assertEq(epoch.frontendOperator, frontendOperator);
 
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -118,6 +119,7 @@ contract ClusterPayoutOracleTest is Test {
             oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
         ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
         assertEq(proposal.proposer, keeper);
+        assertEq(proposal.frontendOperator, frontendOperator);
 
         frontendRegistry.setEligible(frontendOperator, false);
         IClusterPayoutOracle.RoundPayoutSnapshotInput memory nextInput = _defaultRoundPayoutInput(1);
@@ -1478,13 +1480,13 @@ contract TestableClusterPayoutOracle is ClusterPayoutOracle {
         //   slot 4: frontendRegistry (address; challengeBondToken is immutable, no slot)
         //   slot 5: correlationEpochSnapshots (mapping)
         //   slot 6: roundPayoutProposals (mapping)
-        // proposerBond sits at offset 15 within RoundPayoutProposal
+        // proposerBond sits at offset 16 within RoundPayoutProposal
         // (RoundPayoutSnapshot packs into slots 0-8, then proposedAt+consumer=9, proposer=10,
-        // challenger=11, artifactHash=12, artifactURI=13, bond=14, proposerBond=15,
-        // correlationEpochDigest=16). This layout is asserted by
+        // frontendOperator=11, challenger=12, artifactHash=13, artifactURI=14, bond=15,
+        // proposerBond=16, correlationEpochDigest=17). This layout is asserted by
         // test_ProposerBondSlotMatchesBondField below.
         uint256 BASE_SLOT_ROUND_PAYOUT_PROPOSALS = 6;
-        uint256 PROPOSER_BOND_OFFSET = 15;
+        uint256 PROPOSER_BOND_OFFSET = 16;
         bytes32 structRoot = keccak256(abi.encode(snapshotKey, BASE_SLOT_ROUND_PAYOUT_PROPOSALS));
         return bytes32(uint256(structRoot) + PROPOSER_BOND_OFFSET);
     }

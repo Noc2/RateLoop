@@ -70,6 +70,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint64 proposedAt;
         uint64 finalizedAt;
         address proposer;
+        address frontendOperator;
         address challenger;
         bytes32 clusterRoot;
         bytes32 parameterHash;
@@ -84,6 +85,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint64 proposedAt;
         address consumer;
         address proposer;
+        address frontendOperator;
         address challenger;
         bytes32 artifactHash;
         string artifactURI;
@@ -250,6 +252,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             proposedAt: block.timestamp.toUint64(),
             finalizedAt: 0,
             proposer: msg.sender,
+            frontendOperator: frontendOperator,
             challenger: address(0),
             clusterRoot: clusterRoot,
             parameterHash: parameterHash,
@@ -425,6 +428,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             proposedAt: block.timestamp.toUint64(),
             consumer: consumer,
             proposer: msg.sender,
+            frontendOperator: frontendOperator,
             challenger: address(0),
             artifactHash: input.artifactHash,
             artifactURI: input.artifactURI,

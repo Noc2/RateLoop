@@ -209,10 +209,11 @@ const TechStackPage: NextPage = () => {
       </p>
       <p>
         Any keeper or indexer can recompute the same artifact. Registered frontend operators backed by a 1,000 LREP bond
-        can propose the correlation epoch and round payout roots directly or through a delegated snapshot keeper, while
-        other operators or auditors can challenge a bad root during the window and finalize the snapshot on-chain after
-        the window passes. Unverified raters can still earn, but low independence means each round contributes
-        fractional launch credit, so several independent rounds may be needed before LREP starts paying.
+        can propose the correlation epoch and round payout roots directly or through a delegated snapshot keeper that
+        approved that frontend, while other operators or auditors can challenge a bad root during the window and
+        finalize the snapshot on-chain after the window passes. Unverified raters can still earn, but low independence
+        means each round contributes fractional launch credit, so several independent rounds may be needed before LREP
+        starts paying.
       </p>
 
       <h2 id="feedback-bonuses">Feedback Bonuses</h2>

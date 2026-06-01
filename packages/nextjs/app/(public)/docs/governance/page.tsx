@@ -103,9 +103,9 @@ const GovernanceDocs: NextPage = () => {
       <p>
         Payout roots are proposed by registered frontend operators that have bonded{" "}
         <strong>{protocolDocFacts.frontendOperatorStakeLabel}</strong> in the FrontendRegistry. Operators publish the
-        deterministic artifact URI and root from their registered wallet or delegated snapshot keeper, then wait through
-        the challenge window. Other operators or auditors can recompute the artifact and challenge bad roots with the
-        configured USDC challenge bond, which defaults to 5 USDC.
+        deterministic artifact URI and root from their registered wallet or a delegated snapshot keeper that approved
+        them first, then wait through the challenge window. Other operators or auditors can recompute the artifact and
+        challenge bad roots with the configured USDC challenge bond, which defaults to 5 USDC.
       </p>
       <OracleChallengeFlowDiagram />
       <p>

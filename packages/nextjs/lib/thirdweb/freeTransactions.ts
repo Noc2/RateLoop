@@ -932,7 +932,11 @@ async function validateSponsoredCalls(
           functionName === "register" ||
           functionName === "requestDeregister" ||
           functionName === "completeDeregister" ||
-          functionName === "claimFees"
+          functionName === "claimFees" ||
+          functionName === "approveSnapshotFrontend" ||
+          functionName === "setSnapshotProposer" ||
+          functionName === "clearSnapshotProposer" ||
+          functionName === "renounceSnapshotProposer"
         ) {
           continue;
         }

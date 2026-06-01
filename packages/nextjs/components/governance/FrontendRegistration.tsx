@@ -27,6 +27,7 @@ import {
 } from "~~/lib/transactionErrors";
 import scaffoldConfig from "~~/scaffold.config";
 import { notification } from "~~/utils/scaffold-eth";
+import { ZERO_ADDRESS } from "~~/utils/scaffold-eth/common";
 
 const STAKE_AMOUNT = 1000; // Fixed 1,000 LREP stake
 
@@ -92,8 +93,11 @@ export function FrontendRegistration() {
   const [isClaiming, setIsClaiming] = useState(false);
   const [isClaimingAllRoundFees, setIsClaimingAllRoundFees] = useState(false);
   const [snapshotProposerInput, setSnapshotProposerInput] = useState("");
+  const [snapshotFrontendApprovalInput, setSnapshotFrontendApprovalInput] = useState("");
   const [isSettingSnapshotProposer, setIsSettingSnapshotProposer] = useState(false);
   const [isClearingSnapshotProposer, setIsClearingSnapshotProposer] = useState(false);
+  const [isApprovingSnapshotFrontend, setIsApprovingSnapshotFrontend] = useState(false);
+  const [isRevokingSnapshotFrontendApproval, setIsRevokingSnapshotFrontendApproval] = useState(false);
   const [claimingRoundKey, setClaimingRoundKey] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const configuredFrontendCode = scaffoldConfig.frontendCode;
@@ -138,6 +142,18 @@ export function FrontendRegistration() {
     args: [address],
   });
 
+  const { data: assignedSnapshotFrontendRaw, refetch: refetchAssignedSnapshotFrontend } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "frontendForSnapshotProposer",
+    args: [address],
+  });
+
+  const { data: approvedSnapshotFrontendRaw, refetch: refetchApprovedSnapshotFrontend } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "approvedSnapshotFrontendForProposer",
+    args: [address],
+  });
+
   // Read LREP balance
   const { data: lrepBalance, refetch: refetchRateLoop } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
@@ -165,14 +181,25 @@ export function FrontendRegistration() {
   const canCompleteDeregister = isExitPending && nowMs >= exitAvailableAt * 1000;
   const exitAvailableAtLabel = isExitPending ? new Date(exitAvailableAt * 1000).toLocaleString() : "";
   const snapshotProposer =
-    snapshotProposerRaw && snapshotProposerRaw !== "0x0000000000000000000000000000000000000000"
-      ? snapshotProposerRaw
+    snapshotProposerRaw && snapshotProposerRaw !== ZERO_ADDRESS ? snapshotProposerRaw : undefined;
+  const assignedSnapshotFrontend =
+    assignedSnapshotFrontendRaw && assignedSnapshotFrontendRaw !== ZERO_ADDRESS
+      ? assignedSnapshotFrontendRaw
+      : undefined;
+  const approvedSnapshotFrontend =
+    approvedSnapshotFrontendRaw && approvedSnapshotFrontendRaw !== ZERO_ADDRESS
+      ? approvedSnapshotFrontendRaw
       : undefined;
   const normalizedSnapshotProposerInput = snapshotProposerInput.trim();
   const snapshotProposerInputIsValid =
     normalizedSnapshotProposerInput.length > 0 &&
     isAddress(normalizedSnapshotProposerInput) &&
     (!address || normalizedSnapshotProposerInput.toLowerCase() !== address.toLowerCase());
+  const normalizedSnapshotFrontendApprovalInput = snapshotFrontendApprovalInput.trim();
+  const snapshotFrontendApprovalInputIsValid =
+    normalizedSnapshotFrontendApprovalInput.length > 0 &&
+    isAddress(normalizedSnapshotFrontendApprovalInput) &&
+    (!address || normalizedSnapshotFrontendApprovalInput.toLowerCase() !== address.toLowerCase());
   // Parse fees (LREP only)
   const lrepFees = accumulatedFees ? Number(accumulatedFees) / 1e6 : 0;
   const hasFees = lrepFees > 0;
@@ -506,7 +533,7 @@ export function FrontendRegistration() {
       refetchSnapshotProposer();
     } catch (e: any) {
       console.error("Keeper address update failed:", e);
-      notifyTransactionError(e, "Failed to update keeper address");
+      notifyTransactionError(e, "Failed to update keeper address. The keeper wallet must approve this frontend first.");
     } finally {
       setIsSettingSnapshotProposer(false);
     }
@@ -539,6 +566,81 @@ export function FrontendRegistration() {
       notifyTransactionError(e, "Failed to clear keeper address");
     } finally {
       setIsClearingSnapshotProposer(false);
+    }
+  };
+
+  const handleApproveSnapshotFrontend = async () => {
+    if (!address || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (!ensureGasBalance()) return;
+
+    if (!snapshotFrontendApprovalInputIsValid) {
+      notification.error("Enter a separate valid frontend operator address.");
+      return;
+    }
+
+    const frontendAddress = normalizedSnapshotFrontendApprovalInput as `0x${string}`;
+
+    setIsApprovingSnapshotFrontend(true);
+    try {
+      if (canUseSponsoredSubmitCalls) {
+        await executeSponsoredCalls([
+          {
+            abi: frontendRegistryInfo.abi,
+            address: frontendRegistryAddress,
+            args: [frontendAddress],
+            functionName: "approveSnapshotFrontend",
+          },
+        ]);
+      } else {
+        await writeFrontendRegistry({
+          functionName: "approveSnapshotFrontend",
+          args: [frontendAddress],
+        });
+      }
+
+      notification.success("Frontend approval updated.");
+      setSnapshotFrontendApprovalInput("");
+      refetchAssignedSnapshotFrontend();
+      refetchApprovedSnapshotFrontend();
+    } catch (e: any) {
+      console.error("Snapshot frontend approval failed:", e);
+      notifyTransactionError(e, "Failed to approve frontend. The address must be a registered active frontend.");
+    } finally {
+      setIsApprovingSnapshotFrontend(false);
+    }
+  };
+
+  const handleRevokeSnapshotFrontendApproval = async () => {
+    if (!address || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (!approvedSnapshotFrontend && !assignedSnapshotFrontend) return;
+    if (!ensureGasBalance()) return;
+
+    setIsRevokingSnapshotFrontendApproval(true);
+    try {
+      if (canUseSponsoredSubmitCalls) {
+        await executeSponsoredCalls([
+          {
+            abi: frontendRegistryInfo.abi,
+            address: frontendRegistryAddress,
+            args: [ZERO_ADDRESS],
+            functionName: "approveSnapshotFrontend",
+          },
+        ]);
+      } else {
+        await writeFrontendRegistry({
+          functionName: "approveSnapshotFrontend",
+          args: [ZERO_ADDRESS],
+        });
+      }
+
+      notification.success("Snapshot keeper approval cleared.");
+      refetchAssignedSnapshotFrontend();
+      refetchApprovedSnapshotFrontend();
+    } catch (e: any) {
+      console.error("Snapshot frontend approval clear failed:", e);
+      notifyTransactionError(e, "Failed to clear snapshot keeper approval");
+    } finally {
+      setIsRevokingSnapshotFrontendApproval(false);
     }
   };
 
@@ -629,6 +731,78 @@ export function FrontendRegistration() {
             </div>
           </div>
 
+          <div className="surface-card-nested rounded-2xl p-4 space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
+                  Snapshot Keeper Approval
+                  <InfoTooltip text="Approve a registered frontend before that frontend can assign this wallet as its snapshot keeper." />
+                </p>
+                <p className="text-sm text-base-content/60">
+                  Use this from a separate keeper wallet before the frontend operator sets it.
+                </p>
+              </div>
+              <div className="space-y-1 sm:text-right">
+                {assignedSnapshotFrontend ? (
+                  <FrontendOperatorAddressRow label="Active frontend:" address={assignedSnapshotFrontend} />
+                ) : (
+                  <p className="text-sm text-base-content/50">No active frontend</p>
+                )}
+                {approvedSnapshotFrontend ? (
+                  <FrontendOperatorAddressRow label="Pending approval:" address={approvedSnapshotFrontend} />
+                ) : (
+                  <p className="text-sm text-base-content/50">No pending approval</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={snapshotFrontendApprovalInput}
+                onChange={event => setSnapshotFrontendApprovalInput(event.target.value)}
+                placeholder="0x frontend operator"
+                className="input input-bordered input-sm min-w-0 flex-1 font-mono text-sm"
+                disabled={
+                  isApprovingSnapshotFrontend || isRevokingSnapshotFrontendApproval || isAwaitingSponsoredSubmitCalls
+                }
+              />
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleApproveSnapshotFrontend}
+                disabled={
+                  isMissingGasBalance ||
+                  isApprovingSnapshotFrontend ||
+                  isRevokingSnapshotFrontendApproval ||
+                  isAwaitingSponsoredSubmitCalls ||
+                  !snapshotFrontendApprovalInputIsValid
+                }
+              >
+                {isApprovingSnapshotFrontend ? <span className="loading loading-spinner loading-xs" /> : "Approve"}
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={handleRevokeSnapshotFrontendApproval}
+                disabled={
+                  isMissingGasBalance ||
+                  isApprovingSnapshotFrontend ||
+                  isRevokingSnapshotFrontendApproval ||
+                  isAwaitingSponsoredSubmitCalls ||
+                  (!approvedSnapshotFrontend && !assignedSnapshotFrontend)
+                }
+              >
+                {isRevokingSnapshotFrontendApproval ? <span className="loading loading-spinner loading-xs" /> : "Clear"}
+              </button>
+            </div>
+
+            {normalizedSnapshotFrontendApprovalInput &&
+              isAddress(normalizedSnapshotFrontendApprovalInput) &&
+              address &&
+              normalizedSnapshotFrontendApprovalInput.toLowerCase() === address.toLowerCase() && (
+                <p className="text-sm text-warning">Approve the registered frontend, not this keeper wallet.</p>
+              )}
+          </div>
+
           <GradientActionButton
             className="w-full"
             onClick={handleRegister}
@@ -673,7 +847,8 @@ export function FrontendRegistration() {
                   <InfoTooltip text="Optional operational wallet that can publish payout roots for this bonded frontend." />
                 </p>
                 <p className="text-sm text-base-content/60">
-                  Keep the registered frontend wallet offline and rotate the keeper wallet when needed.
+                  Keep the registered frontend wallet offline. The keeper wallet must approve this frontend before it
+                  can be set.
                 </p>
               </div>
               {snapshotProposer ? (
@@ -690,7 +865,13 @@ export function FrontendRegistration() {
                 onChange={event => setSnapshotProposerInput(event.target.value)}
                 placeholder="0x keeper address"
                 className="input input-bordered input-sm min-w-0 flex-1 font-mono text-sm"
-                disabled={isExitPending || isSlashed || isSettingSnapshotProposer || isClearingSnapshotProposer}
+                disabled={
+                  isExitPending ||
+                  isSlashed ||
+                  isSettingSnapshotProposer ||
+                  isClearingSnapshotProposer ||
+                  isAwaitingSponsoredSubmitCalls
+                }
               />
               <button
                 className="btn btn-primary btn-sm"
@@ -701,6 +882,7 @@ export function FrontendRegistration() {
                   isMissingGasBalance ||
                   isSettingSnapshotProposer ||
                   isClearingSnapshotProposer ||
+                  isAwaitingSponsoredSubmitCalls ||
                   !snapshotProposerInputIsValid
                 }
               >
@@ -715,7 +897,8 @@ export function FrontendRegistration() {
                   isSlashed ||
                   isMissingGasBalance ||
                   isSettingSnapshotProposer ||
-                  isClearingSnapshotProposer
+                  isClearingSnapshotProposer ||
+                  isAwaitingSponsoredSubmitCalls
                 }
               >
                 {isClearingSnapshotProposer ? <span className="loading loading-spinner loading-xs" /> : "Clear"}
