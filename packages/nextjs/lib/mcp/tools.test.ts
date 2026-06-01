@@ -1,6 +1,7 @@
 import type { McpAgentAuth } from "./auth";
 import { __setMcpToolTestOverridesForTests, callPublicRateLoopMcpTool, callRateLoopMcpTool } from "./tools";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import deployedContracts from "@rateloop/contracts/deployedContracts";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { encodeAbiParameters, encodeEventTopics } from "viem";
@@ -29,6 +30,7 @@ const RATING_COMMIT_HASH = `0x${"4".repeat(64)}` as const;
 const RATING_CIPHERTEXT = `0x${"12".repeat(64)}` as const;
 const RATING_DRAND_CHAIN_HASH = `0x${"5".repeat(64)}` as const;
 const RATING_FRONTEND = "0x00000000000000000000000000000000000000fe" as const;
+const RATING_VOTING_ENGINE_ADDRESS = deployedContracts[31337].RoundVotingEngine.address;
 
 function askArguments(overrides: Record<string, unknown> = {}) {
   return {
@@ -147,6 +149,36 @@ function ratingPrepareArguments(overrides: Record<string, unknown> = {}) {
     targetRound: "100",
     walletAddress: AGENT.walletAddress,
     ...overrides,
+  };
+}
+
+function ratingCommitReceiptLog(address = RATING_VOTING_ENGINE_ADDRESS) {
+  const topics = encodeEventTopics({
+    abi: RoundVotingEngineAbi,
+    args: {
+      contentId: BigInt(RATING_CONTENT_ID),
+      roundId: RATING_ROUND_ID,
+      voter: AGENT.walletAddress,
+    },
+    eventName: "VoteCommitted",
+  });
+  const data = encodeAbiParameters(
+    [
+      { name: "commitHash", type: "bytes32" },
+      { name: "roundReferenceRatingBps", type: "uint16" },
+      { name: "targetRound", type: "uint64" },
+      { name: "drandChainHash", type: "bytes32" },
+      { name: "stake", type: "uint256" },
+      { name: "ciphertextHash", type: "bytes32" },
+      { name: "ciphertext", type: "bytes" },
+    ],
+    [RATING_COMMIT_HASH, 5000, 100n, RATING_DRAND_CHAIN_HASH, 1_000_000n, `0x${"6".repeat(64)}`, RATING_CIPHERTEXT],
+  );
+
+  return {
+    address,
+    data,
+    topics,
   };
 }
 
@@ -321,38 +353,10 @@ test("rateloop_prepare_rating_transactions can return a zero-stake advisory plan
 });
 
 test("rateloop_confirm_rating_transactions confirms matching rating commit receipts", async () => {
-  const topics = encodeEventTopics({
-    abi: RoundVotingEngineAbi,
-    args: {
-      contentId: BigInt(RATING_CONTENT_ID),
-      roundId: RATING_ROUND_ID,
-      voter: AGENT.walletAddress,
-    },
-    eventName: "VoteCommitted",
-  });
-  const data = encodeAbiParameters(
-    [
-      { name: "commitHash", type: "bytes32" },
-      { name: "roundReferenceRatingBps", type: "uint16" },
-      { name: "targetRound", type: "uint64" },
-      { name: "drandChainHash", type: "bytes32" },
-      { name: "stake", type: "uint256" },
-      { name: "ciphertextHash", type: "bytes32" },
-      { name: "ciphertext", type: "bytes" },
-    ],
-    [RATING_COMMIT_HASH, 5000, 100n, RATING_DRAND_CHAIN_HASH, 1_000_000n, `0x${"6".repeat(64)}`, RATING_CIPHERTEXT],
-  );
-
   __setMcpToolTestOverridesForTests({
     getRatingTransactionReceipt: async () =>
       ({
-        logs: [
-          {
-            address: "0x0000000000000000000000000000000000000001",
-            data,
-            topics,
-          },
-        ],
+        logs: [ratingCommitReceiptLog()],
         status: "success",
       }) as never,
   });
@@ -374,6 +378,32 @@ test("rateloop_confirm_rating_transactions confirms matching rating commit recei
   assert.equal(body.confirmed, true);
   assert.equal(body.roundId, RATING_ROUND_ID.toString());
   assert.equal(body.commitHash, RATING_COMMIT_HASH);
+});
+
+test("rateloop_confirm_rating_transactions rejects matching events from unrelated contracts", async () => {
+  __setMcpToolTestOverridesForTests({
+    getRatingTransactionReceipt: async () =>
+      ({
+        logs: [ratingCommitReceiptLog("0x0000000000000000000000000000000000000001")],
+        status: "success",
+      }) as never,
+  });
+
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: {
+          commitHash: RATING_COMMIT_HASH,
+          contentId: RATING_CONTENT_ID,
+          roundId: RATING_ROUND_ID.toString(),
+          transactionHashes: [`0x${"7".repeat(64)}`],
+          walletAddress: AGENT.walletAddress,
+        },
+        name: "rateloop_confirm_rating_transactions",
+      }),
+    /No matching successful rating commit/,
+  );
 });
 
 test("rateloop_ask_humans carries optional feedback bonus and reserves total spend", async () => {
