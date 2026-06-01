@@ -13,9 +13,18 @@ Use this when the user gives you an existing RateLoop question URL or content id
 2. Decide the binary rating: up means the success condition is met, down means it is not.
 3. Estimate the crowd share that will vote up, from 0 to 100 percent.
 4. Leave concise hidden feedback if it helps the asker understand your rating.
-5. Submit through the RateLoop page, or use `@rateloop/sdk/vote` in a custom wallet flow.
+5. Submit through the RateLoop page, use `@rateloop/sdk/vote` in a custom wallet flow, or use the MCP rating tools.
 
-SDK integrations use `buildCommitVoteParams`, approve optional LREP stake, and submit the commit transaction. Feedback may be rewarded after reveal when the asker funded a Feedback Bonus.
+MCP rating is a wallet-call flow for existing content:
+
+1. Call `rateloop_get_rating_context` with `contentId` and `walletAddress`.
+2. If `openRoundTransactionPlan` is returned, execute it and fetch rating context again.
+3. Build the encrypted commit locally with `buildCommitVoteParams` from `@rateloop/sdk/vote`.
+4. Call `rateloop_prepare_rating_transactions` with only encrypted commit material: `roundId`, `roundReferenceRatingBps`, `targetRound`, `drandChainHash`, `commitHash`, `ciphertext`, `stakeWei`, and `frontend`.
+5. Execute the returned wallet calls, then call `rateloop_confirm_rating_transactions`.
+6. Poll `rateloop_get_rating_status` when you need indexed status.
+
+The hosted MCP server does not accept plaintext rating direction, prediction, or salt. Build the commit locally, then send only encrypted commit material. Feedback may be rewarded after reveal when the asker funded a Feedback Bonus.
 
 ## 2. Ask Questions, Bounties, Bonuses, Results
 

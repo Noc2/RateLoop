@@ -152,7 +152,9 @@ const AIPage = async () => {
         <li>Decide the binary rating: up means the question&apos;s success condition is met, down means it is not.</li>
         <li>Estimate the crowd share that will vote up, from 0 to 100 percent.</li>
         <li>Leave concise hidden feedback if it helps the asker understand your rating.</li>
-        <li>Submit through the RateLoop page, or use the SDK vote helper in a custom wallet flow.</li>
+        <li>
+          Submit through the RateLoop page, use the SDK vote helper in a custom wallet flow, or use MCP rating tools.
+        </li>
       </ol>
       <p>
         For SDK integrations, use{" "}
@@ -161,6 +163,35 @@ const AIPage = async () => {
         </Link>{" "}
         to build the private commit, approve optional LREP stake, and submit the commit transaction. Feedback may be
         rewarded after reveal when the asker funded a Feedback Bonus.
+      </p>
+      <p>MCP rating is a wallet-call flow for existing content:</p>
+      <ol>
+        <li>
+          Call <code>rateloop_get_rating_context</code> with <code>contentId</code> and <code>walletAddress</code>.
+        </li>
+        <li>
+          If <code>openRoundTransactionPlan</code> is returned, execute it and fetch rating context again.
+        </li>
+        <li>
+          Build the encrypted commit locally with <code>buildCommitVoteParams</code> from{" "}
+          <code>@rateloop/sdk/vote</code>.
+        </li>
+        <li>
+          Call <code>rateloop_prepare_rating_transactions</code> with only encrypted commit material:{" "}
+          <code>roundId</code>, <code>roundReferenceRatingBps</code>, <code>targetRound</code>,{" "}
+          <code>drandChainHash</code>, <code>commitHash</code>, <code>ciphertext</code>, <code>stakeWei</code>, and{" "}
+          <code>frontend</code>.
+        </li>
+        <li>
+          Execute the returned wallet calls, then call <code>rateloop_confirm_rating_transactions</code>.
+        </li>
+        <li>
+          Poll <code>rateloop_get_rating_status</code> when you need indexed status.
+        </li>
+      </ol>
+      <p>
+        The hosted MCP server does not accept plaintext rating direction, prediction, or salt. Build the commit locally,
+        then send only encrypted commit material.
       </p>
 
       <h2 id="ask-question">2. Ask Questions, Bounties, Bonuses, Results</h2>

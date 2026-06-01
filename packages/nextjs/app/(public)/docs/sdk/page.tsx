@@ -8,6 +8,64 @@ const referenceAppSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packa
 const keeperSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/keeper";
 const ponderSourceHref = "https://github.com/Noc2/RateLoop/tree/main/packages/ponder";
 
+const agentMcpRatingExample = `import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
+import { buildCommitVoteParams } from "@rateloop/sdk/vote";
+
+const agent = createRateLoopAgentClient({
+  apiBaseUrl: "https://www.rateloop.xyz",
+});
+
+const context = await agent.getRatingContext({
+  chainId: 480,
+  contentId: "42",
+  walletAddress: "0xYourWallet",
+});
+
+// If context.openRoundTransactionPlan exists, execute it first, then fetch context again.
+const runtime = context.runtime ?? {};
+const commit = await buildCommitVoteParams({
+  voter: "0xYourWallet",
+  contentId: 42n,
+  isUp: true,
+  predictedUpPercent: 68,
+  stakeAmount: 1,
+  epochDuration: runtime.epochDuration ?? 20 * 60,
+  roundId: BigInt(runtime.roundId ?? "0"),
+  roundReferenceRatingBps: runtime.roundReferenceRatingBps ?? 5000,
+  defaultFrontendCode: "0xYourFrontendCode",
+  runtime: {
+    targetRound: runtime.targetRound === undefined ? undefined : BigInt(runtime.targetRound),
+    drandChainHash: runtime.drandChainHash,
+    drandGenesisTimeSeconds:
+      runtime.drandGenesisTimeSeconds === undefined ? undefined : BigInt(runtime.drandGenesisTimeSeconds),
+    drandPeriodSeconds: runtime.drandPeriodSeconds === undefined ? undefined : BigInt(runtime.drandPeriodSeconds),
+    roundStartTimeSeconds: runtime.roundStartTimeSeconds ?? null,
+  },
+});
+
+const prepared = await agent.prepareRatingTransactions({
+  chainId: 480,
+  contentId: "42",
+  walletAddress: "0xYourWallet",
+  roundId: commit.roundId,
+  roundReferenceRatingBps: commit.roundReferenceRatingBps,
+  targetRound: commit.targetRound,
+  drandChainHash: commit.drandChainHash,
+  commitHash: commit.commitHash,
+  ciphertext: commit.ciphertext,
+  stakeWei: commit.stakeWei,
+  frontend: commit.frontend,
+});
+
+// Execute prepared.transactionPlan.calls in order, then confirm the hashes.
+await agent.confirmRatingTransactions({
+  contentId: "42",
+  walletAddress: "0xYourWallet",
+  roundId: commit.roundId,
+  commitHash: commit.commitHash,
+  transactionHashes: ["0x..."],
+});`;
+
 const SdkPage: NextPage = () => {
   return (
     <article className="prose max-w-none">
@@ -117,6 +175,14 @@ await votingEngine.write.commitVote([
   commit.stakeWei,
   commit.frontend,
 ]);`}</code>
+      </pre>
+      <p>
+        Agent-hosted MCP rating uses the same local commit helper, but the SDK can prepare and confirm the wallet calls
+        through <code>@rateloop/sdk/agent</code>. The hosted MCP server accepts encrypted commit material only, not
+        plaintext vote direction, prediction, or salt.
+      </p>
+      <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+        <code>{agentMcpRatingExample}</code>
       </pre>
 
       <h2>Frontend Attribution</h2>

@@ -67,6 +67,14 @@ separately from the rating. Feedback Bonuses can use USDC or LREP with `paymentM
 USDC-only. Set `maxPaymentAmount` to cover the USDC bounty plus any USDC bonus. After the ask is confirmed, execute any
 returned `feedbackBonus.transactionPlan.calls` and send those hashes to `rateloop_confirm_feedback_bonus_transactions`.
 
+## Rating Existing Content
+
+When the user gives an existing RateLoop content id or URL, public MCP can prepare the rating wallet calls too. Fetch
+context with `rateloop_get_rating_context`, build the encrypted commit locally with `@rateloop/sdk/vote`, call
+`rateloop_prepare_rating_transactions`, execute the returned calls, then confirm with
+`rateloop_confirm_rating_transactions`. Hosted MCP rejects plaintext rating direction, predicted crowd share, and salt;
+send only encrypted commit material. Managed bearer tokens need `rateloop:rate` for prepare and confirm.
+
 The public MCP config is enough for accountless use. In a chat-hosted runtime, the agent should ask the user for the
 funded `walletAddress`, the public context URL, image context, or YouTube video context, the bounty budget, and whether the user wants to approve spend through a
 browser signing link or let a local signer execute the returned calls. Creating a RateLoop account is optional and only
@@ -78,7 +86,7 @@ needed for managed policies, saved tokens, callbacks, balance tooling, or audit 
 
 - Use `openclaw.mcpServers.json` as the starting point.
 - Start with the public MCP config when the agent already controls a funded wallet.
-- Add bearer tokens scoped to `rateloop:quote`, `rateloop:ask`, `rateloop:read`, and `rateloop:balance` only when you want managed caps or callbacks.
+- Add bearer tokens scoped to `rateloop:quote`, `rateloop:ask`, `rateloop:rate`, `rateloop:read`, and `rateloop:balance` only when you want managed caps or callbacks.
 - Keep daily and per-ask budget caps small until the managed loop has proven stable.
 - Write `operationKey`, `clientRequestId`, `publicUrl`, and `answer` into memory so the agent can avoid duplicate asks.
 

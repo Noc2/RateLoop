@@ -26,7 +26,7 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 - typed read client for hosted/indexed HTTP routes
 - `read.getRaterParticipationStatus(address)` for participation lane, human credential state, active/full launch cap progress, and the explicit reward policy flags
 - vote/frontend helpers in `@rateloop/sdk/vote`
-- wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, non-custodial agent-wallet flows, result parsing, and webhook verification
+- wallet-agnostic agent helpers in `@rateloop/sdk/agent` for MCP-compatible asks, MCP rating of existing content, non-custodial agent-wallet flows, result parsing, and webhook verification
 
 ## Quick Example
 
@@ -79,6 +79,7 @@ import {
   createRateLoopAgentClient,
   buildWebhookVerifier,
 } from "@rateloop/sdk/agent";
+import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const agent = createRateLoopAgentClient({
   apiBaseUrl: "https://rateloop.example",
@@ -134,6 +135,52 @@ const status = await agent.getQuestionStatus({
 });
 const result = await agent.getResult({ operationKey: status.operationKey });
 
+const ratingContext = await agent.getRatingContext({
+  chainId: 480,
+  contentId: "42",
+  walletAddress,
+});
+const ratingRuntime = ratingContext.runtime ?? {};
+
+// Build this locally with @rateloop/sdk/vote. Do not send plaintext
+// isUp, predicted crowd share, or salt to hosted MCP.
+const encryptedCommit = await buildCommitVoteParams({
+  voter: walletAddress,
+  contentId: 42n,
+  isUp: true,
+  predictedUpPercent: 68,
+  stakeAmount: 1,
+  epochDuration: ratingRuntime.epochDuration ?? 20 * 60,
+  roundId: BigInt(ratingRuntime.roundId ?? "0"),
+  roundReferenceRatingBps: ratingRuntime.roundReferenceRatingBps ?? 5000,
+  defaultFrontendCode: "0xYourFrontendCode",
+  runtime: {
+    targetRound: ratingRuntime.targetRound === undefined ? undefined : BigInt(ratingRuntime.targetRound),
+    drandChainHash: ratingRuntime.drandChainHash,
+    drandGenesisTimeSeconds:
+      ratingRuntime.drandGenesisTimeSeconds === undefined ? undefined : BigInt(ratingRuntime.drandGenesisTimeSeconds),
+    drandPeriodSeconds:
+      ratingRuntime.drandPeriodSeconds === undefined ? undefined : BigInt(ratingRuntime.drandPeriodSeconds),
+    roundStartTimeSeconds: ratingRuntime.roundStartTimeSeconds ?? null,
+  },
+});
+
+const preparedRating = await agent.prepareRatingTransactions({
+  chainId: 480,
+  contentId: "42",
+  walletAddress,
+  roundId: encryptedCommit.roundId,
+  roundReferenceRatingBps: encryptedCommit.roundReferenceRatingBps,
+  targetRound: encryptedCommit.targetRound,
+  drandChainHash: encryptedCommit.drandChainHash,
+  commitHash: encryptedCommit.commitHash,
+  ciphertext: encryptedCommit.ciphertext,
+  stakeWei: encryptedCommit.stakeWei,
+  frontend: encryptedCommit.frontend,
+});
+
+// Execute preparedRating.transactionPlan.calls, then call confirmRatingTransactions.
+
 const verifier = buildWebhookVerifier({
   secret: process.env.RATELOOP_WEBHOOK_SECRET ?? "",
 });
@@ -146,7 +193,7 @@ For ranked-option bundles, `requiredSettledRounds` is the number of completed bu
 
 `bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. Use `1` for verified humans. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
 
-For agent flows, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe default. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, callbacks, balance tooling, and audit surfaces. Paid asks return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet; after execution, call `confirmAskTransactions` with the transaction hashes. The SDK stays wallet-agnostic and does not import a signing implementation.
+For ask flows, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe default. For rating existing content, use `getRatingContext -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, callbacks, balance tooling, and audit surfaces. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet. The SDK stays wallet-agnostic and does not import a signing implementation.
 
 ## Agent Examples
 

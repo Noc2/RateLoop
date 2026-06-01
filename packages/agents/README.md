@@ -24,6 +24,7 @@ hard-coded:
 - optional extra public image context: RateLoop-hosted uploads for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `rewardPoolExpiresAt`, and optional payout-only `bountyEligibility`
 - optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include USDC bonuses in `maxPaymentAmount` and approve LREP bonuses through wallet calls
+- existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
 - execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing
 
 `/ask?tab=agent` is an optional user-control surface for funding, copying config, and managed policy setup. It is not a
@@ -70,6 +71,15 @@ The CLI reads `.env` from the current process environment. For the default walle
 7. Poll `rateloop_get_question_status` or read `rateloop_get_result` after settlement.
 
 Managed agents can also call `rateloop_get_agent_balance` and can attach signed callbacks, but those controls require a saved policy and bearer token.
+
+## Rating Existing Content
+
+Public MCP also supports rating an existing content item. Call `rateloop_get_rating_context`, build the encrypted commit
+locally with `@rateloop/sdk/vote`, call `rateloop_prepare_rating_transactions`, execute the returned wallet calls, and
+finish with `rateloop_confirm_rating_transactions`. Use `rateloop_get_rating_status` to poll the indexed rating state.
+
+Do not send plaintext rating direction, predicted crowd share, or salt to hosted MCP. Managed tokens need the
+`rateloop:rate` scope for the prepare and confirm tools.
 
 ## Image Context
 
