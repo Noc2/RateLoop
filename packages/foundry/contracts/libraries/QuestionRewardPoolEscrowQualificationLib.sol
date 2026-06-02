@@ -457,6 +457,10 @@ library QuestionRewardPoolEscrowQualificationLib {
         if (state != RoundLib.RoundState.Settled) return (true, false, 0);
         (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
             QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(votingEngine, rewardPool, roundId);
+        // A settled round whose window never validly opened (e.g. start-by missed) is reported as a
+        // finished, non-qualifying round so advanceQualificationCursor skips past it. The executing
+        // qualifier instead reverts ("Bounty not started") for the same state; both are safe because
+        // advancing the cursor moves no funds and the unallocated balance still refunds normally.
         if (!windowActive) return (true, false, 0);
 
         if (rewardPool.asset == rewardAssetUsdc && rewardPoolClusterPayoutOracle[rewardPool.id] != address(0)) {
