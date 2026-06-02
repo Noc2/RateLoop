@@ -6,7 +6,7 @@ import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHead
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useVoterAccuracy } from "~~/hooks/useVoterAccuracy";
-import { getReputationAvatarUrl } from "~~/utils/profileImage";
+import { getReputationAvatarStatsCacheKey, getReputationAvatarUrl } from "~~/utils/profileImage";
 
 export function VoterAccuracyStats() {
   const { address } = useAccount();
@@ -31,7 +31,8 @@ export function VoterAccuracyStats() {
       : stats.currentStreak < 0
         ? `${Math.abs(stats.currentStreak)}L`
         : "0";
-  const avatarSrc = getReputationAvatarUrl(address, 128, null, targetNetwork.id) || "";
+  const avatarStatsCacheKey = getReputationAvatarStatsCacheKey(stats);
+  const avatarSrc = getReputationAvatarUrl(address, 128, null, targetNetwork.id, avatarStatsCacheKey) || "";
   const winRateLabel = `${(stats.winRate * 100).toFixed(1)}%`;
   const recordLabel = `${stats.totalWins}W / ${stats.totalLosses}L`;
 

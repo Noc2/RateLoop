@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
-import { getFallbackReputationAvatarDataUrl, getReputationAvatarUrl } from "~~/utils/profileImage";
+import { useVoterAccuracy } from "~~/hooks/useVoterAccuracy";
+import {
+  getFallbackReputationAvatarDataUrl,
+  getReputationAvatarStatsCacheKey,
+  getReputationAvatarUrl,
+} from "~~/utils/profileImage";
 
 type BlockieAvatarProps = {
   address: string;
@@ -12,7 +17,9 @@ type BlockieAvatarProps = {
 
 export const BlockieAvatar = ({ address, ensImage, size }: BlockieAvatarProps) => {
   const { targetNetwork } = useTargetNetwork();
-  const remoteAvatar = ensImage || getReputationAvatarUrl(address, size, null, targetNetwork.id);
+  const { stats } = useVoterAccuracy(ensImage ? undefined : address);
+  const avatarStatsCacheKey = getReputationAvatarStatsCacheKey(stats);
+  const remoteAvatar = ensImage || getReputationAvatarUrl(address, size, null, targetNetwork.id, avatarStatsCacheKey);
   const fallbackAvatar = useMemo(() => getFallbackReputationAvatarDataUrl(address, size), [address, size]);
   const [hasLoaded, setHasLoaded] = useState(Boolean(ensImage));
   const [hasFailed, setHasFailed] = useState(false);

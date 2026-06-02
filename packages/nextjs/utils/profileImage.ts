@@ -35,6 +35,7 @@ export function getReputationAvatarUrl(
   size?: number,
   avatarAccentHex?: string | null,
   chainId?: number,
+  cacheKey?: string | null,
 ): string | null {
   if (!address || !isAddress(address)) {
     return null;
@@ -57,7 +58,20 @@ export function getReputationAvatarUrl(
     url.set("chainId", String(Math.trunc(chainId)));
   }
 
+  if (cacheKey) {
+    url.set("v", cacheKey);
+  }
+
   return `/api/reputation-avatar?${url.toString()}`;
+}
+
+export function getReputationAvatarStatsCacheKey(stats: ReputationAvatarPayload["stats"] | null | undefined) {
+  if (!stats || stats.totalSettledVotes <= 0) {
+    return null;
+  }
+
+  const winRateBps = Math.round(stats.winRate * 10_000);
+  return `stats-${stats.totalSettledVotes}-${stats.totalWins}-${stats.totalLosses}-${winRateBps}`;
 }
 
 export function getFallbackReputationAvatarDataUrl(

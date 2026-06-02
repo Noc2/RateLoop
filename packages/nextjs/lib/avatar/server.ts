@@ -32,7 +32,7 @@ function createEmptyReputationAvatarPayload(address: string): ReputationAvatarPa
 
 export async function getReputationAvatarPayload(
   address: string,
-  options: { chainId?: number } = {},
+  options: { chainId?: number; cacheKey?: string | null } = {},
 ): Promise<ReputationAvatarPayload> {
   if (!isAddress(address)) {
     return createEmptyReputationAvatarPayload(address);
@@ -41,10 +41,13 @@ export async function getReputationAvatarPayload(
   const normalizedAddress = address.toLowerCase() as `0x${string}`;
   const fallbackPayload = createEmptyReputationAvatarPayload(normalizedAddress);
   const ponderUrl = getOptionalPonderUrl();
+  const avatarPath = `${ponderUrl?.replace(/\/$/, "") ?? ""}/avatar/${normalizedAddress}`;
+  const avatarUrl =
+    ponderUrl && options.cacheKey ? `${avatarPath}?v=${encodeURIComponent(options.cacheKey)}` : avatarPath;
 
   const [apiPayload, balances, avatarAccent] = await Promise.all([
     ponderUrl
-      ? fetch(`${ponderUrl}/avatar/${normalizedAddress}`, {
+      ? fetch(avatarUrl, {
           next: { revalidate: AVATAR_REVALIDATE_SECONDS },
         })
           .then(async response => {

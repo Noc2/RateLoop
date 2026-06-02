@@ -75,7 +75,7 @@ import {
   type PonderVoteItem,
   ponderApi,
 } from "~~/services/ponder/client";
-import { getReputationAvatarUrl } from "~~/utils/profileImage";
+import { getReputationAvatarStatsCacheKey, getReputationAvatarUrl } from "~~/utils/profileImage";
 import { notification } from "~~/utils/scaffold-eth";
 
 interface PublicProfileViewProps {
@@ -937,8 +937,9 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const selfReportInputLength = getProfileSelfReportLength(effectiveSelfReportInput);
   const displayName = currentName || truncateAddress(normalizedAddress);
   const displayAvatarAccentHex = ownProfile ? (committedAvatarAccentHex ?? avatarAccent?.hex ?? null) : null;
+  const avatarStatsCacheKey = getReputationAvatarStatsCacheKey(stats);
   const fallbackImageUrl =
-    getReputationAvatarUrl(normalizedAddress, 96, displayAvatarAccentHex, targetNetwork.id) || "";
+    getReputationAvatarUrl(normalizedAddress, 96, displayAvatarAccentHex, targetNetwork.id, avatarStatsCacheKey) || "";
   const isOwnName = currentName.length > 0 && currentName.toLowerCase() === nameInput.toLowerCase();
   const showNameStatus = isEditing && nameInput.length >= 3 && !nameCheckLoading;
   const nameIsAvailable = showNameStatus && (!isNameTaken || isOwnName);
@@ -948,7 +949,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const previewAvatarAccentHex = normalizedAvatarAccentInput ?? committedAvatarAccentHex;
   const avatarAccentPickerValue = normalizedAvatarAccentInput ?? committedAvatarAccentHex ?? DEFAULT_AVATAR_ACCENT_HEX;
   const generatedAvatarPreviewUrl =
-    getReputationAvatarUrl(normalizedAddress, 160, previewAvatarAccentHex, targetNetwork.id) || "";
+    getReputationAvatarUrl(normalizedAddress, 160, previewAvatarAccentHex, targetNetwork.id, avatarStatsCacheKey) || "";
   const generatedAvatarPreviewSrc = generatedAvatarPreviewUrl
     ? `${generatedAvatarPreviewUrl}&preview=${encodeURIComponent(previewAvatarAccentHex ?? "default")}`
     : "";

@@ -34,7 +34,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unsupported chainId" }, { status: 400 });
   }
 
-  const payload = await getReputationAvatarPayload(address, { chainId: parsedChainId! });
+  const payload = await getReputationAvatarPayload(address, {
+    chainId: parsedChainId!,
+    cacheKey: request.nextUrl.searchParams.get("v"),
+  });
   const size = parseRequestedSize(request.nextUrl.searchParams.get("size"));
   const previewAccentHex = normalizeAvatarAccentHex(request.nextUrl.searchParams.get("accent"));
   const svg = renderLogoRingAvatarSvg(

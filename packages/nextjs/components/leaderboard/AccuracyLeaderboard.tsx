@@ -13,7 +13,7 @@ import { useFollowedProfiles } from "~~/hooks/useFollowedProfiles";
 import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { FOLLOWED_CURATOR_TOAST_ID } from "~~/lib/notifications/followedActivity";
 import { PonderAccuracyLeaderboardItem, PonderAccuracyLeaderboardWindow, ponderApi } from "~~/services/ponder/client";
-import { getReputationAvatarUrl } from "~~/utils/profileImage";
+import { getReputationAvatarStatsCacheKey, getReputationAvatarUrl } from "~~/utils/profileImage";
 import { notification } from "~~/utils/scaffold-eth";
 
 type SortOption = "signalScore" | "winRate" | "wins" | "stakeWon" | "settledVotes";
@@ -264,7 +264,16 @@ export function AccuracyLeaderboard() {
                 const streak = entry.currentStreak;
                 const streakLabel =
                   streak !== undefined ? (streak > 0 ? `${streak}W` : streak < 0 ? `${Math.abs(streak)}L` : "0") : "-";
-                const avatarSrc = getReputationAvatarUrl(entry.voter, 32, null, targetNetwork.id) || "";
+                const avatarStatsCacheKey = getReputationAvatarStatsCacheKey({
+                  totalSettledVotes: entry.totalSettledVotes,
+                  totalWins: entry.totalWins,
+                  totalLosses: entry.totalLosses,
+                  currentStreak: entry.currentStreak ?? 0,
+                  bestWinStreak: entry.bestWinStreak ?? 0,
+                  winRate: entry.winRate,
+                });
+                const avatarSrc =
+                  getReputationAvatarUrl(entry.voter, 32, null, targetNetwork.id, avatarStatsCacheKey) || "";
 
                 return (
                   <tr
