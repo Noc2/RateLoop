@@ -124,8 +124,7 @@ contract RatingMathTest is Test {
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
         RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 0, 0, 5_000, 5_000, 0, 0);
 
-        RatingLib.RatingState memory next =
-            harness.applySettlement(5_000, 3_200_000, 1_150_000, prev, cfg, slashCfg, 1);
+        RatingLib.RatingState memory next = harness.applySettlement(5_000, 3_200_000, 1_150_000, prev, cfg, slashCfg, 1);
 
         assertEq(next.ratingBps, 7_356, "rating should be direct cumulative up evidence share");
         assertEq(next.upEvidence, 3_200_000, "up evidence should accumulate");
@@ -161,16 +160,14 @@ contract RatingMathTest is Test {
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
         RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 0, 0, 5_000, 5_000, 0, 0);
 
-        RatingLib.RatingState memory notYetSlashable =
-            harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 1);
+        RatingLib.RatingState memory notYetSlashable = harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 1);
         assertEq(notYetSlashable.lowSince, 0, "insufficient settled rounds should not arm lowSince");
 
         prev = _state(0, 80e6, 100e6, 0, 100e6, 1, 1_000, 1_000, 1, 0);
         RatingLib.RatingState memory slashable = harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 2);
         assertEq(slashable.lowSince, 2, "persistent low rating should arm lowSince once thresholds are met");
 
-        RatingLib.RatingState memory recovered =
-            harness.applySettlement(5_000, 500e6, 0, slashable, cfg, slashCfg, 3);
+        RatingLib.RatingState memory recovered = harness.applySettlement(5_000, 500e6, 0, slashable, cfg, slashCfg, 3);
         assertEq(recovered.lowSince, 0, "recovery above threshold should clear lowSince");
     }
 }
