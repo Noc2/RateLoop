@@ -18,7 +18,7 @@ import { useContentFeedback } from "~~/hooks/useContentFeedback";
 import { getContentFeedbackSubmitTooltip } from "~~/lib/feedback/contentFeedbackSubmitState";
 import {
   CONTENT_FEEDBACK_BODY_MAX_LENGTH,
-  CONTENT_FEEDBACK_TYPES,
+  CONTENT_FEEDBACK_PICKER_TYPES,
   CONTENT_FEEDBACK_TYPE_LABELS,
   type ContentFeedbackBonusPool,
   type ContentFeedbackItem,
@@ -175,16 +175,16 @@ export function ContentFeedbackPanel({
   const { address } = useAccount();
   const { feedback, items, isLoading, isSubmitting, isRevealing, submitFeedback, revealFeedback, refetchFeedback } =
     useContentFeedback(item?.id ?? null, address);
-  const [feedbackType, setFeedbackType] = useState<ContentFeedbackType>("evidence");
+  const [feedbackType, setFeedbackType] = useState<ContentFeedbackType>("vote_rationale");
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [awardTarget, setAwardTarget] = useState<ContentFeedbackItem | null>(null);
   const isSheet = variant === "sheet";
   const isFeatureAcceptanceTest = item?.resultSpecHash?.toLowerCase() === FEATURE_ACCEPTANCE_RESULT_SPEC_HASH;
-  const defaultFeedbackType: ContentFeedbackType = isFeatureAcceptanceTest ? "bug_report" : "evidence";
+  const defaultFeedbackType: ContentFeedbackType = isFeatureAcceptanceTest ? "bug_report" : "vote_rationale";
   const feedbackPlaceholder = isFeatureAcceptanceTest
     ? FEATURE_ACCEPTANCE_PLACEHOLDER
-    : "Evidence, ambiguity, missing context, source issues...";
+    : "Opinion, evidence, ambiguity, concerns...";
   const bodyLength = body.trim().length;
   const itemOpenRoundId = item?.openRound?.roundId ?? 0n;
   const feedbackOpenRoundId = feedback.openRoundId ? BigInt(feedback.openRoundId) : 0n;
@@ -319,7 +319,7 @@ export function ContentFeedbackPanel({
           className="select select-sm w-full rounded-lg border-base-content/10 bg-base-200 text-sm font-medium focus:outline-none"
           disabled={!item || isSubmitting}
         >
-          {CONTENT_FEEDBACK_TYPES.map(type => (
+          {CONTENT_FEEDBACK_PICKER_TYPES.map(type => (
             <option key={type} value={type}>
               {CONTENT_FEEDBACK_TYPE_LABELS[type]}
             </option>
