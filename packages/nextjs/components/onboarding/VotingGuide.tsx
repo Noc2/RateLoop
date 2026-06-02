@@ -49,10 +49,6 @@ export function VotingGuide() {
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgb(53_158_238/0.1),transparent_32%,rgb(3_206_164/0.07)_58%,rgb(239_71_111/0.08))]"
         />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[image:var(--rateloop-spectrum-gradient)] opacity-80"
-        />
 
         {/* Header */}
         <div className="relative border-b border-white/10 px-5 pt-5 pb-4">
