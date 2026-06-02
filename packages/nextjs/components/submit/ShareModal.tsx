@@ -150,7 +150,7 @@ export function ShareModal({
           </a>
 
           {/* View content */}
-          <Link href={buildRateContentHref(contentId)} className="btn btn-ghost w-full">
+          <Link href={buildRateContentHref(contentId)} className="btn btn-outline w-full gap-2">
             View Content
           </Link>
         </div>
@@ -158,8 +158,8 @@ export function ShareModal({
         {/* Divider */}
         <div className="divider my-4">or</div>
 
-        {/* Submit another - 16px minimum */}
-        <button onClick={onClose} className="btn btn-ghost w-full text-base text-base-content/60">
+        {/* Submit another */}
+        <button onClick={onClose} className="btn btn-outline w-full gap-2">
           Submit Another
         </button>
       </div>

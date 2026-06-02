@@ -34,7 +34,17 @@ async function expectSuccessfulSubmission(page: Page) {
   const successDialog = page.getByRole("dialog", { name: /Question submitted/i });
   await successDialog.waitFor({ state: "visible", timeout: 60_000 });
   await expect(successDialog.getByText(/Question submitted/i)).toBeVisible();
-  await expect(successDialog.getByRole("link", { name: /View Content/i })).toBeVisible();
+  const shareOnXLink = successDialog.getByRole("link", { name: /Share on X/i });
+  const viewContentLink = successDialog.getByRole("link", { name: /View Content/i });
+  const submitAnotherButton = successDialog.getByRole("button", { name: /Submit Another/i });
+  await expect(shareOnXLink).toHaveClass(/btn-outline/);
+  await expect(viewContentLink).toBeVisible();
+  await expect(viewContentLink).toHaveClass(/btn-outline/);
+  await expect(viewContentLink).toHaveClass(/w-full/);
+  await expect(viewContentLink).toHaveClass(/gap-2/);
+  await expect(submitAnotherButton).toHaveClass(/btn-outline/);
+  await expect(submitAnotherButton).toHaveClass(/w-full/);
+  await expect(submitAnotherButton).toHaveClass(/gap-2/);
   await page.waitForTimeout(1_500);
   await expect(successDialog).toBeVisible();
 }
