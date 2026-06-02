@@ -29,6 +29,20 @@ function jsonResponse(body: unknown) {
   });
 }
 
+function fullVotePageResponse() {
+  return jsonResponse({
+    items: Array.from({ length: 1_000 }, () => ({
+      account: "0x0000000000000000000000000000000000000001",
+      identityKey: `0x${"a".repeat(64)}`,
+      commitKey: `0x${"b".repeat(64)}`,
+      baseWeight: "10000",
+      verifiedHuman: true,
+      historicalVoteCount: 12,
+      features: [`identity:0x${"a".repeat(64)}`],
+    })),
+  });
+}
+
 function parseDataUri(uri: string) {
   const commaIndex = uri.indexOf(",");
   return JSON.parse(Buffer.from(uri.slice(commaIndex + 1), "base64").toString("utf8"));
@@ -43,7 +57,7 @@ afterEach(() => {
 describe("automatic correlation artifact builder", () => {
   it("builds a deterministic stored artifact from Ponder candidates and votes", async () => {
     mockConfig();
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = new URL(input.toString());
       if (url.pathname === "/correlation/round-candidates") {
         expect(url.searchParams.get("limit")).toBe("6");
@@ -99,6 +113,9 @@ describe("automatic correlation artifact builder", () => {
 
     const artifact = await buildConfiguredCorrelationSnapshotArtifact(logger);
 
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(artifact.correlationEpochs).toHaveLength(1);
     expect(artifact.roundPayoutSnapshots).toHaveLength(1);
     expect(artifact.correlationEpochs?.[0]).toMatchObject({
@@ -223,5 +240,98 @@ describe("automatic correlation artifact builder", () => {
         maxRoundsPerTick: 5,
       }),
     );
+  });
+
+  it("rejects oversized Ponder responses before reading the body", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async () => new Response("{}", {
+      status: 200,
+      headers: {
+        "content-length": "5000001",
+        "content-type": "application/json",
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    await expect(buildConfiguredCorrelationSnapshotArtifact(logger)).rejects.toThrow(
+      "Ponder response too large",
+    );
+  });
+
+  it("rejects streamed Ponder responses that exceed the byte cap", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ items: [] }).padEnd(5_000_001, " "),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    await expect(buildConfiguredCorrelationSnapshotArtifact(logger)).rejects.toThrow(
+      "Ponder response exceeded",
+    );
+  });
+
+  it("stops vote pagination after the round page cap", async () => {
+    mockConfig();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/correlation/round-candidates") {
+        return jsonResponse({
+          items: [
+            {
+              rewardPoolId: "7",
+              contentId: "9",
+              roundId: "2",
+            },
+          ],
+        });
+      }
+      if (url.pathname === "/correlation/round-votes") {
+        return fullVotePageResponse();
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { buildConfiguredCorrelationSnapshotArtifact } = await import(
+      "../correlation-artifact-builder.js"
+    );
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    await expect(buildConfiguredCorrelationSnapshotArtifact(logger)).rejects.toThrow(
+      "more than 50 correlation vote pages",
+    );
+    const voteRequests = fetchMock.mock.calls.filter(([input]) =>
+      new URL(input.toString()).pathname === "/correlation/round-votes"
+    );
+    expect(voteRequests).toHaveLength(50);
   });
 });

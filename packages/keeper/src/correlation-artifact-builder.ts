@@ -72,6 +72,9 @@ interface PublicPayoutWeight {
 }
 
 const VOTE_PAGE_SIZE = 1_000;
+const PONDER_FETCH_TIMEOUT_MS = 5_000;
+const PONDER_JSON_MAX_BYTES = 5_000_000;
+const MAX_VOTE_PAGES_PER_ROUND = 50;
 
 export async function buildConfiguredCorrelationSnapshotArtifact(
   logger: Logger,
@@ -234,6 +237,9 @@ async function fetchRoundCandidateWindow(
     url.searchParams.set("offset", String(offset));
     const response = await fetchJson<CandidateResponse>(url);
     const items = response.items ?? [];
+    if (items.length > limit) {
+      throw new Error(`Ponder returned too many correlation candidates: ${items.length} > ${limit}`);
+    }
     candidates.push(...items.map(parseCandidate));
     if (items.length < limit) {
       break;
@@ -272,7 +278,8 @@ async function fetchRoundVotes(
   candidate: CorrelationRoundCandidate,
 ): Promise<CorrelationVoteInput[]> {
   const votes: CorrelationVoteInput[] = [];
-  for (let offset = 0; ; offset += VOTE_PAGE_SIZE) {
+  for (let page = 0; page < MAX_VOTE_PAGES_PER_ROUND; page += 1) {
+    const offset = page * VOTE_PAGE_SIZE;
     const url = new URL("/correlation/round-votes", ponderBaseUrl);
     url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
     url.searchParams.set("contentId", candidate.contentId.toString());
@@ -281,21 +288,64 @@ async function fetchRoundVotes(
     url.searchParams.set("offset", String(offset));
     const response = await fetchJson<VoteResponse>(url);
     const items = response.items ?? [];
+    if (items.length > VOTE_PAGE_SIZE) {
+      throw new Error(`Ponder returned too many correlation votes: ${items.length} > ${VOTE_PAGE_SIZE}`);
+    }
     votes.push(...items.map(parseVote));
     if (items.length < VOTE_PAGE_SIZE) {
       return votes;
     }
   }
+  throw new Error(
+    `Ponder returned more than ${MAX_VOTE_PAGES_PER_ROUND} correlation vote pages for rewardPoolId=${candidate.rewardPoolId} contentId=${candidate.contentId} roundId=${candidate.roundId}`,
+  );
 }
 
 async function fetchJson<T>(url: URL): Promise<T> {
   const response = await fetch(url, {
     headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`Ponder request failed: ${url.pathname} ${response.status}`);
   }
-  return response.json() as Promise<T>;
+  const contentLengthHeader = response.headers.get("content-length");
+  if (contentLengthHeader) {
+    const declaredLength = Number.parseInt(contentLengthHeader, 10);
+    if (Number.isFinite(declaredLength) && declaredLength > PONDER_JSON_MAX_BYTES) {
+      throw new Error(`Ponder response too large: ${declaredLength} > ${PONDER_JSON_MAX_BYTES} bytes`);
+    }
+  }
+  return JSON.parse(await readResponseBody(response, PONDER_JSON_MAX_BYTES)) as T;
+}
+
+async function readResponseBody(response: Response, maxBytes: number): Promise<string> {
+  if (!response.body) {
+    throw new Error("Ponder response body is not readable");
+  }
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  const reader = response.body.getReader();
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error(`Ponder response exceeded ${maxBytes} bytes during read`);
+    }
+    chunks.push(value);
+  }
+
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(combined);
 }
 
 function parseCandidate(value: unknown): CorrelationRoundCandidate {
