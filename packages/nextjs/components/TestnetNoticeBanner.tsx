@@ -13,7 +13,7 @@ const NON_MAINNET_TARGET_CHAIN_IDS = new Set<number>([31337, 4801]);
 
 export function TestnetNoticeBanner({ targetChainId }: { targetChainId: number }) {
   const isMainnetTarget = !NON_MAINNET_TARGET_CHAIN_IDS.has(targetChainId);
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     try {
