@@ -11630,38 +11630,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "approveSnapshotFrontend",
-          inputs: [
-            {
-              name: "frontend",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "approvedSnapshotFrontendForProposer",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "authorizedSnapshotFrontend",
           inputs: [
             {
@@ -12190,13 +12158,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "renounceSnapshotProposer",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "requestDeregister",
           inputs: [],
           outputs: [],
@@ -12655,31 +12616,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "sender",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "SnapshotProposerApprovalUpdated",
-          inputs: [
-            {
-              name: "proposer",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "previousFrontend",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "newFrontend",
               type: "address",
               indexed: true,
               internalType: "address",
@@ -38022,38 +37958,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "approveSnapshotFrontend",
-          inputs: [
-            {
-              name: "frontend",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "approvedSnapshotFrontendForProposer",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "authorizedSnapshotFrontend",
           inputs: [
             {
@@ -38582,13 +38486,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "renounceSnapshotProposer",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "requestDeregister",
           inputs: [],
           outputs: [],
@@ -39047,31 +38944,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "sender",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "SnapshotProposerApprovalUpdated",
-          inputs: [
-            {
-              name: "proposer",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "previousFrontend",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "newFrontend",
               type: "address",
               indexed: true,
               internalType: "address",

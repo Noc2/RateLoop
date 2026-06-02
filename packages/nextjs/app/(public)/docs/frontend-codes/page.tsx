@@ -122,8 +122,7 @@ const FrontendCodes: NextPage = () => {
         <li>
           <strong>Publish roots:</strong> If you operate the correlation scorer, propose deterministic
           ClusterPayoutOracle epoch and round payout roots from the registered frontend wallet, or from a separate
-          snapshot keeper wallet that first approves that frontend and is then delegated, so USDC bounty and launch LREP
-          claims can finalize.
+          snapshot keeper wallet assigned by that frontend, so USDC bounty and launch LREP claims can finalize.
         </li>
       </ol>
 
@@ -176,7 +175,7 @@ RoundVotingEngine.commitVote(
         <li>
           <strong>Publishing payout snapshots:</strong> After settlement, the service can recompute correlation epoch
           artifacts and submit <code>ClusterPayoutOracle</code> roots from the registered frontend operator wallet or a
-          delegated snapshot keeper wallet that approved that frontend. Root proposal remains frontend-bonded,
+          delegated snapshot keeper wallet assigned by that frontend. Root proposal remains frontend-bonded,
           challengeable, and should point at a public deterministic artifact.
         </li>
         <li>

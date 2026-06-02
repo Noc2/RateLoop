@@ -64,10 +64,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     ///         router; preserved after rotation so historical rounds settled by a now-rotated
     ///         engine still resolve to the right creditor (see `creditFees`).
     mapping(address => address) public feeCreditorForEngine;
-    mapping(address => address) public approvedSnapshotFrontendForProposer;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[41] private __gap;
+    uint256[42] private __gap;
 
     // --- Events ---
     event FrontendRegistered(address indexed frontend, address indexed operator, uint256 stakedAmount);
@@ -82,9 +81,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event VotingEngineUpdated(address votingEngine);
     event SnapshotProposerUpdated(
         address indexed frontend, address indexed previousProposer, address indexed newProposer
-    );
-    event SnapshotProposerApprovalUpdated(
-        address indexed proposer, address indexed previousFrontend, address indexed newFrontend
     );
     /// @notice L-Frontend-2: emitted when governance rotates the confiscation recipient.
     event ConfiscationRecipientUpdated(address indexed previous, address indexed current);
@@ -227,7 +223,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         if (assignedFrontend != address(0)) {
             _clearSnapshotProposer(assignedFrontend);
         }
-        _clearSnapshotProposerApproval(msg.sender);
 
         lrepToken.safeTransferFrom(msg.sender, address(this), STAKE_AMOUNT);
 
@@ -342,7 +337,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         emit FrontendStakeToppedUp(msg.sender, amount, uint256(f.stakedAmount));
     }
 
-    /// @notice Authorize an operational wallet to publish ClusterPayoutOracle snapshots for this frontend.
+    /// @notice Assign an operational wallet to publish ClusterPayoutOracle snapshots for this frontend.
     /// @dev The frontend remains slashable/accountable; the proposer is only the transaction signer.
     function setSnapshotProposer(address proposer) external nonReentrant {
         Frontend storage f = frontends[msg.sender];
@@ -355,48 +350,14 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
         address assignedFrontend = frontendForSnapshotProposer[proposer];
         require(assignedFrontend == address(0) || assignedFrontend == msg.sender, "Proposer already assigned");
-        if (proposer != msg.sender && assignedFrontend == address(0)) {
-            require(approvedSnapshotFrontendForProposer[proposer] == msg.sender, "Proposer not approved");
-        }
 
         _setSnapshotProposer(msg.sender, proposer);
-        if (proposer != msg.sender) {
-            _clearSnapshotProposerApproval(proposer);
-        }
     }
 
     /// @notice Clear the operational wallet authorized to publish ClusterPayoutOracle snapshots for this frontend.
     function clearSnapshotProposer() external nonReentrant {
         require(frontends[msg.sender].operator != address(0), "Not registered");
         _clearSnapshotProposer(msg.sender);
-    }
-
-    /// @notice Approve a frontend operator to assign this wallet as its snapshot proposer.
-    /// @dev Pass address(0) to revoke approval and clear any active assignment for the current proposer.
-    function approveSnapshotFrontend(address frontend) external nonReentrant {
-        require(frontends[msg.sender].operator == address(0), "Proposer is registered");
-        if (frontend != address(0)) {
-            Frontend storage f = frontends[frontend];
-            require(f.operator != address(0), "Frontend not registered");
-            require(!f.slashed, "Frontend is slashed");
-            if (frontendExitAvailableAt[frontend] != 0) revert FrontendExitPending();
-            require(uint256(f.stakedAmount) >= STAKE_AMOUNT, "Frontend is underbonded");
-        }
-
-        address assignedFrontend = frontendForSnapshotProposer[msg.sender];
-        if (assignedFrontend != address(0) && assignedFrontend != frontend) {
-            _clearSnapshotProposer(assignedFrontend);
-        }
-        _setSnapshotProposerApproval(msg.sender, frontend);
-    }
-
-    /// @notice Renounce delegated snapshot proposal authority assigned by a frontend operator.
-    /// @dev Lets an operational wallet opt out without relying on the assigning frontend.
-    function renounceSnapshotProposer() external nonReentrant {
-        address frontend = frontendForSnapshotProposer[msg.sender];
-        require(frontend != address(0), "Proposer not assigned");
-        _clearSnapshotProposer(frontend);
-        _clearSnapshotProposerApproval(msg.sender);
     }
 
     // --- Governance Functions ---
@@ -559,21 +520,6 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         delete snapshotProposerForFrontend[frontend];
         delete frontendForSnapshotProposer[previousProposer];
         emit SnapshotProposerUpdated(frontend, previousProposer, address(0));
-    }
-
-    function _setSnapshotProposerApproval(address proposer, address frontend) internal {
-        address previousFrontend = approvedSnapshotFrontendForProposer[proposer];
-        if (previousFrontend == frontend) return;
-        if (frontend == address(0)) {
-            delete approvedSnapshotFrontendForProposer[proposer];
-        } else {
-            approvedSnapshotFrontendForProposer[proposer] = frontend;
-        }
-        emit SnapshotProposerApprovalUpdated(proposer, previousFrontend, frontend);
-    }
-
-    function _clearSnapshotProposerApproval(address proposer) internal {
-        _setSnapshotProposerApproval(proposer, address(0));
     }
 
     function _removeRegisteredFrontend(address frontend) internal {

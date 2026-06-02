@@ -81,12 +81,6 @@
     {
       "slot": 12,
       "offset": 0,
-      "label": "approvedSnapshotFrontendForProposer",
-      "type": "t_mapping(t_address,t_address)"
-    },
-    {
-      "slot": 13,
-      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -108,8 +102,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[41]",
-      "numberOfBytes": "1312",
+      "label": "uint256[42]",
+      "numberOfBytes": "1344",
       "base": "t_uint256"
     },
     {
