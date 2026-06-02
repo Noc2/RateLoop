@@ -4,9 +4,31 @@ Scope: the whole repository at `main` HEAD `7aeddb97`, with attention concentrat
 
 Method: six parallel scope-focused review agents (bounty-window contracts; other changed contracts incl. RatingMath; ponder indexer + API routes; sdk + nextjs x402/signing; keeper + cross-package ABI consistency; nextjs vote-feed + MCP image upload). Each was told to verify against source before reporting and to change nothing. The one High finding was then **re-verified by hand against source** (baseline-vs-HEAD diff + control-flow trace) for this document. Typecheck/test status captured per package below.
 
-**No code was changed.** This document is the only artifact.
-
 **Severity framing.** Nothing is deployed to mainnet. Severities are "impact-if-this-shipped-as-is." Several indexer items are flagged as *pre-existing* (the diff refactored around them without introducing them) — called out so they are weighted correctly.
+
+## Remediation status (this PR)
+
+All findings were re-verified and addressed; each was committed separately (severity-then-file order). Tests pass per package (foundry escrow/rating/settlement suites, ponder 198, sdk 37, keeper 115, nextjs x402/vote/socialProof).
+
+| Finding | Resolution |
+| ------- | ---------- |
+| **H-1** | Fixed — refund now always runs the cursor guard; added an empty-leading-round regression test. |
+| L-1 | Fixed — per-vote bounty-window predicate added to both claim-candidate routes. |
+| L-2 | Fixed — SDK bounty type renamed to the window fields. |
+| L-3 | Fixed — removed the unused per-settlement `observedGapX18` computation. |
+| L-4 | Fixed — windowless pools/bundles index `bountyOpensAt` at creation time. |
+| L-5 | Fixed — bundle create handler uses `onConflictDoNothing` (no window clobber). |
+| L-6 | Documented — `round.startTime` pre-activation proxy noted at the predicate sites (precise per-round first-stake index deferred as a feature). |
+| L-7 | Documented — landing "Verified Humans" over-count bound noted; precise dedupe needs an API change for a ≤9 cosmetic figure. |
+| I-1 | Fixed — removed the dead confidence-model helpers. |
+| I-2 | Documented — inert `RatingConfig` fields commented; the memoryless-cumulative model change still merits explicit product sign-off (fields kept, not removed). |
+| I-3 | Fixed — removed unused `committedByBountyClose`. |
+| I-4 | Documented — `feedbackClosesAt`/`feedbackWindowSeconds` marked informational-only. |
+| I-5 | Fixed — active/expired classifiers match the contract's strict boundary. |
+| I-6 | Documented — intentional cursor preview/execute divergence noted. |
+| I-7 | Fixed — keeper artifact dir resolved to absolute; public artifact route documented. |
+
+The findings below are the original review, retained for the record.
 
 ---
 
