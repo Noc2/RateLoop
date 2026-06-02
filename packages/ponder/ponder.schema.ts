@@ -621,6 +621,7 @@ export const feedbackBonusPool = onchainTable(
     awarderIdx: index().on(table.awarder),
     forfeitedIdx: index().on(table.forfeited),
     feedbackClosesAtIdx: index().on(table.feedbackClosesAt),
+    awardDeadlineIdx: index().on(table.awardDeadline),
   }),
 );
 

@@ -35,6 +35,7 @@ vi.mock("ponder:schema", () => ({
   category: "category",
   content: "content",
   dailyVoteActivity: "dailyVoteActivity",
+  feedbackBonusPool: "feedbackBonusPool",
   globalStats: "globalStats",
   profile: "profile",
   rewardClaim: "rewardClaim",
@@ -64,10 +65,12 @@ vi.mock("@rateloop/contracts/protocol", () => ({
 function createDb({
   existingRound = null,
   existingVote = null,
+  feedbackBonusPools = [],
   roundVotes = [],
 }: {
   existingRound?: Record<string, unknown> | null;
   existingVote?: Record<string, unknown> | null;
+  feedbackBonusPools?: Record<string, unknown>[];
   roundVotes?: Record<string, unknown>[];
 } = {}) {
   const insertCalls: Array<{ table: string; values: Record<string, unknown> }> =
@@ -161,10 +164,17 @@ function createDb({
       })),
       sql: {
         select: vi.fn(() => ({
-          from: vi.fn(() => ({
-            where: vi.fn(() => ({
-              orderBy: vi.fn(async () => roundVotes),
-            })),
+          from: vi.fn((table: string) => ({
+            where: vi.fn(() => {
+              const rows = table === "feedbackBonusPool" ? feedbackBonusPools : roundVotes;
+              return {
+                orderBy: vi.fn(async () => rows),
+                then: (
+                  resolve: (value: Record<string, unknown>[]) => unknown,
+                  reject?: (reason: unknown) => unknown,
+                ) => Promise.resolve(rows).then(resolve, reject),
+              };
+            }),
           })),
         })),
       },
@@ -244,6 +254,52 @@ describe("RoundVotingEngine ponder handlers", () => {
         }),
       });
     }
+  });
+
+  it("extends feedback bonus award deadlines when a round becomes terminal", async () => {
+    const registeredHandlers = await loadHandlers();
+    const { db, updateCalls } = createDb({
+      existingRound: { id: "7-2" },
+      feedbackBonusPools: [
+        {
+          id: 11n,
+          contentId: 7n,
+          roundId: 2n,
+          feedbackClosesAt: 2_000n,
+          awardDeadline: 2_000n,
+        },
+        {
+          id: 12n,
+          contentId: 7n,
+          roundId: 2n,
+          feedbackClosesAt: 100_000n,
+          awardDeadline: 100_000n,
+        },
+      ],
+    });
+
+    await registeredHandlers.get("RoundVotingEngine:RoundTied")!({
+      event: {
+        args: { contentId: 7n, roundId: 2n },
+        block: { number: 42n, timestamp: 3_000n },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).toContainEqual({
+      table: "feedbackBonusPool",
+      key: { id: 11n },
+      values: {
+        awardDeadline: 89_400n,
+        updatedAt: 3_000n,
+      },
+    });
+    expect(updateCalls).not.toContainEqual(
+      expect.objectContaining({
+        table: "feedbackBonusPool",
+        key: { id: 12n },
+      }),
+    );
   });
 
   it("inserts per-round config snapshots before votes arrive", async () => {

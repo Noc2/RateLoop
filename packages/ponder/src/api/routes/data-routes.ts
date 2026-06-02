@@ -126,7 +126,7 @@ export function registerDataRoutes(app: ApiApp) {
       conditions.push(
         eq(feedbackBonusPool.forfeited, false),
         sql`${feedbackBonusPool.remainingAmount} > 0`,
-        sql`${feedbackBonusPool.feedbackClosesAt} > ${nowSeconds}`,
+        sql`${feedbackBonusPool.awardDeadline} >= ${nowSeconds}`,
       );
     }
 
@@ -134,7 +134,7 @@ export function registerDataRoutes(app: ApiApp) {
       .select()
       .from(feedbackBonusPool)
       .where(and(...conditions))
-      .orderBy(asc(feedbackBonusPool.feedbackClosesAt), asc(feedbackBonusPool.id))
+      .orderBy(asc(feedbackBonusPool.awardDeadline), asc(feedbackBonusPool.id))
       .limit(limit)
       .offset(offset);
 

@@ -24,6 +24,7 @@ import {
   getPreviousUtcDateKey,
   normalizeUtcDateKey,
 } from "./streak-utils.js";
+import { extendFeedbackBonusAwardDeadlinesForTerminalRound } from "./feedback-bonus-deadlines.js";
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
@@ -1108,6 +1109,12 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
     });
   }
 
+  await extendFeedbackBonusAwardDeadlinesForTerminalRound(context, {
+    contentId,
+    roundId,
+    settledAt: event.block.timestamp,
+  });
+
   // Increment content round count
   const contentRecord = await context.db.find(content, { id: contentId });
   if (contentRecord) {
@@ -1272,6 +1279,12 @@ ponder.on("RoundVotingEngine:RoundCancelled", async ({ event, context }) => {
       settledAt: event.block.timestamp,
     });
   }
+
+  await extendFeedbackBonusAwardDeadlinesForTerminalRound(context, {
+    contentId,
+    roundId,
+    settledAt: event.block.timestamp,
+  });
 });
 
 ponder.on("RoundVotingEngine:RoundTied", async ({ event, context }) => {
@@ -1314,6 +1327,12 @@ ponder.on("RoundVotingEngine:RoundTied", async ({ event, context }) => {
       settledAt: event.block.timestamp,
     });
   }
+
+  await extendFeedbackBonusAwardDeadlinesForTerminalRound(context, {
+    contentId,
+    roundId,
+    settledAt: event.block.timestamp,
+  });
 });
 
 ponder.on("RoundVotingEngine:RoundRevealFailed", async ({ event, context }) => {
@@ -1356,6 +1375,12 @@ ponder.on("RoundVotingEngine:RoundRevealFailed", async ({ event, context }) => {
       settledAt: event.block.timestamp,
     });
   }
+
+  await extendFeedbackBonusAwardDeadlinesForTerminalRound(context, {
+    contentId,
+    roundId,
+    settledAt: event.block.timestamp,
+  });
 });
 
 ponder.on(

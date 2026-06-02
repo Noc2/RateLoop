@@ -113,6 +113,8 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
         fundedAmount: 100_000_000n,
         remainingAmount: 100_000_000n,
         asset: 0,
+        feedbackClosesAt: 2_592_000n,
+        awardDeadline: 2_592_000n,
         frontendFeeBps: 300,
       }),
     });

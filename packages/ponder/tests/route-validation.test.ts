@@ -207,6 +207,7 @@ function mockPonderModules<T>(result: T) {
     },
     feedbackBonusPool: {
       asset: "feedbackBonusPool.asset",
+      awardDeadline: "feedbackBonusPool.awardDeadline",
       awarder: "feedbackBonusPool.awarder",
       contentId: "feedbackBonusPool.contentId",
       feedbackClosesAt: "feedbackBonusPool.feedbackClosesAt",
@@ -1169,6 +1170,7 @@ describe("registerDataRoutes", () => {
         awarder: "0x00000000000000000000000000000000000000aa",
         remainingAmount: 2_000_000n,
         feedbackClosesAt: 9_999_999_999n,
+        awardDeadline: 9_999_999_999n,
       },
     ]);
     const { registerDataRoutes } = await import(
@@ -1192,7 +1194,7 @@ describe("registerDataRoutes", () => {
     expect(serializedWhere).toContain("feedbackBonusPool.roundId");
     expect(serializedWhere).toContain("feedbackBonusPool.awarder");
     expect(serializedWhere).toContain("feedbackBonusPool.remainingAmount");
-    expect(serializedWhere).toContain("feedbackBonusPool.feedbackClosesAt");
+    expect(serializedWhere).toContain("feedbackBonusPool.awardDeadline");
     expect(body.items[0]).toMatchObject({
       id: "7",
       contentId: "1",

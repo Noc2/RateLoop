@@ -154,18 +154,19 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
       contentId: feedbackBonusPool.contentId,
       asset: feedbackBonusPool.asset,
       poolCount: sql<number>`count(*)`,
-      activePoolCount: sql<number>`sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.feedbackClosesAt} > ${nowSeconds} then 1 else 0 end)`,
-      expiredPoolCount: sql<number>`sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.feedbackClosesAt} <= ${nowSeconds} then 1 else 0 end)`,
+      activePoolCount: sql<number>`sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.awardDeadline} >= ${nowSeconds} then 1 else 0 end)`,
+      expiredPoolCount: sql<number>`sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.awardDeadline} < ${nowSeconds} then 1 else 0 end)`,
       totalFundedAmount: sql<bigint>`coalesce(sum(${feedbackBonusPool.fundedAmount}), 0)`,
       totalRemainingAmount: sql<bigint>`coalesce(sum(${feedbackBonusPool.remainingAmount}), 0)`,
-      activeRemainingAmount: sql<bigint>`coalesce(sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.feedbackClosesAt} > ${nowSeconds} then ${feedbackBonusPool.remainingAmount} else 0 end), 0)`,
-      expiredRemainingAmount: sql<bigint>`coalesce(sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.feedbackClosesAt} <= ${nowSeconds} then ${feedbackBonusPool.remainingAmount} else 0 end), 0)`,
+      activeRemainingAmount: sql<bigint>`coalesce(sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.awardDeadline} >= ${nowSeconds} then ${feedbackBonusPool.remainingAmount} else 0 end), 0)`,
+      expiredRemainingAmount: sql<bigint>`coalesce(sum(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.awardDeadline} < ${nowSeconds} then ${feedbackBonusPool.remainingAmount} else 0 end), 0)`,
       totalAwardedAmount: sql<bigint>`coalesce(sum(${feedbackBonusPool.awardedAmount}), 0)`,
       totalVoterAwardedAmount: sql<bigint>`coalesce(sum(${feedbackBonusPool.voterAwardedAmount}), 0)`,
       totalFrontendAwardedAmount: sql<bigint>`coalesce(sum(${feedbackBonusPool.frontendAwardedAmount}), 0)`,
       totalForfeitedAmount: sql<bigint>`coalesce(sum(${feedbackBonusPool.forfeitedAmount}), 0)`,
       awardCount: sql<number>`coalesce(sum(${feedbackBonusPool.awardCount}), 0)`,
-      nextFeedbackClosesAt: sql<bigint | null>`min(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.feedbackClosesAt} > ${nowSeconds} then ${feedbackBonusPool.feedbackClosesAt} else null end)`,
+      nextFeedbackAwardDeadline: sql<bigint | null>`min(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.awardDeadline} >= ${nowSeconds} then ${feedbackBonusPool.awardDeadline} else null end)`,
+      nextFeedbackClosesAt: sql<bigint | null>`min(case when ${feedbackBonusPool.forfeited} = false and ${feedbackBonusPool.remainingAmount} > 0 and ${feedbackBonusPool.awardDeadline} >= ${nowSeconds} then ${feedbackBonusPool.awardDeadline} else null end)`,
     })
     .from(feedbackBonusPool)
     .where(inArray(feedbackBonusPool.contentId, contentIds))
@@ -365,6 +366,7 @@ function emptyFeedbackBonusSummary() {
     totalForfeitedAmount: 0n,
     awardCount: 0,
     hasActiveFeedbackBonus: false,
+    nextFeedbackAwardDeadline: null as bigint | null,
     nextFeedbackClosesAt: null as bigint | null,
   };
 }
@@ -390,6 +392,7 @@ type FeedbackBonusSummaryRow = {
   totalFrontendAwardedAmount: bigint | string | number | null;
   totalForfeitedAmount: bigint | string | number | null;
   awardCount: number | string | bigint | null;
+  nextFeedbackAwardDeadline?: bigint | string | number | null;
   nextFeedbackClosesAt: bigint | string | number | null;
 };
 
@@ -434,8 +437,12 @@ function formatFeedbackBonusSummaryRows(rows: FeedbackBonusSummaryRow[]) {
     totalForfeitedAmount: rows.reduce((sum, row) => sum + toBigIntValue(row.totalForfeitedAmount), 0n),
     awardCount: rows.reduce((sum, row) => sum + toNumberValue(row.awardCount), 0),
     hasActiveFeedbackBonus: activePoolCount > 0,
+    nextFeedbackAwardDeadline: rows.reduce(
+      (next, row) => minNullableTimestamp(next, row.nextFeedbackAwardDeadline ?? row.nextFeedbackClosesAt),
+      null as bigint | null,
+    ),
     nextFeedbackClosesAt: rows.reduce(
-      (next, row) => minNullableTimestamp(next, row.nextFeedbackClosesAt),
+      (next, row) => minNullableTimestamp(next, row.nextFeedbackAwardDeadline ?? row.nextFeedbackClosesAt),
       null as bigint | null,
     ),
   };
