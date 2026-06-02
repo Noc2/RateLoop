@@ -4,15 +4,36 @@ import { GradientActionButton, getGradientActionMotion } from "~~/components/sha
 import { useAllClaimableRewards } from "~~/hooks/useAllClaimableRewards";
 import { useClaimAll } from "~~/hooks/useClaimAll";
 import { formatUsdAmount } from "~~/lib/questionRewardPools";
+import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
 
-function formatLrepAmount(value: bigint) {
-  return (Number(value) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 });
-}
+const MIN_VISIBLE_LREP_AMOUNT = 50_000n;
+const MIN_VISIBLE_USDC_AMOUNT = 5_000n;
 
 type ClaimRewardsButtonProps = {
   className?: string;
   showTokenSymbol?: boolean;
 };
+
+export function buildClaimRewardsButtonLabel({
+  showTokenSymbol,
+  totalLrepClaimable,
+  totalUsdcClaimable,
+}: {
+  showTokenSymbol: boolean;
+  totalLrepClaimable: bigint;
+  totalUsdcClaimable: bigint;
+}) {
+  const claimParts: string[] = [];
+
+  if (totalLrepClaimable >= MIN_VISIBLE_LREP_AMOUNT) {
+    claimParts.push(`${formatLrepAmount(totalLrepClaimable)}${showTokenSymbol ? " LREP" : ""}`);
+  }
+  if (totalUsdcClaimable >= MIN_VISIBLE_USDC_AMOUNT) {
+    claimParts.push(formatUsdAmount(totalUsdcClaimable));
+  }
+
+  return claimParts.length > 0 ? `Claim ${claimParts.join(" + ")}` : null;
+}
 
 export function ClaimRewardsButton({ className, showTokenSymbol = true }: ClaimRewardsButtonProps) {
   const {
@@ -30,17 +51,17 @@ export function ClaimRewardsButton({ className, showTokenSymbol = true }: ClaimR
   const handleClaimAll = () => {
     void claimAll(claimableItems, () => refetchClaimable());
   };
+  const claimLabel = buildClaimRewardsButtonLabel({ showTokenSymbol, totalLrepClaimable, totalUsdcClaimable });
+
+  if (!claimLabel && !isClaiming && !isPreparingClaim) {
+    return null;
+  }
+
   const label = isPreparingClaim
     ? "Preparing..."
     : isClaiming
       ? `Claim ${progress.current}/${progress.total}`
-      : totalLrepClaimable > 0n && totalUsdcClaimable > 0n
-        ? `Claim ${formatLrepAmount(totalLrepClaimable)}${showTokenSymbol ? " LREP" : ""} + ${formatUsdAmount(
-            totalUsdcClaimable,
-          )}`
-        : totalLrepClaimable > 0n && totalUsdcClaimable <= 0n
-          ? `Claim ${formatLrepAmount(totalLrepClaimable)}${showTokenSymbol ? " LREP" : ""}`
-          : `Claim ${formatUsdAmount(totalUsdcClaimable)}`;
+      : claimLabel;
 
   return (
     <div className={className}>
