@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useAccount } from "wagmi";
 import { ArrowPathIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon } from "@heroicons/react/24/outline";
 import { ConnectWalletCard } from "~~/components/shared/ConnectWalletCard";
+import { WalletRestoreLoading } from "~~/components/shared/WalletRestoreLoading";
 import { buildRateContentHref } from "~~/constants/routes";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { CONTENT_STATUS, type RewardPoolCurrency } from "~~/hooks/contentFeed/shared";
 import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
 import { type ContentItem, useContentFeed } from "~~/hooks/useContentFeed";
@@ -193,6 +195,7 @@ function SubmissionOverviewSkeleton() {
 
 export function SubmissionOverviewPanel() {
   const { address } = useAccount();
+  const { isRestoringWallet } = useWalletRestore();
   const [page, setPage] = useState(0);
   const normalizedAddress = address?.toLowerCase();
   const offset = page * PAGE_SIZE;
@@ -213,6 +216,10 @@ export function SubmissionOverviewPanel() {
   }, [categories]);
 
   if (!normalizedAddress) {
+    if (isRestoringWallet) {
+      return <WalletRestoreLoading className="min-h-80 pt-0" />;
+    }
+
     return (
       <ConnectWalletCard title="Submissions" message="Connect a wallet to view questions submitted by this account." />
     );
