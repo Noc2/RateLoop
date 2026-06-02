@@ -162,7 +162,7 @@ function SubmissionOverviewSkeleton() {
             <th>Question</th>
             <th>Status</th>
             <th className="text-right">Bounty</th>
-            <th>Bounty deadline</th>
+            <th>Deadline</th>
             <th className="text-right">Feedback</th>
             <th className="text-right">Votes</th>
             <th className="text-right">Rounds</th>
@@ -246,7 +246,7 @@ export function SubmissionOverviewPanel() {
                   <th>Question</th>
                   <th>Status</th>
                   <th className="text-right">Bounty</th>
-                  <th>Bounty deadline</th>
+                  <th>Deadline</th>
                   <th className="text-right">Feedback</th>
                   <th className="text-right">Votes</th>
                   <th className="text-right">Rounds</th>
