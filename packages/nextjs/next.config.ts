@@ -183,6 +183,10 @@ const nextConfig: NextConfig = {
       source: "/agent/sign/:path*",
       headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
     },
+    {
+      source: "/agent/handoff/:path*",
+      headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+    },
   ],
 };
 
