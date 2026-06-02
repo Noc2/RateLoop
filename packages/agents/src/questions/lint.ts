@@ -193,7 +193,12 @@ export function lintAgentQuestion(
     }
   }
   if (question.imageUrls !== undefined && hasInvalidUploadedImageUrlList(question.imageUrls)) {
-    pushFinding(findings, "error", `${path}.imageUrls`, "Image URLs must be approved RateLoop-hosted uploads.");
+    pushFinding(
+      findings,
+      "error",
+      `${path}.imageUrls`,
+      "Image URLs must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
+    );
   }
   if (question.videoUrl && !looksLikeYouTubeVideoUrl(question.videoUrl)) {
     pushFinding(findings, "error", `${path}.videoUrl`, "Video URL must be a supported YouTube HTTPS URL.");

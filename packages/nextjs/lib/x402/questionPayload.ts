@@ -181,13 +181,17 @@ function normalizeImageUrls(value: unknown): string[] {
     return [];
   }
   if (!Array.isArray(value)) {
-    throw new X402QuestionInputError("imageUrls must be an array of approved RateLoop-hosted upload URLs.");
+    throw new X402QuestionInputError(
+      "imageUrls must be an array of RateLoop imageUrl values returned by rateloop_upload_image.",
+    );
   }
 
   const imageUrls = value.map((entry, index) => {
     const normalized = normalizeHttpsUrl(readString(entry, `imageUrls[${index}]`), `imageUrls[${index}]`);
     if (!isUploadedImageUrl(normalized)) {
-      throw new X402QuestionInputError("imageUrls must point to approved RateLoop-hosted uploads.");
+      throw new X402QuestionInputError(
+        "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
+      );
     }
     return normalized;
   });

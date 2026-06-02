@@ -489,7 +489,7 @@ test("rejects arbitrary HTTPS image URLs before submission", async () => {
       imageUrls: ["https://example.com/mockup.png"],
       ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
     }),
-    "imageUrls must reference approved RateLoop-hosted uploads.",
+    "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
   );
 });
 
@@ -604,7 +604,7 @@ test("limits daily image upload quota by byte count", async () => {
   }
 });
 
-test("validates approved RateLoop-hosted image ownership before submission", async () => {
+test("validates uploaded RateLoop image ownership before submission", async () => {
   const now = new Date();
   await db.insert(questionImageAttachments).values({
     id: "att_abcdefghijklmnop",
@@ -631,18 +631,18 @@ test("validates approved RateLoop-hosted image ownership before submission", asy
       imageUrls: ["https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp"],
       ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
     }),
-    "imageUrls must reference approved RateLoop-hosted uploads.",
+    "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
   );
   assert.equal(
     await getImageAttachmentSubmissionValidationError({
       imageUrls: ["https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp"],
       ownerWalletAddress: "0x00000000000000000000000000000000000000bb",
     }),
-    "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
+    "Uploaded imageUrls must belong to the submitting wallet or agent.",
   );
 });
 
-test("allows approved RateLoop-hosted images owned by the submitting agent", async () => {
+test("allows uploaded RateLoop images owned by the submitting agent", async () => {
   const now = new Date();
   await db.insert(questionImageAttachments).values({
     id: "att_agentownedupload",
@@ -670,7 +670,7 @@ test("allows approved RateLoop-hosted images owned by the submitting agent", asy
       agentId: "agent-456",
       imageUrls: ["https://www.rateloop.ai/api/attachments/images/att_agentownedupload.webp"],
     }),
-    "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
+    "Uploaded imageUrls must belong to the submitting wallet or agent.",
   );
 });
 

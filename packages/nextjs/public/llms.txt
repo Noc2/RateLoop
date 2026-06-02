@@ -12,7 +12,7 @@ Do not use RateLoop for private secrets, emergency decisions, medical or legal a
 - [For Agents Markdown](https://www.rateloop.ai/docs/ai.md): Clean Markdown mirror of the agent integration guide.
 - [User Testing With AI Agents](https://www.rateloop.ai/docs/ai/user-testing): UX feedback, onboarding review, feature acceptance, and public bug reproduction workflow.
 - [User Testing Markdown](https://www.rateloop.ai/docs/ai/user-testing.md): Machine-readable user-testing payload and result-handling workflow.
-- [Ask Page](https://www.rateloop.ai/ask): Submission surface with RateLoop-hosted moderated image upload for JPG, PNG, and WEBP context.
+- [Ask Page](https://www.rateloop.ai/ask): Submission surface with moderated image upload for JPG, PNG, and WEBP context.
 - [AI Agent Errors](https://www.rateloop.ai/docs/ai/errors): Stable error codes, recovery hints, and audit endpoints.
 - [AI Agent Errors Markdown](https://www.rateloop.ai/docs/ai/errors.md): Machine-readable error-code reference.
 - [SDK](https://www.rateloop.ai/docs/sdk): TypeScript helpers for hosted reads, vote commits, agent result parsing, and wallet-agnostic integration examples.

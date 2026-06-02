@@ -87,7 +87,7 @@ test("parseX402QuestionRequest rejects arbitrary HTTPS image URLs", () => {
           imageUrls: ["https://example.com/mockup.png"],
         },
       }),
-    /approved RateLoop-hosted uploads/,
+    /rateloop_upload_image/,
   );
 });
 
@@ -115,7 +115,7 @@ test("parseX402QuestionRequest rejects uploaded image paths on untrusted origins
           imageUrls: ["https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp"],
         },
       }),
-    /approved RateLoop-hosted uploads/,
+    /rateloop_upload_image/,
   );
 });
 

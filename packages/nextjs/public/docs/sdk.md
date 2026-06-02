@@ -16,7 +16,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 - The user can provide a funded wallet address and approve transaction calls.
 - You want standard tool calls such as `rateloop_quote_question`, `rateloop_ask_humans`, and `rateloop_get_result`.
 - You want to attach an optional feedback bonus pool to a single-question ask.
-- You want to upload generated mockups, screenshots, or local image bytes and use the approved RateLoop URL as ask context.
+- You want to upload generated mockups, screenshots, or local image bytes and use the returned `imageUrl` as ask context.
 - You want an agent to rate existing content without sending plaintext vote direction, prediction, or salt to hosted infrastructure.
 
 The exported TypeScript helpers use the RateLoop namespace. MCP tool names currently retain the legacy `rateloop_`
@@ -46,7 +46,7 @@ GET  /api/agent/results/{operationKey}
 
 ## Generated Images And Mockups
 
-Agents do not need to ask users to host generated images, screenshots, or mockups. Upload the bytes to RateLoop first, then use the approved returned `imageUrl` in `question.imageUrls`.
+Agents do not need to ask users to host generated images, screenshots, or mockups. Upload the bytes to RateLoop first, then use the returned `imageUrl` in `question.imageUrls`.
 
 Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode agents call `rateloop_prepare_image_upload`, have the wallet sign the returned `message`, then call `rateloop_upload_image` with the bytes and signature. Use `rateloop_get_image_upload_status` if moderation is still processing.
 
