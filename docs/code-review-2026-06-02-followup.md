@@ -29,6 +29,26 @@ against source (control-flow trace + `settledAt` write-site audit) for this docu
 
 **Severity framing.** Nothing is deployed to mainnet. Severities are "impact-if-this-shipped-as-is."
 
+## Remediation status (this PR)
+
+All actionable findings were re-verified against source and fixed; each was committed separately
+(severity-then-area order). Tests pass per touched package (nextjs agent-routes 35, profileImage 5,
+discover-filter 15; ponder round-voting 14 incl. new cancelled-deadline regression, feedback-handlers 3,
+route-validation 53).
+
+| Finding | Resolution |
+| ------- | ---------- |
+| **H-1** | Fixed — `updateAgentAskHandoffStatus` UPDATE now guarded with `status NOT IN ('submitted','expired')`. |
+| **M-1** | Fixed — ponder `RoundCancelled` no longer extends the award deadline (matches the contract); regression test added. |
+| **M-2** | Fixed — `readTransactionHashes` caps the array at 32. |
+| L-1 | Fixed — dead `"pending":"pending"` ternary collapsed with an explanatory note. |
+| L-2 | Fixed — `markHandoffExpired` UPDATE guarded against racing transitions. |
+| L-3 | Fixed — client feedback-window boundary made inclusive to match SQL/chain. |
+| L-4 | Fixed — `imageUrls` merge filters pre-existing entries to strings. |
+| I-1 … I-4 | No code change — informational / by-design (duplicate legacy SQL field, open-round display self-corrects, bearer-token capability is intentional, avatar cache confirmed leak-free). |
+
+The findings below are the original review, retained for the record.
+
 ## Summary
 
 | Severity | Count | Items |
