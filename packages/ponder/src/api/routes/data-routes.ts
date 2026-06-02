@@ -1231,9 +1231,12 @@ export function registerDataRoutes(app: ApiApp) {
         };
       },
     );
+    const claimableItems = enrichedItems.filter(
+      item => !item.requiresPayoutProof || (item.payoutWeight !== null && item.payoutProof !== null),
+    );
 
     return jsonBig(c, {
-      items: enrichedItems.map((item) => ({
+      items: claimableItems.map((item) => ({
         ...item,
         currency: item.asset === 0 ? "LREP" : "USDC",
         displayCurrency: item.asset === 0 ? "LREP" : "USD",

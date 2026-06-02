@@ -1809,6 +1809,43 @@ describe("registerDataRoutes", () => {
       payoutProof: [],
     });
   });
+
+  it("omits USDC bounty claim candidates when finalized payout proof data is unavailable", async () => {
+    mockPonderModules([
+      {
+        rewardPoolId: 1n,
+        contentId: 2n,
+        asset: 1,
+        roundId: 3n,
+        title: "USDC bounty",
+        allocation: 10_000n,
+        eligibleVoters: 1,
+        rawEligibleVoters: 1,
+        effectiveParticipantUnits: 10000,
+        totalClaimWeight: 10000n,
+        correlationWeightRoot: null,
+        payoutWeightRoot: `0x${"d".repeat(64)}`,
+        payoutArtifactUri: null,
+        commitKey: `0x${"a".repeat(64)}`,
+        identityKey: `0x${"b".repeat(64)}`,
+        qualified: true,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/question-reward-claim-candidates?voter=0x0000000000000000000000000000000000000001",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items).toEqual([]);
+  });
 });
 
 describe("registerCorrelationRoutes", () => {
@@ -1858,7 +1895,8 @@ describe("registerCorrelationRoutes", () => {
     expect(serialized).toContain("questionRewardPool.asset");
     expect(serialized).toContain("round.state");
     expect(serialized).toContain("roundPayoutSnapshot.id");
-    expect(serialized).not.toContain("round.revealedCount");
+    expect(serialized).toContain("round.revealedCount");
+    expect(serialized).toContain("questionRewardPool.requiredVoters");
   });
 
   it("returns eligible revealed vote inputs for correlation scoring", async () => {
@@ -1906,14 +1944,13 @@ describe("registerCorrelationRoutes", () => {
     expect(serialized).toContain("vote.revealed");
     expect(serialized).toContain("questionRewardPool.bountyEligibility");
     expect(serialized).toContain("raterHumanCredential.rater");
-    expect(serialized).not.toContain("round.settledAt");
     const serializedJoins = queryBuilder.leftJoin.mock.calls.map((call) =>
       serializeExpression(call),
     );
     expect(serializedJoins.some((join) => join.includes("raterHumanCredential.expiresAt"))).toBe(
       true,
     );
-    expect(serializedJoins.every((join) => !join.includes("round.settledAt"))).toBe(true);
+    expect(serializedJoins.some((join) => join.includes("round.settledAt"))).toBe(true);
   });
 
   it("validates correlation round-vote identifiers", async () => {

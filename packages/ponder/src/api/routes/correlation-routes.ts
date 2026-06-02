@@ -75,6 +75,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
           sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
           eq(round.state, ROUND_STATE.Settled),
           sql`${round.roundId} >= ${questionRewardPool.startRoundId}`,
+          sql`${round.revealedCount} >= ${questionRewardPool.requiredVoters}`,
           sql`(
             ${questionRewardPool.bountyWindowSeconds} = 0
             or (
@@ -113,7 +114,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
     }
     if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
 
-    const currentUnixSeconds = BigInt(Math.floor(Date.now() / 1000));
     const rows = await db
       .select({
         account: vote.identityHolder,
@@ -151,7 +151,10 @@ export function registerCorrelationRoutes(app: ApiApp) {
           eq(raterHumanCredential.rater, vote.identityHolder),
           eq(raterHumanCredential.verified, true),
           eq(raterHumanCredential.revoked, false),
-          sql`(${raterHumanCredential.expiresAt} = 0 or ${raterHumanCredential.expiresAt} > ${currentUnixSeconds})`,
+          sql`(
+            ${raterHumanCredential.expiresAt} = 0
+            or ${raterHumanCredential.expiresAt} > coalesce(${round.settledAt}, ${round.startTime})
+          )`,
         ),
       )
       .where(
@@ -160,6 +163,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
           eq(vote.roundId, roundId),
           eq(vote.revealed, true),
           eq(round.state, ROUND_STATE.Settled),
+          sql`coalesce(${round.settledAt}, ${round.startTime}) is not null`,
           sql`${vote.identityKey} is not null`,
           sql`${vote.identityHolder} is not null`,
           sql`${vote.identityKey} != ${ZERO_HASH}`,
