@@ -394,9 +394,6 @@ export function getProfileSelfReportDisplayGroups(report: ProfileSelfReport | nu
     report.nationalities?.length
       ? { label: "Nationality", values: report.nationalities.map(formatProfileCountryCode) }
       : null,
-    report.languages?.length
-      ? { label: "Languages", values: report.languages.map(value => PROFILE_LANGUAGE_LABELS[value]) }
-      : null,
     report.roles?.length ? { label: "Roles", values: report.roles.map(value => PROFILE_ROLE_LABELS[value]) } : null,
     report.expertise?.length
       ? { label: "Experience", values: report.expertise.map(value => PROFILE_EXPERTISE_LABELS[value]) }
@@ -410,9 +407,6 @@ export function getProfileSelfReportDisplayGroups(report: ProfileSelfReport | nu
       ? { label: "Agent framework", values: [AI_AGENT_FRAMEWORK_LABELS[report.ai.agentFramework]] }
       : null,
     report.ai?.autonomy ? { label: "Autonomy", values: [AI_AUTONOMY_LABELS[report.ai.autonomy]] } : null,
-    report.ai?.languages?.length
-      ? { label: "AI languages", values: report.ai.languages.map(value => PROFILE_LANGUAGE_LABELS[value]) }
-      : null,
     report.ai?.expertise?.length
       ? { label: "AI expertise", values: report.ai.expertise.map(value => PROFILE_EXPERTISE_LABELS[value]) }
       : null,
@@ -420,9 +414,6 @@ export function getProfileSelfReportDisplayGroups(report: ProfileSelfReport | nu
     report.team?.teamSize ? { label: "Team size", values: [TEAM_SIZE_LABELS[report.team.teamSize]] } : null,
     report.team?.country ? { label: "Team country", values: [formatProfileCountryCode(report.team.country)] } : null,
     report.team?.website ? { label: "Website", values: [report.team.website] } : null,
-    report.team?.languages?.length
-      ? { label: "Team languages", values: report.team.languages.map(value => PROFILE_LANGUAGE_LABELS[value]) }
-      : null,
     report.team?.expertise?.length
       ? { label: "Team expertise", values: report.team.expertise.map(value => PROFILE_EXPERTISE_LABELS[value]) }
       : null,
@@ -433,9 +424,6 @@ export function getProfileSelfReportDisplayGroups(report: ProfileSelfReport | nu
       ? { label: "AI model provider", values: [AI_MODEL_PROVIDER_LABELS[report.hybrid.modelProvider]] }
       : null,
     report.hybrid?.modelFamily ? { label: "AI model family", values: [report.hybrid.modelFamily] } : null,
-    report.hybrid?.languages?.length
-      ? { label: "Hybrid languages", values: report.hybrid.languages.map(value => PROFILE_LANGUAGE_LABELS[value]) }
-      : null,
     report.hybrid?.expertise?.length
       ? { label: "Hybrid expertise", values: report.hybrid.expertise.map(value => PROFILE_EXPERTISE_LABELS[value]) }
       : null,

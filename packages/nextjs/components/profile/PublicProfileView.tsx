@@ -9,7 +9,6 @@ import {
   AI_MODEL_PROVIDER_OPTIONS,
   type ExpertiseArea,
   HYBRID_OVERSIGHT_OPTIONS,
-  type LanguageCode,
   PROFILE_SELF_REPORT_NOTICE,
   type ProfileRole,
   type ProfileSelfReport,
@@ -64,7 +63,6 @@ import {
   PROFILE_AGE_GROUP_OPTIONS,
   PROFILE_COUNTRY_OPTIONS,
   PROFILE_EXPERTISE_OPTIONS,
-  PROFILE_LANGUAGE_OPTIONS,
   PROFILE_ROLE_OPTIONS,
   getProfileSelfReportDisplayGroups,
 } from "~~/lib/profile/profileSelfReportDisplay";
@@ -165,13 +163,13 @@ function profileSelfReportFromString(value: string | null | undefined) {
 }
 
 function getProfileSelfReportLength(value: ProfileSelfReport) {
-  const normalized = normalizeProfileSelfReport(value);
+  const normalized = stripProfileLanguages(value);
   return profileSelfReportHasValues(normalized) ? serializeProfileSelfReport(normalized).length : 0;
 }
 
 function updateSelfReportArray<T extends string>(
   report: ProfileSelfReport,
-  key: "expertise" | "languages" | "nationalities" | "roles",
+  key: "expertise" | "nationalities" | "roles",
   value: T,
   checked: boolean,
 ) {
@@ -203,6 +201,35 @@ function isHumanCredentialCompatibleRaterType(raterType: RaterTypeValue) {
   return raterType === RATER_TYPE.Human || raterType === RATER_TYPE.Team || raterType === RATER_TYPE.Hybrid;
 }
 
+function stripProfileLanguages(report: ProfileSelfReport) {
+  const normalized = normalizeProfileSelfReport(report);
+  const { ai, team, hybrid } = normalized;
+  const baseReport = { ...normalized };
+  delete baseReport.languages;
+  delete baseReport.ai;
+  delete baseReport.team;
+  delete baseReport.hybrid;
+  const nextReport: ProfileSelfReport = { ...baseReport };
+
+  if (ai) {
+    const aiContext = { ...ai };
+    delete aiContext.languages;
+    nextReport.ai = aiContext;
+  }
+  if (team) {
+    const teamContext = { ...team };
+    delete teamContext.languages;
+    nextReport.team = teamContext;
+  }
+  if (hybrid) {
+    const hybridContext = { ...hybrid };
+    delete hybridContext.languages;
+    nextReport.hybrid = hybridContext;
+  }
+
+  return normalizeProfileSelfReport(nextReport);
+}
+
 function resolveEditableRaterType(
   registryRaterType: RaterTypeValue,
   selfReport: ProfileSelfReport,
@@ -221,27 +248,30 @@ function resolveEditableRaterType(
 }
 
 function withRaterType(report: ProfileSelfReport, raterType: RaterTypeValue) {
+  const languageStrippedReport = stripProfileLanguages(report);
+
   if (raterType === RATER_TYPE.Human) {
     return normalizeProfileSelfReport({
-      ageGroup: report.ageGroup,
-      expertise: report.expertise,
-      languages: report.languages,
-      nationalities: report.nationalities,
+      ageGroup: languageStrippedReport.ageGroup,
+      expertise: languageStrippedReport.expertise,
+      nationalities: languageStrippedReport.nationalities,
       raterType,
-      residenceCountry: report.residenceCountry,
-      roles: report.roles,
+      residenceCountry: languageStrippedReport.residenceCountry,
+      roles: languageStrippedReport.roles,
     });
   }
-  if (raterType === RATER_TYPE.AI) return normalizeProfileSelfReport({ ai: report.ai, raterType });
-  if (raterType === RATER_TYPE.Team) return normalizeProfileSelfReport({ raterType, team: report.team });
-  if (raterType === RATER_TYPE.Hybrid) return normalizeProfileSelfReport({ hybrid: report.hybrid, raterType });
+  if (raterType === RATER_TYPE.AI) return normalizeProfileSelfReport({ ai: languageStrippedReport.ai, raterType });
+  if (raterType === RATER_TYPE.Team)
+    return normalizeProfileSelfReport({ raterType, team: languageStrippedReport.team });
+  if (raterType === RATER_TYPE.Hybrid)
+    return normalizeProfileSelfReport({ hybrid: languageStrippedReport.hybrid, raterType });
   return normalizeProfileSelfReport({ raterType });
 }
 
 function updateContextArray(
   report: ProfileSelfReport,
   section: "ai" | "team" | "hybrid",
-  key: "expertise" | "languages",
+  key: "expertise",
   value: string,
   checked: boolean,
 ) {
@@ -583,21 +613,20 @@ function ProfileTypeSpecificFields({
     </label>
   );
 
-  const renderCheckboxes = (section: "ai" | "team" | "hybrid", key: "expertise" | "languages", label: string) => {
-    const options = key === "languages" ? PROFILE_LANGUAGE_OPTIONS : PROFILE_EXPERTISE_OPTIONS;
-    const values = (report[section]?.[key] ?? []) as readonly string[];
+  const renderExpertiseCheckboxes = (section: "ai" | "team" | "hybrid", label: string) => {
+    const values = (report[section]?.expertise ?? []) as readonly string[];
     return (
       <div className="lg:col-span-2">
         <div className="label-text text-base-content/65">{label}</div>
         <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {options.map(option => (
+          {PROFILE_EXPERTISE_OPTIONS.map(option => (
             <label key={option.value} className="flex items-center gap-2 text-sm text-base-content/75">
               <input
                 type="checkbox"
                 className="checkbox checkbox-sm"
                 checked={optionSelected(values, option.value)}
                 onChange={event =>
-                  onChange(updateContextArray(report, section, key, option.value, event.target.checked))
+                  onChange(updateContextArray(report, section, "expertise", option.value, event.target.checked))
                 }
                 disabled={disabled}
               />
@@ -637,8 +666,7 @@ function ProfileTypeSpecificFields({
         {renderSelect("profile-ai-autonomy", "Autonomy", report.ai?.autonomy, AI_AUTONOMY_OPTIONS, value =>
           setReport({ ...report, ai: { ...report.ai, autonomy: value } }),
         )}
-        {renderCheckboxes("ai", "languages", "Languages")}
-        {renderCheckboxes("ai", "expertise", "Expertise")}
+        {renderExpertiseCheckboxes("ai", "Expertise")}
       </div>
     );
   }
@@ -667,8 +695,7 @@ function ProfileTypeSpecificFields({
           },
           "https://example.com",
         )}
-        {renderCheckboxes("team", "languages", "Languages")}
-        {renderCheckboxes("team", "expertise", "Expertise")}
+        {renderExpertiseCheckboxes("team", "Expertise")}
       </div>
     );
   }
@@ -698,8 +725,7 @@ function ProfileTypeSpecificFields({
         "GPT-5, Claude, Gemini...",
         "lg:col-span-2",
       )}
-      {renderCheckboxes("hybrid", "languages", "Languages")}
-      {renderCheckboxes("hybrid", "expertise", "Expertise")}
+      {renderExpertiseCheckboxes("hybrid", "Expertise")}
     </div>
   );
 }
@@ -1384,34 +1410,6 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
                     }}
                     disabled={profileSaveBusy}
                   />
-
-                  <div className="lg:col-span-2">
-                    <div className="label-text text-base-content/65">Languages</div>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                      {PROFILE_LANGUAGE_OPTIONS.map(option => (
-                        <label key={option.value} className="flex items-center gap-2 text-sm text-base-content/75">
-                          <input
-                            type="checkbox"
-                            className="checkbox checkbox-sm"
-                            checked={optionSelected(selfReportInput.languages, option.value)}
-                            onChange={event => {
-                              setSelfReportInput(
-                                updateSelfReportArray<LanguageCode>(
-                                  selfReportInput,
-                                  "languages",
-                                  option.value,
-                                  event.target.checked,
-                                ),
-                              );
-                              setProfileError(null);
-                            }}
-                            disabled={profileSaveBusy}
-                          />
-                          <span>{option.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
 
                   <div className="lg:col-span-2">
                     <div className="label-text text-base-content/65">Roles</div>
