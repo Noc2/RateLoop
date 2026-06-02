@@ -412,6 +412,25 @@ export const FeedbackBonusEscrowAbi = [
   },
   {
     "type": "function",
+    "name": "feedbackBonusAwardDeadline",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "feedbackBonusPools",
     "inputs": [
       {
@@ -500,25 +519,6 @@ export const FeedbackBonusEscrowAbi = [
         "name": "asset",
         "type": "uint8",
         "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "feedbackBonusAwardDeadline",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
