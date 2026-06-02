@@ -283,6 +283,10 @@ function readGeneratedImages(value: unknown) {
   return value.map((entry, index) => normalizeGeneratedImage(asJsonObject(entry, `generatedImages[${index}]`), index));
 }
 
+function existingImageUrlStrings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
 function cloneWithImageUrls(requestBody: JsonObject, imageUrls: string[]) {
   if (imageUrls.length === 0) return requestBody;
   const cloned = structuredClone(requestBody) as JsonObject;
@@ -290,14 +294,7 @@ function cloneWithImageUrls(requestBody: JsonObject, imageUrls: string[]) {
   if (question && typeof question === "object" && !Array.isArray(question)) {
     cloned.question = {
       ...(question as JsonObject),
-      imageUrls: [
-        ...new Set([
-          ...(Array.isArray((question as JsonObject).imageUrls)
-            ? ((question as JsonObject).imageUrls as unknown[])
-            : []),
-          ...imageUrls,
-        ]),
-      ],
+      imageUrls: [...new Set([...existingImageUrlStrings((question as JsonObject).imageUrls), ...imageUrls])],
     };
     return cloned;
   }
@@ -310,19 +307,12 @@ function cloneWithImageUrls(requestBody: JsonObject, imageUrls: string[]) {
     cloned.questions = [
       {
         ...firstQuestion,
-        imageUrls: [
-          ...new Set([
-            ...(Array.isArray(firstQuestion.imageUrls) ? (firstQuestion.imageUrls as unknown[]) : []),
-            ...imageUrls,
-          ]),
-        ],
+        imageUrls: [...new Set([...existingImageUrlStrings(firstQuestion.imageUrls), ...imageUrls])],
       },
     ];
     return cloned;
   }
-  cloned.imageUrls = [
-    ...new Set([...(Array.isArray(cloned.imageUrls) ? (cloned.imageUrls as unknown[]) : []), ...imageUrls]),
-  ];
+  cloned.imageUrls = [...new Set([...existingImageUrlStrings(cloned.imageUrls), ...imageUrls])];
   return cloned;
 }
 
@@ -340,7 +330,7 @@ async function markHandoffExpired(handoff: AgentAskHandoffRecord) {
       UPDATE agent_ask_handoff_intents
       SET status = 'expired',
           updated_at = ?
-      WHERE id = ?
+      WHERE id = ? AND status NOT IN ('submitted', 'expired')
     `,
     args: [now, handoff.id],
   });
@@ -476,7 +466,9 @@ export async function createAgentAskHandoff(params: {
     args: [
       id,
       hashToken(token),
-      assets.length > 0 ? "pending" : "pending",
+      // Both image and image-free handoffs start in "pending"; image handoffs
+      // advance to awaiting_image_signatures only once prepare is called.
+      "pending",
       parsed.chainId,
       parsed.clientRequestId,
       "wallet_calls",
@@ -558,7 +550,7 @@ export async function updateAgentAskHandoffStatus(params: {
           error = ?,
           completed_at = CASE WHEN ? = 'submitted' THEN ? ELSE completed_at END,
           updated_at = ?
-      WHERE id = ?
+      WHERE id = ? AND status NOT IN ('submitted', 'expired')
     `,
     args: [
       params.status,

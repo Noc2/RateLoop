@@ -1280,11 +1280,11 @@ ponder.on("RoundVotingEngine:RoundCancelled", async ({ event, context }) => {
     });
   }
 
-  await extendFeedbackBonusAwardDeadlinesForTerminalRound(context, {
-    contentId,
-    roundId,
-    settledAt: event.block.timestamp,
-  });
+  // Cancelled rounds get no feedback-bonus award-deadline extension: on-chain
+  // _markRoundCancelled never sets round.settledAt, so FeedbackBonusEscrow's
+  // _feedbackBonusAwardDeadline skips the 24h extension and keeps
+  // feedbackClosesAt. Extending here would diverge from the contract and
+  // surface cancelled pools as awardable (awards on Cancelled rounds revert).
 });
 
 ponder.on("RoundVotingEngine:RoundTied", async ({ event, context }) => {

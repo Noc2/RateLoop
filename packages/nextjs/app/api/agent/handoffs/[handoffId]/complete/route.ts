@@ -25,9 +25,16 @@ function readToken(value: unknown) {
   throw new AgentAskHandoffError("token is required.");
 }
 
+const MAX_TRANSACTION_HASHES = 32;
+
 function readTransactionHashes(value: unknown): Hex[] {
   if (!Array.isArray(value)) {
     throw new AgentAskHandoffError("transactionHashes must be an array.");
+  }
+  if (value.length > MAX_TRANSACTION_HASHES) {
+    throw new AgentAskHandoffError(
+      `transactionHashes must contain at most ${MAX_TRANSACTION_HASHES} transaction hashes.`,
+    );
   }
   const hashes = value.filter((hash): hash is Hex => typeof hash === "string") as Hex[];
   if (hashes.length === 0 || hashes.length !== value.length || hashes.some(hash => !/^0x[a-fA-F0-9]{64}$/.test(hash))) {

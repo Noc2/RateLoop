@@ -302,6 +302,36 @@ describe("RoundVotingEngine ponder handlers", () => {
     );
   });
 
+  it("does not extend feedback bonus award deadlines when a round is cancelled", async () => {
+    const registeredHandlers = await loadHandlers();
+    const { db, updateCalls } = createDb({
+      existingRound: { id: "7-2" },
+      feedbackBonusPools: [
+        {
+          id: 11n,
+          contentId: 7n,
+          roundId: 2n,
+          feedbackClosesAt: 2_000n,
+          awardDeadline: 2_000n,
+        },
+      ],
+    });
+
+    await registeredHandlers.get("RoundVotingEngine:RoundCancelled")!({
+      event: {
+        args: { contentId: 7n, roundId: 2n },
+        block: { number: 42n, timestamp: 3_000n },
+      },
+      context: { db },
+    });
+
+    // On-chain _markRoundCancelled never sets settledAt, so the contract keeps
+    // feedbackClosesAt as the award deadline; the indexer must match.
+    expect(updateCalls).not.toContainEqual(
+      expect.objectContaining({ table: "feedbackBonusPool" }),
+    );
+  });
+
   it("inserts per-round config snapshots before votes arrive", async () => {
     const { db, insertCalls } = createDb();
     const registeredHandlers = await loadHandlers();
