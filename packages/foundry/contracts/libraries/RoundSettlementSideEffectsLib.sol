@@ -79,7 +79,7 @@ library RoundSettlementSideEffectsLib {
         RatingLib.RatingConfig memory ratingConfig,
         RatingLib.SlashConfig memory slashConfig
     ) private view returns (RatingLib.RatingState memory nextState) {
-        (nextState,,) = RatingMath.applySettlement(
+        nextState = RatingMath.applySettlement(
             referenceRatingBps,
             upEvidence,
             downEvidence,

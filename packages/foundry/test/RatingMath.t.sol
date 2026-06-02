@@ -22,23 +22,6 @@ contract RatingMathHarness {
         return RatingMath.logitX18ToRatingBps(ratingLogitX18);
     }
 
-    function computeObservedGapX18(uint256 weightedUp, uint256 weightedDown, RatingLib.RatingConfig calldata cfg)
-        external
-        pure
-        returns (int256)
-    {
-        return RatingMath.computeObservedGapX18(weightedUp, weightedDown, cfg);
-    }
-
-    function computeNextConfidenceMass(
-        uint256 previousConfidenceMass,
-        uint256 roundEvidence,
-        int256 observedGapX18,
-        RatingLib.RatingConfig calldata cfg
-    ) external pure returns (uint256) {
-        return RatingMath.computeNextConfidenceMass(previousConfidenceMass, roundEvidence, observedGapX18, cfg);
-    }
-
     function computeConservativeRatingBps(uint16 ratingBps, uint256 confidenceMass, RatingLib.RatingConfig calldata cfg)
         external
         pure
@@ -55,7 +38,7 @@ contract RatingMathHarness {
         RatingLib.RatingConfig calldata ratingConfig,
         RatingLib.SlashConfig calldata slashConfig,
         uint48 settledAt
-    ) external pure returns (RatingLib.RatingState memory nextState, int256 observedGapX18, int256 ratingDeltaBps) {
+    ) external pure returns (RatingLib.RatingState memory nextState) {
         return RatingMath.applySettlement(
             referenceRatingBps, weightedUp, weightedDown, previousState, ratingConfig, slashConfig, settledAt
         );
@@ -141,7 +124,7 @@ contract RatingMathTest is Test {
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
         RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 0, 0, 5_000, 5_000, 0, 0);
 
-        (RatingLib.RatingState memory next,,) =
+        RatingLib.RatingState memory next =
             harness.applySettlement(5_000, 3_200_000, 1_150_000, prev, cfg, slashCfg, 1);
 
         assertEq(next.ratingBps, 7_356, "rating should be direct cumulative up evidence share");
@@ -155,24 +138,11 @@ contract RatingMathTest is Test {
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
         RatingLib.RatingState memory prev = _state(0, 50e6, 4_350_000, 3_200_000, 1_150_000, 1, 7_356, 5_856, 1, 0);
 
-        (RatingLib.RatingState memory next,,) = harness.applySettlement(7_356, 0, 4_350_000, prev, cfg, slashCfg, 2);
+        RatingLib.RatingState memory next = harness.applySettlement(7_356, 0, 4_350_000, prev, cfg, slashCfg, 2);
 
         assertEq(next.upEvidence, 3_200_000, "prior up evidence should remain");
         assertEq(next.downEvidence, 5_500_000, "new down evidence should accumulate");
         assertEq(next.ratingBps, 3_678, "later rounds should refine the cumulative rating");
-    }
-
-    function test_ConfidenceReopening_ContradictionLowersConfidenceMass() public view {
-        RatingLib.RatingConfig memory cfg = _ratingConfig();
-        uint256 startingMass = 120e6;
-        int256 alignedGap = harness.computeObservedGapX18(55e6, 45e6, cfg);
-        int256 contradictoryGap = harness.computeObservedGapX18(0, 100e6, cfg);
-
-        uint256 alignedMass = harness.computeNextConfidenceMass(startingMass, 100e6, alignedGap, cfg);
-        uint256 reopenedMass = harness.computeNextConfidenceMass(startingMass, 100e6, contradictoryGap, cfg);
-
-        assertGt(alignedMass, reopenedMass, "more surprising round should reopen confidence");
-        assertGe(reopenedMass, cfg.confidenceMassMin, "confidence mass must respect minimum");
     }
 
     function test_ConservativeRatingPenalty_ClosesUpWithMoreConfidence() public view {
@@ -191,15 +161,15 @@ contract RatingMathTest is Test {
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
         RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 0, 0, 5_000, 5_000, 0, 0);
 
-        (RatingLib.RatingState memory notYetSlashable,,) =
+        RatingLib.RatingState memory notYetSlashable =
             harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 1);
         assertEq(notYetSlashable.lowSince, 0, "insufficient settled rounds should not arm lowSince");
 
         prev = _state(0, 80e6, 100e6, 0, 100e6, 1, 1_000, 1_000, 1, 0);
-        (RatingLib.RatingState memory slashable,,) = harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 2);
+        RatingLib.RatingState memory slashable = harness.applySettlement(5_000, 0, 300e6, prev, cfg, slashCfg, 2);
         assertEq(slashable.lowSince, 2, "persistent low rating should arm lowSince once thresholds are met");
 
-        (RatingLib.RatingState memory recovered,,) =
+        RatingLib.RatingState memory recovered =
             harness.applySettlement(5_000, 500e6, 0, slashable, cfg, slashCfg, 3);
         assertEq(recovered.lowSince, 0, "recovery above threshold should clear lowSince");
     }

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { SD59x18, abs, convert, div, exp, ln, mul, sd, unwrap } from "../../lib/prb-math/src/SD59x18.sol";
+import { SD59x18, convert, div, exp, ln, sd, unwrap } from "../../lib/prb-math/src/SD59x18.sol";
 import { RatingLib } from "./RatingLib.sol";
 
 /// @title RatingMath
-/// @notice Pure helpers for cumulative bounded-evidence ratings.
+/// @notice Pure helpers for the cumulative bounded-evidence rating model. Ratings are derived
+///         directly from cumulative up/down evidence; the previous confidence-reopening model
+///         (per-round logit steps, surprise, confidence reopen) has been removed.
 library RatingMath {
     error RatingMathOverflow();
 
@@ -54,12 +56,11 @@ library RatingMath {
         RatingLib.RatingConfig memory ratingConfig,
         RatingLib.SlashConfig memory slashConfig,
         uint48 settledAt
-    ) internal pure returns (RatingLib.RatingState memory nextState, int256 observedGapX18, int256 ratingDeltaBps) {
+    ) internal pure returns (RatingLib.RatingState memory nextState) {
         uint256 cumulativeUpEvidence = uint256(previousState.upEvidence) + weightedUp;
         uint256 cumulativeDownEvidence = uint256(previousState.downEvidence) + weightedDown;
         uint256 cumulativeEvidence = cumulativeUpEvidence + cumulativeDownEvidence;
 
-        observedGapX18 = computeObservedGapX18(weightedUp, weightedDown, ratingConfig);
         uint16 nextRatingBps = cumulativeEvidence == 0
             ? clampRatingBps(previousState.ratingBps == 0 ? referenceRatingBps : previousState.ratingBps)
             : evidenceRatingBps(cumulativeUpEvidence, cumulativeDownEvidence);
@@ -87,74 +88,6 @@ library RatingMath {
         } else {
             nextState.lowSince = 0;
         }
-
-        ratingDeltaBps = int256(uint256(nextState.ratingBps)) - int256(uint256(referenceRatingBps));
-    }
-
-    function computeObservedGapX18(uint256 weightedUp, uint256 weightedDown, RatingLib.RatingConfig memory ratingConfig)
-        internal
-        pure
-        returns (int256)
-    {
-        uint256 numerator = weightedUp + ratingConfig.smoothingAlpha;
-        uint256 denominator = weightedUp + weightedDown + ratingConfig.smoothingAlpha + ratingConfig.smoothingBeta;
-
-        if (denominator == 0) {
-            return 0;
-        }
-
-        SD59x18 observedProbability = div(convert(int256(numerator)), convert(int256(denominator)));
-        SD59x18 observedLogit = _logit(observedProbability);
-        SD59x18 observedGap = div(observedLogit, sd(int256(ratingConfig.observationBetaX18)));
-        return unwrap(observedGap);
-    }
-
-    function computeDeltaLogitX18(
-        int256 observedGapX18,
-        uint256 roundEvidence,
-        uint256 confidenceMass,
-        RatingLib.RatingConfig memory ratingConfig
-    ) internal pure returns (int256) {
-        if (roundEvidence == 0) {
-            return 0;
-        }
-
-        SD59x18 step = computeStepX18(roundEvidence, confidenceMass);
-        SD59x18 deltaLogit = mul(step, sd(observedGapX18));
-        return _clampSigned(unwrap(deltaLogit), ratingConfig.maxDeltaLogitX18);
-    }
-
-    function computeStepX18(uint256 roundEvidence, uint256 confidenceMass) internal pure returns (SD59x18) {
-        if (roundEvidence == 0) {
-            return sd(0);
-        }
-        return div(convert(int256(roundEvidence)), convert(int256(roundEvidence + confidenceMass)));
-    }
-
-    function computeNextConfidenceMass(
-        uint256 previousConfidenceMass,
-        uint256 roundEvidence,
-        int256 observedGapX18,
-        RatingLib.RatingConfig memory ratingConfig
-    ) internal pure returns (uint256) {
-        if (roundEvidence == 0) {
-            return _clampConfidenceMass(previousConfidenceMass, ratingConfig);
-        }
-
-        uint256 surpriseX18 = computeSurpriseX18(observedGapX18, ratingConfig.surpriseReferenceX18);
-        uint256 confidenceGain = (roundEvidence * ratingConfig.confidenceGainBps) / RatingLib.BPS_SCALE;
-        uint256 confidenceReopen =
-            (roundEvidence * ratingConfig.confidenceReopenBps * surpriseX18) / (RatingLib.BPS_SCALE * RatingLib.WAD);
-
-        uint256 nextConfidenceMass;
-        if (confidenceGain >= confidenceReopen) {
-            nextConfidenceMass = previousConfidenceMass + (confidenceGain - confidenceReopen);
-        } else {
-            uint256 decrease = confidenceReopen - confidenceGain;
-            nextConfidenceMass = decrease >= previousConfidenceMass ? 0 : previousConfidenceMass - decrease;
-        }
-
-        return _clampConfidenceMass(nextConfidenceMass, ratingConfig);
     }
 
     function computeConservativeRatingBps(
@@ -184,19 +117,6 @@ library RatingMath {
             return 0;
         }
         return uint16(uint256(ratingBps) - penaltyBps);
-    }
-
-    function computeSurpriseX18(int256 observedGapX18, uint256 surpriseReferenceX18) internal pure returns (uint256) {
-        if (surpriseReferenceX18 == 0) {
-            return RatingLib.WAD;
-        }
-
-        uint256 gapMagnitudeX18 = uint256(unwrap(abs(sd(observedGapX18))));
-        uint256 surpriseX18 = (gapMagnitudeX18 * RatingLib.WAD) / surpriseReferenceX18;
-        if (surpriseX18 > RatingLib.WAD) {
-            return RatingLib.WAD;
-        }
-        return surpriseX18;
     }
 
     function _logit(SD59x18 probability) private pure returns (SD59x18) {
@@ -239,17 +159,6 @@ library RatingMath {
             return ratingConfig.confidenceMassMax;
         }
         return confidenceMass;
-    }
-
-    function _clampSigned(int256 value, uint256 maxAbsValue) private pure returns (int256) {
-        int256 maxAbsValueSigned = int256(maxAbsValue);
-        if (value > maxAbsValueSigned) {
-            return maxAbsValueSigned;
-        }
-        if (value < -maxAbsValueSigned) {
-            return -maxAbsValueSigned;
-        }
-        return value;
     }
 
     function _toUint128(uint256 value) private pure returns (uint128) {

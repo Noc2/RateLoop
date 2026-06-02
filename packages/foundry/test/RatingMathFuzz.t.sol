@@ -83,9 +83,9 @@ contract RatingMathFuzzTest is Test {
         RatingLib.SlashConfig memory slashCfg = _slashConfig();
         RatingLib.RatingState memory prev = _state(0, 80e6, 0, 0, 0, 0, 5_000, 5_000, 0, 0);
 
-        (RatingLib.RatingState memory nextA,,) =
+        RatingLib.RatingState memory nextA =
             RatingMath.applySettlement(referenceA, upStake, downStake, prev, cfg, slashCfg, 1);
-        (RatingLib.RatingState memory nextB,,) =
+        RatingLib.RatingState memory nextB =
             RatingMath.applySettlement(referenceB, upStake, downStake, prev, cfg, slashCfg, 1);
 
         assertEq(nextA.ratingBps, nextB.ratingBps, "public score should come from evidence, not prior anchor");
@@ -100,27 +100,5 @@ contract RatingMathFuzzTest is Test {
         uint16 higherConfidence = RatingMath.computeConservativeRatingBps(ratingBps, confidenceMass + 80e6, cfg);
 
         assertGe(higherConfidence, lowerConfidence, "confidence should not increase the conservative penalty");
-    }
-
-    function testFuzz_ConfidenceReopening_LowerMassForSurprisingRound(
-        uint256 previousConfidenceMass,
-        uint256 roundEvidence,
-        uint256 lessSurprisingUp
-    ) public pure {
-        previousConfidenceMass = bound(previousConfidenceMass, 1, 500e6);
-        roundEvidence = bound(roundEvidence, 1, 500e6);
-        lessSurprisingUp = bound(lessSurprisingUp, 45e6, 55e6);
-
-        RatingLib.RatingConfig memory cfg = _ratingConfig();
-        uint256 lessSurprisingDown = 100e6 - lessSurprisingUp;
-        int256 lessSurprisingGap = RatingMath.computeObservedGapX18(lessSurprisingUp, lessSurprisingDown, cfg);
-        int256 surprisingGap = RatingMath.computeObservedGapX18(0, 100e6, cfg);
-
-        uint256 lessSurprisingMass =
-            RatingMath.computeNextConfidenceMass(previousConfidenceMass, roundEvidence, lessSurprisingGap, cfg);
-        uint256 surprisingMass =
-            RatingMath.computeNextConfidenceMass(previousConfidenceMass, roundEvidence, surprisingGap, cfg);
-
-        assertGe(lessSurprisingMass, surprisingMass, "more surprising round should reopen confidence more");
     }
 }
