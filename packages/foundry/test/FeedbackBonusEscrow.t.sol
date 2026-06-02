@@ -474,8 +474,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
         (,,,,,,,,,, uint48 settledAt,,,) = votingEngine.rounds(contentId, roundId);
-        uint256 minimumDecisionDeadline =
-            uint256(settledAt) + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS();
+        uint256 minimumDecisionDeadline = uint256(settledAt) + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS();
 
         assertGt(requestedDeadline, minimumDecisionDeadline);
         assertEq(feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId), requestedDeadline);
