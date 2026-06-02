@@ -95,8 +95,8 @@ function getRewardAvailableAmount() {
           and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
           and (
             ${questionRewardPool.bountyWindowSeconds} = 0
-            or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} > ${nowSeconds})
-            or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} > ${nowSeconds})
+            or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} >= ${nowSeconds})
+            or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} >= ${nowSeconds})
           )
           then ${questionRewardPool.unallocatedAmount}
         else 0
@@ -115,8 +115,8 @@ function getRewardAvailableAmount() {
         when ${questionBundleReward.completedRoundSetCount} < ${questionBundleReward.requiredSettledRounds}
           and (
             ${questionBundleReward.bountyWindowSeconds} = 0
-            or (${questionBundleReward.bountyClosesAt} != 0 and ${questionBundleReward.bountyClosesAt} > ${nowSeconds})
-            or (${questionBundleReward.bountyClosesAt} = 0 and ${questionBundleReward.bountyStartBy} > ${nowSeconds})
+            or (${questionBundleReward.bountyClosesAt} != 0 and ${questionBundleReward.bountyClosesAt} >= ${nowSeconds})
+            or (${questionBundleReward.bountyClosesAt} = 0 and ${questionBundleReward.bountyStartBy} >= ${nowSeconds})
           )
           then ${questionBundleReward.unallocatedAmount}
         else 0
