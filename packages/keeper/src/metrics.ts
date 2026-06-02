@@ -251,6 +251,12 @@ export async function resolveCorrelationArtifactResponse(
 
 function makeHandler(authToken: string | null, options: MetricsServerOptions = {}) {
   return async function handler(req: IncomingMessage, res: ServerResponse) {
+    // The correlation-artifact route is intentionally served BEFORE the metrics
+    // bearer-auth check below: these artifacts are content-addressed, immutable,
+    // and published via a public base URL, so they are meant to be fetched
+    // without auth. The filename is bounded by ARTIFACT_FILENAME_RE
+    // (^0x[a-fA-F0-9]{64}\.json$), so no path traversal is possible. Do NOT move
+    // this below the auth check.
     if (await serveCorrelationArtifact(req, res, options.artifactDirectory)) return;
 
     if (authToken !== null && !timingSafeBearerMatch(req.headers.authorization, authToken)) {

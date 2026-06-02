@@ -1,3 +1,4 @@
+import path from "node:path";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -368,7 +369,9 @@ describe("keeper config", () => {
         frontendRegistry: expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
         artifactStorage: {
           mode: "data-uri",
-          outputDir: "correlation-artifacts",
+          // outputDir is resolved to an absolute path so the writer and metrics
+          // reader agree regardless of process CWD; the default string is unchanged.
+          outputDir: path.resolve("correlation-artifacts"),
           publicBaseUrl: "",
         },
       }),
