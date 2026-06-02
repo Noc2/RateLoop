@@ -1509,16 +1509,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@gsap/react@npm:^2.1.2":
-  version: 2.1.2
-  resolution: "@gsap/react@npm:2.1.2"
-  peerDependencies:
-    gsap: ^3.12.5
-    react: ">=17"
-  checksum: 237288d9923a5c0f243a7986e655cb09ab600db7cc117d6329334f1e895e31567635ca53587aabf65924e0cc02887b054aeda5f0b04c7d2091c95e75f7d8162d
-  languageName: node
-  linkType: hard
-
 "@heroicons/react@npm:~2.1.5":
   version: 2.1.5
   resolution: "@heroicons/react@npm:2.1.5"
@@ -3265,7 +3255,6 @@ __metadata:
   resolution: "@rateloop/nextjs@workspace:packages/nextjs"
   dependencies:
     "@axe-core/playwright": ^4.11.1
-    "@gsap/react": ^2.1.2
     "@heroicons/react": ~2.1.5
     "@next/bundle-analyzer": ^16.1.6
     "@playwright/test": ^1.58.2
