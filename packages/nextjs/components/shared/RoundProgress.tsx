@@ -11,7 +11,8 @@ interface RoundProgressProps {
 const TERMINAL_ROUND_TOOLTIPS = {
   settled:
     "The round settled successfully. Rewards are allocated by phase-weighted stake; blind signals earned the 4x early-rater advantage.",
-  cancelled: "The round expired before enough signals were committed. All stakes are refunded.",
+  cancelled:
+    "The round expired before enough signals were committed. All stakes are refunded. Check the round details below for stake and rater counts.",
   tied: "The round ended in a tie. All stakes are returned to raters.",
   revealFailed:
     "Commit quorum was reached, but not enough signals were revealed before the final reveal grace deadline. Revealed raters can claim refunds; unrevealed signals forfeit.",

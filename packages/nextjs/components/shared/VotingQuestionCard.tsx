@@ -119,31 +119,28 @@ function LiveRoundActivity({
 }) {
   const progress = getRoundProgressMessaging(snapshot);
   const blindDetail = "Full blind reward weight";
-  const detailCopy =
-    snapshot.phase !== "voting"
-      ? snapshot.hasRound
-        ? `${formatLrepAmount(snapshot.totalStake)} LREP locked in the last round`
-        : ""
-      : snapshot.isEpoch1
-        ? condensed
-          ? blindDetail
-          : "Blind signals keep full reward weight."
-        : condensed
-          ? (progress?.detailLabel ?? `${formatLrepAmount(snapshot.totalStake)} LREP active`)
-          : describeOpenRoundActivity(snapshot);
-  const supportCopy =
-    snapshot.phase !== "voting"
-      ? "Check the round details below for the settled breakdown."
-      : snapshot.isEpoch1
-        ? "Signals stay hidden until reveal, so early signal stays private while keeping full weight."
-        : "Revealed signal is live now. Open signals use informed weight, but they can still help close the round.";
+  const isTerminalRound = snapshot.phase !== "voting";
+  const detailCopy = isTerminalRound
+    ? ""
+    : snapshot.isEpoch1
+      ? condensed
+        ? blindDetail
+        : "Blind signals keep full reward weight."
+      : condensed
+        ? (progress?.detailLabel ?? `${formatLrepAmount(snapshot.totalStake)} LREP active`)
+        : describeOpenRoundActivity(snapshot);
+  const supportCopy = isTerminalRound
+    ? ""
+    : snapshot.isEpoch1
+      ? "Signals stay hidden until reveal, so early signal stays private while keeping full weight."
+      : "Revealed signal is live now. Open signals use informed weight, but they can still help close the round.";
   const condensedDetailCopy =
     progress?.detailLabel ??
     (snapshot.phase === "voting" && snapshot.voteCount >= snapshot.minVoters ? "Waiting for reveals" : detailCopy);
   const showsDedicatedProgressRow = Boolean(progress);
 
   if (condensed) {
-    if (showsDedicatedProgressRow || (snapshot.phase !== "voting" && !snapshot.hasRound)) {
+    if (showsDedicatedProgressRow || isTerminalRound) {
       return null;
     }
 
@@ -176,7 +173,7 @@ function LiveRoundActivity({
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-base-content/52">
               Live round activity
             </p>
-            {!showsDedicatedProgressRow ? (
+            {!showsDedicatedProgressRow && detailCopy ? (
               <p
                 className={`mt-1 leading-relaxed text-base-content/70 ${
                   condensed ? "text-xs" : "text-sm"
@@ -234,7 +231,9 @@ function LiveRoundActivity({
         </div>
       </div>
 
-      {!condensed ? <p className="mt-3 text-sm leading-relaxed text-base-content/56">{supportCopy}</p> : null}
+      {!condensed && supportCopy ? (
+        <p className="mt-3 text-sm leading-relaxed text-base-content/56">{supportCopy}</p>
+      ) : null}
     </div>
   );
 }
