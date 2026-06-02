@@ -115,18 +115,20 @@ export function ShareContentModal({
 
         {/* Share buttons */}
         <div className="space-y-2.5">
-          {/* Twitter/X */}
-          <a
-            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-primary w-full gap-2"
-          >
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-            Share on X
-          </a>
+          {/* Copy Link */}
+          <button onClick={handleCopyLink} className="btn btn-primary w-full gap-2">
+            {copied ? (
+              <>
+                <CheckIcon className="h-5 w-5 text-success" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <ClipboardIcon className="h-5 w-5" />
+                Copy Link
+              </>
+            )}
+          </button>
 
           {/* Facebook */}
           <a
@@ -154,20 +156,18 @@ export function ShareContentModal({
             Share on Reddit
           </a>
 
-          {/* Copy Link */}
-          <button onClick={handleCopyLink} className="btn btn-outline w-full gap-2">
-            {copied ? (
-              <>
-                <CheckIcon className="h-5 w-5 text-success" />
-                Copied!
-              </>
-            ) : (
-              <>
-                <ClipboardIcon className="h-5 w-5" />
-                Copy Link
-              </>
-            )}
-          </button>
+          {/* Twitter/X */}
+          <a
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-outline w-full gap-2"
+          >
+            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+            Share on X
+          </a>
         </div>
       </div>
     </div>,
