@@ -854,6 +854,9 @@ contract LaunchDistributionPool is
 
     function currentRaterLaunchCap() public view returns (uint256) {
         uint256 count = eligibleRaterCount;
+        if (count < 100) return 500e6;
+        if (count < 1_000) return 250e6;
+        if (count < 10_000) return 100e6;
         if (count < 100_000) return 10e6;
         if (count < 1_000_000) return 5e6;
         if (count < 5_000_000) return 2_500_000;
@@ -863,6 +866,9 @@ contract LaunchDistributionPool is
 
     function currentVerifiedBonus() public view returns (uint256) {
         uint256 count = verifiedClaimCount;
+        if (count < 100) return 250e6;
+        if (count < 1_000) return 100e6;
+        if (count < 10_000) return 40e6;
         if (count < 50_000) return 10e6;
         if (count < 200_000) return 5e6;
         if (count < 1_000_000) return 2_500_000;

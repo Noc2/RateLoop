@@ -67,6 +67,10 @@ contract LaunchDistributionPoolTest is Test {
     uint256 internal constant WORLD_ID_V4_ACTION = uint256(keccak256("rateloop-human-credential-v4"));
     uint64 internal constant WORLD_ID_V4_ISSUER_SCHEMA_ID = 7;
     uint256 internal constant WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN = 1_700_000_000;
+    uint256 internal constant FIRST_COHORT_FULL_CAP = 500e6;
+    uint256 internal constant FIRST_COHORT_UNVERIFIED_CAP = 125e6;
+    uint256 internal constant FIRST_COHORT_FULL_SLOT = 50e6;
+    uint256 internal constant FIRST_COHORT_UNVERIFIED_SLOT = 12_500_000;
 
     function setUp() public {
         lrep = new LoopReputation(address(this), address(this));
@@ -441,8 +445,8 @@ contract LaunchDistributionPoolTest is Test {
         }
 
         uint256 firstReward = _recordLaunchRewardWithScore(alice, 5, bytes32("anchor-a"), 9_000);
-        assertEq(firstReward, 250_000);
-        assertEq(pool.raterLaunchPaid(alice), 250_000);
+        assertEq(firstReward, FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT);
     }
 
     function test_SetLaunchRewardPolicyRejectsUnsafeAntiFarmFloors() public {
@@ -517,9 +521,9 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingRatingCount(alice), 4);
 
         uint256 firstReward = _recordLaunchReward(alice, 5, bytes32("anchor-a"));
-        assertEq(firstReward, 250_000);
-        assertEq(pool.raterLaunchCap(alice), 2_500_000);
-        assertEq(pool.raterFullLaunchCap(alice), 10e6);
+        assertEq(firstReward, FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(pool.raterLaunchCap(alice), FIRST_COHORT_UNVERIFIED_CAP);
+        assertEq(pool.raterFullLaunchCap(alice), FIRST_COHORT_FULL_CAP);
         assertTrue(pool.raterLaunchCapAssigned(alice));
         assertFalse(pool.raterFullLaunchCapUnlocked(alice));
         assertEq(pool.eligibleRaterCount(), 1);
@@ -541,39 +545,39 @@ contract LaunchDistributionPoolTest is Test {
             );
         }
         assertEq(pool.rewardedRatingCount(alice), 10);
-        assertEq(pool.raterLaunchPaid(alice), 2_500_000);
-        assertEq(lrep.balanceOf(alice), 2_500_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_CAP);
+        assertEq(lrep.balanceOf(alice), FIRST_COHORT_UNVERIFIED_CAP);
 
         assertEq(_recordLaunchReward(alice, 15, bytes32("anchor-a")), 0);
-        assertEq(lrep.balanceOf(alice), 2_500_000);
+        assertEq(lrep.balanceOf(alice), FIRST_COHORT_UNVERIFIED_CAP);
     }
 
     function test_RecordEarnedRaterRewardPartialEarnedPoolDoesNotConsumeFullSlot() public {
         _recordLaunchRewardSlots(alice, 5);
         assertEq(pool.rewardedRatingCount(alice), 1);
-        assertEq(pool.raterLaunchPaid(alice), 250_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT);
 
-        _setEarnedRaterDistributed(pool.EARNED_RATER_POOL_AMOUNT() - 125_000);
+        _setEarnedRaterDistributed(pool.EARNED_RATER_POOL_AMOUNT() - 6_250_000);
         uint256 partialReward = _recordLaunchReward(alice, 6, bytes32("anchor-b"));
 
-        assertEq(partialReward, 125_000);
-        assertEq(pool.raterLaunchPaid(alice), 375_000);
+        assertEq(partialReward, 6_250_000);
+        assertEq(pool.raterLaunchPaid(alice), 18_750_000);
         assertEq(pool.rewardedRatingCount(alice), 1);
-        assertEq(lrep.balanceOf(alice), 375_000);
+        assertEq(lrep.balanceOf(alice), 18_750_000);
     }
 
     function test_RecordEarnedRaterRewardExactRemainingEarnedPoolConsumesSlot() public {
         _recordLaunchRewardSlots(alice, 5);
         assertEq(pool.rewardedRatingCount(alice), 1);
-        assertEq(pool.raterLaunchPaid(alice), 250_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT);
 
-        _setEarnedRaterDistributed(pool.EARNED_RATER_POOL_AMOUNT() - 250_000);
+        _setEarnedRaterDistributed(pool.EARNED_RATER_POOL_AMOUNT() - FIRST_COHORT_UNVERIFIED_SLOT);
         uint256 fullSlotReward = _recordLaunchReward(alice, 6, bytes32("anchor-b"));
 
-        assertEq(fullSlotReward, 250_000);
-        assertEq(pool.raterLaunchPaid(alice), 500_000);
+        assertEq(fullSlotReward, FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT * 2);
         assertEq(pool.rewardedRatingCount(alice), 2);
-        assertEq(lrep.balanceOf(alice), 500_000);
+        assertEq(lrep.balanceOf(alice), FIRST_COHORT_UNVERIFIED_SLOT * 2);
     }
 
     function test_CorrelationOracleDelaysAndFractionalizesLaunchCredit() public {
@@ -1243,7 +1247,7 @@ contract LaunchDistributionPoolTest is Test {
         }
 
         paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, 5, pool.BPS_DENOMINATOR());
-        assertEq(paid, 250_000);
+        assertEq(paid, FIRST_COHORT_UNVERIFIED_SLOT);
         assertTrue(pool.isRoundPayoutSnapshotConsumed(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5));
 
         bytes32 snapshotKey = oracle.roundPayoutSnapshotKey(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 5);
@@ -1264,12 +1268,12 @@ contract LaunchDistributionPoolTest is Test {
         }
 
         paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, 20, 2_500);
-        assertEq(paid, 250_000);
+        assertEq(paid, FIRST_COHORT_UNVERIFIED_SLOT);
         assertEq(pool.qualifyingCreditBps(alice), 50_000);
         assertEq(pool.qualifyingRatingCount(alice), 5);
         assertEq(pool.rewardedRatingCount(alice), 1);
-        assertEq(pool.raterLaunchPaid(alice), 250_000);
-        assertEq(lrep.balanceOf(alice), 250_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(lrep.balanceOf(alice), FIRST_COHORT_UNVERIFIED_SLOT);
 
         for (uint256 roundId = 21; roundId < 24; roundId++) {
             paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, roundId, 2_500);
@@ -1279,15 +1283,15 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.qualifyingCreditBps(alice), 57_500);
         assertEq(pool.qualifyingRatingCount(alice), 5);
         assertEq(pool.rewardedRatingCount(alice), 1);
-        assertEq(pool.raterLaunchPaid(alice), 250_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT);
 
         paid = _recordAndFinalizeLaunchOracleCredit(oracle, alice, 24, 2_500);
-        assertEq(paid, 250_000);
+        assertEq(paid, FIRST_COHORT_UNVERIFIED_SLOT);
         assertEq(pool.qualifyingCreditBps(alice), 60_000);
         assertEq(pool.qualifyingRatingCount(alice), 6);
         assertEq(pool.rewardedRatingCount(alice), 2);
-        assertEq(pool.raterLaunchPaid(alice), 500_000);
-        assertEq(lrep.balanceOf(alice), 500_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT * 2);
+        assertEq(lrep.balanceOf(alice), FIRST_COHORT_UNVERIFIED_SLOT * 2);
     }
 
     function test_RecordEarnedRaterRewardAppliesLowerUnverifiedCapWhenGovernanceSetsBps() public {
@@ -1297,10 +1301,10 @@ contract LaunchDistributionPoolTest is Test {
 
         uint256 firstReward = _recordFiveEligibleCredits(alice);
 
-        assertEq(firstReward, 250_000);
-        assertEq(pool.raterLaunchCap(alice), 2_500_000);
-        assertEq(pool.raterFullLaunchCap(alice), 10e6);
-        assertEq(pool.raterLaunchPaid(alice), 250_000);
+        assertEq(firstReward, FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(pool.raterLaunchCap(alice), FIRST_COHORT_UNVERIFIED_CAP);
+        assertEq(pool.raterFullLaunchCap(alice), FIRST_COHORT_FULL_CAP);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT);
         assertFalse(pool.raterFullLaunchCapUnlocked(alice));
 
         for (uint256 i = 0; i < 9; i++) {
@@ -1320,8 +1324,8 @@ contract LaunchDistributionPoolTest is Test {
         }
 
         assertEq(pool.rewardedRatingCount(alice), 10);
-        assertEq(pool.raterLaunchPaid(alice), 2_500_000);
-        assertEq(lrep.balanceOf(alice), 2_500_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_CAP);
+        assertEq(lrep.balanceOf(alice), FIRST_COHORT_UNVERIFIED_CAP);
     }
 
     function test_UnlockFullEarnedRaterCapPaysCatchUpAfterLaterHumanVerification() public {
@@ -1331,17 +1335,23 @@ contract LaunchDistributionPoolTest is Test {
 
         _recordFiveEligibleCredits(alice);
         assertEq(pool.rewardedRatingCount(alice), 1);
-        assertEq(pool.raterLaunchPaid(alice), 250_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT);
 
         _verify(alice, bytes32("alice-human"));
 
         vm.expectEmit(true, true, false, true);
-        emit RaterLaunchCapUnlocked(alice, bytes32("alice-human"), 2_500_000, 10e6, 750_000);
+        emit RaterLaunchCapUnlocked(
+            alice,
+            bytes32("alice-human"),
+            FIRST_COHORT_UNVERIFIED_CAP,
+            FIRST_COHORT_FULL_CAP,
+            FIRST_COHORT_FULL_SLOT - FIRST_COHORT_UNVERIFIED_SLOT
+        );
         uint256 catchUp = pool.unlockFullEarnedRaterCap(alice);
 
-        assertEq(catchUp, 750_000);
-        assertEq(pool.raterLaunchCap(alice), 10e6);
-        assertEq(pool.raterFullLaunchCap(alice), 10e6);
+        assertEq(catchUp, FIRST_COHORT_FULL_SLOT - FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(pool.raterLaunchCap(alice), FIRST_COHORT_FULL_CAP);
+        assertEq(pool.raterFullLaunchCap(alice), FIRST_COHORT_FULL_CAP);
         assertTrue(pool.raterFullLaunchCapUnlocked(alice));
         assertEq(pool.raterLaunchCapNullifier(alice), bytes32("alice-human"));
         assertEq(
@@ -1350,8 +1360,8 @@ contract LaunchDistributionPoolTest is Test {
             ),
             alice
         );
-        assertEq(pool.raterLaunchPaid(alice), 1e6);
-        assertEq(lrep.balanceOf(alice), 1e6);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_FULL_SLOT);
+        assertEq(lrep.balanceOf(alice), FIRST_COHORT_FULL_SLOT);
     }
 
     function test_UnlockFullEarnedRaterCapPartialPoolDoesNotConsumeFullCatchUpSlot() public {
@@ -1361,16 +1371,16 @@ contract LaunchDistributionPoolTest is Test {
 
         _recordFiveEligibleCredits(alice);
         assertEq(pool.rewardedRatingCount(alice), 1);
-        assertEq(pool.raterLaunchPaid(alice), 250_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_SLOT);
 
         _verify(alice, bytes32("alice-human"));
-        _setEarnedRaterDistributed(pool.EARNED_RATER_POOL_AMOUNT() - 125_000);
+        _setEarnedRaterDistributed(pool.EARNED_RATER_POOL_AMOUNT() - 6_250_000);
         uint256 catchUp = pool.unlockFullEarnedRaterCap(alice);
 
-        assertEq(catchUp, 125_000);
-        assertEq(pool.raterLaunchPaid(alice), 375_000);
+        assertEq(catchUp, 6_250_000);
+        assertEq(pool.raterLaunchPaid(alice), 18_750_000);
         assertEq(pool.rewardedRatingCount(alice), 1);
-        assertEq(lrep.balanceOf(alice), 375_000);
+        assertEq(lrep.balanceOf(alice), 18_750_000);
     }
 
     function test_UnlockFullEarnedRaterCapPaysCompletedUnverifiedSlots() public {
@@ -1395,15 +1405,15 @@ contract LaunchDistributionPoolTest is Test {
             );
         }
         assertEq(pool.rewardedRatingCount(alice), 10);
-        assertEq(pool.raterLaunchPaid(alice), 2_500_000);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_UNVERIFIED_CAP);
 
         _verify(alice, bytes32("alice-human"));
         uint256 catchUp = pool.unlockFullEarnedRaterCap(alice);
 
-        assertEq(catchUp, 7_500_000);
+        assertEq(catchUp, FIRST_COHORT_FULL_CAP - FIRST_COHORT_UNVERIFIED_CAP);
         assertEq(pool.rewardedRatingCount(alice), 10);
-        assertEq(pool.raterLaunchPaid(alice), 10e6);
-        assertEq(lrep.balanceOf(alice), 10e6);
+        assertEq(pool.raterLaunchPaid(alice), FIRST_COHORT_FULL_CAP);
+        assertEq(lrep.balanceOf(alice), FIRST_COHORT_FULL_CAP);
     }
 
     function test_VerifiedRaterReceivesFullCapAtEligibility() public {
@@ -1414,9 +1424,9 @@ contract LaunchDistributionPoolTest is Test {
 
         uint256 firstReward = _recordFiveEligibleCredits(alice);
 
-        assertEq(firstReward, 1e6);
-        assertEq(pool.raterLaunchCap(alice), 10e6);
-        assertEq(pool.raterFullLaunchCap(alice), 10e6);
+        assertEq(firstReward, FIRST_COHORT_FULL_SLOT);
+        assertEq(pool.raterLaunchCap(alice), FIRST_COHORT_FULL_CAP);
+        assertEq(pool.raterFullLaunchCap(alice), FIRST_COHORT_FULL_CAP);
         assertTrue(pool.raterFullLaunchCapUnlocked(alice));
         assertEq(pool.raterLaunchCapNullifier(alice), bytes32("alice-human"));
         assertEq(
@@ -1455,7 +1465,7 @@ contract LaunchDistributionPoolTest is Test {
             );
         }
 
-        assertEq(pool.raterLaunchCap(bob), 2_500_000);
+        assertEq(pool.raterLaunchCap(bob), FIRST_COHORT_UNVERIFIED_CAP);
         assertFalse(pool.raterFullLaunchCapUnlocked(bob));
         vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
         pool.unlockFullEarnedRaterCap(bob);
@@ -1557,15 +1567,30 @@ contract LaunchDistributionPoolTest is Test {
                 _singleAnchor(bytes32("anchor-a")),
                 uint64(block.timestamp)
             ),
-            250_000
+            FIRST_COHORT_UNVERIFIED_SLOT
         );
     }
 
-    function test_CurrentRaterLaunchCapUsesTenPointCurve() public {
+    function test_CurrentRaterLaunchCapUsesFrontLoadedCurve() public {
         _setEligibleRaterCount(0);
-        assertEq(pool.currentRaterLaunchCap(), 10e6);
+        assertEq(pool.currentRaterLaunchCap(), FIRST_COHORT_FULL_CAP);
 
-        _setEligibleRaterCount(99_999);
+        _setEligibleRaterCount(99);
+        assertEq(pool.currentRaterLaunchCap(), FIRST_COHORT_FULL_CAP);
+
+        _setEligibleRaterCount(100);
+        assertEq(pool.currentRaterLaunchCap(), 250e6);
+
+        _setEligibleRaterCount(999);
+        assertEq(pool.currentRaterLaunchCap(), 250e6);
+
+        _setEligibleRaterCount(1_000);
+        assertEq(pool.currentRaterLaunchCap(), 100e6);
+
+        _setEligibleRaterCount(9_999);
+        assertEq(pool.currentRaterLaunchCap(), 100e6);
+
+        _setEligibleRaterCount(10_000);
         assertEq(pool.currentRaterLaunchCap(), 10e6);
 
         _setEligibleRaterCount(100_000);
@@ -1588,6 +1613,47 @@ contract LaunchDistributionPoolTest is Test {
 
         _setEligibleRaterCount(15_000_000);
         assertEq(pool.currentRaterLaunchCap(), 500_000);
+    }
+
+    function test_CurrentVerifiedBonusUsesFrontLoadedCurve() public {
+        _setVerifiedClaimCount(0);
+        assertEq(pool.currentVerifiedBonus(), 250e6);
+
+        _setVerifiedClaimCount(99);
+        assertEq(pool.currentVerifiedBonus(), 250e6);
+
+        _setVerifiedClaimCount(100);
+        assertEq(pool.currentVerifiedBonus(), 100e6);
+
+        _setVerifiedClaimCount(999);
+        assertEq(pool.currentVerifiedBonus(), 100e6);
+
+        _setVerifiedClaimCount(1_000);
+        assertEq(pool.currentVerifiedBonus(), 40e6);
+
+        _setVerifiedClaimCount(9_999);
+        assertEq(pool.currentVerifiedBonus(), 40e6);
+
+        _setVerifiedClaimCount(10_000);
+        assertEq(pool.currentVerifiedBonus(), 10e6);
+
+        _setVerifiedClaimCount(49_999);
+        assertEq(pool.currentVerifiedBonus(), 10e6);
+
+        _setVerifiedClaimCount(50_000);
+        assertEq(pool.currentVerifiedBonus(), 5e6);
+
+        _setVerifiedClaimCount(199_999);
+        assertEq(pool.currentVerifiedBonus(), 5e6);
+
+        _setVerifiedClaimCount(200_000);
+        assertEq(pool.currentVerifiedBonus(), 2_500_000);
+
+        _setVerifiedClaimCount(999_999);
+        assertEq(pool.currentVerifiedBonus(), 2_500_000);
+
+        _setVerifiedClaimCount(1_000_000);
+        assertEq(pool.currentVerifiedBonus(), 1e6);
     }
 
     function test_RecordEarnedRaterRewardIgnoresLowScoresAndUnauthorizedCallers() public {
@@ -1708,10 +1774,10 @@ contract LaunchDistributionPoolTest is Test {
             uint64(block.timestamp)
         );
 
-        assertEq(pool.raterFullLaunchCap(alice), 10e6);
-        assertEq(pool.raterLaunchCap(alice), 2_500_000);
+        assertEq(pool.raterFullLaunchCap(alice), FIRST_COHORT_FULL_CAP);
+        assertEq(pool.raterLaunchCap(alice), FIRST_COHORT_UNVERIFIED_CAP);
         assertTrue(fifthRecorded);
-        assertEq(paid, 250_000);
+        assertEq(paid, FIRST_COHORT_UNVERIFIED_SLOT);
         assertEq(pool.qualifyingRatingCount(alice), 5);
     }
 
@@ -1829,7 +1895,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(lrep.balanceOf(alice), 0);
 
         uint256 firstReward = _recordLaunchReward(alice, 6, bytes32("anchor-b"));
-        assertEq(firstReward, 250_000);
+        assertEq(firstReward, FIRST_COHORT_UNVERIFIED_SLOT);
         assertEq(pool.raterDistinctVerifiedAnchorCount(alice), 2);
         assertEq(lrep.balanceOf(alice), firstReward);
     }
@@ -2069,15 +2135,15 @@ contract LaunchDistributionPoolTest is Test {
 
         vm.prank(referrer);
         uint256 referrerBase = pool.claimVerifiedBonus(address(0));
-        assertEq(referrerBase, 10e6);
-        assertEq(lrep.balanceOf(referrer), 10e6);
+        assertEq(referrerBase, 250e6);
+        assertEq(lrep.balanceOf(referrer), 250e6);
 
         vm.prank(alice);
         uint256 alicePayout = pool.claimVerifiedBonus(referrer);
-        assertEq(alicePayout, 15e6);
-        assertEq(lrep.balanceOf(alice), 10e6);
-        assertEq(lrep.balanceOf(referrer), 15e6);
-        assertEq(pool.referralEarnings(referrer), 5e6);
+        assertEq(alicePayout, 375e6);
+        assertEq(lrep.balanceOf(alice), 250e6);
+        assertEq(lrep.balanceOf(referrer), 375e6);
+        assertEq(pool.referralEarnings(referrer), 125e6);
 
         vm.prank(alice);
         vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
@@ -2090,8 +2156,8 @@ contract LaunchDistributionPoolTest is Test {
         vm.prank(alice);
         uint256 payout = pool.claimVerifiedBonus(address(0));
 
-        assertEq(payout, 10e6);
-        assertEq(lrep.balanceOf(alice), 10e6);
+        assertEq(payout, 250e6);
+        assertEq(lrep.balanceOf(alice), 250e6);
     }
 
     function test_ClaimVerifiedBonusNamespacesSeededHumanNullifiers() public {
@@ -2104,7 +2170,7 @@ contract LaunchDistributionPoolTest is Test {
         vm.prank(bob);
         uint256 bobPayout = pool.claimVerifiedBonus(address(0));
 
-        assertEq(bobPayout, 10e6);
+        assertEq(bobPayout, 250e6);
         assertTrue(
             pool.verifiedCredentialClaimed(
                 _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("shared-human"))
@@ -2351,6 +2417,10 @@ contract LaunchDistributionPoolTest is Test {
 
     function _setEligibleRaterCount(uint256 count) internal {
         stdstore.target(address(pool)).sig("eligibleRaterCount()").checked_write(count);
+    }
+
+    function _setVerifiedClaimCount(uint256 count) internal {
+        stdstore.target(address(pool)).sig("verifiedClaimCount()").checked_write(count);
     }
 
     function _setEarnedRaterDistributed(uint256 amount) internal {
