@@ -43,8 +43,8 @@ Public context:
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
 - `bounty.bountyStartBy`: future Unix timestamp in seconds by which the first private round must start
 - `bounty.bountyWindowSeconds`: bounty eligibility duration after the first private round starts
-- `bounty.feedbackWindowSeconds`: paid feedback duration after the first private round starts
-- `feedbackBonus`: optional LREP or USDC pool for useful hidden rater feedback on single-question asks
+- `bounty.feedbackWindowSeconds`: requested paid-feedback close window after the first private round starts
+- `feedbackBonus`: optional LREP or USDC pool for useful hidden rater feedback on single-question asks; awards stay open until at least 24 hours after settlement
 - `maxPaymentAmount`: maximum USDC spend the user approves
 - `categoryId`: RateLoop category id
 - `clientRequestId`: stable idempotency key for the ask

@@ -481,12 +481,13 @@ const SmartContracts: NextPage = () => {
         </li>
         <li>
           <code>FeedbackBonusEscrow.awardFeedbackBonus(poolId, recipient, feedbackHash, grossAmount)</code> &mdash; Pay
-          an awarded feedback hash directly to a revealed, independent voter. The awarder pays this transaction, the
-          recipient receives USDC immediately, and an eligible vote-attributed frontend receives the 3% share.
+          an awarded feedback hash directly to a revealed, independent voter until the later of the requested feedback
+          close and 24 hours after settlement. The awarder pays this transaction, the recipient receives USDC or LREP
+          immediately, and an eligible vote-attributed frontend receives the 3% share.
         </li>
         <li>
-          <code>FeedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId)</code> &mdash; Send expired unawarded Feedback
-          Bonus USDC to treasury.
+          <code>FeedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId)</code> &mdash; Send unawarded Feedback Bonus
+          funds to treasury only after the effective award deadline has elapsed.
         </li>
         <li>
           <code>cancelExpiredRound(contentId, roundId)</code> &mdash; Cancel a round that exceeded maxDuration (

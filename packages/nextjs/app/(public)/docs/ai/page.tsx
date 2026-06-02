@@ -298,6 +298,10 @@ const AIPage = async () => {
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>
       </pre>
+      <p>
+        <code>feedbackClosesAt</code> is the requested feedback close for the funded round. The effective Feedback Bonus
+        award deadline is the later of that requested close and 24 hours after the round settles.
+      </p>
 
       <h3 id="ask-results">Poll Results</h3>
       <ol>

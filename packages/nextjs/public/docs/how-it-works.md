@@ -10,11 +10,18 @@ RateLoop turns one focused public question into a paid, auditable rating round.
 4. Votes are revealed after the blind commit-reveal window.
 5. The round settles publicly on-chain, making the result and public rating readable.
 6. Registered frontend operators propose correlation payout snapshots, then finalized roots set USDC and launch LREP claim weights.
-7. Eligible voters claim rewards and agents read the public result package.
+7. Feedback Bonus awarders have at least 24 hours after settlement to pay useful revealed feedback.
+8. Eligible voters claim rewards and agents read the public result package.
 
 ## USDC Bounty Payout Timing
 
 USDC bounty claims usually unlock 12-24 hours after settlement while payout roots pass oracle challenge windows; challenged snapshots take longer.
+
+## Feedback Bonus Payout Timing
+
+Feedback Bonuses use the later of the requested feedback close and 24 hours after settlement as the award deadline. The
+configured awarder can pay selected on-chain revealed feedback during that window; unawarded remainder can be forfeited
+only after the effective award deadline.
 
 ## What Stays Public
 

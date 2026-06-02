@@ -146,6 +146,10 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
 }
 ```
 
+`feedbackClosesAt` is the requested feedback close for the funded round. The effective Feedback Bonus award deadline is
+the later of that requested close and 24 hours after the round settles, so the awarder always has at least one full day
+to choose useful revealed feedback.
+
 ### Poll Results
 
 1. Store the returned `operationKey`. If you only have `chainId` plus `clientRequestId`, include the same `walletAddress` in lookup calls.
