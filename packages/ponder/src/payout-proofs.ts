@@ -49,6 +49,9 @@ const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
 // H-5 (2026-05-22 audit): reject payloads larger than this before consuming them so
 // a misconfigured or hostile artifact host cannot OOM the indexer through slow-read.
 const ARTIFACT_MAX_BYTES = 10_000_000;
+const DATA_URI_PREFIX = "data:";
+const DATA_URI_BASE64_MAX_BYTES = Math.ceil(ARTIFACT_MAX_BYTES / 3) * 4;
+const DATA_URI_PERCENT_ENCODED_MAX_BYTES = ARTIFACT_MAX_BYTES * 3;
 // H-6 (2026-05-22 audit): previously an unbounded Map keyed by URI; replace with a
 // hand-rolled LRU (no new dependency) so long-running indexers cannot drift into a
 // slow leak once the question count grows.
@@ -139,7 +142,7 @@ async function fetchArtifactJson(uri: string): Promise<unknown | null> {
 }
 
 async function readArtifactJson(uri: string): Promise<unknown> {
-  if (uri.startsWith("data:")) {
+  if (uri.startsWith(DATA_URI_PREFIX)) {
     return JSON.parse(readDataUri(uri));
   }
 
@@ -188,7 +191,7 @@ async function readArtifactJson(uri: string): Promise<unknown> {
 function normalizeArtifactUri(uri: string): string | null {
   const value = uri.trim();
   if (!value) return null;
-  if (value.startsWith("data:")) {
+  if (value.startsWith(DATA_URI_PREFIX)) {
     return value;
   }
   if (value.startsWith("https://")) {
@@ -247,12 +250,26 @@ function readDataUri(uri: string) {
   if (commaIndex < 0) {
     throw new Error("Invalid data URI");
   }
-  const metadata = uri.slice(0, commaIndex);
+  const metadata = uri.slice(DATA_URI_PREFIX.length, commaIndex);
   const payload = uri.slice(commaIndex + 1);
-  if (metadata.endsWith(";base64")) {
-    return Buffer.from(payload, "base64").toString("utf8");
+  const metadataParts = metadata.split(";").filter(Boolean);
+  const mediaType = metadataParts[0]?.toLowerCase() ?? "";
+  const isBase64 = metadataParts.some((part) => part.toLowerCase() === "base64");
+  if (mediaType && mediaType !== "application/json" && !mediaType.endsWith("+json")) {
+    throw new Error("Payout artifact data URI must contain JSON");
   }
-  return decodeURIComponent(payload);
+  const encodedBytes = Buffer.byteLength(payload, "utf8");
+  if (encodedBytes > (isBase64 ? DATA_URI_BASE64_MAX_BYTES : DATA_URI_PERCENT_ENCODED_MAX_BYTES)) {
+    throw new Error(`Payout artifact data URI exceeds ${ARTIFACT_MAX_BYTES} decoded bytes`);
+  }
+
+  const decoded = isBase64
+    ? Buffer.from(payload, "base64").toString("utf8")
+    : decodeURIComponent(payload);
+  if (Buffer.byteLength(decoded, "utf8") > ARTIFACT_MAX_BYTES) {
+    throw new Error(`Payout artifact data URI exceeded ${ARTIFACT_MAX_BYTES} decoded bytes`);
+  }
+  return decoded;
 }
 
 function artifactHashMatches(artifact: unknown, expectedHash: Hex | null | undefined) {
