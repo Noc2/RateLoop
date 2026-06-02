@@ -261,5 +261,8 @@ test("normalizeAgentPolicyInput defaults blank agent ids to the agent wallet", (
   assert.equal(normalized.agentId, agentWalletAddress);
   assert.equal(normalized.dailyBudgetAtomic, "0");
   assert.equal(normalized.perAskLimitAtomic, "0");
-  assert.deepEqual(normalized.scopes, [MCP_SCOPES.ask, MCP_SCOPES.balance, MCP_SCOPES.quote, MCP_SCOPES.read].sort());
+  assert.deepEqual(
+    normalized.scopes,
+    [MCP_SCOPES.ask, MCP_SCOPES.balance, MCP_SCOPES.quote, MCP_SCOPES.rate, MCP_SCOPES.read].sort(),
+  );
 });

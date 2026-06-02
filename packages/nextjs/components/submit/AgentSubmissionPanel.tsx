@@ -44,7 +44,7 @@ import { notification } from "~~/utils/scaffold-eth";
 const WORLD_CHAIN_MAINNET_CHAIN_ID = 480;
 const DEFAULT_FUNDING_AMOUNT_USDC = "10";
 const DEFAULT_PER_ASK_CAP_ATOMIC = 2_000_000n;
-const DEFAULT_AGENT_SCOPES = ["rateloop:ask", "rateloop:read", "rateloop:quote", "rateloop:balance"];
+const DEFAULT_AGENT_SCOPES = ["rateloop:ask", "rateloop:rate", "rateloop:read", "rateloop:quote", "rateloop:balance"];
 const MANAGED_SETUP_STEP_ORDER = ["wallet", "fund", "policy", "mcp"] as const;
 const WALLET_DIRECT_SETUP_STEP_ORDER = ["wallet", "fund", "mcp"] as const;
 const AGENT_WALLET_HELP_TEXT =

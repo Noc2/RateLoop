@@ -42,7 +42,13 @@ test("serves root MCP protected-resource metadata for static bearer-token agents
   assert.equal(body.resource, "https://rateloop.ai/api/mcp");
   assert.equal(body.resource_name, "RateLoop MCP");
   assert.deepEqual(body.bearer_methods_supported, ["header"]);
-  assert.deepEqual(body.scopes_supported, ["rateloop:quote", "rateloop:ask", "rateloop:read", "rateloop:balance"]);
+  assert.deepEqual(body.scopes_supported, [
+    "rateloop:quote",
+    "rateloop:ask",
+    "rateloop:rate",
+    "rateloop:read",
+    "rateloop:balance",
+  ]);
   assert.equal("authorization_servers" in body, false);
 });
 

@@ -48,7 +48,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ res
       resource: resource.toString(),
       resource_documentation: new URL("/docs/ai#mcp-adapter-shape", request.url).toString(),
       resource_name: "RateLoop MCP",
-      scopes_supported: [MCP_SCOPES.quote, MCP_SCOPES.ask, MCP_SCOPES.read, MCP_SCOPES.balance],
+      scopes_supported: [MCP_SCOPES.quote, MCP_SCOPES.ask, MCP_SCOPES.rate, MCP_SCOPES.read, MCP_SCOPES.balance],
     },
     {
       headers: {
