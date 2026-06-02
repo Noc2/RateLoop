@@ -104,7 +104,7 @@ async function readSnapshotProposerAuthorization(
       eligible: authorized,
     };
     if (authorized) {
-      logger.info("Correlation snapshot proposer authorization confirmed", data);
+      logger.debug("Correlation snapshot proposer authorization confirmed", data);
     } else {
       logger.warn(
         "Skipping correlation snapshot proposals because keeper is not authorized by an eligible frontend",

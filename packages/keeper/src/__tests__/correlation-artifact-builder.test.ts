@@ -149,6 +149,14 @@ describe("automatic correlation artifact builder", () => {
         candidateCount: 1,
         roundSnapshotCount: 1,
         epochCount: 1,
+        artifactUriScheme: "data",
+        artifactUriBytes: expect.any(Number),
+      }),
+    );
+    expect(logger.info).not.toHaveBeenCalledWith(
+      "Built automatic correlation snapshot artifact",
+      expect.objectContaining({
+        artifactURI: expect.any(String),
       }),
     );
   });

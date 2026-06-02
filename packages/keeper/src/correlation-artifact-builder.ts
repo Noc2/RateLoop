@@ -75,6 +75,7 @@ const VOTE_PAGE_SIZE = 1_000;
 const PONDER_FETCH_TIMEOUT_MS = 5_000;
 const PONDER_JSON_MAX_BYTES = 5_000_000;
 const MAX_VOTE_PAGES_PER_ROUND = 50;
+const loggedAutomaticArtifactHashes = new Set<string>();
 
 export async function buildConfiguredCorrelationSnapshotArtifact(
   logger: Logger,
@@ -181,16 +182,48 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
     artifactURI: stored.artifactURI,
   }));
 
-  logger.info("Built automatic correlation snapshot artifact", {
+  const artifactUriSummary = summarizeArtifactUri(stored.artifactURI);
+  const logData = {
     candidateCount: candidates.length,
     roundSnapshotCount: roundPayoutSnapshots.length,
     epochCount: correlationEpochs.length,
     artifactHash: stored.artifactHash,
-    artifactURI: stored.artifactURI,
+    ...artifactUriSummary,
     canonicalBytes: Buffer.byteLength(stored.canonicalJson),
-  });
+  };
+  if (loggedAutomaticArtifactHashes.has(stored.artifactHash)) {
+    logger.debug("Automatic correlation snapshot artifact unchanged", logData);
+  } else {
+    loggedAutomaticArtifactHashes.add(stored.artifactHash);
+    logger.info("Built automatic correlation snapshot artifact", logData);
+  }
 
   return { correlationEpochs, roundPayoutSnapshots };
+}
+
+function summarizeArtifactUri(artifactURI: string) {
+  const byteLength = Buffer.byteLength(artifactURI);
+  if (artifactURI.startsWith("data:")) {
+    return {
+      artifactUriScheme: "data",
+      artifactUriBytes: byteLength,
+    };
+  }
+
+  try {
+    const url = new URL(artifactURI);
+    return {
+      artifactUriScheme: url.protocol.replace(/:$/u, ""),
+      artifactUriHost: url.host,
+      artifactUriPath: url.pathname,
+      artifactUriBytes: byteLength,
+    };
+  } catch {
+    return {
+      artifactUriScheme: "unknown",
+      artifactUriBytes: byteLength,
+    };
+  }
 }
 
 function buildPublicEpochs(

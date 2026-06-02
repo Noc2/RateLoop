@@ -146,7 +146,7 @@ describe("correlation snapshot publisher", () => {
         args: [ACCOUNT],
       }),
     );
-    expect(publisher.logger.info).toHaveBeenCalledWith(
+    expect(publisher.logger.debug).toHaveBeenCalledWith(
       "Correlation snapshot proposer authorization confirmed",
       expect.objectContaining({
         snapshotProposer: ACCOUNT,
