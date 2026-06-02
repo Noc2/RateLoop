@@ -332,11 +332,12 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         require(!rewardPool.refunded, "Already refunded");
         require(!rewardPool.unallocatedRefunded, "Already refunded");
         require(rewardPool.qualifiedRounds < rewardPool.requiredSettledRounds, "Bounty complete");
-        if (bountyClosesAt != 0) {
-            QuestionRewardPoolEscrowQualificationLib.requireNoPendingFinishedRound(
-                votingEngine, rewardPool.contentId, rewardPool.nextRoundToEvaluate, bountyClosesAt
-            );
-        }
+        // Always enforce this: a finished cursor round must be advanced/qualified before refunding, even
+        // when the window never activated (bountyClosesAt == 0). Gating this on bountyClosesAt != 0 let an
+        // empty leading round skip the check and drain funds owed to a later qualifiable round's voters.
+        QuestionRewardPoolEscrowQualificationLib.requireNoPendingFinishedRound(
+            votingEngine, rewardPool.contentId, rewardPool.nextRoundToEvaluate, bountyClosesAt
+        );
         refundAmount = rewardPool.unallocatedAmount;
         require(refundAmount > 0, "No refund");
         rewardPool.unallocatedRefunded = true;

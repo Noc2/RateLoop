@@ -100,8 +100,19 @@ library QuestionRewardPoolEscrowQualificationLib {
     ) external view {
         (uint48 startedAt, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(contentId, nextRoundToEvaluate);
         if (state == RoundLib.RoundState.Open) {
-            if (startedAt == 0 || (bountyClosesAt != 0 && startedAt > bountyClosesAt)) return;
+            // An Open cursor round is the latest round (rounds are sequential), so it cannot strand a
+            // later qualifiable round. It is safe to refund unallocated funds when it has no live bounty
+            // window competing for them:
+            //  - bountyClosesAt == 0: the window never activated, which only happens when the cursor
+            //    round has no commits (see WindowLib.activateRewardPoolWindowForRound), so it cannot qualify;
+            //  - startedAt == 0: the round was never created/started;
+            //  - startedAt > bountyClosesAt: the round opened after its bounty window had already closed.
+            if (bountyClosesAt == 0 || startedAt == 0 || startedAt > bountyClosesAt) return;
         }
+        // A finished cursor round must be qualified or skipped first: it may itself be qualifiable, or it
+        // may precede a later finished round that is, so the cursor has to advance before unallocated funds
+        // can be refunded. (Reverting here even when bountyClosesAt == 0 is what closes the empty-leading-
+        // round refund bypass.)
         revert RewardPoolCursorNeedsAdvance();
     }
 
