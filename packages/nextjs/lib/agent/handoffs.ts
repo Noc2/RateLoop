@@ -558,7 +558,7 @@ export async function updateAgentAskHandoffStatus(params: {
           error = ?,
           completed_at = CASE WHEN ? = 'submitted' THEN ? ELSE completed_at END,
           updated_at = ?
-      WHERE id = ?
+      WHERE id = ? AND status NOT IN ('submitted', 'expired')
     `,
     args: [
       params.status,
