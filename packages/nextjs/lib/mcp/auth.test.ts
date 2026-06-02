@@ -29,7 +29,7 @@ function sha256(value: string) {
 function requestWithToken(token?: string) {
   const headers = new Headers();
   if (token) headers.set("authorization", `Bearer ${token}`);
-  return new Request("https://rateloop.xyz/api/mcp", { headers });
+  return new Request("https://rateloop.ai/api/mcp", { headers });
 }
 
 before(async () => {

@@ -357,7 +357,7 @@ test("managed agents can upload generated image bytes and get a question imageUr
       walletAddress: AGENT.walletAddress,
     },
     name: "rateloop_upload_image",
-    requestUrl: "https://www.rateloop.xyz/api/mcp",
+    requestUrl: "https://www.rateloop.ai/api/mcp",
   });
   const body = result as {
     attachmentId: string;
@@ -368,7 +368,7 @@ test("managed agents can upload generated image bytes and get a question imageUr
 
   assert.equal(body.status, "approved");
   assert.match(body.attachmentId, /^att_[A-Za-z0-9_-]{16,80}$/);
-  assert.match(body.imageUrl, /^https:\/\/www\.rateloop\.xyz\/api\/attachments\/images\/att_/);
+  assert.match(body.imageUrl, /^https:\/\/www\.rateloop\.ai\/api\/attachments\/images\/att_/);
   assert.match(body.nextAction, /question\.imageUrls/);
 });
 
@@ -385,7 +385,7 @@ test("public MCP image upload uses a wallet-signed upload challenge", async () =
       walletAddress: account.address,
     },
     name: "rateloop_prepare_image_upload",
-    requestUrl: "https://www.rateloop.xyz/api/mcp/public",
+    requestUrl: "https://www.rateloop.ai/api/mcp/public",
   })) as {
     challengeId: string;
     message: string;
@@ -404,7 +404,7 @@ test("public MCP image upload uses a wallet-signed upload challenge", async () =
       walletAddress: account.address,
     },
     name: "rateloop_upload_image",
-    requestUrl: "https://www.rateloop.xyz/api/mcp/public",
+    requestUrl: "https://www.rateloop.ai/api/mcp/public",
   });
   const body = result as {
     imageUrl: string;
@@ -413,7 +413,7 @@ test("public MCP image upload uses a wallet-signed upload challenge", async () =
 
   assert.equal(prepared.signatureRequired, true);
   assert.equal(body.status, "approved");
-  assert.equal(body.imageUrl, `https://www.rateloop.xyz/api/attachments/images/${attachmentId}.webp`);
+  assert.equal(body.imageUrl, `https://www.rateloop.ai/api/attachments/images/${attachmentId}.webp`);
 });
 
 test("public MCP image upload rejects unsigned image bytes", async () => {

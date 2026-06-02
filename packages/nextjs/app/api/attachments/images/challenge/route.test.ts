@@ -16,7 +16,7 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
 }
 
 function challengeRequest() {
-  return new NextRequest("https://rateloop.xyz/api/attachments/images/challenge", {
+  return new NextRequest("https://rateloop.ai/api/attachments/images/challenge", {
     body: JSON.stringify({
       address: "0x00000000000000000000000000000000000000aa",
       attachmentId: "att_missingblobtoken01",

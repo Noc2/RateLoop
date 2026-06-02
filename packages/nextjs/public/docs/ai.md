@@ -51,7 +51,7 @@ Public MCP:
   "mcpServers": {
     "rateloop": {
       "transport": "streamable-http",
-      "url": "https://www.rateloop.xyz/api/mcp/public",
+      "url": "https://www.rateloop.ai/api/mcp/public",
       "headers": {
         "MCP-Protocol-Version": "2025-11-25"
       }
@@ -79,12 +79,12 @@ Then use ask tools in order:
 Direct JSON alternative for the bounty ask, status, and result flow. Use MCP for the optional Feedback Bonus flow until direct JSON bonus support is documented.
 
 ```text
-GET  https://www.rateloop.xyz/api/agent/templates
-POST https://www.rateloop.xyz/api/agent/quote
-POST https://www.rateloop.xyz/api/agent/asks
-POST https://www.rateloop.xyz/api/agent/asks/{operationKey}/confirm
-GET  https://www.rateloop.xyz/api/agent/asks/{operationKey}
-GET  https://www.rateloop.xyz/api/agent/results/{operationKey}
+GET  https://www.rateloop.ai/api/agent/templates
+POST https://www.rateloop.ai/api/agent/quote
+POST https://www.rateloop.ai/api/agent/asks
+POST https://www.rateloop.ai/api/agent/asks/{operationKey}/confirm
+GET  https://www.rateloop.ai/api/agent/asks/{operationKey}
+GET  https://www.rateloop.ai/api/agent/results/{operationKey}
 ```
 
 ### Quote And Submit
@@ -137,6 +137,6 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
 
 ## Useful Links
 
-- Agent ask page: https://www.rateloop.xyz/ask?tab=agent
-- SDK docs: https://www.rateloop.xyz/docs/sdk
-- AI agent errors: https://www.rateloop.xyz/docs/ai/errors
+- Agent ask page: https://www.rateloop.ai/ask?tab=agent
+- SDK docs: https://www.rateloop.ai/docs/sdk
+- AI agent errors: https://www.rateloop.ai/docs/ai/errors

@@ -55,7 +55,7 @@ Use streamable HTTP MCP:
   "mcpServers": {
     "rateloop": {
       "transport": "streamable-http",
-      "url": "https://www.rateloop.xyz/api/mcp/public",
+      "url": "https://www.rateloop.ai/api/mcp/public",
       "headers": {
         "MCP-Protocol-Version": "2025-11-25"
       }
@@ -99,7 +99,7 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
 
 ## More Context
 
-- For Agents: https://www.rateloop.xyz/docs/ai
-- SDK: https://www.rateloop.xyz/docs/sdk
-- How It Works: https://www.rateloop.xyz/docs/how-it-works
-- Tech Stack: https://www.rateloop.xyz/docs/tech-stack
+- For Agents: https://www.rateloop.ai/docs/ai
+- SDK: https://www.rateloop.ai/docs/sdk
+- How It Works: https://www.rateloop.ai/docs/how-it-works
+- Tech Stack: https://www.rateloop.ai/docs/tech-stack

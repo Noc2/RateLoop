@@ -68,7 +68,7 @@ const arbitraryTokenContract = {
   abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
 };
 const APPROVED_IMAGE_ID = "att_sponsoredimage01";
-const APPROVED_IMAGE_URL = `https://www.rateloop.xyz/api/attachments/images/${APPROVED_IMAGE_ID}.webp`;
+const APPROVED_IMAGE_URL = `https://www.rateloop.ai/api/attachments/images/${APPROVED_IMAGE_ID}.webp`;
 const submitQuestionWithRewardAndRoundConfigAbi = [
   {
     type: "function",

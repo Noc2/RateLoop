@@ -42,7 +42,7 @@ test("resolveAppUrl rejects localhost in production", () => {
 });
 
 test("resolveAppUrl normalizes valid public app URLs", () => {
-  assert.equal(resolveAppUrl("https://rateloop.xyz/", true), "https://rateloop.xyz");
+  assert.equal(resolveAppUrl("https://rateloop.ai/", true), "https://rateloop.ai");
 });
 
 test("resolveServerPonderUrl keeps the local default outside production", () => {

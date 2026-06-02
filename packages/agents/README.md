@@ -18,7 +18,7 @@ from the For Agents docs at `/docs/ai`, use any available WebMCP guidance there 
 the public MCP endpoint or direct HTTP routes, and ask the user for the few runtime values that are intentionally not
 hard-coded:
 
-- RateLoop origin, usually `https://www.rateloop.xyz`
+- RateLoop origin, usually `https://www.rateloop.ai`
 - funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
 - public context URL, image context, or YouTube video context for voters
 - optional extra public image context: RateLoop-hosted MCP or Ask-page uploads for local mockups, screenshots, and generated images
@@ -129,7 +129,7 @@ cp packages/agents/.env.example packages/agents/.env
 
 | Variable                                                    | Description                                                                                                              |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `RATELOOP_API_BASE_URL`                                     | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                                           |
+| `RATELOOP_API_BASE_URL`                                     | Hosted RateLoop origin, for example `https://www.rateloop.ai`                                                           |
 | `RATELOOP_AGENT_WALLET_ADDRESS`                             | Funded wallet address for tokenless public asks                                                                          |
 | `RATELOOP_RPC_URL`                                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
 | `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |

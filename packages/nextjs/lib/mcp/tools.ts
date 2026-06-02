@@ -665,7 +665,7 @@ function toolRequestUrl(requestUrl: string | undefined, publicEndpoint = false) 
     requestUrl?.trim() ||
     process.env.APP_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    `https://www.rateloop.xyz/api/mcp${publicEndpoint ? "/public" : ""}`
+    `https://www.rateloop.ai/api/mcp${publicEndpoint ? "/public" : ""}`
   );
 }
 

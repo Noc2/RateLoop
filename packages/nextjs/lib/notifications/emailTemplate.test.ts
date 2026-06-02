@@ -7,10 +7,10 @@ test("buildRateLoopEmailHtml includes the branded header, button, and fallback l
     title: "Verify your email",
     body: "Confirm this email address to receive RateLoop notification emails.",
     ctaLabel: "Verify email",
-    ctaHref: "https://info.rateloop.xyz/api/notifications/email/verify?token=test-token",
+    ctaHref: "https://info.rateloop.ai/api/notifications/email/verify?token=test-token",
     eyebrow: "Email verification",
     footerLinkLabel: "Unsubscribe from these emails",
-    footerLinkHref: "https://info.rateloop.xyz/api/notifications/email/unsubscribe?token=unsubscribe-token",
+    footerLinkHref: "https://info.rateloop.ai/api/notifications/email/unsubscribe?token=unsubscribe-token",
   });
 
   assert.match(html, />\s*RateLoop\s*</);

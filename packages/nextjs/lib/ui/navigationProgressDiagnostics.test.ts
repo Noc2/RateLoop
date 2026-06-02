@@ -6,7 +6,7 @@ import {
   shouldLogNavigationProgressDebug,
 } from "~~/lib/ui/navigationProgressDiagnostics";
 
-const currentHref = "https://rateloop.xyz/profiles/0x123?tab=profile#avatar";
+const currentHref = "https://rateloop.ai/profiles/0x123?tab=profile#avatar";
 
 test("tracks same-origin navigation with a different path", () => {
   const candidate = buildNavigationProgressCandidate({
@@ -15,19 +15,19 @@ test("tracks same-origin navigation with a different path", () => {
   });
 
   assert.deepEqual(candidate, {
-    from: "https://rateloop.xyz/profiles/0x123?tab=profile",
-    target: "https://rateloop.xyz/governance",
-    targetHref: "https://rateloop.xyz/governance",
+    from: "https://rateloop.ai/profiles/0x123?tab=profile",
+    target: "https://rateloop.ai/governance",
+    targetHref: "https://rateloop.ai/governance",
   });
 });
 
 test("tracks same-origin navigation with a different query", () => {
   const candidate = buildNavigationProgressCandidate({
-    currentHref: "https://rateloop.xyz/rate?q=ai",
+    currentHref: "https://rateloop.ai/rate?q=ai",
     href: "/rate?q=ux",
   });
 
-  assert.equal(candidate?.target, "https://rateloop.xyz/rate?q=ux");
+  assert.equal(candidate?.target, "https://rateloop.ai/rate?q=ux");
 });
 
 test("ignores hash-only, external, blank-target, and modified navigations", () => {
@@ -39,7 +39,7 @@ test("ignores hash-only, external, blank-target, and modified navigations", () =
 
 test("ignores links disabled for nprogress and non-navigation protocols", () => {
   assert.equal(buildNavigationProgressCandidate({ currentHref, href: "/governance", nprogressDisabled: true }), null);
-  assert.equal(buildNavigationProgressCandidate({ currentHref, href: "mailto:hello@rateloop.xyz" }), null);
+  assert.equal(buildNavigationProgressCandidate({ currentHref, href: "mailto:hello@rateloop.ai" }), null);
   assert.equal(buildNavigationProgressCandidate({ currentHref, href: "tel:+123" }), null);
 });
 

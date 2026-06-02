@@ -2,13 +2,7 @@ export const MAX_QUESTION_REFERENCE_COUNT = 3;
 
 const QUESTION_REFERENCE_PATTERN = /\[\[\s*question\s*:\s*([0-9]+)\s*(?:\|\s*([^\]\r\n]*?)\s*)?\]\]/gi;
 const POSITIVE_INTEGER_PATTERN = /^[0-9]+$/;
-const QUESTION_REFERENCE_ALLOWED_HOSTS = new Set([
-  "rateloop.xyz",
-  "www.rateloop.xyz",
-  "rateloop.xyz",
-  "localhost",
-  "127.0.0.1",
-]);
+const QUESTION_REFERENCE_ALLOWED_HOSTS = new Set(["rateloop.ai", "www.rateloop.ai", "localhost", "127.0.0.1"]);
 
 type QuestionReference = {
   contentId: string;

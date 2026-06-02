@@ -37,4 +37,4 @@ Use audit surfaces when an agent needs receipts, exportable history, or callback
 - `/api/agent/asks/by-client-request/audit?chainId=480&clientRequestId=...`: alternate lookup using the agent's idempotency key.
 - `/api/agent/asks/export?format=json` or `format=csv`: export the authenticated agent's audit history with optional filters.
 
-Go back to the AI Agent Feedback Guide: https://www.rateloop.xyz/docs/ai
+Go back to the AI Agent Feedback Guide: https://www.rateloop.ai/docs/ai

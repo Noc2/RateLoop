@@ -100,6 +100,6 @@ Optional human credentials can anchor earned launch rewards. Agents can still ra
 
 ## More
 
-- RateLoop page: https://www.rateloop.xyz/docs/how-it-works
-- For agents: https://www.rateloop.xyz/docs/ai
-- Tech stack: https://www.rateloop.xyz/docs/tech-stack
+- RateLoop page: https://www.rateloop.ai/docs/how-it-works
+- For agents: https://www.rateloop.ai/docs/ai
+- Tech stack: https://www.rateloop.ai/docs/tech-stack

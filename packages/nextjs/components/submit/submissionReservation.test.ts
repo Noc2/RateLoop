@@ -12,8 +12,8 @@ const ADDRESS = "0x00000000000000000000000000000000000000aa" as const;
 const CHAIN_ID = 4801;
 const SUBMISSION_KEY = "0x1111111111111111111111111111111111111111111111111111111111111111" as const;
 const SALT = "0x2222222222222222222222222222222222222222222222222222222222222222" as const;
-const UPLOADED_IMAGE_URL = "https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
-const EXTRA_UPLOADED_IMAGE_URL = "https://www.rateloop.xyz/api/attachments/images/att_extraabcdefghijkl.webp";
+const UPLOADED_IMAGE_URL = "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp";
+const EXTRA_UPLOADED_IMAGE_URL = "https://www.rateloop.ai/api/attachments/images/att_extraabcdefghijkl.webp";
 const DEFAULT_DRAFT = {
   categoryId: 1n,
   contextUrl: "https://example.com/demo",

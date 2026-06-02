@@ -23,7 +23,7 @@ function makeRequest(
   const headers = new Headers(init?.headers);
   headers.set("x-forwarded-for", "203.0.113.77");
 
-  return new NextRequest(`https://rateloop.xyz${pathname}`, {
+  return new NextRequest(`https://rateloop.ai${pathname}`, {
     ...init,
     headers,
   });

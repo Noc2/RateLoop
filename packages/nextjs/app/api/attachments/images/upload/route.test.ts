@@ -48,7 +48,7 @@ function uploadRequest(attachmentId: string) {
     }),
   );
 
-  return new NextRequest("https://rateloop.xyz/api/attachments/images/upload", {
+  return new NextRequest("https://rateloop.ai/api/attachments/images/upload", {
     body: formData,
     headers: new Headers({
       authorization: "Bearer secret-token",
@@ -124,7 +124,7 @@ test("MCP image uploads cannot rotate attachment ids around the agent daily quot
 
 test("image upload route rejects oversized multipart bodies before parsing", async () => {
   const response = await POST(
-    new NextRequest("https://rateloop.xyz/api/attachments/images/upload", {
+    new NextRequest("https://rateloop.ai/api/attachments/images/upload", {
       body: "oversized-placeholder",
       headers: new Headers({
         "content-length": String(10 * 1024 * 1024 + 128 * 1024 + 1),

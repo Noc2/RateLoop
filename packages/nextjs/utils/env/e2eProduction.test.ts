@@ -57,7 +57,7 @@ test("enables the local test wallet bridge for local production-style E2E", () =
 test("disables the local test wallet bridge for non-local production traffic", () => {
   assert.equal(
     isLocalE2EWalletBridgeEnabled({
-      hostname: "rateloop.xyz",
+      hostname: "rateloop.ai",
       isProduction: true,
       localE2EProductionBuild: true,
     }),

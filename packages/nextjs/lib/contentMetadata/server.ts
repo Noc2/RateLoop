@@ -78,7 +78,7 @@ async function resolveGenericPageThumbnail(url: string): Promise<string | null> 
     const response = await metadataFetch(url, {
       headers: {
         accept: "text/html,application/xhtml+xml",
-        "user-agent": "RateLoopBot/1.0 (+https://rateloop.xyz)",
+        "user-agent": "RateLoopBot/1.0 (+https://rateloop.ai)",
       },
       maxResponseBytes: MAX_METADATA_BYTES,
       redirect: "manual",

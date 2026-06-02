@@ -64,17 +64,17 @@ test("parseQuestionReferenceInput accepts ids, raw syntax, and internal links", 
   assert.equal(parseQuestionReferenceInput("#0042"), "42");
   assert.equal(parseQuestionReferenceInput("[[question:42|Alternative]]"), "42");
   assert.equal(parseQuestionReferenceInput("/rate?content=42"), "42");
-  assert.equal(parseQuestionReferenceInput("https://rateloop.xyz/rate?content=0042"), "42");
-  assert.equal(parseQuestionReferenceInput("https://www.rateloop.xyz/rate?content=42"), "42");
-  assert.equal(parseQuestionReferenceInput("https://rateloop.xyz/rate?content=0042"), "42");
+  assert.equal(parseQuestionReferenceInput("https://rateloop.ai/rate?content=0042"), "42");
+  assert.equal(parseQuestionReferenceInput("https://www.rateloop.ai/rate?content=42"), "42");
+  assert.equal(parseQuestionReferenceInput("http://localhost:3000/rate?content=0042"), "42");
 });
 
 test("parseQuestionReferenceInput rejects unsupported values", () => {
   assert.equal(parseQuestionReferenceInput("0"), null);
   assert.equal(parseQuestionReferenceInput("question 42"), null);
   assert.equal(parseQuestionReferenceInput("/vote?content=42"), null);
-  assert.equal(parseQuestionReferenceInput("https://app.rateloop.xyz/rate?content=42"), null);
+  assert.equal(parseQuestionReferenceInput("https://app.rateloop.ai/rate?content=42"), null);
   assert.equal(parseQuestionReferenceInput("https://example.com/rate?content=42"), null);
-  assert.equal(parseQuestionReferenceInput("ftp://app.rateloop.xyz/rate?content=42"), null);
+  assert.equal(parseQuestionReferenceInput("ftp://app.rateloop.ai/rate?content=42"), null);
   assert.equal(parseQuestionReferenceInput("/rate?content=abc"), null);
 });

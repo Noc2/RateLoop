@@ -90,8 +90,6 @@ const IMAGE_ATTACHMENT_PATH_PATTERN =
 const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = new Set([
   "https://www.rateloop.ai",
   "https://rateloop.ai",
-  "https://www.rateloop.xyz",
-  "https://rateloop.xyz",
 ]);
 const X402_QUESTION_TOP_LEVEL_FIELDS = new Set([
   "clientRequestId",

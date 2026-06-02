@@ -11,7 +11,7 @@ test("resolvePonderUrl allows missing config in production until runtime use", (
 });
 
 test("resolvePonderUrl normalizes valid production URLs", () => {
-  assert.equal(resolvePonderUrl("https://ponder.rateloop.xyz/", true), "https://ponder.rateloop.xyz");
+  assert.equal(resolvePonderUrl("https://ponder.rateloop.ai/", true), "https://ponder.rateloop.ai");
 });
 
 test("resolvePonderUrl rejects invalid production URLs", () => {
@@ -33,7 +33,7 @@ test("fetchPonderJson returns parsed json responses", async () => {
   });
 
   const result = await fetchPonderJson<{ ok: boolean }>(
-    "https://ponder.rateloop.xyz/content",
+    "https://ponder.rateloop.ai/content",
     1000,
     async () => response,
   );
@@ -46,7 +46,7 @@ test("fetchPonderJson surfaces request timeouts clearly", async () => {
 
   await assert.rejects(
     () =>
-      fetchPonderJson("https://ponder.rateloop.xyz/content", 1234, async () => {
+      fetchPonderJson("https://ponder.rateloop.ai/content", 1234, async () => {
         throw abortError;
       }),
     /Ponder request timed out after 1234ms/,
@@ -56,7 +56,7 @@ test("fetchPonderJson surfaces request timeouts clearly", async () => {
 test("fetchPonderJson wraps fetch failures", async () => {
   await assert.rejects(
     () =>
-      fetchPonderJson("https://ponder.rateloop.xyz/content", 1000, async () => {
+      fetchPonderJson("https://ponder.rateloop.ai/content", 1000, async () => {
         throw new Error("socket hang up");
       }),
     /Ponder request failed: socket hang up/,
@@ -68,7 +68,7 @@ test("fetchPonderJson retries rate-limited responses using Retry-After", async (
   let calls = 0;
 
   const result = await fetchPonderJson<{ ok: boolean }>(
-    "https://ponder.rateloop.xyz/content",
+    "https://ponder.rateloop.ai/content",
     1000,
     async () => {
       calls += 1;
@@ -103,7 +103,7 @@ test("fetchPonderJson stops retrying rate limits after the configured attempts",
   await assert.rejects(
     () =>
       fetchPonderJson(
-        "https://ponder.rateloop.xyz/content",
+        "https://ponder.rateloop.ai/content",
         1000,
         async () => {
           calls += 1;
@@ -132,10 +132,10 @@ test("fetchPonderJson dedupes in-flight identical requests", async () => {
     return fetchPromise;
   };
 
-  const first = fetchPonderJson<{ ok: boolean }>("https://ponder.rateloop.xyz/content", 1000, fetchImpl, {
+  const first = fetchPonderJson<{ ok: boolean }>("https://ponder.rateloop.ai/content", 1000, fetchImpl, {
     queue: false,
   });
-  const second = fetchPonderJson<{ ok: boolean }>("https://ponder.rateloop.xyz/content", 1000, fetchImpl, {
+  const second = fetchPonderJson<{ ok: boolean }>("https://ponder.rateloop.ai/content", 1000, fetchImpl, {
     queue: false,
   });
 

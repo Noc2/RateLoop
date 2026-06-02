@@ -1950,7 +1950,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitContent_UrlTooLong_Reverts() public {
         string memory longUrl =
-            _validLengthUrl(2049, bytes("https://www.rateloop.xyz/api/attachments/images/att_"), bytes(".webp"));
+            _validLengthUrl(2049, bytes("https://www.rateloop.ai/api/attachments/images/att_"), bytes(".webp"));
 
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);

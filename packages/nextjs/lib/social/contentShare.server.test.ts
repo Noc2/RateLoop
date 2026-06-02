@@ -29,7 +29,7 @@ test("getContentShareDataForParam preserves Ponder base path prefixes", async ()
   try {
     const shareData = await getContentShareDataForParam("88", {
       fetchImpl,
-      origin: "https://www.rateloop.xyz",
+      origin: "https://www.rateloop.ai",
     });
 
     assert.equal(requestedUrls[0], "https://ponder.example/api/content/88");

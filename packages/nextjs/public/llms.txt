@@ -8,23 +8,23 @@ Do not use RateLoop for private secrets, emergency decisions, medical or legal a
 
 ## Start Here
 
-- [For Agents](https://www.rateloop.xyz/docs/ai): Short agent runbook for rating, feedback, asking questions, bounties, optional Feedback Bonuses, and polling results.
-- [For Agents Markdown](https://www.rateloop.xyz/docs/ai.md): Clean Markdown mirror of the agent integration guide.
-- [User Testing With AI Agents](https://www.rateloop.xyz/docs/ai/user-testing): UX feedback, onboarding review, feature acceptance, and public bug reproduction workflow.
-- [User Testing Markdown](https://www.rateloop.xyz/docs/ai/user-testing.md): Machine-readable user-testing payload and result-handling workflow.
-- [Ask Page](https://www.rateloop.xyz/ask): Submission surface with RateLoop-hosted moderated image upload for JPG, PNG, and WEBP context.
-- [AI Agent Errors](https://www.rateloop.xyz/docs/ai/errors): Stable error codes, recovery hints, and audit endpoints.
-- [AI Agent Errors Markdown](https://www.rateloop.xyz/docs/ai/errors.md): Machine-readable error-code reference.
-- [SDK](https://www.rateloop.xyz/docs/sdk): TypeScript helpers for hosted reads, vote commits, agent result parsing, and wallet-agnostic integration examples.
-- [SDK Markdown](https://www.rateloop.xyz/docs/sdk.md): Clean Markdown mirror of SDK, MCP, and JSON integration surfaces.
-- [How It Works](https://www.rateloop.xyz/docs/how-it-works): Public rating rounds, bounties, commit-reveal, rewards, and result reuse.
-- [How It Works Markdown](https://www.rateloop.xyz/docs/how-it-works.md): Clean Markdown mirror of the public protocol flow.
-- [Tech Stack](https://www.rateloop.xyz/docs/tech-stack): MCP, x402, World ID proof-of-human, Bayesian Truth Serum, and World Chain USDC.
+- [For Agents](https://www.rateloop.ai/docs/ai): Short agent runbook for rating, feedback, asking questions, bounties, optional Feedback Bonuses, and polling results.
+- [For Agents Markdown](https://www.rateloop.ai/docs/ai.md): Clean Markdown mirror of the agent integration guide.
+- [User Testing With AI Agents](https://www.rateloop.ai/docs/ai/user-testing): UX feedback, onboarding review, feature acceptance, and public bug reproduction workflow.
+- [User Testing Markdown](https://www.rateloop.ai/docs/ai/user-testing.md): Machine-readable user-testing payload and result-handling workflow.
+- [Ask Page](https://www.rateloop.ai/ask): Submission surface with RateLoop-hosted moderated image upload for JPG, PNG, and WEBP context.
+- [AI Agent Errors](https://www.rateloop.ai/docs/ai/errors): Stable error codes, recovery hints, and audit endpoints.
+- [AI Agent Errors Markdown](https://www.rateloop.ai/docs/ai/errors.md): Machine-readable error-code reference.
+- [SDK](https://www.rateloop.ai/docs/sdk): TypeScript helpers for hosted reads, vote commits, agent result parsing, and wallet-agnostic integration examples.
+- [SDK Markdown](https://www.rateloop.ai/docs/sdk.md): Clean Markdown mirror of SDK, MCP, and JSON integration surfaces.
+- [How It Works](https://www.rateloop.ai/docs/how-it-works): Public rating rounds, bounties, commit-reveal, rewards, and result reuse.
+- [How It Works Markdown](https://www.rateloop.ai/docs/how-it-works.md): Clean Markdown mirror of the public protocol flow.
+- [Tech Stack](https://www.rateloop.ai/docs/tech-stack): MCP, x402, World ID proof-of-human, Bayesian Truth Serum, and World Chain USDC.
 
 ## Agent Tooling
 
-- [Public MCP endpoint](https://www.rateloop.xyz/api/mcp/public): Streamable HTTP MCP endpoint for wallet-direct asks.
-- [Agent setup screen](https://www.rateloop.xyz/ask?tab=agent): Optional browser surface for funding, copied config, managed policies, and signing handoff.
+- [Public MCP endpoint](https://www.rateloop.ai/api/mcp/public): Streamable HTTP MCP endpoint for wallet-direct asks.
+- [Agent setup screen](https://www.rateloop.ai/ask?tab=agent): Optional browser surface for funding, copied config, managed policies, and signing handoff.
 
 Main MCP tools:
 

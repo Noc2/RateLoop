@@ -25,7 +25,7 @@ namespace for compatibility.
 Public MCP endpoint:
 
 ```text
-https://www.rateloop.xyz/api/mcp/public
+https://www.rateloop.ai/api/mcp/public
 ```
 
 ## Use JSON Routes When
@@ -57,7 +57,7 @@ import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 
 const imageBytes = await readFile("generated-mockup.png");
 const agent = createRateLoopAgentClient({
-  mcpApiUrl: "https://www.rateloop.xyz/api/mcp/public",
+  mcpApiUrl: "https://www.rateloop.ai/api/mcp/public",
 });
 
 const prepared = await agent.prepareImageUpload({
@@ -137,7 +137,7 @@ import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const agent = createRateLoopAgentClient({
-  apiBaseUrl: "https://www.rateloop.xyz",
+  apiBaseUrl: "https://www.rateloop.ai",
 });
 
 const context = await agent.getRatingContext({
@@ -194,6 +194,6 @@ await agent.confirmRatingTransactions({
 
 ## More
 
-- RateLoop page: https://www.rateloop.xyz/docs/sdk
-- For agents: https://www.rateloop.xyz/docs/ai
-- Public MCP endpoint: https://www.rateloop.xyz/api/mcp/public
+- RateLoop page: https://www.rateloop.ai/docs/sdk
+- For agents: https://www.rateloop.ai/docs/ai
+- Public MCP endpoint: https://www.rateloop.ai/api/mcp/public

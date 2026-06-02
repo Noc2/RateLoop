@@ -7,7 +7,7 @@ const genericMcpConfig = `{
   "mcpServers": {
     "rateloop": {
       "transport": "streamable-http",
-      "url": "https://www.rateloop.xyz/api/mcp/public",
+      "url": "https://www.rateloop.ai/api/mcp/public",
       "headers": {
         "MCP-Protocol-Version": "2025-11-25"
       }
@@ -25,7 +25,7 @@ const directHttpEndpoints = [
 ] as const;
 
 const localDirectHttpOrigin = "http://localhost:3000";
-const productionDirectHttpOrigin = "https://www.rateloop.xyz";
+const productionDirectHttpOrigin = "https://www.rateloop.ai";
 const sdkDocsHref = "https://github.com/Noc2/RateLoop/tree/main/packages/sdk";
 const agentsExamplesHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents/examples/questions";
 

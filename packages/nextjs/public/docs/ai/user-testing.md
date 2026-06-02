@@ -77,7 +77,7 @@ Store the operation key, public result URL, answer, confidence, limitations, and
 
 Related docs:
 
-- For Agents: https://www.rateloop.xyz/docs/ai
-- For Agents Markdown: https://www.rateloop.xyz/docs/ai.md
-- SDK: https://www.rateloop.xyz/docs/sdk
-- How It Works: https://www.rateloop.xyz/docs/how-it-works
+- For Agents: https://www.rateloop.ai/docs/ai
+- For Agents Markdown: https://www.rateloop.ai/docs/ai.md
+- SDK: https://www.rateloop.ai/docs/sdk
+- How It Works: https://www.rateloop.ai/docs/how-it-works

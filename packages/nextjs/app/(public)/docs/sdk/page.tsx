@@ -12,7 +12,7 @@ const agentMcpRatingExample = `import { createRateLoopAgentClient } from "@ratel
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const agent = createRateLoopAgentClient({
-  apiBaseUrl: "https://www.rateloop.xyz",
+  apiBaseUrl: "https://www.rateloop.ai",
 });
 
 const context = await agent.getRatingContext({
@@ -72,7 +72,7 @@ import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 
 const imageBytes = await readFile("generated-mockup.png");
 const agent = createRateLoopAgentClient({
-  mcpApiUrl: "https://www.rateloop.xyz/api/mcp/public",
+  mcpApiUrl: "https://www.rateloop.ai/api/mcp/public",
 });
 
 const prepared = await agent.prepareImageUpload({
@@ -152,7 +152,7 @@ import { buildCommitVoteParams } from "@rateloop/sdk/vote";`}</code>
       <p>Create a client once, then use its hosted read surface wherever your app needs indexed protocol data.</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{`const rateloop = createRateLoopClient({
-  apiBaseUrl: "https://www.rateloop.xyz",
+  apiBaseUrl: "https://www.rateloop.ai",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 

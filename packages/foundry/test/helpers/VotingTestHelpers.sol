@@ -487,7 +487,7 @@ abstract contract ContentSubmissionTestBase {
 
     function _uploadedImageUrl(string memory seed) internal pure returns (string memory) {
         return string.concat(
-            "https://www.rateloop.xyz/api/attachments/images/att_",
+            "https://www.rateloop.ai/api/attachments/images/att_",
             Strings.toHexString(uint256(keccak256(bytes(seed)))),
             ".webp"
         );

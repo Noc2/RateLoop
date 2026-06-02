@@ -30,7 +30,7 @@ const sweepResult = {
 };
 
 function makeRequest(path: string, headers: Record<string, string> = {}) {
-  return new NextRequest(`https://rateloop.xyz${path}`, {
+  return new NextRequest(`https://rateloop.ai${path}`, {
     method: "POST",
     headers,
   });
