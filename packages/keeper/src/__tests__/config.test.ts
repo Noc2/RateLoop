@@ -62,6 +62,25 @@ describe("keeper config", () => {
     expect(config.chainName).toBe("Foundry");
     expect(config.cleanupBatchSize).toBe(25);
     expect(config.frontendFees.enabled).toBe(false);
+    expect(config.persistence.databaseUrl).toBeNull();
+  });
+
+  it("loads an optional keeper persistence database URL", async () => {
+    const { config } = await loadKeeperConfig({
+      KEEPER_DATABASE_URL: "postgresql://postgres:postgres@postgres.railway.internal:5432/railway",
+    });
+
+    expect(config.persistence.databaseUrl).toBe(
+      "postgresql://postgres:postgres@postgres.railway.internal:5432/railway",
+    );
+  });
+
+  it("rejects invalid keeper persistence database URLs", async () => {
+    await expect(
+      loadKeeperConfig({
+        KEEPER_DATABASE_URL: "https://postgres.example.com/railway",
+      }),
+    ).rejects.toThrow("KEEPER_DATABASE_URL must use the postgres:// or postgresql:// scheme");
   });
 
   it("ignores stale CHAIN_NAME overrides for known chain ids", async () => {

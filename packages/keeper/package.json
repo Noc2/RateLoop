@@ -14,11 +14,13 @@
     "@rateloop/contracts": "workspace:*",
     "@rateloop/node-utils": "workspace:*",
     "dotenv": "^16.4.5",
+    "pg": "^8.20.0",
     "tlock-js": "^0.9.0",
     "viem": "2.39.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.7",
+    "@types/pg": "^8.15.6",
     "tsx": "^4.19.0",
     "typescript": "~5.8.2",
     "vitest": "^4.0.18"

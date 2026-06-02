@@ -10,9 +10,16 @@ import type { Logger } from "./logger.js";
 import { config } from "./config.js";
 import {
   buildConfiguredCorrelationSnapshotArtifactForCandidates,
+  correlationSnapshotCandidateFingerprint,
   loadConfiguredCorrelationSnapshotCandidates,
+  restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson,
   type CorrelationRoundCandidate,
 } from "./correlation-artifact-builder.js";
+import {
+  readCachedCorrelationArtifact,
+  runWithCorrelationSnapshotPublishLock,
+  writeCachedCorrelationArtifact,
+} from "./keeper-state.js";
 import { writeContractAndConfirm } from "./keeper.js";
 import { getRevertReason } from "./revert-utils.js";
 
@@ -228,6 +235,24 @@ export async function publishConfiguredCorrelationSnapshots(
   account: Account,
   logger: Logger,
 ): Promise<CorrelationSnapshotPublisherResult> {
+  return runWithCorrelationSnapshotPublishLock(logger, emptyResult(), () =>
+    publishConfiguredCorrelationSnapshotsUnlocked(
+      publicClient,
+      walletClient,
+      chain,
+      account,
+      logger,
+    )
+  );
+}
+
+async function publishConfiguredCorrelationSnapshotsUnlocked(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  chain: Chain,
+  account: Account,
+  logger: Logger,
+): Promise<CorrelationSnapshotPublisherResult> {
   if (!config.correlationSnapshots.enabled) {
     return emptyResult();
   }
@@ -277,10 +302,56 @@ async function publishAutomaticCorrelationSnapshots(
     return preflight.result;
   }
 
-  const built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
-    candidates,
-    logger,
-  );
+  const fingerprint = correlationSnapshotCandidateFingerprint(candidates);
+  const cachedArtifact = await readCachedCorrelationArtifact(fingerprint, logger);
+  let built = cachedArtifact
+    ? await restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson(
+        cachedArtifact.canonicalJson,
+      )
+    : null;
+  if (
+    cachedArtifact &&
+    built?.artifactHash &&
+    built.artifactHash !== cachedArtifact.artifactHash
+  ) {
+    logger.warn("Ignoring cached automatic correlation snapshot artifact with mismatched hash", {
+      candidateFingerprint: fingerprint,
+      cachedArtifactHash: cachedArtifact.artifactHash,
+      actualArtifactHash: built.artifactHash,
+    });
+    built = null;
+  }
+  if (cachedArtifact && built) {
+    logger.debug("Using cached automatic correlation snapshot artifact", {
+      candidateFingerprint: fingerprint,
+      artifactHash: built.artifactHash,
+      roundSnapshotCount: built.roundSnapshotCount,
+      epochCount: built.epochCount,
+      canonicalBytes: built.canonicalBytes,
+    });
+  }
+  if (!built) {
+    built = await buildConfiguredCorrelationSnapshotArtifactForCandidates(
+      candidates,
+      logger,
+    );
+  }
+  if (
+    (!cachedArtifact || cachedArtifact.artifactHash !== built.artifactHash) &&
+    built.artifactHash &&
+    built.canonicalJson
+  ) {
+    await writeCachedCorrelationArtifact({
+      fingerprint,
+      artifactHash: built.artifactHash,
+      canonicalJson: built.canonicalJson,
+      candidateCount: candidates.length,
+      roundSnapshotCount: built.roundSnapshotCount,
+      epochCount: built.epochCount,
+      logger,
+    });
+  }
+
   return publishCorrelationSnapshotArtifact(
     built.artifact,
     publicClient,

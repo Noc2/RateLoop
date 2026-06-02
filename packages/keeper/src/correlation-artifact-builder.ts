@@ -16,7 +16,12 @@ import {
   type Hex,
 } from "viem";
 import { config } from "./config.js";
-import { canonicalJson, storeCorrelationArtifact } from "./correlation-artifact-storage.js";
+import {
+  canonicalJson,
+  materializeCorrelationArtifactCanonicalJson,
+  storeCorrelationArtifact,
+  type StoredCorrelationArtifact,
+} from "./correlation-artifact-storage.js";
 import type {
   CorrelationEpochArtifact,
   CorrelationSnapshotArtifactFile,
@@ -86,6 +91,7 @@ const VOTE_PAGE_SIZE = 1_000;
 const PONDER_FETCH_TIMEOUT_MS = 5_000;
 const PONDER_JSON_MAX_BYTES = 5_000_000;
 const MAX_VOTE_PAGES_PER_ROUND = 50;
+const CANDIDATE_FINGERPRINT_VERSION = "rateloop-correlation-candidates-v1";
 const loggedAutomaticArtifactHashes = new Set<string>();
 
 export async function buildConfiguredCorrelationSnapshotArtifact(
@@ -208,25 +214,12 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
     roundPayoutSnapshots: publicRounds,
   });
 
-  const correlationEpochs: CorrelationEpochArtifact[] = publicEpochs.map((epoch) => ({
-    ...epoch,
-    artifactHash: stored.artifactHash,
-    artifactURI: stored.artifactURI,
-  }));
-  const roundPayoutSnapshots: RoundPayoutSnapshotArtifact[] = publicRounds.map((snapshot) => ({
-    domain: snapshot.domain,
-    rewardPoolId: snapshot.rewardPoolId,
-    contentId: snapshot.contentId,
-    roundId: snapshot.roundId,
-    correlationEpochId: snapshot.correlationEpochId,
-    rawEligibleVoters: snapshot.rawEligibleVoters,
-    effectiveParticipantUnits: snapshot.effectiveParticipantUnits,
-    totalClaimWeight: snapshot.totalClaimWeight,
-    weightRoot: snapshot.weightRoot,
-    reasonRoot: snapshot.reasonRoot,
-    artifactHash: stored.artifactHash,
-    artifactURI: stored.artifactURI,
-  }));
+  const artifact = buildSnapshotArtifactFromStoredPublicArtifact(
+    { correlationEpochs: publicEpochs, roundPayoutSnapshots: publicRounds },
+    stored,
+  );
+  const correlationEpochs = artifact.correlationEpochs ?? [];
+  const roundPayoutSnapshots = artifact.roundPayoutSnapshots ?? [];
 
   const artifactUriSummary = summarizeArtifactUri(stored.artifactURI);
   const logData = {
@@ -245,7 +238,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
   }
 
   return {
-    artifact: { correlationEpochs, roundPayoutSnapshots },
+    artifact,
     artifactHash: stored.artifactHash,
     artifactURI: stored.artifactURI,
     canonicalJson: stored.canonicalJson,
@@ -254,6 +247,91 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
     roundSnapshotCount: roundPayoutSnapshots.length,
     epochCount: correlationEpochs.length,
   };
+}
+
+export function correlationSnapshotCandidateFingerprint(
+  candidates: readonly CorrelationRoundCandidate[],
+): `0x${string}` {
+  const params = defaultCorrelationScoringParams();
+  const normalizedCandidates = candidates
+    .map((candidate) => ({
+      rewardPoolId: candidate.rewardPoolId.toString(),
+      contentId: candidate.contentId.toString(),
+      roundId: candidate.roundId.toString(),
+    }))
+    .sort((left, right) => {
+      const roundCompare = bigintCompare(BigInt(left.roundId), BigInt(right.roundId));
+      if (roundCompare !== 0) return roundCompare;
+      const rewardPoolCompare = bigintCompare(
+        BigInt(left.rewardPoolId),
+        BigInt(right.rewardPoolId),
+      );
+      if (rewardPoolCompare !== 0) return rewardPoolCompare;
+      return bigintCompare(BigInt(left.contentId), BigInt(right.contentId));
+    });
+
+  return keccak256(toBytes(canonicalJson({
+    version: CANDIDATE_FINGERPRINT_VERSION,
+    chainId: config.chainId,
+    oracleAddress: config.contracts.clusterPayoutOracle,
+    scorerVersion: params.scorerVersion,
+    parameterHash: correlationParameterHash(params),
+    candidates: normalizedCandidates,
+  })));
+}
+
+export async function restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson(
+  canonical: string,
+): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
+  const stored = await materializeCorrelationArtifactCanonicalJson(canonical);
+  const publicArtifact = JSON.parse(canonical) as PublicCorrelationArtifact;
+  const artifact = buildSnapshotArtifactFromStoredPublicArtifact(publicArtifact, stored);
+  return {
+    artifact,
+    artifactHash: stored.artifactHash,
+    artifactURI: stored.artifactURI,
+    canonicalJson: stored.canonicalJson,
+    canonicalBytes: Buffer.byteLength(stored.canonicalJson),
+    candidateCount: 0,
+    roundSnapshotCount: artifact.roundPayoutSnapshots?.length ?? 0,
+    epochCount: artifact.correlationEpochs?.length ?? 0,
+  };
+}
+
+interface PublicCorrelationArtifact {
+  correlationEpochs?: Array<Omit<CorrelationEpochArtifact, "artifactHash" | "artifactURI">>;
+  roundPayoutSnapshots?: PublicRoundPayoutSnapshot[];
+}
+
+function buildSnapshotArtifactFromStoredPublicArtifact(
+  publicArtifact: PublicCorrelationArtifact,
+  stored: StoredCorrelationArtifact,
+): CorrelationSnapshotArtifactFile {
+  const correlationEpochs: CorrelationEpochArtifact[] = (
+    publicArtifact.correlationEpochs ?? []
+  ).map((epoch) => ({
+    ...epoch,
+    artifactHash: stored.artifactHash,
+    artifactURI: stored.artifactURI,
+  }));
+  const roundPayoutSnapshots: RoundPayoutSnapshotArtifact[] = (
+    publicArtifact.roundPayoutSnapshots ?? []
+  ).map((snapshot) => ({
+    domain: snapshot.domain,
+    rewardPoolId: snapshot.rewardPoolId,
+    contentId: snapshot.contentId,
+    roundId: snapshot.roundId,
+    correlationEpochId: snapshot.correlationEpochId,
+    rawEligibleVoters: snapshot.rawEligibleVoters,
+    effectiveParticipantUnits: snapshot.effectiveParticipantUnits,
+    totalClaimWeight: snapshot.totalClaimWeight,
+    weightRoot: snapshot.weightRoot,
+    reasonRoot: snapshot.reasonRoot,
+    artifactHash: stored.artifactHash,
+    artifactURI: stored.artifactURI,
+  }));
+
+  return { correlationEpochs, roundPayoutSnapshots };
 }
 
 function summarizeArtifactUri(artifactURI: string) {

@@ -20,6 +20,7 @@ import {
 import { resolveRounds, validateKeeperContracts } from "./keeper.js";
 import { claimConfiguredFrontendFees } from "./frontend-fees.js";
 import { publishConfiguredCorrelationSnapshots } from "./correlation-snapshots.js";
+import { closeKeeperState } from "./keeper-state.js";
 import {
   startMetricsServer,
   setHealthThreshold,
@@ -41,6 +42,7 @@ async function main() {
     contentRegistry: config.contracts.contentRegistry,
     intervalMs: config.intervalMs,
     metricsEnabled: config.metricsEnabled,
+    persistenceEnabled: Boolean(config.persistence?.databaseUrl),
     frontendFeesEnabled: config.frontendFees.enabled,
     frontendFeeAddress: config.frontendFees.frontendAddress ?? account.address,
     correlationSnapshotsEnabled: config.correlationSnapshots.enabled,
@@ -223,6 +225,7 @@ async function main() {
     }
 
     metricsServer?.close();
+    await closeKeeperState();
     process.exit(0);
   }
 

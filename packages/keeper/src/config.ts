@@ -93,6 +93,29 @@ function readOptionalUrlEnv(
   return value.replace(/\/+$/, "");
 }
 
+function readOptionalPostgresUrlEnv(
+  name: string,
+  errors: string[],
+): string | undefined {
+  const value = readEnv(name);
+  if (!value) return undefined;
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
+      errors.push(`${name} must use the postgres:// or postgresql:// scheme`);
+    }
+    if (!url.hostname || !url.pathname || url.pathname === "/") {
+      errors.push(`${name} must include a host and database name`);
+    }
+  } catch {
+    errors.push(`${name} must be a valid PostgreSQL URL when provided`);
+    return undefined;
+  }
+
+  return value;
+}
+
 function readEnumEnv<const T extends readonly string[]>(
   name: string,
   values: T,
@@ -354,6 +377,10 @@ function loadConfig() {
     "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
     errors,
   );
+  const keeperDatabaseUrl = readOptionalPostgresUrlEnv(
+    "KEEPER_DATABASE_URL",
+    errors,
+  );
   const ponderBaseUrl = readOptionalUrlEnv("PONDER_BASE_URL", errors, {
     rejectLocalhostInProduction: true,
     requireHttpsInProduction: true,
@@ -451,6 +478,9 @@ function loadConfig() {
     // Keeper behavior
     intervalMs: readPositiveIntEnv("KEEPER_INTERVAL_MS", "30000", errors),
     ponderBaseUrl,
+    persistence: {
+      databaseUrl: keeperDatabaseUrl ?? null,
+    },
     startupJitterMs: readNonNegativeIntEnv(
       "KEEPER_STARTUP_JITTER_MS",
       "0",
