@@ -25,6 +25,32 @@ function readOptionalUrl(name: string): string | undefined {
   }
 }
 
+function enforceTokenUrlPolicy(
+  name: string,
+  value: string | undefined,
+  token: string | undefined,
+) {
+  if (!token || !value) return;
+
+  const url = new URL(value);
+  if (url.protocol === "https:") return;
+  if (url.protocol === "http:" && isLoopbackHostname(url.hostname)) return;
+
+  throw new Error(
+    `${name} must use HTTPS when RATELOOP_MCP_TOKEN is set; localhost HTTP is only allowed for local development.`,
+  );
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]"
+  );
+}
+
 function readOptionalAddress(name: string): Address | undefined {
   const value = readEnv(name);
   if (!value) return undefined;
@@ -35,11 +61,18 @@ function readOptionalAddress(name: string): Address | undefined {
 }
 
 export function loadAgentsRuntimeConfig(): AgentsRuntimeConfig {
+  const apiBaseUrl = readOptionalUrl("RATELOOP_API_BASE_URL");
+  const mcpAccessToken = readEnv("RATELOOP_MCP_TOKEN");
+  const mcpApiUrl = readOptionalUrl("RATELOOP_MCP_API_URL");
+
+  enforceTokenUrlPolicy("RATELOOP_API_BASE_URL", apiBaseUrl, mcpAccessToken);
+  enforceTokenUrlPolicy("RATELOOP_MCP_API_URL", mcpApiUrl, mcpAccessToken);
+
   return {
     agentWalletAddress: readOptionalAddress("RATELOOP_AGENT_WALLET_ADDRESS"),
-    apiBaseUrl: readOptionalUrl("RATELOOP_API_BASE_URL"),
-    mcpAccessToken: readEnv("RATELOOP_MCP_TOKEN"),
-    mcpApiUrl: readOptionalUrl("RATELOOP_MCP_API_URL"),
+    apiBaseUrl,
+    mcpAccessToken,
+    mcpApiUrl,
     mcpProtocolVersion: readEnv("RATELOOP_MCP_PROTOCOL_VERSION"),
   };
 }

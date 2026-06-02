@@ -109,6 +109,46 @@ test("agent MCP helpers call tools/call with protocol and bearer headers", async
   assert.equal(quote.clientRequestId, "ask-1");
 });
 
+test("agent config rejects token-bearing remote HTTP URLs", () => {
+  assert.throws(
+    () =>
+      createRateLoopAgentClient({
+        apiBaseUrl: "http://rateloop.example",
+        mcpAccessToken: "agent-token",
+      }),
+    /apiBaseUrl must use HTTPS/,
+  );
+  assert.throws(
+    () =>
+      createRateLoopAgentClient({
+        mcpApiUrl: "http://rateloop.example/api/mcp",
+        mcpAccessToken: "agent-token",
+      }),
+    /mcpApiUrl must use HTTPS/,
+  );
+});
+
+test("agent config allows token-bearing localhost HTTP URLs", () => {
+  for (const url of [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://[::1]:3000",
+  ]) {
+    assert.doesNotThrow(() =>
+      createRateLoopAgentClient({
+        apiBaseUrl: url,
+        mcpAccessToken: "agent-token",
+      }),
+    );
+    assert.doesNotThrow(() =>
+      createRateLoopAgentClient({
+        mcpApiUrl: `${url}/api/mcp`,
+        mcpAccessToken: "agent-token",
+      }),
+    );
+  }
+});
+
 test("image upload SDK helpers call the MCP image tools", async () => {
   const calls: any[] = [];
   const agent = createRateLoopAgentClient({
