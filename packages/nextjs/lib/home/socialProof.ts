@@ -57,6 +57,17 @@ export function buildLandingPageSocialProofItems(stats: LandingSocialProofStats)
 
   return [
     {
+      // L-7: We sum the live verified-credential count with the legacy contributor count.
+      // This can over-count if a legacy contributor (identified by EOA address in
+      // `legacyClaimManifest.entries[].address`) ALSO re-verifies as a human on the current
+      // contract (`raterHumanCredential`, keyed by the same `rater` address). Those two sets are
+      // NOT guaranteed disjoint — nothing stops a legacy address from verifying again.
+      //
+      // We accept this small headline over-count on purpose: the only inputs available here are
+      // scalar counts, not address lists. `totalVerifiedHumans` comes from a `count(*)` in the
+      // ponder stats route (data-routes.ts), which does not expose the underlying addresses, so a
+      // true union-dedupe is not possible without changing the API shape and shipping the full
+      // legacy + live address sets to the client. Treat this figure as an upper-bound display stat.
       value: (totalVerifiedHumans + LEGACY_VERIFIED_HUMAN_COUNT).toLocaleString("en-US"),
       label: "Verified Humans",
     },
