@@ -116,7 +116,8 @@ const agentBountyInputSchema = {
       type: ["integer", "string"],
     },
     feedbackWindowSeconds: {
-      description: "Paid feedback window duration after the first private round starts.",
+      description:
+        "Requested paid-feedback close window after the first private round starts. Feedback Bonus awards remain payable for at least 24 hours after settlement.",
       type: ["integer", "string"],
     },
     bountyEligibility: {
@@ -154,7 +155,7 @@ const agentFeedbackBonusInputSchema = {
     },
     feedbackClosesAt: {
       description:
-        "Unix timestamp in seconds when feedback bonus awards close. Defaults to bounty.bountyStartBy + bounty.feedbackWindowSeconds.",
+        "Requested Unix timestamp in seconds for the feedback bonus close. The effective award deadline is at least 24 hours after settlement.",
       type: ["integer", "string"],
     },
   },

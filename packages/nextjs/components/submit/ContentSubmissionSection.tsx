@@ -3390,7 +3390,7 @@ export function ContentSubmissionSection() {
               <div>
                 <p className="flex items-center gap-1.5 text-base text-base-content/70">
                   Feedback window
-                  <InfoTooltip text="The optional feedback bonus closes no later than the selected start-by deadline plus the feedback window." />
+                  <InfoTooltip text="Sets the requested feedback close. Awarders still get at least 24 hours after settlement to decide payouts." />
                 </p>
                 <p className="mt-1 text-base font-medium text-base-content">{feedbackBonusWindowLabel}</p>
               </div>
@@ -3492,8 +3492,8 @@ export function ContentSubmissionSection() {
 
           <div>
             <p className="flex items-center gap-1.5 text-base text-base-content/70">
-              Feedback closes
-              <InfoTooltip text="The optional feedback bonus uses a fixed close time based on the latest possible bounty eligibility close." />
+              Requested feedback close
+              <InfoTooltip text="The effective award deadline is at least 24 hours after the round settles, even when this requested close is earlier." />
             </p>
             <p className="mt-1 text-base font-medium text-base-content">{feedbackBonusWindowLabel}</p>
           </div>

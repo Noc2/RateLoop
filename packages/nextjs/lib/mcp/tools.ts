@@ -627,7 +627,9 @@ function parseOptionalFeedbackBonus(
     throw new McpToolError("feedbackBonus.feedbackClosesAt must be greater than zero.");
   }
   if (feedbackClosesAt > feedbackWindowClosesAt) {
-    throw new McpToolError("feedbackBonus.feedbackClosesAt cannot be after the feedback window.");
+    throw new McpToolError(
+      "feedbackBonus.feedbackClosesAt cannot be after the requested feedback window; the award deadline still extends at least 24 hours after settlement.",
+    );
   }
 
   const awarder = typeof value.awarder === "string" && value.awarder.trim() ? value.awarder.trim() : walletAddress;

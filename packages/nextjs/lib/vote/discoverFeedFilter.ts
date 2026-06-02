@@ -150,7 +150,7 @@ export function getActiveFeedbackClosesAt(item: ContentItem, nowSeconds = Math.f
   const feedbackSummary = item.feedbackBonusSummary;
   if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n) return null;
 
-  const closesAt = feedbackSummary.nextFeedbackClosesAt ?? 0n;
+  const closesAt = feedbackSummary.nextFeedbackAwardDeadline ?? feedbackSummary.nextFeedbackClosesAt ?? 0n;
   if (closesAt <= 0n || closesAt <= BigInt(nowSeconds)) return null;
 
   return closesAt;
@@ -160,13 +160,13 @@ export function hasActiveFeedbackBonus(item: ContentItem, nowSeconds = Math.floo
   const feedbackSummary = item.feedbackBonusSummary;
   if (!feedbackSummary || feedbackSummary.totalRemaining <= 0n) return false;
 
-  const closesAt = feedbackSummary.nextFeedbackClosesAt ?? 0n;
+  const closesAt = feedbackSummary.nextFeedbackAwardDeadline ?? feedbackSummary.nextFeedbackClosesAt ?? 0n;
   if (closesAt > 0n && closesAt <= BigInt(nowSeconds)) return false;
 
   return Boolean(
     feedbackSummary.hasActiveFeedbackBonus ||
       (feedbackSummary.activePoolCount ?? 0) > 0 ||
-      (feedbackSummary.nextFeedbackClosesAt && feedbackSummary.nextFeedbackClosesAt > BigInt(nowSeconds)),
+      closesAt > BigInt(nowSeconds),
   );
 }
 

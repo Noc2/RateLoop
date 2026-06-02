@@ -139,6 +139,7 @@ export interface ContentItem {
     expiredPoolCount?: number;
     awardCount: number;
     hasActiveFeedbackBonus?: boolean;
+    nextFeedbackAwardDeadline?: bigint | null;
     nextFeedbackClosesAt?: bigint | null;
   } | null;
 }
@@ -478,6 +479,7 @@ export function mapContentItem(
       expiredPoolCount?: number | null;
       awardCount?: number | null;
       hasActiveFeedbackBonus?: boolean | null;
+      nextFeedbackAwardDeadline?: string | number | bigint | null;
       nextFeedbackClosesAt?: string | number | bigint | null;
     } | null;
   },
@@ -653,11 +655,22 @@ export function mapContentItem(
           awardCount: item.feedbackBonusSummary.awardCount ?? 0,
           hasActiveFeedbackBonus:
             item.feedbackBonusSummary.hasActiveFeedbackBonus ?? (item.feedbackBonusSummary.activePoolCount ?? 0) > 0,
+          nextFeedbackAwardDeadline:
+            item.feedbackBonusSummary.nextFeedbackAwardDeadline === null ||
+            item.feedbackBonusSummary.nextFeedbackAwardDeadline === undefined
+              ? item.feedbackBonusSummary.nextFeedbackClosesAt === null ||
+                item.feedbackBonusSummary.nextFeedbackClosesAt === undefined
+                ? null
+                : BigInt(item.feedbackBonusSummary.nextFeedbackClosesAt)
+              : BigInt(item.feedbackBonusSummary.nextFeedbackAwardDeadline),
           nextFeedbackClosesAt:
-            item.feedbackBonusSummary.nextFeedbackClosesAt === null ||
-            item.feedbackBonusSummary.nextFeedbackClosesAt === undefined
-              ? null
-              : BigInt(item.feedbackBonusSummary.nextFeedbackClosesAt),
+            item.feedbackBonusSummary.nextFeedbackAwardDeadline === null ||
+            item.feedbackBonusSummary.nextFeedbackAwardDeadline === undefined
+              ? item.feedbackBonusSummary.nextFeedbackClosesAt === null ||
+                item.feedbackBonusSummary.nextFeedbackClosesAt === undefined
+                ? null
+                : BigInt(item.feedbackBonusSummary.nextFeedbackClosesAt)
+              : BigInt(item.feedbackBonusSummary.nextFeedbackAwardDeadline),
         }
       : null,
   };

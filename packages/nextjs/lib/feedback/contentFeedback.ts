@@ -707,6 +707,7 @@ function mapFeedbackBonusPool(row: PonderFeedbackBonusPool): ContentFeedbackBonu
     remainingAmount: row.remainingAmount,
     awardedAmount: row.awardedAmount,
     feedbackClosesAt: row.feedbackClosesAt,
+    awardDeadline: row.awardDeadline,
     frontendFeeBps: Number(row.frontendFeeBps) || 0,
   };
 }

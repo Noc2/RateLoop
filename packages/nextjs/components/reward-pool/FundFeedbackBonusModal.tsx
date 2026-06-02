@@ -51,7 +51,7 @@ type FundFeedbackBonusModalProps = {
 const FRONTEND_FEE_PERCENT = DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS / 100;
 const FEEDBACK_BONUS_AMOUNT_TOOLTIP = `Paid in LREP or USDC on World Chain. Awarded feedback reserves ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to selected revealed raters after settlement.`;
 const FEEDBACK_WINDOW_TOOLTIP =
-  "Feedback can earn this bonus only inside the selected window. The bonus is attached to the current active round.";
+  "Sets the requested feedback close for this active round. Awarders still get at least 24 hours after the round settles to decide payouts.";
 
 function FeedbackBonusFieldLabel({
   htmlFor,
@@ -331,7 +331,8 @@ export function FundFeedbackBonusModal({ contentId, roundId, title, onClose, onC
 
         <h3 className="mb-3 px-9 text-balance break-words text-center text-lg font-semibold leading-tight">{title}</h3>
         <p className="mt-5 rounded-lg bg-info/10 p-3 text-sm text-base-content/75">
-          Feedback Bonuses reward useful written feedback from revealed raters after this round settles.
+          Feedback Bonuses reward useful written feedback from revealed raters after this round settles. The award
+          decision window stays open for at least 24 hours after settlement.
         </p>
 
         <div className="mt-5 grid gap-4">

@@ -57,12 +57,17 @@ function hasHexFeedbackHash(item: ContentFeedbackItem) {
   return typeof item.feedbackHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(item.feedbackHash);
 }
 
+function isOnchainRevealedFeedback(item: ContentFeedbackItem) {
+  return item.visibilityStatus === "public_onchain" || String(item.id).startsWith("protocol:");
+}
+
 function FeedbackItem({
   item,
   awardablePoolCount,
   canReveal,
   isAwarded,
   isRevealing,
+  needsOnchainReveal,
   onAward,
   onReveal,
 }: {
@@ -71,6 +76,7 @@ function FeedbackItem({
   canReveal?: boolean;
   isAwarded?: boolean;
   isRevealing?: boolean;
+  needsOnchainReveal?: boolean;
   onAward?: (item: ContentFeedbackItem) => void;
   onReveal?: (item: ContentFeedbackItem) => void;
 }) {
@@ -116,6 +122,20 @@ function FeedbackItem({
                 aria-label="Feedback Bonus awarded"
               >
                 Awarded
+              </span>
+            </TooltipAnchor>
+          ) : needsOnchainReveal ? (
+            <TooltipAnchor
+              text="This feedback must be published on-chain by its author before it can receive a Feedback Bonus"
+              position="top"
+              className="rounded-full"
+            >
+              <span
+                tabIndex={0}
+                className="rounded-full bg-base-content/[0.07] px-2 py-1 text-[0.66rem] font-semibold leading-none text-base-content/58"
+                aria-label="Publish on-chain before awarding"
+              >
+                Publish first
               </span>
             </TooltipAnchor>
           ) : null}
@@ -235,7 +255,7 @@ export function ContentFeedbackPanel({
     });
   }, [items]);
   const awardablePools = feedback.awardableFeedbackBonusPools ?? [];
-  const getAwardablePoolsForFeedback = (feedbackItem: ContentFeedbackItem): ContentFeedbackBonusPool[] => {
+  const getOpenPoolsForFeedback = (feedbackItem: ContentFeedbackItem): ContentFeedbackBonusPool[] => {
     if (!feedbackItem.isPublic || !hasHexFeedbackHash(feedbackItem) || !feedbackItem.roundId) return [];
 
     const awardedPoolIds = new Set((feedbackItem.feedbackBonusAwards ?? []).map(award => award.poolId));
@@ -247,6 +267,12 @@ export function ContentFeedbackPanel({
         return false;
       }
     });
+  };
+  const getAwardablePoolsForFeedback = (feedbackItem: ContentFeedbackItem): ContentFeedbackBonusPool[] => {
+    return isOnchainRevealedFeedback(feedbackItem) ? getOpenPoolsForFeedback(feedbackItem) : [];
+  };
+  const needsOnchainRevealBeforeAward = (feedbackItem: ContentFeedbackItem): boolean => {
+    return !isOnchainRevealedFeedback(feedbackItem) && getOpenPoolsForFeedback(feedbackItem).length > 0;
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -390,9 +416,16 @@ export function ContentFeedbackPanel({
                 key={feedbackItem.id}
                 item={feedbackItem}
                 awardablePoolCount={getAwardablePoolsForFeedback(feedbackItem).length}
-                canReveal={feedback.settlementComplete && feedbackItem.isOwn && !feedbackItem.isPublic}
+                canReveal={
+                  feedback.settlementComplete &&
+                  feedbackItem.isOwn &&
+                  !isOnchainRevealedFeedback(feedbackItem) &&
+                  hasHexFeedbackHash(feedbackItem) &&
+                  Boolean(feedbackItem.clientNonce)
+                }
                 isAwarded={(feedbackItem.feedbackBonusAwards ?? []).length > 0}
                 isRevealing={isRevealing}
+                needsOnchainReveal={needsOnchainRevealBeforeAward(feedbackItem)}
                 onAward={setAwardTarget}
                 onReveal={handleRevealFeedback}
               />

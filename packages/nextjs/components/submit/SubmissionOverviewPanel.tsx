@@ -21,7 +21,7 @@ import { formatRatingScoreOutOfTen } from "~~/lib/ui/ratingDisplay";
 
 const PAGE_SIZE = 25;
 const SUBMISSION_TABLE_SCROLL_CLASS = "overflow-x-auto xl:overflow-x-hidden";
-const SUBMISSION_TABLE_CLASS = "table w-full min-w-[980px] xl:min-w-full xl:table-fixed";
+const SUBMISSION_TABLE_CLASS = "table w-full min-w-[1040px] xl:min-w-full xl:table-fixed";
 
 function normalizeDateMs(value: string | null | undefined): number | null {
   if (!value) return null;
@@ -165,7 +165,7 @@ function SubmissionOverviewSkeleton() {
             <th>Status</th>
             <th className="text-right">Bounty</th>
             <th>Deadline</th>
-            <th className="text-right">Feedback</th>
+            <th className="text-right">Feedback Bonus</th>
             <th className="text-right">Votes</th>
             <th className="text-right">Rounds</th>
             <th className="text-right">Rating</th>
@@ -254,7 +254,7 @@ export function SubmissionOverviewPanel() {
                   <th>Status</th>
                   <th className="text-right">Bounty</th>
                   <th>Deadline</th>
-                  <th className="text-right">Feedback</th>
+                  <th className="text-right">Feedback Bonus</th>
                   <th className="text-right">Votes</th>
                   <th className="text-right">Rounds</th>
                   <th className="text-right">Rating</th>

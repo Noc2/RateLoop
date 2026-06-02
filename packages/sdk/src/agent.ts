@@ -61,6 +61,7 @@ export interface RateLoopAgentFeedbackBonus {
   amount: string | number | bigint;
   asset?: "USDC" | string;
   awarder?: `0x${string}` | string;
+  /** Requested feedback close. Awards remain payable until at least 24h after settlement. */
   feedbackClosesAt?: string | number | bigint;
   [key: string]: unknown;
 }
@@ -283,7 +284,9 @@ export interface RateLoopAgentFeedbackBonusState {
   asset?: string;
   awarder?: string;
   confirmTool?: string;
+  /** Requested feedback close; the effective award deadline is at least 24h after settlement. */
   feedbackClosesAt?: string;
+  awardDeadline?: string;
   poolId?: string | null;
   status?:
     | "pending_question_confirmation"

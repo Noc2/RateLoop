@@ -41,8 +41,22 @@ function isHexHash(value: string | null | undefined): value is `0x${string}` {
   return typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
 }
 
+function formatAwardDeadline(pool: ContentFeedbackBonusPool) {
+  try {
+    const timestamp = BigInt(pool.awardDeadline || pool.feedbackClosesAt);
+    if (timestamp <= 0n) return "award window open";
+    return `award by ${new Intl.DateTimeFormat(undefined, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(Number(timestamp) * 1000))}`;
+  } catch {
+    return "award window open";
+  }
+}
+
 function getPoolLabel(pool: ContentFeedbackBonusPool) {
-  return `Round ${pool.roundId} · ${formatFeedbackBonusAmount(pool.remainingAmount, getPoolAsset(pool))} left`;
+  return `Round ${pool.roundId} · ${formatFeedbackBonusAmount(pool.remainingAmount, getPoolAsset(pool))} left · ${formatAwardDeadline(pool)}`;
 }
 
 function getPoolAsset(pool: ContentFeedbackBonusPool): FeedbackBonusAsset {

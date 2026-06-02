@@ -86,6 +86,7 @@ export interface ContentFeedbackBonusPool {
   remainingAmount: string;
   awardedAmount: string;
   feedbackClosesAt: string;
+  awardDeadline: string;
   frontendFeeBps: number;
 }
 

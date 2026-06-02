@@ -415,6 +415,7 @@ export interface PonderFeedbackBonusSummary {
   totalForfeitedAmount: string;
   awardCount: number;
   hasActiveFeedbackBonus?: boolean;
+  nextFeedbackAwardDeadline?: string | null;
   nextFeedbackClosesAt?: string | null;
 }
 

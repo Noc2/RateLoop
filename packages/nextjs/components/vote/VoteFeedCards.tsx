@@ -48,7 +48,7 @@ const CONTENT_INTENT_INTERACTIVE_SELECTOR =
 const BOUNTY_DEADLINE_TOOLTIP_TEXT =
   "Bounty eligibility ends at this time. Expired bounties move to the Expired filter.";
 const FEEDBACK_DEADLINE_TOOLTIP_TEXT =
-  "Paid feedback is only active inside this window. The question remains visible after feedback closes.";
+  "Feedback Bonus awards remain available until this deadline. The question remains visible after awards close.";
 
 function getSourceLabel(url: string) {
   if (!url) return "";
@@ -127,14 +127,12 @@ function getRewardDeadlineChips(item: ContentItem) {
 
   if (feedbackSummary && hasActiveFeedback) {
     chips.push({
-      label: activeFeedbackClosesAt
-        ? formatDeadlineLabel("Feedback closes", activeFeedbackClosesAt)
-        : "Feedback active",
+      label: activeFeedbackClosesAt ? formatDeadlineLabel("Award by", activeFeedbackClosesAt) : "Feedback Bonus active",
       tone: "active",
       tooltip: FEEDBACK_DEADLINE_TOOLTIP_TEXT,
     });
   } else if (isFeedbackClosed) {
-    chips.push({ label: "Feedback closed", tone: "ended" });
+    chips.push({ label: "Feedback Bonus closed", tone: "ended" });
   }
 
   return chips;
