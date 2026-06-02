@@ -122,6 +122,84 @@ afterEach(() => {
 });
 
 describe("correlation snapshot publisher", () => {
+  it("does not build automatic artifacts when status preflight can finish the tick", async () => {
+    vi.resetModules();
+    mockConfig(FRONTEND_REGISTRY);
+    vi.doMock("../config.js", () => ({
+      config: {
+        contracts: {
+          clusterPayoutOracle: ORACLE,
+        },
+        correlationSnapshots: {
+          enabled: true,
+          mode: "auto",
+          artifactPath: undefined,
+          frontendRegistry: FRONTEND_REGISTRY,
+          maxRoundsPerTick: 20,
+          artifactStorage: {
+            mode: "data-uri",
+            outputDir: "correlation-artifacts",
+            publicBaseUrl: "",
+          },
+        },
+      },
+    }));
+
+    const buildConfiguredCorrelationSnapshotArtifactForCandidates = vi.fn();
+    vi.doMock("../correlation-artifact-builder.js", () => ({
+      loadConfiguredCorrelationSnapshotCandidates: vi.fn().mockResolvedValue([
+        {
+          rewardPoolId: 7n,
+          contentId: 9n,
+          roundId: 1n,
+        },
+      ]),
+      buildConfiguredCorrelationSnapshotArtifactForCandidates,
+    }));
+
+    const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
+      if (functionName === "correlationEpochSnapshot") return { status: 1 };
+      if (functionName === "roundPayoutSnapshotKey") return SNAPSHOT_KEY;
+      if (functionName === "roundPayoutProposal") return { snapshot: { status: 3 } };
+      throw new Error(`unexpected readContract(${functionName})`);
+    });
+    const writeContract = vi.fn().mockResolvedValue("0xhash");
+    const waitForTransactionReceipt = vi.fn().mockResolvedValue({
+      status: "success",
+    });
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+
+    const { publishConfiguredCorrelationSnapshots } = await import(
+      "../correlation-snapshots.js"
+    );
+
+    const result = await publishConfiguredCorrelationSnapshots(
+      { readContract, waitForTransactionReceipt } as never,
+      { writeContract } as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger,
+    );
+
+    expect(result).toEqual({
+      epochsProposed: 0,
+      epochsFinalized: 1,
+      roundSnapshotsProposed: 0,
+      roundSnapshotsFinalized: 0,
+    });
+    expect(buildConfiguredCorrelationSnapshotArtifactForCandidates).not.toHaveBeenCalled();
+    expect(writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "finalizeCorrelationEpoch",
+      }),
+    );
+  });
+
   it("confirms frontend eligibility and proposes finalized-epoch round snapshots without ETH value", async () => {
     const publisher = await loadPublisher({ epochStatus: 3 });
 

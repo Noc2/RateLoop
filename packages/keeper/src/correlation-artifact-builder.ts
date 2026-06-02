@@ -32,10 +32,21 @@ interface VoteResponse {
   items?: unknown[];
 }
 
-interface CorrelationRoundCandidate {
+export interface CorrelationRoundCandidate {
   rewardPoolId: bigint;
   contentId: bigint;
   roundId: bigint;
+}
+
+export interface BuiltConfiguredCorrelationSnapshotArtifact {
+  artifact: CorrelationSnapshotArtifactFile;
+  artifactHash?: `0x${string}`;
+  artifactURI?: string;
+  canonicalJson?: string;
+  canonicalBytes: number;
+  candidateCount: number;
+  roundSnapshotCount: number;
+  epochCount: number;
 }
 
 interface PublicRoundPayoutSnapshot {
@@ -80,6 +91,19 @@ const loggedAutomaticArtifactHashes = new Set<string>();
 export async function buildConfiguredCorrelationSnapshotArtifact(
   logger: Logger,
 ): Promise<CorrelationSnapshotArtifactFile> {
+  return (await buildConfiguredCorrelationSnapshotArtifactDetails(logger)).artifact;
+}
+
+export async function buildConfiguredCorrelationSnapshotArtifactDetails(
+  logger: Logger,
+): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
+  const candidates = await loadConfiguredCorrelationSnapshotCandidates(logger);
+  return buildConfiguredCorrelationSnapshotArtifactForCandidates(candidates, logger);
+}
+
+export async function loadConfiguredCorrelationSnapshotCandidates(
+  logger: Logger,
+): Promise<CorrelationRoundCandidate[]> {
   if (!config.ponderBaseUrl) {
     throw new Error("PONDER_BASE_URL is required for automatic correlation snapshots");
   }
@@ -93,10 +117,26 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
     config.correlationSnapshots.maxRoundsPerTick,
     logger,
   );
+  return candidates;
+}
+
+export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
+  candidates: readonly CorrelationRoundCandidate[],
+  logger: Logger,
+): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
   if (candidates.length === 0) {
-    return {};
+    return {
+      artifact: {},
+      canonicalBytes: 0,
+      candidateCount: 0,
+      roundSnapshotCount: 0,
+      epochCount: 0,
+    };
   }
 
+  if (!config.ponderBaseUrl) {
+    throw new Error("PONDER_BASE_URL is required for automatic correlation snapshots");
+  }
   const publicRounds: PublicRoundPayoutSnapshot[] = [];
 
   for (const candidate of candidates) {
@@ -146,7 +186,13 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
   }
 
   if (publicRounds.length === 0) {
-    return {};
+    return {
+      artifact: {},
+      canonicalBytes: 0,
+      candidateCount: candidates.length,
+      roundSnapshotCount: 0,
+      epochCount: 0,
+    };
   }
 
   const params = defaultCorrelationScoringParams();
@@ -198,7 +244,16 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
     logger.info("Built automatic correlation snapshot artifact", logData);
   }
 
-  return { correlationEpochs, roundPayoutSnapshots };
+  return {
+    artifact: { correlationEpochs, roundPayoutSnapshots },
+    artifactHash: stored.artifactHash,
+    artifactURI: stored.artifactURI,
+    canonicalJson: stored.canonicalJson,
+    canonicalBytes: Buffer.byteLength(stored.canonicalJson),
+    candidateCount: candidates.length,
+    roundSnapshotCount: roundPayoutSnapshots.length,
+    epochCount: correlationEpochs.length,
+  };
 }
 
 function summarizeArtifactUri(artifactURI: string) {
