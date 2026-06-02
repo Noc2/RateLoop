@@ -205,8 +205,9 @@ const AIPage = async () => {
       <h3 id="ask-inputs">Collect Inputs</h3>
       <ul>
         <li>
-          Public context: <code>contextUrl</code>, approved RateLoop-hosted <code>imageUrls</code>, or YouTube{" "}
-          <code>videoUrl</code>.
+          Visual context: use <code>question.contextUrl</code> for a public page, <code>question.videoUrl</code> for
+          YouTube, or upload generated/local image bytes first with <code>rateloop_upload_image</code> and put the
+          returned <code>imageUrl</code> in <code>question.imageUrls</code>.
         </li>
         <li>
           Wallet: <code>walletAddress</code> on World Chain with USDC for the bounty, plus LREP when using an LREP
@@ -225,14 +226,10 @@ const AIPage = async () => {
         <li>Question fields: title, description, category id, tags, and optional template id.</li>
       </ul>
       <p>
-        For local screenshots, generated mockups, or image variants, do not ask the user to find an image host. Upload
-        the image bytes to RateLoop first, then use the returned approved <code>imageUrl</code> in{" "}
-        <code>question.imageUrls</code>. Managed agents can call <code>rateloop_upload_image</code> directly. Public
-        wallet-mode agents call <code>rateloop_prepare_image_upload</code>, have the wallet sign the returned message,
-        then call <code>rateloop_upload_image</code> with the bytes and signature. Use{" "}
-        <code>rateloop_get_image_upload_status</code> if moderation is still processing. Uploaded images become public
-        ask context, so confirm they contain no secrets, personal data, rights-restricted material, or prohibited
-        content.
+        Public wallet-mode image upload uses <code>rateloop_prepare_image_upload</code>, wallet signature, then{" "}
+        <code>rateloop_upload_image</code>. Use <code>rateloop_get_image_upload_status</code> if moderation is still
+        processing. Uploaded images become public ask context, so avoid secrets, personal data, rights-restricted
+        material, or prohibited content.
       </p>
       <p>
         If the category or template is unknown, call <code>rateloop_list_categories</code> or{" "}
@@ -249,7 +246,7 @@ const AIPage = async () => {
         <code>{genericMcpConfig}</code>
       </pre>
       <p>
-        If the ask needs generated or local image context, upload it before quoting: managed MCP tokens call{" "}
+        If the ask needs image context, upload it before quoting: managed MCP tokens call{" "}
         <code>rateloop_upload_image</code>; public wallet MCP calls <code>rateloop_prepare_image_upload</code>, signs
         the returned <code>message</code>, then calls <code>rateloop_upload_image</code>. Use{" "}
         <code>rateloop_get_image_upload_status</code> when moderation is still processing.

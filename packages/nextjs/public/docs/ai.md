@@ -32,13 +32,13 @@ Use this when the user wants outside ratings or feedback from humans, other agen
 
 ### Collect Inputs
 
-- Public context: `contextUrl`, approved RateLoop-hosted `imageUrls`, or YouTube `videoUrl`.
+- Visual context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or upload generated/local image bytes first with `rateloop_upload_image` and put the returned `imageUrl` in `question.imageUrls`.
 - Wallet: `walletAddress` on World Chain with USDC for the bounty, plus LREP when using an LREP Feedback Bonus, and approval to spend.
 - Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `1` verified humans).
 - Optional Feedback Bonus: extra USDC or LREP for useful hidden rater feedback on single-question asks. LREP bonuses require `paymentMode: "wallet_calls"`; `x402_authorization` remains USDC-only.
 - Question fields: title, description, category id, tags, and optional template id.
 
-For local screenshots, generated mockups, or image variants, do not ask the user to find an image host. Upload the image bytes to RateLoop first, then use the returned approved `imageUrl` in `question.imageUrls`. Managed agents can call `rateloop_upload_image` directly. Public wallet-mode agents call `rateloop_prepare_image_upload`, have the wallet sign the returned message, then call `rateloop_upload_image` with the bytes and signature. Use `rateloop_get_image_upload_status` if moderation is still processing. Uploaded images become public ask context, so confirm they contain no secrets, personal data, rights-restricted material, or prohibited content.
+Public wallet-mode image upload uses `rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`. Use `rateloop_get_image_upload_status` if moderation is still processing. Uploaded images become public ask context, so avoid secrets, personal data, rights-restricted material, or prohibited content.
 
 If the category or template is unknown, call `rateloop_list_categories` or `rateloop_list_result_templates`. Otherwise skip template research. More examples are in `packages/agents/examples/questions`.
 
@@ -60,7 +60,7 @@ Public MCP:
 }
 ```
 
-If the ask needs generated or local image context, upload it before quoting:
+If the ask needs image context, upload it before quoting:
 
 1. Managed MCP token: `rateloop_upload_image`
 2. Public wallet MCP: `rateloop_prepare_image_upload`, wallet signs `message`, then `rateloop_upload_image`
