@@ -3,10 +3,13 @@ import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
 import { type ContentShareData, VOTE_SHARE_RATING_VERSION_PARAM } from "~~/lib/social/contentShare";
 import { getContentShareDataForParam } from "~~/lib/social/contentShare.server";
+import { checkRateLimit } from "~~/utils/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 
 const imageSize = {
   width: 1200,
@@ -243,7 +246,13 @@ function FallbackShareImage() {
 }
 
 export async function GET(request: NextRequest) {
-  const shareData = await getContentShareDataForParam(request.nextUrl.searchParams.get("content"), {
+  const contentParam = request.nextUrl.searchParams.get("content");
+  const limited = await checkRateLimit(request, RATE_LIMIT, {
+    extraKeyParts: [contentParam],
+  });
+  if (limited) return limited;
+
+  const shareData = await getContentShareDataForParam(contentParam, {
     origin: request.nextUrl.origin,
   });
   const requestedRatingVersion = request.nextUrl.searchParams.get(VOTE_SHARE_RATING_VERSION_PARAM);

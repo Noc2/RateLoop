@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { GET } from "./route";
 import assert from "node:assert/strict";
 import { after, beforeEach, test } from "node:test";
+import { __setRateLimitStoreForTests } from "~~/utils/rateLimit";
 
 const originalFetch = globalThis.fetch;
 const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
@@ -57,10 +58,17 @@ function mockShareContentFetch(requestedUrls: string[] = []) {
 beforeEach(() => {
   process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.example/api";
   globalThis.fetch = originalFetch;
+  __setRateLimitStoreForTests({
+    execute: async () =>
+      ({
+        rows: [{ name: "cleanup", request_count: 1 }],
+      }) as any,
+  });
 });
 
 after(() => {
   globalThis.fetch = originalFetch;
+  __setRateLimitStoreForTests(null);
 
   if (originalPonderUrl === undefined) {
     delete process.env.NEXT_PUBLIC_PONDER_URL;
@@ -121,4 +129,23 @@ test("keeps fallback vote social cards uncached", async () => {
   assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
   assert.equal(response.headers.get("cdn-cache-control"), null);
   assert.equal(response.headers.get("vercel-cdn-cache-control"), null);
+});
+
+test("rate-limits vote social cards before fetching share data", async () => {
+  let fetched = false;
+  __setRateLimitStoreForTests({
+    execute: async () =>
+      ({
+        rows: [{ name: "cleanup", request_count: 61 }],
+      }) as any,
+  });
+  globalThis.fetch = (async () => {
+    fetched = true;
+    throw new Error("fetch should not be called");
+  }) as typeof fetch;
+
+  const response = await GET(new NextRequest("https://www.rateloop.ai/api/og/vote?content=88"));
+
+  assert.equal(response.status, 429);
+  assert.equal(fetched, false);
 });
