@@ -23,6 +23,7 @@ import { ASK_ROUTE, RATE_ROUTE } from "~~/constants/routes";
 import { useMobileHeaderVisibility, useMobileHeaderVoteControls } from "~~/contexts/MobileHeaderVisibilityContext";
 import { useOutsideClick } from "~~/hooks/scaffold-eth";
 import { useVoteSearch } from "~~/hooks/useVoteSearch";
+import { isHeaderMenuLinkActive } from "~~/lib/ui/headerNavigation";
 import { shouldSuppressShellNavClick } from "~~/lib/ui/shellNavigation";
 
 type HeaderMenuLink = {
@@ -93,7 +94,7 @@ export const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "
   return (
     <>
       {menuLinks.map(({ label, href, icon: Icon }) => {
-        const isActive = pathname === "/" && href === RATE_ROUTE ? true : pathname.startsWith(href);
+        const isActive = isHeaderMenuLinkActive(pathname, href);
         const isDocs = href === "/docs";
 
         // If we're on docs page, show Docs as header with submenu, otherwise show as regular link
