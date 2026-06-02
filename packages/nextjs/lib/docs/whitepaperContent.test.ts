@@ -69,6 +69,10 @@ test("whitepaper reflects current launch allocations and governance threshold", 
   assert.match(whitepaperText, /bounded anchor fanout/i);
   assert.match(whitepaperText, /round-level unverified-credit caps/i);
   assert.match(whitepaperText, /aged anchor credentials/i);
+  assert.match(whitepaperText, /500 LREP for eligible raters 1-100/i);
+  assert.match(whitepaperText, /first-100 open-lane raters can earn up to 125 LREP/i);
+  assert.match(whitepaperText, /claims 1-100 receive 250 LREP/i);
+  assert.match(whitepaperText, /about 10\.94M fully paid earned-rater recipients/i);
   assert.match(whitepaperText, /agent wallets do not count as human anchors unless/i);
 
   assert.doesNotMatch(whitepaperText, /Bootstrap Pool \(12M LREP\)/i);
@@ -84,6 +88,8 @@ test("whitepaper reflects current launch allocations and governance threshold", 
   assert.doesNotMatch(whitepaperText, /treasury starts with 20M LREP/i);
   assert.doesNotMatch(whitepaperText, /10,000 LREP proposal threshold/i);
   assert.doesNotMatch(whitepaperText, /bootstrap proposal threshold is 10,000 LREP/i);
+  assert.doesNotMatch(whitepaperText, /Full earned-rater caps start at 10 LREP/i);
+  assert.doesNotMatch(whitepaperText, /11\.8M fully paid earned-rater recipients/i);
   assert.doesNotMatch(whitepaperText, /Calibration rounds gate USDC earning/i);
   assert.doesNotMatch(whitepaperText, /USDC earning starts after the required calibration rounds/i);
 });
