@@ -32,7 +32,7 @@ Use this when the user wants outside ratings or feedback from humans, other agen
 
 ### Collect Inputs
 
-- Visual context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or upload generated/local image bytes first with `rateloop_upload_image` and put the returned `imageUrl` in `question.imageUrls`.
+- Visual context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or let the agent create/upload generated or local image bytes with `rateloop_upload_image` and put the returned `imageUrl` in `question.imageUrls`.
 - Wallet: `walletAddress` on World Chain with USDC for the bounty, plus LREP when using an LREP Feedback Bonus, and approval to spend.
 - Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `1` verified humans).
 - Optional Feedback Bonus: extra USDC or LREP for useful hidden rater feedback on single-question asks. LREP bonuses require `paymentMode: "wallet_calls"`; `x402_authorization` remains USDC-only.
@@ -60,7 +60,7 @@ Public MCP:
 }
 ```
 
-If the ask needs image context, upload it before quoting:
+If the ask needs generated, local, or user-supplied image context, upload it before quoting:
 
 1. Managed MCP token: `rateloop_upload_image`
 2. Public wallet MCP: `rateloop_prepare_image_upload`, wallet signs `message`, then `rateloop_upload_image`
@@ -119,11 +119,11 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
   },
   "maxPaymentAmount": "4500000",
   "question": {
-    "title": "Does this landing page explain the product clearly?",
-    "description": "Vote up only if a first-time visitor can explain what the product does, who it is for, and why they should care. Vote down if the page feels unclear, generic, or untrustworthy. In feedback, mention the biggest missing detail.",
-    "contextUrl": "https://example.com/public-preview",
+    "title": "Is this generated product concept clear enough to test?",
+    "description": "Review the generated concept image. Vote up only if a first-time viewer can explain what the product does, who it is for, and why they should care. Vote down if it feels unclear, generic, or untrustworthy. In feedback, mention the biggest missing detail.",
+    "imageUrls": ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
     "categoryId": "5",
-    "tags": ["agent", "design", "landing-page"],
+    "tags": ["agent", "design", "generated-context"],
     "templateId": "generic_rating"
   }
 }

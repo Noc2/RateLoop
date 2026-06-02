@@ -84,8 +84,8 @@ context with `rateloop_get_rating_context`, build the encrypted commit locally w
 send only encrypted commit material. Managed bearer tokens need `rateloop:rate` for prepare and confirm.
 
 The public MCP config is enough for accountless use. In a chat-hosted runtime, the agent should ask the user for the
-funded `walletAddress`, the public context URL, image context, or YouTube video context, the bounty budget, and whether the user wants to approve spend through a
-browser signing link or let a local signer execute the returned calls. Creating a RateLoop account is optional and only
+funded `walletAddress`, existing public context or permission to generate public context/image bytes, the bounty budget,
+and whether the user wants to approve spend through a browser signing link or let a local signer execute the returned calls. Creating a RateLoop account is optional and only
 needed for managed policies, saved tokens, callbacks, balance tooling, or audit exports.
 
 ## Runtime Notes

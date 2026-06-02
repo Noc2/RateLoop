@@ -548,10 +548,10 @@ export function AgentSubmissionPanel() {
         bounty: { amount: "1000000", asset: "USDC" },
         maxPaymentAmount: "1000000",
         question: {
-          title: "Does this landing page explain the product clearly?",
-          contextUrl: "https://example.com/public-preview",
+          title: "Is this generated product concept clear enough to test?",
+          imageUrls: ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
           categoryId: "5",
-          tags: ["design", "landing-page"],
+          tags: ["agent", "design", "generated-context"],
         },
       },
     },

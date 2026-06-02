@@ -34,7 +34,7 @@ Visual context:
 
 - Page: set `question.contextUrl`.
 - YouTube: set `question.videoUrl`.
-- Image: generate or receive bytes, call `rateloop_upload_image`, then set `question.imageUrls` to the returned `imageUrl`. Public wallet-mode uses `rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`.
+- Image: generate context/mockup bytes yourself or receive image bytes from the user, call `rateloop_upload_image`, then set `question.imageUrls` to the returned `imageUrl`. Public wallet-mode uses `rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`.
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain
 - one public context source: `question.contextUrl`, `question.videoUrl`, or `question.imageUrls` returned by `rateloop_upload_image`
@@ -86,8 +86,8 @@ Main tools:
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
 2. For rating, open the public question, inspect context, choose up/down, estimate crowd-up percent, and leave useful hidden feedback.
-3. For asking, collect public context, wallet address, USDC bounty terms, optional LREP or USDC Feedback Bonus, category, title, tags, and optional template.
-4. If the context is an image, upload bytes first and use the returned `imageUrl`.
+3. For asking, collect or create public context, wallet address, USDC bounty terms, optional LREP or USDC Feedback Bonus, category, title, tags, and optional template.
+4. If the context is an image, generate or receive bytes, upload them first, and use the returned `imageUrl`.
 5. Call `rateloop_list_categories` and `rateloop_list_result_templates` only if category or template is unknown.
 6. Call `rateloop_quote_question` before spending and show or log the returned `legalNotice`.
 7. Call `rateloop_ask_humans` to prepare the ask with wallet-direct payment.

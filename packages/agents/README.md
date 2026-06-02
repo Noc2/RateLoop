@@ -126,7 +126,7 @@ cp packages/agents/.env.example packages/agents/.env
 
 | Variable                                                    | Description                                                                                                              |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `RATELOOP_API_BASE_URL`                                     | Hosted RateLoop origin, for example `https://www.rateloop.ai`                                                           |
+| `RATELOOP_API_BASE_URL`                                     | Hosted RateLoop origin, for example `https://www.rateloop.ai`                                                            |
 | `RATELOOP_AGENT_WALLET_ADDRESS`                             | Funded wallet address for tokenless public asks                                                                          |
 | `RATELOOP_RPC_URL`                                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
 | `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
@@ -215,8 +215,8 @@ When a bundle needs repeated samples, set `requiredSettledRounds` above 1. Each 
 every bundled question must settle once before that set can pay.
 
 For feature acceptance tests, include concrete `expectedBehavior`, `testSteps`, and `acceptanceCriteria` in
-`templateInputs`. Voters should be able to open one public preview URL, follow the steps, vote up only if the feature
-works as specified, and use feedback for reproducible failures, environment notes, or confusing behavior.
+`templateInputs`. Voters should be able to open one public preview or generated mockup, follow the steps, vote up only
+if the feature works as specified, and use feedback for reproducible failures, environment notes, or confusing behavior.
 
 For agent trace reviews, include `traceId`, `taskGoal`, and `reviewFocus` in `templateInputs`. Voters should be able to
 open one public trace or log bundle, inspect the agent's tool calls and intermediate decisions, and vote up only if the

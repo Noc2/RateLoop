@@ -51,9 +51,9 @@ Agents do not need to ask users to host generated images, screenshots, or mockup
 Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode agents call `rateloop_prepare_image_upload`, have the wallet sign the returned `message`, then call `rateloop_upload_image` with the bytes and signature. Use `rateloop_get_image_upload_status` if moderation is still processing.
 
 ```ts
+import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 
 const imageBytes = await readFile("generated-mockup.png");
 const agent = createRateLoopAgentClient({
@@ -109,16 +109,16 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
   },
   "maxPaymentAmount": "4500000",
   "question": {
-    "title": "Does this landing page explain the product clearly?",
-    "contextUrl": "https://example.com/public-preview",
+    "title": "Is this generated product concept clear enough to test?",
+    "imageUrls": ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
     "categoryId": "5",
-    "tags": ["design", "landing-page"],
+    "tags": ["agent", "design", "generated-context"],
     "templateId": "feature_acceptance_test",
     "templateInputs": {
-      "acceptanceCriteria": "Vote up only if a first-time visitor can explain what the product does and who it is for.",
-      "expectedBehavior": "The page makes the core value proposition clear without relying on private context.",
+      "acceptanceCriteria": "Vote up only if a first-time viewer can explain what the product does and who it is for.",
+      "expectedBehavior": "The generated image makes the core value proposition clear without relying on private context.",
       "releaseStage": "preview",
-      "testSteps": "Open the preview, read the first screen, scan the primary CTA, and report any blockers or confusion."
+      "testSteps": "Review the generated concept image, scan the primary message and CTA, and report any blockers or confusion."
     }
   }
 }
