@@ -467,6 +467,82 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     );
   });
 
+  it("does not double-count duplicate round qualifications", async () => {
+    const { db, inserts, updates } = createDb({
+      'questionRewardPoolRound:{"id":"7-3"}': { id: "7-3" },
+      content: { id: 1n },
+    });
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RewardPoolRoundQualified",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          allocation: 50_000_000n,
+          eligibleVoters: 5n,
+          frontendFeeAllocation: 1_500_000n,
+        },
+        block: { number: 11n, timestamp: 1_800n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "questionRewardPoolRound",
+        values: expect.objectContaining({ id: "7-3" }),
+      }),
+    );
+    expect(updates).not.toContainEqual(
+      expect.objectContaining({ table: "questionRewardPool" }),
+    );
+    expect(updates).toContainEqual(
+      expect.objectContaining({ table: "content" }),
+    );
+  });
+
+  it("does not double-count duplicate question reward claims", async () => {
+    const claimId =
+      "7-3-0x0000000000000000000000000000000000000002-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const { db, inserts, updates } = createDb({
+      [`questionRewardPoolClaim:{"id":"${claimId}"}`]: { id: claimId },
+    });
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:QuestionRewardClaimed",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          claimant: "0x0000000000000000000000000000000000000002",
+          identityKey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          amount: 9_700_000n,
+          frontend: "0x00000000000000000000000000000000000000f1",
+          frontendRecipient: "0x00000000000000000000000000000000000000f1",
+          frontendFee: 300_000n,
+          grossAmount: 10_000_000n,
+        },
+        block: { number: 12n, timestamp: 1_900n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "questionRewardPoolClaim",
+        values: expect.objectContaining({ id: claimId }),
+      }),
+    );
+    expect(updates).toEqual([]);
+  });
+
   it("indexes multi-round bundle reward round sets and claims", async () => {
     const { db, inserts, updates } = createDb();
     const registeredHandlers = await loadHandlers();
