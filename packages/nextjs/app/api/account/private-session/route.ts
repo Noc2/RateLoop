@@ -12,12 +12,6 @@ import {
   verifySignedReadSession,
 } from "~~/lib/auth/signedReadSessions";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
-import {
-  SIGNED_WRITE_SESSION_COOKIE_NAMES,
-  SIGNED_WRITE_SESSION_SCOPES,
-  setAllSignedWriteSessionCookies,
-  verifySignedWriteSession,
-} from "~~/lib/auth/signedWriteSessions";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -34,17 +28,8 @@ async function hasAllPrivateReadSessions(request: NextRequest, walletAddress: `0
       ),
     ),
   );
-  const writeSessions = await Promise.all(
-    SIGNED_WRITE_SESSION_SCOPES.map(scope =>
-      verifySignedWriteSession(
-        request.cookies.get(SIGNED_WRITE_SESSION_COOKIE_NAMES[scope])?.value,
-        walletAddress,
-        scope,
-      ),
-    ),
-  );
 
-  return readSessions.every(Boolean) && writeSessions.every(Boolean);
+  return readSessions.every(Boolean);
 }
 
 export async function GET(request: NextRequest) {
@@ -119,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({ ok: true, hasSession: true });
     await setAllSignedReadSessionCookies(response, normalized.payload.normalizedAddress);
-    return setAllSignedWriteSessionCookies(response, normalized.payload.normalizedAddress);
+    return response;
   } catch (error) {
     console.error("Error creating private account session:", error);
     return NextResponse.json({ error: "Failed to create private account session" }, { status: 500 });
