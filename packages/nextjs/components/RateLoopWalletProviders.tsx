@@ -4,6 +4,7 @@ import { type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
 import { ThirdwebProvider } from "thirdweb/react";
+import type { State } from "wagmi";
 import { WagmiProvider } from "wagmi";
 import { LocalTestWalletBridge } from "~~/components/thirdweb/LocalTestWalletBridge";
 import { ThirdwebAutoConnectBridge } from "~~/components/thirdweb/ThirdwebAutoConnectBridge";
@@ -21,9 +22,15 @@ const queryClient = new QueryClient({
   },
 });
 
-export function RateLoopWalletProviders({ children }: { children: ReactNode }) {
+export function RateLoopWalletProviders({
+  children,
+  wagmiInitialState,
+}: {
+  children: ReactNode;
+  wagmiInitialState?: State;
+}) {
   return (
-    <WagmiProvider config={wagmiConfig}>
+    <WagmiProvider config={wagmiConfig} initialState={wagmiInitialState}>
       <QueryClientProvider client={queryClient}>
         <ThirdwebProvider>
           <WalletRestoreProvider>
