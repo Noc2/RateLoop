@@ -1,6 +1,7 @@
 import { buildAgentResultPackage } from "./resultPackage";
 import { listAgentResultTemplates } from "./templates";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { PROFILE_SELF_REPORT_NOTICE } from "@rateloop/node-utils/profileSelfReport";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ContentFeedbackItem } from "~~/lib/feedback/types";
@@ -81,7 +82,7 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
           { down: 0, total: 2, up: 2, value: "engineer" },
         ],
       },
-      note: "Audience context is public, self-reported, unverified, and not used for vote eligibility.",
+      note: PROFILE_SELF_REPORT_NOTICE,
       restrictedEligibility: false,
       selfReportedProfileCount: 2,
       source: "self_reported_public_profiles",

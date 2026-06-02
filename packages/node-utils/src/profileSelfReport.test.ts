@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   MAX_PROFILE_SELF_REPORT_LENGTH,
+  PROFILE_SELF_REPORT_NOTICE,
   RATER_TYPE,
   aggregateProfileSelfReports,
   emptyProfileSelfReportAudienceContext,
@@ -130,7 +131,7 @@ test("emptyProfileSelfReportAudienceContext marks every revealed vote as missing
       roles: [],
     },
     missingSelfReportCount: 3,
-    note: "Audience context is public, self-reported, unverified, and not used for vote eligibility.",
+    note: PROFILE_SELF_REPORT_NOTICE,
     restrictedEligibility: false,
     selfReportedProfileCount: 0,
     source: "self_reported_public_profiles",

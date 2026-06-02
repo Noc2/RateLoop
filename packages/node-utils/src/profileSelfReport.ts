@@ -5,7 +5,7 @@ export const PROFILE_SELF_REPORT_RESTRICTS_ELIGIBILITY = false;
 export const MAX_PROFILE_SELF_REPORT_LENGTH = 1600;
 
 export const PROFILE_SELF_REPORT_NOTICE =
-  "Audience context is public, self-reported, unverified, and not used for vote eligibility.";
+  "Audience context is public, self-reported, unverified, and not used for vote eligibility. Governance may penalize clearly false context when public evidence supports it.";
 
 export const RATER_TYPE = {
   Unknown: 0,
