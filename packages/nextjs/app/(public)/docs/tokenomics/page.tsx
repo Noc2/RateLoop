@@ -70,11 +70,12 @@ const Tokenomics = () => {
         Staking LREP remains available for raters who want normal winner/loser settlement upside and downside.
       </p>
       <p>
-        Launch rewards are deliberately front-loaded. Verified humans can claim once, verified referrers can earn when a
-        referred user verifies, useful raters can earn from qualifying verified-human anchored rounds, and eligible
-        legacy contributors can claim a prior-allocation-based grant until the 27-month deadline. Amounts below are
-        maximums; cluster-capped effective credit, vesting state, pool balance, claim expiry, and governance updates can
-        reduce or pause payouts.
+        Launch rewards are deliberately front-loaded for the cold-start phase. The first verified humans and useful
+        raters carry more traction risk, so the first 100 and first 1,000 cohorts receive materially higher rewards.
+        Verified referrers earn immediately when a referred user verifies, useful raters earn from qualifying
+        verified-human anchored rounds, and eligible legacy contributors can claim a prior-allocation-based grant until
+        the 27-month deadline. Amounts below are maximums; cluster-capped effective credit, vesting state, pool balance,
+        claim expiry, and governance updates can reduce or pause payouts.
       </p>
       <div className="not-prose overflow-x-auto my-6 rounded-xl bg-base-200">
         <table className="table table-zebra [&_th]:text-base [&_td]:text-base [&_.badge]:text-base [&_th]:bg-base-300">
@@ -146,6 +147,12 @@ const Tokenomics = () => {
           </table>
         </div>
       </div>
+
+      <p>
+        Earned-rater per-slot values are based on the full cap divided across 10 rewarding slots. Open-lane raters keep
+        the 25% unverified cap share, so a first-100 open-lane rater can earn up to 125 LREP before unlocking the full
+        snapshotted cap through human verification.
+      </p>
 
       <p>
         Eligible legacy contributors claim from the prior-allocation snapshot; 1% is immediate, 99% unlocks over 24

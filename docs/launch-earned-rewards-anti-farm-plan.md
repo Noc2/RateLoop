@@ -32,7 +32,7 @@ Initial governance defaults:
 | `minQualifyingScoreBps`              |                          `7_000` |
 | `eligibilityRatingCount`             |                              `5` |
 | `rewardingRatingCount`               |                             `10` |
-| `earnedRaterCapSchedule`             | `10 / 5 / 2.5 / 1.25 / 0.5 LREP` |
+| `earnedRaterCapSchedule`             | `500 / 250 / 100 / 10 / 5 / 2.5 / 1.25 / 0.5 LREP` |
 | `requireNoPendingCleanup`            |                           `true` |
 
 Advisory ratings are available only in rounds that already have a staked vote
@@ -65,10 +65,19 @@ Credits that arrive before the diversity gate is satisfied are not back-paid.
 They count toward eligibility after snapshot finality, and future effective
 credits pay the normal per-credit slice once all gates are satisfied.
 
-Earned-rater caps start at `10 LREP` for the first `100,000` eligible raters,
-then step down to `5`, `2.5`, `1.25`, and `0.5 LREP` at the existing count
-thresholds. With the `24M LREP` earned-rater allocation, this supports about
-`11.8M` fully paid earned-rater recipients before the pool exhausts.
+Earned-rater caps are now front-loaded for the cold-start phase. They start at
+`500 LREP` for eligible raters 1-100, step down to `250 LREP` for 101-1,000,
+`100 LREP` for 1,001-10,000, and then use the previous `10 LREP` cap for
+10,001-100,000. Later cohorts continue at `5`, `2.5`, `1.25`, and `0.5 LREP`
+at the existing count thresholds. With the `24M LREP` earned-rater allocation,
+this supports about `10.94M` fully paid earned-rater recipients before the pool
+exhausts.
+
+Verified + referral rewards are also front-loaded before the previous
+50,000-claim tier: `250 / 125 LREP` for verified claims 1-100, `100 / 50 LREP`
+for claims 101-1,000, `40 / 20 LREP` for claims 1,001-10,000, then
+`10 / 5 LREP` through claim 50,000. Referral rewards remain immediate at 50% of
+the verified user's bonus, bounded by the existing per-referrer cap.
 
 All policy values must be timelock-governance updateable so the network can
 start permissive and become stricter if farming pressure appears.

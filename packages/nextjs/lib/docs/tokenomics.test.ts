@@ -1,4 +1,10 @@
-import { launchDistributionChartSlices, legacyContributorVestingRows, tokenAllocationChartSlices } from "./tokenomics";
+import {
+  earnedRaterRewardScheduleRows,
+  launchDistributionChartSlices,
+  legacyContributorVestingRows,
+  tokenAllocationChartSlices,
+  verifiedReferralRewardScheduleRows,
+} from "./tokenomics";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -34,5 +40,23 @@ test("launch distribution rows include legacy contributor vesting", () => {
     "Month 27+",
     "Expired unclaimed balance",
     "Governance can sweep unclaimed allocation to the treasury",
+  ]);
+});
+
+test("verified referral schedule includes cold-start tiers", () => {
+  assert.deepEqual(verifiedReferralRewardScheduleRows.slice(0, 4), [
+    ["1-100", "250 LREP", "125 LREP"],
+    ["101-1,000", "100 LREP", "50 LREP"],
+    ["1,001-10,000", "40 LREP", "20 LREP"],
+    ["10,001-50,000", "10 LREP", "5 LREP"],
+  ]);
+});
+
+test("earned rater schedule keeps 25 percent open-lane cap in first cohort", () => {
+  assert.deepEqual(earnedRaterRewardScheduleRows.slice(0, 4), [
+    ["1-100", "500 LREP", "125 LREP", "50 LREP"],
+    ["101-1,000", "250 LREP", "62.5 LREP", "25 LREP"],
+    ["1,001-10,000", "100 LREP", "25 LREP", "10 LREP"],
+    ["10,001-100,000", "10 LREP", "2.5 LREP", "1 LREP"],
   ]);
 });

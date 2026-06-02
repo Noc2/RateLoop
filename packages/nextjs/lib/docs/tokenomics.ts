@@ -20,7 +20,7 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
   {
     label: "Human verified + referral rewards",
     amount: 42_000_000,
-    purpose: "One-time decaying human verification bonuses plus bounded referral rewards",
+    purpose: "Front-loaded one-time human verification bonuses plus immediate bounded referral rewards",
     color: "var(--rateloop-green)",
   },
   {
@@ -93,15 +93,18 @@ export const launchDistributionBreakdownRows = launchDistributionBreakdownEntrie
 export const launchRewardOverviewRows = [
   {
     reward: "Verified human bonus",
-    howToEarn: "Verify one active human credential and claim once from that wallet.",
+    howToEarn:
+      "Verify one active human credential and claim once from that wallet; earliest claims receive larger cold-start bonuses.",
   },
   {
     reward: "Referral bonus",
-    howToEarn: "Refer a user who verifies, while the referrer also holds an active human credential.",
+    howToEarn:
+      "Refer a user who verifies, while the referrer also holds an active human credential; the referral bonus remains 50% of the verified user's bonus.",
   },
   {
     reward: "Earned rater reward",
-    howToEarn: "Complete qualifying ratings in verified-human anchored rounds; payout starts after 5 launch credits.",
+    howToEarn:
+      "Complete qualifying ratings in verified-human anchored rounds; payout starts after 5 launch credits, with higher early-rater caps.",
   },
 ] as const;
 
@@ -113,14 +116,20 @@ export const legacyContributorVestingRows = [
 ] as const;
 
 export const verifiedReferralRewardScheduleRows = [
-  ["1-50,000", formatLrepAmount(10), formatLrepAmount(5)],
+  ["1-100", formatLrepAmount(250), formatLrepAmount(125)],
+  ["101-1,000", formatLrepAmount(100), formatLrepAmount(50)],
+  ["1,001-10,000", formatLrepAmount(40), formatLrepAmount(20)],
+  ["10,001-50,000", formatLrepAmount(10), formatLrepAmount(5)],
   ["50,001-200,000", formatLrepAmount(5), formatLrepAmount(2.5)],
   ["200,001-1,000,000", formatLrepAmount(2.5), formatLrepAmount(1.25)],
   ["1,000,001+", formatLrepAmount(1), formatLrepAmount(0.5)],
 ] as const;
 
 export const earnedRaterRewardScheduleRows = [
-  ["1-100,000", formatLrepAmount(10), formatLrepAmount(2.5), formatLrepAmount(1)],
+  ["1-100", formatLrepAmount(500), formatLrepAmount(125), formatLrepAmount(50)],
+  ["101-1,000", formatLrepAmount(250), formatLrepAmount(62.5), formatLrepAmount(25)],
+  ["1,001-10,000", formatLrepAmount(100), formatLrepAmount(25), formatLrepAmount(10)],
+  ["10,001-100,000", formatLrepAmount(10), formatLrepAmount(2.5), formatLrepAmount(1)],
   ["100,001-1,000,000", formatLrepAmount(5), formatLrepAmount(1.25), formatLrepAmount(0.5)],
   ["1,000,001-5,000,000", formatLrepAmount(2.5), formatLrepAmount(0.625), formatLrepAmount(0.25)],
   ["5,000,001-15,000,000", formatLrepAmount(1.25), formatLrepAmount(0.3125), formatLrepAmount(0.125)],

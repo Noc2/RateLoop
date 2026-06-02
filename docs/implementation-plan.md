@@ -174,8 +174,17 @@ Initial policy:
 - Minimum distinct anchor rounds across the rater's qualifying history: 2.
 - Minimum qualifying score: 7,000 bps.
 - Eligibility starts after 5 qualifying ratings.
-- Launch credits are capped by the existing cohort schedule.
+- Launch credits are capped by the front-loaded cohort schedule: `500`, `250`,
+  `100`, `10`, `5`, `2.5`, `1.25`, then `0.5 LREP`.
 - Default unverified earned-rater cap share: 2,500 bps.
+
+The first 100 eligible earned raters receive a `500 LREP` full cap and a
+`125 LREP` open-lane cap. Raters 101-1,000 receive a `250 LREP` full cap,
+raters 1,001-10,000 receive a `100 LREP` full cap, and raters 10,001-100,000
+receive the previous `10 LREP` cap. Verification and referral rewards are also
+front-loaded before the previous 50,000-claim tier: `250 / 125 LREP` for claims
+1-100, `100 / 50 LREP` for claims 101-1,000, and `40 / 20 LREP` for claims
+1,001-10,000, followed by `10 / 5 LREP` through claim 50,000.
 
 The previous verified-human metrics are preserved in naming and behavior:
 `minVerifiedHumanUnits`/`minVerifiedHumans`, verified-human round units, distinct
