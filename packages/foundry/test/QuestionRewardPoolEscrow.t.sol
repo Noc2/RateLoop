@@ -2369,6 +2369,37 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
+    /// @dev H-1 regression: an empty (zero-commit) leading round that finishes must not let
+    ///      refundExpiredRewardPool bypass the cursor guard and drain funds owed to a later qualifiable round.
+    function testRefundBlockedWhenEmptyLeadingRoundPrecedesQualifiableRound() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 expiresAt = block.timestamp + 30 days;
+        uint256 rewardPoolId = _createRewardPoolWithExpiry(contentId, REWARD_POOL_AMOUNT, 3, 1, expiresAt);
+
+        // Leading round opens empty and is cancelled -> a finished, zero-commit round sits at the cursor,
+        // so the bounty window never activates (bountyClosesAt stays 0).
+        vm.prank(voter1);
+        votingEngine.openRound(contentId);
+        uint256 emptyRoundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        vm.warp(block.timestamp + 7 days + 1);
+        votingEngine.cancelExpiredRound(contentId, emptyRoundId);
+
+        // A later round is staked, voted, and settles within the (still-unactivated) window.
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        // Past bountyStartBy the pool reports expired, but the finished empty cursor round must be advanced
+        // first -- the refund must NOT skip the guard and drain the later round's voters' funds.
+        vm.warp(expiresAt + 1);
+        vm.expectRevert(QuestionRewardPoolEscrow.RewardPoolCursorNeedsAdvance.selector);
+        rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+
+        // Advancing past the empty round, the later round still qualifies and pays out.
+        (uint256 skipped, uint256 nextRoundToEvaluate) = rewardPoolEscrow.advanceQualificationCursor(rewardPoolId, 1);
+        assertEq(skipped, 1);
+        assertEq(nextRoundToEvaluate, roundId);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+    }
+
     function testOpenRoundThatReachedThresholdBeforeExpiryBlocksRefundAndCanQualify() public {
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;

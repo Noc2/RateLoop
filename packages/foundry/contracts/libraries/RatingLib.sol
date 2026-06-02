@@ -12,16 +12,20 @@ library RatingLib {
     uint256 internal constant WAD = 1e18;
 
     struct RatingConfig {
-        uint256 smoothingAlpha;
-        uint256 smoothingBeta;
-        uint256 observationBetaX18;
+        // The following fields (smoothingAlpha, smoothingBeta, observationBetaX18, confidenceGainBps,
+        // confidenceReopenBps, surpriseReferenceX18, maxDeltaLogitX18) are retained for config/ABI/storage
+        // stability but are NOT read by the current cumulative bounded-evidence model. They belonged to the
+        // removed confidence-reopening model (per-round logit steps, surprise, confidence reopen).
+        uint256 smoothingAlpha; // inert: not read by current model
+        uint256 smoothingBeta; // inert: not read by current model
+        uint256 observationBetaX18; // inert: not read by current model
         uint256 confidenceMassInitial;
         uint256 confidenceMassMin;
         uint256 confidenceMassMax;
-        uint16 confidenceGainBps;
-        uint16 confidenceReopenBps;
-        uint256 surpriseReferenceX18;
-        uint256 maxDeltaLogitX18;
+        uint16 confidenceGainBps; // inert: not read by current model
+        uint16 confidenceReopenBps; // inert: not read by current model
+        uint256 surpriseReferenceX18; // inert: not read by current model
+        uint256 maxDeltaLogitX18; // inert: not read by current model
         uint256 maxAbsLogitX18;
         uint16 conservativePenaltyMaxBps;
         uint16 conservativePenaltyMinBps;

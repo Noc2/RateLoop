@@ -350,6 +350,25 @@ export function registerDataRoutes(app: ApiApp) {
           eq(questionBundleReward.failed, false),
           eq(questionBundleReward.refunded, false),
           sql`${questionBundleRoundSet.claimedCount} < ${questionBundleReward.requiredCompleters}`,
+          // L-1: the bundle endpoint previously applied no window filter, while the on-chain bundle
+          // claim enforces the per-vote bounty window (committedWithinBountyWindow via BundleLib).
+          // Gate only on the *activated* bundle window (bountyOpensAt/bountyClosesAt). Unlike a pool,
+          // the bundle window is anchored to the earliest staked round across the whole round set
+          // (_firstBundleRoundSetStake), so a single question's round.startTime is not a valid
+          // pre-activation proxy (it would over-include late votes in later-starting questions whose
+          // on-chain claim then reverts -- codex PR #31). claimQuestionBundleReward lazily qualifies
+          // and activates the window, so once a round set is claimable its bountyClosesAt is set and
+          // this predicate matches the on-chain check exactly; before that activation event is indexed
+          // the round set is simply not surfaced yet (a brief, self-healing under-inclusion).
+          sql`(
+            ${questionBundleReward.bountyWindowSeconds} = 0
+            or (
+              ${questionBundleReward.bountyClosesAt} != 0
+              and ${questionBundleReward.bountyOpensAt} <= ${questionBundleReward.bountyClosesAt}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionBundleReward.bountyOpensAt}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionBundleReward.bountyClosesAt}
+            )
+          )`,
         ),
       )
       .groupBy(
@@ -1144,24 +1163,36 @@ export function registerDataRoutes(app: ApiApp) {
           eq(round.state, ROUND_STATE.Settled),
           sql`${vote.roundId} >= ${questionRewardPool.startRoundId}`,
           sql`${questionRewardPoolClaim.id} is null`,
+          // L-1: mirror the on-chain per-vote bounty-window bound enforced by claimQuestionReward
+          // (committedWithinBountyWindow), so votes whose commit/reveal fell outside the window are
+          // not surfaced as candidates (their claim would revert). Same predicate as the
+          // correlation round-votes eligibility query.
+          // L-6: before activation the window is anchored on-chain to firstStakedAt; the indexer has
+          // no per-round first-stake column, so it approximates with round.startTime (<= firstStakedAt).
+          // This can transiently over-include a not-yet-activated late bounty until the activation
+          // event lands and fills in the real bountyOpensAt/bountyClosesAt.
+          sql`(
+            ${questionRewardPool.bountyWindowSeconds} = 0
+            or (
+              ${questionRewardPool.bountyClosesAt} != 0
+              and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionRewardPool.bountyOpensAt}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionRewardPool.bountyClosesAt}
+            )
+            or (
+              ${questionRewardPool.bountyClosesAt} = 0
+              and ${round.startTime} is not null
+              and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${round.startTime}
+              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${round.startTime} + ${questionRewardPool.bountyWindowSeconds}
+            )
+          )`,
           or(
             sql`${questionRewardPoolRound.rewardPoolId} is not null`,
             and(
               eq(questionRewardPool.refunded, false),
               sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
               sql`${round.revealedCount} >= ${questionRewardPool.requiredVoters}`,
-              sql`(
-                ${questionRewardPool.bountyWindowSeconds} = 0
-                or (
-                  ${questionRewardPool.bountyClosesAt} != 0
-                  and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
-                )
-                or (
-                  ${questionRewardPool.bountyClosesAt} = 0
-                  and ${round.startTime} is not null
-                  and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
-                )
-              )`,
             ),
           ),
         ),

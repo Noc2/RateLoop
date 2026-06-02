@@ -655,7 +655,7 @@ test("askHumans routes feedback bonus asks through MCP", async () => {
   });
 
   const response = await agent.askHumans({
-    bounty: { amount: 1_000_000n, rewardPoolExpiresAt: 1_762_000_000n },
+    bounty: { amount: 1_000_000n, bountyStartBy: 1_762_000_000n },
     chainId: 480,
     clientRequestId: "ask-feedback-bonus",
     feedbackBonus: { amount: 2_000_000n },

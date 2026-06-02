@@ -13,6 +13,9 @@ struct RewardPool {
     uint64 bountyStartBy;
     uint64 bountyOpensAt;
     uint64 bountyClosesAt;
+    // Informational only: feedbackClosesAt (and feedbackWindowSeconds below) are computed and emitted
+    // for off-chain consumers to display a feedback window. They are NOT read by any on-chain
+    // eligibility/qualification/claim check here (the same is true of the BundleReward equivalents).
     uint64 feedbackClosesAt;
     uint64 claimDeadline;
     address funder;

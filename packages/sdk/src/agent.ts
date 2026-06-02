@@ -50,8 +50,9 @@ export interface RateLoopAgentBounty {
   amount: string | number | bigint;
   requiredVoters?: string | number | bigint;
   requiredSettledRounds?: string | number | bigint;
-  rewardPoolExpiresAt?: string | number | bigint;
-  feedbackClosesAt?: string | number | bigint;
+  bountyStartBy?: string | number | bigint;
+  bountyWindowSeconds?: string | number | bigint;
+  feedbackWindowSeconds?: string | number | bigint;
   bountyEligibility?: 0 | 1 | string | number;
   [key: string]: unknown;
 }

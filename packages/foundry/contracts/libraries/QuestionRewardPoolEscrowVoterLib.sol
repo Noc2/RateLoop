@@ -36,16 +36,6 @@ library QuestionRewardPoolEscrowVoterLib {
         );
     }
 
-    function committedByBountyClose(uint64 closesAt, uint48 committedAt, uint48 revealedAt)
-        internal
-        pure
-        returns (bool)
-    {
-        if (closesAt == 0) return true;
-        uint48 eligibilityTimestamp = committedAt == 0 ? revealedAt : committedAt;
-        return eligibilityTimestamp <= closesAt;
-    }
-
     function committedWithinBountyWindow(uint64 opensAt, uint64 closesAt, uint48 committedAt, uint48 revealedAt)
         internal
         pure

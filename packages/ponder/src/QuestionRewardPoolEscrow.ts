@@ -83,7 +83,10 @@ ponder.on(
         frontendFeeBps: Number(frontendFeeBps),
         startRoundId,
         bountyStartBy,
-        bountyOpensAt: 0n,
+        // Windowless pools (bountyWindowSeconds == 0) never emit RewardPoolWindowActivated; the
+        // contract opens them at creation time (bountyOpensAt = block.timestamp). Mirror that here
+        // instead of leaving bountyOpensAt at 0. Windowed pools stay 0 until activation fills it in.
+        bountyOpensAt: bountyWindowSeconds === 0n ? event.block.timestamp : 0n,
         bountyClosesAt: 0n,
         feedbackClosesAt: 0n,
         bountyWindowSeconds: Number(bountyWindowSeconds),
@@ -410,7 +413,9 @@ ponder.on(
         bountyEligibility: Number(bountyEligibility),
         bountyEligibilityDataHash,
         bountyStartBy,
-        bountyOpensAt: 0n,
+        // See RewardPoolCreated: windowless bundles open at creation time and never emit an
+        // activation event, so mirror the contract's bountyOpensAt = block.timestamp here.
+        bountyOpensAt: bountyWindowSeconds === 0n ? event.block.timestamp : 0n,
         bountyClosesAt: 0n,
         feedbackClosesAt: 0n,
         bountyWindowSeconds: Number(bountyWindowSeconds),
@@ -421,34 +426,11 @@ ponder.on(
         createdAt: event.block.timestamp,
         updatedAt: event.block.timestamp,
       })
-      .onConflictDoUpdate((row) => ({
-        funder,
-        funderIdentityKey,
-        asset: Number(asset),
-        fundedAmount: amount,
-        requiredCompleters: Number(requiredCompleters),
-        requiredSettledRounds: Number(requiredSettledRounds),
-        questionCount: Number(questionCount),
-        frontendFeeBps: Number(frontendFeeBps),
-        bountyEligibility: Number(bountyEligibility),
-        bountyEligibilityDataHash,
-        bountyStartBy,
-        bountyWindowSeconds: Number(bountyWindowSeconds),
-        feedbackWindowSeconds: Number(feedbackWindowSeconds),
-        expiresAt: bountyStartBy,
-        updatedAt: event.block.timestamp,
-        claimedAmount: row.claimedAmount,
-        voterClaimedAmount: row.voterClaimedAmount,
-        frontendClaimedAmount: row.frontendClaimedAmount,
-        refundedAmount: row.refundedAmount,
-        unallocatedAmount: row.unallocatedAmount,
-        allocatedAmount: row.allocatedAmount,
-        completedRoundSetCount: row.completedRoundSetCount,
-        totalRecordedQuestionRounds: row.totalRecordedQuestionRounds,
-        claimedCount: row.claimedCount,
-        failed: row.failed,
-        refunded: row.refunded,
-      }));
+      // Bundles are created once. Use DoNothing (like the RewardPoolCreated sibling) so a
+      // duplicate/replayed create cannot clobber an already-activated window: the previous
+      // onConflictDoUpdate reset expiresAt back to bountyStartBy while leaving the activated
+      // bountyOpensAt/bountyClosesAt set by QuestionBundleWindowActivated, an inconsistent state.
+      .onConflictDoNothing();
   },
 );
 

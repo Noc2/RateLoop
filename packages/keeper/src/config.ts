@@ -1,3 +1,4 @@
+import path from "node:path";
 import { getSharedDeploymentAddress as getSharedArtifactAddress } from "@rateloop/contracts/deployments";
 import { config as loadDotenv } from "dotenv";
 import { isAddress } from "viem";
@@ -563,9 +564,14 @@ function loadConfig() {
       ),
       artifactStorage: {
         mode: correlationSnapshotArtifactStorageMode,
-        outputDir:
+        // Resolve to an absolute path here so the writer
+        // (correlation-artifact-storage.ts) and the metrics reader (metrics.ts)
+        // always agree on the same directory regardless of the process launch
+        // CWD. The configured value / default string is unchanged.
+        outputDir: path.resolve(
           readEnv("KEEPER_CORRELATION_SNAPSHOT_STORAGE_DIR") ||
-          "correlation-artifacts",
+            "correlation-artifacts",
+        ),
         publicBaseUrl: correlationSnapshotArtifactPublicBaseUrl || "",
       },
     },

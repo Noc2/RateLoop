@@ -93,19 +93,22 @@ export async function attachOpenRoundSummary<T extends { id: bigint }>(items: T[
 
   const contentIds = items.map(item => item.id);
   const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+  // I-5: match the contract's strict boundary (WindowLib.rewardPoolExpired treats a pool as expired
+  // only when block.timestamp > closesAt/startBy). So active iff now <= boundary (>=), expired iff
+  // now > boundary (<). Previously the indexer flipped at now == boundary, one second early.
   const pendingOrActiveRewardPool = sql<boolean>`${questionRewardPool.refunded} = false
     and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
     and (
       ${questionRewardPool.bountyWindowSeconds} = 0
-      or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} > ${nowSeconds})
-      or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} > ${nowSeconds})
+      or (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} >= ${nowSeconds})
+      or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} >= ${nowSeconds})
     )`;
   const expiredRewardPool = sql<boolean>`${questionRewardPool.refunded} = false
     and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
     and ${questionRewardPool.bountyWindowSeconds} != 0
     and (
-      (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} <= ${nowSeconds})
-      or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} <= ${nowSeconds})
+      (${questionRewardPool.bountyClosesAt} != 0 and ${questionRewardPool.bountyClosesAt} < ${nowSeconds})
+      or (${questionRewardPool.bountyClosesAt} = 0 and ${questionRewardPool.bountyStartBy} < ${nowSeconds})
     )`;
   const currentRewardPoolAsset = sql<number | null>`case
     when ${questionRewardPool.allocatedAmount} > ${questionRewardPool.claimedAmount}
