@@ -16,6 +16,10 @@ type AgentAsksAuditRouteModule = typeof import("./asks/[operationKey]/audit/rout
 type AgentAsksExportRouteModule = typeof import("./asks/export/route");
 type AgentAsksOperationRouteModule = typeof import("./asks/[operationKey]/route");
 type AgentAsksRouteModule = typeof import("./asks/route");
+type AgentHandoffCompleteRouteModule = typeof import("./handoffs/[handoffId]/complete/route");
+type AgentHandoffPrepareRouteModule = typeof import("./handoffs/[handoffId]/prepare/route");
+type AgentHandoffRouteModule = typeof import("./handoffs/[handoffId]/route");
+type AgentHandoffsRouteModule = typeof import("./handoffs/route");
 type AgentQuoteRouteModule = typeof import("./quote/route");
 type AgentResultsByClientRouteModule = typeof import("./results/by-client-request/route");
 type AgentResultsOperationRouteModule = typeof import("./results/[operationKey]/route");
@@ -48,6 +52,10 @@ let callbackLifecycleModule: CallbackLifecycleModule;
 let callbackRegistryModule: CallbackRegistryModule;
 let dbModule: DbModule;
 let dbTestMemory: DbTestMemoryModule;
+let handoffCompleteRoute: AgentHandoffCompleteRouteModule;
+let handoffPrepareRoute: AgentHandoffPrepareRouteModule;
+let handoffRoute: AgentHandoffRouteModule;
+let handoffsRoute: AgentHandoffsRouteModule;
 let mcpBudgetModule: McpBudgetModule;
 let mcpToolsModule: McpToolsModule;
 let quoteRoute: AgentQuoteRouteModule;
@@ -333,6 +341,15 @@ function installAskOverrides() {
       },
       status: 202,
     }),
+    confirmAgentWalletQuestionSubmissionRequest: async params => ({
+      body: {
+        contentId: "content-123",
+        operationKey: params.operationKey,
+        status: "submitted",
+        transactionHashes: params.transactionHashes,
+      },
+      status: 200,
+    }),
     prepareNativeX402QuestionSubmissionRequest: async params => ({
       body: {
         clientRequestId: "mcp:ask-http",
@@ -468,6 +485,10 @@ before(async () => {
   callbackEventsModule = await import("~~/lib/agent-callbacks/events");
   callbackLifecycleModule = await import("~~/lib/agent-callbacks/lifecycle");
   callbackRegistryModule = await import("~~/lib/agent-callbacks/registry");
+  handoffCompleteRoute = await import("./handoffs/[handoffId]/complete/route");
+  handoffPrepareRoute = await import("./handoffs/[handoffId]/prepare/route");
+  handoffRoute = await import("./handoffs/[handoffId]/route");
+  handoffsRoute = await import("./handoffs/route");
   quoteRoute = await import("./quote/route");
   resultsByClientRoute = await import("./results/by-client-request/route");
   resultsOperationRoute = await import("./results/[operationKey]/route");
@@ -492,7 +513,11 @@ beforeEach(async () => {
   await dbModule.dbClient.execute("DELETE FROM api_rate_limit_maintenance");
   await dbModule.dbClient.execute("DELETE FROM mcp_agent_ask_audit_records");
   await dbModule.dbClient.execute("DELETE FROM mcp_agent_budget_reservations");
+  await dbModule.dbClient.execute("DELETE FROM agent_ask_handoff_assets");
+  await dbModule.dbClient.execute("DELETE FROM agent_ask_handoff_intents");
   await dbModule.dbClient.execute("DELETE FROM agent_signing_intents");
+  await dbModule.dbClient.execute("DELETE FROM question_image_attachments");
+  await dbModule.dbClient.execute("DELETE FROM signed_action_challenges");
   await dbModule.dbClient.execute("DELETE FROM x402_question_submissions");
 });
 
@@ -699,6 +724,123 @@ test("agent signing intent route accepts ttlMs on direct ask bodies without pers
   assert.equal(body.clientRequestId, "direct-ttl");
   assert.equal((body.requestBody as Record<string, unknown>).ttlMs, undefined);
   assert.equal(new Date(String(body.expiresAt)).getTime() - new Date(String(body.createdAt)).getTime(), 300000);
+});
+
+test("agent ask handoff route stages generated image bytes behind a browser link", async () => {
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      generatedImages: [
+        {
+          filename: "concept.png",
+          imageBase64: "aGVsbG8=",
+          mimeType: "image/png",
+          sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+          sizeBytes: 5,
+        },
+      ],
+      request: {
+        ...questionPayload("agent-handoff-image"),
+        maxPaymentAmount: "1500000",
+        question: {
+          categoryId: "5",
+          description: "Would this make you want to learn more?",
+          tags: ["agents", "pitch"],
+          title: "Generated concept image",
+        },
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+  const handoffId = String(body.handoffId);
+  const handoffUrl = new URL(String(body.handoffUrl));
+  const hashParams = new URLSearchParams(handoffUrl.hash.replace(/^#/, ""));
+  const token = hashParams.get("token");
+
+  assert.equal(response.status, 200);
+  assert.match(handoffId, /^ahf_/);
+  assert.ok(token);
+  assert.equal(handoffUrl.searchParams.get("token"), null);
+  assert.equal(body.nextAction, "Share handoffUrl with the user. Do not ask the user to paste raw wallet signatures.");
+
+  const readResponse = await handoffRoute.GET(
+    makePublicGet(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      "x-rateloop-handoff-token": token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const readBody = (await readResponse.json()) as { assets?: Array<Record<string, unknown>>; status?: string };
+
+  assert.equal(readResponse.status, 200);
+  assert.equal(readBody.status, "pending");
+  assert.equal(readBody.assets?.[0]?.status, "staged");
+  assert.equal(readBody.assets?.[0]?.dataUrl, "data:image/png;base64,aGVsbG8=");
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as {
+    status?: string;
+    uploadChallenges?: Array<Record<string, unknown>>;
+  };
+
+  assert.equal(prepareResponse.status, 200);
+  assert.equal(prepareBody.status, "awaiting_image_signatures");
+  assert.equal(prepareBody.uploadChallenges?.length, 1);
+  assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
+  assert.match(String(prepareBody.uploadChallenges?.[0]?.challengeId), /^[a-f0-9]{32}$/);
+});
+
+test("agent ask handoff route prepares and completes no-image wallet-call asks", async () => {
+  installAskOverrides();
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...questionPayload("agent-handoff-no-image"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+
+  assert.equal(prepareResponse.status, 200);
+  assert.equal(prepareBody.status, "prepared");
+  assert.equal(prepareBody.operationKey, OPERATION_KEY);
+  assert.equal((prepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
+
+  const completeResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [`0x${"4".repeat(64)}`],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const completeBody = (await completeResponse.json()) as Record<string, unknown>;
+
+  assert.equal(completeResponse.status, 200);
+  assert.equal(completeBody.status, "submitted");
+  assert.deepEqual(completeBody.transactionHashes, [`0x${"4".repeat(64)}`]);
 });
 
 test("agent signing intent read requires a private token outside the request URL", async () => {

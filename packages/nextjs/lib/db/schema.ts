@@ -402,6 +402,64 @@ export const agentSigningIntents = pgTable(
 export type AgentSigningIntent = typeof agentSigningIntents.$inferSelect;
 export type NewAgentSigningIntent = typeof agentSigningIntents.$inferInsert;
 
+export const agentAskHandoffIntents = pgTable(
+  "agent_ask_handoff_intents",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    status: text("status").notNull(),
+    chainId: integer("chain_id"),
+    clientRequestId: text("client_request_id"),
+    paymentMode: text("payment_mode").notNull(),
+    walletAddress: text("wallet_address"),
+    operationKey: text("operation_key"),
+    payloadHash: text("payload_hash"),
+    requestBody: text("request_body").notNull(),
+    transactionPlan: text("transaction_plan"),
+    transactionHashes: text("transaction_hashes"),
+    error: text("error"),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({
+    tokenHashUnique: uniqueIndex("agent_ask_handoff_intents_token_hash_unique").on(table.tokenHash),
+    statusExpiresIdx: index("agent_ask_handoff_intents_status_expires_idx").on(table.status, table.expiresAt),
+    operationKeyIdx: index("agent_ask_handoff_intents_operation_key_idx").on(table.operationKey),
+  }),
+);
+
+export type AgentAskHandoffIntent = typeof agentAskHandoffIntents.$inferSelect;
+export type NewAgentAskHandoffIntent = typeof agentAskHandoffIntents.$inferInsert;
+
+export const agentAskHandoffAssets = pgTable(
+  "agent_ask_handoff_assets",
+  {
+    id: text("id").primaryKey(),
+    handoffId: text("handoff_id").notNull(),
+    attachmentId: text("attachment_id").notNull(),
+    status: text("status").notNull(),
+    originalFilename: text("original_filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    imageBase64: text("image_base64").notNull(),
+    imageUrl: text("image_url"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    handoffIdx: index("agent_ask_handoff_assets_handoff_idx").on(table.handoffId),
+    attachmentUnique: uniqueIndex("agent_ask_handoff_assets_attachment_unique").on(table.attachmentId),
+    statusCreatedIdx: index("agent_ask_handoff_assets_status_created_idx").on(table.status, table.createdAt),
+  }),
+);
+
+export type AgentAskHandoffAsset = typeof agentAskHandoffAssets.$inferSelect;
+export type NewAgentAskHandoffAsset = typeof agentAskHandoffAssets.$inferInsert;
+
 export const mcpAgentBudgetReservations = pgTable(
   "mcp_agent_budget_reservations",
   {

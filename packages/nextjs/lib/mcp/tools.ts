@@ -26,16 +26,25 @@ import {
 import { buildAgentCallbackPayload, callbackEventId, getAgentPublicQuestionUrl } from "~~/lib/agent-callbacks/payload";
 import { assertSafeAgentCallbackUrl } from "~~/lib/agent-callbacks/urlSafety";
 import { buildAgentFastLaneGuidance } from "~~/lib/agent/fastLane";
+import {
+  buildAgentAskHandoffResponse,
+  createAgentAskHandoff,
+  listAgentAskHandoffAssets,
+  loadAgentAskHandoffByToken,
+} from "~~/lib/agent/handoffs";
 import { buildAgentLegalNotice } from "~~/lib/agent/legalNotice";
 import { buildAgentLiveAskGuidance } from "~~/lib/agent/liveAskGuidance";
 import { buildAgentResultPackage, resolveAgentBountyEligibilityScope } from "~~/lib/agent/resultPackage";
 import {
+  agentAskHandoffOutputSchema,
   agentAskHumansInputSchema,
   agentAskHumansOutputSchema,
   agentBalanceOutputSchema,
   agentConfirmAskTransactionsInputSchema,
   agentConfirmFeedbackBonusTransactionsInputSchema,
   agentConfirmRatingTransactionsInputSchema,
+  agentCreateAskHandoffInputSchema,
+  agentHandoffStatusInputSchema,
   agentImageUploadOutputSchema,
   agentImageUploadStatusInputSchema,
   agentOperationLookupInputSchema,
@@ -256,12 +265,41 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     annotations: {
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: true,
       readOnlyHint: false,
     },
     description:
-      "Prepare a RateLoop image upload for generated mockups, screenshots, or local visual context. Public MCP callers sign the returned challenge before rateloop_upload_image; managed agents may upload with bearer auth.",
+      "Create a browser handoff link for normal human-wallet asks. Use this for public URL, YouTube, or generated/local image context; share the returned handoffUrl with the user. Do not ask users to paste raw wallet signatures.",
+    inputSchema: agentCreateAskHandoffInputSchema,
+    name: "rateloop_create_ask_handoff_link",
+    outputSchema: agentAskHandoffOutputSchema,
+    requiredScope: MCP_SCOPES.ask,
+    title: "Create Ask Handoff Link",
+  },
+  {
+    annotations: {
+      idempotentHint: true,
+      openWorldHint: true,
+      readOnlyHint: true,
+    },
+    description:
+      "Get browser handoff status by handoffId and handoffToken. Use this after sharing a handoffUrl to know whether the user has prepared or submitted the ask.",
+    inputSchema: agentHandoffStatusInputSchema,
+    name: "rateloop_get_handoff_status",
+    outputSchema: agentAskHandoffOutputSchema,
+    requiredScope: MCP_SCOPES.read,
+    title: "Get Handoff Status",
+  },
+  {
+    annotations: {
+      idempotentHint: false,
+      openWorldHint: true,
+      readOnlyHint: false,
+    },
+    description:
+      "Advanced raw image-upload flow. Prefer rateloop_create_ask_handoff_link for chat agents with human-controlled wallets; public MCP callers that use this low-level tool must sign the returned challenge before rateloop_upload_image.",
     inputSchema: agentPrepareImageUploadInputSchema,
     name: "rateloop_prepare_image_upload",
     outputSchema: agentPrepareImageUploadOutputSchema,
@@ -276,7 +314,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Upload AI-generated or local image bytes to RateLoop, normalize and moderate them, and return an imageUrl for question.imageUrls.",
+      "Advanced raw image-upload flow. Upload AI-generated or local image bytes after a managed token or public wallet signature; normal chat handoffs should use rateloop_create_ask_handoff_link instead.",
     inputSchema: agentUploadImageInputSchema,
     name: "rateloop_upload_image",
     outputSchema: agentImageUploadOutputSchema,
@@ -318,7 +356,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Prepare a paid human-feedback ask and return either wallet transaction calls or a native x402 USDC authorization request, plus Terms and Privacy Notice links. Public wallet-mode asks are not submitted until the wallet signs and the hashes are confirmed.",
+      "Advanced raw wallet-call flow. Prepare a paid human-feedback ask and return wallet transaction calls or a native x402 USDC authorization request; normal chat agents should create a handoff link instead.",
     inputSchema: agentAskHumansInputSchema,
     name: "rateloop_ask_humans",
     outputSchema: agentAskHumansOutputSchema,
@@ -471,6 +509,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
 const PUBLIC_MCP_TOOL_NAMES = new Set([
   "rateloop_list_categories",
   "rateloop_list_result_templates",
+  "rateloop_create_ask_handoff_link",
+  "rateloop_get_handoff_status",
   "rateloop_prepare_image_upload",
   "rateloop_upload_image",
   "rateloop_get_image_upload_status",
@@ -499,6 +539,42 @@ function questionPayloadArgs(args: JsonObject): JsonObject {
   const payloadArgs = { ...args };
   delete payloadArgs.feedbackBonus;
   return payloadArgs;
+}
+
+function handoffRequestArgs(args: JsonObject): JsonObject {
+  if (args.request && typeof args.request === "object" && !Array.isArray(args.request)) {
+    return args.request as JsonObject;
+  }
+  const requestArgs = { ...args };
+  delete requestArgs.generatedImages;
+  delete requestArgs.request;
+  delete requestArgs.ttlMs;
+  return requestArgs;
+}
+
+function toolOrigin(requestUrl: string | undefined) {
+  try {
+    return new URL(toolRequestUrl(requestUrl, true)).origin;
+  } catch {
+    return "https://www.rateloop.ai";
+  }
+}
+
+async function createAskHandoffLink(args: JsonObject, requestUrl: string | undefined) {
+  return createAgentAskHandoff({
+    generatedImages: args.generatedImages,
+    origin: toolOrigin(requestUrl),
+    requestBody: handoffRequestArgs(args),
+    ttlMs: typeof args.ttlMs === "number" ? args.ttlMs : undefined,
+  });
+}
+
+async function getAskHandoffStatus(args: JsonObject) {
+  const handoffId = readRequiredStringField(args, "handoffId");
+  const handoffToken = readRequiredStringField(args, "handoffToken");
+  const handoff = await loadAgentAskHandoffByToken({ handoffId, token: handoffToken });
+  const assets = await listAgentAskHandoffAssets(handoff.id);
+  return buildAgentAskHandoffResponse({ assets, handoff });
 }
 
 function parseMaxPaymentAmount(value: unknown): bigint {
@@ -2161,6 +2237,12 @@ export async function callPublicRateLoopMcpTool(params: {
     case "rateloop_list_result_templates":
       return { templates: listAgentResultTemplates() };
 
+    case "rateloop_create_ask_handoff_link":
+      return createAskHandoffLink(args, params.requestUrl);
+
+    case "rateloop_get_handoff_status":
+      return getAskHandoffStatus(args);
+
     case "rateloop_prepare_image_upload":
       return prepareImageUpload(args, toolRequestUrl(params.requestUrl, true));
 
@@ -2354,6 +2436,12 @@ export async function callRateLoopMcpTool(params: {
 
     case "rateloop_list_result_templates":
       return { templates: listAgentResultTemplates() };
+
+    case "rateloop_create_ask_handoff_link":
+      return createAskHandoffLink(args, params.requestUrl);
+
+    case "rateloop_get_handoff_status":
+      return getAskHandoffStatus(args);
 
     case "rateloop_prepare_image_upload":
       return prepareImageUpload(args, toolRequestUrl(params.requestUrl), params.agent);
@@ -2668,6 +2756,10 @@ type AgentToolErrorCode =
   | "unsupported_template"
   | "wallet_address_required";
 
+function isStatusError(error: unknown): error is Error & { status: number } {
+  return error instanceof Error && "status" in error && typeof (error as { status?: unknown }).status === "number";
+}
+
 function classifyToolError(error: unknown): {
   code: AgentToolErrorCode;
   recoverWith: string;
@@ -2728,6 +2820,16 @@ function classifyToolError(error: unknown): {
     return { code: "invalid_arguments", recoverWith: "fix_tool_arguments", retryable: false };
   }
 
+  if (isStatusError(error)) {
+    if (message.includes("walletaddress")) {
+      return { code: "wallet_address_required", recoverWith: "include_walletAddress", retryable: false };
+    }
+    if (error.status >= 500) {
+      return { code: "service_unavailable", recoverWith: "retry_or_contact_operator", retryable: true };
+    }
+    return { code: "invalid_arguments", recoverWith: "fix_tool_arguments", retryable: false };
+  }
+
   return { code: "failed_submission", recoverWith: "retry_or_contact_operator", retryable: true };
 }
 
@@ -2737,7 +2839,8 @@ export function normalizeToolError(error: unknown) {
     error instanceof McpBudgetError ||
     error instanceof X402QuestionConfigError ||
     error instanceof X402QuestionConflictError ||
-    error instanceof X402QuestionInputError
+    error instanceof X402QuestionInputError ||
+    isStatusError(error)
   ) {
     const classified = classifyToolError(error);
     return {
@@ -2746,7 +2849,7 @@ export function normalizeToolError(error: unknown) {
       message: error.message,
       recoverWith: classified.recoverWith,
       retryable: classified.retryable,
-      status: "status" in error && typeof error.status === "number" ? error.status : 400,
+      status: isStatusError(error) ? error.status : 400,
     };
   }
 

@@ -328,6 +328,113 @@ const agentAskInputBaseProperties = {
   ...templateSelectorSchema.properties,
 } satisfies JsonSchema;
 
+const agentHandoffGeneratedImageInputSchema = {
+  additionalProperties: false,
+  properties: {
+    dataUrl: {
+      description:
+        "Alternative to imageBase64. A data:image/png;base64,..., data:image/jpeg;base64,..., or data:image/webp;base64,... URL.",
+      type: "string",
+    },
+    filename: { description: "Generated or local image filename, such as generated-mockup.png.", type: "string" },
+    imageBase64: {
+      description: "Base64-encoded raw image bytes staged for browser wallet upload.",
+      type: "string",
+    },
+    mimeType: {
+      description: "Image MIME type. Supported values are image/jpeg, image/png, and image/webp.",
+      enum: ["image/jpeg", "image/png", "image/webp"],
+      type: "string",
+    },
+    sha256: {
+      description: "Optional lowercase SHA-256 hash of the raw image bytes.",
+      pattern: "^[a-f0-9]{64}$",
+      type: "string",
+    },
+    sizeBytes: {
+      description: "Optional raw image byte length.",
+      minimum: 1,
+      type: "integer",
+    },
+  },
+  required: ["filename"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentCreateAskHandoffInputSchema = {
+  additionalProperties: true,
+  properties: {
+    ...agentAskInputBaseProperties,
+    generatedImages: {
+      description:
+        "Optional generated/local image bytes to stage into the browser handoff. Use this instead of raw public image-upload challenges for normal chat flows.",
+      items: agentHandoffGeneratedImageInputSchema,
+      maxItems: 4,
+      type: "array",
+    },
+    maxPaymentAmount: {
+      description: "Maximum total bounty spend in atomic USDC.",
+      pattern: "^\\d+$",
+      type: "string",
+    },
+    paymentMode: {
+      default: "wallet_calls",
+      description: "Browser handoff links currently support wallet_calls.",
+      enum: ["wallet_calls"],
+      type: "string",
+    },
+    request: {
+      additionalProperties: true,
+      description:
+        "Optional wrapped ask request body. When present, RateLoop stages generatedImages alongside this request.",
+      type: "object",
+    },
+    ttlMs: {
+      description: "Optional handoff link lifetime in milliseconds.",
+      minimum: 60000,
+      type: "integer",
+    },
+    walletAddress: {
+      ...agentWalletAddressSchema,
+      description: "Optional expected user wallet. If omitted, the user chooses the wallet in the browser handoff.",
+    },
+  },
+  required: ["clientRequestId", "bounty", "maxPaymentAmount"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentHandoffStatusInputSchema = {
+  additionalProperties: false,
+  properties: {
+    handoffId: {
+      description: "Agent ask handoff id returned by rateloop_create_ask_handoff_link.",
+      type: "string",
+    },
+    handoffToken: {
+      description: "Private handoff token returned by rateloop_create_ask_handoff_link.",
+      type: "string",
+    },
+  },
+  required: ["handoffId", "handoffToken"],
+  type: "object",
+} satisfies JsonSchema;
+
+export const agentAskHandoffOutputSchema = {
+  additionalProperties: true,
+  properties: {
+    assets: { items: { type: "object" }, type: "array" },
+    handoffId: { type: "string" },
+    handoffToken: { type: "string" },
+    handoffUrl: { type: "string" },
+    nextAction: { type: "string" },
+    resultTool: { type: "string" },
+    status: { type: "string" },
+    statusTool: { type: "string" },
+  },
+  required: ["handoffId", "handoffToken", "handoffUrl", "status", "nextAction"],
+  type: "object",
+} satisfies JsonSchema;
+
 export const agentQuoteInputSchema = {
   additionalProperties: true,
   properties: {
