@@ -18095,6 +18095,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "MIN_FEEDBACK_AWARD_DECISION_SECONDS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "PAUSER_ROLE",
           inputs: [],
           outputs: [
@@ -18513,6 +18526,25 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "asset",
               type: "uint8",
               internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "feedbackBonusAwardDeadline",
+          inputs: [
+            {
+              name: "poolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -44423,6 +44455,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "MIN_FEEDBACK_AWARD_DECISION_SECONDS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "PAUSER_ROLE",
           inputs: [],
           outputs: [
@@ -44841,6 +44886,25 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "asset",
               type: "uint8",
               internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "feedbackBonusAwardDeadline",
+          inputs: [
+            {
+              name: "poolId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",

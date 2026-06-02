@@ -31,6 +31,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     uint256 public constant BPS_SCALE = 10_000;
     uint256 public constant DEFAULT_FRONTEND_FEE_BPS = 300;
     uint256 public constant MAX_FRONTEND_FEE_BPS = 500;
+    uint256 public constant MIN_FEEDBACK_AWARD_DECISION_SECONDS = 1 days;
     uint8 public constant REWARD_ASSET_LREP = 0;
     uint8 public constant REWARD_ASSET_USDC = 1;
     bytes32 internal constant FEEDBACK_BONUS_AUTHORIZATION_TYPEHASH = keccak256(
@@ -312,7 +313,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         FeedbackBonusPool storage pool = _getExistingPool(poolId);
         require(msg.sender == pool.awarder, "Only awarder");
         require(!pool.forfeited, "Pool forfeited");
-        require(block.timestamp <= pool.feedbackClosesAt, "Feedback closed");
+        require(block.timestamp <= _feedbackBonusAwardDeadline(pool), "Feedback closed");
         require(feedbackHash != bytes32(0), "Feedback hash required");
         require(grossAmount > 0 && grossAmount <= pool.remainingAmount, "Invalid amount");
         require(!feedbackHashAwarded[poolId][feedbackHash], "Feedback already awarded");
@@ -378,7 +379,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     {
         FeedbackBonusPool storage pool = _getExistingPool(poolId);
         require(!pool.forfeited, "Already forfeited");
-        require(block.timestamp > pool.feedbackClosesAt, "Not expired");
+        require(block.timestamp > _feedbackBonusAwardDeadline(pool), "Not expired");
         forfeitedAmount = pool.remainingAmount;
         require(forfeitedAmount > 0, "No funds");
 
@@ -411,6 +412,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         require(to != address(0), "Invalid recipient");
         token.safeTransfer(to, amount);
         emit NonAssetTokenRecovered(address(token), to, amount);
+    }
+
+    function feedbackBonusAwardDeadline(uint256 poolId) external view returns (uint256) {
+        return _feedbackBonusAwardDeadline(_getExistingPool(poolId));
     }
 
     function setRaterRegistry(address raterRegistry_) external onlyRole(CONFIG_ROLE) {
@@ -490,6 +495,23 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         require(roundId == currentRoundId, "Invalid target round");
         (, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(contentId, roundId);
         require(state == RoundLib.RoundState.Open, "Round not open");
+    }
+
+    function _feedbackBonusAwardDeadline(FeedbackBonusPool storage pool) internal view returns (uint256) {
+        (uint48 startTime, RoundLib.RoundState state,,,,,,,,, uint48 settledAt,,,) =
+            votingEngine.rounds(pool.contentId, pool.roundId);
+        uint256 requestedDeadline = pool.feedbackClosesAt;
+
+        if (settledAt != 0 && state != RoundLib.RoundState.Open) {
+            uint256 decisionDeadline = uint256(settledAt) + MIN_FEEDBACK_AWARD_DECISION_SECONDS;
+            return requestedDeadline > decisionDeadline ? requestedDeadline : decisionDeadline;
+        }
+
+        if (startTime != 0 && state == RoundLib.RoundState.Open) {
+            return type(uint256).max;
+        }
+
+        return requestedDeadline;
     }
 
     function _requireCurrentRegistryVotingEngine() internal view {

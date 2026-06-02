@@ -429,6 +429,84 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(remainingAmount, 90e6);
     }
 
+    function testAwardDeadlineExtendsToOneDayAfterSettlement() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 requestedDeadline = block.timestamp + 1;
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        (,,,,,,,,,, uint48 settledAt,,,) = votingEngine.rounds(contentId, roundId);
+
+        assertGt(block.timestamp, requestedDeadline);
+        assertEq(
+            feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId),
+            uint256(settledAt) + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS()
+        );
+
+        vm.prank(funder);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        assertEq(recipientAmount, 10e6);
+        assertEq(usdc.balanceOf(voter1), 1_010e6);
+    }
+
+    function testAwardRejectsAfterMinimumDecisionWindowAndForfeits() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
+        _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        uint256 awardDeadline = feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId);
+
+        vm.warp(awardDeadline + 1);
+
+        vm.prank(funder);
+        vm.expectRevert("Feedback closed");
+        feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        uint256 treasuryBalanceBefore = usdc.balanceOf(treasury);
+        uint256 forfeitedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+
+        assertEq(forfeitedAmount, BONUS_AMOUNT);
+        assertEq(usdc.balanceOf(treasury), treasuryBalanceBefore + BONUS_AMOUNT);
+    }
+
+    function testLongerRequestedAwardDeadlineWinsOverMinimumDecisionWindow() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 requestedDeadline = block.timestamp + 7 days;
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        (,,,,,,,,,, uint48 settledAt,,,) = votingEngine.rounds(contentId, roundId);
+        uint256 minimumDecisionDeadline =
+            uint256(settledAt) + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS();
+
+        assertGt(requestedDeadline, minimumDecisionDeadline);
+        assertEq(feedbackBonusEscrow.feedbackBonusAwardDeadline(poolId), requestedDeadline);
+
+        vm.warp(minimumDecisionDeadline + 1);
+        vm.prank(funder);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        assertEq(recipientAmount, 10e6);
+    }
+
+    function testUnstartedRoundFeedbackBonusForfeitsAtRequestedDeadline() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
+
+        vm.warp(block.timestamp + 2);
+        uint256 forfeitedAmount = feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+
+        assertEq(forfeitedAmount, BONUS_AMOUNT);
+    }
+
+    function testStartedOpenRoundFeedbackBonusCannotForfeitBeforeTerminalDeadline() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 1);
+        _commitFeedbackVote(voter1, contentId, true, 0, address(0));
+
+        vm.warp(block.timestamp + 2);
+        vm.expectRevert("Not expired");
+        feedbackBonusEscrow.forfeitExpiredFeedbackBonus(poolId);
+    }
+
     function testLrepFeedbackBonusPaysRevealedVoterAndFrontend() public {
         _registerFrontend(frontend1);
         uint256 contentId = _submitQuestion("");
@@ -919,10 +997,16 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
     }
 
     function _createFeedbackBonusPool(uint256 contentId) internal returns (uint256 poolId) {
+        poolId = _createFeedbackBonusPoolWithDeadline(contentId, block.timestamp + 7 days);
+    }
+
+    function _createFeedbackBonusPoolWithDeadline(uint256 contentId, uint256 feedbackClosesAt)
+        internal
+        returns (uint256 poolId)
+    {
         vm.startPrank(funder);
         usdc.approve(address(feedbackBonusEscrow), BONUS_AMOUNT);
-        poolId =
-            feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
+        poolId = feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, feedbackClosesAt, funder);
         vm.stopPrank();
     }
 
