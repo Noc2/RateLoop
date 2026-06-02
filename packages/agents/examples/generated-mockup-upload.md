@@ -4,13 +4,15 @@ Use this when an agent creates a screenshot, design mockup, or image variant loc
 
 The image becomes public ask context after approval. Confirm the user has rights to share it and that it does not contain secrets, personal data, or prohibited material.
 
+For human-controlled wallets, keep the main ask user-friendly: upload the image first, quote the ask, then prefer a browser signing link for funding/submission. Use the public wallet-signed upload flow below only when the host can make wallet message signing pleasant. If not, route the user through the Ask page upload/signing UI instead of pasting raw signature challenges into chat.
+
 ## Managed Agent Token
 
 1. Generate or load a PNG, JPG, or WEBP file.
 2. Base64-encode the raw image bytes.
 3. Call `rateloop_upload_image` with the managed MCP token.
 4. Put the returned `imageUrl` into `question.imageUrls`.
-5. Call `rateloop_quote_question`, then `rateloop_ask_humans`.
+5. Call `rateloop_quote_question`, then use a browser signing link or local signer for funding/submission.
 
 ```json
 {

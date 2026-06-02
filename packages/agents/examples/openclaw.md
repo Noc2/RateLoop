@@ -4,7 +4,7 @@ OpenClaw-style persistent agents are a good fit for RateLoop's remote MCP surfac
 
 ## Config
 
-Start from `generic-public-mcp.json` when OpenClaw already controls a funded wallet. Use `openclaw.mcpServers.json` when you also want a saved managed policy and bearer token:
+Start from `generic-public-mcp.json` only when OpenClaw already controls a funded wallet. For a human-controlled wallet, create a browser signing link instead of exposing raw wallet calls. Use `openclaw.mcpServers.json` when you also want a saved managed policy and bearer token:
 
 ```json
 {
@@ -27,7 +27,7 @@ Bearer tokens are optional. Use them with narrow scopes and small budget caps wh
 
 1. list templates
 2. quote the ask
-3. ask humans with a stable `clientRequestId`
+3. submit through the controlled wallet, or create a browser signing link for a human wallet
 4. wait for callback or poll status
 5. fetch the structured result
 6. store `operationKey`, `publicUrl`, `answer`, and `recommendedNextAction` in memory

@@ -2,12 +2,12 @@
 
 Agent-facing examples, templates, question guidance, and CLI helpers for asking open raters through RateLoop.
 
-This package is for the moment an agent should ask instead of guess. The core loop is:
+This package is for the moment an agent should ask instead of guess. The default user-friendly loop is:
 
-1. choose a result template
-2. lint the question
+1. create or collect public context
+2. upload generated/local image bytes to RateLoop when needed
 3. quote before spending
-4. prepare an ask with a stable `clientRequestId`
+4. hand a human wallet a browser signing link, or use a local signer for agent-controlled wallets
 5. poll status or wait for a callback
 6. read the structured result and store the public URL
 
@@ -19,16 +19,15 @@ the public MCP endpoint or direct HTTP routes, and ask the user for the few runt
 hard-coded:
 
 - RateLoop origin, usually `https://www.rateloop.ai`
-- funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
+- funded World Chain `walletAddress` for browser signing, or permission to generate a local encrypted signer and fund that address
 - public context URL, YouTube video context, or image context you can upload to RateLoop
 - optional extra image bytes for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`
 - optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include USDC bonuses in `maxPaymentAmount` and approve LREP bonuses through wallet calls
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
-- execution path: public MCP wallet calls, direct JSON routes, local signer, or WebMCP-assisted browser signing
+- execution path: browser signing link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
 
-`/ask?tab=agent` is an optional user-control surface for funding, copying config, and managed policy setup. It is not a
-prerequisite for public wallet-funded asks.
+`/ask?tab=agent` is the user-control surface for funding, copied config, managed policy setup, image upload, and browser signing handoff. It is not a prerequisite for public wallet-funded asks, but it is the friendliest fallback when chat-based wallet message signing would be awkward.
 
 The RateLoop account and managed bearer-token path are optional. Use them only when the operator wants saved caps,
 category allowlists, callbacks, balance tooling, or audit exports enforced by RateLoop instead of by the host agent.
@@ -42,10 +41,9 @@ yarn agents:templates
 # Validate a focused example ask.
 yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.json
 
-# Quote, prepare wallet calls, then confirm submitted transactions.
+# Quote through MCP, then prefer a browser signing link for user wallets.
 export RATELOOP_AGENT_WALLET_ADDRESS=0x...
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
-yarn agents:ask --file packages/agents/examples/questions/landing-pitch-review.json
 
 # Local signer path for Codex-like agents that can hold an encrypted keystore.
 export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="$(security find-generic-password -a rateloop-local-signer -w)"
@@ -62,12 +60,12 @@ The CLI reads `.env` from the current process environment. For the default walle
 
 ## First Funded Ask
 
-1. Fund the signer wallet with World Chain USDC. On the Next.js `/ask` Agent tab, use **Add World Chain USDC** on World Chain mainnet when thirdweb is configured, or send World Chain USDC from another wallet.
-2. Pass that address as `walletAddress` when quoting or asking, or set `RATELOOP_AGENT_WALLET_ADDRESS` for the CLI. For public MCP, use `/api/mcp/public`; for direct HTTP, use `/api/agent`.
+1. Fund the user wallet or local signer wallet with World Chain USDC.
+2. Upload generated/local image bytes to RateLoop before quoting, if visual context is needed.
 3. Quote with `rateloop_quote_question` before reserving spend.
-4. Call `rateloop_ask_humans` to prepare the ask, execute the returned `transactionPlan.calls` in order, and keep every transaction hash.
-5. Confirm those hashes with `rateloop_confirm_ask_transactions`.
-6. If `feedbackBonus.transactionPlan` is returned, execute those calls and confirm them with `rateloop_confirm_feedback_bonus_transactions`.
+4. For a human wallet, create `POST /api/agent/signing-intents` with the same ask payload and share the returned `/agent/sign/{intentId}#token=...` URL.
+5. For an agent-controlled wallet, run `local-ask` with the encrypted local signer.
+6. Use raw MCP `rateloop_ask_humans` wallet calls only when the host can execute or present them cleanly.
 7. Poll `rateloop_get_question_status` or read `rateloop_get_result` after settlement.
 
 Managed agents can also call `rateloop_get_agent_balance` and can attach signed callbacks, but those controls require a saved policy and bearer token.
@@ -85,8 +83,9 @@ Do not send plaintext rating direction, predicted crowd share, or salt to hosted
 
 For mockups, screenshots, generated images, or design options, upload image bytes to RateLoop before quoting. Managed
 bearer-token agents call `rateloop_upload_image`; public wallet-mode agents call `rateloop_prepare_image_upload`, get the
-wallet signature, then call `rateloop_upload_image`. The Ask page provides the same moderated upload path. RateLoop
-returns an `imageUrl` for `question.imageUrls`.
+wallet signature, then call `rateloop_upload_image`. The Ask page provides the same moderated upload path and is the
+fallback when chat-based wallet message signing would be too clunky. RateLoop returns an `imageUrl` for
+`question.imageUrls`.
 
 Treat uploaded images as public ask context. Ask the user to confirm they have rights to share the image and that it
 does not contain confidential, personal, or prohibited material. Do not pass arbitrary HTTPS image URLs in `imageUrls`;

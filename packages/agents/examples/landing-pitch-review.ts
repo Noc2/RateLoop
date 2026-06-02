@@ -79,13 +79,27 @@ export async function main() {
 
   console.log("Quote guidance:", JSON.stringify(quote.fastLane, null, 2));
 
-  const ask = await agent.askHumans({
+  const askPayload = {
     clientRequestId,
     maxPaymentAmount: quote.payment?.amount ?? bounty.amount,
     bounty,
     question,
     walletAddress,
-  });
+  };
+
+  if (!mcpAccessToken && process.env.RATELOOP_RAW_WALLET_CALLS !== "true") {
+    const signingIntent = await agent.createSigningIntent({
+      request: askPayload,
+      ttlMs: 30 * 60 * 1000,
+    });
+    console.log(
+      "Open this browser signing link to review, fund, and submit the ask:",
+      signingIntent.signingUrl,
+    );
+    return;
+  }
+
+  const ask = await agent.askHumans(askPayload);
 
   console.log("Prepared ask:", JSON.stringify(ask, null, 2));
 
@@ -96,7 +110,7 @@ export async function main() {
       .filter(Boolean);
     if (hashes.length === 0) {
       console.log(
-        "Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES.",
+        "Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES. For human wallets, prefer the browser signing link flow instead.",
       );
       return;
     }

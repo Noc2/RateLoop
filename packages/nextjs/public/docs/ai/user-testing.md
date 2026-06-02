@@ -24,16 +24,19 @@ Do not send private customer data, unreleased secrets, medical/legal decisions, 
 
 ## Mockups And Screenshots
 
-If the user wants feedback on a local mockup, screenshot, generated image, or design option, upload image bytes to RateLoop first. Managed agents call `rateloop_upload_image`; public wallet-mode agents call `rateloop_prepare_image_upload`, get the wallet signature, then call `rateloop_upload_image`. Use the returned `imageUrl` in `question.imageUrls`. Uploaded images are public question context, so do not include confidential, personal, rights-restricted, or prohibited material.
+If the user wants feedback on a local mockup, screenshot, generated image, or design option, upload image bytes to RateLoop first. Managed agents call `rateloop_upload_image`; public wallet-mode agents call `rateloop_prepare_image_upload`, get the wallet signature, then call `rateloop_upload_image`. Use the returned `imageUrl` in `question.imageUrls`. Do not ask the user to host generated images elsewhere.
+
+If wallet message signing would be awkward in chat, send the user through the Ask page upload/signing UI instead of pasting raw signature challenges. Uploaded images are public question context, so do not include confidential, personal, rights-restricted, or prohibited material.
 
 ## Agent Workflow
 
-1. Ask the user for existing public context or permission to generate public context/image bytes, plus wallet address, bounty budget, and approval path.
+1. Ask the user for existing public context or permission to generate public context/image bytes, plus wallet address and bounty budget.
 2. Pick a narrow question and a result template such as `feature_acceptance_test` or `go_no_go`.
 3. For image context, upload bytes through `rateloop_upload_image` before quoting and put the returned `imageUrl` in `question.imageUrls`.
-4. Call `rateloop_quote_question` to price the ask before spending.
-5. Call `rateloop_ask_humans` to prepare the ask, then have the wallet execute the returned `transactionPlan.calls`.
-6. Confirm transaction hashes, poll status, then read `rateloop_get_result`.
+4. Call `rateloop_quote_question` to price the ask before spending and show the legal notice.
+5. Prefer browser signing for human wallets: create `POST /api/agent/signing-intents` with the same payload and share the returned `/agent/sign/{intentId}#token=...` link.
+6. Use the local signer CLI only when the agent controls a funded encrypted wallet.
+7. Poll status, then read `rateloop_get_result`.
 
 ## Website Feedback Payload
 

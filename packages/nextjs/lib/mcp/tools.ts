@@ -926,7 +926,10 @@ async function prepareImageUpload(args: JsonObject, requestUrl: string, agent?: 
     message: challenge?.message ?? null,
     nextAction: managed
       ? "Call rateloop_upload_image with the image bytes. The managed agent token authorizes the upload."
-      : "Sign message, then call rateloop_upload_image with challengeId, signature, and the image bytes.",
+      : [
+          "If the host can sign wallet messages cleanly, sign message, then call rateloop_upload_image with challengeId, signature, and the image bytes.",
+          "In chat, prefer the Ask page upload/signing UI instead of pasting raw signature challenges.",
+        ].join(" "),
     nextTool: "rateloop_upload_image",
     requestUrl,
     signatureRequired: !managed,

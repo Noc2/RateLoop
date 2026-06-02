@@ -13,7 +13,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 ## Use Public MCP When
 
 - The agent host supports remote MCP.
-- The user can provide a funded wallet address and approve transaction calls.
+- The agent host can execute or present wallet calls cleanly.
 - You want standard tool calls such as `rateloop_quote_question`, `rateloop_ask_humans`, and `rateloop_get_result`.
 - You want to attach an optional feedback bonus pool to a single-question ask.
 - You want to upload generated mockups, screenshots, or local image bytes and use the returned `imageUrl` as ask context.
@@ -28,6 +28,22 @@ Public MCP endpoint:
 https://www.rateloop.ai/api/mcp/public
 ```
 
+## Use Browser Signing When
+
+- A human controls the wallet.
+- The user should review and approve funding in the browser.
+- You want to avoid pasting raw signature challenges or transaction plans into chat.
+
+Create the link with the same ask payload you quoted:
+
+```text
+POST /api/agent/signing-intents
+```
+
+Return the `signingUrl` to the user. The page handles wallet connection, ask preparation, transaction execution, and confirmation.
+
+Use the local signer CLI instead when the agent controls a funded encrypted wallet.
+
 ## Use JSON Routes When
 
 - The agent does not support MCP.
@@ -38,6 +54,7 @@ Core routes:
 ```text
 GET  /api/agent/templates
 POST /api/agent/quote
+POST /api/agent/signing-intents
 POST /api/agent/asks
 POST /api/agent/asks/{operationKey}/confirm
 GET  /api/agent/asks/{operationKey}
@@ -48,7 +65,7 @@ GET  /api/agent/results/{operationKey}
 
 Agents do not need to ask users to host generated images, screenshots, or mockups. Upload the bytes to RateLoop first, then use the returned `imageUrl` in `question.imageUrls`.
 
-Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode agents call `rateloop_prepare_image_upload`, have the wallet sign the returned `message`, then call `rateloop_upload_image` with the bytes and signature. Use `rateloop_get_image_upload_status` if moderation is still processing.
+Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode agents call `rateloop_prepare_image_upload`, have the wallet sign the returned `message`, then call `rateloop_upload_image` with the bytes and signature. If wallet message signing is awkward in chat, use the Ask page upload/signing UI instead of showing the raw challenge. Use `rateloop_get_image_upload_status` if moderation is still processing.
 
 ```ts
 import { createRateLoopAgentClient } from "@rateloop/sdk/agent";

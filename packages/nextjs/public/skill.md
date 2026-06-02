@@ -28,13 +28,13 @@ Use RateLoop when an AI agent needs to rate an existing public question, or ask 
 
 ## Required Inputs
 
-Public MCP and direct-agent asks use the World Chain USDC bounty lane. Feedback Bonuses can use USDC, or LREP when the agent uses wallet calls. Browser question submissions can use LREP or USDC for both bounties and Feedback Bonuses.
+Default to a browser signing link when a human controls the wallet. Use a local signer only when the agent controls a funded encrypted wallet. Use raw MCP wallet calls only when the host can execute or present wallet calls cleanly.
 
 Visual context:
 
 - Page: set `question.contextUrl`.
 - YouTube: set `question.videoUrl`.
-- Image: generate context/mockup bytes yourself or receive image bytes from the user, call `rateloop_upload_image`, then set `question.imageUrls` to the returned `imageUrl`. Public wallet-mode uses `rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`.
+- Image: generate or receive image bytes, upload them to RateLoop yourself, then set `question.imageUrls` to the returned `imageUrl`. Do not ask the user to host the image elsewhere. If the agent lacks a managed upload token, use the public upload challenge only when the wallet can sign in the host; otherwise route the user through the Ask page upload/signing UI.
 
 - `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain
 - one public context source: `question.contextUrl`, `question.videoUrl`, or `question.imageUrls` returned by `rateloop_upload_image`
@@ -45,10 +45,23 @@ Visual context:
 - `bounty.bountyWindowSeconds`: bounty eligibility duration after the first private round starts
 - `bounty.feedbackWindowSeconds`: paid feedback duration after the first private round starts
 - `feedbackBonus`: optional LREP or USDC pool for useful hidden rater feedback on single-question asks
-- `maxPaymentAmount`: maximum USDC spend the user approves; LREP Feedback Bonuses are approved through the returned wallet calls
+- `maxPaymentAmount`: maximum USDC spend the user approves
 - `categoryId`: RateLoop category id
 - `clientRequestId`: stable idempotency key for the ask
 - `title`, `tags`, and optional `templateId`
+
+## Recommended Ask Handoff
+
+For chat agents, keep the user flow short:
+
+1. Create or collect public context. Upload generated/local image bytes to RateLoop before asking.
+2. Choose category/template only if needed.
+3. Quote the ask and show the cost plus `legalNotice`.
+4. Create a browser signing intent with the same ask payload: `POST /api/agent/signing-intents`.
+5. Give the user the returned `/agent/sign/{intentId}#token=...` link. They connect the wallet, review, and approve funding/submission there.
+6. Poll status and fetch the result URL.
+
+Backup: if the agent controls a funded encrypted wallet, use the local signer CLI (`wallet --generate`, then `local-ask`). Avoid pasting raw signature challenges or transaction plans into chat unless the user explicitly asks for the low-level MCP path.
 
 ## Public MCP Endpoint
 
@@ -86,16 +99,9 @@ Main tools:
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
 2. For rating, open the public question, inspect context, choose up/down, estimate crowd-up percent, and leave useful hidden feedback.
-3. For asking, collect or create public context, wallet address, USDC bounty terms, optional LREP or USDC Feedback Bonus, category, title, tags, and optional template.
-4. If the context is an image, generate or receive bytes, upload them first, and use the returned `imageUrl`.
-5. Call `rateloop_list_categories` and `rateloop_list_result_templates` only if category or template is unknown.
-6. Call `rateloop_quote_question` before spending and show or log the returned `legalNotice`.
-7. Call `rateloop_ask_humans` to prepare the ask with wallet-direct payment.
-8. Have the wallet execute the returned `transactionPlan.calls` or route the user through browser signing.
-9. Call `rateloop_confirm_ask_transactions`; if a Feedback Bonus transaction plan is returned, execute it and call `rateloop_confirm_feedback_bonus_transactions`.
-10. Poll `rateloop_get_question_status`.
-11. Call `rateloop_get_result`.
-12. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
+3. For asking, prefer the browser signing handoff above.
+4. If the host cannot create signing links, use local signer or raw MCP wallet calls.
+5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
 

@@ -6,13 +6,17 @@ Use these notes when wiring RateLoop into chat-hosted agents such as ChatGPT and
 
 - Prefer a remote connector or remote MCP wrapper that exposes the same RateLoop actions:
   - quote
-  - ask
+  - create browser signing link
   - status
   - result
-- Use the public endpoint when the connector can supply a funded `walletAddress`; use a managed token only for RateLoop-enforced caps or callbacks.
-- Keep RateLoop account creation optional for the user. The accountless flow only needs a funded wallet, existing public context or permission to generate public context/image bytes, a budget, and a signing/approval path.
+- Use browser signing links for human-controlled wallets. Create them with `POST /api/agent/signing-intents` and share the returned `/agent/sign/{intentId}#token=...` URL.
+- Use a local signer only when the agent controls a funded encrypted wallet.
+- Use raw MCP wallet calls only when the chat host can execute or present wallet calls cleanly.
+- Keep RateLoop account creation optional for the user. The accountless flow only needs a funded wallet, existing public context or permission to generate/upload public context/image bytes, and a budget.
 - Show spend confirmation on the quoted amount before the ask is submitted.
 - Keep callbacks optional. Many chat hosts can simply poll status and fetch the final result in the same conversation.
+
+For generated images, upload the bytes to RateLoop yourself before quoting. Do not ask the user to host the image elsewhere. If wallet message signing for upload is awkward in chat, route through the Ask page upload/signing UI instead of pasting raw challenges.
 
 ## Recommended Demo
 

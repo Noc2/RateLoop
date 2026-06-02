@@ -3,14 +3,15 @@
 These examples keep one loop stable across runtimes:
 
 1. quote before spending
-2. prepare an ask with a stable `clientRequestId`
-3. wait through a signed callback or poll status
-4. fetch the structured result
-5. store `publicUrl`, `operationKey`, and the outcome in memory or logs
+2. use a stable `clientRequestId`
+3. prefer a browser signing link for human wallets, or a local signer for agent-controlled wallets
+4. wait through a signed callback or poll status
+5. fetch the structured result
+6. store `publicUrl`, `operationKey`, and the outcome in memory or logs
 
 ## Files
 
-- `landing-pitch-review.ts`: canonical backend-worker loop using `@rateloop/sdk/agent`
+- `landing-pitch-review.ts`: canonical SDK loop; public wallet mode prints a browser signing link by default
 - `questions/landing-pitch-review.json`: generic rating demo for landing-page clarity
 - `questions/ai-website-feedback-service.json`: canonical AI website generation plus human feedback market-interest ask
 - `questions/generated-mockup-feedback.json`: single generated mockup feedback ask that uses an uploaded RateLoop `imageUrl`
@@ -55,20 +56,25 @@ leave reproducible failure notes in feedback.
 When comparing options, do not ask one multiple-choice question. Use `ranked_option_member` or
 `pairwise_output_preference`, submit one question per option in the same bundle, then compare the settled ratings.
 
-When the artifact is an AI-generated mockup or screenshot, upload image bytes to RateLoop first. Managed agents call
-`rateloop_upload_image` directly; public wallet-mode agents call `rateloop_prepare_image_upload`, get the wallet
-signature, then call `rateloop_upload_image`. Use the returned `imageUrl` in `question.imageUrls`; see
-`generated-mockup-upload.md` and `questions/generated-mockup-feedback.json`.
+When the artifact is an AI-generated mockup or screenshot, upload image bytes to RateLoop first. Do not ask the user to
+host the image elsewhere. Managed agents call `rateloop_upload_image` directly; public wallet-mode agents call
+`rateloop_prepare_image_upload`, get the wallet signature, then call `rateloop_upload_image`. If wallet message signing
+is awkward in chat, use the Ask page upload/signing UI instead of pasting raw challenges. Use the returned `imageUrl` in
+`question.imageUrls`; see `generated-mockup-upload.md` and `questions/generated-mockup-feedback.json`.
 
 ## First Funded Ask
 
-Before the first paid ask, fund the configured `walletAddress` with World Chain USDC. In the public MCP flow, quote with
-`rateloop_quote_question`, then call `rateloop_ask_humans` to prepare the ask. Execute the returned `transactionPlan.calls` in
-order; the plan includes USDC approval, submission reservation, and question submission. Finish by sending the
-transaction hashes to `rateloop_confirm_ask_transactions`. Example bounty amounts are atomic USDC units. Set
-`bountyStartBy` to the latest acceptable first-round start timestamp, then set `bountyWindowSeconds` and
-`feedbackWindowSeconds` to the active windows after that first round starts. Managed agents can also call
-`rateloop_get_agent_balance`, use signed callbacks, and rely on RateLoop-enforced per-ask or daily caps.
+Before the first paid ask, fund the configured `walletAddress` with World Chain USDC. Quote with
+`rateloop_quote_question`, then prefer a browser signing link for human wallets:
+
+```text
+POST /api/agent/signing-intents
+```
+
+Share the returned `/agent/sign/{intentId}#token=...` URL. Use `local-ask` when the agent controls a funded encrypted
+wallet. Use raw MCP `transactionPlan.calls` only when the host can execute or present wallet calls cleanly. Example
+bounty amounts are atomic USDC units. Set `bountyStartBy` to the latest acceptable first-round start timestamp, then set
+`bountyWindowSeconds` and `feedbackWindowSeconds` to the active windows after that first round starts.
 
 For single-question MCP asks, add an optional `feedbackBonus` when written feedback is useful enough to reward
 separately from the rating. Feedback Bonuses can use USDC or LREP with `paymentMode: "wallet_calls"`; x402 remains
@@ -83,10 +89,10 @@ context with `rateloop_get_rating_context`, build the encrypted commit locally w
 `rateloop_confirm_rating_transactions`. Hosted MCP rejects plaintext rating direction, predicted crowd share, and salt;
 send only encrypted commit material. Managed bearer tokens need `rateloop:rate` for prepare and confirm.
 
-The public MCP config is enough for accountless use. In a chat-hosted runtime, the agent should ask the user for the
-funded `walletAddress`, existing public context or permission to generate public context/image bytes, the bounty budget,
-and whether the user wants to approve spend through a browser signing link or let a local signer execute the returned calls. Creating a RateLoop account is optional and only
-needed for managed policies, saved tokens, callbacks, balance tooling, or audit exports.
+The public MCP config is enough for accountless use. In a chat-hosted runtime, ask for the funded `walletAddress`,
+existing public context or permission to generate public context/image bytes, and the bounty budget. Recommend browser
+signing for user approval. Mention local signer only as the agent-controlled-wallet backup. Creating a RateLoop account
+is optional and only needed for managed policies, saved tokens, callbacks, balance tooling, or audit exports.
 
 ## Runtime Notes
 

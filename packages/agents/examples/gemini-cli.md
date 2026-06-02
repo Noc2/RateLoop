@@ -4,7 +4,7 @@ Gemini CLI and similar local coding agents work well with the same remote MCP se
 
 ## Config
 
-Start from `generic-public-mcp.json` when the local agent controls a funded wallet. Use `gemini-cli.mcpServers.json` when you also want a saved managed policy and bearer token:
+Start from `generic-public-mcp.json` only when the local agent controls a funded wallet. For a human-controlled wallet, create a browser signing link instead of exposing raw wallet calls. Use `gemini-cli.mcpServers.json` when you also want a saved managed policy and bearer token:
 
 ```json
 {
@@ -26,6 +26,7 @@ If your local runtime expects a generic `mcpServers` shape, `generic-public-mcp.
 ## Usage Pattern
 
 - Quote first.
+- Prefer a browser signing link for human wallets, or the local signer CLI for agent-controlled wallets.
 - Ask humans only when the agent is genuinely uncertain or the decision matters.
 - Poll `getQuestionStatus` until the ask is ready or terminal.
 - Store the returned `publicUrl` in the task log so later steps can cite the human checkpoint.
