@@ -3,6 +3,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useActiveWallet, useSetActiveWallet } from "thirdweb/react";
 import { useAccount } from "wagmi";
+import { reconnectWagmiConnectorProvider } from "~~/components/thirdweb/ThirdwebConnectorWalletBridge.helpers";
 import {
   getConnectedThirdwebConnectorWallet,
   subscribeConnectedThirdwebConnectorWallet,
@@ -82,7 +83,13 @@ export function ThirdwebConnectorWalletBridge() {
 
     reconnectAttemptRef.current = attemptKey;
 
-    void connector.getProvider({ chainId }).catch(error => {
+    const providerReconnect = reconnectWagmiConnectorProvider(connector, chainId);
+    if (!providerReconnect) {
+      reconnectAttemptRef.current = null;
+      return;
+    }
+
+    void providerReconnect.catch(error => {
       console.error("Failed to reconnect thirdweb wallet from wagmi connector:", error);
       reconnectAttemptRef.current = null;
     });

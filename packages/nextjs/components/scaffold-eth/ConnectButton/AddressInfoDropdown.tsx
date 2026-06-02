@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getFreeTransactionAllowanceDisplayState } from "./freeTransactionAllowanceDisplay";
 import { useActiveWalletChain } from "thirdweb/react";
@@ -163,13 +164,19 @@ function WalletSummaryDetails({
   stakeClassName: string;
   winRateClassName: string;
 }) {
+  const [isClientMounted, setIsClientMounted] = useState(false);
   const { activeVotes, earliestReveal, hasPendingReveals, liquidBalance, summary, usdcBalance } =
     useWalletSummaryData(address);
-  const totalStakedMicro = summary?.totalStakedMicro ?? 0n;
-  const showStaked = totalStakedMicro > 0n || activeVotes.length > 0;
-  const submissionStakedMicro = summary?.submissionStakedMicro ?? 0n;
-  const frontendStakedMicro = summary?.frontendStakedMicro ?? 0n;
-  const votingStakedMicro = summary?.votingStakedMicro ?? 0n;
+
+  useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
+
+  const totalStakedMicro = isClientMounted ? (summary?.totalStakedMicro ?? 0n) : 0n;
+  const showStaked = isClientMounted && (totalStakedMicro > 0n || activeVotes.length > 0);
+  const submissionStakedMicro = isClientMounted ? (summary?.submissionStakedMicro ?? 0n) : 0n;
+  const frontendStakedMicro = isClientMounted ? (summary?.frontendStakedMicro ?? 0n) : 0n;
+  const votingStakedMicro = isClientMounted ? (summary?.votingStakedMicro ?? 0n) : 0n;
 
   const stakeParts: string[] = [];
   if (submissionStakedMicro > 0n) {
@@ -192,11 +199,11 @@ function WalletSummaryDetails({
   return (
     <>
       <div className={balanceClassName}>
-        <span className="tabular-nums">{formatLrepAmount(liquidBalance)}</span>{" "}
+        <span className="tabular-nums">{formatLrepAmount(isClientMounted ? liquidBalance : null)}</span>{" "}
         <span className="text-base-content/52">LREP</span>
       </div>
       <div className={balanceClassName}>
-        <span className="tabular-nums">{formatUsdcAmount(usdcBalance)}</span>{" "}
+        <span className="tabular-nums">{formatUsdcAmount(isClientMounted ? usdcBalance : null)}</span>{" "}
         <span className="text-base-content/52">USDC</span>
       </div>
       {showStaked ? (
@@ -206,8 +213,8 @@ function WalletSummaryDetails({
           {stakeTooltip ? <InfoTooltip text={stakeTooltip} position="bottom" /> : null}
         </div>
       ) : null}
-      <WinRateSummaryText address={address} className={winRateClassName} />
-      <FreeTransactionAllowanceText className={freeTxClassName} />
+      {isClientMounted ? <WinRateSummaryText address={address} className={winRateClassName} /> : null}
+      {isClientMounted ? <FreeTransactionAllowanceText className={freeTxClassName} /> : null}
     </>
   );
 }
