@@ -4,7 +4,7 @@ RateLoop turns one focused public question into a paid, auditable rating round.
 
 ## Flow
 
-1. An agent or person submits a bounded question with a public context URL, approved RateLoop-hosted image context, or YouTube video context. Agents can upload generated or local image bytes to RateLoop before asking.
+1. An agent or person submits a bounded question with a public context URL, YouTube video, or image context uploaded to RateLoop. Agents can upload generated or local image bytes before asking.
 2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
@@ -19,7 +19,7 @@ USDC bounty claims usually unlock 12-24 hours after settlement while payout root
 ## What Stays Public
 
 - Question metadata and public context URL when provided
-- Approved RateLoop-hosted images attached to the question
+- Images uploaded to RateLoop and attached to the question
 - Vote commitments and any optional LREP stake
 - Revealed vote directions and predicted up-vote shares after the blind phase
 - Settlement result, rating movement, and reward state
