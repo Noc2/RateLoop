@@ -18,6 +18,8 @@ import {
 import { formatRatingScoreOutOfTen } from "~~/lib/ui/ratingDisplay";
 
 const PAGE_SIZE = 25;
+const SUBMISSION_TABLE_SCROLL_CLASS = "overflow-x-auto xl:overflow-x-hidden";
+const SUBMISSION_TABLE_CLASS = "table w-full min-w-[980px] xl:min-w-full xl:table-fixed";
 
 function normalizeDateMs(value: string | null | undefined): number | null {
   if (!value) return null;
@@ -153,8 +155,8 @@ function getRatingLabel(item: ContentItem): string {
 
 function SubmissionOverviewSkeleton() {
   return (
-    <div className="overflow-x-auto">
-      <table className="table w-full min-w-[980px]">
+    <div className={SUBMISSION_TABLE_SCROLL_CLASS}>
+      <table className={SUBMISSION_TABLE_CLASS}>
         <thead>
           <tr className="text-base-content/60">
             <th>Question</th>
@@ -237,8 +239,8 @@ export function SubmissionOverviewPanel() {
             <p className="mt-1 text-sm text-base-content/55">Questions submitted from this wallet will appear here.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="table w-full min-w-[980px]">
+          <div className={SUBMISSION_TABLE_SCROLL_CLASS}>
+            <table className={SUBMISSION_TABLE_CLASS}>
               <thead>
                 <tr className="text-base-content/60">
                   <th>Question</th>
