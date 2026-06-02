@@ -322,13 +322,6 @@ export function registerDataRoutes(app: ApiApp) {
           eq(vote.revealed, true),
         ),
       )
-      .innerJoin(
-        round,
-        and(
-          eq(round.contentId, questionBundleRound.contentId),
-          eq(round.roundId, questionBundleRound.roundId),
-        ),
-      )
       .where(
         and(
           eq(questionBundleReward.failed, false),
@@ -336,9 +329,14 @@ export function registerDataRoutes(app: ApiApp) {
           sql`${questionBundleRoundSet.claimedCount} < ${questionBundleReward.requiredCompleters}`,
           // L-1: the bundle endpoint previously applied no window filter, while the on-chain bundle
           // claim enforces the per-vote bounty window (committedWithinBountyWindow via BundleLib).
-          // Mirror it so completers whose commit/reveal fell outside the bundle window are not
-          // surfaced as candidates. L-6: round.startTime is used as the pre-activation first-stake
-          // proxy (same approximation as the pool/correlation queries).
+          // Gate only on the *activated* bundle window (bountyOpensAt/bountyClosesAt). Unlike a pool,
+          // the bundle window is anchored to the earliest staked round across the whole round set
+          // (_firstBundleRoundSetStake), so a single question's round.startTime is not a valid
+          // pre-activation proxy (it would over-include late votes in later-starting questions whose
+          // on-chain claim then reverts -- codex PR #31). claimQuestionBundleReward lazily qualifies
+          // and activates the window, so once a round set is claimable its bountyClosesAt is set and
+          // this predicate matches the on-chain check exactly; before that activation event is indexed
+          // the round set is simply not surfaced yet (a brief, self-healing under-inclusion).
           sql`(
             ${questionBundleReward.bountyWindowSeconds} = 0
             or (
@@ -346,13 +344,6 @@ export function registerDataRoutes(app: ApiApp) {
               and ${questionBundleReward.bountyOpensAt} <= ${questionBundleReward.bountyClosesAt}
               and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionBundleReward.bountyOpensAt}
               and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionBundleReward.bountyClosesAt}
-            )
-            or (
-              ${questionBundleReward.bountyClosesAt} = 0
-              and ${round.startTime} is not null
-              and ${round.startTime} <= ${questionBundleReward.bountyStartBy}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${round.startTime}
-              and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${round.startTime} + ${questionBundleReward.bountyWindowSeconds}
             )
           )`,
         ),
