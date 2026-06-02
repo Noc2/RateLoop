@@ -101,7 +101,7 @@ test("free transaction session route rejects unsupported numeric chain ids", asy
   const route = await import("./route");
   const response = await route.GET(
     new NextRequest(
-      "https://rateloop.xyz/api/transactions/free/session?address=0xfa9605a2c38a0b4f16f689fdd07b63f295b86d1c&chainId=1",
+      "https://rateloop.ai/api/transactions/free/session?address=0xfa9605a2c38a0b4f16f689fdd07b63f295b86d1c&chainId=1",
     ),
   );
   const body = (await response.json()) as { error: string };
@@ -135,7 +135,7 @@ test("free transaction session route falls back to self-funded mode when summary
   const route = await import("./route");
   const response = await route.GET(
     new NextRequest(
-      "https://rateloop.xyz/api/transactions/free/session?address=0x63cada40E8AcF7A1d47229af5Be35b78b16035fa&chainId=480",
+      "https://rateloop.ai/api/transactions/free/session?address=0x63cada40E8AcF7A1d47229af5Be35b78b16035fa&chainId=480",
     ),
   );
   const body = await response.json();

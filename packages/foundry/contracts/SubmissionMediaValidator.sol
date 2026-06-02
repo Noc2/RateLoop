@@ -56,8 +56,6 @@ contract SubmissionMediaValidator {
     }
 
     function _isSupportedImageUrl(string memory url) internal pure returns (bool) {
-        if (_hasUploadedImagePath(url, "https://www.rateloop.xyz/api/attachments/images/att_")) return true;
-        if (_hasUploadedImagePath(url, "https://rateloop.xyz/api/attachments/images/att_")) return true;
         if (_hasUploadedImagePath(url, "https://www.rateloop.ai/api/attachments/images/att_")) return true;
         if (_hasUploadedImagePath(url, "https://rateloop.ai/api/attachments/images/att_")) return true;
         if (_isValidContentAddressedUri(url)) return true;

@@ -23,6 +23,20 @@ interface TermsAcceptanceContextType {
 
 const TermsAcceptanceContext = createContext<TermsAcceptanceContextType | null>(null);
 
+function readStoredTermsAcceptance(): boolean {
+  try {
+    const stored = localStorage.getItem(TERMS_ACCEPTED_KEY);
+    if (!stored) {
+      return false;
+    }
+
+    const acceptance: TermsAcceptance = JSON.parse(stored);
+    return acceptance.version === TERMS_VERSION && acceptance.termsAccepted;
+  } catch {
+    return false;
+  }
+}
+
 export function TermsAcceptanceProvider({ children }: { children: React.ReactNode }) {
   const [isAccepted, setIsAccepted] = useState<boolean | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -33,25 +47,29 @@ export function TermsAcceptanceProvider({ children }: { children: React.ReactNod
 
   // Check localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(TERMS_ACCEPTED_KEY);
-    if (stored) {
-      try {
-        const acceptance: TermsAcceptance = JSON.parse(stored);
-        if (acceptance.version === TERMS_VERSION && acceptance.termsAccepted) {
-          setIsAccepted(true);
-          return;
-        }
-      } catch {
-        // Invalid stored data, require re-acceptance
-      }
+    if (readStoredTermsAcceptance()) {
+      setIsAccepted(true);
+      return;
     }
+
     setIsAccepted(false);
   }, []);
 
   const requireAcceptance = useCallback(
     async (actionName: ActionType): Promise<boolean> => {
+      const hasAcceptedTerms = isAccepted ?? readStoredTermsAcceptance();
+
       // Already accepted
-      if (isAccepted) return true;
+      if (hasAcceptedTerms) {
+        if (isAccepted !== true) {
+          setIsAccepted(true);
+        }
+        return true;
+      }
+
+      if (isAccepted === null) {
+        setIsAccepted(false);
+      }
 
       // Show modal and wait for acceptance
       setPendingAction(actionName);
@@ -72,7 +90,11 @@ export function TermsAcceptanceProvider({ children }: { children: React.ReactNod
       termsAccepted: true,
       privacyAcknowledged: true,
     };
-    localStorage.setItem(TERMS_ACCEPTED_KEY, JSON.stringify(acceptance));
+    try {
+      localStorage.setItem(TERMS_ACCEPTED_KEY, JSON.stringify(acceptance));
+    } catch {
+      // Accept for this page view even when browser storage is unavailable.
+    }
     setIsAccepted(true);
     setShowModal(false);
     setPendingAction(null);

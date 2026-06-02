@@ -77,7 +77,7 @@ test.describe("Profile management", () => {
     await nameInput.fill(uniqueName);
     await page.getByLabel("Age group").selectOption("25-34");
     await page.getByLabel("Country").fill("United States");
-    await page.getByLabel("English").check();
+    await expect(page.getByText("Languages", { exact: true })).toHaveCount(0);
 
     const saveBtn = page
       .getByRole("button", { name: /Save profile/i })

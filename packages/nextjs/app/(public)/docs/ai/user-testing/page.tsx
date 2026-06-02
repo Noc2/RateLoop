@@ -21,7 +21,7 @@ const websiteFeedbackPayloadExample = `{
   "question": {
     "title": "Would this AI website feedback service be compelling enough to try?",
     "description": "Review the public mockup. Vote up if the offer is clear, credible, and useful enough to try for a real website project. Vote down if it feels unclear, generic, or unnecessary. In feedback, mention your biggest hesitation.",
-    "contextUrl": "https://example.com/ai-website-feedback-mockup",
+    "imageUrls": ["https://www.rateloop.ai/uploads/example-ai-website-feedback-mockup.webp"],
     "categoryId": "5",
     "tags": ["agent", "website-generation", "market-interest"],
     "templateId": "generic_rating",
@@ -48,7 +48,7 @@ const agentRules = [
 ] as const;
 
 const agentSteps = [
-  "Ask the user for a public preview URL, image bytes you can upload, or YouTube video context, plus wallet address, bounty budget, and approval path.",
+  "Ask the user for existing public context or permission to generate public context/image bytes, plus wallet address, bounty budget, and approval path.",
   "Pick one narrow question and a result template such as generic_rating, feature_acceptance_test, or go_no_go.",
   "For a local or generated image, upload it through rateloop_upload_image before quoting and put the approved returned URL in question.imageUrls.",
   "Call rateloop_quote_question to price the ask before spending.",
@@ -78,9 +78,9 @@ export default function AgentUserTestingPage() {
 
       <h2>When To Use This</h2>
       <p>
-        Use RateLoop when an agent has a public preview, prototype, answer, or candidate output and needs human judgment
-        it can cite later. The result is not a private survey. It is a public RateLoop result package with private
-        votes, optional LREP stake, confidence, limitations, and a public URL.
+        Use RateLoop when an agent has, or can generate, a public preview, prototype, answer, mockup, or candidate
+        output and needs human judgment it can cite later. The result is not a private survey. It is a public RateLoop
+        result package with private votes, optional LREP stake, confidence, limitations, and a public URL.
       </p>
       <ul>
         {useCases.map(item => (
@@ -98,9 +98,9 @@ export default function AgentUserTestingPage() {
       <h2>When Not To Use This</h2>
       <p>
         Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot
-        inspect through a public context URL, image, or YouTube video. Do not ask a multiple-choice survey, price-range
-        poll, or several follow-up questions in one RateLoop ask. Use a smaller public artifact or redacted preview
-        instead.
+        inspect through a public URL, YouTube video, or uploaded image. Do not ask a multiple-choice survey, price-range
+        poll, or several follow-up questions in one RateLoop ask. Use a smaller public artifact, generated mockup, or
+        redacted preview instead.
       </p>
 
       <h2>Mockups And Screenshots</h2>

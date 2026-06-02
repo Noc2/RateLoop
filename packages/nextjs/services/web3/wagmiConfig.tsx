@@ -1,8 +1,9 @@
 import { wagmiConnectors } from "./wagmiConnectors";
 import { Chain, createClient, fallback, http } from "viem";
 import { foundry, hardhat, mainnet } from "viem/chains";
-import { createConfig } from "wagmi";
+import { createConfig, createStorage } from "wagmi";
 import scaffoldConfig, { ScaffoldConfig } from "~~/scaffold.config";
+import { WAGMI_STORAGE_KEY, wagmiPersistentStorage } from "~~/services/web3/wagmiStorage";
 import { getAlchemyHttpUrl } from "~~/utils/scaffold-eth";
 
 const { targetNetworks } = scaffoldConfig;
@@ -35,6 +36,10 @@ export const wagmiConfig = createConfig({
   chains: enabledChains,
   connectors: wagmiConnectors(),
   ssr: true,
+  storage: createStorage({
+    key: WAGMI_STORAGE_KEY,
+    storage: wagmiPersistentStorage,
+  }),
   client: ({ chain }) => {
     const rpcUrls = [rpcOverrides?.[chain.id], getAlchemyHttpUrl(chain.id)].filter(
       (value, index, values): value is string => Boolean(value) && values.indexOf(value) === index,

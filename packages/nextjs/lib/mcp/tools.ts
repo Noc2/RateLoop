@@ -261,7 +261,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Prepare a RateLoop-hosted image upload for generated mockups, screenshots, or local visual context. Public MCP callers sign the returned challenge before rateloop_upload_image; managed agents may upload with bearer auth.",
+      "Prepare a RateLoop image upload for generated mockups, screenshots, or local visual context. Public MCP callers sign the returned challenge before rateloop_upload_image; managed agents may upload with bearer auth.",
     inputSchema: agentPrepareImageUploadInputSchema,
     name: "rateloop_prepare_image_upload",
     outputSchema: agentPrepareImageUploadOutputSchema,
@@ -276,7 +276,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Upload AI-generated or local image bytes to RateLoop, normalize and moderate them, and return an approved imageUrl for question.imageUrls.",
+      "Upload AI-generated or local image bytes to RateLoop, normalize and moderate them, and return an imageUrl for question.imageUrls.",
     inputSchema: agentUploadImageInputSchema,
     name: "rateloop_upload_image",
     outputSchema: agentImageUploadOutputSchema,
@@ -289,7 +289,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       openWorldHint: true,
       readOnlyHint: true,
     },
-    description: "Get processing or moderation status for a RateLoop-hosted image upload.",
+    description: "Get processing or moderation status for an image uploaded to RateLoop.",
     inputSchema: agentImageUploadStatusInputSchema,
     name: "rateloop_get_image_upload_status",
     outputSchema: agentImageUploadOutputSchema,
@@ -665,7 +665,7 @@ function toolRequestUrl(requestUrl: string | undefined, publicEndpoint = false) 
     requestUrl?.trim() ||
     process.env.APP_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    `https://www.rateloop.xyz/api/mcp${publicEndpoint ? "/public" : ""}`
+    `https://www.rateloop.ai/api/mcp${publicEndpoint ? "/public" : ""}`
   );
 }
 

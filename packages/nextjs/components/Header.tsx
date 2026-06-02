@@ -23,6 +23,7 @@ import { ASK_ROUTE, RATE_ROUTE } from "~~/constants/routes";
 import { useMobileHeaderVisibility, useMobileHeaderVoteControls } from "~~/contexts/MobileHeaderVisibilityContext";
 import { useOutsideClick } from "~~/hooks/scaffold-eth";
 import { useVoteSearch } from "~~/hooks/useVoteSearch";
+import { isHeaderMenuLinkActive } from "~~/lib/ui/headerNavigation";
 import { shouldSuppressShellNavClick } from "~~/lib/ui/shellNavigation";
 
 type HeaderMenuLink = {
@@ -57,19 +58,26 @@ const HeaderNavLink = ({ className, compact = false, href, icon: Icon, isActive,
   const navTone = isActive ? "text-base-content" : "text-base-content/75 group-hover:text-base-content";
 
   return (
-    // Keep shell route changes as document navigations so wallet-heavy client transitions cannot strand the app mid-route.
-    <a
+    <Link
       href={href}
+      prefetch={false}
       onClick={event => {
+        const isModifiedEvent = event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
         if (
           shouldSuppressShellNavClick({
             currentHref: window.location.href,
             isActive,
-            isModifiedEvent: event.metaKey || event.ctrlKey || event.shiftKey || event.altKey,
+            isModifiedEvent,
             targetHref: href,
           })
         ) {
           event.preventDefault();
+          return;
+        }
+
+        if (compact && !isModifiedEvent) {
+          const menu = event.currentTarget.closest("details");
+          window.setTimeout(() => menu?.removeAttribute("open"), 0);
         }
       }}
       className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl ${
@@ -81,7 +89,7 @@ const HeaderNavLink = ({ className, compact = false, href, icon: Icon, isActive,
       <Icon className={`relative z-10 h-6 w-6 shrink-0 transition-colors duration-200 ${navTone}`} />
       <span className={`relative z-10 text-base font-medium transition-colors duration-200 ${navTone}`}>{label}</span>
       {isActive ? <span className={navIndicatorClassName} /> : null}
-    </a>
+    </Link>
   );
 };
 
@@ -93,7 +101,7 @@ export const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "
   return (
     <>
       {menuLinks.map(({ label, href, icon: Icon }) => {
-        const isActive = pathname === "/" && href === RATE_ROUTE ? true : pathname.startsWith(href);
+        const isActive = isHeaderMenuLinkActive(pathname, href);
         const isDocs = href === "/docs";
 
         // If we're on docs page, show Docs as header with submenu, otherwise show as regular link

@@ -2,6 +2,7 @@
 
 import { formatUnits } from "viem";
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { useLegacyClaim } from "~~/hooks/useLegacyClaim";
 import { legacyContributorVestingRows } from "~~/lib/docs/tokenomics";
 
@@ -37,6 +38,7 @@ function StatTile({ label, value }: { label: string; value: string }) {
 }
 
 export function LegacyClaimPage() {
+  const { isRestoringWallet } = useWalletRestore();
   const {
     allocation,
     claim,
@@ -78,7 +80,13 @@ export function LegacyClaimPage() {
         </div>
       </header>
 
-      {!isConnected && (
+      {!isConnected && isRestoringWallet && (
+        <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
+          <span className="loading loading-spinner loading-md" />
+        </section>
+      )}
+
+      {!isConnected && !isRestoringWallet && (
         <section className="rounded-lg border border-base-content/10 bg-base-200 p-6">
           <h2 className="text-xl font-semibold text-base-content">Connect Wallet</h2>
           <p className="mt-2 text-base leading-7 text-base-content/65">

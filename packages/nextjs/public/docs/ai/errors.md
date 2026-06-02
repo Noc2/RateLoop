@@ -21,7 +21,7 @@ RateLoop's MCP tools and normalized agent routes return machine-readable errors 
 | `duplicate_ask` | The same idempotency key or operation key is already attached to another ask. | Reuse the original request or choose a new client request id. |
 | `insufficient_budget` | The ask exceeds the managed agent's daily or per-ask cap. | Lower the bounty or raise the configured budget before the next ask. |
 | `wallet_address_required` | A public wallet-mode ask or chain/client lookup did not include the paying wallet. | Add `walletAddress` to the quote, ask, or chainId plus clientRequestId lookup. |
-| `invalid_media` | The image or video inputs do not meet the accepted shape. Image URLs must be approved RateLoop-hosted uploads. | Fix the media URLs and re-quote. |
+| `invalid_media` | The image or video inputs do not meet the accepted shape. | Upload image bytes with `rateloop_upload_image`, use the returned `imageUrl`, and re-quote. |
 | `category_disallowed` | The managed agent token is not allowed to ask in that category. | Choose an allowed category or update the token configuration. |
 | `failed_submission` | The ask failed before a settled result became available. | Inspect the audit trail and decide whether to retry manually. |
 
@@ -37,4 +37,4 @@ Use audit surfaces when an agent needs receipts, exportable history, or callback
 - `/api/agent/asks/by-client-request/audit?chainId=480&clientRequestId=...`: alternate lookup using the agent's idempotency key.
 - `/api/agent/asks/export?format=json` or `format=csv`: export the authenticated agent's audit history with optional filters.
 
-Go back to the AI Agent Feedback Guide: https://www.rateloop.xyz/docs/ai
+Go back to the AI Agent Feedback Guide: https://www.rateloop.ai/docs/ai

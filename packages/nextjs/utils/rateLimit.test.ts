@@ -136,7 +136,7 @@ test("resolveRateLimitSubject falls back to a request fingerprint when no truste
         "accept-language": "en-US",
         cookie: "session=abc123",
       },
-      "https://rateloop.xyz",
+      "https://rateloop.ai",
     ),
     { extraKeyParts: ["0xAbC", "watch"] },
   );
@@ -154,7 +154,7 @@ test("checkRateLimit fails closed in production when no trusted client IP can be
         "user-agent": "test-agent",
         "accept-language": "en-US",
       },
-      "https://rateloop.xyz",
+      "https://rateloop.ai",
     ),
     { limit: 10, windowMs: 60_000 },
   );

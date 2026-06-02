@@ -940,7 +940,7 @@ export async function getImageAttachmentSubmissionValidationError(params: {
 
   const parsedAttachmentIds = params.imageUrls.map(parseAttachmentIdFromImageUrl);
   if (parsedAttachmentIds.some(id => !id)) {
-    return "imageUrls must reference approved RateLoop-hosted uploads.";
+    return "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.";
   }
   const attachmentIds = [...new Set(parsedAttachmentIds as string[])];
 
@@ -950,7 +950,7 @@ export async function getImageAttachmentSubmissionValidationError(params: {
   for (const attachmentId of attachmentIds) {
     const attachment = await getImageAttachment(attachmentId);
     if (!attachment || attachment.status !== "approved") {
-      return "imageUrls must reference approved RateLoop-hosted uploads.";
+      return "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.";
     }
 
     const ownedByAgent = agentId !== null && attachment.agentId === agentId;
@@ -958,7 +958,7 @@ export async function getImageAttachmentSubmissionValidationError(params: {
       ownerWalletAddress !== null && attachment.ownerWalletAddress?.trim().toLowerCase() === ownerWalletAddress;
 
     if (!ownedByAgent && !ownedByWallet) {
-      return "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.";
+      return "Uploaded imageUrls must belong to the submitting wallet or agent.";
     }
   }
 

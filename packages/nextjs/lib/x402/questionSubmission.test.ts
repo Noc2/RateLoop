@@ -725,12 +725,12 @@ test("preparePermissionlessWalletQuestionSubmissionRequest namespaces idempotenc
   assert.match(record?.paymentReceipt ?? "", /permissionless-wallet-plan/);
 });
 
-test("preparePermissionlessWalletQuestionSubmissionRequest rejects unapproved RateLoop-hosted image uploads", async () => {
+test("preparePermissionlessWalletQuestionSubmissionRequest rejects invalid uploaded image URLs", async () => {
   const attachmentId = "att_pendingUpload0001";
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const payload = buildPayloadWithImageUrl(
     "pending-image-upload",
-    `https://www.rateloop.xyz/api/attachments/images/${attachmentId}.webp`,
+    `https://www.rateloop.ai/api/attachments/images/${attachmentId}.webp`,
   );
   await insertQuestionImageAttachment({
     id: attachmentId,
@@ -746,16 +746,16 @@ test("preparePermissionlessWalletQuestionSubmissionRequest rejects unapproved Ra
       }),
     (error: unknown) =>
       error instanceof X402QuestionInputError &&
-      error.message === "imageUrls must reference approved RateLoop-hosted uploads.",
+      error.message === "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
   );
 });
 
-test("preparePermissionlessWalletQuestionSubmissionRequest rejects RateLoop-hosted image uploads from another wallet", async () => {
+test("preparePermissionlessWalletQuestionSubmissionRequest rejects uploaded images from another wallet", async () => {
   const attachmentId = "att_foreignUpload001";
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const payload = buildPayloadWithImageUrl(
     "foreign-image-upload",
-    `https://www.rateloop.xyz/api/attachments/images/${attachmentId}.webp`,
+    `https://www.rateloop.ai/api/attachments/images/${attachmentId}.webp`,
   );
   await insertQuestionImageAttachment({
     id: attachmentId,
@@ -771,7 +771,7 @@ test("preparePermissionlessWalletQuestionSubmissionRequest rejects RateLoop-host
       }),
     (error: unknown) =>
       error instanceof X402QuestionInputError &&
-      error.message === "imageUrls RateLoop-hosted uploads must belong to the submitting wallet or agent.",
+      error.message === "Uploaded imageUrls must belong to the submitting wallet or agent.",
   );
 });
 

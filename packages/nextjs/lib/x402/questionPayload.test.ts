@@ -6,7 +6,7 @@ import {
   parseX402QuestionRequest,
 } from "~~/lib/x402/questionPayload";
 
-const UPLOADED_IMAGE_URL = "https://www.rateloop.xyz/api/attachments/images/att_abcdefghijklmnop.webp";
+const UPLOADED_IMAGE_URL = "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp";
 
 const VALID_REQUEST = {
   bounty: {
@@ -87,7 +87,7 @@ test("parseX402QuestionRequest rejects arbitrary HTTPS image URLs", () => {
           imageUrls: ["https://example.com/mockup.png"],
         },
       }),
-    /approved RateLoop-hosted uploads/,
+    /rateloop_upload_image/,
   );
 });
 
@@ -115,7 +115,7 @@ test("parseX402QuestionRequest rejects uploaded image paths on untrusted origins
           imageUrls: ["https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp"],
         },
       }),
-    /approved RateLoop-hosted uploads/,
+    /rateloop_upload_image/,
   );
 });
 

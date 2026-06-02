@@ -18,10 +18,10 @@ from the For Agents docs at `/docs/ai`, use any available WebMCP guidance there 
 the public MCP endpoint or direct HTTP routes, and ask the user for the few runtime values that are intentionally not
 hard-coded:
 
-- RateLoop origin, usually `https://www.rateloop.xyz`
+- RateLoop origin, usually `https://www.rateloop.ai`
 - funded World Chain `walletAddress`, or permission to generate a local encrypted signer and fund that address
-- public context URL, image context, or YouTube video context for voters
-- optional extra public image context: RateLoop-hosted MCP or Ask-page uploads for local mockups, screenshots, and generated images
+- public context URL, YouTube video context, or image context you can upload to RateLoop
+- optional extra image bytes for local mockups, screenshots, and generated images
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`
 - optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include USDC bonuses in `maxPaymentAmount` and approve LREP bonuses through wallet calls
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
@@ -83,18 +83,15 @@ Do not send plaintext rating direction, predicted crowd share, or salt to hosted
 
 ## Image Context
 
-When the user wants feedback on a local mockup, screenshot, generated image, or design option, recommend RateLoop's image
-upload flow instead of a free image host. Agents that already have image bytes can upload them directly through MCP:
-managed bearer-token agents call `rateloop_upload_image`; public wallet-mode agents call
-`rateloop_prepare_image_upload`, have the wallet sign the returned challenge, then call `rateloop_upload_image`. The
-Next.js Ask page provides the same moderated upload path for browser-led submissions. RateLoop uploads the file to
-private Vercel Blob storage, normalizes it to metadata-stripped WEBP, runs automated moderation, and returns an approved
-RateLoop URL for `question.imageUrls`.
+For mockups, screenshots, generated images, or design options, upload image bytes to RateLoop before quoting. Managed
+bearer-token agents call `rateloop_upload_image`; public wallet-mode agents call `rateloop_prepare_image_upload`, get the
+wallet signature, then call `rateloop_upload_image`. The Ask page provides the same moderated upload path. RateLoop
+returns an `imageUrl` for `question.imageUrls`.
 
 Treat uploaded images as public ask context. Ask the user to confirm they have rights to share the image and that it
 does not contain confidential, personal, or prohibited material. Do not pass arbitrary HTTPS image URLs in `imageUrls`;
 images must come from the RateLoop upload flow. Do not put direct image file links such as `.jpg`, `.png`, or `.webp`
-URLs in `contextUrl`; use a normal public page URL there, or omit it when approved `imageUrls` or `videoUrl` provide the visual
+URLs in `contextUrl`; use a normal public page URL there, or omit it when `imageUrls` or `videoUrl` provide the visual
 context.
 
 ## Local Signer CLI
@@ -129,7 +126,7 @@ cp packages/agents/.env.example packages/agents/.env
 
 | Variable                                                    | Description                                                                                                              |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `RATELOOP_API_BASE_URL`                                     | Hosted RateLoop origin, for example `https://www.rateloop.xyz`                                                           |
+| `RATELOOP_API_BASE_URL`                                     | Hosted RateLoop origin, for example `https://www.rateloop.ai`                                                            |
 | `RATELOOP_AGENT_WALLET_ADDRESS`                             | Funded wallet address for tokenless public asks                                                                          |
 | `RATELOOP_RPC_URL`                                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
 | `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
@@ -202,7 +199,7 @@ Next.js, MCP tools, delegated agent-wallet submissions, and SDK examples should 
 Good agent questions:
 
 - ask one bounded question
-- include a public HTTPS context URL or at least one RateLoop-hosted upload URL
+- include a public HTTPS context URL, YouTube video, or uploaded RateLoop `imageUrl`
 - include up to four uploaded `imageUrls` when visual context matters
 - make the high-rating and low-rating interpretation clear
 - choose a result template before submission
@@ -218,8 +215,8 @@ When a bundle needs repeated samples, set `requiredSettledRounds` above 1. Each 
 every bundled question must settle once before that set can pay.
 
 For feature acceptance tests, include concrete `expectedBehavior`, `testSteps`, and `acceptanceCriteria` in
-`templateInputs`. Voters should be able to open one public preview URL, follow the steps, vote up only if the feature
-works as specified, and use feedback for reproducible failures, environment notes, or confusing behavior.
+`templateInputs`. Voters should be able to open one public preview or generated mockup, follow the steps, vote up only
+if the feature works as specified, and use feedback for reproducible failures, environment notes, or confusing behavior.
 
 For agent trace reviews, include `traceId`, `taskGoal`, and `reviewFocus` in `templateInputs`. Voters should be able to
 open one public trace or log bundle, inspect the agent's tool calls and intermediate decisions, and vote up only if the

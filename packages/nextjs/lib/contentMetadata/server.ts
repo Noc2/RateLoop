@@ -2,6 +2,7 @@ import type { ContentMetadataResult } from "./types";
 import { isUploadedImageUrl } from "~~/lib/contentMedia";
 import { getThumbnailUrl } from "~~/utils/platforms";
 import { fetchPublicHttpsUrl } from "~~/utils/safeFetch";
+import { isSafeUrl } from "~~/utils/urlSafety";
 
 const MAX_METADATA_BYTES = 256_000;
 const METADATA_TIMEOUT_MS = 3_500;
@@ -38,11 +39,12 @@ function extractMetaTagContent(html: string, propertyName: string): string | nul
   return content ? decodeHtmlAttribute(content.trim()) : null;
 }
 
-function resolveThumbnailUrl(baseUrl: string, candidate: string | null): string | null {
+async function resolveThumbnailUrl(baseUrl: string, candidate: string | null): Promise<string | null> {
   if (!candidate) return null;
   try {
     const resolved = new URL(candidate, baseUrl);
-    return resolved.protocol === "https:" ? resolved.toString() : null;
+    const resolvedUrl = resolved.toString();
+    return (await isSafeUrl(resolvedUrl)) ? resolvedUrl : null;
   } catch {
     return null;
   }
@@ -78,7 +80,7 @@ async function resolveGenericPageThumbnail(url: string): Promise<string | null> 
     const response = await metadataFetch(url, {
       headers: {
         accept: "text/html,application/xhtml+xml",
-        "user-agent": "RateLoopBot/1.0 (+https://rateloop.xyz)",
+        "user-agent": "RateLoopBot/1.0 (+https://rateloop.ai)",
       },
       maxResponseBytes: MAX_METADATA_BYTES,
       redirect: "manual",
@@ -93,9 +95,9 @@ async function resolveGenericPageThumbnail(url: string): Promise<string | null> 
 
     const html = await readResponsePrefix(response);
     return (
-      resolveThumbnailUrl(url, extractMetaTagContent(html, "og:image:secure_url")) ??
-      resolveThumbnailUrl(url, extractMetaTagContent(html, "og:image")) ??
-      resolveThumbnailUrl(url, extractMetaTagContent(html, "twitter:image"))
+      (await resolveThumbnailUrl(url, extractMetaTagContent(html, "og:image:secure_url"))) ??
+      (await resolveThumbnailUrl(url, extractMetaTagContent(html, "og:image"))) ??
+      (await resolveThumbnailUrl(url, extractMetaTagContent(html, "twitter:image")))
     );
   } catch {
     return null;

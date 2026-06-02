@@ -3,7 +3,7 @@ import path from "node:path";
 import { keccak256, toBytes } from "viem";
 import { config } from "./config.js";
 
-interface StoredCorrelationArtifact {
+export interface StoredCorrelationArtifact {
   artifactHash: `0x${string}`;
   artifactURI: string;
   canonicalJson: string;
@@ -19,6 +19,12 @@ export async function storeCorrelationArtifact(
   artifact: unknown,
 ): Promise<StoredCorrelationArtifact> {
   const canonical = canonicalJson(artifact);
+  return materializeCorrelationArtifactCanonicalJson(canonical);
+}
+
+export async function materializeCorrelationArtifactCanonicalJson(
+  canonical: string,
+): Promise<StoredCorrelationArtifact> {
   const artifactHash = keccak256(toBytes(canonical));
   const storage = config.correlationSnapshots.artifactStorage;
 

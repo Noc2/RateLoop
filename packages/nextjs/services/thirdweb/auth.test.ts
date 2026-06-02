@@ -8,7 +8,7 @@ test("getThirdwebAuthMode uses redirect auth on localhost", () => {
 });
 
 test("getThirdwebAuthMode uses popup auth away from localhost", () => {
-  assert.equal(getThirdwebAuthMode("rateloop.xyz"), "popup");
+  assert.equal(getThirdwebAuthMode("rateloop.ai"), "popup");
   assert.equal(getThirdwebAuthMode(undefined), "popup");
 });
 
@@ -25,8 +25,8 @@ test("getThirdwebWalletAuthConfig adds a redirect URL for localhost flows", () =
 
 test("getThirdwebWalletAuthConfig keeps popup mode for non-localhost flows", () => {
   const auth = getThirdwebWalletAuthConfig({
-    hostname: "rateloop.xyz",
-    currentUrl: "https://rateloop.xyz/rate",
+    hostname: "rateloop.ai",
+    currentUrl: "https://rateloop.ai/rate",
   });
 
   assert.equal(auth.mode, "popup");
@@ -36,7 +36,7 @@ test("getThirdwebWalletAuthConfig keeps popup mode for non-localhost flows", () 
 
 test("getThirdwebWalletAuthConfig can omit wallet auth when external wallets are already available", () => {
   const auth = getThirdwebWalletAuthConfig({
-    hostname: "rateloop.xyz",
+    hostname: "rateloop.ai",
     includeWalletOption: false,
   });
 

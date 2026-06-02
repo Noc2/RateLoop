@@ -184,10 +184,11 @@ const GovernanceDocs: NextPage = () => {
 
       <h2>Safety Powers</h2>
       <p>
-        Governance can use public on-chain evidence to respond to collusion, repeated unrevealed commitments, or other
-        behavior that damages the feedback signal. The main enforcement tools are parameter changes, payout snapshot
-        challenge windows and bonds, oracle challenge arbitration, frontend stake slashing, calibration changes,
-        optional credential policies, and treasury or pool routing through normal proposals.
+        Governance can use public on-chain evidence to respond to collusion, repeated unrevealed commitments, clearly
+        false self-reported context, or other behavior that damages the feedback signal. The main enforcement tools are
+        parameter changes, payout snapshot challenge windows and bonds, oracle challenge arbitration, frontend stake
+        slashing, calibration changes, optional credential policies, and treasury or pool routing through normal
+        proposals.
       </p>
       <h2>Protocol Evolution</h2>
       <p>

@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import { useAccount } from "wagmi";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { ConnectWalletCard } from "~~/components/shared/ConnectWalletCard";
+import { WalletRestoreLoading } from "~~/components/shared/WalletRestoreLoading";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
@@ -68,6 +70,7 @@ function normalizeGovernanceHash(hash: string): GovernanceTab | null {
 
 function GovernancePageInner() {
   const { isConnected, address } = useAccount();
+  const { isRestoringWallet } = useWalletRestore();
   const [activeTab, setActiveTab] = useState<GovernanceTab>("profile");
   const [hashInitialized, setHashInitialized] = useState(false);
   const autoSelectedEntryAddressRef = useRef<string | null>(null);
@@ -149,6 +152,10 @@ function GovernancePageInner() {
 
   // Show connect wallet prompt if not connected
   if (!isConnected) {
+    if (isRestoringWallet) {
+      return <WalletRestoreLoading />;
+    }
+
     return (
       <ConnectWalletCard
         title="LREP"

@@ -197,11 +197,13 @@ ponder.on(
       eligibleVoters,
       frontendFeeAllocation,
     } = event.args;
+    const id = `${rewardPoolId}-${roundId}`;
+    const existingRound = await context.db.find(questionRewardPoolRound, { id });
 
     await context.db
       .insert(questionRewardPoolRound)
       .values({
-        id: `${rewardPoolId}-${roundId}`,
+        id,
         rewardPoolId,
         contentId,
         roundId,
@@ -221,14 +223,16 @@ ponder.on(
       })
       .onConflictDoNothing();
 
-    await context.db
-      .update(questionRewardPool, { id: rewardPoolId })
-      .set((row) => ({
-        unallocatedAmount: row.unallocatedAmount - allocation,
-        allocatedAmount: row.allocatedAmount + allocation,
-        qualifiedRounds: row.qualifiedRounds + 1,
-        updatedAt: event.block.timestamp,
-      }));
+    if (!existingRound) {
+      await context.db
+        .update(questionRewardPool, { id: rewardPoolId })
+        .set((row) => ({
+          unallocatedAmount: row.unallocatedAmount - allocation,
+          allocatedAmount: row.allocatedAmount + allocation,
+          qualifiedRounds: row.qualifiedRounds + 1,
+          updatedAt: event.block.timestamp,
+        }));
+    }
 
     const existingContent = await context.db.find(content, { id: contentId });
     if (existingContent) {
@@ -290,11 +294,13 @@ ponder.on(
       frontendFee,
       grossAmount,
     } = event.args;
+    const id = `${rewardPoolId}-${roundId}-${claimant.toLowerCase()}-${identityKey}`;
+    const existingClaim = await context.db.find(questionRewardPoolClaim, { id });
 
     await context.db
       .insert(questionRewardPoolClaim)
       .values({
-        id: `${rewardPoolId}-${roundId}-${claimant.toLowerCase()}-${identityKey}`,
+        id,
         rewardPoolId,
         contentId,
         roundId,
@@ -309,23 +315,25 @@ ponder.on(
       })
       .onConflictDoNothing();
 
-    await context.db
-      .update(questionRewardPoolRound, { id: `${rewardPoolId}-${roundId}` })
-      .set((row) => ({
-        claimedAmount: row.claimedAmount + grossAmount,
-        voterClaimedAmount: row.voterClaimedAmount + amount,
-        frontendClaimedAmount: row.frontendClaimedAmount + frontendFee,
-        claimedCount: row.claimedCount + 1,
-      }));
+    if (!existingClaim) {
+      await context.db
+        .update(questionRewardPoolRound, { id: `${rewardPoolId}-${roundId}` })
+        .set((row) => ({
+          claimedAmount: row.claimedAmount + grossAmount,
+          voterClaimedAmount: row.voterClaimedAmount + amount,
+          frontendClaimedAmount: row.frontendClaimedAmount + frontendFee,
+          claimedCount: row.claimedCount + 1,
+        }));
 
-    await context.db
-      .update(questionRewardPool, { id: rewardPoolId })
-      .set((row) => ({
-        claimedAmount: row.claimedAmount + grossAmount,
-        voterClaimedAmount: row.voterClaimedAmount + amount,
-        frontendClaimedAmount: row.frontendClaimedAmount + frontendFee,
-        updatedAt: event.block.timestamp,
-      }));
+      await context.db
+        .update(questionRewardPool, { id: rewardPoolId })
+        .set((row) => ({
+          claimedAmount: row.claimedAmount + grossAmount,
+          voterClaimedAmount: row.voterClaimedAmount + amount,
+          frontendClaimedAmount: row.frontendClaimedAmount + frontendFee,
+          updatedAt: event.block.timestamp,
+        }));
+    }
   },
 );
 

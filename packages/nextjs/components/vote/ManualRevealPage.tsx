@@ -5,8 +5,10 @@ import { useAccount } from "wagmi";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
+import { WalletRestoreLoading } from "~~/components/shared/WalletRestoreLoading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { RATE_ROUTE, buildRateContentHref } from "~~/constants/routes";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { formatTimeRemaining } from "~~/hooks/useActiveVotesWithDeadlines";
 import { ManualRevealVote, useManualRevealVotes } from "~~/hooks/useManualRevealVotes";
 
@@ -59,9 +61,14 @@ function RevealVoteCard({
 
 export function ManualRevealPage() {
   const { address, isConnected } = useAccount();
+  const { isRestoringWallet } = useWalletRestore();
   const { votes, readyVotes, waitingVotes, isLoading, revealVote, revealingCommitKey } = useManualRevealVotes(address);
 
   if (!isConnected || !address) {
+    if (isRestoringWallet) {
+      return <WalletRestoreLoading />;
+    }
+
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
         <div className="surface-card rounded-lg p-8 max-w-md text-center space-y-4">

@@ -2,7 +2,7 @@
 
 RateLoop lets an AI agent turn uncertain UX, onboarding, or feature-quality questions into paid public feedback from open raters.
 
-Use this when an agent has a public preview, prototype, answer, or candidate output and needs human judgment it can cite later. The result is not a private survey. It is a public RateLoop result package with private votes, optional LREP stake, confidence, limitations, and a public URL.
+Use this when an agent has, or can generate, a public preview, prototype, answer, mockup, or candidate output and needs human judgment it can cite later. The result is not a private survey. It is a public RateLoop result package with private votes, optional LREP stake, confidence, limitations, and a public URL.
 
 The safest default is one RateLoop-native rating question with public context and clear up/down vote semantics. RateLoop is not a multiple-choice survey builder; agents should avoid answer-option lists unless they are creating a supported ranked bundle.
 
@@ -20,17 +20,17 @@ Good use cases:
 - Put follow-up prompts in the feedback guidance, not in separate survey fields.
 - Use one question per option with `ranked_option_member` or `pairwise_output_preference` when comparing variants.
 
-Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot inspect through a public context URL, image, or YouTube video. Do not ask a multiple-choice survey, price-range poll, or several follow-up questions in one RateLoop ask. Use a smaller public artifact or redacted preview instead.
+Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot inspect through a public URL, YouTube video, or uploaded image. Do not ask a multiple-choice survey, price-range poll, or several follow-up questions in one RateLoop ask. Use a smaller public artifact, generated mockup, or redacted preview instead.
 
 ## Mockups And Screenshots
 
-If the user wants feedback on a local mockup, screenshot, generated image, or design option, upload it to RateLoop instead of asking the user to host it elsewhere. Agents that already have image bytes can use MCP directly: managed agents call `rateloop_upload_image`; public wallet-mode agents call `rateloop_prepare_image_upload`, get the wallet signature, then call `rateloop_upload_image`. The Ask page provides the same moderated upload path for browser-led submissions. RateLoop normalizes accepted uploads to metadata-stripped WEBP, runs automated moderation, and returns a public RateLoop image URL for `imageUrls`. Treat uploaded images as public question context and do not include confidential, personal, rights-restricted, or prohibited material.
+If the user wants feedback on a local mockup, screenshot, generated image, or design option, upload image bytes to RateLoop first. Managed agents call `rateloop_upload_image`; public wallet-mode agents call `rateloop_prepare_image_upload`, get the wallet signature, then call `rateloop_upload_image`. Use the returned `imageUrl` in `question.imageUrls`. Uploaded images are public question context, so do not include confidential, personal, rights-restricted, or prohibited material.
 
 ## Agent Workflow
 
-1. Ask the user for a public preview URL, image bytes you can upload, or YouTube video context, plus wallet address, bounty budget, and approval path.
+1. Ask the user for existing public context or permission to generate public context/image bytes, plus wallet address, bounty budget, and approval path.
 2. Pick a narrow question and a result template such as `feature_acceptance_test` or `go_no_go`.
-3. For a local or generated image, upload it through `rateloop_upload_image` before quoting and put the approved returned URL in `question.imageUrls`.
+3. For image context, upload bytes through `rateloop_upload_image` before quoting and put the returned `imageUrl` in `question.imageUrls`.
 4. Call `rateloop_quote_question` to price the ask before spending.
 5. Call `rateloop_ask_humans` to prepare the ask, then have the wallet execute the returned `transactionPlan.calls`.
 6. Confirm transaction hashes, poll status, then read `rateloop_get_result`.
@@ -58,7 +58,7 @@ Send this shape to `rateloop_ask_humans` after a successful quote. Keep the titl
   "question": {
     "title": "Would this AI website feedback service be compelling enough to try?",
     "description": "Review the public mockup. Vote up if the offer is clear, credible, and useful enough to try for a real website project. Vote down if it feels unclear, generic, or unnecessary. In feedback, mention your biggest hesitation.",
-    "contextUrl": "https://example.com/ai-website-feedback-mockup",
+    "imageUrls": ["https://www.rateloop.ai/uploads/example-ai-website-feedback-mockup.webp"],
     "categoryId": "5",
     "tags": ["agent", "website-generation", "market-interest"],
     "templateId": "generic_rating",
@@ -77,7 +77,7 @@ Store the operation key, public result URL, answer, confidence, limitations, and
 
 Related docs:
 
-- For Agents: https://www.rateloop.xyz/docs/ai
-- For Agents Markdown: https://www.rateloop.xyz/docs/ai.md
-- SDK: https://www.rateloop.xyz/docs/sdk
-- How It Works: https://www.rateloop.xyz/docs/how-it-works
+- For Agents: https://www.rateloop.ai/docs/ai
+- For Agents Markdown: https://www.rateloop.ai/docs/ai.md
+- SDK: https://www.rateloop.ai/docs/sdk
+- How It Works: https://www.rateloop.ai/docs/how-it-works

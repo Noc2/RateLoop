@@ -96,6 +96,21 @@ describe("payout artifact proof resolution", () => {
     );
   });
 
+  it("rejects oversized data URI artifacts before base64 decoding", async () => {
+    const { resolveQuestionPayoutProof } = await loadResolver();
+    const bufferFromSpy = vi.spyOn(Buffer, "from");
+    const oversizedPayload = "A".repeat(13_333_340);
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactUri: `data:application/json;base64,${oversizedPayload}`,
+      }),
+    ).resolves.toBeNull();
+    expect(bufferFromSpy).not.toHaveBeenCalled();
+    bufferFromSpy.mockRestore();
+  });
+
   it("verifies fetched artifacts against the expected on-chain hash", async () => {
     const { resolveQuestionPayoutProof } = await loadResolver();
     const artifactUri = `data:application/json;base64,${Buffer.from(JSON.stringify(artifact), "utf8").toString("base64")}`;

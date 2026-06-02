@@ -7,7 +7,9 @@ import { useAccount } from "wagmi";
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { NotificationSettingsPanel } from "~~/components/settings/NotificationSettingsPanel";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
+import { WalletRestoreLoading } from "~~/components/shared/WalletRestoreLoading";
 import { SETTINGS_FRONTEND_HASH, SETTINGS_ROUTE } from "~~/constants/routes";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 
 type SettingsTab = "identity" | "notifications" | "wallet" | typeof SETTINGS_FRONTEND_HASH;
@@ -65,6 +67,7 @@ function buildSettingsTabUrl(pathname: string, searchParams: URLSearchParams, ta
 
 function SettingsPageInner() {
   const { isConnected, address } = useAccount();
+  const { isRestoringWallet } = useWalletRestore();
   const pathname = usePathname() ?? SETTINGS_ROUTE;
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<SettingsTab>("notifications");
@@ -100,6 +103,10 @@ function SettingsPageInner() {
   );
 
   if (!isConnected) {
+    if (isRestoringWallet) {
+      return <WalletRestoreLoading />;
+    }
+
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
         <p className="text-base-content/60 mb-6 text-center">Sign in to manage your settings</p>

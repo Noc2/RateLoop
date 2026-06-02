@@ -61,13 +61,13 @@ const agentQuestionInputSchema = {
     categoryId: { description: "RateLoop category id.", type: ["integer", "string"] },
     contextUrl: {
       description:
-        "Optional HTTPS page URL voters should inspect. Do not use direct image file URLs; use imageUrls for uploaded images. Required when both imageUrls and videoUrl are empty.",
+        "Optional HTTPS page URL voters should inspect. For images, upload bytes first and use imageUrls. Required when both imageUrls and videoUrl are empty.",
       type: "string",
     },
     description: { description: "Optional question details shown to voters.", type: "string" },
     imageUrls: {
       description:
-        "Approved RateLoop-hosted upload URLs for public mockups, screenshots, or generated visuals. Required only when both contextUrl and videoUrl are empty.",
+        "Image URLs returned by rateloop_upload_image for public mockups, screenshots, or generated visuals. Required only when both contextUrl and videoUrl are empty.",
       items: { type: "string" },
       type: "array",
     },

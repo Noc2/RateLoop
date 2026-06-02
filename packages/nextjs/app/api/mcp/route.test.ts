@@ -49,7 +49,7 @@ function configureAgent() {
 }
 
 function makePost(body: unknown, headers: Record<string, string> = {}) {
-  return new NextRequest("https://rateloop.xyz/api/mcp", {
+  return new NextRequest("https://rateloop.ai/api/mcp", {
     body: JSON.stringify(body),
     headers: new Headers({
       authorization: "Bearer secret-token",
@@ -61,7 +61,7 @@ function makePost(body: unknown, headers: Record<string, string> = {}) {
 }
 
 function makePublicPost(body: unknown, headers: Record<string, string> = {}) {
-  return new NextRequest("https://rateloop.xyz/api/mcp/public", {
+  return new NextRequest("https://rateloop.ai/api/mcp/public", {
     body: JSON.stringify(body),
     headers: new Headers({
       "content-type": "application/json",
@@ -88,7 +88,7 @@ async function postPublicJson(body: unknown, headers: Record<string, string> = {
 }
 
 function makeGet(headers: Record<string, string> = {}) {
-  return new NextRequest("https://rateloop.xyz/api/mcp", {
+  return new NextRequest("https://rateloop.ai/api/mcp", {
     headers: new Headers(headers),
     method: "GET",
   });
@@ -172,7 +172,7 @@ test("initialize honors a supported older protocol version", async () => {
 
 test("missing bearer tokens receive an MCP auth challenge with resource metadata", async () => {
   const response = await route.POST(
-    new NextRequest("https://rateloop.xyz/api/mcp", {
+    new NextRequest("https://rateloop.ai/api/mcp", {
       body: JSON.stringify({
         id: 1,
         jsonrpc: "2.0",
@@ -187,7 +187,7 @@ test("missing bearer tokens receive an MCP auth challenge with resource metadata
   assert.equal(response.status, 401);
   assert.match(
     response.headers.get("www-authenticate") ?? "",
-    /resource_metadata="https:\/\/rateloop\.xyz\/\.well-known\/oauth-protected-resource"/,
+    /resource_metadata="https:\/\/rateloop\.ai\/\.well-known\/oauth-protected-resource"/,
   );
 });
 
@@ -321,7 +321,7 @@ test("MCP routes reject oversized JSON-RPC bodies", async () => {
     "content-type": "application/json",
   };
   const managedResponse = await route.POST(
-    new NextRequest("https://rateloop.xyz/api/mcp", {
+    new NextRequest("https://rateloop.ai/api/mcp", {
       body: "{}",
       headers: new Headers({
         authorization: "Bearer secret-token",
@@ -331,7 +331,7 @@ test("MCP routes reject oversized JSON-RPC bodies", async () => {
     }),
   );
   const publicResponse = await publicRoute.POST(
-    new NextRequest("https://rateloop.xyz/api/mcp/public", {
+    new NextRequest("https://rateloop.ai/api/mcp/public", {
       body: "{}",
       headers: new Headers(oversizedHeaders),
       method: "POST",

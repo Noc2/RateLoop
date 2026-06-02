@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { CheckIcon, ClipboardIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { GradientActionButton } from "~~/components/shared/GradientAction";
+import { GradientActionInner, getGradientActionClassName } from "~~/components/shared/GradientAction";
 import { buildRateContentHref } from "~~/constants/routes";
 import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
 import { truncateContentTitle } from "~~/lib/contentTitle";
@@ -121,8 +121,17 @@ export function ShareModal({
 
         {/* Share buttons */}
         <div className="space-y-2.5">
+          {/* View content */}
+          <Link
+            href={buildRateContentHref(contentId)}
+            className={getGradientActionClassName("!w-full")}
+            data-motion="idle"
+          >
+            <GradientActionInner>View Content</GradientActionInner>
+          </Link>
+
           {/* Copy link */}
-          <GradientActionButton onClick={handleCopyLink} className="!w-full">
+          <button type="button" onClick={handleCopyLink} className="btn btn-outline w-full gap-2">
             {copied ? (
               <>
                 <CheckIcon className="h-5 w-5 text-success" />
@@ -134,7 +143,7 @@ export function ShareModal({
                 Copy Link
               </>
             )}
-          </GradientActionButton>
+          </button>
 
           {/* Twitter/X share */}
           <a
@@ -148,18 +157,13 @@ export function ShareModal({
             </svg>
             Share on X
           </a>
-
-          {/* View content */}
-          <Link href={buildRateContentHref(contentId)} className="btn btn-ghost w-full">
-            View Content
-          </Link>
         </div>
 
         {/* Divider */}
         <div className="divider my-4">or</div>
 
-        {/* Submit another - 16px minimum */}
-        <button onClick={onClose} className="btn btn-ghost w-full text-base text-base-content/60">
+        {/* Submit another */}
+        <button onClick={onClose} className="btn btn-outline w-full gap-2">
           Submit Another
         </button>
       </div>

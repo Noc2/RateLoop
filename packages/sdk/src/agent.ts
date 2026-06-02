@@ -1352,16 +1352,21 @@ function normalizeAgentConfig(
   const defaultMcpPath = options.mcpAccessToken
     ? DEFAULT_MCP_PATH
     : DEFAULT_PUBLIC_MCP_PATH;
+  const mcpApiUrl =
+    normalizeUrl(options.mcpApiUrl) ??
+    (apiBaseUrl
+      ? new URL(defaultMcpPath, `${apiBaseUrl}/`).toString()
+      : undefined);
+
+  enforceTokenUrlPolicy("apiBaseUrl", apiBaseUrl, options.mcpAccessToken);
+  enforceTokenUrlPolicy("mcpApiUrl", mcpApiUrl, options.mcpAccessToken);
+
   return {
     agentApiPath: options.agentApiPath ?? DEFAULT_AGENT_API_PATH,
     apiBaseUrl,
     fetchImpl,
     mcpAccessToken: options.mcpAccessToken,
-    mcpApiUrl:
-      normalizeUrl(options.mcpApiUrl) ??
-      (apiBaseUrl
-        ? new URL(defaultMcpPath, `${apiBaseUrl}/`).toString()
-        : undefined),
+    mcpApiUrl,
     mcpProtocolVersion:
       options.mcpProtocolVersion ?? DEFAULT_MCP_PROTOCOL_VERSION,
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
@@ -1376,6 +1381,32 @@ function normalizeUrl(value?: string) {
   } catch {
     throw new RateLoopSdkError(`Invalid URL: ${value}`);
   }
+}
+
+function enforceTokenUrlPolicy(
+  name: string,
+  value: string | undefined,
+  token: string | undefined,
+) {
+  if (!token || !value) return;
+
+  const url = new URL(value);
+  if (url.protocol === "https:") return;
+  if (url.protocol === "http:" && isLoopbackHostname(url.hostname)) return;
+
+  throw new RateLoopSdkError(
+    `${name} must use HTTPS when mcpAccessToken is configured; localhost HTTP is only allowed for local development.`,
+  );
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]"
+  );
 }
 
 function agentBaseUrl(config: NormalizedAgentConfig) {

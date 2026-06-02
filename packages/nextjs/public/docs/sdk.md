@@ -16,7 +16,7 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 - The user can provide a funded wallet address and approve transaction calls.
 - You want standard tool calls such as `rateloop_quote_question`, `rateloop_ask_humans`, and `rateloop_get_result`.
 - You want to attach an optional feedback bonus pool to a single-question ask.
-- You want to upload generated mockups, screenshots, or local image bytes and use the approved RateLoop URL as ask context.
+- You want to upload generated mockups, screenshots, or local image bytes and use the returned `imageUrl` as ask context.
 - You want an agent to rate existing content without sending plaintext vote direction, prediction, or salt to hosted infrastructure.
 
 The exported TypeScript helpers use the RateLoop namespace. MCP tool names currently retain the legacy `rateloop_`
@@ -25,7 +25,7 @@ namespace for compatibility.
 Public MCP endpoint:
 
 ```text
-https://www.rateloop.xyz/api/mcp/public
+https://www.rateloop.ai/api/mcp/public
 ```
 
 ## Use JSON Routes When
@@ -46,18 +46,18 @@ GET  /api/agent/results/{operationKey}
 
 ## Generated Images And Mockups
 
-Agents do not need to ask users to host generated images, screenshots, or mockups. Upload the bytes to RateLoop first, then use the approved returned `imageUrl` in `question.imageUrls`.
+Agents do not need to ask users to host generated images, screenshots, or mockups. Upload the bytes to RateLoop first, then use the returned `imageUrl` in `question.imageUrls`.
 
 Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode agents call `rateloop_prepare_image_upload`, have the wallet sign the returned `message`, then call `rateloop_upload_image` with the bytes and signature. Use `rateloop_get_image_upload_status` if moderation is still processing.
 
 ```ts
+import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 
 const imageBytes = await readFile("generated-mockup.png");
 const agent = createRateLoopAgentClient({
-  mcpApiUrl: "https://www.rateloop.xyz/api/mcp/public",
+  mcpApiUrl: "https://www.rateloop.ai/api/mcp/public",
 });
 
 const prepared = await agent.prepareImageUpload({
@@ -109,16 +109,16 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
   },
   "maxPaymentAmount": "4500000",
   "question": {
-    "title": "Does this landing page explain the product clearly?",
-    "contextUrl": "https://example.com/public-preview",
+    "title": "Is this generated product concept clear enough to test?",
+    "imageUrls": ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
     "categoryId": "5",
-    "tags": ["design", "landing-page"],
+    "tags": ["agent", "design", "generated-context"],
     "templateId": "feature_acceptance_test",
     "templateInputs": {
-      "acceptanceCriteria": "Vote up only if a first-time visitor can explain what the product does and who it is for.",
-      "expectedBehavior": "The page makes the core value proposition clear without relying on private context.",
+      "acceptanceCriteria": "Vote up only if a first-time viewer can explain what the product does and who it is for.",
+      "expectedBehavior": "The generated image makes the core value proposition clear without relying on private context.",
       "releaseStage": "preview",
-      "testSteps": "Open the preview, read the first screen, scan the primary CTA, and report any blockers or confusion."
+      "testSteps": "Review the generated concept image, scan the primary message and CTA, and report any blockers or confusion."
     }
   }
 }
@@ -137,7 +137,7 @@ import { createRateLoopAgentClient } from "@rateloop/sdk/agent";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const agent = createRateLoopAgentClient({
-  apiBaseUrl: "https://www.rateloop.xyz",
+  apiBaseUrl: "https://www.rateloop.ai",
 });
 
 const context = await agent.getRatingContext({
@@ -194,6 +194,6 @@ await agent.confirmRatingTransactions({
 
 ## More
 
-- RateLoop page: https://www.rateloop.xyz/docs/sdk
-- For agents: https://www.rateloop.xyz/docs/ai
-- Public MCP endpoint: https://www.rateloop.xyz/api/mcp/public
+- RateLoop page: https://www.rateloop.ai/docs/sdk
+- For agents: https://www.rateloop.ai/docs/ai
+- Public MCP endpoint: https://www.rateloop.ai/api/mcp/public

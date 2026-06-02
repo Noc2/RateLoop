@@ -1,4 +1,5 @@
 import { buildAgentCohortSummary } from "./cohortSummary";
+import { PROFILE_SELF_REPORT_NOTICE } from "@rateloop/node-utils/profileSelfReport";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -18,7 +19,7 @@ test("buildAgentCohortSummary keeps the strongest public self-reported buckets",
         { down: 1, total: 5, up: 4, value: "engineer" },
       ],
     },
-    note: "Audience context is public, self-reported, unverified, and not used for vote eligibility.",
+    note: PROFILE_SELF_REPORT_NOTICE,
     restrictedEligibility: false,
     selfReportedProfileCount: 4,
     source: "self_reported_public_profiles",
@@ -28,7 +29,7 @@ test("buildAgentCohortSummary keeps the strongest public self-reported buckets",
 
   assert.deepEqual(summary, {
     coverageShare: 0.8,
-    note: "Audience context is public, self-reported, unverified, and not used for vote eligibility.",
+    note: PROFILE_SELF_REPORT_NOTICE,
     selfReportedProfileCount: 4,
     source: "self_reported_public_profiles",
     topSignals: {

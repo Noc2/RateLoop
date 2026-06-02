@@ -10,9 +10,19 @@ export const CONTENT_FEEDBACK_TYPES = [
   "repro_steps",
   "environment_note",
   "usability_blocker",
+  "other",
 ] as const;
 
 export type ContentFeedbackType = (typeof CONTENT_FEEDBACK_TYPES)[number];
+
+export const CONTENT_FEEDBACK_PICKER_TYPES = [
+  "vote_rationale",
+  "evidence",
+  "clarification",
+  "concern",
+  "bug_report",
+  "other",
+] as const satisfies readonly ContentFeedbackType[];
 
 export const CONTENT_FEEDBACK_TYPE_LABELS: Record<ContentFeedbackType, string> = {
   evidence: "Evidence",
@@ -21,11 +31,12 @@ export const CONTENT_FEEDBACK_TYPE_LABELS: Record<ContentFeedbackType, string> =
   counterpoint: "Counterpoint",
   source_quality: "Source quality",
   ai_note: "AI note",
-  vote_rationale: "Vote rationale",
+  vote_rationale: "Opinion",
   bug_report: "Bug report",
   repro_steps: "Repro steps",
   environment_note: "Environment note",
   usability_blocker: "Usability blocker",
+  other: "Other",
 };
 
 export const CONTENT_FEEDBACK_BODY_MAX_LENGTH = 1500;

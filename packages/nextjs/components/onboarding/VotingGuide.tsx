@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton } from "~~/components/shared/GradientAction";
 import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
 import { useOnboarding } from "~~/hooks/useOnboarding";
 import { HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
@@ -42,25 +43,32 @@ export function VotingGuide() {
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 80 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className="fixed right-4 top-24 z-50 w-80 rounded-2xl bg-base-200 shadow-[0_24px_54px_rgba(9,10,12,0.42)]"
+        className="fixed left-4 right-4 top-24 z-50 overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(145deg,rgb(24_24_24/0.98),rgb(9_9_9/0.99)_58%,rgb(27_27_27/0.96))] shadow-[0_28px_72px_rgba(0,0,0,0.62),0_0_0_1px_rgba(245,245,245,0.04)] backdrop-blur-xl sm:left-auto sm:w-80"
       >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgb(53_158_238/0.1),transparent_32%,rgb(3_206_164/0.07)_58%,rgb(239_71_111/0.08))]"
+        />
+
         {/* Header */}
-        <div className="relative rounded-t-2xl border-b border-base-content/5 px-5 pt-5 pb-4">
+        <div className="relative border-b border-white/10 px-5 pt-5 pb-4">
           <button
             onClick={dismissGuide}
-            className="absolute top-3 right-3 btn btn-ghost btn-xs btn-circle"
+            className="btn btn-ghost btn-xs btn-circle absolute right-3 top-3"
             aria-label="Dismiss guide"
           >
-            <XMarkIcon className="w-4 h-4" />
+            <XMarkIcon className="h-4 w-4" />
           </button>
-          <h3 className="font-bold text-lg leading-snug pr-6">How It Works</h3>
+          <h3 className="pr-6 text-lg font-bold leading-snug">
+            How It <span className="rateloop-text-gradient">Works</span>
+          </h3>
         </div>
 
         {/* Steps */}
-        <div className="space-y-3 px-5 py-4">
+        <div className="relative space-y-3.5 px-5 py-4">
           {STEPS.map((step, i) => (
             <div key={step.label} className="flex items-start gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-base-300 text-xs font-bold text-base-content/75">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] text-xs font-bold text-base-content/80 shadow-[inset_0_1px_0_rgba(245,245,245,0.06)]">
                 {i + 1}
               </span>
               <p className="text-sm leading-snug text-base-content/70">
@@ -72,15 +80,21 @@ export function VotingGuide() {
         </div>
 
         {/* Footer */}
-        <div className="px-5 pb-4">
+        <div className="relative px-5 pb-4">
           {!address ? (
-            <HumanSignInButton className="btn btn-sm btn-primary w-full border-none" style={{ fontSize: "16px" }}>
+            <HumanSignInButton className="w-full" gradientMotion="intro" gradientSize="sm" style={{ width: "100%" }}>
               {HUMAN_SIGN_IN_LABEL}
             </HumanSignInButton>
           ) : (
-            <button type="button" onClick={dismissGuide} className="btn btn-primary btn-sm w-full">
+            <GradientActionButton
+              className="w-full"
+              motion="intro"
+              size="sm"
+              style={{ width: "100%" }}
+              onClick={dismissGuide}
+            >
               Start rating
-            </button>
+            </GradientActionButton>
           )}
         </div>
       </motion.div>

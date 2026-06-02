@@ -187,6 +187,19 @@ test("normalizes feature testing feedback types", () => {
   assert.equal(normalized.payload.feedbackType, "repro_steps");
 });
 
+test("normalizes other feedback type", () => {
+  const normalized = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "44",
+    feedbackType: "OTHER",
+    body: "This note does not fit the predefined feedback buckets.",
+  });
+
+  assert.equal(normalized.ok, true);
+  if (!normalized.ok) return;
+  assert.equal(normalized.payload.feedbackType, "other");
+});
+
 test("rejects invalid feedback fields", () => {
   assert.equal(
     contentFeedback.normalizeContentFeedbackInput({

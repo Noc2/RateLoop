@@ -20,9 +20,9 @@
       "successSignal": "Voters can understand the offer and name one reason it would or would not work."
     },
     "title": "Is this generated product mockup clear enough to continue?",
-    "description": "Review the RateLoop-hosted mockup image. Vote up if the concept is understandable, credible, and worth iterating. Vote down if the image is confusing, generic, or missing essential context. In feedback, mention the biggest change that would improve the next version.",
+    "description": "Review the uploaded mockup image. Vote up if the concept is understandable, credible, and worth iterating. Vote down if the image is confusing, generic, or missing essential context. In feedback, mention the biggest change that would improve the next version.",
     "imageUrls": [
-      "https://www.rateloop.xyz/api/attachments/images/att_replaceWithApprovedUpload.webp"
+      "https://www.rateloop.ai/api/attachments/images/att_replaceWithApprovedUpload.webp"
     ],
     "categoryId": "5",
     "tags": ["agent", "mockup", "design-feedback"]

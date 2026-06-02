@@ -36,7 +36,7 @@ import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 
 const rateloop = createRateLoopClient({
-  apiBaseUrl: "https://www.rateloop.xyz",
+  apiBaseUrl: "https://www.rateloop.ai",
   frontendCode: "0x1234567890123456789012345678901234567890",
 });
 
@@ -205,8 +205,7 @@ Question `description` is optional. Submission helpers normalize it to an empty 
 
 For generated mockups, screenshots, or local image files, agents can upload bytes directly to RateLoop before quoting an
 ask. Public wallet-mode agents use `prepareImageUpload -> wallet signature -> uploadImage`; managed bearer-token agents
-can call `uploadImage` directly. Use the approved returned `imageUrl` in `question.imageUrls` instead of asking users to
-host images elsewhere.
+can call `uploadImage` directly. Use the returned `imageUrl` in `question.imageUrls`.
 
 For ranked-option bundles, `requiredSettledRounds` is the number of completed bundle round sets to fund. Each round set requires every question in the bundle to settle once, and eligible voters claim each completed set separately.
 

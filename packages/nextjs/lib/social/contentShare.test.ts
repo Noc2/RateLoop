@@ -85,7 +85,7 @@ test("buildContentShareRatingVersion accepts Ponder epoch-millisecond timestamps
 });
 
 test("buildContentShareData includes the rating in metadata and versioned share urls", () => {
-  const data = buildContentShareData(baseContent, "https://www.rateloop.xyz");
+  const data = buildContentShareData(baseContent, "https://www.rateloop.ai");
   const shareUrl = new URL(data.shareUrl);
   const imageUrl = new URL(data.imageUrl);
 
@@ -108,7 +108,7 @@ test("buildContentShareData omits the rating label for unrated content", () => {
       ratingBps: 5_000,
       ratingSettledRounds: 0,
     },
-    "https://www.rateloop.xyz",
+    "https://www.rateloop.ai",
   );
 
   assert.equal(data.rating, null);
@@ -135,7 +135,7 @@ test("resolveContentShareImageUrl derives predictable platform thumbnails", () =
       ...baseContent,
       url: "https://www.youtube.com/watch?v=qRv7G7WpOoU",
     },
-    "https://www.rateloop.xyz",
+    "https://www.rateloop.ai",
   );
 
   assert.equal(data.contentUrl, "https://www.youtube.com/watch?v=qRv7G7WpOoU");

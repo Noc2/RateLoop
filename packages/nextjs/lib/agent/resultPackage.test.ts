@@ -1,6 +1,7 @@
 import { buildAgentResultPackage } from "./resultPackage";
 import { listAgentResultTemplates } from "./templates";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { PROFILE_SELF_REPORT_NOTICE } from "@rateloop/node-utils/profileSelfReport";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ContentFeedbackItem } from "~~/lib/feedback/types";
@@ -81,7 +82,7 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
           { down: 0, total: 2, up: 2, value: "engineer" },
         ],
       },
-      note: "Audience context is public, self-reported, unverified, and not used for vote eligibility.",
+      note: PROFILE_SELF_REPORT_NOTICE,
       restrictedEligibility: false,
       selfReportedProfileCount: 2,
       source: "self_reported_public_profiles",
@@ -103,7 +104,7 @@ test("buildAgentResultPackage turns a settled rating into an agent decision", ()
       upWins: true,
       voteCount: 8,
     },
-    publicUrl: "https://rateloop.xyz/rate?content=123",
+    publicUrl: "https://rateloop.ai/rate?content=123",
   });
 
   assert.equal(result.ready, true);
@@ -258,7 +259,7 @@ test("buildAgentResultPackage exposes feedback source URLs for agents", () => {
       upWins: true,
       voteCount: 8,
     },
-    publicUrl: "https://rateloop.xyz/rate?content=123",
+    publicUrl: "https://rateloop.ai/rate?content=123",
   });
 
   assert.equal(result.feedbackQuality.actionability, "high");
@@ -311,7 +312,7 @@ test("buildAgentResultPackage summarizes feature acceptance failures for agents"
       upWins: true,
       voteCount: 8,
     },
-    publicUrl: "https://rateloop.xyz/rate?content=123",
+    publicUrl: "https://rateloop.ai/rate?content=123",
   });
 
   assert.equal(result.methodology.templateId, "feature_acceptance_test");
@@ -448,7 +449,7 @@ test("buildAgentResultPackage prefers the latest round rating over stale content
       upWins: false,
       voteCount: 8,
     },
-    publicUrl: "https://rateloop.xyz/rate?content=123",
+    publicUrl: "https://rateloop.ai/rate?content=123",
   });
 
   assert.equal(result.answer, "do_not_proceed");
@@ -483,7 +484,7 @@ test("buildAgentResultPackage treats tied rounds as ready inconclusive results",
       upWins: false,
       voteCount: 8,
     },
-    publicUrl: "https://rateloop.xyz/rate?content=123",
+    publicUrl: "https://rateloop.ai/rate?content=123",
   });
 
   assert.equal(result.ready, true);
@@ -510,7 +511,7 @@ test("buildAgentResultPackage treats reveal-failed rounds as ready failures", ()
       upPool: "300",
       voteCount: 3,
     },
-    publicUrl: "https://rateloop.xyz/rate?content=123",
+    publicUrl: "https://rateloop.ai/rate?content=123",
   });
 
   assert.equal(result.ready, true);

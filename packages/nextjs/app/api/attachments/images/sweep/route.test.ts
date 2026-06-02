@@ -19,7 +19,7 @@ function restoreEnv(name: keyof NodeJS.ProcessEnv, value: string | undefined) {
 }
 
 function sweepRequest(token = "sweep-secret") {
-  return new NextRequest("https://rateloop.xyz/api/attachments/images/sweep?limit=10", {
+  return new NextRequest("https://rateloop.ai/api/attachments/images/sweep?limit=10", {
     headers: new Headers({
       authorization: `Bearer ${token}`,
     }),

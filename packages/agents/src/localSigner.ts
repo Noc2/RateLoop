@@ -90,8 +90,6 @@ const IMAGE_ATTACHMENT_PATH_PATTERN =
 const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = new Set([
   "https://www.rateloop.ai",
   "https://rateloop.ai",
-  "https://www.rateloop.xyz",
-  "https://rateloop.xyz",
 ]);
 const X402_QUESTION_TOP_LEVEL_FIELDS = new Set([
   "clientRequestId",
@@ -1034,7 +1032,7 @@ function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
     !IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)
   ) {
     throw new Error(
-      "imageUrls must point to approved RateLoop-hosted uploads.",
+      "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
     );
   }
   const configuredOrigins = [
@@ -1061,7 +1059,7 @@ function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
     (localhostAllowed && parsed.protocol === "http:");
   if (!isAllowedProtocol) {
     throw new Error(
-      "imageUrls must point to approved RateLoop-hosted uploads.",
+      "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
     );
   }
   if (
@@ -1069,7 +1067,7 @@ function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
     !(localhostAllowed && isLocalhostOrigin(parsed.origin))
   ) {
     throw new Error(
-      "imageUrls must point to approved RateLoop-hosted uploads.",
+      "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
     );
   }
   return parsed.toString();
@@ -1081,7 +1079,7 @@ function normalizeImageUrls(value: unknown): string[] {
   }
   if (!Array.isArray(value)) {
     throw new Error(
-      "imageUrls must be an array of approved RateLoop-hosted upload URLs.",
+      "imageUrls must be an array of RateLoop imageUrl values returned by rateloop_upload_image.",
     );
   }
   if (value.length > 4) {

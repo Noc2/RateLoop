@@ -29,11 +29,11 @@ describe("ponder api bootstrap", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { default: app } = await loadApp({
       NODE_ENV: "production",
-      CORS_ORIGIN: "https://app.rateloop.xyz",
+      CORS_ORIGIN: "https://app.rateloop.ai",
       RATE_LIMIT_TRUSTED_IP_HEADERS: undefined,
     });
 
-    const response = await app.request("https://ponder.rateloop.xyz/content");
+    const response = await app.request("https://ponder.rateloop.ai/content");
 
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({
@@ -45,11 +45,11 @@ describe("ponder api bootstrap", () => {
   it("does not block requests when trusted rate-limit headers are configured", async () => {
     const { default: app } = await loadApp({
       NODE_ENV: "production",
-      CORS_ORIGIN: "https://app.rateloop.xyz",
+      CORS_ORIGIN: "https://app.rateloop.ai",
       RATE_LIMIT_TRUSTED_IP_HEADERS: "x-forwarded-for",
     });
 
-    const response = await app.request("https://ponder.rateloop.xyz/content");
+    const response = await app.request("https://ponder.rateloop.ai/content");
 
     expect(response.status).toBe(404);
   });

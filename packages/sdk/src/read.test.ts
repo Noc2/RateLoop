@@ -6,17 +6,17 @@ import { createRateLoopReadClient } from "./read";
 
 test("createRateLoopClient exposes a read client with normalized base URL", () => {
   const client = createRateLoopClient({
-    apiBaseUrl: "https://api.rateloop.xyz///",
+    apiBaseUrl: "https://api.rateloop.ai///",
   });
 
-  assert.equal(client.config.apiBaseUrl, "https://api.rateloop.xyz");
+  assert.equal(client.config.apiBaseUrl, "https://api.rateloop.ai");
   assert.ok(client.read);
 });
 
 test("searchContent forwards query params to the hosted API", async () => {
   let requestedUrl = "";
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
       return new Response(
@@ -58,7 +58,7 @@ test("searchContent forwards query params to the hosted API", async () => {
 test("searchContent forwards relevance sorting", async () => {
   let requestedUrl = "";
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
       return new Response(
@@ -81,7 +81,7 @@ test("searchContent forwards relevance sorting", async () => {
 test("getProfiles joins addresses into the expected batch query", async () => {
   let requestedUrl = "";
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
       return new Response(JSON.stringify({}), {
@@ -106,7 +106,7 @@ test("getProfiles joins addresses into the expected batch query", async () => {
 test("getFollows and getFollowers request the public follow routes", async () => {
   const requestedUrls: string[] = [];
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrls.push(String(input));
       return new Response(
@@ -150,7 +150,7 @@ test("getFollows and getFollowers request the public follow routes", async () =>
 
 test("getCategories exposes current category fields", async () => {
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async () =>
       new Response(
         JSON.stringify({
@@ -181,7 +181,7 @@ test("getCategories exposes current category fields", async () => {
 
 test("listFrontends exposes current frontend fields", async () => {
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async () =>
       new Response(
         JSON.stringify({
@@ -217,7 +217,7 @@ test("listFrontends exposes current frontend fields", async () => {
 test("getAccuracyLeaderboard can include reputation blocks", async () => {
   let requestedUrl = "";
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
       return new Response(
@@ -268,7 +268,7 @@ test("getAccuracyLeaderboard can include reputation blocks", async () => {
 
 test("getProfile exposes social counts from profile detail", async () => {
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async () =>
       new Response(
         JSON.stringify({
@@ -307,7 +307,7 @@ test("getProfile exposes social counts from profile detail", async () => {
 test("getRaterParticipationStatus requests the typed participation-status route", async () => {
   let requestedUrl = "";
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async (input: URL | RequestInfo) => {
       requestedUrl = String(input);
       return new Response(
@@ -383,7 +383,7 @@ test("getRaterParticipationStatus requests the typed participation-status route"
 
 test("read client surfaces API errors with status codes", async () => {
   const read = createRateLoopReadClient({
-    apiBaseUrl: "https://api.rateloop.xyz",
+    apiBaseUrl: "https://api.rateloop.ai",
     fetchImpl: async () =>
       new Response(JSON.stringify({ error: "Frontend not found" }), {
         status: 404,

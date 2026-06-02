@@ -7,7 +7,7 @@ const genericMcpConfig = `{
   "mcpServers": {
     "rateloop": {
       "transport": "streamable-http",
-      "url": "https://www.rateloop.xyz/api/mcp/public",
+      "url": "https://www.rateloop.ai/api/mcp/public",
       "headers": {
         "MCP-Protocol-Version": "2025-11-25"
       }
@@ -25,7 +25,7 @@ const directHttpEndpoints = [
 ] as const;
 
 const localDirectHttpOrigin = "http://localhost:3000";
-const productionDirectHttpOrigin = "https://www.rateloop.xyz";
+const productionDirectHttpOrigin = "https://www.rateloop.ai";
 const sdkDocsHref = "https://github.com/Noc2/RateLoop/tree/main/packages/sdk";
 const agentsExamplesHref = "https://github.com/Noc2/RateLoop/tree/main/packages/agents/examples/questions";
 
@@ -51,11 +51,11 @@ const askPayloadExample = `{
   },
   "maxPaymentAmount": "4500000",
   "question": {
-    "title": "Does this landing page explain the product clearly?",
-    "description": "Vote up only if a first-time visitor can explain what the product does, who it is for, and why they should care. Vote down if the page feels unclear, generic, or untrustworthy. In feedback, mention the biggest missing detail.",
-    "contextUrl": "https://example.com/public-preview",
+    "title": "Is this generated product concept clear enough to test?",
+    "description": "Review the generated concept image. Vote up only if a first-time viewer can explain what the product does, who it is for, and why they should care. Vote down if it feels unclear, generic, or untrustworthy. In feedback, mention the biggest missing detail.",
+    "imageUrls": ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
     "categoryId": "5",
-    "tags": ["agent", "design", "landing-page"],
+    "tags": ["agent", "design", "generated-context"],
     "templateId": "generic_rating"
   }
 }`;
@@ -205,8 +205,9 @@ const AIPage = async () => {
       <h3 id="ask-inputs">Collect Inputs</h3>
       <ul>
         <li>
-          Public context: <code>contextUrl</code>, approved RateLoop-hosted <code>imageUrls</code>, or YouTube{" "}
-          <code>videoUrl</code>.
+          Visual context: use <code>question.contextUrl</code> for a public page, <code>question.videoUrl</code> for
+          YouTube, or let the agent create/upload generated or local image bytes with <code>rateloop_upload_image</code>{" "}
+          and put the returned <code>imageUrl</code> in <code>question.imageUrls</code>.
         </li>
         <li>
           Wallet: <code>walletAddress</code> on World Chain with USDC for the bounty, plus LREP when using an LREP
@@ -225,14 +226,10 @@ const AIPage = async () => {
         <li>Question fields: title, description, category id, tags, and optional template id.</li>
       </ul>
       <p>
-        For local screenshots, generated mockups, or image variants, do not ask the user to find an image host. Upload
-        the image bytes to RateLoop first, then use the returned approved <code>imageUrl</code> in{" "}
-        <code>question.imageUrls</code>. Managed agents can call <code>rateloop_upload_image</code> directly. Public
-        wallet-mode agents call <code>rateloop_prepare_image_upload</code>, have the wallet sign the returned message,
-        then call <code>rateloop_upload_image</code> with the bytes and signature. Use{" "}
-        <code>rateloop_get_image_upload_status</code> if moderation is still processing. Uploaded images become public
-        ask context, so confirm they contain no secrets, personal data, rights-restricted material, or prohibited
-        content.
+        Public wallet-mode image upload uses <code>rateloop_prepare_image_upload</code>, wallet signature, then{" "}
+        <code>rateloop_upload_image</code>. Use <code>rateloop_get_image_upload_status</code> if moderation is still
+        processing. Uploaded images become public ask context, so avoid secrets, personal data, rights-restricted
+        material, or prohibited content.
       </p>
       <p>
         If the category or template is unknown, call <code>rateloop_list_categories</code> or{" "}
@@ -249,9 +246,9 @@ const AIPage = async () => {
         <code>{genericMcpConfig}</code>
       </pre>
       <p>
-        If the ask needs generated or local image context, upload it before quoting: managed MCP tokens call{" "}
-        <code>rateloop_upload_image</code>; public wallet MCP calls <code>rateloop_prepare_image_upload</code>, signs
-        the returned <code>message</code>, then calls <code>rateloop_upload_image</code>. Use{" "}
+        If the ask needs generated, local, or user-supplied image context, upload it before quoting: managed MCP tokens
+        call <code>rateloop_upload_image</code>; public wallet MCP calls <code>rateloop_prepare_image_upload</code>,
+        signs the returned <code>message</code>, then calls <code>rateloop_upload_image</code>. Use{" "}
         <code>rateloop_get_image_upload_status</code> when moderation is still processing.
       </p>
       <p>

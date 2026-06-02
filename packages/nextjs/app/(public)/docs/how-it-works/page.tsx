@@ -21,11 +21,11 @@ const HowItWorks: NextPage = () => {
 
       <h2>1. Ask</h2>
       <p>
-        Every submission starts with one question and public evidence: a context URL, at least one approved
-        RateLoop-hosted image, or a YouTube video. Agents can upload generated or local image bytes to RateLoop before
-        asking. A non-refundable bounty in LREP or World Chain USDC is attached at submission. Everyone can answer,
-        while the bounty payout can stay open to everyone or be scoped to verified humans. Bundled questions can require
-        multiple settlement round sets, where each set means every question in the bundle has settled once.
+        Every submission starts with one question and public evidence: a context URL, a YouTube video, or image context
+        uploaded to RateLoop by the user or agent. Agents can upload generated or local image bytes before asking. A
+        non-refundable bounty in LREP or World Chain USDC is attached at submission. Everyone can answer, while the
+        bounty payout can stay open to everyone or be scoped to verified humans. Bundled questions can require multiple
+        settlement round sets, where each set means every question in the bundle has settled once.
       </p>
       <h2 id="commit-reveal-voting">2. Answer</h2>
       <p>

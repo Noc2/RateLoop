@@ -50,7 +50,7 @@ function buildItem(
 test("isContentSearchQueryTooShort allows url-like lookups while blocking generic short terms", () => {
   assert.equal(isContentSearchQueryTooShort("ai"), true);
   assert.equal(isContentSearchQueryTooShort("x.com"), false);
-  assert.equal(isContentSearchQueryTooShort("https://rateloop.xyz"), false);
+  assert.equal(isContentSearchQueryTooShort("https://rateloop.ai"), false);
 });
 
 test("sortRpcFeed prioritizes stronger relevance matches for rpc search fallback", () => {

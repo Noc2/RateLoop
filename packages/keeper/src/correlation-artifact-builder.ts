@@ -16,7 +16,12 @@ import {
   type Hex,
 } from "viem";
 import { config } from "./config.js";
-import { canonicalJson, storeCorrelationArtifact } from "./correlation-artifact-storage.js";
+import {
+  canonicalJson,
+  materializeCorrelationArtifactCanonicalJson,
+  storeCorrelationArtifact,
+  type StoredCorrelationArtifact,
+} from "./correlation-artifact-storage.js";
 import type {
   CorrelationEpochArtifact,
   CorrelationSnapshotArtifactFile,
@@ -32,10 +37,21 @@ interface VoteResponse {
   items?: unknown[];
 }
 
-interface CorrelationRoundCandidate {
+export interface CorrelationRoundCandidate {
   rewardPoolId: bigint;
   contentId: bigint;
   roundId: bigint;
+}
+
+export interface BuiltConfiguredCorrelationSnapshotArtifact {
+  artifact: CorrelationSnapshotArtifactFile;
+  artifactHash?: `0x${string}`;
+  artifactURI?: string;
+  canonicalJson?: string;
+  canonicalBytes: number;
+  candidateCount: number;
+  roundSnapshotCount: number;
+  epochCount: number;
 }
 
 interface PublicRoundPayoutSnapshot {
@@ -72,10 +88,28 @@ interface PublicPayoutWeight {
 }
 
 const VOTE_PAGE_SIZE = 1_000;
+const PONDER_FETCH_TIMEOUT_MS = 5_000;
+const PONDER_JSON_MAX_BYTES = 5_000_000;
+const MAX_VOTE_PAGES_PER_ROUND = 50;
+const CANDIDATE_FINGERPRINT_VERSION = "rateloop-correlation-candidates-v1";
+const loggedAutomaticArtifactHashes = new Set<string>();
 
 export async function buildConfiguredCorrelationSnapshotArtifact(
   logger: Logger,
 ): Promise<CorrelationSnapshotArtifactFile> {
+  return (await buildConfiguredCorrelationSnapshotArtifactDetails(logger)).artifact;
+}
+
+export async function buildConfiguredCorrelationSnapshotArtifactDetails(
+  logger: Logger,
+): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
+  const candidates = await loadConfiguredCorrelationSnapshotCandidates(logger);
+  return buildConfiguredCorrelationSnapshotArtifactForCandidates(candidates, logger);
+}
+
+export async function loadConfiguredCorrelationSnapshotCandidates(
+  logger: Logger,
+): Promise<CorrelationRoundCandidate[]> {
   if (!config.ponderBaseUrl) {
     throw new Error("PONDER_BASE_URL is required for automatic correlation snapshots");
   }
@@ -89,10 +123,26 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
     config.correlationSnapshots.maxRoundsPerTick,
     logger,
   );
+  return candidates;
+}
+
+export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
+  candidates: readonly CorrelationRoundCandidate[],
+  logger: Logger,
+): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
   if (candidates.length === 0) {
-    return {};
+    return {
+      artifact: {},
+      canonicalBytes: 0,
+      candidateCount: 0,
+      roundSnapshotCount: 0,
+      epochCount: 0,
+    };
   }
 
+  if (!config.ponderBaseUrl) {
+    throw new Error("PONDER_BASE_URL is required for automatic correlation snapshots");
+  }
   const publicRounds: PublicRoundPayoutSnapshot[] = [];
 
   for (const candidate of candidates) {
@@ -142,7 +192,13 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
   }
 
   if (publicRounds.length === 0) {
-    return {};
+    return {
+      artifact: {},
+      canonicalBytes: 0,
+      candidateCount: candidates.length,
+      roundSnapshotCount: 0,
+      epochCount: 0,
+    };
   }
 
   const params = defaultCorrelationScoringParams();
@@ -158,12 +214,109 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
     roundPayoutSnapshots: publicRounds,
   });
 
-  const correlationEpochs: CorrelationEpochArtifact[] = publicEpochs.map((epoch) => ({
+  const artifact = buildSnapshotArtifactFromStoredPublicArtifact(
+    { correlationEpochs: publicEpochs, roundPayoutSnapshots: publicRounds },
+    stored,
+  );
+  const correlationEpochs = artifact.correlationEpochs ?? [];
+  const roundPayoutSnapshots = artifact.roundPayoutSnapshots ?? [];
+
+  const artifactUriSummary = summarizeArtifactUri(stored.artifactURI);
+  const logData = {
+    candidateCount: candidates.length,
+    roundSnapshotCount: roundPayoutSnapshots.length,
+    epochCount: correlationEpochs.length,
+    artifactHash: stored.artifactHash,
+    ...artifactUriSummary,
+    canonicalBytes: Buffer.byteLength(stored.canonicalJson),
+  };
+  if (loggedAutomaticArtifactHashes.has(stored.artifactHash)) {
+    logger.debug("Automatic correlation snapshot artifact unchanged", logData);
+  } else {
+    loggedAutomaticArtifactHashes.add(stored.artifactHash);
+    logger.info("Built automatic correlation snapshot artifact", logData);
+  }
+
+  return {
+    artifact,
+    artifactHash: stored.artifactHash,
+    artifactURI: stored.artifactURI,
+    canonicalJson: stored.canonicalJson,
+    canonicalBytes: Buffer.byteLength(stored.canonicalJson),
+    candidateCount: candidates.length,
+    roundSnapshotCount: roundPayoutSnapshots.length,
+    epochCount: correlationEpochs.length,
+  };
+}
+
+export function correlationSnapshotCandidateFingerprint(
+  candidates: readonly CorrelationRoundCandidate[],
+): `0x${string}` {
+  const params = defaultCorrelationScoringParams();
+  const normalizedCandidates = candidates
+    .map((candidate) => ({
+      rewardPoolId: candidate.rewardPoolId.toString(),
+      contentId: candidate.contentId.toString(),
+      roundId: candidate.roundId.toString(),
+    }))
+    .sort((left, right) => {
+      const roundCompare = bigintCompare(BigInt(left.roundId), BigInt(right.roundId));
+      if (roundCompare !== 0) return roundCompare;
+      const rewardPoolCompare = bigintCompare(
+        BigInt(left.rewardPoolId),
+        BigInt(right.rewardPoolId),
+      );
+      if (rewardPoolCompare !== 0) return rewardPoolCompare;
+      return bigintCompare(BigInt(left.contentId), BigInt(right.contentId));
+    });
+
+  return keccak256(toBytes(canonicalJson({
+    version: CANDIDATE_FINGERPRINT_VERSION,
+    chainId: config.chainId,
+    oracleAddress: config.contracts.clusterPayoutOracle,
+    scorerVersion: params.scorerVersion,
+    parameterHash: correlationParameterHash(params),
+    candidates: normalizedCandidates,
+  })));
+}
+
+export async function restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson(
+  canonical: string,
+): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
+  const stored = await materializeCorrelationArtifactCanonicalJson(canonical);
+  const publicArtifact = JSON.parse(canonical) as PublicCorrelationArtifact;
+  const artifact = buildSnapshotArtifactFromStoredPublicArtifact(publicArtifact, stored);
+  return {
+    artifact,
+    artifactHash: stored.artifactHash,
+    artifactURI: stored.artifactURI,
+    canonicalJson: stored.canonicalJson,
+    canonicalBytes: Buffer.byteLength(stored.canonicalJson),
+    candidateCount: 0,
+    roundSnapshotCount: artifact.roundPayoutSnapshots?.length ?? 0,
+    epochCount: artifact.correlationEpochs?.length ?? 0,
+  };
+}
+
+interface PublicCorrelationArtifact {
+  correlationEpochs?: Array<Omit<CorrelationEpochArtifact, "artifactHash" | "artifactURI">>;
+  roundPayoutSnapshots?: PublicRoundPayoutSnapshot[];
+}
+
+function buildSnapshotArtifactFromStoredPublicArtifact(
+  publicArtifact: PublicCorrelationArtifact,
+  stored: StoredCorrelationArtifact,
+): CorrelationSnapshotArtifactFile {
+  const correlationEpochs: CorrelationEpochArtifact[] = (
+    publicArtifact.correlationEpochs ?? []
+  ).map((epoch) => ({
     ...epoch,
     artifactHash: stored.artifactHash,
     artifactURI: stored.artifactURI,
   }));
-  const roundPayoutSnapshots: RoundPayoutSnapshotArtifact[] = publicRounds.map((snapshot) => ({
+  const roundPayoutSnapshots: RoundPayoutSnapshotArtifact[] = (
+    publicArtifact.roundPayoutSnapshots ?? []
+  ).map((snapshot) => ({
     domain: snapshot.domain,
     rewardPoolId: snapshot.rewardPoolId,
     contentId: snapshot.contentId,
@@ -178,16 +331,32 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
     artifactURI: stored.artifactURI,
   }));
 
-  logger.info("Built automatic correlation snapshot artifact", {
-    candidateCount: candidates.length,
-    roundSnapshotCount: roundPayoutSnapshots.length,
-    epochCount: correlationEpochs.length,
-    artifactHash: stored.artifactHash,
-    artifactURI: stored.artifactURI,
-    canonicalBytes: Buffer.byteLength(stored.canonicalJson),
-  });
-
   return { correlationEpochs, roundPayoutSnapshots };
+}
+
+function summarizeArtifactUri(artifactURI: string) {
+  const byteLength = Buffer.byteLength(artifactURI);
+  if (artifactURI.startsWith("data:")) {
+    return {
+      artifactUriScheme: "data",
+      artifactUriBytes: byteLength,
+    };
+  }
+
+  try {
+    const url = new URL(artifactURI);
+    return {
+      artifactUriScheme: url.protocol.replace(/:$/u, ""),
+      artifactUriHost: url.host,
+      artifactUriPath: url.pathname,
+      artifactUriBytes: byteLength,
+    };
+  } catch {
+    return {
+      artifactUriScheme: "unknown",
+      artifactUriBytes: byteLength,
+    };
+  }
 }
 
 function buildPublicEpochs(
@@ -234,6 +403,9 @@ async function fetchRoundCandidateWindow(
     url.searchParams.set("offset", String(offset));
     const response = await fetchJson<CandidateResponse>(url);
     const items = response.items ?? [];
+    if (items.length > limit) {
+      throw new Error(`Ponder returned too many correlation candidates: ${items.length} > ${limit}`);
+    }
     candidates.push(...items.map(parseCandidate));
     if (items.length < limit) {
       break;
@@ -272,7 +444,8 @@ async function fetchRoundVotes(
   candidate: CorrelationRoundCandidate,
 ): Promise<CorrelationVoteInput[]> {
   const votes: CorrelationVoteInput[] = [];
-  for (let offset = 0; ; offset += VOTE_PAGE_SIZE) {
+  for (let page = 0; page < MAX_VOTE_PAGES_PER_ROUND; page += 1) {
+    const offset = page * VOTE_PAGE_SIZE;
     const url = new URL("/correlation/round-votes", ponderBaseUrl);
     url.searchParams.set("rewardPoolId", candidate.rewardPoolId.toString());
     url.searchParams.set("contentId", candidate.contentId.toString());
@@ -281,21 +454,64 @@ async function fetchRoundVotes(
     url.searchParams.set("offset", String(offset));
     const response = await fetchJson<VoteResponse>(url);
     const items = response.items ?? [];
+    if (items.length > VOTE_PAGE_SIZE) {
+      throw new Error(`Ponder returned too many correlation votes: ${items.length} > ${VOTE_PAGE_SIZE}`);
+    }
     votes.push(...items.map(parseVote));
     if (items.length < VOTE_PAGE_SIZE) {
       return votes;
     }
   }
+  throw new Error(
+    `Ponder returned more than ${MAX_VOTE_PAGES_PER_ROUND} correlation vote pages for rewardPoolId=${candidate.rewardPoolId} contentId=${candidate.contentId} roundId=${candidate.roundId}`,
+  );
 }
 
 async function fetchJson<T>(url: URL): Promise<T> {
   const response = await fetch(url, {
     headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`Ponder request failed: ${url.pathname} ${response.status}`);
   }
-  return response.json() as Promise<T>;
+  const contentLengthHeader = response.headers.get("content-length");
+  if (contentLengthHeader) {
+    const declaredLength = Number.parseInt(contentLengthHeader, 10);
+    if (Number.isFinite(declaredLength) && declaredLength > PONDER_JSON_MAX_BYTES) {
+      throw new Error(`Ponder response too large: ${declaredLength} > ${PONDER_JSON_MAX_BYTES} bytes`);
+    }
+  }
+  return JSON.parse(await readResponseBody(response, PONDER_JSON_MAX_BYTES)) as T;
+}
+
+async function readResponseBody(response: Response, maxBytes: number): Promise<string> {
+  if (!response.body) {
+    throw new Error("Ponder response body is not readable");
+  }
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  const reader = response.body.getReader();
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error(`Ponder response exceeded ${maxBytes} bytes during read`);
+    }
+    chunks.push(value);
+  }
+
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(combined);
 }
 
 function parseCandidate(value: unknown): CorrelationRoundCandidate {

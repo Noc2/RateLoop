@@ -507,7 +507,7 @@ after(() => {
 
 test("agent templates route returns public templates without bearer auth", async () => {
   const response = await templatesRoute.GET(
-    new NextRequest("https://rateloop.xyz/api/agent/templates", { method: "GET" }),
+    new NextRequest("https://rateloop.ai/api/agent/templates", { method: "GET" }),
   );
   const body = (await response.json()) as {
     templates: Array<{ id: string; submissionPattern: string }>;
@@ -523,7 +523,7 @@ test("agent quote route returns a direct authenticated quote response", async ()
   installQuoteOverrides();
 
   const response = await quoteRoute.POST(
-    makePost("https://rateloop.xyz/api/agent/quote", questionPayload("quote-http")),
+    makePost("https://rateloop.ai/api/agent/quote", questionPayload("quote-http")),
   );
   const body = (await response.json()) as Record<string, unknown>;
 
@@ -541,7 +541,7 @@ test("agent quote route returns a tokenless wallet quote response", async () => 
   installQuoteOverrides();
 
   const response = await quoteRoute.POST(
-    makePublicPost("https://rateloop.xyz/api/agent/quote", {
+    makePublicPost("https://rateloop.ai/api/agent/quote", {
       ...questionPayload("quote-public"),
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
@@ -558,7 +558,7 @@ test("agent quote route returns a tokenless wallet quote response", async () => 
 test("agent quote route treats malformed authorization as managed auth", async () => {
   const response = await quoteRoute.POST(
     makePublicPost(
-      "https://rateloop.xyz/api/agent/quote",
+      "https://rateloop.ai/api/agent/quote",
       {
         ...questionPayload("quote-bad-auth"),
         walletAddress: "0x00000000000000000000000000000000000000aa",
@@ -576,7 +576,7 @@ test("agent asks route returns the wallet transaction plan response", async () =
   installAskOverrides();
 
   const response = await asksRoute.POST(
-    makePost("https://rateloop.xyz/api/agent/asks", {
+    makePost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-http"),
       maxPaymentAmount: "1500000",
     }),
@@ -593,7 +593,7 @@ test("agent asks route returns a tokenless wallet transaction plan response", as
   installAskOverrides();
 
   const response = await asksRoute.POST(
-    makePublicPost("https://rateloop.xyz/api/agent/asks", {
+    makePublicPost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-public"),
       maxPaymentAmount: "1500000",
       walletAddress: "0x00000000000000000000000000000000000000aa",
@@ -613,7 +613,7 @@ test("agent asks route returns a tokenless wallet transaction plan response", as
 
 test("agent asks route rejects oversized JSON bodies", async () => {
   const response = await asksRoute.POST(
-    new NextRequest("https://rateloop.xyz/api/agent/asks", {
+    new NextRequest("https://rateloop.ai/api/agent/asks", {
       body: "{}",
       headers: new Headers({
         "content-length": String(128 * 1024 + 1),
@@ -631,7 +631,7 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   installAskOverrides();
 
   const createResponse = await signingIntentsRoute.POST(
-    makePublicPost("https://rateloop.xyz/api/agent/signing-intents", {
+    makePublicPost("https://rateloop.ai/api/agent/signing-intents", {
       request: {
         ...questionPayload("browser-handoff"),
         maxPaymentAmount: "1500000",
@@ -655,7 +655,7 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal(createBody.status, "pending");
 
   const readResponse = await signingIntentRoute.GET(
-    makePublicGet(`https://rateloop.xyz/api/agent/signing-intents/${intentId}`, {
+    makePublicGet(`https://rateloop.ai/api/agent/signing-intents/${intentId}`, {
       "x-rateloop-signing-intent-token": token,
     }),
     { params: Promise.resolve({ intentId }) },
@@ -667,7 +667,7 @@ test("agent signing intent routes create and prepare browser handoff asks", asyn
   assert.equal(readBody.clientRequestId, "browser-handoff");
 
   const prepareResponse = await signingIntentPrepareRoute.POST(
-    makePublicPost(`https://rateloop.xyz/api/agent/signing-intents/${intentId}/prepare`, {
+    makePublicPost(`https://rateloop.ai/api/agent/signing-intents/${intentId}/prepare`, {
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
@@ -686,7 +686,7 @@ test("agent signing intent route accepts ttlMs on direct ask bodies without pers
   installAskOverrides();
 
   const response = await signingIntentsRoute.POST(
-    makePublicPost("https://rateloop.xyz/api/agent/signing-intents", {
+    makePublicPost("https://rateloop.ai/api/agent/signing-intents", {
       ...questionPayload("direct-ttl"),
       maxPaymentAmount: "1500000",
       signatureMode: "browser_link",
@@ -703,7 +703,7 @@ test("agent signing intent route accepts ttlMs on direct ask bodies without pers
 
 test("agent signing intent read requires a private token outside the request URL", async () => {
   const response = await signingIntentRoute.GET(
-    makePublicGet("https://rateloop.xyz/api/agent/signing-intents/asi_missing"),
+    makePublicGet("https://rateloop.ai/api/agent/signing-intents/asi_missing"),
     { params: Promise.resolve({ intentId: "asi_missing" }) },
   );
   const body = (await response.json()) as Record<string, unknown>;
@@ -716,7 +716,7 @@ test("agent asks route requires walletAddress for tokenless asks", async () => {
   installAskOverrides();
 
   const response = await asksRoute.POST(
-    makePublicPost("https://rateloop.xyz/api/agent/asks", {
+    makePublicPost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-public-missing-wallet"),
       maxPaymentAmount: "1500000",
     }),
@@ -732,7 +732,7 @@ test("agent asks route keeps callbacks managed-only for tokenless asks", async (
   installAskOverrides();
 
   const response = await asksRoute.POST(
-    makePublicPost("https://rateloop.xyz/api/agent/asks", {
+    makePublicPost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-public-callback"),
       maxPaymentAmount: "1500000",
       walletAddress: "0x00000000000000000000000000000000000000aa",
@@ -750,7 +750,7 @@ test("agent asks route returns the native x402 authorization response", async ()
   installAskOverrides();
 
   const response = await asksRoute.POST(
-    makePost("https://rateloop.xyz/api/agent/asks", {
+    makePost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-http"),
       maxPaymentAmount: "1500000",
       paymentMode: "x402_authorization",
@@ -773,7 +773,7 @@ test("agent asks route returns tokenless native x402 authorization response", as
   installAskOverrides();
 
   const response = await asksRoute.POST(
-    makePublicPost("https://rateloop.xyz/api/agent/asks", {
+    makePublicPost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-public-x402"),
       maxPaymentAmount: "1500000",
       paymentMode: "x402_authorization",
@@ -812,7 +812,7 @@ test("agent asks route returns stable direct HTTP error payloads", async () => {
   });
 
   const response = await asksRoute.POST(
-    makePost("https://rateloop.xyz/api/agent/asks", {
+    makePost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-http"),
       maxPaymentAmount: "1500000",
     }),
@@ -842,7 +842,7 @@ test("agent confirm route returns a submitted ask response", async () => {
   });
 
   const response = await asksConfirmRoute.POST(
-    makePost(`https://rateloop.xyz/api/agent/asks/${OPERATION_KEY}/confirm`, {
+    makePost(`https://rateloop.ai/api/agent/asks/${OPERATION_KEY}/confirm`, {
       transactionHashes: [`0x${"4".repeat(64)}`],
     }),
     { params: Promise.resolve({ operationKey: OPERATION_KEY }) },
@@ -871,7 +871,7 @@ test("agent confirm route accepts tokenless operation confirmations", async () =
   });
 
   const response = await asksConfirmRoute.POST(
-    makePublicPost(`https://rateloop.xyz/api/agent/asks/${OPERATION_KEY}/confirm`, {
+    makePublicPost(`https://rateloop.ai/api/agent/asks/${OPERATION_KEY}/confirm`, {
       transactionHashes: [`0x${"4".repeat(64)}`],
     }),
     { params: Promise.resolve({ operationKey: OPERATION_KEY }) },
@@ -886,7 +886,7 @@ test("agent confirm route accepts tokenless operation confirmations", async () =
 
 test("agent status route returns not_found without treating it as a transport error", async () => {
   const response = await asksByClientRoute.GET(
-    makeGet("https://rateloop.xyz/api/agent/asks/by-client-request?chainId=480&clientRequestId=missing"),
+    makeGet("https://rateloop.ai/api/agent/asks/by-client-request?chainId=480&clientRequestId=missing"),
   );
   const body = (await response.json()) as Record<string, unknown>;
 
@@ -931,7 +931,7 @@ test("agent status route supports tokenless operation lookups", async () => {
     `,
   });
 
-  const response = await asksOperationRoute.GET(makePublicGet(`https://rateloop.xyz/api/agent/asks/${OPERATION_KEY}`), {
+  const response = await asksOperationRoute.GET(makePublicGet(`https://rateloop.ai/api/agent/asks/${OPERATION_KEY}`), {
     params: Promise.resolve({ operationKey: OPERATION_KEY }),
   });
   const body = (await response.json()) as Record<string, unknown>;
@@ -1072,7 +1072,7 @@ test("agent audit route returns ask-centric audit details", async () => {
     },
   });
 
-  const response = await asksAuditRoute.GET(makeGet(`https://rateloop.xyz/api/agent/asks/${OPERATION_KEY}/audit`), {
+  const response = await asksAuditRoute.GET(makeGet(`https://rateloop.ai/api/agent/asks/${OPERATION_KEY}/audit`), {
     params: Promise.resolve({ operationKey: OPERATION_KEY }),
   });
   const body = (await response.json()) as {
@@ -1098,9 +1098,7 @@ test("agent audit by client request route resolves the same managed ask", async 
   await seedManagedAskAudit({ clientRequestId: "audit-client-http" });
 
   const response = await asksByClientAuditRoute.GET(
-    makeGet(
-      "https://rateloop.xyz/api/agent/asks/by-client-request/audit?chainId=480&clientRequestId=audit-client-http",
-    ),
+    makeGet("https://rateloop.ai/api/agent/asks/by-client-request/audit?chainId=480&clientRequestId=audit-client-http"),
   );
   const body = (await response.json()) as {
     clientRequestId: string;
@@ -1118,7 +1116,7 @@ test("agent audit export route returns csv rows for the authenticated agent", as
   await seedManagedAskAudit({ clientRequestId: "audit-export-http" });
 
   const response = await asksExportRoute.GET(
-    makeGet("https://rateloop.xyz/api/agent/asks/export?format=csv&eventType=submitted&limit=10"),
+    makeGet("https://rateloop.ai/api/agent/asks/export?format=csv&eventType=submitted&limit=10"),
   );
   const body = await response.text();
 
@@ -1158,7 +1156,7 @@ test("agent status route surfaces callback delivery state for missed webhooks", 
     workerId: "worker-a",
   });
 
-  const response = await asksOperationRoute.GET(makeGet(`https://rateloop.xyz/api/agent/asks/${OPERATION_KEY}`), {
+  const response = await asksOperationRoute.GET(makeGet(`https://rateloop.ai/api/agent/asks/${OPERATION_KEY}`), {
     params: Promise.resolve({ operationKey: OPERATION_KEY }),
   });
   const body = (await response.json()) as {
@@ -1302,7 +1300,7 @@ test("agent status route includes live ask guidance for underfunded open markets
       }) as never,
   });
 
-  const response = await asksOperationRoute.GET(makeGet(`https://rateloop.xyz/api/agent/asks/${OPERATION_KEY}`), {
+  const response = await asksOperationRoute.GET(makeGet(`https://rateloop.ai/api/agent/asks/${OPERATION_KEY}`), {
     params: Promise.resolve({ operationKey: OPERATION_KEY }),
   });
   const body = (await response.json()) as {
@@ -1326,7 +1324,7 @@ test("agent status route includes live ask guidance for underfunded open markets
 
 test("agent results route returns the pending result package before settlement", async () => {
   const response = await resultsByClientRoute.GET(
-    makeGet("https://rateloop.xyz/api/agent/results/by-client-request?chainId=480&clientRequestId=missing"),
+    makeGet("https://rateloop.ai/api/agent/results/by-client-request?chainId=480&clientRequestId=missing"),
   );
   const body = (await response.json()) as Record<string, unknown>;
 
@@ -1384,7 +1382,7 @@ test("agent results routes accept contentId for bundle lookups", async () => {
 
   const byClientResponse = await resultsByClientRoute.GET(
     makeGet(
-      "https://rateloop.xyz/api/agent/results/by-client-request?chainId=480&clientRequestId=bundle-result-http&contentId=99",
+      "https://rateloop.ai/api/agent/results/by-client-request?chainId=480&clientRequestId=bundle-result-http&contentId=99",
     ),
   );
   const byClientBody = (await byClientResponse.json()) as {
@@ -1399,7 +1397,7 @@ test("agent results routes accept contentId for bundle lookups", async () => {
   assert.deepEqual(byClientBody.operation?.contentIds, ["42", "99"]);
 
   const byOperationResponse = await resultsOperationRoute.GET(
-    makeGet(`https://rateloop.xyz/api/agent/results/${OPERATION_KEY}?contentId=99`),
+    makeGet(`https://rateloop.ai/api/agent/results/${OPERATION_KEY}?contentId=99`),
     {
       params: Promise.resolve({ operationKey: OPERATION_KEY }),
     },
@@ -1413,7 +1411,7 @@ test("agent results routes accept contentId for bundle lookups", async () => {
 });
 
 test("agent templates route returns supported result templates", async () => {
-  const response = await templatesRoute.GET(makeGet("https://rateloop.xyz/api/agent/templates"));
+  const response = await templatesRoute.GET(makeGet("https://rateloop.ai/api/agent/templates"));
   const body = (await response.json()) as {
     templates: Array<{
       bundleStrategy: string;

@@ -1,11 +1,6 @@
 const IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
 
-const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = [
-  "https://www.rateloop.ai",
-  "https://rateloop.ai",
-  "https://www.rateloop.xyz",
-  "https://rateloop.xyz",
-] as const;
+const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
 
 type UploadedImageAttachmentUrlOptions = {
   allowedOrigins?: readonly string[];

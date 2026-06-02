@@ -5,7 +5,7 @@ import { shouldSuppressShellNavClick } from "~~/lib/ui/shellNavigation";
 test("suppresses only exact same-url shell nav clicks", () => {
   assert.equal(
     shouldSuppressShellNavClick({
-      currentHref: "https://rateloop.xyz/rate",
+      currentHref: "https://rateloop.ai/rate",
       isActive: true,
       targetHref: "/rate",
     }),
@@ -14,7 +14,7 @@ test("suppresses only exact same-url shell nav clicks", () => {
 
   assert.equal(
     shouldSuppressShellNavClick({
-      currentHref: "https://rateloop.xyz/rate?content=123",
+      currentHref: "https://rateloop.ai/rate?content=123",
       isActive: true,
       targetHref: "/rate",
     }),
@@ -23,7 +23,7 @@ test("suppresses only exact same-url shell nav clicks", () => {
 
   assert.equal(
     shouldSuppressShellNavClick({
-      currentHref: "https://rateloop.xyz/governance#leaderboard",
+      currentHref: "https://rateloop.ai/governance#leaderboard",
       isActive: true,
       targetHref: "/governance",
     }),
@@ -34,7 +34,7 @@ test("suppresses only exact same-url shell nav clicks", () => {
 test("allows inactive, modified, and malformed shell nav clicks", () => {
   assert.equal(
     shouldSuppressShellNavClick({
-      currentHref: "https://rateloop.xyz/rate",
+      currentHref: "https://rateloop.ai/rate",
       isActive: false,
       targetHref: "/rate",
     }),
@@ -42,7 +42,7 @@ test("allows inactive, modified, and malformed shell nav clicks", () => {
   );
   assert.equal(
     shouldSuppressShellNavClick({
-      currentHref: "https://rateloop.xyz/rate",
+      currentHref: "https://rateloop.ai/rate",
       isActive: true,
       isModifiedEvent: true,
       targetHref: "/rate",

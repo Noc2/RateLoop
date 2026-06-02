@@ -1,102 +1,102 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://www.rateloop.xyz/</loc>
+    <loc>https://www.rateloop.ai/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs</loc>
+    <loc>https://www.rateloop.ai/docs</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/ai</loc>
+    <loc>https://www.rateloop.ai/docs/ai</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/ai.md</loc>
+    <loc>https://www.rateloop.ai/docs/ai.md</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/ai/user-testing</loc>
+    <loc>https://www.rateloop.ai/docs/ai/user-testing</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/ai/user-testing.md</loc>
+    <loc>https://www.rateloop.ai/docs/ai/user-testing.md</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/ai/errors</loc>
+    <loc>https://www.rateloop.ai/docs/ai/errors</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/ai/errors.md</loc>
+    <loc>https://www.rateloop.ai/docs/ai/errors.md</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/sdk</loc>
+    <loc>https://www.rateloop.ai/docs/sdk</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/sdk.md</loc>
+    <loc>https://www.rateloop.ai/docs/sdk.md</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/how-it-works</loc>
+    <loc>https://www.rateloop.ai/docs/how-it-works</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/how-it-works.md</loc>
+    <loc>https://www.rateloop.ai/docs/how-it-works.md</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/tech-stack</loc>
+    <loc>https://www.rateloop.ai/docs/tech-stack</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/tokenomics</loc>
+    <loc>https://www.rateloop.ai/docs/tokenomics</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/governance</loc>
+    <loc>https://www.rateloop.ai/docs/governance</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/smart-contracts</loc>
+    <loc>https://www.rateloop.ai/docs/smart-contracts</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/frontend-codes</loc>
+    <loc>https://www.rateloop.ai/docs/frontend-codes</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/docs/whitepaper</loc>
+    <loc>https://www.rateloop.ai/docs/whitepaper</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/llms.txt</loc>
+    <loc>https://www.rateloop.ai/llms.txt</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://www.rateloop.xyz/skill.md</loc>
+    <loc>https://www.rateloop.ai/skill.md</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>

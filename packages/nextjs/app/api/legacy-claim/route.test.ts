@@ -8,7 +8,7 @@ function makeRequest(pathname: string): NextRequest {
   // Use a per-test unique IP so the rate-limit doesn't carry over between tests in this file.
   // The trusted-client-ip header is read from x-forwarded-for (in non-prod, falls back to a
   // fingerprint of the request). Each test below uses a different IP.
-  return new NextRequest(`https://rateloop.xyz${pathname}`);
+  return new NextRequest(`https://rateloop.ai${pathname}`);
 }
 
 test("legacy claim route rejects invalid addresses", async () => {

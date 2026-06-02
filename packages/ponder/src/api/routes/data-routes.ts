@@ -55,6 +55,7 @@ const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
 const SNAPSHOT_STATUS_FINALIZED = 3;
 const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 const HEX_BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
+const PAYOUT_PROOF_ENRICHMENT_CONCURRENCY = 8;
 
 const STREAK_MILESTONES = [
   { days: 7, baseBonus: 10 },
@@ -76,6 +77,28 @@ function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
     inArray(vote.identityHolder, addresses),
     inArray(vote.identityVoter, addresses),
   );
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+  );
+  return results;
 }
 
 export function registerDataRoutes(app: ApiApp) {
@@ -1178,8 +1201,10 @@ export function registerDataRoutes(app: ApiApp) {
       .limit(limit)
       .offset(offset);
 
-    const enrichedItems = await Promise.all(
-      items.map(async (item) => {
+    const enrichedItems = await mapWithConcurrency(
+      items,
+      PAYOUT_PROOF_ENRICHMENT_CONCURRENCY,
+      async (item) => {
         const requiresPayoutProof =
           item.asset !== 0 &&
           (item.correlationWeightRoot != null ||
@@ -1204,7 +1229,7 @@ export function registerDataRoutes(app: ApiApp) {
           payoutWeight: payoutProof?.payoutWeight ?? null,
           payoutProof: payoutProof?.proof ?? null,
         };
-      }),
+      },
     );
 
     return jsonBig(c, {

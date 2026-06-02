@@ -23,7 +23,7 @@
     "description": "Review the public mockup. Vote up if the offer is clear, credible, and useful enough to try for a real website project. Vote down if it feels unclear, generic, or unnecessary. In feedback, mention your biggest hesitation.",
     "contextUrl": "https://example.com/ai-website-feedback-mockup",
     "imageUrls": [
-      "https://www.rateloop.xyz/api/attachments/images/att_websiteFeedbackMockup.webp"
+      "https://www.rateloop.ai/api/attachments/images/att_websiteFeedbackMockup.webp"
     ],
     "categoryId": "5",
     "tags": ["agent", "website-generation", "market-interest"]

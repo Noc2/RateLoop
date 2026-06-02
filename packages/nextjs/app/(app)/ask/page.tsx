@@ -7,6 +7,8 @@ import type { NextPage } from "next";
 import { useAccount } from "wagmi";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { ConnectWalletCard } from "~~/components/shared/ConnectWalletCard";
+import { WalletRestoreLoading } from "~~/components/shared/WalletRestoreLoading";
+import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 
 const AskPageTabs = dynamic(() => import("~~/components/submit/AskPageTabs").then(mod => mod.AskPageTabs), {
   loading: () => <AskSectionLoading />,
@@ -25,10 +27,15 @@ function AskSectionLoading() {
 
 const AskPage: NextPage = () => {
   const { address } = useAccount();
+  const { isRestoringWallet } = useWalletRestore();
   const searchParams = useSearchParams();
   const isAgentTab = searchParams?.get("tab") === "agent";
 
   if (!address && !isAgentTab) {
+    if (isRestoringWallet) {
+      return <WalletRestoreLoading />;
+    }
+
     return (
       <ConnectWalletCard
         title="Submit"

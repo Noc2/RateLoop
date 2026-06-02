@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { AppProgressBar as ProgressBar } from "next-nprogress-bar";
 import { hardhat } from "viem/chains";
+import type { State } from "wagmi";
 import { Footer } from "~~/components/Footer";
 import { Header } from "~~/components/Header";
 import { NavigationProgressDiagnostics } from "~~/components/NavigationProgressDiagnostics";
@@ -71,9 +72,15 @@ const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-export const ScaffoldEthAppWithProviders = ({ children }: { children: React.ReactNode }) => {
+export const ScaffoldEthAppWithProviders = ({
+  children,
+  wagmiInitialState,
+}: {
+  children: React.ReactNode;
+  wagmiInitialState?: State;
+}) => {
   return (
-    <RateLoopWalletProviders>
+    <RateLoopWalletProviders wagmiInitialState={wagmiInitialState}>
       <Suspense fallback={null}>
         <ReferralAttributionCapture />
       </Suspense>

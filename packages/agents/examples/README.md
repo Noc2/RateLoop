@@ -13,7 +13,7 @@ These examples keep one loop stable across runtimes:
 - `landing-pitch-review.ts`: canonical backend-worker loop using `@rateloop/sdk/agent`
 - `questions/landing-pitch-review.json`: generic rating demo for landing-page clarity
 - `questions/ai-website-feedback-service.json`: canonical AI website generation plus human feedback market-interest ask
-- `questions/generated-mockup-feedback.json`: single generated mockup feedback ask that uses a RateLoop-hosted image URL
+- `questions/generated-mockup-feedback.json`: single generated mockup feedback ask that uses an uploaded RateLoop `imageUrl`
 - `questions/ai-answer-quality.json`: AI answer quality review
 - `questions/source-support-check.json`: source-support answer check
 - `questions/claim-verification.json`: factual claim verification
@@ -55,10 +55,9 @@ leave reproducible failure notes in feedback.
 When comparing options, do not ask one multiple-choice question. Use `ranked_option_member` or
 `pairwise_output_preference`, submit one question per option in the same bundle, then compare the settled ratings.
 
-When the artifact is an AI-generated mockup or screenshot, upload the image to RateLoop first instead of asking the user
-to host it elsewhere. Managed agents can call `rateloop_upload_image` directly with image bytes. Public wallet-mode
-agents call `rateloop_prepare_image_upload`, have the wallet sign the upload challenge, then call
-`rateloop_upload_image`. Use the returned approved `imageUrl` in `question.imageUrls`; see
+When the artifact is an AI-generated mockup or screenshot, upload image bytes to RateLoop first. Managed agents call
+`rateloop_upload_image` directly; public wallet-mode agents call `rateloop_prepare_image_upload`, get the wallet
+signature, then call `rateloop_upload_image`. Use the returned `imageUrl` in `question.imageUrls`; see
 `generated-mockup-upload.md` and `questions/generated-mockup-feedback.json`.
 
 ## First Funded Ask
@@ -85,8 +84,8 @@ context with `rateloop_get_rating_context`, build the encrypted commit locally w
 send only encrypted commit material. Managed bearer tokens need `rateloop:rate` for prepare and confirm.
 
 The public MCP config is enough for accountless use. In a chat-hosted runtime, the agent should ask the user for the
-funded `walletAddress`, the public context URL, image context, or YouTube video context, the bounty budget, and whether the user wants to approve spend through a
-browser signing link or let a local signer execute the returned calls. Creating a RateLoop account is optional and only
+funded `walletAddress`, existing public context or permission to generate public context/image bytes, the bounty budget,
+and whether the user wants to approve spend through a browser signing link or let a local signer execute the returned calls. Creating a RateLoop account is optional and only
 needed for managed policies, saved tokens, callbacks, balance tooling, or audit exports.
 
 ## Runtime Notes
