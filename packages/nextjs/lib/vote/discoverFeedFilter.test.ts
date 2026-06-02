@@ -244,6 +244,10 @@ test("content with a newer active bounty is not treated as expired", () => {
     [1n],
   );
   assert.deepEqual(filterDiscoverCategoryItems(feed, DISCOVER_EXPIRED_BOUNTY_FILTER, undefined, 10_000), []);
+  assert.equal(getActiveBountyClosesAt(feed[0], 12_000), 12_000n);
+  assert.equal(getVisibleRewardPoolAmount(feed[0], 12_000), 15_000_000n);
+  assert.equal(shouldShowBountyExpiredStatus(feed[0], 12_000), false);
+  assert.equal(shouldShowBountyExpiredStatus(feed[0], 12_001), true);
 });
 
 test("pending start-by bounty stays visible until it activates or misses the deadline", () => {
@@ -265,6 +269,8 @@ test("pending start-by bounty stays visible until it activates or misses the dea
   assert.equal(getActiveBountyClosesAt(item, 10_000), null);
   assert.equal(getPendingBountyStartBy(item, 10_000), 12_000n);
   assert.equal(shouldShowBountyExpiredStatus(item, 10_000), false);
+  assert.equal(getPendingBountyStartBy(item, 12_000), 12_000n);
+  assert.equal(shouldShowBountyExpiredStatus(item, 12_000), false);
   assert.equal(shouldShowBountyExpiredStatus(item, 12_001), true);
 });
 
@@ -376,6 +382,10 @@ test("bundle-only items keep the active bounty status when the bundle bounty is 
 
   assert.equal(getActiveBountyClosesAt(item, 10_000), 12_000n);
   assert.equal(shouldShowBountyExpiredStatus(item, 10_000), false);
+  assert.equal(getActiveBountyClosesAt(item, 12_000), 12_000n);
+  assert.equal(shouldShowBountyExpiredStatus(item, 12_000), false);
+  assert.equal(getActiveBountyClosesAt(item, 12_001), null);
+  assert.equal(shouldShowBountyExpiredStatus(item, 12_001), true);
 });
 
 test("feedback bonuses stay active without an indexed open round when the award window is still open", () => {

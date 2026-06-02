@@ -73,10 +73,10 @@ function hasVisibleBundleBounty(item: ContentItem): boolean {
   if (!bundle || bundle.failed || bundle.refunded || bundle.unallocatedAmount <= 0n) return false;
   const now = BigInt(Math.floor(Date.now() / 1000));
   const closesAt = bundle.bountyClosesAt ?? 0n;
-  if (closesAt > 0n) return closesAt > now;
+  if (closesAt > 0n) return closesAt >= now;
 
   const startBy = bundle.bountyStartBy ?? bundle.expiresAt ?? 0n;
-  return startBy === 0n || startBy > now;
+  return startBy === 0n || startBy >= now;
 }
 
 function getStatus(item: ContentItem): { label: string; className: string } {
@@ -104,10 +104,10 @@ function getBountyLabel(item: ContentItem): string {
     (summary.hasActiveBounty ||
       (summary.nextBountyClosesAt !== null &&
         summary.nextBountyClosesAt !== undefined &&
-        summary.nextBountyClosesAt > now) ||
+        summary.nextBountyClosesAt >= now) ||
       (summary.nextBountyStartBy !== null &&
         summary.nextBountyStartBy !== undefined &&
-        summary.nextBountyStartBy > now))
+        summary.nextBountyStartBy >= now))
   ) {
     return formatCompactAmount(summary.totalAvailable, summary.currency);
   }
@@ -125,17 +125,17 @@ function getBountyExpiry(item: ContentItem): string {
   const now = BigInt(Math.floor(Date.now() / 1000));
   if (summary && summary.totalAvailable > 0n) {
     const closesAt = summary.nextBountyClosesAt ?? 0n;
-    if (closesAt > now) return formatTimestampSeconds(closesAt);
+    if (closesAt > 0n && closesAt >= now) return formatTimestampSeconds(closesAt);
 
     const startBy = summary.nextBountyStartBy ?? 0n;
-    if (startBy > now) return formatTimestampSeconds(startBy);
+    if (startBy > 0n && startBy >= now) return formatTimestampSeconds(startBy);
   }
 
   const bundle = item.bundle;
   if (!bundle || !hasVisibleBundleBounty(item)) return "-";
 
   const closesAt = bundle.bountyClosesAt ?? 0n;
-  if (closesAt > now) return formatTimestampSeconds(closesAt);
+  if (closesAt > 0n && closesAt >= now) return formatTimestampSeconds(closesAt);
 
   return formatTimestampSeconds(bundle.bountyStartBy ?? bundle.expiresAt ?? null);
 }
