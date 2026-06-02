@@ -674,10 +674,6 @@ export function FrontendRegistration() {
                   Snapshot Keeper
                   <InfoTooltip text="Optional operational wallet that can publish payout roots for this bonded frontend." />
                 </p>
-                <p className="text-sm text-base-content/60">
-                  Optional separate wallet for payout-root proposal transactions. It must be unregistered and not
-                  already assigned to another frontend.
-                </p>
               </div>
               {snapshotProposer ? (
                 <FrontendOperatorAddressRow address={snapshotProposer} />
@@ -764,11 +760,7 @@ export function FrontendRegistration() {
                 <span className="loading loading-spinner loading-xs" />
                 Scanning settled rounds for claimable frontend fees...
               </div>
-            ) : claimableRoundFees.length === 0 ? (
-              <p className="text-sm text-base-content/60">
-                No unclaimed frontend fees were found in settled rounds for this frontend.
-              </p>
-            ) : (
+            ) : claimableRoundFees.length > 0 ? (
               <div className="space-y-3">
                 <GradientActionButton
                   className="w-full"
@@ -853,7 +845,7 @@ export function FrontendRegistration() {
                   </button>
                 )}
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Accumulated Fees */}
