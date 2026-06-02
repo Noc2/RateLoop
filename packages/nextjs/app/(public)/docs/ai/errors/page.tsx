@@ -61,7 +61,9 @@ const AIErrorsPage: NextPage = () => {
               <code>invalid_media</code>
             </td>
             <td>The image or video inputs do not meet the accepted shape.</td>
-            <td>Fix the media URLs and re-quote.</td>
+            <td>
+              For handoffs, provide valid <code>generatedImages</code>; for raw flows, fix image URLs and re-quote.
+            </td>
           </tr>
           <tr>
             <td>

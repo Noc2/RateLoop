@@ -13,10 +13,10 @@ RateLoop exposes SDK, MCP, and JSON routes so agents can quote, submit, fund, tr
 ## Use Public MCP When
 
 - The agent host supports remote MCP.
-- The agent host can execute or present wallet calls cleanly.
-- You want standard tool calls such as `rateloop_quote_question`, `rateloop_ask_humans`, and `rateloop_get_result`.
+- You want a normal human-wallet browser handoff with `rateloop_create_ask_handoff_link`.
+- You want standard tool calls such as `rateloop_quote_question`, `rateloop_get_handoff_status`, and `rateloop_get_result`.
 - You want to attach an optional feedback bonus pool to a single-question ask.
-- You want to upload generated mockups, screenshots, or local image bytes and use the returned `imageUrl` as ask context.
+- You want to stage generated mockups, screenshots, or local image bytes in `generatedImages`.
 - You want an agent to rate existing content without sending plaintext vote direction, prediction, or salt to hosted infrastructure.
 
 The exported TypeScript helpers use the RateLoop namespace. MCP tool names currently retain the legacy `rateloop_`
@@ -28,19 +28,25 @@ Public MCP endpoint:
 https://www.rateloop.ai/api/mcp/public
 ```
 
-## Use Browser Signing When
+## Use Browser Handoff When
 
 - A human controls the wallet.
 - The user should review and approve funding in the browser.
-- You want to avoid pasting raw signature challenges or transaction plans into chat.
+- You want to avoid pasting raw image-upload signatures or transaction plans into chat.
 
-Create the link with the same ask payload you quoted:
+Create the link through MCP with the same ask payload you quoted:
 
 ```text
-POST /api/agent/signing-intents
+rateloop_create_ask_handoff_link
 ```
 
-Return the `signingUrl` to the user. The page handles wallet connection, ask preparation, transaction execution, and confirmation.
+Or use the direct JSON route:
+
+```text
+POST /api/agent/handoffs
+```
+
+Return the `handoffUrl` to the user. The page handles wallet connection, generated-image upload signatures, ask preparation, transaction execution, and confirmation.
 
 Use the local signer CLI instead when the agent controls a funded encrypted wallet.
 
@@ -54,7 +60,7 @@ Core routes:
 ```text
 GET  /api/agent/templates
 POST /api/agent/quote
-POST /api/agent/signing-intents
+POST /api/agent/handoffs
 POST /api/agent/asks
 POST /api/agent/asks/{operationKey}/confirm
 GET  /api/agent/asks/{operationKey}
@@ -63,9 +69,11 @@ GET  /api/agent/results/{operationKey}
 
 ## Generated Images And Mockups
 
-Agents do not need to ask users to host generated images, screenshots, or mockups. Upload the bytes to RateLoop first, then use the returned `imageUrl` in `question.imageUrls`.
+Agents do not need to ask users to host generated images, screenshots, or mockups. In the normal public human-wallet flow, pass image bytes as `generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches approved RateLoop image URLs before funding the ask.
 
-Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode agents call `rateloop_prepare_image_upload`, have the wallet sign the returned `message`, then call `rateloop_upload_image` with the bytes and signature. If wallet message signing is awkward in chat, use the Ask page upload/signing UI instead of showing the raw challenge. Use `rateloop_get_image_upload_status` if moderation is still processing.
+Managed agents with a bearer token can call `rateloop_upload_image` directly. Public wallet-mode raw upload (`rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`) is an advanced fallback for hosts that can present wallet signing cleanly. Use `rateloop_get_image_upload_status` if moderation is still processing.
+
+Advanced raw upload example:
 
 ```ts
 import { createRateLoopAgentClient } from "@rateloop/sdk/agent";

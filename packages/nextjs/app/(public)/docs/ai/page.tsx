@@ -18,6 +18,7 @@ const genericMcpConfig = `{
 const directHttpEndpoints = [
   { method: "GET", path: "/api/agent/templates" },
   { method: "POST", path: "/api/agent/quote" },
+  { method: "POST", path: "/api/agent/handoffs" },
   { method: "POST", path: "/api/agent/asks" },
   { method: "POST", path: "/api/agent/asks/{operationKey}/confirm" },
   { method: "GET", path: "/api/agent/asks/{operationKey}" },
@@ -206,12 +207,11 @@ const AIPage = async () => {
       <ul>
         <li>
           Visual context: use <code>question.contextUrl</code> for a public page, <code>question.videoUrl</code> for
-          YouTube, or let the agent create/upload generated or local image bytes with <code>rateloop_upload_image</code>{" "}
-          and put the returned <code>imageUrl</code> in <code>question.imageUrls</code>.
+          YouTube, or pass generated/local/user image bytes as <code>generatedImages</code> to the browser handoff.
         </li>
         <li>
-          Wallet: <code>walletAddress</code> on World Chain with USDC for the bounty, plus LREP when using an LREP
-          Feedback Bonus, and approval to spend.
+          Wallet: optional expected <code>walletAddress</code> on World Chain with USDC for the bounty, plus LREP when
+          using an LREP Feedback Bonus.
         </li>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, <code>requiredSettledRounds</code>,{" "}
@@ -226,10 +226,10 @@ const AIPage = async () => {
         <li>Question fields: title, description, category id, tags, and optional template id.</li>
       </ul>
       <p>
-        Public wallet-mode image upload uses <code>rateloop_prepare_image_upload</code>, wallet signature, then{" "}
-        <code>rateloop_upload_image</code>. Use <code>rateloop_get_image_upload_status</code> if moderation is still
-        processing. Uploaded images become public ask context, so avoid secrets, personal data, rights-restricted
-        material, or prohibited content.
+        The browser handoff signs and uploads staged generated images before funding the ask. Managed MCP agents can
+        still call <code>rateloop_upload_image</code> directly. Public wallet-mode raw image upload is an advanced
+        fallback for hosts that can present wallet signing cleanly. Uploaded images become public ask context, so avoid
+        secrets, personal data, rights-restricted material, or prohibited content.
       </p>
       <p>
         If the category or template is unknown, call <code>rateloop_list_categories</code> or{" "}
@@ -245,17 +245,29 @@ const AIPage = async () => {
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{genericMcpConfig}</code>
       </pre>
+      <p>For normal human-wallet asks, use handoff tools in order:</p>
+      <ol>
+        <li>
+          <code>rateloop_quote_question</code>
+        </li>
+        <li>
+          <code>rateloop_create_ask_handoff_link</code>
+        </li>
+        <li>Share the returned handoff URL.</li>
+        <li>
+          <code>rateloop_get_handoff_status</code>
+        </li>
+        <li>
+          <code>rateloop_get_question_status</code>
+        </li>
+        <li>
+          <code>rateloop_get_result</code>
+        </li>
+      </ol>
       <p>
-        If the ask needs generated, local, or user-supplied image context, upload it before quoting: managed MCP tokens
-        call <code>rateloop_upload_image</code>; public wallet MCP calls <code>rateloop_prepare_image_upload</code>,
-        signs the returned <code>message</code>, then calls <code>rateloop_upload_image</code>. Use{" "}
-        <code>rateloop_get_image_upload_status</code> when moderation is still processing.
-      </p>
-      <p>
-        Then use these ask tools in order: <code>rateloop_quote_question</code>, <code>rateloop_ask_humans</code>,
-        execute the returned <code>transactionPlan.calls</code>, <code>rateloop_confirm_ask_transactions</code>,
-        optionally <code>rateloop_confirm_feedback_bonus_transactions</code>, <code>rateloop_get_question_status</code>,
-        then <code>rateloop_get_result</code>.
+        For low-level MCP wallet-call hosts only, use <code>rateloop_ask_humans</code>, execute the returned{" "}
+        <code>transactionPlan.calls</code>, <code>rateloop_confirm_ask_transactions</code>, optionally{" "}
+        <code>rateloop_confirm_feedback_bonus_transactions</code>, then poll status and result.
       </p>
       <p>
         Agents that do not use MCP can call the bounty ask, status, and result flow through JSON routes. Use MCP for the
@@ -274,11 +286,10 @@ const AIPage = async () => {
           Show or log the returned <code>legalNotice</code> before spending.
         </li>
         <li>
-          Call <code>rateloop_ask_humans</code> with <code>maxPaymentAmount</code> set to the maximum USDC spend the
-          user approved. Include a USDC Feedback Bonus in that cap; LREP Feedback Bonuses are approved through the
-          returned wallet calls.
+          Prefer browser handoff: call <code>rateloop_create_ask_handoff_link</code> and share the returned{" "}
+          <code>handoffUrl</code>.
         </li>
-        <li>Execute each returned wallet call, then confirm the transaction hashes.</li>
+        <li>If using raw MCP instead, execute each returned wallet call, then confirm the transaction hashes.</li>
       </ol>
       <p>
         Default to <code>{'paymentMode: "wallet_calls"'}</code>. Use <code>{'paymentMode: "x402_authorization"'}</code>{" "}

@@ -32,26 +32,26 @@ Use this when the user wants outside ratings or feedback from humans, other agen
 
 ### Default Human-Wallet Flow
 
-When the user controls the wallet, prefer a browser signing link instead of pasting raw signature challenges or transaction plans into chat.
+When the user controls the wallet, prefer a browser ask handoff instead of pasting raw signature challenges or transaction plans into chat.
 
 1. Create or collect public context.
-2. If context is a generated, local, or user-provided image, upload the bytes to RateLoop first and use the returned `imageUrl`.
+2. If context is a generated, local, or user-provided image, keep the bytes ready as `generatedImages`.
 3. Call `rateloop_quote_question` and show the cost plus `legalNotice`.
-4. Create a browser signing intent with the same ask payload: `POST /api/agent/signing-intents`.
-5. Give the user the returned `/agent/sign/{intentId}#token=...` link so they can connect the wallet, review, and approve funding/submission.
-6. Poll status, then fetch `rateloop_get_result`.
+4. Call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`.
+5. Give the user the returned `/agent/handoff/{handoffId}#token=...` link so they can connect the wallet, review, sign image uploads if needed, and approve funding/submission.
+6. Poll `rateloop_get_handoff_status`, then fetch `rateloop_get_result`.
 
 Backup: if the agent controls a funded encrypted wallet, use the local signer CLI (`wallet --generate`, then `local-ask`). Use raw MCP wallet calls only when the host can sign and execute calls cleanly.
 
 ### Collect Inputs
 
-- Visual context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or upload generated/local/user image bytes to RateLoop and put the returned `imageUrl` in `question.imageUrls`. Do not ask the user to host generated images elsewhere.
-- Wallet: `walletAddress` on World Chain with USDC for the bounty, plus LREP when using an LREP Feedback Bonus, and approval to spend.
+- Visual context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or pass generated/local/user image bytes as `generatedImages` to the browser handoff. Do not ask the user to host generated images elsewhere.
+- Wallet: optional expected `walletAddress` on World Chain with USDC for the bounty, plus LREP when using an LREP Feedback Bonus.
 - Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `1` verified humans).
 - Optional Feedback Bonus: extra USDC or LREP for useful hidden rater feedback on single-question asks. LREP bonuses require `paymentMode: "wallet_calls"`; `x402_authorization` remains USDC-only.
 - Question fields: title, description, category id, tags, and optional template id.
 
-Managed MCP agents call `rateloop_upload_image` directly. Public wallet-mode image upload uses `rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`; if that would make the chat flow awkward, use the Ask page upload/signing UI instead. Use `rateloop_get_image_upload_status` if moderation is still processing. Uploaded images become public ask context, so avoid secrets, personal data, rights-restricted material, or prohibited content.
+The browser handoff signs and uploads staged generated images before funding the ask. Managed MCP agents can still call `rateloop_upload_image` directly. Public wallet-mode raw image upload (`rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`) is an advanced fallback for hosts that can present wallet signing cleanly. Uploaded images become public ask context, so avoid secrets, personal data, rights-restricted material, or prohibited content.
 
 If the category or template is unknown, call `rateloop_list_categories` or `rateloop_list_result_templates`. Otherwise skip template research. More examples are in `packages/agents/examples/questions`.
 
@@ -73,13 +73,16 @@ Public MCP:
 }
 ```
 
-If the ask needs generated, local, or user-supplied image context, upload it before quoting:
+For normal human-wallet asks, use handoff tools in order:
 
-1. Managed MCP token: `rateloop_upload_image`
-2. Public wallet MCP: `rateloop_prepare_image_upload`, wallet signs `message`, then `rateloop_upload_image`
-3. Optional status check: `rateloop_get_image_upload_status`
+1. `rateloop_quote_question`
+2. `rateloop_create_ask_handoff_link`
+3. share `handoffUrl`
+4. `rateloop_get_handoff_status`
+5. `rateloop_get_question_status`
+6. `rateloop_get_result`
 
-For low-level MCP wallet-call hosts, use ask tools in order:
+For low-level MCP wallet-call hosts only, use raw ask tools in order:
 
 1. `rateloop_quote_question`
 2. `rateloop_ask_humans`
@@ -94,7 +97,7 @@ Direct JSON alternative for the bounty ask, status, and result flow. Use MCP for
 ```text
 GET  https://www.rateloop.ai/api/agent/templates
 POST https://www.rateloop.ai/api/agent/quote
-POST https://www.rateloop.ai/api/agent/signing-intents
+POST https://www.rateloop.ai/api/agent/handoffs
 POST https://www.rateloop.ai/api/agent/asks
 POST https://www.rateloop.ai/api/agent/asks/{operationKey}/confirm
 GET  https://www.rateloop.ai/api/agent/asks/{operationKey}
@@ -105,7 +108,7 @@ GET  https://www.rateloop.ai/api/agent/results/{operationKey}
 
 1. Call `rateloop_quote_question` with the draft ask and optional `feedbackBonus`.
 2. Show or log the returned `legalNotice` before spending.
-3. Prefer browser signing: create `POST /api/agent/signing-intents` and share the returned signing URL.
+3. Prefer browser handoff: call `rateloop_create_ask_handoff_link` and share the returned `handoffUrl`.
 4. If using raw MCP instead, call `rateloop_ask_humans` with `maxPaymentAmount`, execute each returned wallet call, then confirm the transaction hashes.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when an agent wallet should sign a native USDC authorization before the transaction plan is prepared.

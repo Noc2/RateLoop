@@ -28,16 +28,16 @@ Use RateLoop when an AI agent needs to rate an existing public question, or ask 
 
 ## Required Inputs
 
-Default to a browser signing link when a human controls the wallet. Use a local signer only when the agent controls a funded encrypted wallet. Use raw MCP wallet calls only when the host can execute or present wallet calls cleanly.
+Default to `rateloop_create_ask_handoff_link` when a human controls the wallet. The returned `handoffUrl` lets the user review the ask, sign any generated-image upload messages, fund the World Chain USDC bounty, and submit the ask in the browser. Use a local signer only when the agent controls a funded encrypted wallet. Use raw MCP upload or wallet-call tools only when the host can execute wallet signatures and transactions cleanly.
 
-Visual context:
+Public context:
 
 - Page: set `question.contextUrl`.
 - YouTube: set `question.videoUrl`.
-- Image: generate or receive image bytes, upload them to RateLoop yourself, then set `question.imageUrls` to the returned `imageUrl`. Do not ask the user to host the image elsewhere. If the agent lacks a managed upload token, use the public upload challenge only when the wallet can sign in the host; otherwise route the user through the Ask page upload/signing UI.
+- Image: pass generated, local, or user-provided image bytes as `generatedImages` to `rateloop_create_ask_handoff_link` when using a human wallet. The browser handoff signs, uploads, moderates, and attaches the returned RateLoop image URLs. Do not ask the user to host images elsewhere.
 
-- `walletAddress`: user-controlled wallet or scoped agent wallet on World Chain
-- one public context source: `question.contextUrl`, `question.videoUrl`, or `question.imageUrls` returned by `rateloop_upload_image`
+- `walletAddress`: optional expected user wallet for handoff flows, or a scoped agent wallet for managed/local-signer flows
+- one public context source: `question.contextUrl`, `question.videoUrl`, or generated/local image bytes supplied as `generatedImages`
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
 - `bounty.requiredVoters`: minimum eligible voters required by the bounty
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
@@ -54,12 +54,13 @@ Visual context:
 
 For chat agents, keep the user flow short:
 
-1. Create or collect public context. Upload generated/local image bytes to RateLoop before asking.
-2. Choose category/template only if needed.
-3. Quote the ask and show the cost plus `legalNotice`.
-4. Create a browser signing intent with the same ask payload: `POST /api/agent/signing-intents`.
-5. Give the user the returned `/agent/sign/{intentId}#token=...` link. They connect the wallet, review, and approve funding/submission there.
-6. Poll status and fetch the result URL.
+1. Create or collect public context.
+2. Put generated/local image bytes in `generatedImages` when useful.
+3. Choose a category/template only if needed.
+4. Call `rateloop_quote_question` and show the cost plus `legalNotice`.
+5. Call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`.
+6. Give the user the returned `/agent/handoff/{handoffId}#token=...` link. They connect the wallet, review, sign image uploads if needed, and approve funding/submission there.
+7. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status` and `rateloop_get_result`.
 
 Backup: if the agent controls a funded encrypted wallet, use the local signer CLI (`wallet --generate`, then `local-ask`). Avoid pasting raw signature challenges or transaction plans into chat unless the user explicitly asks for the low-level MCP path.
 
@@ -85,22 +86,27 @@ Main tools:
 
 - `rateloop_list_categories`
 - `rateloop_list_result_templates`
+- `rateloop_create_ask_handoff_link`
+- `rateloop_get_handoff_status`
 - `rateloop_quote_question`
+- `rateloop_get_question_status`
+- `rateloop_get_result`
+
+Advanced low-level tools:
+
 - `rateloop_ask_humans`
 - `rateloop_prepare_image_upload`
 - `rateloop_upload_image`
 - `rateloop_get_image_upload_status`
 - `rateloop_confirm_ask_transactions`
 - `rateloop_confirm_feedback_bonus_transactions`
-- `rateloop_get_question_status`
-- `rateloop_get_result`
 
 ## Workflow
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
 2. For rating, open the public question, inspect context, choose up/down, estimate crowd-up percent, and leave useful hidden feedback.
-3. For asking, prefer the browser signing handoff above.
-4. If the host cannot create signing links, use local signer or raw MCP wallet calls.
+3. For asking, prefer `rateloop_create_ask_handoff_link`.
+4. If the host cannot create handoff links, use local signer or raw MCP wallet calls.
 5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.

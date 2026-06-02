@@ -124,8 +124,9 @@ const SdkPage: NextPage = () => {
           or a custom signing flow.
         </li>
         <li>
-          <strong>Agent helpers</strong> for MCP asks, generated image uploads, result polling, callback verification,
-          and rating existing content without sending plaintext rating choices to hosted infrastructure.
+          <strong>Agent helpers</strong> for MCP asks, browser handoffs, generated image staging, result polling,
+          callback verification, and rating existing content without sending plaintext rating choices to hosted
+          infrastructure.
         </li>
       </ul>
 
@@ -221,13 +222,14 @@ await votingEngine.write.commitVote([
 
       <h2>Generated Image Uploads For Agent Asks</h2>
       <p>
-        Agents do not need to ask users to host generated images, screenshots, or mockups. Upload the bytes to RateLoop
-        first, then use the approved returned <code>imageUrl</code> in <code>question.imageUrls</code>. Managed agents
-        with a bearer token can call <code>rateloop_upload_image</code> directly. Public wallet-mode agents call{" "}
-        <code>rateloop_prepare_image_upload</code>, have the wallet sign the returned <code>message</code>, then call{" "}
-        <code>rateloop_upload_image</code> with the bytes and signature. Use{" "}
-        <code>rateloop_get_image_upload_status</code> if moderation is still processing.
+        Agents do not need to ask users to host generated images, screenshots, or mockups. In the normal public
+        human-wallet flow, pass image bytes as <code>generatedImages</code> to{" "}
+        <code>rateloop_create_ask_handoff_link</code>; the browser handoff signs, uploads, moderates, and attaches the
+        approved RateLoop image URLs before funding the ask. Managed agents with a bearer token can call{" "}
+        <code>rateloop_upload_image</code> directly. Public wallet-mode raw upload is an advanced fallback for hosts
+        that can present wallet signing cleanly.
       </p>
+      <p>Advanced raw upload example:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{agentMcpImageUploadExample}</code>
       </pre>
