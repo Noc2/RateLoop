@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { CheckIcon, ClipboardIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton } from "~~/components/shared/GradientAction";
 import { buildRateContentHref } from "~~/constants/routes";
 import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
 import { truncateContentTitle } from "~~/lib/contentTitle";
@@ -120,21 +121,8 @@ export function ShareModal({
 
         {/* Share buttons */}
         <div className="space-y-2.5">
-          {/* Twitter/X share */}
-          <a
-            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-primary w-full gap-2"
-          >
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-            Share on X
-          </a>
-
           {/* Copy link */}
-          <button onClick={handleCopyLink} className="btn btn-outline w-full gap-2">
+          <GradientActionButton onClick={handleCopyLink} className="!w-full">
             {copied ? (
               <>
                 <CheckIcon className="h-5 w-5 text-success" />
@@ -146,7 +134,20 @@ export function ShareModal({
                 Copy Link
               </>
             )}
-          </button>
+          </GradientActionButton>
+
+          {/* Twitter/X share */}
+          <a
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-outline w-full gap-2"
+          >
+            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+            Share on X
+          </a>
 
           {/* View content */}
           <Link href={buildRateContentHref(contentId)} className="btn btn-ghost w-full">

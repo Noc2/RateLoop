@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckIcon, ClipboardIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { GradientActionButton } from "~~/components/shared/GradientAction";
 import { buildRateContentHref } from "~~/constants/routes";
 import { useCopyToClipboard } from "~~/hooks/scaffold-eth";
 import { truncateContentTitle } from "~~/lib/contentTitle";
@@ -116,7 +117,7 @@ export function ShareContentModal({
         {/* Share buttons */}
         <div className="space-y-2.5">
           {/* Copy Link */}
-          <button onClick={handleCopyLink} className="btn btn-primary w-full gap-2">
+          <GradientActionButton onClick={handleCopyLink} className="!w-full">
             {copied ? (
               <>
                 <CheckIcon className="h-5 w-5 text-success" />
@@ -128,7 +129,7 @@ export function ShareContentModal({
                 Copy Link
               </>
             )}
-          </button>
+          </GradientActionButton>
 
           {/* Facebook */}
           <a
