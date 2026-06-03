@@ -382,6 +382,7 @@ function installAskOverrides() {
     }),
     preparePermissionlessNativeX402QuestionSubmissionRequest: async params => ({
       body: {
+        chainId: params.payload.chainId,
         clientRequestId: params.payload.clientRequestId,
         operationKey: OPERATION_KEY,
         payment: {
@@ -412,6 +413,7 @@ function installAskOverrides() {
     }),
     preparePermissionlessWalletQuestionSubmissionRequest: async params => ({
       body: {
+        chainId: params.payload.chainId,
         clientRequestId: params.payload.clientRequestId,
         operationKey: OPERATION_KEY,
         payment: {
@@ -778,17 +780,20 @@ test("agent ask handoff route stages generated image bytes behind a browser link
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: 4801,
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
     { params: Promise.resolve({ handoffId }) },
   );
   const prepareBody = (await prepareResponse.json()) as {
+    chainId?: number;
     status?: string;
     uploadChallenges?: Array<Record<string, unknown>>;
   };
 
   assert.equal(prepareResponse.status, 200);
+  assert.equal(prepareBody.chainId, 4801);
   assert.equal(prepareBody.status, "awaiting_image_signatures");
   assert.equal(prepareBody.uploadChallenges?.length, 1);
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
@@ -817,6 +822,7 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
 
   const prepareResponse = await handoffPrepareRoute.POST(
     makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: 4801,
       token,
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
@@ -825,6 +831,8 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
   const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
 
   assert.equal(prepareResponse.status, 200);
+  assert.equal(prepareBody.chainId, 4801);
+  assert.equal((prepareBody.ask as Record<string, unknown>).chainId, 4801);
   assert.equal(prepareBody.status, "prepared");
   assert.equal(prepareBody.operationKey, OPERATION_KEY);
   assert.equal((prepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
@@ -841,6 +849,182 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
   assert.equal(completeResponse.status, 200);
   assert.equal(completeBody.status, "submitted");
   assert.deepEqual(completeBody.transactionHashes, [`0x${"4".repeat(64)}`]);
+});
+
+test("agent ask handoff route funds feedback bonus after submitting the ask", async () => {
+  const feedbackBonusCalls = [
+    { id: "approve-feedback-bonus-usdc", to: "0x0000000000000000000000000000000000000001" },
+    { id: "create-feedback-bonus-pool", to: "0x0000000000000000000000000000000000000003" },
+  ];
+  const confirmedFeedbackBonus: unknown[] = [];
+  mcpToolsModule.__setMcpToolTestOverridesForTests({
+    confirmAgentWalletQuestionSubmissionRequest: async params => ({
+      body: {
+        contentId: "content-123",
+        feedbackBonus: {
+          amount: "2000000",
+          asset: "USDC",
+          enabled: true,
+          status: "awaiting_wallet_signature",
+        },
+        operationKey: params.operationKey,
+        publicUrl: "https://rateloop.ai/rate?content=content-123",
+        status: "submitted",
+        transactionHashes: params.transactionHashes,
+      },
+      status: 200,
+    }),
+    confirmFeedbackBonusQuestionSubmissionRequest: async params => {
+      confirmedFeedbackBonus.push(params);
+      return {
+        body: {
+          feedbackBonus: {
+            enabled: true,
+            poolId: "7",
+            status: "funded",
+          },
+          operationKey: params.operationKey,
+          status: "submitted",
+        },
+        status: 200,
+      };
+    },
+    prepareFeedbackBonusQuestionSubmissionRequest: async params => ({
+      body: {
+        feedbackBonus: {
+          amount: "2000000",
+          contentId: "content-123",
+          roundId: "1",
+          status: "awaiting_wallet_signature",
+          transactionPlan: {
+            calls: feedbackBonusCalls,
+            requiresOrderedExecution: true,
+          },
+        },
+        operationKey: params.operationKey,
+      },
+      status: 202,
+    }),
+    preparePermissionlessWalletQuestionSubmissionRequest: async params => ({
+      body: {
+        chainId: params.payload.chainId,
+        clientRequestId: params.payload.clientRequestId,
+        operationKey: OPERATION_KEY,
+        payment: {
+          amount: "1000000",
+          asset: "USDC",
+          bountyAmount: "1000000",
+          decimals: 6,
+          spender: "0x0000000000000000000000000000000000000002",
+          tokenAddress: "0x0000000000000000000000000000000000000001",
+        },
+        status: "awaiting_wallet_signature",
+        transactionPlan: {
+          calls: [{ id: "approve-usdc", to: "0x0000000000000000000000000000000000000001" }],
+          requiresOrderedExecution: true,
+        },
+        wallet: { address: params.walletAddress, fundingMode: "permissionless_wallet" },
+      },
+      status: 202,
+    }),
+    preflightX402QuestionSubmission: async () => ({
+      operation: {
+        canonicalPayload: {} as never,
+        operationKey: OPERATION_KEY,
+        payloadHash: "payload-hash",
+      },
+      paymentAmount: 1_000_000n,
+      resolvedCategoryIds: [5n],
+      submissionKeys: [`0x${"2".repeat(64)}` as const],
+    }),
+    resolveX402QuestionConfig: () =>
+      ({
+        feedbackBonusEscrowAddress: "0x0000000000000000000000000000000000000003",
+        questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000002",
+        usdcAddress: "0x0000000000000000000000000000000000000001",
+      }) as never,
+  });
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...questionPayload("agent-handoff-feedback-bonus"),
+        feedbackBonus: {
+          amount: "2000000",
+          asset: "USDC",
+        },
+        maxPaymentAmount: "3000000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+  assert.equal(
+    ((createBody.requestBody as Record<string, unknown>).feedbackBonus as Record<string, unknown>).amount,
+    "2000000",
+  );
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: 4801,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+
+  assert.equal(prepareResponse.status, 200);
+  assert.equal(prepareBody.status, "prepared");
+  assert.equal((prepareBody.transactionPlan as { calls: unknown[] }).calls.length, 1);
+  assert.equal(
+    ((prepareBody.ask as Record<string, unknown>).feedbackBonus as Record<string, unknown>).status,
+    "pending_question_confirmation",
+  );
+
+  const askHash = `0x${"4".repeat(64)}` as const;
+  const completeAskResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [askHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const completeAskBody = (await completeAskResponse.json()) as Record<string, unknown>;
+
+  assert.equal(completeAskResponse.status, 200);
+  assert.equal(completeAskBody.status, "feedback_bonus_prepared");
+  assert.deepEqual(completeAskBody.transactionHashes, [askHash]);
+  assert.equal((completeAskBody.transactionPlan as { calls: unknown[] }).calls.length, 2);
+  assert.equal(
+    completeAskBody.nextAction,
+    "Execute the Feedback Bonus transactionPlan.calls in the connected wallet, then confirm transaction hashes.",
+  );
+
+  const feedbackHash = `0x${"5".repeat(64)}` as const;
+  const completeBonusResponse = await handoffCompleteRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/complete`, {
+      token,
+      transactionHashes: [feedbackHash],
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const completeBonusBody = (await completeBonusResponse.json()) as Record<string, unknown>;
+
+  assert.equal(completeBonusResponse.status, 200);
+  assert.equal(completeBonusBody.status, "submitted");
+  assert.deepEqual(completeBonusBody.transactionHashes, [askHash, feedbackHash]);
+  assert.equal(
+    ((completeBonusBody.ask as Record<string, unknown>).feedbackBonus as Record<string, unknown>).status,
+    "funded",
+  );
+  assert.deepEqual(confirmedFeedbackBonus, [{ operationKey: OPERATION_KEY, transactionHashes: [feedbackHash] }]);
 });
 
 test("agent signing intent read requires a private token outside the request URL", async () => {
