@@ -1,19 +1,20 @@
 # OpenClaw Notes
 
-OpenClaw-style persistent agents are a good fit for RateLoop's remote MCP surface because they can keep memory, tools, and background loops alive across asks.
+OpenClaw-style persistent agents are a good fit for RateLoop because they can keep memory, tools, a funded local signer,
+and background loops alive across asks.
 
 ## Config
 
-Start from `generic-public-mcp.json` only when OpenClaw already controls a funded wallet. For a human-controlled wallet, create a browser handoff link instead of exposing raw wallet calls. Use `openclaw.mcpServers.json` when you also want a saved managed policy and bearer token:
+Start from `openclaw.mcpServers.json` for public quote, handoff, status, and result tools:
 
 ```json
 {
   "mcpServers": {
     "rateloop": {
-      "url": "https://rateloop.example/api/mcp",
+      "url": "https://www.rateloop.ai/api/mcp/public",
       "transport": "streamable-http",
       "headers": {
-        "Authorization": "Bearer ${RATELOOP_MCP_TOKEN}",
+        "MCP-Protocol-Version": "2025-11-25",
         "X-Agent-Name": "openclaw"
       }
     }
@@ -21,16 +22,35 @@ Start from `generic-public-mcp.json` only when OpenClaw already controls a funde
 }
 ```
 
-Bearer tokens are optional. Use them with narrow scopes and small budget caps when you want RateLoop-enforced policy limits, callbacks, or managed audit exports.
+Use browser handoff when a human should fund or approve the ask. Use the local signer CLI when OpenClaw controls a
+funded encrypted wallet:
+
+```bash
+export RATELOOP_API_BASE_URL="https://www.rateloop.ai"
+export RATELOOP_RPC_URL="https://worldchain-mainnet.g.alchemy.com/public"
+export RATELOOP_CHAIN_ID=480
+export RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH="$HOME/.rateloop/local-signer.json"
+export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD="<load-from-secret-store>"
+
+yarn workspace @rateloop/agents wallet --generate
+yarn workspace @rateloop/agents wallet
+yarn workspace @rateloop/agents local-ask --file ./ask.json
+```
+
+The local signer never prints the private key. Fund the printed signer address with World Chain USDC before the first
+paid ask. Bearer tokens are optional; use `generic-remote-mcp.json` with narrow scopes and small budget caps only when
+you want RateLoop-enforced policy limits, callbacks, or managed audit exports.
 
 ## Loop
 
 1. list templates
-2. quote the ask
-3. submit through the controlled wallet, or create a browser handoff link for a human wallet
-4. wait for callback or poll handoff/question status
-5. fetch the structured result
-6. store `operationKey`, `publicUrl`, `answer`, and `recommendedNextAction` in memory
+2. generate or collect public context
+3. add a Feedback Bonus when written reasons matter
+4. quote the ask
+5. submit with `local-ask` for the controlled wallet, or create a browser handoff link for a human wallet
+6. wait for callback or poll handoff/question status
+7. fetch the structured result
+8. store `operationKey`, `publicUrl`, `answer`, and `recommendedNextAction` in memory
 
 ## First Demo
 

@@ -40,13 +40,10 @@ function AgentIcon({ name }: { name: string }) {
           <path d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1 .19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z" />
         </svg>
       );
-    case "Lovable":
+    case "OpenClaw":
       return (
         <svg className={iconClass} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-          <path
-            clipRule="evenodd"
-            d="M7.082 0c3.91 0 7.081 3.179 7.081 7.1v2.7h2.357c3.91 0 7.082 3.178 7.082 7.1 0 3.923-3.17 7.1-7.082 7.1H0V7.1C0 3.18 3.17 0 7.082 0z"
-          />
+          <path d="M8.72 6.35L3.07 12l5.65 5.65 1.7-1.7L6.47 12l3.95-3.95-1.7-1.7zm6.56 0l-1.7 1.7L17.53 12l-3.95 3.95 1.7 1.7L20.93 12l-5.65-5.65zm-2.22-2.1l-4.3 15.5 2.18.6 4.3-15.5-2.18-.6z" />
         </svg>
       );
     case "Gemini CLI":
@@ -74,10 +71,10 @@ function AgentIcon({ name }: { name: string }) {
 }
 
 const RATELOOP_AGENT_PROMPT =
-  "Read RateLoop's agent docs: https://www.rateloop.ai/docs/ai and https://www.rateloop.ai/docs/how-it-works. Explain how you can use RateLoop for me through the public MCP endpoint at https://www.rateloop.ai/api/mcp/public: turn public URLs, YouTube videos, user images, or agent-generated public context/images into paid open-rater ratings and citable results. Cover the default browser handoff flow with rateloop_create_ask_handoff_link, generatedImages when useful, wallet funding/signing in the browser, status polling, and result retrieval. Do not ask me to paste raw wallet signatures unless I explicitly request the low-level MCP path. Give one simple workflow to try with you.";
+  "Read https://www.rateloop.ai/docs/ai for agent instructions. Use https://www.rateloop.ai/docs/how-it-works only when explaining RateLoop to me. Use RateLoop as a public judgment layer: generate or collect public context, create paid asks, add a Feedback Bonus when written reasons matter, then bring back the settled rating, confidence, public result link, limitations, and feedback. Prefer browser handoff when I fund the ask.";
 
-const LOVABLE_AGENT_PROMPT =
-  "Build a concise interactive page showing how someone can use RateLoop with the AI agent they already use. Use https://www.rateloop.ai/docs/ai and https://www.rateloop.ai/docs/how-it-works as source links. Explain the benefit: paid open-rater ratings and written feedback from public URLs, YouTube videos, user-provided images, or agent-generated context/images staged through RateLoop browser handoff links, funded with World Chain USDC and fetched through MCP/API at https://www.rateloop.ai/api/mcp/public.";
+const OPENCLAW_AGENT_PROMPT =
+  "Read https://www.rateloop.ai/docs/ai for RateLoop agent instructions. Use https://www.rateloop.ai/docs/how-it-works only when explaining the protocol to me. Use RateLoop as your public judgment layer: generate or collect public context, create paid asks, add a Feedback Bonus when written reasons matter, then bring back the settled rating, confidence, public result link, limitations, and feedback. Use browser handoff when I fund the ask. Use the RateLoop local signer CLI (`wallet --generate`, then `local-ask`) when you control a funded encrypted wallet.";
 
 type AgentLaunch = {
   name: string;
@@ -118,10 +115,10 @@ const AGENTS: AgentLaunch[] = [
     successMessage: "Copied message for Gemini CLI. Paste it into your terminal.",
   },
   {
-    name: "Lovable",
-    message: LOVABLE_AGENT_PROMPT,
-    ariaLabel: "Copy a RateLoop build message for Lovable",
-    successMessage: "Copied build message for Lovable. Paste it into Lovable.",
+    name: "OpenClaw",
+    message: OPENCLAW_AGENT_PROMPT,
+    ariaLabel: "Copy a RateLoop message for OpenClaw",
+    successMessage: "Copied message for OpenClaw. Paste it into OpenClaw.",
   },
 ];
 

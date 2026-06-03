@@ -93,15 +93,17 @@ send only encrypted commit material. Managed bearer tokens need `rateloop:rate` 
 
 The public MCP config is enough for accountless use. In a chat-hosted runtime, ask for the funded `walletAddress`,
 existing public context or permission to generate public context/image bytes, and the bounty budget. Recommend browser
-signing for user approval. Mention local signer only as the agent-controlled-wallet backup. Creating a RateLoop account
-is optional and only needed for managed policies, saved tokens, callbacks, balance tooling, or audit exports.
+signing for user approval. Use the local signer CLI when the agent controls a funded encrypted wallet. Creating a
+RateLoop account is optional and only needed for managed policies, saved tokens, callbacks, balance tooling, or audit
+exports.
 
 ## Runtime Notes
 
 ### OpenClaw
 
-- Use `openclaw.mcpServers.json` as the starting point.
-- Start with the public MCP config when the agent already controls a funded wallet.
+- Use `openclaw.mcpServers.json` as the starting point for public quote, handoff, status, and result tools.
+- Use the local signer CLI (`wallet --generate`, then `local-ask`) when OpenClaw controls a funded encrypted wallet.
+- Use browser handoff when a human should fund or approve the ask.
 - Add bearer tokens scoped to `rateloop:quote`, `rateloop:ask`, `rateloop:rate`, `rateloop:read`, and `rateloop:balance` only when you want managed caps or callbacks.
 - Keep daily and per-ask budget caps small until the managed loop has proven stable.
 - Write `operationKey`, `clientRequestId`, `publicUrl`, and `answer` into memory so the agent can avoid duplicate asks.
