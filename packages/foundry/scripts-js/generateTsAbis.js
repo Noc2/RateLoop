@@ -35,6 +35,7 @@ const REQUIRED_NON_LOCAL_DEPLOYMENT_EXPORT_CONTRACTS = [
   "RoundRewardDistributor",
   "QuestionRewardPoolEscrow",
   "X402QuestionSubmitter",
+  "FeedbackRegistry",
   "FeedbackBonusEscrow",
   "CategoryRegistry",
   "RaterRegistry",

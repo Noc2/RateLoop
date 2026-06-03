@@ -34,6 +34,7 @@ const REQUIRED_WORLD_CHAIN_EXPORT = {
   "0x0000000000000000000000000000000000000009": "RoundRewardDistributor",
   "0x000000000000000000000000000000000000000a": "QuestionRewardPoolEscrow",
   "0x000000000000000000000000000000000000000b": "X402QuestionSubmitter",
+  "0x000000000000000000000000000000000000001c": "FeedbackRegistry",
   "0x000000000000000000000000000000000000000c": "FeedbackBonusEscrow",
   "0x000000000000000000000000000000000000000d": "CategoryRegistry",
   "0x000000000000000000000000000000000000000e": "RaterRegistry",
@@ -141,6 +142,25 @@ describe("assertFreshTargetDeployment", () => {
           { 480: 200 }
         ),
       /missing required contracts/
+    );
+  });
+
+  test("rejects complete exports missing FeedbackRegistry", () => {
+    process.env.DEPLOY_TARGET_NETWORK = "worldchain";
+    const {
+      "0x000000000000000000000000000000000000001c": _feedbackRegistry,
+      ...deploymentExport
+    } = REQUIRED_WORLD_CHAIN_EXPORT;
+
+    assert.throws(
+      () =>
+        assertFreshTargetDeployment(
+          {},
+          {},
+          { 480: deploymentExport },
+          { 480: 200 }
+        ),
+      /missing required contracts: FeedbackRegistry/
     );
   });
 
