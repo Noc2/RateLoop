@@ -521,7 +521,7 @@ contract GovernanceTest is Test {
         assertEq(holders[7], mockFeedbackBonusEscrow);
         assertEq(holders[8], replacement);
         assertEq(governor.excludedHolderEffectiveBlock(mockFrontendRegistry), 0);
-        assertEq(governor.excludedHolderEffectiveBlock(replacement), vm.getBlockNumber());
+        assertEq(governor.excludedHolderEffectiveBlock(replacement), vm.getBlockNumber() + 1);
 
         vm.roll(block.number + 1);
         uint256 quorumBeforeMint = governor.quorum(block.number - 1);
@@ -535,12 +535,9 @@ contract GovernanceTest is Test {
         address replacement = address(99);
         vm.etch(replacement, hex"600160005260206000F3");
 
-        vm.prank(mockFaucet);
-        token.transfer(replacement, 20_000_000e6);
         vm.roll(block.number + 1);
         uint256 snapshotBlock = vm.getBlockNumber() - 1;
         uint256 snapshotQuorum = governor.quorum(snapshotBlock);
-        assertEq(snapshotQuorum, 1_040_000e6);
 
         _executeSingleCallProposal(
             address(governor),
@@ -552,11 +549,16 @@ contract GovernanceTest is Test {
         assertEq(governor.quorum(snapshotBlock), snapshotQuorum);
         uint256 effectiveBlock = governor.excludedHolderEffectiveBlock(replacement);
         assertGt(effectiveBlock, snapshotBlock);
+
+        vm.roll(effectiveBlock + 1);
+        uint256 quorumBeforeFunding = governor.quorum(effectiveBlock);
+        vm.prank(deployer);
+        token.mint(replacement, 20_000_000e6);
         vm.roll(effectiveBlock + 2);
-        assertEq(governor.quorum(effectiveBlock + 1), 240_000e6);
+        assertEq(governor.quorum(effectiveBlock + 1), quorumBeforeFunding);
     }
 
-    function test_GovernorReplacementIgnoresDustVotes() public {
+    function test_GovernorRejectsFundedExcludedHolderReplacement() public {
         address replacement = address(99);
         vm.etch(replacement, hex"600160005260206000F3");
 
@@ -566,12 +568,12 @@ contract GovernanceTest is Test {
         _executeSingleCallProposal(
             address(governor),
             abi.encodeWithSignature("replaceExcludedHolder(address,address)", mockFrontendRegistry, replacement),
-            "Dust-resistant excluded holder replacement",
-            false
+            "Reject funded excluded holder replacement",
+            true
         );
 
         assertTrue(governor.isExcludedHolder(mockFrontendRegistry));
-        assertTrue(governor.isExcludedHolder(replacement));
+        assertFalse(governor.isExcludedHolder(replacement));
     }
 
     function test_GovernorExcludedHoldersRemainFixedAcrossGovernanceActions() public {

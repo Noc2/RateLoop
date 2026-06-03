@@ -119,18 +119,21 @@ contract RateLoopGovernor is
 
     /// @notice Add a migrated protocol holder to future quorum exclusions.
     /// @dev Timelock-only via Governor.onlyGovernance. The old holder remains excluded so
-    ///      past quorum snapshots keep their original exclusion set and dust cannot block migration.
+    ///      past quorum snapshots keep their original exclusion set.
+    ///      The replacement must have no current LREP voting power; migrate protocol balances after
+    ///      the replacement is excluded so governance cannot repurpose this hook to disenfranchise a
+    ///      contract wallet with existing LREP votes.
     function replaceExcludedHolder(address oldHolder, address newHolder) external onlyGovernance {
         if (
             !isExcludedHolder[oldHolder] || newHolder == address(0) || isExcludedHolder[newHolder]
-                || newHolder.code.length == 0
+                || newHolder.code.length == 0 || reputationToken.getVotes(newHolder) != 0
         ) {
             revert InvalidExcludedHolder();
         }
         require(_excludedHolders.length < MAX_EXCLUDED_HOLDERS, "Too many excluded holders");
 
         isExcludedHolder[newHolder] = true;
-        excludedHolderEffectiveBlock[newHolder] = uint48(block.number);
+        excludedHolderEffectiveBlock[newHolder] = uint48(block.number + 1);
         _excludedHolders.push(newHolder);
         emit ExcludedHolderReplaced(oldHolder, newHolder);
     }
