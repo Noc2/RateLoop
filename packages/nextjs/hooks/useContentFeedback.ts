@@ -4,7 +4,8 @@ import { useCallback, useMemo, useState } from "react";
 import { FeedbackRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { encodePacked, keccak256, zeroHash } from "viem";
-import { usePublicClient, useSignMessage, useWriteContract } from "wagmi";
+import { useConfig, usePublicClient, useSignMessage, useWriteContract } from "wagmi";
+import { waitForTransactionReceipt } from "wagmi/actions";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { ensurePrivateAccountReadSession } from "~~/hooks/usePrivateAccountSession";
 import type { ContentFeedbackItem, ContentFeedbackListResult, ContentFeedbackType } from "~~/lib/feedback/types";
@@ -67,6 +68,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
   const queryClient = useQueryClient();
   const { signMessageAsync } = useSignMessage();
   const { writeContractAsync } = useWriteContract();
+  const wagmiConfig = useConfig();
   const { targetNetwork } = useTargetNetwork();
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const normalizedContentId = useMemo(() => normalizeContentId(contentId), [contentId]);
@@ -102,24 +104,30 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
   );
 
   const commitFeedbackHashOnchain = useCallback(
-    async (params: { roundId: string; feedbackHash: `0x${string}`; commitHash?: `0x${string}` | null }) => {
-      if (!normalizedContentId) return;
+    async (params: {
+      roundId: string;
+      feedbackHash: `0x${string}`;
+      commitHash?: `0x${string}` | null;
+    }): Promise<{ commitKey: `0x${string}`; txHash: `0x${string}` } | null> => {
+      if (!normalizedContentId) return null;
       const feedbackRegistryAddress = getConfiguredFeedbackRegistryAddress(targetNetwork.id);
-      if (!feedbackRegistryAddress) return;
+      if (!feedbackRegistryAddress) return null;
 
       const commitKey = await resolveCommitKey(params.roundId, params.commitHash);
       if (!commitKey) {
         throw new Error("Vote on this question before saving feedback");
       }
 
-      await writeContractAsync({
+      const txHash = await writeContractAsync({
         address: feedbackRegistryAddress,
         abi: FeedbackRegistryAbi,
         functionName: "commitFeedbackHash",
         args: [BigInt(normalizedContentId), BigInt(params.roundId), commitKey, params.feedbackHash],
       });
+      await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
+      return { commitKey, txHash };
     },
-    [normalizedContentId, resolveCommitKey, targetNetwork.id, writeContractAsync],
+    [normalizedContentId, resolveCommitKey, targetNetwork.id, wagmiConfig, writeContractAsync],
   );
 
   const feedbackQuery = useQuery({
@@ -178,11 +186,14 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         }
 
         const signature = await signMessageAsync({ message: challenge.message });
-        await commitFeedbackHashOnchain({
+        const committedFeedback = await commitFeedbackHashOnchain({
           roundId: challenge.roundId,
           feedbackHash: challenge.feedbackHash as `0x${string}`,
           commitHash: input.commitHash,
         });
+        if (!committedFeedback) {
+          throw new Error("Feedback registry is not deployed for this chain");
+        }
         await readResponseBody<{ ok: true; item: ContentFeedbackItem }>(
           await fetch("/api/feedback", {
             method: "POST",
@@ -197,6 +208,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
               roundId: challenge.roundId,
               clientNonce: challenge.clientNonce,
               feedbackHash: challenge.feedbackHash,
+              commitKey: committedFeedback.commitKey,
               signature,
               challengeId: challenge.challengeId,
             }),

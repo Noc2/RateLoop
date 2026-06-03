@@ -34,6 +34,7 @@ function prepareFeedback(payload: NormalizedContentFeedbackInput, context: Conte
   return contentFeedback.buildPreparedContentFeedbackInput(payload, {
     chainId: CHAIN_ID,
     roundId: context.currentRoundId,
+    commitKey: nextNonce(),
     clientNonce: nextNonce(),
     payloadSignature: SIGNATURE,
   });
@@ -243,15 +244,18 @@ test("builds stable canonical feedback hash metadata", () => {
   if (!payload.ok) return;
 
   const clientNonce = nextNonce();
+  const commitKey = nextNonce();
   const prepared = contentFeedback.buildPreparedContentFeedbackInput(payload.payload, {
     chainId: CHAIN_ID,
     roundId: context.currentRoundId!,
+    commitKey,
     clientNonce,
     payloadSignature: SIGNATURE,
   });
   const preparedAgain = contentFeedback.buildPreparedContentFeedbackInput(payload.payload, {
     chainId: CHAIN_ID,
     roundId: context.currentRoundId!,
+    commitKey,
     clientNonce,
     feedbackHash: prepared.feedbackHash,
     payloadSignature: SIGNATURE,
@@ -448,6 +452,140 @@ test("terminal round feedback becomes public", async () => {
   assert.equal(result.count, 1);
   assert.equal(result.publicCount, 1);
   assert.equal(result.items[0]?.isPublic, true);
+});
+
+test("leases reveal candidates only after a revealable terminal round", async () => {
+  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
+  const payload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "31",
+    feedbackType: "evidence",
+    body: "The cited report confirms the central claim.",
+  });
+  assert.equal(payload.ok, true);
+  if (!payload.ok) return;
+
+  const added = await contentFeedback.addContentFeedback(
+    prepareFeedback(payload.payload, activeContext),
+    activeContext,
+  );
+  assert.equal(added.onchainRevealStatus, "pending");
+
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => ({ content: { openRound: { roundId: "8" } } }) as any,
+    getAllRounds: async () => [buildRoundItem({ contentId: "31", roundId: "8", state: ROUND_STATE.Open })],
+  });
+  const activeCandidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
+    chainId: CHAIN_ID,
+    limit: 5,
+    now: new Date("2026-06-03T05:00:00.000Z"),
+  });
+  assert.equal(activeCandidates.length, 0);
+
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => ({ content: { openRound: null } }) as any,
+    getAllRounds: async () => [buildRoundItem({ contentId: "31", roundId: "8", state: ROUND_STATE.Settled })],
+    resolveOnchainOpenRoundId: async () => null,
+  });
+  const settledCandidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
+    chainId: CHAIN_ID,
+    limit: 5,
+    now: new Date("2026-06-03T05:01:00.000Z"),
+  });
+
+  assert.equal(settledCandidates.length, 1);
+  assert.equal(settledCandidates[0]?.id, added.id);
+  assert.equal(settledCandidates[0]?.commitKey.length, 66);
+  assert.equal(settledCandidates[0]?.feedbackHash, added.feedbackHash);
+  assert.equal(settledCandidates[0]?.clientNonce, added.clientNonce);
+  assert.equal(settledCandidates[0]?.attempt, 1);
+});
+
+test("does not lease cancelled round feedback for on-chain reveal", async () => {
+  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
+  const payload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "32",
+    feedbackType: "concern",
+    body: "This cancelled round note can be displayed locally but cannot be revealed on-chain.",
+  });
+  assert.equal(payload.ok, true);
+  if (!payload.ok) return;
+
+  await contentFeedback.addContentFeedback(prepareFeedback(payload.payload, activeContext), activeContext);
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => ({ content: { openRound: null } }) as any,
+    getAllRounds: async () => [buildRoundItem({ contentId: "32", roundId: "8", state: ROUND_STATE.Cancelled })],
+    resolveOnchainOpenRoundId: async () => null,
+  });
+
+  const candidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
+    chainId: CHAIN_ID,
+    limit: 5,
+    now: new Date("2026-06-03T05:02:00.000Z"),
+  });
+
+  assert.equal(candidates.length, 0);
+});
+
+test("records reveal success and retryable failure state", async () => {
+  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
+  const settledOverrides = {
+    getContentById: async () => ({ content: { openRound: null } }) as any,
+    getAllRounds: async () => [buildRoundItem({ contentId: "33", roundId: "8", state: ROUND_STATE.Settled })],
+    resolveOnchainOpenRoundId: async () => null,
+  };
+  const payload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "33",
+    feedbackType: "clarification",
+    body: "This note should eventually become awardable after the keeper reveal.",
+  });
+  assert.equal(payload.ok, true);
+  if (!payload.ok) return;
+
+  const added = await contentFeedback.addContentFeedback(
+    prepareFeedback(payload.payload, activeContext),
+    activeContext,
+  );
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests(settledOverrides);
+  const [candidate] = await contentFeedback.leaseContentFeedbackRevealCandidates({
+    chainId: CHAIN_ID,
+    limit: 1,
+    now: new Date("2026-06-03T05:03:00.000Z"),
+  });
+  assert.equal(candidate?.id, added.id);
+
+  const failure = await contentFeedback.recordContentFeedbackRevealFailure({
+    id: added.id as number,
+    error: "RPC temporarily unavailable",
+    retryable: true,
+    now: new Date("2026-06-03T05:04:00.000Z"),
+  });
+  assert.equal(failure.retryScheduled, true);
+
+  const retryResult = await contentFeedback.listContentFeedback({
+    contentId: "33",
+    context: contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Settled }]),
+    viewerAddress: WALLET,
+  });
+  assert.equal(retryResult.items[0]?.onchainRevealStatus, "pending");
+  assert.equal(retryResult.items[0]?.onchainRevealError, "RPC temporarily unavailable");
+
+  await contentFeedback.recordContentFeedbackRevealSuccess({
+    id: added.id as number,
+    txHash: `0x${"44".repeat(32)}`,
+    now: new Date("2026-06-03T05:05:00.000Z"),
+  });
+  const successResult = await contentFeedback.listContentFeedback({
+    contentId: "33",
+    context: contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Settled }]),
+    viewerAddress: WALLET,
+  });
+
+  assert.equal(successResult.items[0]?.onchainRevealStatus, "revealed");
+  assert.equal(successResult.items[0]?.onchainRevealTxHash, `0x${"44".repeat(32)}`);
+  assert.equal(successResult.items[0]?.onchainRevealError, null);
 });
 
 test("returns awardable feedback bonus pools and awards for public feedback", async () => {

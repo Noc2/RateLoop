@@ -42,6 +42,10 @@ export const CONTENT_FEEDBACK_TYPE_LABELS: Record<ContentFeedbackType, string> =
 export const CONTENT_FEEDBACK_BODY_MAX_LENGTH = 1500;
 export const CONTENT_FEEDBACK_SOURCE_URL_MAX_LENGTH = 2048;
 
+export const CONTENT_FEEDBACK_ONCHAIN_REVEAL_STATUSES = ["pending", "revealed", "failed"] as const;
+
+export type ContentFeedbackOnchainRevealStatus = (typeof CONTENT_FEEDBACK_ONCHAIN_REVEAL_STATUSES)[number];
+
 export interface ContentFeedbackItem {
   id: number | string;
   contentId: string;
@@ -56,6 +60,12 @@ export interface ContentFeedbackItem {
   clientNonce: string | null;
   moderationStatus: string;
   visibilityStatus: string;
+  onchainRevealStatus?: ContentFeedbackOnchainRevealStatus;
+  onchainRevealAttempts?: number;
+  onchainRevealLeaseUntil?: string | null;
+  onchainRevealTxHash?: string | null;
+  onchainRevealError?: string | null;
+  onchainRevealedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   isOwn: boolean;

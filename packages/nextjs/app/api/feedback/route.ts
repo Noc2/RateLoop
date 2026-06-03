@@ -19,6 +19,7 @@ import {
   assertContentFeedbackVoterEligibility,
   buildPreparedContentFeedbackInput,
   listContentFeedback,
+  normalizeContentFeedbackCommitKey,
   normalizeContentFeedbackInput,
   normalizeContentFeedbackReadInput,
   resolveContentFeedbackRoundContext,
@@ -94,6 +95,7 @@ export async function POST(request: NextRequest) {
       chainId?: unknown;
       roundId?: unknown;
       clientNonce?: unknown;
+      commitKey?: unknown;
       feedbackHash?: unknown;
       signature?: `0x${string}`;
       challengeId?: string;
@@ -123,11 +125,16 @@ export async function POST(request: NextRequest) {
     if (!metadata.ok) {
       return NextResponse.json({ error: metadata.error }, { status: 400 });
     }
+    const commitKey = normalizeContentFeedbackCommitKey(body.commitKey);
+    if (!commitKey) {
+      return NextResponse.json({ error: "Missing or invalid feedback commit key" }, { status: 400 });
+    }
 
     let preparedPayload: PreparedContentFeedbackInput;
     try {
       preparedPayload = buildPreparedContentFeedbackInput(payload, {
         ...metadata.metadata,
+        commitKey,
         payloadSignature: body.signature,
       });
     } catch (error) {

@@ -1,6 +1,6 @@
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE, type RoundState } from "@rateloop/contracts/protocol";
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { type Abi, type Address, createPublicClient, http, zeroHash } from "viem";
 import { db } from "~~/lib/db";
 import { contentFeedback } from "~~/lib/db/schema";
@@ -12,6 +12,7 @@ import {
 } from "~~/lib/feedback/feedbackHash";
 import {
   CONTENT_FEEDBACK_BODY_MAX_LENGTH,
+  CONTENT_FEEDBACK_ONCHAIN_REVEAL_STATUSES,
   CONTENT_FEEDBACK_SOURCE_URL_MAX_LENGTH,
   CONTENT_FEEDBACK_TYPES,
   CONTENT_FEEDBACK_TYPE_LABELS,
@@ -19,6 +20,7 @@ import {
   type ContentFeedbackBonusPool,
   type ContentFeedbackItem,
   type ContentFeedbackListResult,
+  type ContentFeedbackOnchainRevealStatus,
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
 import { isValidWalletAddress, normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
@@ -34,6 +36,13 @@ import { containsBlockedText, containsBlockedUrl } from "~~/utils/contentFilter"
 const CONTENT_FEEDBACK_LIST_LIMIT = 100;
 const APPROVED_MODERATION_STATUS = "approved";
 const HIDDEN_UNTIL_SETTLEMENT_STATUS = "hidden_until_settlement";
+const ONCHAIN_REVEAL_PENDING_STATUS = "pending" satisfies ContentFeedbackOnchainRevealStatus;
+const ONCHAIN_REVEAL_REVEALED_STATUS = "revealed" satisfies ContentFeedbackOnchainRevealStatus;
+const ONCHAIN_REVEAL_FAILED_STATUS = "failed" satisfies ContentFeedbackOnchainRevealStatus;
+const DEFAULT_REVEAL_LEASE_SECONDS = 120;
+const DEFAULT_REVEAL_QUEUE_LIMIT = 25;
+const MAX_REVEAL_QUEUE_LIMIT = 100;
+const MAX_REVEAL_ATTEMPTS = 8;
 
 export interface NormalizedContentFeedbackInput {
   normalizedAddress: `0x${string}`;
@@ -46,6 +55,7 @@ export interface NormalizedContentFeedbackInput {
 export interface ContentFeedbackChallengePayload extends NormalizedContentFeedbackInput, ContentFeedbackHashMetadata {}
 
 export interface PreparedContentFeedbackInput extends ContentFeedbackChallengePayload {
+  commitKey: `0x${string}`;
   payloadSignature: `0x${string}`;
 }
 
@@ -58,7 +68,23 @@ export interface ContentFeedbackRoundContext {
   openRoundId: string | null;
   currentRoundId: string | null;
   terminalRoundIds: Set<string>;
+  revealableRoundIds: Set<string>;
   settlementComplete: boolean;
+}
+
+export interface ContentFeedbackRevealCandidate {
+  id: number;
+  contentId: string;
+  roundId: string;
+  chainId: number;
+  authorAddress: `0x${string}`;
+  feedbackType: string;
+  body: string;
+  sourceUrl: string | null;
+  feedbackHash: `0x${string}`;
+  commitKey: `0x${string}`;
+  clientNonce: `0x${string}`;
+  attempt: number;
 }
 
 type FeedbackRow = typeof contentFeedback.$inferSelect;
@@ -178,6 +204,22 @@ function normalizeFeedbackSourceUrl(value: unknown): string | null | undefined {
   }
 }
 
+function normalizeBytes32Hex(value: unknown): `0x${string}` | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  return /^0x[0-9a-f]{64}$/.test(trimmed) ? (trimmed as `0x${string}`) : null;
+}
+
+export function normalizeContentFeedbackCommitKey(value: unknown): `0x${string}` | null {
+  return normalizeBytes32Hex(value);
+}
+
+function normalizeOnchainRevealStatus(value: unknown): ContentFeedbackOnchainRevealStatus {
+  return CONTENT_FEEDBACK_ONCHAIN_REVEAL_STATUSES.includes(value as ContentFeedbackOnchainRevealStatus)
+    ? (value as ContentFeedbackOnchainRevealStatus)
+    : ONCHAIN_REVEAL_PENDING_STATUS;
+}
+
 export function normalizeContentFeedbackInput(input: {
   address?: string;
   contentId?: unknown;
@@ -284,6 +326,12 @@ function isTerminalRoundState(state: unknown): state is Exclude<RoundState, type
   );
 }
 
+function isFeedbackRevealableRoundState(
+  state: unknown,
+): state is typeof ROUND_STATE.Settled | typeof ROUND_STATE.Tied | typeof ROUND_STATE.RevealFailed {
+  return state === ROUND_STATE.Settled || state === ROUND_STATE.Tied || state === ROUND_STATE.RevealFailed;
+}
+
 export function buildContentFeedbackRoundContext(
   rounds: Array<{ roundId?: string | number | bigint | null; state?: unknown }>,
   openRoundId?: string | number | bigint | null,
@@ -291,6 +339,7 @@ export function buildContentFeedbackRoundContext(
   const normalizedOpenRoundId = openRoundId !== undefined && openRoundId !== null ? String(openRoundId) : null;
   let latestRoundId: string | null = null;
   const terminalRoundIds = new Set<string>();
+  const revealableRoundIds = new Set<string>();
 
   for (const round of rounds) {
     if (round.roundId === undefined || round.roundId === null) continue;
@@ -300,6 +349,9 @@ export function buildContentFeedbackRoundContext(
     }
     if (isTerminalRoundState(round.state)) {
       terminalRoundIds.add(roundId);
+    }
+    if (isFeedbackRevealableRoundState(round.state)) {
+      revealableRoundIds.add(roundId);
     }
   }
 
@@ -314,6 +366,7 @@ export function buildContentFeedbackRoundContext(
     openRoundId: resolvedOpenRoundId,
     currentRoundId: resolvedOpenRoundId ?? latestRoundId,
     terminalRoundIds,
+    revealableRoundIds,
     settlementComplete: resolvedOpenRoundId === null && terminalRoundIds.size > 0,
   };
 }
@@ -396,12 +449,14 @@ export async function resolveContentFeedbackRoundContext(
 export function buildPreparedContentFeedbackInput(
   payload: NormalizedContentFeedbackInput,
   params: Omit<ContentFeedbackHashInput, "contentId" | "authorAddress" | "feedbackType" | "body" | "sourceUrl"> & {
+    commitKey: `0x${string}`;
     feedbackHash?: `0x${string}`;
     payloadSignature: `0x${string}`;
   },
 ): PreparedContentFeedbackInput {
   return {
     ...buildContentFeedbackChallengePayload(payload, params),
+    commitKey: params.commitKey,
     payloadSignature: params.payloadSignature,
   };
 }
@@ -602,6 +657,12 @@ function mapFeedbackRow(
     clientNonce: row.clientNonce,
     moderationStatus: row.moderationStatus,
     visibilityStatus: row.visibilityStatus,
+    onchainRevealStatus: normalizeOnchainRevealStatus(row.onchainRevealStatus),
+    onchainRevealAttempts: row.onchainRevealAttempts,
+    onchainRevealLeaseUntil: row.onchainRevealLeaseUntil?.toISOString() ?? null,
+    onchainRevealTxHash: row.onchainRevealTxHash,
+    onchainRevealError: row.onchainRevealError,
+    onchainRevealedAt: row.onchainRevealedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     isOwn,
@@ -656,6 +717,12 @@ function mapProtocolFeedbackRow(
     clientNonce: row.clientNonce ?? null,
     moderationStatus: APPROVED_MODERATION_STATUS,
     visibilityStatus: "public_onchain",
+    onchainRevealStatus: ONCHAIN_REVEAL_REVEALED_STATUS,
+    onchainRevealAttempts: 0,
+    onchainRevealLeaseUntil: null,
+    onchainRevealTxHash: null,
+    onchainRevealError: null,
+    onchainRevealedAt: unixSecondsToIso(row.revealedAt ?? row.committedAt),
     createdAt,
     updatedAt: unixSecondsToIso(row.updatedAt ?? row.revealedAt ?? row.committedAt),
     isOwn,
@@ -689,7 +756,209 @@ async function listProtocolContentFeedback(params: {
 }
 
 function isHexHash(value: string | null | undefined): value is `0x${string}` {
-  return typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
+  return normalizeBytes32Hex(value) !== null;
+}
+
+function isFeedbackRevealable(row: Pick<FeedbackRow, "roundId">, context: ContentFeedbackRoundContext) {
+  return Boolean(row.roundId && context.revealableRoundIds.has(row.roundId));
+}
+
+function clampRevealQueueLimit(value: number | undefined): number {
+  if (!Number.isSafeInteger(value) || value === undefined || value <= 0) {
+    return DEFAULT_REVEAL_QUEUE_LIMIT;
+  }
+  return Math.min(value, MAX_REVEAL_QUEUE_LIMIT);
+}
+
+function clampRevealLeaseSeconds(value: number | undefined): number {
+  if (!Number.isSafeInteger(value) || value === undefined || value <= 0) {
+    return DEFAULT_REVEAL_LEASE_SECONDS;
+  }
+  return Math.min(value, 15 * 60);
+}
+
+function computeRevealRetryDelayMs(attempts: number) {
+  const exponent = Math.max(0, Math.min(attempts - 1, 6));
+  return Math.min(5 * 60 * 1000 * 2 ** exponent, 6 * 60 * 60 * 1000);
+}
+
+function mapRevealCandidate(row: FeedbackRow): ContentFeedbackRevealCandidate | null {
+  if (
+    !row.roundId ||
+    typeof row.chainId !== "number" ||
+    !isValidWalletAddress(row.authorAddress) ||
+    !isHexHash(row.feedbackHash) ||
+    !isHexHash(row.commitKey) ||
+    !isHexHash(row.clientNonce)
+  ) {
+    return null;
+  }
+
+  const feedbackType = normalizeFeedbackType(row.feedbackType);
+  if (!feedbackType) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    contentId: row.contentId,
+    roundId: row.roundId,
+    chainId: row.chainId,
+    authorAddress: normalizeWalletAddress(row.authorAddress),
+    feedbackType,
+    body: row.body,
+    sourceUrl: row.sourceUrl,
+    feedbackHash: normalizeBytes32Hex(row.feedbackHash)!,
+    commitKey: normalizeBytes32Hex(row.commitKey)!,
+    clientNonce: normalizeBytes32Hex(row.clientNonce)!,
+    attempt: row.onchainRevealAttempts,
+  };
+}
+
+export async function leaseContentFeedbackRevealCandidates(
+  params: {
+    chainId?: number;
+    limit?: number;
+    leaseSeconds?: number;
+    now?: Date;
+  } = {},
+): Promise<ContentFeedbackRevealCandidate[]> {
+  const limit = clampRevealQueueLimit(params.limit);
+  const now = params.now ?? createContentFeedbackTimestamp();
+  const leaseUntil = new Date(now.getTime() + clampRevealLeaseSeconds(params.leaseSeconds) * 1000);
+  let rows: FeedbackRow[];
+
+  try {
+    rows = await db
+      .select()
+      .from(contentFeedback)
+      .where(
+        and(
+          eq(contentFeedback.onchainRevealStatus, ONCHAIN_REVEAL_PENDING_STATUS),
+          eq(contentFeedback.moderationStatus, APPROVED_MODERATION_STATUS),
+          isNull(contentFeedback.deletedAt),
+          params.chainId === undefined ? undefined : eq(contentFeedback.chainId, params.chainId),
+          or(isNull(contentFeedback.onchainRevealNextAttemptAt), lte(contentFeedback.onchainRevealNextAttemptAt, now)),
+          or(isNull(contentFeedback.onchainRevealLeaseUntil), lt(contentFeedback.onchainRevealLeaseUntil, now)),
+        ),
+      )
+      .orderBy(asc(contentFeedback.createdAt), asc(contentFeedback.id))
+      .limit(Math.min(limit * 10, 500));
+  } catch (error) {
+    if (isContentFeedbackStorageUnavailableError(error)) {
+      throw new ContentFeedbackStorageUnavailableError();
+    }
+    throw error;
+  }
+
+  const candidates: ContentFeedbackRevealCandidate[] = [];
+  for (const row of rows) {
+    if (candidates.length >= limit) break;
+
+    const candidateShape = mapRevealCandidate(row);
+    if (!candidateShape) {
+      await recordContentFeedbackRevealFailure({
+        id: row.id,
+        error: "Feedback is missing on-chain reveal metadata",
+        retryable: false,
+        now,
+      });
+      continue;
+    }
+
+    const context = await resolveContentFeedbackRoundContext(row.contentId, row.chainId ?? undefined);
+    if (!isFeedbackRevealable(row, context)) {
+      continue;
+    }
+
+    const [leased] = await db
+      .update(contentFeedback)
+      .set({
+        onchainRevealAttempts: sql<number>`${contentFeedback.onchainRevealAttempts} + 1`,
+        onchainRevealError: null,
+        onchainRevealLeaseUntil: leaseUntil,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(contentFeedback.id, row.id),
+          eq(contentFeedback.onchainRevealStatus, ONCHAIN_REVEAL_PENDING_STATUS),
+          isNull(contentFeedback.deletedAt),
+          or(isNull(contentFeedback.onchainRevealNextAttemptAt), lte(contentFeedback.onchainRevealNextAttemptAt, now)),
+          or(isNull(contentFeedback.onchainRevealLeaseUntil), lt(contentFeedback.onchainRevealLeaseUntil, now)),
+        ),
+      )
+      .returning();
+
+    const candidate = leased ? mapRevealCandidate(leased) : null;
+    if (candidate) {
+      candidates.push(candidate);
+    }
+  }
+
+  return candidates;
+}
+
+export async function recordContentFeedbackRevealSuccess(params: {
+  id: number;
+  txHash?: `0x${string}` | string | null;
+  now?: Date;
+}): Promise<boolean> {
+  const now = params.now ?? createContentFeedbackTimestamp();
+  const txHash = normalizeBytes32Hex(params.txHash) ?? null;
+  const [updated] = await db
+    .update(contentFeedback)
+    .set({
+      onchainRevealStatus: ONCHAIN_REVEAL_REVEALED_STATUS,
+      onchainRevealLeaseUntil: null,
+      onchainRevealNextAttemptAt: null,
+      onchainRevealTxHash: txHash,
+      onchainRevealError: null,
+      onchainRevealedAt: now,
+      updatedAt: now,
+    })
+    .where(eq(contentFeedback.id, params.id))
+    .returning({ id: contentFeedback.id });
+
+  return Boolean(updated);
+}
+
+export async function recordContentFeedbackRevealFailure(params: {
+  id: number;
+  error: string;
+  retryable?: boolean;
+  txHash?: `0x${string}` | string | null;
+  now?: Date;
+}): Promise<{ retryScheduled: boolean; terminal: boolean }> {
+  const now = params.now ?? createContentFeedbackTimestamp();
+  const [row] = await db
+    .select({
+      attempts: contentFeedback.onchainRevealAttempts,
+    })
+    .from(contentFeedback)
+    .where(eq(contentFeedback.id, params.id))
+    .limit(1);
+  const attempts = row?.attempts ?? 0;
+  const retryScheduled = Boolean(params.retryable && attempts < MAX_REVEAL_ATTEMPTS);
+  const nextAttemptAt = retryScheduled ? new Date(now.getTime() + computeRevealRetryDelayMs(attempts)) : null;
+  const txHash = normalizeBytes32Hex(params.txHash) ?? null;
+
+  await db
+    .update(contentFeedback)
+    .set({
+      onchainRevealStatus: retryScheduled ? ONCHAIN_REVEAL_PENDING_STATUS : ONCHAIN_REVEAL_FAILED_STATUS,
+      onchainRevealLeaseUntil: null,
+      onchainRevealNextAttemptAt: nextAttemptAt,
+      onchainRevealTxHash: txHash,
+      onchainRevealError: params.error.slice(0, 1000),
+      updatedAt: now,
+    })
+    .where(eq(contentFeedback.id, params.id));
+
+  return {
+    retryScheduled,
+    terminal: !retryScheduled,
+  };
 }
 
 function mapFeedbackBonusPool(row: PonderFeedbackBonusPool): ContentFeedbackBonusPool | null {
@@ -865,10 +1134,18 @@ export async function addContentFeedback(
         body: payload.body,
         sourceUrl: payload.sourceUrl,
         feedbackHash: payload.feedbackHash,
+        commitKey: payload.commitKey,
         clientNonce: payload.clientNonce,
         payloadSignature: payload.payloadSignature,
         moderationStatus: APPROVED_MODERATION_STATUS,
         visibilityStatus: HIDDEN_UNTIL_SETTLEMENT_STATUS,
+        onchainRevealStatus: ONCHAIN_REVEAL_PENDING_STATUS,
+        onchainRevealAttempts: 0,
+        onchainRevealNextAttemptAt: null,
+        onchainRevealLeaseUntil: null,
+        onchainRevealTxHash: null,
+        onchainRevealError: null,
+        onchainRevealedAt: null,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
