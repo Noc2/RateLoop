@@ -267,25 +267,23 @@ contract LaunchDistributionPool is
     }
 
     function setClusterPayoutOracle(address newOracle) external onlyOwner {
+        if (address(roundClusterReadyAtSource) == address(0)) revert InvalidAddress();
         _validateClusterPayoutOracle(newOracle);
         clusterPayoutOracle = IClusterPayoutOracle(newOracle);
         emit ClusterPayoutOracleUpdated(newOracle);
     }
 
     /// @notice M-Oracle-1: configure the authoritative round source-readiness oracle (the
-    ///         RoundVotingEngine). Accepts address(0) to clear, which falls back to per-record
-    ///         tracking only.
+    ///         RoundVotingEngine). Must be set before the cluster oracle is enabled.
     function setRoundClusterReadyAtSource(address newSource) external onlyOwner {
-        if (newSource != address(0)) {
-            if (newSource.code.length == 0) revert InvalidAddress();
-            // ABI shape probe — calling with (0,0) must not revert on a properly conforming
-            // source. The returned timestamp is intentionally discarded; the probe is purely
-            // a try/catch barrier to confirm the candidate decodes uint48.
-            // slither-disable-next-line unused-return
-            try IRoundClusterReadyAtSource(newSource).roundClusterPayoutReadyAt(0, 0) returns (uint48) { }
-            catch {
-                revert InvalidAddress();
-            }
+        if (newSource == address(0) || newSource.code.length == 0) revert InvalidAddress();
+        // ABI shape probe — calling with (0,0) must not revert on a properly conforming
+        // source. The returned timestamp is intentionally discarded; the probe is purely
+        // a try/catch barrier to confirm the candidate decodes uint48.
+        // slither-disable-next-line unused-return
+        try IRoundClusterReadyAtSource(newSource).roundClusterPayoutReadyAt(0, 0) returns (uint48) { }
+        catch {
+            revert InvalidAddress();
         }
         roundClusterReadyAtSource = IRoundClusterReadyAtSource(newSource);
         emit RoundClusterReadyAtSourceUpdated(newSource);

@@ -129,8 +129,8 @@ function completeBroadcast() {
   pushCall(transactions, receipts, "ClusterPayoutOracle", "renounceRole(bytes32,address)", [configRole, deployer], clusterOracle);
   pushCall(transactions, receipts, "ClusterPayoutOracle", "renounceRole(bytes32,address)", [defaultAdminRole, deployer], clusterOracle);
   pushProtocolConfigProxyCall(transactions, receipts, protocolConfig, "0x440616e4");
-  pushCall(transactions, receipts, "LaunchDistributionPool", "setClusterPayoutOracle(address)", [clusterOracle], launchPool);
   pushCall(transactions, receipts, "LaunchDistributionPool", "setRoundClusterReadyAtSource(address)", [votingEngine], launchPool);
+  pushCall(transactions, receipts, "LaunchDistributionPool", "setClusterPayoutOracle(address)", [clusterOracle], launchPool);
   pushCall(transactions, receipts, "LaunchDistributionPool", "setAuthorizedCaller(address,bool)", [rewardDistributor, "true"], launchPool);
   pushProtocolConfigProxyCall(transactions, receipts, protocolConfig, "0x8b099e2f");
   pushCall(transactions, receipts, "LaunchDistributionPool", "setAuthorizedCaller(address,bool)", [advisoryRecorder, "true"], launchPool);

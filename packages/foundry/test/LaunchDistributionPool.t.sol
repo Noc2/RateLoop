@@ -154,6 +154,20 @@ contract LaunchDistributionPoolTest is Test {
         pool.accountPrefundedPoolDeposit(0);
     }
 
+    function test_SetClusterPayoutOracleRequiresReadyAtSource() public {
+        MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
+        frontendRegistry.setEligible(address(this), true);
+        ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
+        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setClusterPayoutOracle(address(oracle));
+
+        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
+        pool.setClusterPayoutOracle(address(oracle));
+        assertEq(address(pool.clusterPayoutOracle()), address(oracle));
+    }
+
     function test_ConstructorRejectsInvalidRaterRegistryIntegration() public {
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         new LaunchDistributionPool(address(lrep), address(0xBEEF), address(this));
@@ -183,6 +197,13 @@ contract LaunchDistributionPoolTest is Test {
         );
         pool.setRaterRegistry(address(replacementRegistry));
         assertEq(address(pool.raterRegistry()), address(replacementRegistry));
+
+        assertEq(address(pool.roundClusterReadyAtSource()), address(0));
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setRoundClusterReadyAtSource(address(0));
+        MockAlwaysReadyClusterSource readySource = new MockAlwaysReadyClusterSource();
+        pool.setRoundClusterReadyAtSource(address(readySource));
+        assertEq(address(pool.roundClusterReadyAtSource()), address(readySource));
 
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         pool.setClusterPayoutOracle(address(0));
@@ -636,6 +657,7 @@ contract LaunchDistributionPoolTest is Test {
         ClusterPayoutOracle oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
         oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
+        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
         pool.setClusterPayoutOracle(address(oracle));
 
         uint256 paidBeforeSnapshot = _recordLaunchReward(alice, 1, bytes32("anchor-a"));
@@ -718,6 +740,7 @@ contract LaunchDistributionPoolTest is Test {
         // to `address(this)` to recreate the "different consumer" scenario that the rest
         // of this test targets.
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
+        pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
         pool.setClusterPayoutOracle(address(oracle));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(this));
 
@@ -744,18 +767,15 @@ contract LaunchDistributionPoolTest is Test {
         pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
     }
 
-    function test_LaunchCreditRejectsSnapshotProposedBeforePendingCredit() public {
+    function test_LaunchCreditUsesAuthoritativeSourceOverLaterCallerReadyAt() public {
         ClusterPayoutOracle oracle = _configureLaunchOracle(1);
-        pool.setRoundClusterReadyAtSource(address(0));
-        oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(this));
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(1, _commitKey(1), alice, 2_500, keccak256("clustered"));
         _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
 
-        // L-Oracle-C: pass `block.timestamp + 1` as sourceReadyAt so the pending credit is
-        // recorded AFTER the snapshot was proposed — replicating the "snapshot proposed before
-        // pending credit" scenario that the finalize gate is supposed to reject.
+        // The caller supplies a later sourceReadyAt, but the configured authoritative source
+        // keeps the credit anchored to the round source timestamp used by the oracle gate.
         vm.warp(block.timestamp + 1);
         uint64 readyAt = uint64(block.timestamp);
         pool.recordEarnedRaterRewardWithSourceReady(
@@ -772,8 +792,9 @@ contract LaunchDistributionPoolTest is Test {
         );
         assertGt(pool.pendingEarnedRaterCreditReadyAt(1, 1, _commitKey(1)), 0);
 
-        vm.expectRevert(LaunchDistributionPool.InvalidProof.selector);
-        pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0));
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 1, _commitKey(1), payout, new bytes32[](0)), 0);
+        assertEq(pool.qualifyingCreditBps(alice), 2_500);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 1, _commitKey(1)));
     }
 
     function test_LaunchCreditAcceptsSourceReadySnapshotProposedBeforeRecord() public {
@@ -2354,10 +2375,10 @@ contract LaunchDistributionPoolTest is Test {
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
         oracle.setOracleConfig(1, oracle.MIN_CHALLENGE_BOND(), address(this));
         oracle.setRoundPayoutSnapshotConsumer(oracle.PAYOUT_DOMAIN_LAUNCH_CREDIT(), address(pool));
-        pool.setClusterPayoutOracle(address(oracle));
         // M-Oracle-1: wire an always-ready cluster source so proposals can land before the first
         // pending credit record (the legitimate front-run case exercised by these tests).
         pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
+        pool.setClusterPayoutOracle(address(oracle));
 
         oracle.proposeCorrelationEpoch(
             1,
