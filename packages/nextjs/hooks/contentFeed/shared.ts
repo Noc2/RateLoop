@@ -119,9 +119,15 @@ export interface ContentItem {
     totalFrontendClaimed?: bigint;
     activeRewardPoolCount: number;
     expiredRewardPoolCount?: number;
+    openEndedRewardPoolCount?: number;
+    fundedAsset?: number | null;
+    fundedCurrency?: RewardPoolCurrency;
+    fundedDisplayCurrency?: RewardPoolDisplayCurrency;
     hasActiveBounty?: boolean;
     nextBountyStartBy?: bigint | null;
     nextBountyClosesAt?: bigint | null;
+    lastBountyStartBy?: bigint | null;
+    lastBountyClosesAt?: bigint | null;
     nextFeedbackClosesAt?: bigint | null;
   } | null;
   feedbackBonusSummary?: {
@@ -455,9 +461,15 @@ export function mapContentItem(
       totalFrontendClaimedAmount?: string | number | bigint | null;
       activeRewardPoolCount?: number | null;
       expiredRewardPoolCount?: number | null;
+      openEndedRewardPoolCount?: number | null;
+      fundedAsset?: number | string | bigint | null;
+      fundedCurrency?: string | null;
+      fundedDisplayCurrency?: string | null;
       hasActiveBounty?: boolean | null;
       nextBountyStartBy?: string | number | bigint | null;
       nextBountyClosesAt?: string | number | bigint | null;
+      lastBountyStartBy?: string | number | bigint | null;
+      lastBountyClosesAt?: string | number | bigint | null;
       nextFeedbackClosesAt?: string | number | bigint | null;
     } | null;
     feedbackBonusSummary?: {
@@ -510,6 +522,20 @@ export function mapContentItem(
   const rewardPoolDisplayCurrency =
     item.rewardPoolSummary && rewardPoolCurrency
       ? normalizeRewardPoolDisplayCurrency(item.rewardPoolSummary.displayCurrency, rewardPoolCurrency)
+      : undefined;
+  const fundedRewardPoolAsset = item.rewardPoolSummary?.fundedAsset ?? item.rewardPoolSummary?.asset;
+  const fundedRewardPoolCurrency = item.rewardPoolSummary
+    ? normalizeRewardPoolCurrency(
+        item.rewardPoolSummary.fundedCurrency ?? item.rewardPoolSummary.currency,
+        fundedRewardPoolAsset,
+      )
+    : undefined;
+  const fundedRewardPoolDisplayCurrency =
+    item.rewardPoolSummary && fundedRewardPoolCurrency
+      ? normalizeRewardPoolDisplayCurrency(
+          item.rewardPoolSummary.fundedDisplayCurrency ?? item.rewardPoolSummary.displayCurrency,
+          fundedRewardPoolCurrency,
+        )
       : undefined;
   const feedbackBonusCurrency = item.feedbackBonusSummary
     ? normalizeRewardPoolCurrency(item.feedbackBonusSummary.currency, item.feedbackBonusSummary.asset)
@@ -608,6 +634,13 @@ export function mapContentItem(
           totalFrontendClaimed: BigInt(item.rewardPoolSummary.totalFrontendClaimedAmount ?? 0),
           activeRewardPoolCount: item.rewardPoolSummary.activeRewardPoolCount ?? 0,
           expiredRewardPoolCount: item.rewardPoolSummary.expiredRewardPoolCount ?? 0,
+          openEndedRewardPoolCount: item.rewardPoolSummary.openEndedRewardPoolCount ?? 0,
+          fundedAsset:
+            fundedRewardPoolAsset === undefined || fundedRewardPoolAsset === null
+              ? null
+              : Number(fundedRewardPoolAsset),
+          fundedCurrency: fundedRewardPoolCurrency,
+          fundedDisplayCurrency: fundedRewardPoolDisplayCurrency,
           hasActiveBounty:
             item.rewardPoolSummary.hasActiveBounty ?? (item.rewardPoolSummary.activeRewardPoolCount ?? 0) > 0,
           nextBountyStartBy:
@@ -619,6 +652,15 @@ export function mapContentItem(
             item.rewardPoolSummary.nextBountyClosesAt === undefined
               ? null
               : BigInt(item.rewardPoolSummary.nextBountyClosesAt),
+          lastBountyStartBy:
+            item.rewardPoolSummary.lastBountyStartBy === null || item.rewardPoolSummary.lastBountyStartBy === undefined
+              ? null
+              : BigInt(item.rewardPoolSummary.lastBountyStartBy),
+          lastBountyClosesAt:
+            item.rewardPoolSummary.lastBountyClosesAt === null ||
+            item.rewardPoolSummary.lastBountyClosesAt === undefined
+              ? null
+              : BigInt(item.rewardPoolSummary.lastBountyClosesAt),
           nextFeedbackClosesAt:
             item.rewardPoolSummary.nextFeedbackClosesAt === null ||
             item.rewardPoolSummary.nextFeedbackClosesAt === undefined

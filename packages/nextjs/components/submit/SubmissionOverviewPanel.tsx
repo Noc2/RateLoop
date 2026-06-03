@@ -6,17 +6,16 @@ import { useAccount } from "wagmi";
 import { ArrowPathIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon } from "@heroicons/react/24/outline";
 import { ConnectWalletCard } from "~~/components/shared/ConnectWalletCard";
 import { WalletRestoreLoading } from "~~/components/shared/WalletRestoreLoading";
+import {
+  getSubmissionBountyDeadline,
+  getSubmissionBountyLabel,
+  getSubmissionFeedbackLabel,
+} from "~~/components/submit/submissionOverviewDisplay";
 import { buildRateContentHref } from "~~/constants/routes";
 import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
-import { CONTENT_STATUS, type RewardPoolCurrency } from "~~/hooks/contentFeed/shared";
+import { CONTENT_STATUS } from "~~/hooks/contentFeed/shared";
 import { useCategoryRegistry } from "~~/hooks/useCategoryRegistry";
 import { type ContentItem, useContentFeed } from "~~/hooks/useContentFeed";
-import {
-  SUBMISSION_REWARD_ASSET_LREP,
-  SUBMISSION_REWARD_ASSET_USDC,
-  formatSubmissionRewardAmount,
-  formatUsdAmount,
-} from "~~/lib/questionRewardPools";
 import { formatRatingScoreOutOfTen } from "~~/lib/ui/ratingDisplay";
 
 const PAGE_SIZE = 25;
@@ -45,40 +44,6 @@ function formatDate(value: string | null | undefined): string {
   }).format(new Date(dateMs));
 }
 
-function formatTimestampSeconds(value: bigint | null | undefined): string {
-  if (value === null || value === undefined) return "-";
-  if (value === 0n) return "Open-ended";
-
-  return new Intl.DateTimeFormat(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(Number(value) * 1000));
-}
-
-function formatCompactAmount(value: bigint, currency?: RewardPoolCurrency): string {
-  if (currency === "MIXED") return "Mixed";
-  if (currency === "LREP") return formatSubmissionRewardAmount(value, "lrep");
-  return formatUsdAmount(value);
-}
-
-function getBundleCurrency(asset: number | null | undefined): RewardPoolCurrency {
-  if (asset === SUBMISSION_REWARD_ASSET_LREP) return "LREP";
-  if (asset === SUBMISSION_REWARD_ASSET_USDC) return "USDC";
-  return "MIXED";
-}
-
-function hasVisibleBundleBounty(item: ContentItem): boolean {
-  const bundle = item.bundle;
-  if (!bundle || bundle.failed || bundle.refunded || bundle.unallocatedAmount <= 0n) return false;
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const closesAt = bundle.bountyClosesAt ?? 0n;
-  if (closesAt > 0n) return closesAt >= now;
-
-  const startBy = bundle.bountyStartBy ?? bundle.expiresAt ?? 0n;
-  return startBy === 0n || startBy >= now;
-}
-
 function getStatus(item: ContentItem): { label: string; className: string } {
   if (item.status === CONTENT_STATUS.Cancelled) {
     return { label: "Cancelled", className: "bg-error/10 text-error" };
@@ -93,60 +58,6 @@ function getStatus(item: ContentItem): { label: string; className: string } {
     return { label: "Settled", className: "bg-success/10 text-success" };
   }
   return { label: "Active", className: "bg-base-content/10 text-base-content/70" };
-}
-
-function getBountyLabel(item: ContentItem): string {
-  const summary = item.rewardPoolSummary;
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  if (
-    summary &&
-    summary.totalAvailable > 0n &&
-    (summary.hasActiveBounty ||
-      (summary.nextBountyClosesAt !== null &&
-        summary.nextBountyClosesAt !== undefined &&
-        summary.nextBountyClosesAt >= now) ||
-      (summary.nextBountyStartBy !== null &&
-        summary.nextBountyStartBy !== undefined &&
-        summary.nextBountyStartBy >= now))
-  ) {
-    return formatCompactAmount(summary.totalAvailable, summary.currency);
-  }
-
-  const bundle = item.bundle;
-  if (bundle && hasVisibleBundleBounty(item)) {
-    return formatCompactAmount(bundle.unallocatedAmount, getBundleCurrency(bundle.asset));
-  }
-
-  return "-";
-}
-
-function getBountyExpiry(item: ContentItem): string {
-  const summary = item.rewardPoolSummary;
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  if (summary && summary.totalAvailable > 0n) {
-    const closesAt = summary.nextBountyClosesAt ?? 0n;
-    if (closesAt > 0n && closesAt >= now) return formatTimestampSeconds(closesAt);
-
-    const startBy = summary.nextBountyStartBy ?? 0n;
-    if (startBy > 0n && startBy >= now) return formatTimestampSeconds(startBy);
-  }
-
-  const bundle = item.bundle;
-  if (!bundle || !hasVisibleBundleBounty(item)) return "-";
-
-  const closesAt = bundle.bountyClosesAt ?? 0n;
-  if (closesAt > 0n && closesAt >= now) return formatTimestampSeconds(closesAt);
-
-  return formatTimestampSeconds(bundle.bountyStartBy ?? bundle.expiresAt ?? null);
-}
-
-function getFeedbackLabel(item: ContentItem): string {
-  const summary = item.feedbackBonusSummary;
-  if (!summary || !summary.hasActiveFeedbackBonus || summary.totalRemaining <= 0n) {
-    return "-";
-  }
-
-  return formatCompactAmount(summary.totalRemaining, summary.currency);
 }
 
 function getRatingLabel(item: ContentItem): string {
@@ -290,9 +201,9 @@ export function SubmissionOverviewPanel() {
                           {status.label}
                         </span>
                       </td>
-                      <td className="text-right font-mono text-sm">{getBountyLabel(item)}</td>
-                      <td className="text-sm text-base-content/70">{getBountyExpiry(item)}</td>
-                      <td className="text-right font-mono text-sm">{getFeedbackLabel(item)}</td>
+                      <td className="text-right font-mono text-sm">{getSubmissionBountyLabel(item)}</td>
+                      <td className="text-sm text-base-content/70">{getSubmissionBountyDeadline(item)}</td>
+                      <td className="text-right font-mono text-sm">{getSubmissionFeedbackLabel(item)}</td>
                       <td className="text-right tabular-nums">{item.totalVotes}</td>
                       <td className="text-right tabular-nums">{item.totalRounds}</td>
                       <td className="text-right font-mono text-sm">{getRatingLabel(item)}</td>

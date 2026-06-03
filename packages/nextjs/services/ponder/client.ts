@@ -379,6 +379,10 @@ export interface PonderRewardPoolSummary {
   bountyEligibilityDataHash?: string | null;
   activeRewardPoolCount: number;
   expiredRewardPoolCount?: number;
+  openEndedRewardPoolCount?: number;
+  fundedAsset?: number | null;
+  fundedCurrency?: PonderRewardPoolCurrency;
+  fundedDisplayCurrency?: PonderRewardPoolDisplayCurrency;
   totalFundedAmount: string;
   totalUnallocatedAmount: string;
   activeUnallocatedAmount?: string;
@@ -394,6 +398,8 @@ export interface PonderRewardPoolSummary {
   hasActiveBounty?: boolean;
   nextBountyStartBy?: string | null;
   nextBountyClosesAt?: string | null;
+  lastBountyStartBy?: string | null;
+  lastBountyClosesAt?: string | null;
   nextFeedbackClosesAt?: string | null;
 }
 

@@ -344,6 +344,12 @@ test("mapContentItem supports text-only questions and Ponder bounty summaries", 
       totalVoterClaimedAmount: "6790000",
       totalFrontendClaimedAmount: "210000",
       activeRewardPoolCount: 1,
+      openEndedRewardPoolCount: 0,
+      fundedAsset: 0,
+      fundedCurrency: "LREP",
+      fundedDisplayCurrency: "LREP",
+      lastBountyStartBy: "1780000000",
+      lastBountyClosesAt: "1780086400",
     },
     feedbackBonusSummary: {
       asset: 0,
@@ -376,6 +382,12 @@ test("mapContentItem supports text-only questions and Ponder bounty summaries", 
   assert.equal(item.rewardPoolSummary?.totalVoterClaimed, 6_790_000n);
   assert.equal(item.rewardPoolSummary?.totalFrontendClaimed, 210_000n);
   assert.equal(item.rewardPoolSummary?.activeRewardPoolCount, 1);
+  assert.equal(item.rewardPoolSummary?.openEndedRewardPoolCount, 0);
+  assert.equal(item.rewardPoolSummary?.fundedAsset, 0);
+  assert.equal(item.rewardPoolSummary?.fundedCurrency, "LREP");
+  assert.equal(item.rewardPoolSummary?.fundedDisplayCurrency, "LREP");
+  assert.equal(item.rewardPoolSummary?.lastBountyStartBy, 1_780_000_000n);
+  assert.equal(item.rewardPoolSummary?.lastBountyClosesAt, 1_780_086_400n);
   assert.equal(item.feedbackBonusSummary?.asset, 0);
   assert.equal(item.feedbackBonusSummary?.currency, "LREP");
   assert.equal(item.feedbackBonusSummary?.displayCurrency, "LREP");
