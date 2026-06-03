@@ -41,7 +41,7 @@ const ROUND_CONFIG_BOUNDS = {
   minSettlementVoters: 3,
   maxSettlementVoters: 100,
   minVoterCap: 3,
-  maxVoterCap: 1_000,
+  maxVoterCap: 200,
 } as const;
 
 const CLUSTER_PAYOUT_CHALLENGE_WINDOW_SECONDS = 12 * 60 * 60;

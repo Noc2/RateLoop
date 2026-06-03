@@ -14,7 +14,7 @@ export type SerializedQuestionRoundConfig = {
   maxVoters: string;
 };
 
-type QuestionRoundConfigBounds = {
+export type QuestionRoundConfigBounds = {
   minEpochDuration: number;
   maxEpochDuration: number;
   minRoundDuration: number;
@@ -43,7 +43,7 @@ export const DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS: QuestionRoundConfigBounds = {
   minSettlementVoters: 3,
   maxSettlementVoters: 100,
   minVoterCap: 3,
-  maxVoterCap: 1_000,
+  maxVoterCap: 200,
 };
 
 export function serializeQuestionRoundConfig(config: QuestionRoundConfig): SerializedQuestionRoundConfig {

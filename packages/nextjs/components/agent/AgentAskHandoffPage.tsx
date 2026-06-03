@@ -23,12 +23,14 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { formatSubmissionRewardAmount, parseSubmissionRewardAmount } from "~~/lib/questionRewardPools";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
   DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS,
   QUESTION_ROUND_MAX_EPOCH_COUNT,
+  type QuestionRoundConfigBounds,
   formatDurationLabel,
   getQuestionRoundMaxDurationForEpoch,
   isQuestionRoundMaxDurationValidForEpoch,
@@ -163,29 +165,9 @@ type SubmittedContentModalState = {
 };
 
 const SECONDS_PER_MINUTE = 60;
-const ROUND_BLIND_MINUTE_BOUNDS = {
-  min: Math.ceil(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minEpochDuration / SECONDS_PER_MINUTE),
-  max: Math.max(1, Math.floor(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxEpochDuration / SECONDS_PER_MINUTE)),
-};
-const ROUND_MIN_VOTER_BOUNDS = {
-  min: DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minSettlementVoters,
-  max: DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxSettlementVoters,
-};
-const ROUND_MAX_VOTER_BOUNDS = {
-  min: DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minVoterCap,
-  max: DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxVoterCap,
-};
 
 const BOUNTY_AMOUNT_TOOLTIP =
   "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
-const BLIND_MINUTES_TOOLTIP = `Private response window before reveal/open voting. Must be ${formatDurationLabel(
-  DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minEpochDuration,
-)}-${formatDurationLabel(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxEpochDuration)}.`;
-const MAX_MINUTES_TOOLTIP = `Total round duration. It must be at least the blind window, no more than ${formatDurationLabel(
-  DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxRoundDuration,
-)}, and can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases.`;
-const MIN_VOTERS_TOOLTIP = `Eligible revealed voters required before a round can settle. Must be ${ROUND_MIN_VOTER_BOUNDS.min}-${ROUND_MIN_VOTER_BOUNDS.max}.`;
-const MAX_VOTERS_TOOLTIP = `Per-round voter cap. Must be ${ROUND_MAX_VOTER_BOUNDS.min}-${ROUND_MAX_VOTER_BOUNDS.max} and cannot be below min voters.`;
 
 function DraftFieldLabel({ children, htmlFor, tooltip }: { children: ReactNode; htmlFor: string; tooltip: string }) {
   return (
@@ -440,23 +422,71 @@ function clampWholeNumberInput(value: string, min: number, max: number): string 
   return String(Math.min(Math.max(parsed, min), max));
 }
 
-function getRoundMaxDurationMinuteBoundsForBlind(blindMinutes: number) {
+function readRoundConfigBounds(value: unknown): QuestionRoundConfigBounds {
+  const source = value as any;
+  return {
+    minEpochDuration: Number(
+      source?.minEpochDuration ?? source?.[0] ?? DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minEpochDuration,
+    ),
+    maxEpochDuration: Number(
+      source?.maxEpochDuration ?? source?.[1] ?? DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxEpochDuration,
+    ),
+    minRoundDuration: Number(
+      source?.minRoundDuration ?? source?.[2] ?? DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minRoundDuration,
+    ),
+    maxRoundDuration: Number(
+      source?.maxRoundDuration ?? source?.[3] ?? DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxRoundDuration,
+    ),
+    minSettlementVoters: Number(
+      source?.minSettlementVoters ?? source?.[4] ?? DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minSettlementVoters,
+    ),
+    maxSettlementVoters: Number(
+      source?.maxSettlementVoters ?? source?.[5] ?? DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxSettlementVoters,
+    ),
+    minVoterCap: Number(source?.minVoterCap ?? source?.[6] ?? DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minVoterCap),
+    maxVoterCap: Number(source?.maxVoterCap ?? source?.[7] ?? DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxVoterCap),
+  };
+}
+
+function getRoundBlindMinuteBounds(bounds: QuestionRoundConfigBounds) {
+  const min = Math.ceil(bounds.minEpochDuration / SECONDS_PER_MINUTE);
+  const max = Math.max(min, Math.floor(bounds.maxEpochDuration / SECONDS_PER_MINUTE));
+  return { min, max };
+}
+
+function getRoundMaxDurationMinuteBoundsForBlind(blindMinutes: number, bounds: QuestionRoundConfigBounds) {
   const blindSeconds = Math.max(1, Math.floor(blindMinutes)) * SECONDS_PER_MINUTE;
-  const maxDurationSeconds = getQuestionRoundMaxDurationForEpoch(
-    blindSeconds,
-    DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxRoundDuration,
-  );
-  const minSeconds = Math.max(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minRoundDuration, blindSeconds);
+  const maxDurationSeconds = getQuestionRoundMaxDurationForEpoch(blindSeconds, bounds.maxRoundDuration);
+  const minSeconds = Math.max(bounds.minRoundDuration, blindSeconds);
   const min = Math.ceil(minSeconds / SECONDS_PER_MINUTE);
   const max = Math.max(min, Math.floor(maxDurationSeconds / SECONDS_PER_MINUTE));
   return { min, max };
 }
 
-function getEffectiveBlindMinutes(value: string): number {
+function getEffectiveBlindMinutes(value: string, bounds: QuestionRoundConfigBounds): number {
+  const blindMinuteBounds = getRoundBlindMinuteBounds(bounds);
   const parsed = parseWholeNumberInput(value);
-  return parsed >= ROUND_BLIND_MINUTE_BOUNDS.min && parsed <= ROUND_BLIND_MINUTE_BOUNDS.max
-    ? parsed
-    : ROUND_BLIND_MINUTE_BOUNDS.min;
+  return parsed >= blindMinuteBounds.min && parsed <= blindMinuteBounds.max ? parsed : blindMinuteBounds.min;
+}
+
+function getBlindMinutesTooltip(bounds: QuestionRoundConfigBounds): string {
+  return `Private response window before reveal/open voting. Must be ${formatDurationLabel(
+    bounds.minEpochDuration,
+  )}-${formatDurationLabel(bounds.maxEpochDuration)}.`;
+}
+
+function getMaxMinutesTooltip(bounds: QuestionRoundConfigBounds): string {
+  return `Total round duration. It must be at least the blind window, no more than ${formatDurationLabel(
+    bounds.maxRoundDuration,
+  )}, and can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases.`;
+}
+
+function getMinVotersTooltip(bounds: QuestionRoundConfigBounds): string {
+  return `Eligible revealed voters required before a round can settle. Must be ${bounds.minSettlementVoters}-${bounds.maxSettlementVoters}.`;
+}
+
+function getMaxVotersTooltip(bounds: QuestionRoundConfigBounds): string {
+  return `Per-round voter cap. Must be ${bounds.minVoterCap}-${bounds.maxVoterCap} and cannot be below min voters.`;
 }
 
 function parseRoundSecondsFromMinutes(value: string, fieldName: string) {
@@ -508,7 +538,11 @@ function applyDraftQuestion(baseQuestion: JsonRecord, draft: DraftQuestionForm, 
   return nextQuestion;
 }
 
-function buildDraftRequestBody(handoff: Handoff, form: DraftForm): JsonRecord {
+function buildDraftRequestBody(
+  handoff: Handoff,
+  form: DraftForm,
+  roundConfigBounds: QuestionRoundConfigBounds,
+): JsonRecord {
   const requestBody = structuredClone(handoff.requestBody ?? {}) as JsonRecord;
   const bountyAmount = parseSubmissionRewardAmount(form.bountyAmount);
   if (bountyAmount === null) {
@@ -526,43 +560,35 @@ function buildDraftRequestBody(handoff: Handoff, form: DraftForm): JsonRecord {
     throw new Error("Min voters cannot be greater than max voters.");
   }
   if (
-    Number(blindSeconds) < DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minEpochDuration ||
-    Number(blindSeconds) > DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxEpochDuration
+    Number(blindSeconds) < roundConfigBounds.minEpochDuration ||
+    Number(blindSeconds) > roundConfigBounds.maxEpochDuration
   ) {
     throw new Error(
-      `Blind phase must be ${formatDurationLabel(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minEpochDuration)}-${formatDurationLabel(
-        DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxEpochDuration,
+      `Blind phase must be ${formatDurationLabel(roundConfigBounds.minEpochDuration)}-${formatDurationLabel(
+        roundConfigBounds.maxEpochDuration,
       )}.`,
     );
   }
   if (
-    Number(maxDurationSeconds) < DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minRoundDuration ||
-    Number(maxDurationSeconds) > DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxRoundDuration
+    Number(maxDurationSeconds) < roundConfigBounds.minRoundDuration ||
+    Number(maxDurationSeconds) > roundConfigBounds.maxRoundDuration
   ) {
     throw new Error(
       `Max duration must be ${formatDurationLabel(
-        DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minRoundDuration,
-      )}-${formatDurationLabel(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxRoundDuration)}.`,
+        roundConfigBounds.minRoundDuration,
+      )}-${formatDurationLabel(roundConfigBounds.maxRoundDuration)}.`,
     );
   }
   if (!isQuestionRoundMaxDurationValidForEpoch(Number(blindSeconds), Number(maxDurationSeconds))) {
     throw new Error("Max duration spans too many blind phases.");
   }
-  if (
-    minVoters < DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minSettlementVoters ||
-    minVoters > DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxSettlementVoters
-  ) {
+  if (minVoters < roundConfigBounds.minSettlementVoters || minVoters > roundConfigBounds.maxSettlementVoters) {
     throw new Error(
-      `Min voters must be ${DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minSettlementVoters}-${DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxSettlementVoters}.`,
+      `Min voters must be ${roundConfigBounds.minSettlementVoters}-${roundConfigBounds.maxSettlementVoters}.`,
     );
   }
-  if (
-    maxVoters < DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minVoterCap ||
-    maxVoters > DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxVoterCap
-  ) {
-    throw new Error(
-      `Max voters must be ${DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minVoterCap}-${DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxVoterCap}.`,
-    );
+  if (maxVoters < roundConfigBounds.minVoterCap || maxVoters > roundConfigBounds.maxVoterCap) {
+    throw new Error(`Max voters must be ${roundConfigBounds.minVoterCap}-${roundConfigBounds.maxVoterCap}.`);
   }
 
   requestBody.bounty = {
@@ -687,6 +713,39 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [steps, setSteps] = useState<ExecutionStep[]>([]);
   const [imageSignatureSteps, setImageSignatureSteps] = useState<ImageSignatureStep[]>([]);
   const [submittedContent, setSubmittedContent] = useState<SubmittedContentModalState | null>(null);
+  const boundsChainId = handoff?.chainId ?? chain?.id ?? chainId;
+  const { data: protocolRoundConfigBounds } = useScaffoldReadContract({
+    contractName: "ProtocolConfig" as any,
+    functionName: "roundConfigBounds" as any,
+    chainId: boundsChainId,
+    watch: false,
+    query: {
+      staleTime: 300_000,
+    },
+  } as any);
+  const roundConfigBounds = useMemo(
+    () => readRoundConfigBounds(protocolRoundConfigBounds),
+    [protocolRoundConfigBounds],
+  );
+  const roundBlindMinuteBounds = useMemo(() => getRoundBlindMinuteBounds(roundConfigBounds), [roundConfigBounds]);
+  const roundMinVoterBounds = useMemo(
+    () => ({
+      min: roundConfigBounds.minSettlementVoters,
+      max: roundConfigBounds.maxSettlementVoters,
+    }),
+    [roundConfigBounds],
+  );
+  const roundMaxVoterBounds = useMemo(
+    () => ({
+      min: roundConfigBounds.minVoterCap,
+      max: roundConfigBounds.maxVoterCap,
+    }),
+    [roundConfigBounds],
+  );
+  const blindMinutesTooltip = useMemo(() => getBlindMinutesTooltip(roundConfigBounds), [roundConfigBounds]);
+  const maxMinutesTooltip = useMemo(() => getMaxMinutesTooltip(roundConfigBounds), [roundConfigBounds]);
+  const minVotersTooltip = useMemo(() => getMinVotersTooltip(roundConfigBounds), [roundConfigBounds]);
+  const maxVotersTooltip = useMemo(() => getMaxVotersTooltip(roundConfigBounds), [roundConfigBounds]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -750,8 +809,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
   const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && isDraftDirty && !isBusy);
   const draftRoundMaxDurationMinuteBounds = useMemo(
-    () => getRoundMaxDurationMinuteBoundsForBlind(getEffectiveBlindMinutes(draftForm?.roundBlindMinutes ?? "")),
-    [draftForm?.roundBlindMinutes],
+    () =>
+      getRoundMaxDurationMinuteBoundsForBlind(
+        getEffectiveBlindMinutes(draftForm?.roundBlindMinutes ?? "", roundConfigBounds),
+        roundConfigBounds,
+      ),
+    [draftForm?.roundBlindMinutes, roundConfigBounds],
   );
   const canSubmit = Boolean(
     token &&
@@ -820,7 +883,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           return next;
         }
 
-        const maxDurationBounds = getRoundMaxDurationMinuteBoundsForBlind(parseWholeNumberInput(normalizedValue));
+        const maxDurationBounds = getRoundMaxDurationMinuteBoundsForBlind(
+          parseWholeNumberInput(normalizedValue),
+          roundConfigBounds,
+        );
         next.roundMaxDurationMinutes = clampWholeNumberInput(
           next.roundMaxDurationMinutes,
           maxDurationBounds.min,
@@ -830,7 +896,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       });
       setDraftError(null);
     },
-    [],
+    [roundConfigBounds],
   );
 
   const clampDraftWholeNumberField = useCallback(
@@ -841,10 +907,13 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         if (field === "roundBlindMinutes") {
           const roundBlindMinutes = clampWholeNumberInput(
             current.roundBlindMinutes,
-            ROUND_BLIND_MINUTE_BOUNDS.min,
-            ROUND_BLIND_MINUTE_BOUNDS.max,
+            roundBlindMinuteBounds.min,
+            roundBlindMinuteBounds.max,
           );
-          const maxDurationBounds = getRoundMaxDurationMinuteBoundsForBlind(parseWholeNumberInput(roundBlindMinutes));
+          const maxDurationBounds = getRoundMaxDurationMinuteBoundsForBlind(
+            parseWholeNumberInput(roundBlindMinutes),
+            roundConfigBounds,
+          );
           return {
             ...current,
             roundBlindMinutes,
@@ -858,7 +927,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
         if (field === "roundMaxDurationMinutes") {
           const maxDurationBounds = getRoundMaxDurationMinuteBoundsForBlind(
-            getEffectiveBlindMinutes(current.roundBlindMinutes),
+            getEffectiveBlindMinutes(current.roundBlindMinutes, roundConfigBounds),
+            roundConfigBounds,
           );
           return {
             ...current,
@@ -875,8 +945,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             ...current,
             roundMinVoters: clampWholeNumberInput(
               current.roundMinVoters,
-              ROUND_MIN_VOTER_BOUNDS.min,
-              ROUND_MIN_VOTER_BOUNDS.max,
+              roundMinVoterBounds.min,
+              roundMinVoterBounds.max,
             ),
           };
         }
@@ -885,14 +955,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           ...current,
           roundMaxVoters: clampWholeNumberInput(
             current.roundMaxVoters,
-            ROUND_MAX_VOTER_BOUNDS.min,
-            ROUND_MAX_VOTER_BOUNDS.max,
+            roundMaxVoterBounds.min,
+            roundMaxVoterBounds.max,
           ),
         };
       });
       setDraftError(null);
     },
-    [],
+    [roundBlindMinuteBounds, roundConfigBounds, roundMaxVoterBounds, roundMinVoterBounds],
   );
 
   const updateDraftQuestion = useCallback((index: number, patch: Partial<DraftQuestionForm>) => {
@@ -913,7 +983,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     setDraftError(null);
     let requestBody: JsonRecord;
     try {
-      requestBody = buildDraftRequestBody(handoff, draftForm);
+      requestBody = buildDraftRequestBody(handoff, draftForm, roundConfigBounds);
     } catch (saveError) {
       setDraftError(saveError instanceof Error ? saveError.message : "Draft is invalid.");
       return;
@@ -938,7 +1008,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     } finally {
       setIsSavingDraft(false);
     }
-  }, [draftForm, handoff, handoffId, token]);
+  }, [draftForm, handoff, handoffId, roundConfigBounds, token]);
 
   const prepareHandoff = useCallback(async () => {
     if (!address) {
@@ -1382,7 +1452,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                   <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-round-blind-minutes" tooltip={BLIND_MINUTES_TOOLTIP}>
+                    <DraftFieldLabel htmlFor="agent-ask-round-blind-minutes" tooltip={blindMinutesTooltip}>
                       Blind minutes
                     </DraftFieldLabel>
                     <input
@@ -1391,8 +1461,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       className="input input-bordered mt-1 w-full"
                       disabled={!canEditDraft}
                       inputMode="numeric"
-                      min={ROUND_BLIND_MINUTE_BOUNDS.min}
-                      max={ROUND_BLIND_MINUTE_BOUNDS.max}
+                      min={roundBlindMinuteBounds.min}
+                      max={roundBlindMinuteBounds.max}
                       step={1}
                       value={draftForm?.roundBlindMinutes ?? ""}
                       onBlur={() => clampDraftWholeNumberField("roundBlindMinutes")}
@@ -1400,7 +1470,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     />
                   </div>
                   <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-round-max-minutes" tooltip={MAX_MINUTES_TOOLTIP}>
+                    <DraftFieldLabel htmlFor="agent-ask-round-max-minutes" tooltip={maxMinutesTooltip}>
                       Max minutes
                     </DraftFieldLabel>
                     <input
@@ -1418,7 +1488,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     />
                   </div>
                   <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-round-min-voters" tooltip={MIN_VOTERS_TOOLTIP}>
+                    <DraftFieldLabel htmlFor="agent-ask-round-min-voters" tooltip={minVotersTooltip}>
                       Min voters
                     </DraftFieldLabel>
                     <input
@@ -1427,8 +1497,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       className="input input-bordered mt-1 w-full"
                       disabled={!canEditDraft}
                       inputMode="numeric"
-                      min={ROUND_MIN_VOTER_BOUNDS.min}
-                      max={ROUND_MIN_VOTER_BOUNDS.max}
+                      min={roundMinVoterBounds.min}
+                      max={roundMinVoterBounds.max}
                       step={1}
                       value={draftForm?.roundMinVoters ?? ""}
                       onBlur={() => clampDraftWholeNumberField("roundMinVoters")}
@@ -1436,7 +1506,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     />
                   </div>
                   <div className="form-control">
-                    <DraftFieldLabel htmlFor="agent-ask-round-max-voters" tooltip={MAX_VOTERS_TOOLTIP}>
+                    <DraftFieldLabel htmlFor="agent-ask-round-max-voters" tooltip={maxVotersTooltip}>
                       Max voters
                     </DraftFieldLabel>
                     <input
@@ -1445,8 +1515,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       className="input input-bordered mt-1 w-full"
                       disabled={!canEditDraft}
                       inputMode="numeric"
-                      min={ROUND_MAX_VOTER_BOUNDS.min}
-                      max={ROUND_MAX_VOTER_BOUNDS.max}
+                      min={roundMaxVoterBounds.min}
+                      max={roundMaxVoterBounds.max}
                       step={1}
                       value={draftForm?.roundMaxVoters ?? ""}
                       onBlur={() => clampDraftWholeNumberField("roundMaxVoters")}
