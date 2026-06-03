@@ -14,7 +14,7 @@ test.describe("Governance page", () => {
     // Account #2 has LREP, so should see all tabs (not just Faucet)
     const profileTab = page.getByRole("button", { name: "Profile", exact: true });
     const leaderboardTab = page.getByRole("button", { name: "Leaderboard" });
-    const governanceTab = page.getByRole("button", { name: "Governance" });
+    const governanceTab = page.getByRole("button", { name: "Governance", exact: true });
 
     // At least one tab should be visible (tabs render after wallet state loads)
     const anyTab = profileTab.or(leaderboardTab).or(governanceTab);
@@ -96,7 +96,7 @@ test.describe("Governance page", () => {
     await gotoWithRetry(page, "/governance", { ensureWalletConnected: true });
 
     // Click Governance tab (was previously "Vote", renamed in the tab UI)
-    const governanceTabBtn = page.getByRole("button", { name: "Governance" });
+    const governanceTabBtn = page.getByRole("button", { name: "Governance", exact: true });
     await expect(governanceTabBtn).toBeVisible({ timeout: 15_000 });
     await governanceTabBtn.click();
 
