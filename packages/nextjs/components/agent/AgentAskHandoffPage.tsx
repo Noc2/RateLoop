@@ -211,10 +211,19 @@ function imageSignatureLabel(challenge: UploadChallenge, handoff: Handoff | null
   return asset?.filename || challenge.attachmentId || challenge.assetId;
 }
 
+function canPrepareHandoffStatus(status: string | undefined) {
+  return (
+    status === "pending" ||
+    status === "awaiting_image_signatures" ||
+    status === "uploading_images" ||
+    status === "failed"
+  );
+}
+
 export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const searchParams = useSearchParams();
   const wagmiConfig = useConfig();
-  const { address, chain } = useAccount();
+  const { address, chain, chainId } = useAccount();
   const { signMessageAsync, isPending: isSigningMessage } = useSignMessage();
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const [token] = useState(() => readToken(searchParams));
@@ -235,14 +244,19 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   }, []);
 
   const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
+  const isFeedbackBonusStep = handoff?.status === "feedback_bonus_prepared";
   const connectedMismatch = Boolean(handoff?.walletAddress && address && !sameAddress(handoff.walletAddress, address));
   const hasTransactionPlan = Boolean(handoff?.transactionPlan?.calls?.length);
-  const needsChainSwitch = Boolean(handoff?.chainId && chain?.id && chain.id !== handoff.chainId);
+  const connectedChainId = chain?.id ?? chainId ?? null;
+  const needsChainSwitch = Boolean(
+    hasTransactionPlan && handoff?.chainId && connectedChainId && connectedChainId !== handoff.chainId,
+  );
   const canPrepare = Boolean(
     token &&
       address &&
+      connectedChainId &&
       handoff &&
-      handoff.status !== "prepared" &&
+      canPrepareHandoffStatus(handoff.status) &&
       !connectedMismatch &&
       !isPreparing &&
       !isExecuting &&
@@ -283,8 +297,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const postPrepare = useCallback(
     async (imageSignatures?: Array<{ assetId: string; challengeId: string; signature: Hex }>) => {
       if (!address) throw new Error("Connect a wallet before preparing this ask.");
+      if (!connectedChainId) throw new Error("Connect a supported network before preparing this ask.");
       const response = await fetch(`/api/agent/handoffs/${handoffId}/prepare`, {
         body: JSON.stringify({
+          chainId: connectedChainId,
           imageSignatures,
           token,
           walletAddress: address,
@@ -296,12 +312,16 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       if (!response.ok) throw new Error(readResponseError(body, "Failed to prepare handoff."));
       return body as PrepareResponse;
     },
-    [address, handoffId, token],
+    [address, connectedChainId, handoffId, token],
   );
 
   const handlePrepare = useCallback(async () => {
     if (!address) {
       notification.error("Connect the wallet that will fund this ask.");
+      return;
+    }
+    if (!connectedChainId) {
+      notification.error("Connect a supported network before preparing this ask.");
       return;
     }
     if (connectedMismatch) {
@@ -313,10 +333,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     setImageSignatureSteps([]);
     setError(null);
     try {
-      if (handoff?.chainId && chain?.id !== handoff.chainId) {
-        await switchToChain(handoff.chainId);
-      }
-
       let prepared = await postPrepare();
       setHandoff(prepared);
       const uploadChallenges = prepared.uploadChallenges ?? [];
@@ -350,11 +366,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     } finally {
       setIsPreparing(false);
     }
-  }, [address, chain?.id, connectedMismatch, handoff?.chainId, postPrepare, signMessageAsync, switchToChain]);
+  }, [address, connectedChainId, connectedMismatch, postPrepare, signMessageAsync]);
 
   const handleExecute = useCallback(async () => {
     if (!handoff?.transactionPlan?.calls?.length) {
-      notification.error("Prepare this handoff before submitting wallet calls.");
+      notification.error(
+        isFeedbackBonusStep
+          ? "Feedback Bonus funding is not prepared yet."
+          : "Prepare this handoff before submitting wallet calls.",
+      );
       return;
     }
     if (!address) {
@@ -376,7 +396,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     setSteps(nextSteps);
 
     try {
-      if (handoff.chainId && chain?.id !== handoff.chainId) {
+      if (handoff.chainId && connectedChainId !== handoff.chainId) {
         await switchToChain(handoff.chainId);
       }
 
@@ -406,14 +426,34 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       });
       const body = (await response.json()) as Handoff | { error?: string; message?: string };
       if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
-      setHandoff(body as Handoff);
-      notification.success("Ask submitted to RateLoop.");
+      const nextHandoff = body as Handoff;
+      setHandoff(current => ({
+        ...nextHandoff,
+        publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? null,
+      }));
+      if (nextHandoff.status === "feedback_bonus_prepared") {
+        notification.success("Ask submitted. Feedback Bonus funding is ready.");
+      } else if (isFeedbackBonusStep) {
+        notification.success("Feedback Bonus funded.");
+      } else {
+        notification.success("Ask submitted to RateLoop.");
+      }
     } catch (executeError) {
       setError(executeError instanceof Error ? executeError.message : "Failed to execute wallet calls.");
     } finally {
       setIsExecuting(false);
     }
-  }, [address, chain?.id, connectedMismatch, handoff, handoffId, switchToChain, token, wagmiConfig]);
+  }, [
+    address,
+    connectedChainId,
+    connectedMismatch,
+    handoff,
+    handoffId,
+    isFeedbackBonusStep,
+    switchToChain,
+    token,
+    wagmiConfig,
+  ]);
 
   return (
     <AppPageShell contentClassName="space-y-5" paddingTopClassName="pt-6">
@@ -485,7 +525,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             ) : null}
             {needsChainSwitch ? (
               <p className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
-                This ask is on chain {handoff.chainId}. Your wallet is on chain {chain?.id}.
+                This prepared ask is on chain {handoff.chainId}. Your wallet is on chain {connectedChainId}.
               </p>
             ) : null}
           </section>
@@ -536,9 +576,11 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           <section className="surface-card rounded-lg p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">Submit Ask</h2>
+                <h2 className="text-lg font-semibold">{isFeedbackBonusStep ? "Fund Feedback Bonus" : "Submit Ask"}</h2>
                 <p className="mt-1 text-sm text-base-content/60">
-                  The connected wallet signs generated-image uploads first, then funds and submits the ask.
+                  {isFeedbackBonusStep
+                    ? "The question is submitted. Execute the remaining wallet calls to fund the optional Feedback Bonus."
+                    : "The connected wallet signs generated-image uploads first, then funds and submits the ask."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -560,7 +602,13 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   type="button"
                   onClick={() => void handleExecute()}
                 >
-                  {isExecuting ? "Submitting..." : "Submit"}
+                  {isFeedbackBonusStep
+                    ? isExecuting
+                      ? "Funding..."
+                      : "Fund Bonus"
+                    : isExecuting
+                      ? "Submitting..."
+                      : "Submit"}
                 </button>
               </div>
             </div>
@@ -614,7 +662,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               </div>
             ) : (
               <p className="mt-4 text-sm text-base-content/60">
-                Prepare this handoff to sign staged images and fetch the wallet transaction calls.
+                {isFeedbackBonusStep
+                  ? "Feedback Bonus funding is waiting for a transaction plan."
+                  : "Prepare this handoff to sign staged images and fetch the wallet transaction calls."}
               </p>
             )}
 

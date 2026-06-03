@@ -20,6 +20,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+type JsonObject = Record<string, unknown>;
+
 function readToken(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   throw new AgentAskHandoffError("token is required.");
@@ -43,6 +45,16 @@ function readTransactionHashes(value: unknown): Hex[] {
   return hashes;
 }
 
+function readJsonObject(value: unknown): JsonObject | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : null;
+}
+
+function readFeedbackBonusTransactionPlan(result: JsonObject): JsonObject | null {
+  const feedbackBonus = readJsonObject(result.feedbackBonus);
+  if (!feedbackBonus || feedbackBonus.status !== "awaiting_wallet_signature") return null;
+  return readJsonObject(feedbackBonus.transactionPlan);
+}
+
 export async function POST(request: NextRequest, context: { params: Promise<{ handoffId: string }> }) {
   const { handoffId } = await context.params;
 
@@ -58,7 +70,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         const assets = await listAgentAskHandoffAssets(handoff.id);
         return buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true });
       }
-      if (!handoff.operationKey || handoff.status !== "prepared") {
+      const confirmsFeedbackBonus = handoff.status === "feedback_bonus_prepared";
+      if (!handoff.operationKey || (handoff.status !== "prepared" && !confirmsFeedbackBonus)) {
         return NextResponse.json({ error: "Prepare this handoff before completing it." }, { status: 400 });
       }
 
@@ -67,19 +80,35 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
           operationKey: handoff.operationKey,
           transactionHashes,
         },
-        name: "rateloop_confirm_ask_transactions",
+        name: confirmsFeedbackBonus
+          ? "rateloop_confirm_feedback_bonus_transactions"
+          : "rateloop_confirm_ask_transactions",
         requestUrl: request.url,
-      })) as Record<string, unknown>;
+      })) as JsonObject;
+      const feedbackBonusTransactionPlan = confirmsFeedbackBonus ? null : readFeedbackBonusTransactionPlan(result);
+      const nextStatus = feedbackBonusTransactionPlan
+        ? "feedback_bonus_prepared"
+        : result.status === "submitted"
+          ? "submitted"
+          : "prepared";
+      const storedTransactionHashes = confirmsFeedbackBonus
+        ? [...handoff.transactionHashes, ...transactionHashes]
+        : transactionHashes;
       await updateAgentAskHandoffStatus({
         handoffId,
-        status: result.status === "submitted" ? "submitted" : "prepared",
-        transactionHashes,
+        status: nextStatus,
+        transactionHashes: storedTransactionHashes,
+        transactionPlan: feedbackBonusTransactionPlan ?? undefined,
       });
       const updatedHandoff = await loadAgentAskHandoffByToken({ handoffId, token });
       const assets = await listAgentAskHandoffAssets(updatedHandoff.id);
       return {
         ...buildAgentAskHandoffResponse({ assets, handoff: updatedHandoff, includeImageData: true }),
         ask: result,
+        nextAction:
+          nextStatus === "feedback_bonus_prepared"
+            ? "Execute the Feedback Bonus transactionPlan.calls in the connected wallet, then confirm transaction hashes."
+            : undefined,
         publicUrl: typeof result.publicUrl === "string" ? result.publicUrl : null,
       };
     },

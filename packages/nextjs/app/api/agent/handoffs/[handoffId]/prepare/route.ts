@@ -43,6 +43,14 @@ function readWalletAddress(value: unknown): Address {
   throw new AgentAskHandoffError("walletAddress is required and must be an EVM address.");
 }
 
+function readChainId(value: unknown): number {
+  const chainId = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isSafeInteger(chainId) || chainId <= 0) {
+    throw new AgentAskHandoffError("chainId is required and must be a positive integer.");
+  }
+  return chainId;
+}
+
 function readToken(value: unknown) {
   if (typeof value === "string" && value.trim()) return value.trim();
   throw new AgentAskHandoffError("token is required.");
@@ -70,6 +78,7 @@ function readImageSignatures(value: unknown): ImageSignatureInput[] {
 
 async function buildUploadChallenges(params: {
   assets: Awaited<ReturnType<typeof listAgentAskHandoffAssets>>;
+  chainId: number;
   handoffId: string;
   walletAddress: Address;
 }) {
@@ -102,6 +111,7 @@ async function buildUploadChallenges(params: {
   }
 
   await updateAgentAskHandoffStatus({
+    chainId: params.chainId,
     handoffId: params.handoffId,
     status: "awaiting_image_signatures",
     walletAddress: params.walletAddress,
@@ -168,10 +178,19 @@ async function uploadSignedImages(params: {
   }
 }
 
-async function prepareAsk(params: { handoffId: string; requestUrl: string; token: string; walletAddress: Address }) {
+async function prepareAsk(params: {
+  chainId: number;
+  handoffId: string;
+  requestUrl: string;
+  token: string;
+  walletAddress: Address;
+}) {
   const handoff = await loadAgentAskHandoffByToken({ handoffId: params.handoffId, token: params.token });
   const assets = await listAgentAskHandoffAssets(handoff.id);
-  const askBody = buildAskBodyWithUploadedHandoffImages({ assets, handoff });
+  const askBody = {
+    ...buildAskBodyWithUploadedHandoffImages({ assets, handoff }),
+    chainId: params.chainId,
+  };
   const prepared = (await callPublicRateLoopMcpTool({
     arguments: {
       ...askBody,
@@ -189,6 +208,7 @@ async function prepareAsk(params: { handoffId: string; requestUrl: string; token
       : null;
 
   await updateAgentAskHandoffStatus({
+    chainId: params.chainId,
     handoffId: params.handoffId,
     operationKey,
     payloadHash,
@@ -217,6 +237,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
 
       const token = readToken((body as { token?: unknown }).token);
       const walletAddress = readWalletAddress((body as { walletAddress?: unknown }).walletAddress);
+      const chainId = readChainId((body as { chainId?: unknown }).chainId);
       const imageSignatures = readImageSignatures((body as { imageSignatures?: unknown }).imageSignatures);
       const handoff = await loadAgentAskHandoffByToken({ handoffId, token });
       assertHandoffCanPrepare(handoff);
@@ -231,7 +252,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       let assets = await listAgentAskHandoffAssets(handoff.id);
       const stagedAssets = assets.filter(asset => asset.status === "staged");
       if (stagedAssets.length > 0 && imageSignatures.length === 0) {
-        const uploadChallenges = await buildUploadChallenges({ assets, handoffId, walletAddress });
+        const uploadChallenges = await buildUploadChallenges({ assets, chainId, handoffId, walletAddress });
         const updatedHandoff = await loadAgentAskHandoffByToken({ handoffId, token });
         assets = await listAgentAskHandoffAssets(updatedHandoff.id);
         return {
@@ -251,7 +272,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         });
       }
 
-      return prepareAsk({ handoffId, requestUrl: request.url, token, walletAddress });
+      return prepareAsk({ chainId, handoffId, requestUrl: request.url, token, walletAddress });
     },
     rateLimit: AGENT_WRITE_RATE_LIMIT,
     request,

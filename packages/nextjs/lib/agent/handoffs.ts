@@ -13,6 +13,7 @@ export type AgentAskHandoffStatus =
   | "awaiting_image_signatures"
   | "uploading_images"
   | "prepared"
+  | "feedback_bonus_prepared"
   | "submitted"
   | "failed"
   | "expired";
@@ -316,6 +317,13 @@ function cloneWithImageUrls(requestBody: JsonObject, imageUrls: string[]) {
   return cloned;
 }
 
+function stripHandoffOnlyValidationFields(requestBody: JsonObject) {
+  if (!("feedbackBonus" in requestBody)) return requestBody;
+  const cloned = structuredClone(requestBody) as JsonObject;
+  delete cloned.feedbackBonus;
+  return cloned;
+}
+
 function assertFresh(handoff: AgentAskHandoffRecord) {
   if (handoff.expiresAt.getTime() <= Date.now()) {
     throw new AgentAskHandoffError("Handoff link has expired.", 410);
@@ -439,7 +447,7 @@ export async function createAgentAskHandoff(params: {
     id: randomAssetId(),
   }));
   const validationImageUrls = assets.map(asset => assetImageUrl(params.origin, asset.attachmentId));
-  const validationBody = cloneWithImageUrls(requestBody, validationImageUrls);
+  const validationBody = stripHandoffOnlyValidationFields(cloneWithImageUrls(requestBody, validationImageUrls));
   const parsed = parseX402QuestionRequest(validationBody);
   const walletAddress = readOptionalAddress(
     requestBody.walletAddress ?? requestBody.agentWalletAddress,
@@ -528,6 +536,7 @@ export async function createAgentAskHandoff(params: {
 }
 
 export async function updateAgentAskHandoffStatus(params: {
+  chainId?: number | null;
   error?: string | null;
   handoffId: string;
   operationKey?: string | null;
@@ -542,6 +551,7 @@ export async function updateAgentAskHandoffStatus(params: {
     sql: `
       UPDATE agent_ask_handoff_intents
       SET status = ?,
+          chain_id = COALESCE(?, chain_id),
           wallet_address = COALESCE(?, wallet_address),
           operation_key = COALESCE(?, operation_key),
           payload_hash = COALESCE(?, payload_hash),
@@ -554,6 +564,7 @@ export async function updateAgentAskHandoffStatus(params: {
     `,
     args: [
       params.status,
+      params.chainId ?? null,
       params.walletAddress ?? null,
       params.operationKey ?? null,
       params.payloadHash ?? null,
