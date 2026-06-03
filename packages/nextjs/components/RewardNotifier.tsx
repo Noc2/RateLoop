@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAccount } from "wagmi";
 import { useAllClaimableRewards } from "~~/hooks/useAllClaimableRewards";
 import {
+  formatClaimableLrepNotificationAmount,
   readLastClaimRewardNotificationAt,
   shouldNotifyAboutClaimableRewards,
   writeLastClaimRewardNotificationAt,
@@ -59,14 +60,16 @@ export function RewardNotifier() {
         lastNotifiedAtMs,
       })
     ) {
-      const formatted = (Number(totalClaimable) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 });
-      notification.success(
-        <Link href="/governance" className="font-medium underline">
-          {`You have ${formatted} LREP ready to claim.`}
-        </Link>,
-        { duration: 8000 },
-      );
-      writeLastClaimRewardNotificationAt(address, nowMs, window.localStorage);
+      const formatted = formatClaimableLrepNotificationAmount(totalClaimable);
+      if (formatted) {
+        notification.success(
+          <Link href="/governance" className="font-medium underline">
+            {`You have ${formatted} LREP ready to claim.`}
+          </Link>,
+          { duration: 8000 },
+        );
+        writeLastClaimRewardNotificationAt(address, nowMs, window.localStorage);
+      }
     }
 
     prevRef.current = totalClaimable;

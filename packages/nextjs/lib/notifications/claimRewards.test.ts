@@ -1,5 +1,6 @@
 import {
   type PendingClaimRewardNotification,
+  formatClaimableLrepNotificationAmount,
   pickClaimRewardNotification,
   shouldNotifyAboutClaimableRewards,
 } from "./claimRewards";
@@ -80,4 +81,11 @@ test("shouldNotifyAboutClaimableRewards only fires when claimable total increase
     }),
     true,
   );
+});
+
+test("formatClaimableLrepNotificationAmount preserves visible fractional LREP and suppresses zero", () => {
+  assert.equal(formatClaimableLrepNotificationAmount(0n), null);
+  assert.equal(formatClaimableLrepNotificationAmount(1n), null);
+  assert.equal(formatClaimableLrepNotificationAmount(200_000n), "0.2");
+  assert.equal(formatClaimableLrepNotificationAmount(1_000_000n), "1");
 });

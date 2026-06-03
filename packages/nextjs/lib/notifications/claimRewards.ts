@@ -1,3 +1,5 @@
+import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
+
 export const CLAIM_REWARD_NOTIFICATION_DELAY_MS = 15_000;
 export const CLAIM_REWARD_NOTIFICATION_RECHECK_MS = 15_000;
 const CLAIM_REWARD_NOTIFICATION_COOLDOWN_MS = 30 * 60 * 1000;
@@ -72,4 +74,11 @@ export function shouldNotifyAboutClaimableRewards(options: {
   }
 
   return true;
+}
+
+export function formatClaimableLrepNotificationAmount(amountMicro: bigint) {
+  if (amountMicro <= 0n) return null;
+
+  const formatted = formatLrepAmount(amountMicro);
+  return formatted === "0" ? null : formatted;
 }
