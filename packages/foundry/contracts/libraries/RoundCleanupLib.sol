@@ -132,6 +132,24 @@ library RoundCleanupLib {
         ProtocolConfig protocolConfig,
         uint256 roundId
     ) external view returns (bool) {
+        return _isSettlementRevealGraceElapsed(
+            round,
+            roundConfigSnapshot,
+            roundRevealGracePeriodSnapshot,
+            lastCommitRevealableAfter,
+            protocolConfig,
+            roundId
+        );
+    }
+
+    function _isSettlementRevealGraceElapsed(
+        RoundLib.Round storage round,
+        mapping(uint256 => RoundLib.RoundConfig) storage roundConfigSnapshot,
+        mapping(uint256 => uint256) storage roundRevealGracePeriodSnapshot,
+        mapping(uint256 => uint256) storage lastCommitRevealableAfter,
+        ProtocolConfig protocolConfig,
+        uint256 roundId
+    ) private view returns (bool) {
         uint256 lastRevealableAt = lastCommitRevealableAfter[roundId];
         if (lastRevealableAt == 0) return false;
 
@@ -151,6 +169,14 @@ library RoundCleanupLib {
         RoundLib.Round storage round,
         RoundLib.RoundConfig memory roundCfg
     ) external view returns (uint256 total) {
+        return _pastEpochUnrevealedCount(epochUnrevealedCount, round, roundCfg);
+    }
+
+    function _pastEpochUnrevealedCount(
+        mapping(uint256 => uint256) storage epochUnrevealedCount,
+        RoundLib.Round storage round,
+        RoundLib.RoundConfig memory roundCfg
+    ) private view returns (uint256 total) {
         uint256 epochEnd = round.startTime + roundCfg.epochDuration;
         uint256 maxEpochEnd = round.startTime + roundCfg.maxDuration + roundCfg.epochDuration;
         while (epochEnd <= block.timestamp && epochEnd <= maxEpochEnd) {
@@ -400,6 +426,7 @@ library RoundCleanupLib {
         IERC20 lrepToken,
         ProtocolConfig protocolConfig,
         uint256 accountedLrepBalance,
+        uint48 staleRevealCutoffAt,
         address cleanupCaller,
         uint256 startIndex,
         uint256 count
@@ -428,6 +455,7 @@ library RoundCleanupLib {
             roundId,
             lrepToken,
             protocolConfig,
+            staleRevealCutoffAt,
             cleanupCaller,
             startIndex,
             count
@@ -473,6 +501,7 @@ library RoundCleanupLib {
         uint256 roundId,
         IERC20 lrepToken,
         ProtocolConfig protocolConfig,
+        uint48 staleRevealCutoffAt,
         address cleanupCaller,
         uint256 startIndex,
         uint256 count
@@ -496,6 +525,7 @@ library RoundCleanupLib {
             endIndex = (count == 0 || candidate < startIndex || candidate > len) ? len : candidate;
         }
 
+        uint48 pastEpochCutoffAt = staleRevealCutoffAt == 0 ? round.settledAt : staleRevealCutoffAt;
         for (uint256 i = startIndex; i < endIndex; i++) {
             RoundLib.Commit storage commit = roundCommits[commitKeys[i]];
             if (!commit.revealed && commit.stakeAmount > 0) {
@@ -508,12 +538,12 @@ library RoundCleanupLib {
                 // non-revealers preserves the no-punishment invariant for ties.
                 if (
                     round.state == RoundLib.RoundState.RevealFailed
-                        || (round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= round.settledAt)
+                        || (round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= pastEpochCutoffAt)
                 ) {
                     processedPastEpochCount++;
                     forfeitedToTreasury += amount;
                 } else {
-                    if (commit.revealableAfter <= round.settledAt && round.state == RoundLib.RoundState.Tied) {
+                    if (commit.revealableAfter <= pastEpochCutoffAt && round.state == RoundLib.RoundState.Tied) {
                         // Past-epoch in a Tied round counts toward the cleanup queue but is refunded.
                         processedPastEpochCount++;
                     }

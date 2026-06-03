@@ -142,25 +142,25 @@ contract RoundVotingEngine is
 
     // Reward accounting per round
     mapping(uint256 => mapping(uint256 => uint256)) public roundVoterPool; // contentId => roundId => voter pool
-    mapping(uint256 => mapping(uint256 => uint256)) public roundWinningStake; // contentId => roundId => reward-distribution weight
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundWinningStake; // contentId => roundId => reward-distribution weight
 
     // Robust BTS reward accounting per round.
     mapping(uint256 => mapping(uint256 => bool)) public roundRbtsScored;
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsRewardWeight;
     mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsRewardClaimants;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsParticipationWeight;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsParticipationClaimants;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitedPool;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsForfeitClaimants;
-    mapping(uint256 => mapping(uint256 => uint16)) public roundRbtsMeanScoreBps;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsParticipationWeight;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsParticipationClaimants;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsForfeitedPool;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsForfeitClaimants;
+    mapping(uint256 => mapping(uint256 => uint16)) internal roundRbtsMeanScoreBps;
     mapping(uint256 => mapping(uint256 => bytes32)) public roundRbtsScoreSeed;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundThresholdReachedBlock;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundThresholdReachedBlock;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedUpBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsWeight;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRbtsScoreBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitRbtsRewardWeight;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitRbtsStakeReturned;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitRbtsForfeitedStake;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsForfeitedStake;
 
     // Cancelled/tied round refund claims: contentId => roundId => voter => claimed
     mapping(uint256 => mapping(uint256 => mapping(address => bool))) public cancelledRoundRefundClaimed;
@@ -193,7 +193,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) public roundFrontendPool;
     mapping(uint256 => mapping(uint256 => uint256)) public roundEligibleFrontendCount;
     mapping(uint256 => mapping(uint256 => address)) public roundRaterRegistrySnapshot;
-    mapping(uint256 => mapping(uint256 => address)) public roundAdvisoryVoteRecorderSnapshot;
+    mapping(uint256 => mapping(uint256 => address)) internal roundAdvisoryVoteRecorderSnapshot;
 
     // --- Events ---
     event VoteCommitted(
@@ -885,18 +885,16 @@ contract RoundVotingEngine is
         // Must have enough revealed votes for both the round config and Robust BTS.
         if (round.revealedCount < _rbtsRevealQuorum(roundCfg.minVoters)) revert NotEnoughVotes();
 
-        // Prevent selective revelation: all past-epoch commits must be revealed before settlement is allowed.
-        // Once the final reveal grace window has elapsed, revealed quorum is enough to settle and unrevealed
-        // past-epoch stakes stay locked until they are cleaned up.
-        // Loop is bounded: votes can only be committed during maxDuration, so no
-        // epochUnrevealedCount entries exist beyond startTime + maxDuration + epochDuration.
         uint256 unrevealedPastEpochCount;
-        if (round.voteCount > round.revealedCount) {
+        bool scoringClosed = roundRbtsSeedEntropy[contentId][roundId] != bytes32(0);
+        if (!scoringClosed && round.voteCount > round.revealedCount) {
             unrevealedPastEpochCount = _pastEpochUnrevealedCount(contentId, roundId, round, roundCfg);
             if (unrevealedPastEpochCount > 0) {
                 if (!_isSettlementRevealGraceElapsed(contentId, roundId, round)) revert UnrevealedPastEpochVotes();
                 roundUnrevealedCleanupRemaining[contentId][roundId] = unrevealedPastEpochCount;
             }
+        } else if (scoringClosed) {
+            unrevealedPastEpochCount = roundUnrevealedCleanupRemaining[contentId][roundId];
         }
 
         uint256 weightedRewardStake;
@@ -918,11 +916,16 @@ contract RoundVotingEngine is
             }
             // Tiebreak: smaller raw pool wins. Rationale: identical weighted pools with
             // different raw pools means the smaller-raw side achieved the same weight with
-            // fewer tokens → more concentration in early epochs → "more informed" voters.
+            // fewer tokens -> more concentration in early epochs -> "more informed" voters.
             // This inverts the conventional raw-majority-breaks-tie convention intentionally.
             upWins = round.upPool < round.downPool;
         }
         binaryLosingPool = upWins ? round.downPool : round.upPool;
+
+        if (!scoringClosed) {
+            RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
+            return;
+        }
 
         (weightedRewardStake, rbtsForfeitedPool, scoreSeed) =
             _scoreRbtsRewards(contentId, roundId, round.revealedCount, round.thresholdReachedAt);
@@ -1030,6 +1033,7 @@ contract RoundVotingEngine is
             lrepToken,
             protocolConfig,
             accountedLrepBalance,
+            uint48(uint256(roundRbtsSeedEntropy[contentId][roundId]) >> 64),
             msg.sender,
             startIndex,
             count
@@ -1322,11 +1326,11 @@ contract RoundVotingEngine is
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
+        if (roundRbtsSeedEntropy[contentId][roundId] != bytes32(0)) revert UnrevealedPastEpochVotes();
         uint256 thresholdBlock = roundThresholdReachedBlock[contentId][roundId];
         if (thresholdBlock != 0 && _isSettlementRevealGraceElapsed(contentId, roundId, round)) {
             revert UnrevealedPastEpochVotes();
         }
-        bool countForSettlement = thresholdBlock == 0;
         (
             uint256 eligibleFrontendStake,
             uint256 eligibleFrontendCount,
@@ -1352,33 +1356,25 @@ contract RoundVotingEngine is
                 minVoters: _rbtsRevealQuorum(roundCfg.minVoters),
                 targetRoundRevealableAt: targetRoundRevealableAt,
                 drandChainHash: _getRoundDrandChainHash(contentId, roundId),
-                countForSettlement: countForSettlement
+                countForSettlement: true
             })
         );
         roundStakeWithEligibleFrontend[contentId][roundId] = eligibleFrontendStake;
         roundEligibleFrontendCount[contentId][roundId] = eligibleFrontendCount;
         if (thresholdBlock == 0 && round.thresholdReachedAt != 0) {
             roundThresholdReachedBlock[contentId][roundId] = block.number;
-            RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         }
         commitPredictedUpBps[contentId][roundId][commitKey] = predictedUpBps;
-        // L-Vote-B / H-Vote-1: settlement pools and RBTS scoring use the same cutoff for all
-        // post-quorum reveals. The delayed RBTS seed makes settlement impossible in the
-        // quorum-closing block, so later-block reveals must be stake-return-only as well.
-        if (countForSettlement) {
-            commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
-        }
+        commitRbtsWeight[contentId][roundId][commitKey] = effectiveStake;
         // L-Vote-A: keep evidence accumulation checked so a future governance proposal that
         // raises `maxVoters` past ~9.2e12 cannot silently truncate the uint64 counter. The
         // current bound is well below that, but the `unchecked` block was a bytecode-trim
         // micro-optimization that traded a real (if remote) safety guarantee for a few hundred
         // gas. Restore the default checked arithmetic here.
-        if (countForSettlement) {
-            if (isUp) {
-                roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
-            } else {
-                roundRatingDownEvidence[contentId][roundId] += ratingEvidenceWeight;
-            }
+        if (isUp) {
+            roundRatingUpEvidence[contentId][roundId] += ratingEvidenceWeight;
+        } else {
+            roundRatingDownEvidence[contentId][roundId] += ratingEvidenceWeight;
         }
 
         emit VoteRevealed(contentId, roundId, voter, isUp);
@@ -1516,7 +1512,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint256))) internal epochUnrevealedCount;
 
     // Per-round reveal grace period snapshot for governance consistency across open rounds.
-    mapping(uint256 => mapping(uint256 => uint256)) public roundRevealGracePeriodSnapshot;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundRevealGracePeriodSnapshot;
 
     // Per-round drand config snapshot so reveal timing stays stable across governance updates.
     mapping(uint256 => mapping(uint256 => bytes32)) internal roundDrandChainHashSnapshot;
@@ -1540,8 +1536,8 @@ contract RoundVotingEngine is
 
     // Bounded binary signal evidence used for public rating movement. Reward and payout
     // accounting continue to use stake-weighted RBTS weights.
-    mapping(uint256 => mapping(uint256 => uint64)) public roundRatingUpEvidence;
-    mapping(uint256 => mapping(uint256 => uint64)) public roundRatingDownEvidence;
+    mapping(uint256 => mapping(uint256 => uint64)) internal roundRatingUpEvidence;
+    mapping(uint256 => mapping(uint256 => uint64)) internal roundRatingDownEvidence;
 
     // Commit timestamp used for bounty eligibility.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint48))) public commitCommittedAt;
@@ -1556,11 +1552,11 @@ contract RoundVotingEngine is
     // credential. `cancelExpiredRound` requires this flag before the min-RBTS-quorum cancel-lockout
     // engages -- attacker-only rounds (all non-HRC sybils) remain refund-cancellable so they
     // cannot grief honest content into a RevealFailed cycle.
-    mapping(uint256 => mapping(uint256 => bool)) public roundHasHumanVerifiedCommit;
+    mapping(uint256 => mapping(uint256 => bool)) internal roundHasHumanVerifiedCommit;
 
-    // Entropy captured when reveal quorum first closes the commit set; RBTS settlement uses this
-    // stored value so the settlement caller cannot grind the sampler by reverting unfavorable runs.
-    mapping(uint256 => mapping(uint256 => bytes32)) public roundRbtsSeedEntropy;
+    // Delayed seed marker captured when settlement closes the scoring set; the marker packs
+    // closure timestamp and seed block so cleanup uses the original scoring cutoff.
+    mapping(uint256 => mapping(uint256 => bytes32)) internal roundRbtsSeedEntropy;
 
     /// @notice Timestamp when a settled round's payout source became fully auditable.
     /// @dev For rounds without stale unrevealed votes this equals `settledAt`; otherwise it is

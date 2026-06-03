@@ -18,6 +18,7 @@ library RoundRevealLib {
     uint64 internal constant RATING_EVIDENCE_STAKE_BONUS_CAP = 10_000_000;
     uint64 internal constant RATING_EVIDENCE_MAX_STAKE_BONUS = 1_000_000;
     uint256 internal constant RBTS_SEED_BLOCK_FLAG = 1 << 255;
+    uint256 internal constant RBTS_SEED_TIMESTAMP_SHIFT = 64;
 
     error RoundNotOpen();
     error NoCommit();
@@ -179,12 +180,11 @@ library RoundRevealLib {
 
         if (params.thresholdReachedAt == 0) revert NotEnoughVotes();
 
-        // M-Vote-7: the sampler SEED is hashed over the threshold-frozen SCORING set
-        // (revealed commits with pre-threshold RBTS weight, in commit order), so unrevealed
+        // The sampler seed is hashed over the settlement-closed scoring set
+        // (revealed commits with RBTS weight, in commit order), so unrevealed
         // current-epoch commits that are allowed to settle/refund cannot grind reward draws.
-        // The sampler INDEX SPACE is frozen to commits whose RBTS weight was recorded before
-        // reveal threshold. This avoids block.timestamp ambiguity for post-threshold reveals
-        // included in the same block as the quorum-closing reveal.
+        // The engine rejects reveals after closure, keeping the sampler index space stable
+        // between seed capture and final settlement.
         uint256 committedCount = commitKeys.length;
         bytes32[] memory revealedKeysMem = new bytes32[](committedCount);
         bytes32 scoringSetHash;
@@ -225,7 +225,7 @@ library RoundRevealLib {
             return result;
         }
 
-        // Seed combines post-threshold entropy with the threshold-frozen scoring set.
+        // Seed combines delayed closure entropy with the settlement-closed scoring set.
         result.scoreSeed = _rbtsScoreSeed(
             params.contentId, params.roundId, revealedBuildIdx, scoringSetHash, params.settlementEntropy
         );
@@ -284,7 +284,7 @@ library RoundRevealLib {
     ) public view returns (bool) {
         uint256 seedWord = uint256(roundRbtsSeedEntropy[contentId][roundId]);
         if (seedWord < RBTS_SEED_BLOCK_FLAG) return false;
-        uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
+        uint256 seedBlock = uint64(seedWord);
         return block.number > seedBlock && blockhash(seedBlock) == bytes32(0);
     }
 
@@ -297,7 +297,7 @@ library RoundRevealLib {
         uint256 seedWord = uint256(settlementEntropy);
         if (seedWord < RBTS_SEED_BLOCK_FLAG) return (settlementEntropy, false);
 
-        uint256 seedBlock = seedWord ^ RBTS_SEED_BLOCK_FLAG;
+        uint256 seedBlock = uint64(seedWord);
         if (block.number <= seedBlock) revert RevealGraceActive();
         bytes32 seedBlockhash = blockhash(seedBlock);
         if (seedBlockhash == bytes32(0)) {
@@ -312,7 +312,6 @@ library RoundRevealLib {
                     settlementEntropy
                 )
             );
-            roundRbtsSeedEntropy[contentId][roundId] = settlementEntropy;
             emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
             return (settlementEntropy, expiredSeed);
         }
@@ -327,7 +326,6 @@ library RoundRevealLib {
                 seedBlockhash
             )
         );
-        roundRbtsSeedEntropy[contentId][roundId] = settlementEntropy;
         emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
         return (settlementEntropy, false);
     }
@@ -343,7 +341,10 @@ library RoundRevealLib {
         uint256 contentId,
         uint256 roundId
     ) private {
-        bytes32 seedBlockMarker = bytes32(RBTS_SEED_BLOCK_FLAG | block.number);
+        bytes32 seedBlockMarker = bytes32(
+            RBTS_SEED_BLOCK_FLAG | (uint256(block.timestamp.toUint48()) << RBTS_SEED_TIMESTAMP_SHIFT)
+                | uint256(block.number.toUint64())
+        );
         roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
         emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
     }
@@ -560,14 +561,14 @@ library RoundRevealLib {
     /// @dev The seed binds:
     ///      - `block.chainid` and `address(this)` (cross-chain / cross-engine replay protection),
     ///      - `contentId` / `roundId` (per-round uniqueness),
-    ///      - `scoringSetCount` and `scoringSetHash` (M-Vote-7: the threshold-frozen RBTS
+    ///      - `scoringSetCount` and `scoringSetHash` (the settlement-closed RBTS
     ///        scoring set in commit order, excluding unrevealed current-epoch commits that are
-    ///        allowed to settle/refund and post-threshold stake-return-only reveals),
-    ///      - `settlementEntropy`, captured when reveal quorum first closes the commit set so
+    ///        allowed to settle/refund),
+    ///      - `settlementEntropy`, captured when settlement closes the scoring set so
     ///        neither the last committer nor the settlement caller can overwrite the entropy while
     ///        choosing whether to proceed.
-    ///      Together the post-threshold entropy + M-Vote-7 make the seed fixed after reveal
-    ///      threshold and invariant to non-scoring commits.
+    ///      Together the delayed entropy and closed scoring set make the seed fixed after closure
+    ///      and invariant to non-scoring commits.
     function _rbtsScoreSeed(
         uint256 contentId,
         uint256 roundId,
@@ -597,7 +598,7 @@ library RoundRevealLib {
         pure
         returns (uint256)
     {
-        // Deterministic sampler over the threshold-frozen scoring set.
+        // Deterministic sampler over the settlement-closed scoring set.
         // slither-disable-next-line weak-prng
         uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, domain))) % (count - 1);
         return drawn >= ownIndex ? drawn + 1 : drawn;
@@ -608,7 +609,7 @@ library RoundRevealLib {
         pure
         returns (uint256)
     {
-        // Deterministic sampler over the threshold-frozen scoring set.
+        // Deterministic sampler over the settlement-closed scoring set.
         // slither-disable-next-line weak-prng
         uint256 drawn = uint256(keccak256(abi.encodePacked(seed, drawKey, ownIndex, uint8(2)))) % (count - 2);
         uint256 firstExcluded = ownIndex < referenceIndex ? ownIndex : referenceIndex;

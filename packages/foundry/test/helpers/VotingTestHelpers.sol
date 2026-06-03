@@ -15,6 +15,7 @@ import { RatingLib } from "../../contracts/libraries/RatingLib.sol";
 import { RoundLib } from "../../contracts/libraries/RoundLib.sol";
 import { MockWorldIDRouter } from "../../contracts/mocks/MockWorldIDRouter.sol";
 import { MockQuestionRewardPoolEscrow } from "../mocks/MockQuestionRewardPoolEscrow.sol";
+import { RoundEngineReadHelpers } from "./RoundEngineReadHelpers.sol";
 
 function deployInitializedProtocolConfig(address admin) returns (ProtocolConfig protocolConfig) {
     return deployInitializedProtocolConfig(admin, admin);
@@ -540,11 +541,125 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     bytes internal constant TEST_MAC_LINE_PREFIX = "--- ";
     bytes internal constant TEST_PAYLOAD_LINE_PREFIX = "payload ";
     uint256 internal constant TEST_AGE_LINE_CHUNK_SIZE = 64;
+    uint256 internal constant ROUND_WINNING_STAKE_SLOT = 10;
+    uint256 internal constant ROUND_RBTS_FORFEITED_POOL_SLOT = 16;
+    uint256 internal constant COMMIT_RBTS_FORFEITED_STAKE_SLOT = 26;
+    uint256 internal constant ROUND_ADVISORY_VOTE_RECORDER_SNAPSHOT_SLOT = 45;
+    uint256 internal constant ROUND_REVEAL_GRACE_PERIOD_SNAPSHOT_SLOT = 48;
+    uint256 internal constant ROUND_RATING_UP_EVIDENCE_SLOT = 57;
+    uint256 internal constant ROUND_RATING_DOWN_EVIDENCE_SLOT = 58;
+    uint256 internal constant ROUND_HAS_HUMAN_VERIFIED_COMMIT_SLOT = 61;
     ProtocolConfig internal activeTlockProtocolConfig;
     bytes32 internal activeTlockDrandChainHash = DEFAULT_DRAND_CHAIN_HASH;
     uint64 internal activeTlockDrandGenesisTime = DEFAULT_DRAND_GENESIS_TIME;
     uint64 internal activeTlockDrandPeriod = DEFAULT_DRAND_PERIOD;
     uint256 internal activeTlockEpochDuration = DEFAULT_TLOCK_EPOCH_DURATION;
+
+    function _doubleUintMappingSlot(uint256 baseSlot, uint256 key1, uint256 key2) internal pure returns (bytes32) {
+        return keccak256(abi.encode(key2, keccak256(abi.encode(key1, baseSlot))));
+    }
+
+    function _tripleUintBytes32MappingSlot(uint256 baseSlot, uint256 key1, uint256 key2, bytes32 key3)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(key3, keccak256(abi.encode(key2, keccak256(abi.encode(key1, baseSlot))))));
+    }
+
+    function _roundRbtsForfeitedPool(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256)
+    {
+        return uint256(
+            HEVM.load(address(engine), _doubleUintMappingSlot(ROUND_RBTS_FORFEITED_POOL_SLOT, contentId, roundId))
+        );
+    }
+
+    function _roundWinningStake(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256)
+    {
+        return uint256(HEVM.load(address(engine), _doubleUintMappingSlot(ROUND_WINNING_STAKE_SLOT, contentId, roundId)));
+    }
+
+    function _roundAdvisoryVoteRecorderSnapshot(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (address)
+    {
+        return address(
+            uint160(
+                uint256(
+                    HEVM.load(
+                        address(engine),
+                        _doubleUintMappingSlot(ROUND_ADVISORY_VOTE_RECORDER_SNAPSHOT_SLOT, contentId, roundId)
+                    )
+                )
+            )
+        );
+    }
+
+    function _roundRevealGracePeriodSnapshot(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256)
+    {
+        return uint256(
+            HEVM.load(
+                address(engine), _doubleUintMappingSlot(ROUND_REVEAL_GRACE_PERIOD_SNAPSHOT_SLOT, contentId, roundId)
+            )
+        );
+    }
+
+    function _commitRbtsForfeitedStake(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (uint256)
+    {
+        return uint256(
+            HEVM.load(
+                address(engine),
+                _tripleUintBytes32MappingSlot(COMMIT_RBTS_FORFEITED_STAKE_SLOT, contentId, roundId, commitKey)
+            )
+        );
+    }
+
+    function _roundRatingUpEvidence(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint64)
+    {
+        return uint64(
+            uint256(
+                HEVM.load(address(engine), _doubleUintMappingSlot(ROUND_RATING_UP_EVIDENCE_SLOT, contentId, roundId))
+            )
+        );
+    }
+
+    function _roundRatingDownEvidence(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint64)
+    {
+        return uint64(
+            uint256(
+                HEVM.load(address(engine), _doubleUintMappingSlot(ROUND_RATING_DOWN_EVIDENCE_SLOT, contentId, roundId))
+            )
+        );
+    }
+
+    function _roundHasHumanVerifiedCommit(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (bool)
+    {
+        return uint256(
+            HEVM.load(address(engine), _doubleUintMappingSlot(ROUND_HAS_HUMAN_VERIFIED_COMMIT_SLOT, contentId, roundId))
+        ) != 0;
+    }
 
     function _deployProtocolConfig(address admin) internal returns (ProtocolConfig protocolConfig) {
         return _deployProtocolConfig(admin, admin);
@@ -855,7 +970,12 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     }
 
     function _settleAfterRbtsSeed(RoundVotingEngine engine, uint256 contentId, uint256 roundId) internal {
-        vm.roll(block.number + 1);
+        uint256 seedBlock = block.number + 1;
+        vm.roll(seedBlock);
+        engine.settleRound(contentId, roundId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        if (round.state != RoundLib.RoundState.Open) return;
+        vm.roll(seedBlock + 1);
         engine.settleRound(contentId, roundId);
     }
 

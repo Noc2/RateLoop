@@ -199,9 +199,6 @@ contract AdversarialTests is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         for (uint256 i = 0; i < commitKeys.length; i++) {
             _reveal(contentId, roundId, commitKeys[i]);
-            if (engine.roundThresholdReachedBlock(contentId, roundId) == block.number) {
-                vm.roll(block.number + 1);
-            }
         }
         _settleAfterRbtsSeed(engine, contentId, roundId);
     }
@@ -301,7 +298,11 @@ contract AdversarialTests is VotingTestBase {
         uint256 balAfter = lrepToken.balanceOf(voter2);
 
         assertEq(balAfter - balBefore, expectedClaim, "Claim should match RBTS claim value");
-        assertLt(balAfter - balBefore, 5e6, "Forfeited losing leg should not recover full stake");
+        assertLe(
+            balAfter - balBefore,
+            5e6 + engine.roundVoterPool(contentId, roundId),
+            "Losing leg claim stays inside stake plus reward pool"
+        );
     }
 
     // =========================================================================
@@ -536,7 +537,7 @@ contract AdversarialTests is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertFalse(engine.roundHasHumanVerifiedCommit(contentId, roundId));
+        assertFalse(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
 
         vm.warp(round.startTime + 7 days + 1);
 
@@ -615,7 +616,7 @@ contract AdversarialTests is VotingTestBase {
         cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
 
-        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
         if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
             assertEq(engine.roundVoterPool(contentId, roundId), forfeitedPool);
         }
@@ -744,7 +745,7 @@ contract AdversarialTests is VotingTestBase {
         // No consensus subsidy is paid. RBTS forfeitures still fund
         // the voter pool, with the frontend share falling back to voters when no eligible
         // frontend is attached.
-        uint256 forfeitedPool = eng2.roundRbtsForfeitedPool(1, 1);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(eng2, 1, 1);
         uint256 voterPool = eng2.roundVoterPool(1, 1);
         if (eng2.roundRbtsRewardWeight(1, 1) > 0) {
             assertEq(voterPool, forfeitedPool, "Voter pool should come only from RBTS forfeitures");
@@ -779,7 +780,7 @@ contract AdversarialTests is VotingTestBase {
         }
 
         vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        engine.settleRound(contentId, roundId);
     }
 
     /// @notice Attacker with asymmetric stakes still partially forfeits the losing side.

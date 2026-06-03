@@ -179,6 +179,24 @@ contract SelectiveRevelationTest is VotingTestBase {
         revert("RbtsRewardsScored event not emitted");
     }
 
+    function _settlementEntropyFromLogs(Vm.Log[] memory logs, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (bytes32 settlementEntropy)
+    {
+        bytes32 expectedTopic = keccak256("RbtsSeedCaptured(uint256,uint256,bytes32)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (
+                logs[i].emitter == address(engine) && logs[i].topics.length == 3 && logs[i].topics[0] == expectedTopic
+                    && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
+            ) {
+                settlementEntropy = abi.decode(logs[i].data, (bytes32));
+            }
+        }
+        if (settlementEntropy != bytes32(0)) return settlementEntropy;
+        revert("RbtsSeedCaptured event not emitted");
+    }
+
     function _submitContent() internal returns (uint256 contentId) {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
@@ -217,8 +235,9 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[6], false, salts[6]);
 
         // Settlement should revert — 7 unrevealed past-epoch votes remain within grace period
+        vm.roll(block.number + 1);
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        engine.settleRound(contentId, roundId);
     }
 
     /// @notice Same scenario but all 10 votes are revealed — settlement succeeds.
@@ -306,9 +325,15 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, false, s3);
 
+        uint256 seedBlock = block.number + 1;
+        vm.roll(seedBlock);
+        engine.settleRound(contentId, roundId);
+        vm.roll(seedBlock + 1);
         vm.recordLogs();
-        _settleAfterRbtsSeed(engine, contentId, roundId);
-        bytes32 actualSeed = _scoreSeedFromLogs(vm.getRecordedLogs(), contentId, roundId);
+        engine.settleRound(contentId, roundId);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 actualSeed = _scoreSeedFromLogs(logs, contentId, roundId);
+        bytes32 settlementEntropy = _settlementEntropyFromLogs(logs, contentId, roundId);
 
         bytes32 scoringSetHash;
         scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, ck1));
@@ -316,13 +341,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         scoringSetHash = keccak256(abi.encodePacked(scoringSetHash, ck3));
         bytes32 expectedSeed = keccak256(
             abi.encode(
-                block.chainid,
-                address(engine),
-                contentId,
-                roundId,
-                uint256(3),
-                scoringSetHash,
-                engine.roundRbtsSeedEntropy(contentId, roundId)
+                block.chainid, address(engine), contentId, roundId, uint256(3), scoringSetHash, settlementEntropy
             )
         );
 
@@ -331,13 +350,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         pollutedSetHash = keccak256(abi.encodePacked(pollutedSetHash, currentEpochKey2));
         bytes32 pollutedSeed = keccak256(
             abi.encode(
-                block.chainid,
-                address(engine),
-                contentId,
-                roundId,
-                uint256(5),
-                pollutedSetHash,
-                engine.roundRbtsSeedEntropy(contentId, roundId)
+                block.chainid, address(engine), contentId, roundId, uint256(5), pollutedSetHash, settlementEntropy
             )
         );
 
@@ -368,13 +381,13 @@ contract SelectiveRevelationTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
-        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
         if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
             assertEq(engine.roundVoterPool(contentId, roundId), forfeitedPool);
         }
     }
 
-    function test_FirstSettleableBlockPostThresholdRevealCannotMoveSettlementOrEnterRbtsScoringSet() public {
+    function test_FirstSettleableBlockPostThresholdRevealCountsAndCanFlipSettlement() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, 1e6);
@@ -390,8 +403,6 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, ck2, true, s2);
         _reveal(contentId, roundId, ck3, true, s3);
 
-        // Settlement cannot finalize in the quorum-closing block because the delayed RBTS seed
-        // needs that blockhash. A first-settleable-block reveal must still be stake-return-only.
         vm.warp(block.timestamp + 1);
         vm.roll(block.number + 1);
         RoundLib.Round memory beforeLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -399,35 +410,40 @@ contract SelectiveRevelationTest is VotingTestBase {
         uint256 downPoolBefore = beforeLateReveal.downPool;
         uint256 weightedUpPoolBefore = beforeLateReveal.weightedUpPool;
         uint256 weightedDownPoolBefore = beforeLateReveal.weightedDownPool;
-        uint256 upEvidenceBefore = engine.roundRatingUpEvidence(contentId, roundId);
-        uint256 downEvidenceBefore = engine.roundRatingDownEvidence(contentId, roundId);
+        uint256 upEvidenceBefore = _roundRatingUpEvidence(engine, contentId, roundId);
+        uint256 downEvidenceBefore = _roundRatingDownEvidence(engine, contentId, roundId);
         uint256 frontendStakeBefore = engine.roundStakeWithEligibleFrontend(contentId, roundId);
 
         _reveal(contentId, roundId, ck4, false, s4);
         RoundLib.Round memory afterLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(afterLateReveal.upPool, upPoolBefore, "late reveal cannot move up pool");
-        assertEq(afterLateReveal.downPool, downPoolBefore, "late reveal cannot move down pool");
-        assertEq(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "late reveal cannot move weighted up");
-        assertEq(afterLateReveal.weightedDownPool, weightedDownPoolBefore, "late reveal cannot move weighted down");
-        assertEq(engine.roundRatingUpEvidence(contentId, roundId), upEvidenceBefore, "late reveal adds up evidence");
+        assertEq(afterLateReveal.upPool, upPoolBefore, "late reveal keeps up pool");
+        assertEq(afterLateReveal.downPool, downPoolBefore + 10e6, "late reveal moves down pool");
+        assertEq(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "late reveal keeps weighted up");
+        assertEq(afterLateReveal.weightedDownPool, weightedDownPoolBefore + 10e6, "late reveal moves weighted down");
+        assertEq(_roundRatingUpEvidence(engine, contentId, roundId), upEvidenceBefore, "late reveal adds up evidence");
         assertEq(
-            engine.roundRatingDownEvidence(contentId, roundId), downEvidenceBefore, "late reveal adds down evidence"
+            _roundRatingDownEvidence(engine, contentId, roundId),
+            downEvidenceBefore + 2_000_000,
+            "late reveal adds down evidence"
         );
         assertEq(engine.roundStakeWithEligibleFrontend(contentId, roundId), frontendStakeBefore, "late frontend stake");
-        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "late reveal omitted");
+        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 10e6, "late reveal scored");
 
-        engine.settleRound(contentId, roundId);
+        _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertTrue(settled.upWins, "late down reveal cannot flip settlement");
+        assertFalse(settled.upWins, "late down reveal flips settlement");
         assertGt(engine.commitRbtsScoringWeight(contentId, roundId, ck1), 0, "threshold reveal set scored");
-        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "late reveal has no scoring weight");
-        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck4), 0, "late reveal has no RBTS reward");
-        assertEq(engine.commitRbtsForfeitedStake(contentId, roundId, ck4), 0, "late reveal has no RBTS forfeit");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 10e6, "late reveal gets stake back");
+        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 10e6, "late reveal has scoring weight");
+        assertEq(
+            engine.commitRbtsStakeReturned(contentId, roundId, ck4)
+                + _commitRbtsForfeitedStake(engine, contentId, roundId, ck4),
+            10e6,
+            "late reveal stake accounted through RBTS"
+        );
     }
 
-    function test_SameBlockPostThresholdRevealCannotMoveSettlementOrEnterRbtsScoringSet() public {
+    function test_SameBlockPostThresholdRevealCountsAndCanFlipSettlement() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, 1e6);
@@ -448,31 +464,71 @@ contract SelectiveRevelationTest is VotingTestBase {
         uint256 downPoolBefore = beforeLateReveal.downPool;
         uint256 weightedUpPoolBefore = beforeLateReveal.weightedUpPool;
         uint256 weightedDownPoolBefore = beforeLateReveal.weightedDownPool;
-        uint256 upEvidenceBefore = engine.roundRatingUpEvidence(contentId, roundId);
-        uint256 downEvidenceBefore = engine.roundRatingDownEvidence(contentId, roundId);
+        uint256 upEvidenceBefore = _roundRatingUpEvidence(engine, contentId, roundId);
+        uint256 downEvidenceBefore = _roundRatingDownEvidence(engine, contentId, roundId);
 
         _reveal(contentId, roundId, ck4, false, s4);
 
         RoundLib.Round memory afterLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(afterLateReveal.upPool, upPoolBefore, "same-block late reveal cannot move up pool");
-        assertEq(afterLateReveal.downPool, downPoolBefore, "same-block late reveal cannot move down pool");
-        assertEq(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "same-block late reveal cannot move up weight");
+        assertEq(afterLateReveal.upPool, upPoolBefore, "same-block late reveal keeps up pool");
+        assertEq(afterLateReveal.downPool, downPoolBefore + 10e6, "same-block late reveal moves down pool");
+        assertEq(afterLateReveal.weightedUpPool, weightedUpPoolBefore, "same-block late reveal keeps up weight");
         assertEq(
-            afterLateReveal.weightedDownPool, weightedDownPoolBefore, "same-block late reveal cannot move down weight"
+            afterLateReveal.weightedDownPool, weightedDownPoolBefore + 10e6, "same-block late reveal moves down weight"
         );
-        assertEq(engine.roundRatingUpEvidence(contentId, roundId), upEvidenceBefore, "same-block late up evidence");
+        assertEq(_roundRatingUpEvidence(engine, contentId, roundId), upEvidenceBefore, "same-block late up evidence");
         assertEq(
-            engine.roundRatingDownEvidence(contentId, roundId), downEvidenceBefore, "same-block late down evidence"
+            _roundRatingDownEvidence(engine, contentId, roundId),
+            downEvidenceBefore + 2_000_000,
+            "same-block late down evidence"
         );
-        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "same-block late reveal omitted");
+        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 10e6, "same-block late reveal scored");
+
+        _settleAfterRbtsSeed(engine, contentId, roundId);
+
+        RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertFalse(settled.upWins, "same-block down reveal flips settlement");
+        assertEq(
+            engine.commitRbtsStakeReturned(contentId, roundId, ck4)
+                + _commitRbtsForfeitedStake(engine, contentId, roundId, ck4),
+            10e6,
+            "same-block late reveal stake accounted through RBTS"
+        );
+    }
+
+    function test_RevealAfterSettlementClosureRevertsBeforeMutation() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commit(voters[0], contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voters[1], contentId, true, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voters[2], contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r.startTime) + EPOCH);
+
+        (bytes32 ck4, bytes32 s4) = _commit(voters[3], contentId, false, STAKE);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, true, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
 
         vm.roll(block.number + 1);
         engine.settleRound(contentId, roundId);
 
-        RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertTrue(settled.upWins, "same-block down backrun cannot flip settlement");
-        assertEq(engine.commitRbtsRewardWeight(contentId, roundId, ck4), 0, "late reveal has no RBTS reward");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 10e6, "late reveal gets stake back");
+        RoundLib.Round memory beforeReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        (,,,, bool revealedBefore,,) = engine.commitCore(contentId, roundId, ck4);
+        assertFalse(revealedBefore, "commit starts unrevealed");
+
+        _warpPastTlockRevealTime(uint256(r.startTime) + 2 * EPOCH);
+        vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
+        _reveal(contentId, roundId, ck4, false, s4);
+
+        RoundLib.Round memory afterReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        (,,,, bool revealedAfter,,) = engine.commitCore(contentId, roundId, ck4);
+        assertFalse(revealedAfter, "post-closure reveal does not mutate commit");
+        assertEq(afterReveal.revealedCount, beforeReveal.revealedCount, "revealed count unchanged");
+        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "RBTS weight unchanged");
     }
 
     // =========================================================================
@@ -541,7 +597,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
-        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
         if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
             assertEq(engine.roundVoterPool(contentId, roundId), forfeitedPool);
         }
@@ -601,8 +657,9 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[2], false, salts[2]);
 
         // Settlement blocked — 1 unrevealed vote within grace period
+        vm.roll(block.number + 1);
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        engine.settleRound(contentId, roundId);
     }
 
     // =========================================================================
@@ -680,7 +737,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        assertEq(engine.roundRevealGracePeriodSnapshot(contentId, roundId), GRACE_PERIOD);
+        assertEq(_roundRevealGracePeriodSnapshot(engine, contentId, roundId), GRACE_PERIOD);
 
         ProtocolConfig cfg = ProtocolConfig(address(engine.protocolConfig()));
         vm.prank(owner);
@@ -715,7 +772,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        assertEq(engine.roundRevealGracePeriodSnapshot(contentId, roundId), 2 hours);
+        assertEq(_roundRevealGracePeriodSnapshot(engine, contentId, roundId), 2 hours);
 
         uint256 lastRevealableAfter = engine.lastCommitRevealableAfter(contentId, roundId);
         vm.warp(lastRevealableAfter + GRACE_PERIOD + 1);
@@ -724,8 +781,9 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[1], true, salts[1]);
         _reveal(contentId, roundId, commitKeys[2], false, salts[2]);
 
+        vm.roll(block.number + 1);
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        engine.settleRound(contentId, roundId);
 
         vm.warp(lastRevealableAfter + 2 hours + 1);
         _settleAfterRbtsSeed(engine, contentId, roundId);
@@ -767,7 +825,8 @@ contract SelectiveRevelationTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(r.startTime) + 2 * EPOCH);
 
         // Settlement blocked — epoch-2 has unrevealed vote within grace period
+        vm.roll(block.number + 1);
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        engine.settleRound(contentId, roundId);
     }
 }

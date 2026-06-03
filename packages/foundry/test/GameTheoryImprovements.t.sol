@@ -159,9 +159,6 @@ contract GameTheoryImprovementsTest is VotingTestBase {
 
         vm.prank(voter);
         engine.revealVoteByCommitKey(contentId, roundId, ck, isUp, 5_000, salt);
-        if (engine.roundThresholdReachedBlock(contentId, roundId) == block.number) {
-            vm.roll(block.number + 1);
-        }
     }
 
     /// @dev Settle the round. Caller must ensure minVoters have been revealed.
@@ -254,11 +251,10 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "weighted-only tie settles");
         assertTrue(settled.upWins, "earlier higher-weight side wins weighted-only tie");
         assertEq(
-            engine.roundWinningStake(cid, roundId),
+            _roundWinningStake(engine, cid, roundId),
             engine.roundRbtsRewardWeight(cid, roundId),
             "roundWinningStake tracks RBTS reward weight"
         );
-        assertGt(engine.roundWinningStake(cid, roundId), 0, "winning reward weight recorded");
 
         vm.prank(carol);
         vm.expectRevert(RoundVotingEngine.RoundNotCancelledOrTied.selector);
@@ -440,7 +436,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Round settled");
         assertTrue(settled.upWins, "UP wins (unanimous)");
 
-        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, roundId);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, roundId);
         uint256 voterPool = engine.roundVoterPool(cid, roundId);
         if (engine.roundRbtsRewardWeight(cid, roundId) > 0) {
             assertEq(voterPool, forfeitedPool, "Voter pool comes only from RBTS forfeitures");

@@ -347,6 +347,19 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
+    "name": "accountPrefundedPoolDeposit",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "authorizedCallers",
     "inputs": [
       {

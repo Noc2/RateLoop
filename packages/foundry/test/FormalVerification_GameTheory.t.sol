@@ -157,21 +157,24 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
                 (bool up, bytes32 s, bool exists) = _testRevealPayload(keys[i]);
                 if (exists) {
                     try engine.revealVoteByCommitKey(cid, roundId, keys[i], up, 5_000, s) { } catch { }
-                    if (engine.roundThresholdReachedBlock(cid, roundId) == block.number) {
-                        vm.roll(block.number + 1);
-                    }
                 }
             }
         }
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(engine, cid, roundId);
         if (r2.thresholdReachedAt > 0) {
-            vm.roll(block.number + 1);
+            uint256 seedBlock = block.number + 1;
+            vm.roll(seedBlock);
             try engine.settleRound(cid, roundId) { } catch { }
+            RoundLib.Round memory r3 = RoundEngineReadHelpers.round(engine, cid, roundId);
+            if (r3.state == RoundLib.RoundState.Open) {
+                vm.roll(seedBlock + 1);
+                try engine.settleRound(cid, roundId) { } catch { }
+            }
         }
     }
 
     function _rbtsConsensusShare(uint256 cid, uint256 rid) internal view returns (uint256) {
-        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, rid);
         uint256 loserRefundShare = (forfeitedPool * 500) / 10_000;
         return ((forfeitedPool - loserRefundShare) * 500) / 10_000;
     }
@@ -347,7 +350,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         // Consensus settlement after maxEpochBlocks
         _forceSettle(cid);
 
-        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, rid);
         if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
             assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
         }
@@ -505,7 +508,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
             RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
             assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled), "Round settled");
-            uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
+            uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, rid);
             if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
                 assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
             }
@@ -534,7 +537,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             _vote(v[4], cid, false, 5e6);
             uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
             _forceSettle(cid);
-            uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
+            uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, rid);
             if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
                 uint256 voterPool = engine.roundVoterPool(cid, rid);
                 assertLe(voterPool, forfeitedPool, "Voter pool cannot exceed forfeitures");
@@ -553,7 +556,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             }
             uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
             _forceSettle(cid);
-            uint256 forfeitedPool = engine.roundRbtsForfeitedPool(cid, rid);
+            uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, rid);
             if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
                 assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
             }
@@ -609,7 +612,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         vm.warp(block.timestamp + 1 hours + 1);
 
         vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
-        _settleAfterRbtsSeed(engine, cid, rid);
+        engine.settleRound(cid, rid);
     }
 
     // ==================== Test 14: Tied Round - Full Refund ====================

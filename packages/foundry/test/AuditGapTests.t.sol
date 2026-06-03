@@ -563,7 +563,7 @@ contract AuditGapTests is VotingTestBase {
         vm.warp(block.timestamp + 60 minutes + 1);
         _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
-        uint256 forfeitedPool = votingEngine.roundRbtsForfeitedPool(contentId, 1);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(votingEngine, contentId, 1);
         if (votingEngine.roundRbtsRewardWeight(contentId, 1) > 0) {
             assertEq(votingEngine.roundVoterPool(contentId, 1), forfeitedPool, "Voter pool should equal forfeitures");
         }

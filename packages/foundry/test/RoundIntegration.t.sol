@@ -423,9 +423,6 @@ contract RoundIntegrationTest is VotingTestBase {
             votingEngine.revealVoteByCommitKey(
                 contentId, roundId, commitKeys[i], directions[i], _defaultPredictionBps(i, directions[i]), salts[i]
             );
-            if (votingEngine.roundThresholdReachedBlock(contentId, roundId) == block.number) {
-                vm.roll(block.number + 1);
-            }
         }
     }
 
@@ -1890,7 +1887,7 @@ contract RoundIntegrationTest is VotingTestBase {
         assertTrue(round.upWins, "UP should win by consensus");
 
         uint256 rewardWeight = votingEngine.roundRbtsRewardWeight(contentId, roundId);
-        uint256 forfeitedPool = votingEngine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(votingEngine, contentId, roundId);
         if (rewardWeight > 0) {
             assertEq(
                 votingEngine.roundVoterPool(contentId, roundId),
@@ -2168,7 +2165,7 @@ contract RoundIntegrationTest is VotingTestBase {
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         uint256 rewardWeight = votingEngine.roundRbtsRewardWeight(contentId, roundId);
-        uint256 forfeitedPool = votingEngine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(votingEngine, contentId, roundId);
         if (rewardWeight > 0) {
             assertEq(
                 votingEngine.roundVoterPool(contentId, roundId),

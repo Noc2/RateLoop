@@ -172,9 +172,6 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {
         engine.revealVoteByCommitKey(contentId, roundId, commitKey, isUp, 5_000, salt);
-        if (engine.roundThresholdReachedBlock(contentId, roundId) == block.number) {
-            vm.roll(block.number + 1);
-        }
     }
 
     function _commitKeyForVoter(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, address voter)
@@ -514,7 +511,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertFalse(engine.roundHasHumanVerifiedCommit(contentId, roundId));
+        assertFalse(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
 
         // Warp past maxDuration without revealing.
         vm.warp(r0.startTime + 7 days + 1);
@@ -559,7 +556,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         vm.warp(block.timestamp + 7 days);
 
         vm.expectRevert(RoundVotingEngine.NotEnoughVotes.selector);
-        _settleAfterRbtsSeed(engine, contentId, roundId);
+        engine.settleRound(contentId, roundId);
     }
 
     // =========================================================================
@@ -596,8 +593,10 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 treasuryAfter = lrepToken.balanceOf(treasury);
         if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
-            assertEq(engine.roundVoterPool(contentId, roundId), engine.roundRbtsForfeitedPool(contentId, roundId));
-            assertEq(treasuryAfter, treasuryBefore);
+            uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
+            (uint256 voterShare, uint256 platformShare, uint256 treasuryShare) = RewardMath.splitPool(forfeitedPool);
+            assertEq(engine.roundVoterPool(contentId, roundId), voterShare + platformShare);
+            assertEq(treasuryAfter - treasuryBefore, treasuryShare);
         }
     }
 
@@ -637,7 +636,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
-        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
         uint256 voterPool = engine.roundVoterPool(contentId, roundId);
         if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
             assertEq(voterPool, forfeitedPool);
@@ -649,7 +648,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
-        uint256 forfeitedPool = engine.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
         uint256 voterPool = engine.roundVoterPool(contentId, roundId);
         if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
             assertEq(voterPool, forfeitedPool);
@@ -672,7 +671,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine2, contentId, roundId);
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled));
 
-        uint256 forfeitedPool = engine2.roundRbtsForfeitedPool(contentId, roundId);
+        uint256 forfeitedPool = _roundRbtsForfeitedPool(engine2, contentId, roundId);
 
         if (engine2.roundRbtsRewardWeight(contentId, roundId) > 0) {
             assertEq(engine2.roundVoterPool(contentId, roundId), forfeitedPool);

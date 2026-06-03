@@ -377,8 +377,8 @@ contract UpgradeTest is Test {
             bytes32(uint256(333))
         );
 
-        assertEq(votingEngine.roundRatingUpEvidence(contentId, roundId), 111);
-        assertEq(votingEngine.roundRatingDownEvidence(contentId, roundId), 222);
+        assertEq(uint256(vm.load(address(votingEngine), _doubleUintMappingSlot(57, contentId, roundId))), 111);
+        assertEq(uint256(vm.load(address(votingEngine), _doubleUintMappingSlot(58, contentId, roundId))), 222);
         assertEq(votingEngine.commitCommittedAt(contentId, roundId, commitKey), 333);
     }
 
