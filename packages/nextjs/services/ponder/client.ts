@@ -650,6 +650,38 @@ export interface PonderProfileSummary {
   totalRewardsClaimed: string;
 }
 
+export interface PonderProfileEarningsSummary {
+  totalUsdcEarned: string;
+  totalLrepEarned: string;
+  bountyUsdcEarned: string;
+  bountyLrepEarned: string;
+  feedbackUsdcEarned: string;
+  feedbackLrepEarned: string;
+  roundLrepEarned: string;
+  paidEventCount: number;
+  latestPaidAt: string | null;
+}
+
+export type PonderEarningSource = "question_reward" | "question_bundle_reward" | "feedback_bonus" | "round_reward";
+
+export interface PonderProfileEarningItem {
+  id: string;
+  source: PonderEarningSource;
+  asset: number;
+  currency: PonderRewardCurrency;
+  amount: string;
+  grossAmount: string;
+  frontendFee: string;
+  contentId: string | null;
+  roundId: string | null;
+  rewardPoolId: string | null;
+  bundleId: string | null;
+  roundSetIndex: number | null;
+  feedbackHash: string | null;
+  title: string | null;
+  paidAt: string;
+}
+
 export interface PonderProfileSocialCounts {
   followerCount: number;
   followingCount: number;
@@ -942,6 +974,25 @@ export interface PonderAccuracyLeaderboardResponse {
   endsAt: string | null;
 }
 
+export type PonderEarningsLeaderboardAsset = "all" | "lrep" | "usdc";
+export type PonderEarningsLeaderboardSource = "all" | "bounty" | "feedback" | "round";
+
+export interface PonderEarningsLeaderboardItem extends PonderProfileEarningsSummary {
+  voter: string;
+  profileName: string | null;
+}
+
+export interface PonderEarningsLeaderboardResponse {
+  items: PonderEarningsLeaderboardItem[];
+  asset: PonderEarningsLeaderboardAsset;
+  source: PonderEarningsLeaderboardSource;
+  window: PonderAccuracyLeaderboardWindow;
+  startsAt: string | null;
+  endsAt: string | null;
+  limit: number;
+  offset: number;
+}
+
 export interface PonderVoteItem {
   id: string;
   contentId: string;
@@ -1006,9 +1057,11 @@ export interface PonderVoteCooldownsResponse {
 export interface PonderProfileDetailResponse {
   profile: PonderProfile | null;
   summary: PonderProfileSummary;
+  earningsSummary: PonderProfileEarningsSummary;
   social: PonderProfileSocialCounts;
   recentVotes: PonderVoteItem[];
   recentRewards: PonderRewardClaim[];
+  recentEarnings: PonderProfileEarningItem[];
   recentSubmissions: PonderProfileSubmissionItem[];
 }
 
@@ -1360,6 +1413,16 @@ export const ponderApi = {
     offset?: string;
   }) {
     return ponderGet<PonderAccuracyLeaderboardResponse>("/accuracy-leaderboard", params);
+  },
+
+  getEarningsLeaderboard(params?: {
+    window?: string;
+    asset?: PonderEarningsLeaderboardAsset;
+    source?: PonderEarningsLeaderboardSource;
+    limit?: string;
+    offset?: string;
+  }) {
+    return ponderGet<PonderEarningsLeaderboardResponse>("/earnings-leaderboard", params);
   },
 
   getVoterAccuracy(address: string) {

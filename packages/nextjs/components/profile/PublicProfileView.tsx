@@ -32,6 +32,7 @@ import { BalanceHistory } from "~~/components/leaderboard/BalanceHistory";
 import { CategoryBars } from "~~/components/leaderboard/CategoryBars";
 import { StakeBreakdown } from "~~/components/leaderboard/StakeBreakdown";
 import { WinRateRing } from "~~/components/leaderboard/WinRateRing";
+import { ProfileEarnings } from "~~/components/profile/ProfileEarnings";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { ProfileImageLightbox } from "~~/components/shared/ProfileImageLightbox";
@@ -773,12 +774,24 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
         totalContent: 0,
         totalRewardsClaimed: "0",
       },
+      earningsSummary: {
+        totalUsdcEarned: "0",
+        totalLrepEarned: "0",
+        bountyUsdcEarned: "0",
+        bountyLrepEarned: "0",
+        feedbackUsdcEarned: "0",
+        feedbackLrepEarned: "0",
+        roundLrepEarned: "0",
+        paidEventCount: 0,
+        latestPaidAt: null,
+      },
       social: {
         followerCount: 0,
         followingCount: 0,
       },
       recentVotes: [],
       recentRewards: [],
+      recentEarnings: [],
       recentSubmissions: [],
     }),
     enabled: true,
@@ -1565,6 +1578,12 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
             </>
           ) : null}
         </div>
+
+        <ProfileEarnings
+          isLoading={profileLoading}
+          items={profileDetail?.recentEarnings ?? []}
+          summary={profileDetail?.earningsSummary}
+        />
 
         {ownProfile ? (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
