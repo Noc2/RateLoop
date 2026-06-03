@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -23,7 +23,13 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
-import { DEFAULT_QUESTION_ROUND_CONFIG, formatDurationLabel } from "~~/lib/questionRoundConfig";
+import { formatSubmissionRewardAmount, parseSubmissionRewardAmount } from "~~/lib/questionRewardPools";
+import {
+  DEFAULT_QUESTION_ROUND_CONFIG,
+  DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS,
+  formatDurationLabel,
+  isQuestionRoundMaxDurationValidForEpoch,
+} from "~~/lib/questionRoundConfig";
 import { notification } from "~~/utils/scaffold-eth";
 
 const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(module => module.ShareModal), {
@@ -62,17 +68,22 @@ type Handoff = {
   assets?: HandoffAsset[];
   chainId: number | null;
   clientRequestId: string | null;
+  draftRevision?: number;
+  editedByUser?: boolean;
   error: string | null;
   expiresAt: string;
   id: string;
   operationKey: string | null;
+  originalRequestBody?: JsonRecord;
   payloadHash: string | null;
   paymentMode: "wallet_calls";
+  preparedDraftRevision?: number | null;
   publicUrl?: string | null;
   requestBody?: JsonRecord;
   status: string;
   transactionHashes?: string[];
   transactionPlan?: HandoffTransactionPlan | null;
+  updatedAt?: string;
   walletAddress: string | null;
 };
 
@@ -120,6 +131,25 @@ type RoundSettings = {
   maxDuration: bigint;
   maxVoters: bigint;
   minVoters: bigint;
+};
+
+type DraftQuestionForm = {
+  categoryId: string;
+  contextUrl: string;
+  description: string;
+  tags: string;
+  templateId: string;
+  title: string;
+  videoUrl: string;
+};
+
+type DraftForm = {
+  bountyAmount: string;
+  questions: DraftQuestionForm[];
+  roundBlindMinutes: string;
+  roundMaxDurationMinutes: string;
+  roundMaxVoters: string;
+  roundMinVoters: string;
 };
 
 type SubmittedContentModalState = {
@@ -223,6 +253,24 @@ function readQuestionSummaries(handoff: Handoff | null): QuestionSummary[] {
   }));
 }
 
+function readBountyAmountAtomic(handoff: Handoff | null) {
+  const bounty = handoff?.requestBody?.bounty;
+  if (!isJsonRecord(bounty)) return null;
+  const amount = bounty.amount;
+  if (typeof amount !== "string" && typeof amount !== "number" && typeof amount !== "bigint") return null;
+  try {
+    const atomic = BigInt(amount);
+    return atomic > 0n ? atomic : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatUsdcInput(value: bigint | null) {
+  if (value === null) return "";
+  return formatSubmissionRewardAmount(value, "usdc").replace(/ USDC$/, "");
+}
+
 function readRoundSettings(handoff: Handoff | null): RoundSettings {
   const requestBody = handoff?.requestBody ?? null;
   const firstQuestion = readQuestionRecords(handoff)[0];
@@ -255,6 +303,199 @@ function readQuestionTitle(handoff: Handoff | null) {
   return "RateLoop ask";
 }
 
+function readDraftTitle(form: DraftForm | null, handoff: Handoff | null) {
+  if (!form) return readQuestionTitle(handoff);
+  if (form.questions.length === 1) return form.questions[0]?.title.trim() || readQuestionTitle(handoff);
+  if (form.questions.length > 1) return `${form.questions.length} question bundle`;
+  return readQuestionTitle(handoff);
+}
+
+function secondsToMinutesInput(value: bigint) {
+  const rounded = (value + 30n) / 60n;
+  return rounded > 0n ? rounded.toString() : "1";
+}
+
+function createDraftForm(handoff: Handoff): DraftForm {
+  const roundSettings = readRoundSettings(handoff);
+  const questions = readQuestionSummaries(handoff);
+  return {
+    bountyAmount: formatUsdcInput(readBountyAmountAtomic(handoff)),
+    questions: questions.length
+      ? questions.map(question => ({
+          categoryId: question.categoryId,
+          contextUrl: question.contextUrl,
+          description: question.description,
+          tags: question.tags.join(", "),
+          templateId: question.templateId,
+          title: question.title,
+          videoUrl: question.videoUrl,
+        }))
+      : [
+          {
+            categoryId: "",
+            contextUrl: "",
+            description: "",
+            tags: "",
+            templateId: "",
+            title: readQuestionTitle(handoff),
+            videoUrl: "",
+          },
+        ],
+    roundBlindMinutes: secondsToMinutesInput(roundSettings.epochDuration),
+    roundMaxDurationMinutes: secondsToMinutesInput(roundSettings.maxDuration),
+    roundMaxVoters: roundSettings.maxVoters.toString(),
+    roundMinVoters: roundSettings.minVoters.toString(),
+  };
+}
+
+function parsePositiveInteger(value: string, fieldName: string) {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${fieldName} must be a positive whole number.`);
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${fieldName} must be a positive whole number.`);
+  }
+  return parsed;
+}
+
+function parseRoundSecondsFromMinutes(value: string, fieldName: string) {
+  return BigInt(parsePositiveInteger(value, fieldName)) * 60n;
+}
+
+function parseTagsInput(value: string) {
+  return value
+    .split(",")
+    .map(tag => tag.trim())
+    .filter(Boolean);
+}
+
+function applyDraftQuestion(baseQuestion: JsonRecord, draft: DraftQuestionForm, index: number): JsonRecord {
+  const title = draft.title.trim();
+  const categoryId = draft.categoryId.trim();
+  const tags = parseTagsInput(draft.tags);
+  if (!title) throw new Error(`Question ${index + 1} needs a title.`);
+  if (!categoryId) throw new Error(`Question ${index + 1} needs a category.`);
+  if (tags.length === 0 || tags.length > 3) {
+    throw new Error(`Question ${index + 1} needs one to three tags.`);
+  }
+
+  const nextQuestion: JsonRecord = {
+    ...baseQuestion,
+    categoryId,
+    description: draft.description.trim(),
+    tags,
+    title,
+  };
+  const contextUrl = draft.contextUrl.trim();
+  const videoUrl = draft.videoUrl.trim();
+  const templateId = draft.templateId.trim();
+  if (contextUrl) {
+    nextQuestion.contextUrl = contextUrl;
+  } else {
+    delete nextQuestion.contextUrl;
+  }
+  if (videoUrl) {
+    nextQuestion.videoUrl = videoUrl;
+  } else {
+    delete nextQuestion.videoUrl;
+  }
+  if (templateId) {
+    nextQuestion.templateId = templateId;
+  } else {
+    delete nextQuestion.templateId;
+  }
+  return nextQuestion;
+}
+
+function buildDraftRequestBody(handoff: Handoff, form: DraftForm): JsonRecord {
+  const requestBody = structuredClone(handoff.requestBody ?? {}) as JsonRecord;
+  const bountyAmount = parseSubmissionRewardAmount(form.bountyAmount);
+  if (bountyAmount === null) {
+    throw new Error("Bounty must be a positive USDC amount with up to 6 decimals.");
+  }
+
+  const blindSeconds = parseRoundSecondsFromMinutes(form.roundBlindMinutes, "Blind phase");
+  const maxDurationSeconds = parseRoundSecondsFromMinutes(form.roundMaxDurationMinutes, "Max duration");
+  const minVoters = parsePositiveInteger(form.roundMinVoters, "Min voters");
+  const maxVoters = parsePositiveInteger(form.roundMaxVoters, "Max voters");
+  if (maxDurationSeconds < blindSeconds) {
+    throw new Error("Max duration must be at least the blind phase.");
+  }
+  if (minVoters > maxVoters) {
+    throw new Error("Min voters cannot be greater than max voters.");
+  }
+  if (
+    Number(blindSeconds) < DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minEpochDuration ||
+    Number(blindSeconds) > DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxEpochDuration
+  ) {
+    throw new Error(
+      `Blind phase must be ${formatDurationLabel(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minEpochDuration)}-${formatDurationLabel(
+        DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxEpochDuration,
+      )}.`,
+    );
+  }
+  if (
+    Number(maxDurationSeconds) < DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minRoundDuration ||
+    Number(maxDurationSeconds) > DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxRoundDuration
+  ) {
+    throw new Error(
+      `Max duration must be ${formatDurationLabel(
+        DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minRoundDuration,
+      )}-${formatDurationLabel(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxRoundDuration)}.`,
+    );
+  }
+  if (!isQuestionRoundMaxDurationValidForEpoch(Number(blindSeconds), Number(maxDurationSeconds))) {
+    throw new Error("Max duration spans too many blind phases.");
+  }
+  if (
+    minVoters < DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minSettlementVoters ||
+    minVoters > DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxSettlementVoters
+  ) {
+    throw new Error(
+      `Min voters must be ${DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minSettlementVoters}-${DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxSettlementVoters}.`,
+    );
+  }
+  if (
+    maxVoters < DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minVoterCap ||
+    maxVoters > DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxVoterCap
+  ) {
+    throw new Error(
+      `Max voters must be ${DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minVoterCap}-${DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxVoterCap}.`,
+    );
+  }
+
+  requestBody.bounty = {
+    ...(isJsonRecord(requestBody.bounty) ? requestBody.bounty : {}),
+    amount: bountyAmount.toString(),
+    asset: "USDC",
+  };
+  requestBody.roundConfig = {
+    epochDuration: blindSeconds.toString(),
+    maxDuration: maxDurationSeconds.toString(),
+    maxVoters: maxVoters.toString(),
+    minVoters: minVoters.toString(),
+  };
+
+  if (Array.isArray(requestBody.questions)) {
+    requestBody.questions = requestBody.questions.map((question, index) =>
+      applyDraftQuestion(isJsonRecord(question) ? question : {}, form.questions[index] ?? form.questions[0], index),
+    );
+    return requestBody;
+  }
+
+  if (isJsonRecord(requestBody.question)) {
+    requestBody.question = applyDraftQuestion(requestBody.question, form.questions[0], 0);
+    return requestBody;
+  }
+
+  return {
+    ...requestBody,
+    ...applyDraftQuestion(requestBody, form.questions[0], 0),
+  };
+}
+
 function readSubmittedContentForShare(handoff: Handoff | null, ask: unknown): SubmittedContentModalState | null {
   const contentId = readSubmittedContentId(isJsonRecord(ask) ? ask : null);
   if (contentId === null) return null;
@@ -273,19 +514,13 @@ function readSubmittedContentForShare(handoff: Handoff | null, ask: unknown): Su
 }
 
 function readBounty(handoff: Handoff | null) {
-  const bounty = handoff?.requestBody?.bounty;
-  if (!bounty || typeof bounty !== "object" || Array.isArray(bounty)) return "Unknown bounty";
-  const amount = (bounty as JsonRecord).amount;
-  if (typeof amount !== "string" && typeof amount !== "number") return "Unknown bounty";
-  let atomic: bigint;
-  try {
-    atomic = BigInt(amount);
-  } catch {
-    return "Unknown bounty";
-  }
-  const whole = atomic / 1_000_000n;
-  const fractional = (atomic % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
-  return `${whole.toString()}${fractional ? `.${fractional}` : ""} USDC`;
+  const amount = readBountyAmountAtomic(handoff);
+  return amount === null ? "Unknown bounty" : formatSubmissionRewardAmount(amount, "usdc");
+}
+
+function readDraftBountyLabel(form: DraftForm | null, handoff: Handoff | null) {
+  const draftAmount = form?.bountyAmount.trim();
+  return draftAmount ? `${draftAmount} USDC` : readBounty(handoff);
 }
 
 function normalizeHex(value: unknown, field: string): Hex {
@@ -343,7 +578,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [draftForm, setDraftForm] = useState<DraftForm | null>(null);
+  const [savedDraftJson, setSavedDraftJson] = useState("");
+  const [draftSourceKey, setDraftSourceKey] = useState("");
   const [steps, setSteps] = useState<ExecutionStep[]>([]);
   const [imageSignatureSteps, setImageSignatureSteps] = useState<ImageSignatureStep[]>([]);
   const [submittedContent, setSubmittedContent] = useState<SubmittedContentModalState | null>(null);
@@ -355,25 +595,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     if (!hasTokenInQuery && !hasTokenInHash) return;
     window.history.replaceState(null, "", window.location.pathname);
   }, []);
-
-  const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
-  const isFeedbackBonusStep = handoff?.status === "feedback_bonus_prepared";
-  const connectedMismatch = Boolean(handoff?.walletAddress && address && !sameAddress(handoff.walletAddress, address));
-  const hasTransactionPlan = Boolean(handoff?.transactionPlan?.calls?.length);
-  const connectedChainId = chain?.id ?? chainId ?? null;
-  const needsChainSwitch = Boolean(
-    hasTransactionPlan && handoff?.chainId && connectedChainId && connectedChainId !== handoff.chainId,
-  );
-  const isBusy = isPreparing || isExecuting || isSigningMessage || switchingChainId !== null;
-  const canSubmit = Boolean(
-    token &&
-      address &&
-      handoff &&
-      !connectedMismatch &&
-      !isTerminalStatus &&
-      !isBusy &&
-      (hasTransactionPlan || (connectedChainId && canPrepareHandoffStatus(handoff.status))),
-  );
 
   const loadHandoff = useCallback(async () => {
     if (!token) {
@@ -403,6 +624,42 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     void loadHandoff();
   }, [loadHandoff]);
 
+  const currentDraftSourceKey = handoff ? `${handoff.id}:${handoff.draftRevision ?? 0}` : "";
+  useEffect(() => {
+    if (!handoff || !currentDraftSourceKey || draftSourceKey === currentDraftSourceKey) return;
+    const nextForm = createDraftForm(handoff);
+    setDraftForm(nextForm);
+    setSavedDraftJson(JSON.stringify(nextForm));
+    setDraftSourceKey(currentDraftSourceKey);
+    setDraftError(null);
+  }, [currentDraftSourceKey, draftSourceKey, handoff]);
+
+  const draftFormJson = useMemo(() => (draftForm ? JSON.stringify(draftForm) : ""), [draftForm]);
+  const isDraftDirty = Boolean(draftForm && savedDraftJson && draftFormJson !== savedDraftJson);
+
+  const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
+  const isFeedbackBonusStep = handoff?.status === "feedback_bonus_prepared";
+  const connectedMismatch = Boolean(handoff?.walletAddress && address && !sameAddress(handoff.walletAddress, address));
+  const hasTransactionPlan = Boolean(handoff?.transactionPlan?.calls?.length);
+  const connectedChainId = chain?.id ?? chainId ?? null;
+  const needsChainSwitch = Boolean(
+    hasTransactionPlan && handoff?.chainId && connectedChainId && connectedChainId !== handoff.chainId,
+  );
+  const isBusy = isPreparing || isExecuting || isSigningMessage || isSavingDraft || switchingChainId !== null;
+  const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
+  const canEditDraft = Boolean(isDraftEditable && !isBusy);
+  const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && isDraftDirty && !isBusy);
+  const canSubmit = Boolean(
+    token &&
+      address &&
+      handoff &&
+      !connectedMismatch &&
+      !isTerminalStatus &&
+      !isBusy &&
+      !isDraftDirty &&
+      (hasTransactionPlan || (connectedChainId && canPrepareHandoffStatus(handoff.status))),
+  );
+
   const postPrepare = useCallback(
     async (imageSignatures?: Array<{ assetId: string; challengeId: string; signature: Hex }>) => {
       if (!address) throw new Error("Connect a wallet before preparing this ask.");
@@ -424,6 +681,56 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [address, connectedChainId, handoffId, token],
   );
 
+  const updateDraftField = useCallback((field: keyof Omit<DraftForm, "questions">, value: string) => {
+    setDraftForm(current => (current ? { ...current, [field]: value } : current));
+    setDraftError(null);
+  }, []);
+
+  const updateDraftQuestion = useCallback((index: number, patch: Partial<DraftQuestionForm>) => {
+    setDraftForm(current => {
+      if (!current) return current;
+      return {
+        ...current,
+        questions: current.questions.map((question, questionIndex) =>
+          questionIndex === index ? { ...question, ...patch } : question,
+        ),
+      };
+    });
+    setDraftError(null);
+  }, []);
+
+  const handleSaveDraft = useCallback(async () => {
+    if (!handoff || !draftForm) return;
+    setDraftError(null);
+    let requestBody: JsonRecord;
+    try {
+      requestBody = buildDraftRequestBody(handoff, draftForm);
+    } catch (saveError) {
+      setDraftError(saveError instanceof Error ? saveError.message : "Draft is invalid.");
+      return;
+    }
+
+    setIsSavingDraft(true);
+    try {
+      const response = await fetch(`/api/agent/handoffs/${handoffId}`, {
+        body: JSON.stringify({
+          requestBody,
+          token,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "PATCH",
+      });
+      const body = (await response.json()) as Handoff | { error?: string; message?: string };
+      if (!response.ok) throw new Error(readResponseError(body, "Failed to save draft."));
+      setHandoff(body as Handoff);
+      notification.success("Draft saved.");
+    } catch (saveError) {
+      setDraftError(saveError instanceof Error ? saveError.message : "Failed to save draft.");
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }, [draftForm, handoff, handoffId, token]);
+
   const prepareHandoff = useCallback(async () => {
     if (!address) {
       notification.error("Connect the wallet that will fund this ask.");
@@ -435,6 +742,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     }
     if (connectedMismatch) {
       notification.error("Connected wallet does not match this handoff.");
+      return null;
+    }
+    if (isDraftDirty) {
+      notification.error("Save the draft before submitting.");
       return null;
     }
 
@@ -478,7 +789,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     } finally {
       setIsPreparing(false);
     }
-  }, [address, connectedChainId, connectedMismatch, postPrepare, signMessageAsync]);
+  }, [address, connectedChainId, connectedMismatch, isDraftDirty, postPrepare, signMessageAsync]);
 
   const executeHandoff = useCallback(
     async (targetHandoff: Handoff) => {
@@ -579,6 +890,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       notification.error("Connected wallet does not match this handoff.");
       return;
     }
+    if (isDraftDirty) {
+      notification.error("Save the draft before submitting.");
+      return;
+    }
 
     let executableHandoff = handoff;
     if (!executableHandoff.transactionPlan?.calls?.length) {
@@ -592,13 +907,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     }
 
     await executeHandoff(executableHandoff);
-  }, [address, connectedMismatch, executeHandoff, handoff, isFeedbackBonusStep, prepareHandoff]);
+  }, [address, connectedMismatch, executeHandoff, handoff, isDraftDirty, isFeedbackBonusStep, prepareHandoff]);
 
   const handleCloseShareModal = useCallback(() => {
     setSubmittedContent(null);
   }, []);
 
   const submitLabel = (() => {
+    if (isSavingDraft) return "Saving...";
     if (switchingChainId !== null) return "Switching...";
     if (isPreparing || isSigningMessage) return "Preparing...";
     if (isFeedbackBonusStep) return isExecuting ? "Funding..." : "Fund Bonus";
@@ -612,11 +928,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         : `Confirming wallet call ${Math.min(confirmedStepCount + 1, steps.length)} of ${steps.length}.`
       : isPreparing || isSigningMessage
         ? "Preparing the ask in your wallet."
-        : null;
+        : isDraftDirty
+          ? "Save the draft before submitting."
+          : null;
 
   const questionSummaries = readQuestionSummaries(handoff);
-  const roundSettings = readRoundSettings(handoff);
-  const hasQuestionBundle = questionSummaries.length > 1;
+  const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
 
   return (
     <AppPageShell contentClassName="space-y-5" paddingTopClassName="pt-6">
@@ -624,7 +941,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Agent ask handoff</p>
-            <h1 className={`${surfaceSectionHeadingClassName} mt-2`}>{readQuestionTitle(handoff)}</h1>
+            <h1 className={`${surfaceSectionHeadingClassName} mt-2`}>{readDraftTitle(draftForm, handoff)}</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-base-content/65">
               Review the RateLoop ask, connect the wallet that should pay the bounty, then approve the image signatures
               and wallet calls in the browser.
@@ -667,7 +984,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   <ShieldCheckIcon className="h-4 w-4" />
                   <span>Bounty</span>
                 </div>
-                <p className="mt-2 text-lg font-semibold">{readBounty(handoff)}</p>
+                <p className="mt-2 text-lg font-semibold">{readDraftBountyLabel(draftForm, handoff)}</p>
               </div>
               <div className="surface-card-nested rounded-lg p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
@@ -691,73 +1008,140 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           </section>
 
           <section className="surface-card rounded-lg p-5">
-            <div className="flex items-center gap-2">
-              <DocumentTextIcon className="h-5 w-5 text-base-content/60" />
-              <h2 className="text-lg font-semibold">Ask details</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <DocumentTextIcon className="h-5 w-5 text-base-content/60" />
+                <h2 className="text-lg font-semibold">Ask details</h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">
+                  Revision {handoff.draftRevision ?? 0}
+                </span>
+                {handoff.editedByUser ? (
+                  <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">Edited</span>
+                ) : null}
+                {isDraftDirty ? <span className="reward-chip px-2 py-0.5 text-xs text-warning">Unsaved</span> : null}
+                {!isDraftEditable ? (
+                  <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">Locked</span>
+                ) : null}
+                <button
+                  className="btn btn-outline btn-sm"
+                  disabled={!canSaveDraft}
+                  type="button"
+                  onClick={() => void handleSaveDraft()}
+                >
+                  {isSavingDraft ? (
+                    <span className="flex items-center gap-2">
+                      <span className="loading loading-spinner loading-xs" />
+                      <span>Saving</span>
+                    </span>
+                  ) : (
+                    "Save draft"
+                  )}
+                </button>
+              </div>
             </div>
+
+            {draftError ? (
+              <div className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-error">
+                <div className="flex items-start gap-2">
+                  <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+                  <span>{draftError}</span>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
               <div className="space-y-3">
-                {questionSummaries.length > 0 ? (
-                  questionSummaries.map((question, index) => (
-                    <div key={`${question.title}-${index}`} className="surface-card-nested rounded-lg p-4">
-                      {hasQuestionBundle ? (
-                        <p className="text-sm font-semibold text-base-content/75">{question.title}</p>
-                      ) : null}
-                      <div className={hasQuestionBundle ? "mt-3" : ""}>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                {draftForm?.questions.length ? (
+                  draftForm.questions.map((question, index) => (
+                    <div key={`${index}-${question.title}`} className="surface-card-nested rounded-lg p-4">
+                      <label className="form-control">
+                        <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                          {hasQuestionBundle ? `Question ${index + 1}` : "Question"}
+                        </span>
+                        <input
+                          className="input input-bordered mt-1 w-full"
+                          disabled={!canEditDraft}
+                          value={question.title}
+                          onChange={event => updateDraftQuestion(index, { title: event.target.value })}
+                        />
+                      </label>
+
+                      <label className="form-control mt-3">
+                        <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                           Description
-                        </p>
-                        {question.description ? (
-                          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-base-content/78">
-                            {question.description}
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-sm text-base-content/45">No description provided</p>
-                        )}
-                      </div>
+                        </span>
+                        <textarea
+                          className="textarea textarea-bordered mt-1 min-h-28 w-full leading-relaxed"
+                          disabled={!canEditDraft}
+                          value={question.description}
+                          onChange={event => updateDraftQuestion(index, { description: event.target.value })}
+                        />
+                      </label>
 
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Category</p>
-                          <p className="mt-1 text-sm font-medium">{question.categoryId || "Not set"}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Template</p>
-                          <p className="mt-1 text-sm font-medium">{question.templateId || "Default"}</p>
-                        </div>
+                        <label className="form-control">
+                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            Category
+                          </span>
+                          <input
+                            className="input input-bordered mt-1 w-full"
+                            disabled={!canEditDraft}
+                            value={question.categoryId}
+                            onChange={event => updateDraftQuestion(index, { categoryId: event.target.value })}
+                          />
+                        </label>
+                        <label className="form-control">
+                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            Template
+                          </span>
+                          <input
+                            className="input input-bordered mt-1 w-full"
+                            disabled={!canEditDraft}
+                            value={question.templateId}
+                            onChange={event => updateDraftQuestion(index, { templateId: event.target.value })}
+                          />
+                        </label>
                       </div>
 
-                      {question.tags.length > 0 ? (
-                        <div className="mt-4">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            <TagIcon className="h-3.5 w-3.5" />
-                            <span>Tags</span>
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {question.tags.map(tag => (
-                              <span key={tag} className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
+                      <label className="form-control mt-4">
+                        <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                          <TagIcon className="h-3.5 w-3.5" />
+                          <span>Tags</span>
+                        </span>
+                        <input
+                          className="input input-bordered mt-1 w-full"
+                          disabled={!canEditDraft}
+                          value={question.tags}
+                          onChange={event => updateDraftQuestion(index, { tags: event.target.value })}
+                        />
+                      </label>
 
-                      {question.contextUrl || question.videoUrl ? (
-                        <div className="mt-4 space-y-2">
-                          {question.contextUrl ? (
-                            <p className="break-all text-xs text-base-content/55">
-                              <span className="font-semibold text-base-content/70">Context:</span> {question.contextUrl}
-                            </p>
-                          ) : null}
-                          {question.videoUrl ? (
-                            <p className="break-all text-xs text-base-content/55">
-                              <span className="font-semibold text-base-content/70">Video:</span> {question.videoUrl}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : null}
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <label className="form-control">
+                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            Context URL
+                          </span>
+                          <input
+                            className="input input-bordered mt-1 w-full"
+                            disabled={!canEditDraft}
+                            value={question.contextUrl}
+                            onChange={event => updateDraftQuestion(index, { contextUrl: event.target.value })}
+                          />
+                        </label>
+                        <label className="form-control">
+                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            Video URL
+                          </span>
+                          <input
+                            className="input input-bordered mt-1 w-full"
+                            disabled={!canEditDraft}
+                            value={question.videoUrl}
+                            onChange={event => updateDraftQuestion(index, { videoUrl: event.target.value })}
+                          />
+                        </label>
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -768,27 +1152,76 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               </div>
 
               <div className="surface-card-nested rounded-lg p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-base-content/75">
+                <label className="form-control">
+                  <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                    Bounty
+                  </span>
+                  <input
+                    className="input input-bordered mt-1 w-full"
+                    disabled={!canEditDraft}
+                    inputMode="decimal"
+                    value={draftForm?.bountyAmount ?? ""}
+                    onChange={event => updateDraftField("bountyAmount", event.target.value)}
+                  />
+                </label>
+
+                <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-base-content/75">
                   <ClockIcon className="h-4 w-4" />
                   <span>Round settings</span>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Blind phase</p>
-                    <p className="mt-1 text-sm font-medium">{formatDurationLabel(roundSettings.epochDuration)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Max duration</p>
-                    <p className="mt-1 text-sm font-medium">{formatDurationLabel(roundSettings.maxDuration)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Min voters</p>
-                    <p className="mt-1 text-sm font-medium">{roundSettings.minVoters.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Max voters</p>
-                    <p className="mt-1 text-sm font-medium">{roundSettings.maxVoters.toLocaleString()}</p>
-                  </div>
+                  <label className="form-control">
+                    <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                      Blind minutes
+                    </span>
+                    <input
+                      className="input input-bordered mt-1 w-full"
+                      disabled={!canEditDraft}
+                      inputMode="numeric"
+                      min={1}
+                      value={draftForm?.roundBlindMinutes ?? ""}
+                      onChange={event => updateDraftField("roundBlindMinutes", event.target.value)}
+                    />
+                  </label>
+                  <label className="form-control">
+                    <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                      Max minutes
+                    </span>
+                    <input
+                      className="input input-bordered mt-1 w-full"
+                      disabled={!canEditDraft}
+                      inputMode="numeric"
+                      min={1}
+                      value={draftForm?.roundMaxDurationMinutes ?? ""}
+                      onChange={event => updateDraftField("roundMaxDurationMinutes", event.target.value)}
+                    />
+                  </label>
+                  <label className="form-control">
+                    <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                      Min voters
+                    </span>
+                    <input
+                      className="input input-bordered mt-1 w-full"
+                      disabled={!canEditDraft}
+                      inputMode="numeric"
+                      min={1}
+                      value={draftForm?.roundMinVoters ?? ""}
+                      onChange={event => updateDraftField("roundMinVoters", event.target.value)}
+                    />
+                  </label>
+                  <label className="form-control">
+                    <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                      Max voters
+                    </span>
+                    <input
+                      className="input input-bordered mt-1 w-full"
+                      disabled={!canEditDraft}
+                      inputMode="numeric"
+                      min={1}
+                      value={draftForm?.roundMaxVoters ?? ""}
+                      onChange={event => updateDraftField("roundMaxVoters", event.target.value)}
+                    />
+                  </label>
                 </div>
               </div>
             </div>
