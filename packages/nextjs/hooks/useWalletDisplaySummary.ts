@@ -183,6 +183,17 @@ export function reconcileWalletDisplaySummary(
 
   const rawKnownStakedMicro =
     rawSnapshot.votingStakedMicro + rawSnapshot.submissionStakedMicro + rawSnapshot.frontendStakedMicro;
+  const currentKnownStakedMicro =
+    current.votingStakedMicro + current.submissionStakedMicro + current.frontendStakedMicro;
+
+  if (
+    rawSnapshot.totalMicro < current.totalMicro &&
+    rawSnapshot.liquidMicro < current.liquidMicro &&
+    rawKnownStakedMicro <= currentKnownStakedMicro &&
+    current.pendingStakedMicro === 0n
+  ) {
+    return rawSnapshot;
+  }
 
   // Keep the last coherent total while stake indexing catches up to a balance decrease.
   if (rawSnapshot.totalMicro < current.totalMicro && rawSnapshot.liquidMicro !== current.liquidMicro) {

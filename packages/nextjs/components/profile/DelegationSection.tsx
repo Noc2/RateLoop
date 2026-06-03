@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useQueryClient } from "@tanstack/react-query";
 import { formatUnits, isAddress, parseUnits } from "viem";
 import { useAccount } from "wagmi";
 import { ArrowsRightLeftIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
@@ -12,6 +11,7 @@ import { GOVERNANCE_ROUTE } from "~~/constants/routes";
 import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useDelegation } from "~~/hooks/useDelegation";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
+import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
 import { notification } from "~~/utils/scaffold-eth";
@@ -34,7 +34,7 @@ function parseLrepAmount(value: string): bigint | null {
 
 export function DelegationSection() {
   const { address } = useAccount();
-  const queryClient = useQueryClient();
+  const refreshWalletBalances = useRefreshWalletBalances();
   const { hasActiveHumanCredential, isLoading: credentialLoading } = useRaterRegistryIdentity(address);
   const {
     delegateTo,
@@ -46,7 +46,7 @@ export function DelegationSection() {
     writeContractAsync,
     refetch,
   } = useDelegation(address);
-  const { data: lrepBalance, refetch: refetchLrepBalance } = useScaffoldReadContract({
+  const { data: lrepBalance } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
@@ -163,8 +163,7 @@ export function DelegationSection() {
       });
       notification.success(`Sent ${formatLrepAmount(parsedTransferAmount, 6)} LREP`);
       setTransferAmountInput("");
-      await refetchLrepBalance();
-      void queryClient.invalidateQueries();
+      await refreshWalletBalances(address);
     } catch (e: any) {
       console.error("Transfer LREP failed:", e);
       setTransferError(e?.shortMessage || e?.message || "Failed to transfer LREP");

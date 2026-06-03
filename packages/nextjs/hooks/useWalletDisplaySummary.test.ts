@@ -37,7 +37,36 @@ test("getWalletDisplaySummaryQueryKey partitions cache entries by chain", () => 
   assert.notDeepEqual(getWalletDisplaySummaryQueryKey(address, 480), getWalletDisplaySummaryQueryKey(address, 31337));
 });
 
-test("reconcileWalletDisplaySummary preserves the last coherent total while stake indexing catches up", () => {
+test("reconcileWalletDisplaySummary treats an outgoing transfer as a fresh lower total", () => {
+  const current = buildWalletDisplaySummary(
+    {
+      liquidMicro: 250n * MICRO,
+      votingStakedMicro: 0n,
+      submissionStakedMicro: 0n,
+      frontendStakedMicro: 0n,
+    },
+    { updatedAt: 1_000 },
+  );
+
+  const raw = buildWalletDisplaySummary(
+    {
+      liquidMicro: 239n * MICRO,
+      votingStakedMicro: 0n,
+      submissionStakedMicro: 0n,
+      frontendStakedMicro: 0n,
+    },
+    { updatedAt: 2_000 },
+  );
+
+  const reconciled = reconcileWalletDisplaySummary(current, raw, 2_500);
+  assert.ok(reconciled);
+  assert.equal(reconciled.liquidMicro, 239n * MICRO);
+  assert.equal(reconciled.pendingStakedMicro, 0n);
+  assert.equal(reconciled.totalStakedMicro, 0n);
+  assert.equal(reconciled.totalMicro, 239n * MICRO);
+});
+
+test("reconcileWalletDisplaySummary does not turn a transfer into extra stake when stake already exists", () => {
   const current = buildWalletDisplaySummary(
     {
       liquidMicro: 850n * MICRO,
@@ -45,7 +74,36 @@ test("reconcileWalletDisplaySummary preserves the last coherent total while stak
       submissionStakedMicro: 0n,
       frontendStakedMicro: 0n,
     },
-    { updatedAt: 1_000 },
+    { updatedAt: 3_000 },
+  );
+
+  const raw = buildWalletDisplaySummary(
+    {
+      liquidMicro: 839n * MICRO,
+      votingStakedMicro: 150n * MICRO,
+      submissionStakedMicro: 0n,
+      frontendStakedMicro: 0n,
+    },
+    { updatedAt: 4_000 },
+  );
+
+  const reconciled = reconcileWalletDisplaySummary(current, raw, 4_500);
+  assert.ok(reconciled);
+  assert.equal(reconciled.liquidMicro, 839n * MICRO);
+  assert.equal(reconciled.pendingStakedMicro, 0n);
+  assert.equal(reconciled.totalStakedMicro, 150n * MICRO);
+  assert.equal(reconciled.totalMicro, 989n * MICRO);
+});
+
+test("reconcileWalletDisplaySummary keeps optimistic stake while indexed stake catches up", () => {
+  const current = buildWalletDisplaySummary(
+    {
+      liquidMicro: 700n * MICRO,
+      votingStakedMicro: 300n * MICRO,
+      submissionStakedMicro: 0n,
+      frontendStakedMicro: 0n,
+    },
+    { updatedAt: 5_000 },
   );
 
   const raw = buildWalletDisplaySummary(
@@ -55,15 +113,11 @@ test("reconcileWalletDisplaySummary preserves the last coherent total while stak
       submissionStakedMicro: 0n,
       frontendStakedMicro: 0n,
     },
-    { updatedAt: 2_000 },
+    { updatedAt: 6_000 },
   );
 
-  const reconciled = reconcileWalletDisplaySummary(current, raw, 2_500);
-  assert.ok(reconciled);
-  assert.equal(reconciled.liquidMicro, 700n * MICRO);
-  assert.equal(reconciled.pendingStakedMicro, 150n * MICRO);
-  assert.equal(reconciled.totalStakedMicro, 300n * MICRO);
-  assert.equal(reconciled.totalMicro, 1000n * MICRO);
+  const reconciled = reconcileWalletDisplaySummary(current, raw, 6_500);
+  assert.equal(reconciled, current);
 });
 
 test("reconcileWalletDisplaySummary clears pending stake once the fresh snapshot is coherent", () => {
