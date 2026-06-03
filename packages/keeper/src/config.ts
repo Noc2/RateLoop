@@ -399,7 +399,7 @@ function loadConfig() {
     readEnv("RATELOOP_FEEDBACK_REVEAL_SECRET");
   const feedbackRevealsEnabled = parseBooleanEnv(
     readEnv("KEEPER_FEEDBACK_REVEALS_ENABLED"),
-    Boolean(feedbackRevealApiBaseUrl && feedbackRevealSecret),
+    false,
     "KEEPER_FEEDBACK_REVEALS_ENABLED",
   );
 
@@ -659,19 +659,6 @@ function loadConfig() {
     if (loadedConfig.contracts.clusterPayoutOracle === ZERO_ADDRESS) {
       errors.push(
         "CLUSTER_PAYOUT_ORACLE_ADDRESS or a shared ClusterPayoutOracle deployment artifact is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true",
-      );
-    }
-  }
-
-  if (feedbackRevealsEnabled) {
-    if (!loadedConfig.feedbackReveals.apiBaseUrl) {
-      errors.push(
-        "KEEPER_FEEDBACK_REVEAL_API_BASE_URL is required when KEEPER_FEEDBACK_REVEALS_ENABLED=true",
-      );
-    }
-    if (!loadedConfig.feedbackReveals.secret) {
-      errors.push(
-        "KEEPER_FEEDBACK_REVEAL_SECRET or RATELOOP_FEEDBACK_REVEAL_SECRET is required when KEEPER_FEEDBACK_REVEALS_ENABLED=true",
       );
     }
   }

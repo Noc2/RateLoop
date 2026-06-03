@@ -201,7 +201,7 @@ describe("keeper config", () => {
     ).rejects.toThrow("PONDER_BASE_URL must be an HTTPS URL in production");
   });
 
-  it("loads feedback reveal keeper settings when configured", async () => {
+  it("loads legacy feedback reveal keeper settings without auto-enabling jobs", async () => {
     const { config } = await loadKeeperConfig({
       KEEPER_FEEDBACK_REVEAL_API_BASE_URL: "https://app.example.com/",
       KEEPER_FEEDBACK_REVEAL_SECRET: "shared-secret",
@@ -209,7 +209,7 @@ describe("keeper config", () => {
       KEEPER_FEEDBACK_REVEAL_LEASE_SECONDS: "45",
     });
 
-    expect(config.feedbackReveals.enabled).toBe(true);
+    expect(config.feedbackReveals.enabled).toBe(false);
     expect(config.feedbackReveals.apiBaseUrl).toBe("https://app.example.com");
     expect(config.feedbackReveals.secret).toBe("shared-secret");
     expect(config.feedbackReveals.batchSize).toBe(7);
@@ -217,19 +217,14 @@ describe("keeper config", () => {
     expect(config.contracts.feedbackRegistry).toMatch(/^0x[a-fA-F0-9]{40}$/);
   });
 
-  it("requires feedback reveal API settings when explicitly enabled", async () => {
-    await expect(
-      loadKeeperConfig({
-        KEEPER_FEEDBACK_REVEALS_ENABLED: "true",
-      }),
-    ).rejects.toThrow("KEEPER_FEEDBACK_REVEAL_API_BASE_URL is required");
+  it("allows the legacy feedback reveal flag without now-unused API settings", async () => {
+    const { config } = await loadKeeperConfig({
+      KEEPER_FEEDBACK_REVEALS_ENABLED: "true",
+    });
 
-    await expect(
-      loadKeeperConfig({
-        KEEPER_FEEDBACK_REVEALS_ENABLED: "true",
-        KEEPER_FEEDBACK_REVEAL_API_BASE_URL: "https://app.example.com",
-      }),
-    ).rejects.toThrow("KEEPER_FEEDBACK_REVEAL_SECRET or RATELOOP_FEEDBACK_REVEAL_SECRET is required");
+    expect(config.feedbackReveals.enabled).toBe(true);
+    expect(config.feedbackReveals.apiBaseUrl).toBeNull();
+    expect(config.feedbackReveals.secret).toBeNull();
   });
 
   it.each([
