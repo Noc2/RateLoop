@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  RATING_TOOLTIP,
   getInitialPredictedUpPercent,
   getLaunchRewardEstimateLabel,
   getNextStakeSelectorAmount,
@@ -80,4 +81,10 @@ test("getLaunchRewardEstimateLabel keeps advisory rewards qualitative", () => {
 test("getLaunchRewardEstimateLabel shows the early rater cap range for counted stake", () => {
   assert.equal(getLaunchRewardEstimateLabel(1), "Est. cap 2.5-10 LREP");
   assert.equal(getLaunchRewardEstimateLabel(4, "TOKEN"), "Est. cap 2.5-10 TOKEN");
+});
+
+test("rating tooltip explains unrated and settled rating states", () => {
+  assert.match(RATING_TOOLTIP, /N\/A until/i);
+  assert.match(RATING_TOOLTIP, /settled round/i);
+  assert.match(RATING_TOOLTIP, /0-10 display/i);
 });

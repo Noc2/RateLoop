@@ -43,6 +43,8 @@ const YOUR_VOTE_TOOLTIP =
   "Thumbs up means you think this content is useful for the question; thumbs down means it is unhelpful, broken, misleading, or unsafe.";
 const EXPECTED_CROWD_TOOLTIP =
   "Your forecast of what share of revealed raters will choose thumbs up this round. This forecast helps determine rewards; it is separate from your own thumbs up/down vote.";
+export const RATING_TOOLTIP =
+  "Rating is N/A until this content has at least one settled round. After settlement, it uses the settled community score converted from the protocol's 0-100 scale to a 0-10 display.";
 const ACCURACY_BASED_REWARDS_TOOLTIP =
   "Calculated after reveal and settlement. Early eligible raters can qualify for up to 2.5 LREP unverified or 10 LREP verified; later cohorts step down. Final payout depends on accuracy, launch-credit eligibility, and finalized snapshots.";
 const OPEN_PHASE_REWARDS_TOOLTIP =
@@ -274,7 +276,10 @@ export function StakeSelector({
                   <p className={`mt-1 text-3xl font-bold ${signalToneClassName}`}>{signalTone}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">Rating</p>
+                  <p className="inline-flex items-center justify-end gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/55">
+                    <span>Rating</span>
+                    <InfoTooltip text={RATING_TOOLTIP} position="bottom" className="[&>svg]:h-3.5 [&>svg]:w-3.5" />
+                  </p>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-base-content/75">{currentRatingLabel}</p>
                 </div>
               </div>
