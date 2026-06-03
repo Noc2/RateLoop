@@ -833,6 +833,55 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter4, FEEDBACK_HASH, 10e6);
     }
 
+    function testAwardRejectsPostThresholdReveal() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+        address[] memory voters = _fourVoters();
+        bool[] memory directions = _directions(true, true, false, false);
+        bytes32[] memory salts = new bytes32[](voters.length);
+        bytes32[] memory commitKeys = new bytes32[](voters.length);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            (salts[i], commitKeys[i]) = _commitFeedbackVote(voters[i], contentId, directions[i], i, address(0));
+        }
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        for (uint256 i = 0; i < voters.length; i++) {
+            bytes32 feedbackHash = _feedbackHash(contentId, roundId, voters[i]);
+            vm.prank(voters[i]);
+            feedbackRegistry.commitFeedbackHash(contentId, roundId, commitKeys[i], feedbackHash);
+        }
+
+        _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
+        for (uint256 i = 0; i < 3; i++) {
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
+        }
+        vm.roll(block.number + 1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[3], directions[3], 5_000, salts[3]);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+
+        bytes32 voter1FeedbackHash = _feedbackHash(contentId, roundId, voter1);
+        bytes32 voter4FeedbackHash = _feedbackHash(contentId, roundId, voter4);
+        vm.prank(address(0xBEEF));
+        feedbackRegistry.revealFeedback(
+            contentId, roundId, commitKeys[3], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+
+        assertEq(votingEngine.commitRbtsScoringWeight(contentId, roundId, commitKeys[3]), 0);
+        vm.prank(funder);
+        vm.expectRevert("Vote not scored");
+        feedbackBonusEscrow.awardFeedbackBonus(poolId, voter4, voter4FeedbackHash, 10e6);
+
+        vm.prank(voter1);
+        feedbackRegistry.revealFeedback(
+            contentId, roundId, commitKeys[0], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+        assertGt(votingEngine.commitRbtsScoringWeight(contentId, roundId, commitKeys[0]), 0);
+        vm.prank(funder);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, voter1FeedbackHash, 10e6);
+        assertEq(recipientAmount, 10e6);
+    }
+
     function testAwardUnverifiedRecipientUsesDirectCommitKey() public {
         uint256 contentId = _submitQuestion("");
         uint256 poolId = _createFeedbackBonusPool(contentId);
@@ -1250,6 +1299,14 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         voters[0] = voter1;
         voters[1] = voter2;
         voters[2] = voter3;
+    }
+
+    function _fourVoters() internal view returns (address[] memory voters) {
+        voters = new address[](4);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        voters[3] = voter4;
     }
 
     function _directions(bool a, bool b, bool c) internal pure returns (bool[] memory directions) {

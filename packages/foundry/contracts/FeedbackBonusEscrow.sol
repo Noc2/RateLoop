@@ -539,6 +539,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             votingEngine.commitCore(pool.contentId, pool.roundId, commitKey);
         frontend = commitFrontend;
         require(voter != address(0) && revealed, "Vote not revealed");
+        require(votingEngine.commitRbtsScoringWeight(pool.contentId, pool.roundId, commitKey) != 0, "Vote not scored");
     }
 
     function _isExcludedRater(FeedbackBonusPool storage pool, bytes32 identityKey) internal view returns (bool) {
