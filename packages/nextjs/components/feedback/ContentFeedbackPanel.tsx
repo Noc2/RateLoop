@@ -58,7 +58,53 @@ function hasHexFeedbackHash(item: ContentFeedbackItem) {
 }
 
 function isOnchainRevealedFeedback(item: ContentFeedbackItem) {
-  return item.visibilityStatus === "public_onchain" || String(item.id).startsWith("protocol:");
+  return (
+    item.onchainRevealStatus === "revealed" ||
+    item.visibilityStatus === "public_onchain" ||
+    String(item.id).startsWith("protocol:")
+  );
+}
+
+type FeedbackRevealBadge = {
+  label: string;
+  tooltip: string;
+  className: string;
+  ariaLabel: string;
+};
+
+function isLeaseActive(value: string | null | undefined) {
+  if (!value) return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp > Date.now();
+}
+
+function getFeedbackRevealBadge(item: ContentFeedbackItem, hasOpenBonusPool: boolean): FeedbackRevealBadge | null {
+  if (!hasOpenBonusPool || isOnchainRevealedFeedback(item)) return null;
+
+  if (item.onchainRevealStatus === "failed") {
+    return {
+      label: "Needs attention",
+      tooltip: "Automatic on-chain publication could not finish. The feedback author can use manual publish.",
+      className: "bg-warning/10 text-warning",
+      ariaLabel: "Automatic feedback publication needs attention",
+    };
+  }
+
+  if (isLeaseActive(item.onchainRevealLeaseUntil)) {
+    return {
+      label: "Publishing",
+      tooltip: "The keeper is publishing this settled feedback on-chain for Feedback Bonus eligibility.",
+      className: "bg-info/10 text-info",
+      ariaLabel: "Feedback publication is in progress",
+    };
+  }
+
+  return {
+    label: "Queued",
+    tooltip: "The keeper will publish this settled feedback on-chain for Feedback Bonus eligibility.",
+    className: "bg-base-content/[0.07] text-base-content/58",
+    ariaLabel: "Feedback is queued for automatic on-chain publication",
+  };
 }
 
 function FeedbackItem({
@@ -67,7 +113,7 @@ function FeedbackItem({
   canReveal,
   isAwarded,
   isRevealing,
-  needsOnchainReveal,
+  revealBadge,
   onAward,
   onReveal,
 }: {
@@ -76,7 +122,7 @@ function FeedbackItem({
   canReveal?: boolean;
   isAwarded?: boolean;
   isRevealing?: boolean;
-  needsOnchainReveal?: boolean;
+  revealBadge?: FeedbackRevealBadge | null;
   onAward?: (item: ContentFeedbackItem) => void;
   onReveal?: (item: ContentFeedbackItem) => void;
 }) {
@@ -124,23 +170,23 @@ function FeedbackItem({
                 Awarded
               </span>
             </TooltipAnchor>
-          ) : needsOnchainReveal ? (
-            <TooltipAnchor
-              text="This feedback must be published on-chain by its author before it can receive a Feedback Bonus"
-              position="top"
-              className="rounded-full"
-            >
+          ) : revealBadge ? (
+            <TooltipAnchor text={revealBadge.tooltip} position="top" className="rounded-full">
               <span
                 tabIndex={0}
-                className="rounded-full bg-base-content/[0.07] px-2 py-1 text-[0.66rem] font-semibold leading-none text-base-content/58"
-                aria-label="Publish on-chain before awarding"
+                className={`rounded-full px-2 py-1 text-[0.66rem] font-semibold leading-none ${revealBadge.className}`}
+                aria-label={revealBadge.ariaLabel}
               >
-                Publish first
+                {revealBadge.label}
               </span>
             </TooltipAnchor>
           ) : null}
           {canReveal ? (
-            <TooltipAnchor text="Publish this settled feedback on-chain" position="top" className="rounded-full">
+            <TooltipAnchor
+              text="Manual fallback: publish this settled feedback on-chain"
+              position="top"
+              className="rounded-full"
+            >
               <button
                 type="button"
                 className="vote-btn vote-btn-sm vote-light"
@@ -271,9 +317,6 @@ export function ContentFeedbackPanel({
   const getAwardablePoolsForFeedback = (feedbackItem: ContentFeedbackItem): ContentFeedbackBonusPool[] => {
     return isOnchainRevealedFeedback(feedbackItem) ? getOpenPoolsForFeedback(feedbackItem) : [];
   };
-  const needsOnchainRevealBeforeAward = (feedbackItem: ContentFeedbackItem): boolean => {
-    return !isOnchainRevealedFeedback(feedbackItem) && getOpenPoolsForFeedback(feedbackItem).length > 0;
-  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -300,7 +343,7 @@ export function ContentFeedbackPanel({
 
     setBody("");
     setSourceUrl("");
-    notification.success(feedback.settlementComplete ? "Feedback published" : "Feedback added until settlement");
+    notification.success("Feedback saved until settlement");
   };
 
   const handleRevealFeedback = async (feedbackItem: ContentFeedbackItem) => {
@@ -411,25 +454,28 @@ export function ContentFeedbackPanel({
           </div>
         ) : visibleItems.length > 0 ? (
           <ul className="flex flex-col gap-2">
-            {visibleItems.map(feedbackItem => (
-              <FeedbackItem
-                key={feedbackItem.id}
-                item={feedbackItem}
-                awardablePoolCount={getAwardablePoolsForFeedback(feedbackItem).length}
-                canReveal={
-                  feedback.settlementComplete &&
-                  feedbackItem.isOwn &&
-                  !isOnchainRevealedFeedback(feedbackItem) &&
-                  hasHexFeedbackHash(feedbackItem) &&
-                  Boolean(feedbackItem.clientNonce)
-                }
-                isAwarded={(feedbackItem.feedbackBonusAwards ?? []).length > 0}
-                isRevealing={isRevealing}
-                needsOnchainReveal={needsOnchainRevealBeforeAward(feedbackItem)}
-                onAward={setAwardTarget}
-                onReveal={handleRevealFeedback}
-              />
-            ))}
+            {visibleItems.map(feedbackItem => {
+              const openPoolCount = getOpenPoolsForFeedback(feedbackItem).length;
+              return (
+                <FeedbackItem
+                  key={feedbackItem.id}
+                  item={feedbackItem}
+                  awardablePoolCount={getAwardablePoolsForFeedback(feedbackItem).length}
+                  canReveal={
+                    feedback.settlementComplete &&
+                    feedbackItem.isOwn &&
+                    !isOnchainRevealedFeedback(feedbackItem) &&
+                    hasHexFeedbackHash(feedbackItem) &&
+                    Boolean(feedbackItem.clientNonce)
+                  }
+                  isAwarded={(feedbackItem.feedbackBonusAwards ?? []).length > 0}
+                  isRevealing={isRevealing}
+                  revealBadge={getFeedbackRevealBadge(feedbackItem, openPoolCount > 0)}
+                  onAward={setAwardTarget}
+                  onReveal={handleRevealFeedback}
+                />
+              );
+            })}
           </ul>
         ) : feedback.settlementComplete ? (
           <p className="surface-card-nested rounded-lg px-3 py-3 text-sm leading-relaxed text-base-content/60">

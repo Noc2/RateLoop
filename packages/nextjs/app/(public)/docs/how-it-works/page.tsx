@@ -151,11 +151,11 @@ const HowItWorks: NextPage = () => {
 
       <h3>Feedback Bonuses</h3>
       <p>
-        To earn a feedback bonus, reveal your vote and leave useful hidden feedback; the configured awarder can pay one
-        award per independent rater or feedback hash until the later of the requested feedback close and 24 hours after
-        settlement. The calculation is <code>recipient amount = gross award - frontend fee</code>, with the default
-        frontend fee at 3% when an eligible frontend applies; unawarded remainder goes to treasury after the effective
-        award deadline.
+        To earn a feedback bonus, reveal your vote and leave useful hidden feedback; after settlement, the keeper
+        publishes eligible feedback on-chain so the configured awarder can pay one award per independent rater or
+        feedback hash until the later of the requested feedback close and 24 hours after settlement. The calculation is{" "}
+        <code>recipient amount = gross award - frontend fee</code>, with the default frontend fee at 3% when an eligible
+        frontend applies; unawarded remainder goes to treasury after the effective award deadline.
       </p>
 
       <h2 id="optional-identity">Optional Identity Signals</h2>

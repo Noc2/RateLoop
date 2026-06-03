@@ -1,6 +1,6 @@
 # RateLoop — Keeper (Round Resolution Service)
 
-Stateless service that reveals committed RBTS votes via `revealVoteByCommitKey()` after each epoch, settles eligible rounds via `settleRound()`, finalizes `RevealFailed` rounds after the last grace deadline, sweeps unrevealed-vote cleanup via `processUnrevealedVotes()`, cancels expired rounds, marks dormant content, and can optionally sweep frontend fees or publish `ClusterPayoutOracle` snapshot artifacts for a registered frontend operator. In the redeployed tlock model, it also performs deeper AGE/tlock stanza checks against the stored drand metadata before decrypting. Designed for horizontal scaling — multiple instances run independently for redundancy.
+Stateless service that reveals committed RBTS votes via `revealVoteByCommitKey()` after each epoch, settles eligible rounds via `settleRound()`, finalizes `RevealFailed` rounds after the last grace deadline, sweeps unrevealed-vote cleanup via `processUnrevealedVotes()`, cancels expired rounds, marks dormant content, and can optionally publish settled feedback for Feedback Bonus eligibility, sweep frontend fees, or publish `ClusterPayoutOracle` snapshot artifacts for a registered frontend operator. In the redeployed tlock model, it also performs deeper AGE/tlock stanza checks against the stored drand metadata before decrypting. Designed for horizontal scaling — multiple instances run independently for redundancy.
 
 ## Quick Start
 
@@ -35,6 +35,7 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `VOTING_ENGINE_ADDRESS`                           | Auto-derived for supported chains                                   | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `CONTENT_REGISTRY_ADDRESS`                        | Auto-derived for supported chains                                   | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `ADVISORY_VOTE_RECORDER_ADDRESS`                  | Auto-derived for supported chains                                   | Local `31337` override only; used to reveal and credit zero-stake advisory votes                                   |
+| `FEEDBACK_REGISTRY_ADDRESS`                       | Auto-derived for supported chains                                   | Local `31337` override only; used to publish settled feedback for Feedback Bonus eligibility                       |
 | `ROUND_REWARD_DISTRIBUTOR_ADDRESS`                | Auto-derived when frontend-fee sweep is enabled on supported chains | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `FRONTEND_REGISTRY_ADDRESS`                       | Auto-derived when frontend-fee sweep is enabled on supported chains | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `CLUSTER_PAYOUT_ORACLE_ADDRESS`                   | Auto-derived for supported chains                                   | Required when correlation snapshot publication is enabled                                                          |
@@ -47,6 +48,11 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `KEEPER_STARTUP_JITTER_MS`                        | `0`                                                                 | Random startup delay for multi-instance staggering                                                                 |
 | `KEEPER_CLEANUP_BATCH_SIZE`                       | `25`                                                                | Max commit window processed per `processUnrevealedVotes()` batch                                                   |
 | `KEEPER_DATABASE_URL`                             | —                                                                   | Optional Postgres URL for keeper-only correlation artifact cache and advisory locks                                |
+| `KEEPER_FEEDBACK_REVEAL_API_BASE_URL`             | —                                                                   | Next.js app base URL used to lease and report settled feedback reveal jobs                                         |
+| `KEEPER_FEEDBACK_REVEAL_SECRET`                   | —                                                                   | Bearer token for `/api/feedback/keeper/*`; must match the app's `RATELOOP_FEEDBACK_REVEAL_SECRET`                  |
+| `KEEPER_FEEDBACK_REVEALS_ENABLED`                 | Auto-enabled when API URL and secret are set                        | Explicitly enable or disable post-settlement feedback reveal publication                                           |
+| `KEEPER_FEEDBACK_REVEAL_BATCH_SIZE`               | `25`                                                                | Max feedback reveal jobs to lease per keeper tick                                                                 |
+| `KEEPER_FEEDBACK_REVEAL_LEASE_SECONDS`            | `120`                                                               | Lease duration for feedback reveal jobs before another keeper may retry                                           |
 | `METRICS_ENABLED`                                 | `true`                                                              | Enable Prometheus metrics server                                                                                   |
 | `METRICS_BIND_ADDRESS`                            | `127.0.0.1`                                                         | Metrics server bind address                                                                                        |
 | `METRICS_PORT`                                    | `9090`                                                              | Metrics server port                                                                                                |
@@ -81,7 +87,9 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 - **Prometheus metrics:** `http://localhost:9090/metrics`
 - **Health check:** `http://localhost:9090/health`
 
-Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), and `keeper_unrevealed_cleanup_batches_total` (counter).
+Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), `keeper_unrevealed_cleanup_batches_total` (counter), and the `keeper_feedback_reveal_*` counters.
+
+When `KEEPER_FEEDBACK_REVEAL_API_BASE_URL` and `KEEPER_FEEDBACK_REVEAL_SECRET` are set, the same worker leases settled feedback reveal jobs from the Next.js app, verifies the stored commit key against `FeedbackRegistry.feedbackByCommitKey(...)`, calls `FeedbackRegistry.revealFeedback(...)`, and reports success or retryable/nonretryable failure back to the app. This keeps feedback hidden through the commit/reveal round while making post-settlement Feedback Bonus eligibility automatic. Authors can still manually publish their own settled feedback as a fallback.
 
 When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes a bounded cursor through recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also withdraw accumulated `FrontendRegistry.claimFees()` credits.
 
@@ -102,6 +110,7 @@ src/
 ├── correlation-artifact-builder.ts # Ponder-backed automatic ClusterPayoutOracle artifacts
 ├── correlation-artifact-storage.ts # Canonical artifact hashing and storage
 ├── correlation-snapshots.ts # Optional ClusterPayoutOracle publication
+├── feedback-reveals.ts # Optional post-settlement content feedback publication
 ├── frontend-fees.ts # Optional hosted frontend fee sweeps
 ├── keeper-state.ts # Optional Postgres cache and advisory locks
 ├── config.ts     # Configuration from environment

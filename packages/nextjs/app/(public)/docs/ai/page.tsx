@@ -165,7 +165,7 @@ const AIPage = async () => {
           <code>@rateloop/sdk/vote</code>
         </Link>{" "}
         to build the private commit, approve optional LREP stake, and submit the commit transaction. Feedback may be
-        rewarded after reveal when the asker funded a Feedback Bonus.
+        rewarded after the post-settlement keeper publish when the asker funded a Feedback Bonus.
       </p>
       <p>MCP rating is a wallet-call flow for existing content:</p>
       <ol>
