@@ -17,7 +17,6 @@ import {
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
-import { DOCS_AI_ROUTE } from "~~/constants/routes";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -469,9 +468,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <RateLoopConnectButton />
-            <Link href={DOCS_AI_ROUTE} className="btn btn-outline btn-sm">
-              For Agents
-            </Link>
           </div>
         </div>
       </section>
