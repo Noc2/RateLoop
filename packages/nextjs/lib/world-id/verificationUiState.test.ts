@@ -35,6 +35,13 @@ test("formats RPC rate-limit errors as retry guidance", () => {
   );
 });
 
+test("formats stale wallet connector errors as reconnect guidance", () => {
+  assert.equal(
+    getWorldIdCredentialAttestationErrorMessage("connection.connector.getChainId is not a function"),
+    "Your wallet session is still reconnecting. Wait a moment, then try verifying again. If this keeps happening, disconnect and sign in again.",
+  );
+});
+
 test("derives QR-first request states", () => {
   assertStep({}, "idle");
   assertStep({ isPreparing: true }, "preparing");

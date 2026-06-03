@@ -67,6 +67,45 @@ export function pickTransactorOptions(options?: ScaffoldWriteContractOptions): T
   return transactorOptions;
 }
 
+export const WALLET_SESSION_RESTORING_MESSAGE =
+  "Your wallet session is still reconnecting. Wait a moment, then try again.";
+
+type WalletWriteReadinessParams = {
+  accountChainId?: number;
+  accountStatus: "connected" | "connecting" | "disconnected" | "reconnecting";
+  connector?: { getChainId?: unknown };
+  hasDirectWalletClient?: boolean;
+  selectedNetworkId: number;
+  selectedNetworkName: string;
+};
+
+function connectorCanResolveChainId(connector: WalletWriteReadinessParams["connector"]) {
+  return typeof connector?.getChainId === "function";
+}
+
+export function getWalletWriteUnavailableMessage({
+  accountChainId,
+  accountStatus,
+  connector,
+  hasDirectWalletClient = false,
+  selectedNetworkId,
+  selectedNetworkName,
+}: WalletWriteReadinessParams) {
+  if (!accountChainId) {
+    return "Please connect your wallet";
+  }
+
+  if (accountStatus !== "connected" || (!hasDirectWalletClient && !connectorCanResolveChainId(connector))) {
+    return WALLET_SESSION_RESTORING_MESSAGE;
+  }
+
+  if (accountChainId !== selectedNetworkId) {
+    return `Wallet is connected to the wrong network. Please switch to ${selectedNetworkName}`;
+  }
+
+  return null;
+}
+
 export function useScaffoldWriteContract<TContractName extends ContractName>(
   config: UseScaffoldWriteConfig<TContractName>,
 ): ScaffoldWriteContractReturnType<TContractName>;
@@ -85,7 +124,12 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
 
   const wagmiConfig = useConfig();
 
-  const { chain: accountChain, address: accountAddress } = useAccount();
+  const {
+    chain: accountChain,
+    address: accountAddress,
+    connector: accountConnector,
+    status: accountStatus,
+  } = useAccount();
   const [isMining, setIsMining] = useState(false);
   const selectedNetwork = useSelectedNetwork(chainId);
   const localE2ETestWalletClient = useLocalE2ETestWalletClient(accountAddress, selectedNetwork.id);
@@ -111,13 +155,19 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
       return;
     }
 
-    if (!accountChain?.id) {
-      notification.error("Please connect your wallet");
-      return;
-    }
-
-    if (accountChain?.id !== selectedNetwork.id) {
-      notification.error(`Wallet is connected to the wrong network. Please switch to ${selectedNetwork.name}`);
+    const walletUnavailableMessage = getWalletWriteUnavailableMessage({
+      accountChainId: accountChain?.id,
+      accountStatus,
+      connector: accountConnector,
+      hasDirectWalletClient: Boolean(localE2ETestWalletClient),
+      selectedNetworkId: selectedNetwork.id,
+      selectedNetworkName: selectedNetwork.name,
+    });
+    if (walletUnavailableMessage) {
+      notification.error(walletUnavailableMessage);
+      if (walletUnavailableMessage === WALLET_SESSION_RESTORING_MESSAGE) {
+        throw new Error(walletUnavailableMessage);
+      }
       return;
     }
 
@@ -226,13 +276,16 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
       );
       return;
     }
-    if (!accountChain?.id) {
-      notification.error("Please connect your wallet");
-      return;
-    }
-
-    if (accountChain?.id !== selectedNetwork.id) {
-      notification.error(`Wallet is connected to the wrong network. Please switch to ${selectedNetwork.name}`);
+    const walletUnavailableMessage = getWalletWriteUnavailableMessage({
+      accountChainId: accountChain?.id,
+      accountStatus,
+      connector: accountConnector,
+      hasDirectWalletClient: Boolean(localE2ETestWalletClient),
+      selectedNetworkId: selectedNetwork.id,
+      selectedNetworkName: selectedNetwork.name,
+    });
+    if (walletUnavailableMessage) {
+      notification.error(walletUnavailableMessage);
       return;
     }
 
