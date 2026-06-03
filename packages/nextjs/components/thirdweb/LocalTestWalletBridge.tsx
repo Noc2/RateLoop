@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { defineChain } from "thirdweb";
 import { useActiveAccount, useConnect as useThirdwebConnect } from "thirdweb/react";
 import { foundry } from "viem/chains";
@@ -31,7 +31,21 @@ function isLocalTestWalletEnabled() {
   });
 }
 
-export function LocalTestWalletBridge() {
+function getLocalTestWalletPrivateKey() {
+  if (!isLocalTestWalletEnabled() || !thirdwebClient) {
+    return null;
+  }
+
+  return window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim() || null;
+}
+
+function LocalTestWalletBridgeRunner({
+  client,
+  privateKey,
+}: {
+  client: NonNullable<typeof thirdwebClient>;
+  privateKey: string;
+}) {
   const { targetNetwork } = useTargetNetwork();
   const { address } = useAccount();
   const activeThirdwebAccount = useActiveAccount();
@@ -42,15 +56,6 @@ export function LocalTestWalletBridge() {
   const thirdwebTargetChain = useMemo(() => defineChain(targetNetwork), [targetNetwork]);
 
   useEffect(() => {
-    if (!isLocalTestWalletEnabled() || !thirdwebClient) {
-      return;
-    }
-
-    const privateKey = window.localStorage.getItem(RATELOOP_E2E_TEST_WALLET_PRIVATE_KEY_STORAGE_KEY)?.trim();
-    if (!privateKey) {
-      return;
-    }
-
     if (targetNetwork.id !== LOCAL_TEST_CHAIN_ID) {
       const localTestNetwork =
         scaffoldConfig.targetNetworks.find(network => network.id === LOCAL_TEST_CHAIN_ID) ?? foundry;
@@ -67,7 +72,7 @@ export function LocalTestWalletBridge() {
 
     const wallet = createLocalTestWallet({
       chain: thirdwebTargetChain,
-      client: thirdwebClient,
+      client,
       privateKey,
     });
     const targetAddress = wallet.getAccount()?.address?.toLowerCase();
@@ -118,7 +123,9 @@ export function LocalTestWalletBridge() {
   }, [
     activeThirdwebAccount?.address,
     address,
+    client,
     connect,
+    privateKey,
     setTargetNetwork,
     syncWalletToWagmi,
     targetNetwork.id,
@@ -126,4 +133,18 @@ export function LocalTestWalletBridge() {
   ]);
 
   return null;
+}
+
+export function LocalTestWalletBridge() {
+  const [privateKey, setPrivateKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPrivateKey(getLocalTestWalletPrivateKey());
+  }, []);
+
+  if (!privateKey || !thirdwebClient) {
+    return null;
+  }
+
+  return <LocalTestWalletBridgeRunner client={thirdwebClient} privateKey={privateKey} />;
 }
