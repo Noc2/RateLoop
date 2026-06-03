@@ -61,6 +61,19 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "CORRELATION_EPOCH_COVERAGE_DOMAIN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "CORRELATION_EPOCH_DOMAIN",
     "inputs": [],
     "outputs": [
@@ -146,6 +159,19 @@ export const ClusterPayoutOracleAbi = [
         "name": "",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_CORRELATION_EPOCH_SOURCES",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -305,6 +331,25 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "correlationEpochCoverageDigest",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "correlationEpochSnapshot",
     "inputs": [
       {
@@ -390,6 +435,30 @@ export const ClusterPayoutOracleAbi = [
             "internalType": "uint256"
           }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "correlationEpochSnapshotCoverageDigest",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -798,6 +867,33 @@ export const ClusterPayoutOracleAbi = [
         "name": "artifactURI",
         "type": "string",
         "internalType": "string"
+      },
+      {
+        "name": "sourceRefs",
+        "type": "tuple[]",
+        "internalType": "struct IClusterPayoutOracle.CorrelationEpochSourceRef[]",
+        "components": [
+          {
+            "name": "domain",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "rewardPoolId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "contentId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "roundId",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
       }
     ],
     "outputs": [],

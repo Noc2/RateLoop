@@ -4976,7 +4976,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             keccak256(abi.encode("cluster-root", roundId)),
             keccak256("params"),
             keccak256("epoch-artifact"),
-            "ipfs://epoch"
+            "ipfs://epoch",
+            _questionEpochSources(rewardPoolId, contentId, roundId)
         );
         vm.warp(block.timestamp + 1 hours + 1);
         oracle.finalizeCorrelationEpoch(correlationEpochId);
@@ -5150,6 +5151,20 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             0,
             bountyEligibility
         );
+    }
+
+    function _questionEpochSources(uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+        internal
+        pure
+        returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources)
+    {
+        sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](1);
+        sources[0] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+            domain: 1,
+            rewardPoolId: rewardPoolId,
+            contentId: contentId,
+            roundId: roundId
+        });
     }
 
     function _settleRoundWith(address[] memory voters, uint256 contentId, bool[] memory directions)

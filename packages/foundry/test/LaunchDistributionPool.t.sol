@@ -12,6 +12,32 @@ import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRe
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
+function _launchEpochSources(uint256 toRoundId)
+    pure
+    returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources)
+{
+    return _launchEpochSourcesForRange(1, toRoundId);
+}
+
+function _launchEpochSourcesForRange(uint256 fromRoundId, uint256 toRoundId)
+    pure
+    returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources)
+{
+    uint256 sourceCount = toRoundId - fromRoundId + 1;
+    sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](sourceCount);
+    for (uint256 i; i < sourceCount;) {
+        sources[i] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+            domain: 2,
+            rewardPoolId: 0,
+            contentId: 1,
+            roundId: fromRoundId + i
+        });
+        unchecked {
+            ++i;
+        }
+    }
+}
+
 contract WeakLaunchRaterRegistry {
     function getHumanCredential(address) external pure returns (RaterRegistry.HumanCredential memory credential) {
         return credential;
@@ -600,7 +626,14 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.roundUnverifiedLaunchCreditCount(1, 1), 1);
 
         oracle.proposeCorrelationEpoch(
-            1, 1, 1, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1,
+            1,
+            1,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _launchEpochSources(1)
         );
         vm.warp(2);
         oracle.finalizeCorrelationEpoch(1);
@@ -667,7 +700,14 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(_recordLaunchReward(alice, 1, bytes32("anchor-a")), 0);
 
         oracle.proposeCorrelationEpoch(
-            1, 1, 1, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1,
+            1,
+            1,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _launchEpochSources(1)
         );
         vm.warp(2);
         oracle.finalizeCorrelationEpoch(1);
@@ -999,7 +1039,7 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_FinalizedPendingLaunchCreditKeepsAnchorFanoutAfterSiblingCancel() public {
-        ClusterPayoutOracle oracle = _configureLaunchOracle(601);
+        ClusterPayoutOracle oracle = _configureLaunchOracle(601, _launchEpochSourcesForRange(600, 601));
         bytes32 anchorId = bytes32("anchor-finalized");
         bytes32 firstCommitKey = keccak256("finalized-pending-first");
         bytes32 secondCommitKey = keccak256("finalized-pending-second");
@@ -1116,7 +1156,7 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_RescueStalePendingLaunchCreditRepointsOracleAndDefersAnchors() public {
-        _configureLaunchOracle(80);
+        _configureLaunchOracle(80, _launchEpochSourcesForRange(80, 80));
         bytes32 commitKey = _commitKey(80);
 
         pool.recordEarnedRaterRewardWithSourceReady(
@@ -1138,7 +1178,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterDistinctAnchorRoundCount(alice), 0);
         assertEq(pool.verifiedAnchorDistinctRaterCount(bytes32("anchor-a")), 1);
 
-        ClusterPayoutOracle currentOracle = _configureLaunchOracle(80);
+        ClusterPayoutOracle currentOracle = _configureLaunchOracle(80, _launchEpochSourcesForRange(80, 80));
         pool.rescueStalePendingEarnedRaterCredit(1, 80, commitKey, 0);
 
         assertTrue(pool.earnedRewardCreditRecorded(1, 80, commitKey));
@@ -2278,6 +2318,13 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function _configureLaunchOracle(uint64 toRoundId) internal returns (ClusterPayoutOracle oracle) {
+        return _configureLaunchOracle(toRoundId, _launchEpochSources(toRoundId));
+    }
+
+    function _configureLaunchOracle(
+        uint64 toRoundId,
+        IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sourceRefs
+    ) internal returns (ClusterPayoutOracle oracle) {
         MockLaunchOracleFrontendRegistry frontendRegistry = new MockLaunchOracleFrontendRegistry();
         frontendRegistry.setEligible(address(this), true);
         oracle = new ClusterPayoutOracle(address(this), address(frontendRegistry), address(lrep));
@@ -2289,7 +2336,14 @@ contract LaunchDistributionPoolTest is Test {
         pool.setRoundClusterReadyAtSource(address(new MockAlwaysReadyClusterSource()));
 
         oracle.proposeCorrelationEpoch(
-            1, 1, toRoundId, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1,
+            1,
+            toRoundId,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            sourceRefs
         );
         ClusterPayoutOracle.CorrelationEpochSnapshot memory epoch = oracle.correlationEpochSnapshot(1);
         vm.warp(uint256(epoch.proposedAt) + 2);

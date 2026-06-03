@@ -41,6 +41,13 @@ interface IClusterPayoutOracle {
         string artifactURI;
     }
 
+    struct CorrelationEpochSourceRef {
+        uint8 domain;
+        uint256 rewardPoolId;
+        uint256 contentId;
+        uint256 roundId;
+    }
+
     struct PayoutWeight {
         uint8 domain;
         uint256 rewardPoolId;

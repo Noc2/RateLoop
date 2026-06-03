@@ -6,6 +6,42 @@ import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
 import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 
+function _questionEpochSources(uint256 rewardPoolId, uint256 contentId, uint256 roundId)
+    pure
+    returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources)
+{
+    sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](1);
+    sources[0] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+        domain: 1,
+        rewardPoolId: rewardPoolId,
+        contentId: contentId,
+        roundId: roundId
+    });
+}
+
+function _defaultEpochSources() pure returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources) {
+    return _questionEpochSources(7, 42, 3);
+}
+
+function _twoQuestionEpochSources(uint256 firstRoundId, uint256 secondRoundId)
+    pure
+    returns (IClusterPayoutOracle.CorrelationEpochSourceRef[] memory sources)
+{
+    sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](2);
+    sources[0] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+        domain: 1,
+        rewardPoolId: 7,
+        contentId: 42,
+        roundId: firstRoundId
+    });
+    sources[1] = IClusterPayoutOracle.CorrelationEpochSourceRef({
+        domain: 1,
+        rewardPoolId: 7,
+        contentId: 42,
+        roundId: secondRoundId
+    });
+}
+
 contract ClusterPayoutOracleTest is Test {
     uint256 internal constant CHALLENGE_BOND = 5e6;
     address internal constant CHALLENGER = address(0xCA11);
@@ -73,13 +109,15 @@ contract ClusterPayoutOracleTest is Test {
         vm.prank(ineligibleFrontend);
         vm.expectRevert(ClusterPayoutOracle.FrontendNotEligible.selector);
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         frontendRegistry.setEligible(ineligibleFrontend, true);
         vm.prank(ineligibleFrontend);
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         vm.warp(1 hours + 2);
@@ -101,7 +139,8 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.prank(keeper);
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory epoch = oracle.correlationEpochSnapshot(1);
@@ -132,20 +171,23 @@ contract ClusterPayoutOracleTest is Test {
     function test_ProposalsDoNotAcceptEthBonds() public {
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
         oracle.proposeCorrelationEpoch{ value: 1 }(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
     }
 
     function test_ProposeCorrelationEpochRejectsZeroArtifactHash() public {
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), bytes32(0), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), bytes32(0), "ipfs://epoch",
+            _defaultEpochSources()
         );
     }
 
     function test_ProposeRoundPayoutSnapshotRejectsZeroArtifactHash() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -172,20 +214,15 @@ contract ClusterPayoutOracleTest is Test {
         oracle.setOracleConfig(1 hours, maxChallengeBond + 1, address(this));
     }
 
-    function test_RoundPayoutSnapshotConsumersMustBeConfigured() public {
+    function test_CorrelationEpochSourcesRequireConfiguredConsumer() public {
         ClusterPayoutOracle unconfiguredOracle =
             new ClusterPayoutOracle(address(this), address(frontendRegistry), address(usdc));
         unconfiguredOracle.setOracleConfig(1 hours, CHALLENGE_BOND, address(this));
-        unconfiguredOracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
-        );
-
-        vm.warp(1 hours + 2);
-        unconfiguredOracle.finalizeCorrelationEpoch(1);
-
-        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
         vm.expectRevert(ClusterPayoutOracle.InvalidAddress.selector);
-        unconfiguredOracle.proposeRoundPayoutSnapshot(input);
+        unconfiguredOracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
+        );
     }
 
     function test_SetRoundPayoutSnapshotConsumerRejectsInvalidConfig() public {
@@ -218,7 +255,8 @@ contract ClusterPayoutOracleTest is Test {
             keccak256("replacement-cluster-root"),
             keccak256("params"),
             keccak256("epoch-artifact"),
-            "ipfs://ok"
+            "ipfs://ok",
+            _defaultEpochSources()
         );
     }
 
@@ -228,7 +266,8 @@ contract ClusterPayoutOracleTest is Test {
     // (sourceReadyAt == 0) and future-readyAt branches, plus the happy-path once ready.
     function test_RoundPayoutSnapshotProposalRequiresSourceReady() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -250,9 +289,92 @@ contract ClusterPayoutOracleTest is Test {
         oracle.proposeRoundPayoutSnapshot(input);
     }
 
+    function test_CorrelationEpochProposalRequiresSourcesReady() public {
+        questionConsumer.setSourceReadyAt(0);
+        vm.expectRevert(ClusterPayoutOracle.SourceNotReady.selector);
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
+        );
+
+        questionConsumer.setSourceReadyAt(uint64(block.timestamp + 1 hours));
+        vm.expectRevert(ClusterPayoutOracle.SourceNotReady.selector);
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
+        );
+
+        questionConsumer.setSourceReadyAt(uint64(block.timestamp));
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
+        );
+    }
+
+    function test_CorrelationEpochCoverageRejectsDuplicatesAndOutOfRangeSources() public {
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _twoQuestionEpochSources(3, 3)
+        );
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            1, 10, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
+        );
+    }
+
+    function test_RoundSnapshotMustBeCoveredByCorrelationEpoch() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _questionEpochSources(7, 42, 4)
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        bytes32 defaultKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 3);
+        bytes32 coveredKey = oracle.roundPayoutSnapshotKey(oracle.PAYOUT_DOMAIN_QUESTION_REWARD(), 7, 42, 4);
+        assertNotEq(defaultKey, coveredKey);
+        assertEq(oracle.correlationEpochSnapshotCoverageDigest(1, defaultKey), bytes32(0));
+        assertEq(
+            oracle.correlationEpochSnapshotCoverageDigest(1, coveredKey), oracle.correlationEpochCoverageDigest(1)
+        );
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
+    function test_ReproposedCorrelationEpochDoesNotInheritOldCoverage() public {
+        oracle.proposeCorrelationEpoch(
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        oracle.rejectCorrelationEpoch(1, keccak256("replace-coverage"));
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("replacement-cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _questionEpochSources(7, 42, 4)
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeRoundPayoutSnapshot(input);
+    }
+
     function test_OptimisticEpochAndRoundSnapshotFinalizeAndVerifyLeaf() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         vm.warp(1 hours + 2);
@@ -311,7 +433,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_EmptyRoundPayoutSnapshotFinalizesButCannotVerifyClaims() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -353,7 +476,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_RoundPayoutSnapshotRejectsInconsistentEmptyShape() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -389,7 +513,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_RejectedEmptyRoundPayoutSnapshotBlacklistsEmptyRoot() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -414,7 +539,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_ChallengedEpochCannotFinalizeUntilArbiterRejectsIt() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
 
@@ -433,7 +559,8 @@ contract ClusterPayoutOracleTest is Test {
     function test_FinalizedCorrelationEpochCanBeVetoedBeforeFutureChildProposals() public {
         bytes32 clusterRoot = keccak256("cluster-root");
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, clusterRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, clusterRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -451,7 +578,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_FinalizedCorrelationEpochVetoWindowExpires() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -463,7 +591,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_RejectedFinalizedCorrelationEpochBlocksChildFinalization() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -483,7 +612,8 @@ contract ClusterPayoutOracleTest is Test {
             keccak256("replacement-cluster-root"),
             keccak256("params"),
             keccak256("replacement-epoch-artifact"),
-            "ipfs://epoch-replacement"
+            "ipfs://epoch-replacement",
+            _defaultEpochSources()
         );
         vm.warp(block.timestamp + 1 hours + 1);
         oracle.finalizeCorrelationEpoch(1);
@@ -495,7 +625,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_RejectedFinalizedCorrelationEpochBlocksChallengedChildFinalization() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -516,7 +647,8 @@ contract ClusterPayoutOracleTest is Test {
             keccak256("replacement-cluster-root"),
             keccak256("params"),
             keccak256("replacement-epoch-artifact"),
-            "ipfs://epoch-replacement"
+            "ipfs://epoch-replacement",
+            _defaultEpochSources()
         );
         vm.warp(block.timestamp + 1 hours + 1);
         oracle.finalizeCorrelationEpoch(1);
@@ -527,7 +659,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_RejectedFinalizedCorrelationEpochBlocksFuturePayoutVerification() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -584,7 +717,8 @@ contract ClusterPayoutOracleTest is Test {
             keccak256("replacement-cluster-root"),
             keccak256("params"),
             keccak256("replacement-epoch-artifact"),
-            "ipfs://epoch-replacement"
+            "ipfs://epoch-replacement",
+            _defaultEpochSources()
         );
         vm.warp(3 hours + 4);
         oracle.finalizeCorrelationEpoch(1);
@@ -605,7 +739,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_StaleFinalizedRoundPayoutSnapshotCanBeReplacedWhenUnconsumed() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -627,7 +762,8 @@ contract ClusterPayoutOracleTest is Test {
             keccak256("replacement-cluster-root"),
             keccak256("params"),
             keccak256("replacement-epoch-artifact"),
-            "ipfs://epoch-replacement"
+            "ipfs://epoch-replacement",
+            _defaultEpochSources()
         );
         vm.warp(3 hours + 4);
         oracle.finalizeCorrelationEpoch(1);
@@ -647,7 +783,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_StaleFinalizedRoundPayoutSnapshotCannotBeReplacedWhenConsumed() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -668,7 +805,8 @@ contract ClusterPayoutOracleTest is Test {
             keccak256("replacement-cluster-root"),
             keccak256("params"),
             keccak256("replacement-epoch-artifact"),
-            "ipfs://epoch-replacement"
+            "ipfs://epoch-replacement",
+            _defaultEpochSources()
         );
         vm.warp(3 hours + 4);
         oracle.finalizeCorrelationEpoch(1);
@@ -683,7 +821,8 @@ contract ClusterPayoutOracleTest is Test {
     function test_RejectedFinalizedCorrelationEpochCanBeReplacedWithDifferentRoot() public {
         bytes32 badRoot = keccak256("bad-cluster-root");
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, badRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, badRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -691,7 +830,8 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, badRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, badRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         oracle.proposeCorrelationEpoch(
@@ -701,7 +841,8 @@ contract ClusterPayoutOracleTest is Test {
             keccak256("replacement-cluster-root"),
             keccak256("params"),
             keccak256("epoch-artifact"),
-            "ipfs://epoch-replacement"
+            "ipfs://epoch-replacement",
+            _defaultEpochSources()
         );
         vm.warp(block.timestamp + 1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -723,7 +864,8 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.prank(squatter);
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, honestRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, honestRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         // Arbiter clears the squatted slot without going through the challenge cycle.
@@ -732,7 +874,8 @@ contract ClusterPayoutOracleTest is Test {
         // The clusterRoot is NOT blacklisted, so an honest proposer can re-submit it.
         assertFalse(oracle.rejectedCorrelationEpochRoots(1, honestRoot));
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, honestRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, honestRoot, keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         vm.warp(block.timestamp + 1 hours + 2);
@@ -746,7 +889,8 @@ contract ClusterPayoutOracleTest is Test {
         usdc.mint(challenger, CHALLENGE_BOND);
 
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         vm.prank(challenger);
@@ -763,7 +907,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_ProposerCannotChallengeOwnCorrelationEpoch() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
@@ -772,7 +917,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_ProposerCannotChallengeOwnRoundPayoutSnapshot() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -792,7 +938,8 @@ contract ClusterPayoutOracleTest is Test {
         vm.deal(challenger, 1 ether);
 
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         vm.prank(challenger);
@@ -806,7 +953,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_ArbiterCanFinalizeChallengedSnapshots() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         _challengeCorrelationEpoch(1, keccak256("invalid-challenge"));
         oracle.finalizeChallengedCorrelationEpoch(1, keccak256("challenge-dismissed"));
@@ -859,7 +1007,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_ChallengesCloseWhenSnapshotIsFinalizable() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
 
         vm.warp(1 hours + 2);
@@ -897,14 +1046,16 @@ contract ClusterPayoutOracleTest is Test {
         usdc.mint(address(challenger), 100e6);
 
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         challenger.challengeCorrelationEpoch(usdc, oracle, 1, keccak256("bad-root"));
         oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
         assertEq(oracle.pendingBondWithdrawals(address(challenger)), CHALLENGE_BOND);
 
         oracle.proposeCorrelationEpoch(
-            2, 1, 20, keccak256("cluster-root-2"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            2, 1, 20, keccak256("cluster-root-2"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(2);
@@ -926,7 +1077,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_RejectedSnapshotPayloadCanBeReplacedWithSameRootAndCorrectedMetadata() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("bad-cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("bad-cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
         oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
@@ -938,7 +1090,8 @@ contract ClusterPayoutOracleTest is Test {
             keccak256("replacement-cluster-root"),
             keccak256("params"),
             keccak256("replacement-epoch-artifact"),
-            "ipfs://epoch-replacement"
+            "ipfs://epoch-replacement",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -994,7 +1147,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_RejectedSnapshotRootCannotBeReproposed() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("bad-cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("bad-cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
         oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
@@ -1006,7 +1160,8 @@ contract ClusterPayoutOracleTest is Test {
             keccak256("replacement-cluster-root"),
             keccak256("params"),
             keccak256("replacement-epoch-artifact"),
-            "ipfs://epoch-replacement"
+            "ipfs://epoch-replacement",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1034,7 +1189,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_FinalizedRoundPayoutSnapshotCanBeRejectedWhenConsumerHasNotAppliedIt() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1071,7 +1227,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_FinalizedRoundPayoutSnapshotRejectChecksConsumerAfterVetoWindow() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1094,7 +1251,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_FinalizedRoundPayoutSnapshotRejectAllowedWithinVetoWindowEvenIfConsumed() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1128,7 +1286,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_FinalizedRoundPayoutSnapshotRejectUsesSnapshottedConsumerAfterRotation() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1154,7 +1313,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_LaunchSnapshotsUseZeroRewardPoolId() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1181,7 +1341,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_RoundSnapshotMustStayWithinCorrelationEpochRange() public {
         oracle.proposeCorrelationEpoch(
-            1, 10, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 10, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _questionEpochSources(7, 42, 10)
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1208,7 +1369,8 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_RoundSnapshotMustUseFinalizedEpochArtifactHash() public {
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1343,7 +1505,8 @@ contract ClusterPayoutOracleProposerBondTest is Test {
     function _proposeAndFinalize() internal returns (bytes32 snapshotKey) {
         vm.prank(proposer);
         oracle.proposeCorrelationEpoch(
-            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch"
+            1, 1, 20, keccak256("cluster-root"), keccak256("params"), keccak256("epoch-artifact"), "ipfs://epoch",
+            _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1369,11 +1532,11 @@ contract ClusterPayoutOracleProposerBondTest is Test {
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 
-    /// @dev Writes pendingBondWithdrawals[account] directly. The mapping sits at slot 8
+    /// @dev Writes pendingBondWithdrawals[account] directly. The mapping sits at slot 10
     ///      (challengeBondToken is immutable so does not consume a slot — see comment in
     ///      TestableClusterPayoutOracle._proposerBondSlot for the layout walk).
     function _seedPendingBondWithdrawal(address account, uint256 amount) internal {
-        uint256 BASE_SLOT_PENDING_BOND_WITHDRAWALS = 8;
+        uint256 BASE_SLOT_PENDING_BOND_WITHDRAWALS = 10;
         bytes32 slot = keccak256(abi.encode(account, BASE_SLOT_PENDING_BOND_WITHDRAWALS));
         vm.store(address(oracle), slot, bytes32(amount));
         assertEq(oracle.pendingBondWithdrawals(account), amount, "pendingBondWithdrawals seed sanity");

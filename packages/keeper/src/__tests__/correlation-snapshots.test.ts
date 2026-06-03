@@ -163,6 +163,7 @@ describe("correlation snapshot publisher", () => {
       if (functionName === "roundPayoutProposal") return { snapshot: { status: 3 } };
       throw new Error(`unexpected readContract(${functionName})`);
     });
+    const getBlock = vi.fn().mockResolvedValue({ timestamp: 200n });
     const writeContract = vi.fn().mockResolvedValue("0xhash");
     const waitForTransactionReceipt = vi.fn().mockResolvedValue({
       status: "success",
@@ -179,7 +180,7 @@ describe("correlation snapshot publisher", () => {
     );
 
     const result = await publishConfiguredCorrelationSnapshots(
-      { readContract, waitForTransactionReceipt } as never,
+      { readContract, getBlock, waitForTransactionReceipt } as never,
       { writeContract } as never,
       { id: 31337 } as never,
       { address: ACCOUNT } as never,
@@ -237,7 +238,22 @@ describe("correlation snapshot publisher", () => {
             artifactURI: "ipfs://cached",
           },
         ],
-        roundPayoutSnapshots: [],
+        roundPayoutSnapshots: [
+          {
+            domain: 1,
+            rewardPoolId: "7",
+            contentId: "9",
+            roundId: "1",
+            correlationEpochId: "1",
+            rawEligibleVoters: 5,
+            effectiveParticipantUnits: 50_000,
+            totalClaimWeight: "100",
+            weightRoot: `0x${"4".repeat(64)}`,
+            reasonRoot: `0x${"5".repeat(64)}`,
+            artifactHash: `0x${"3".repeat(64)}`,
+            artifactURI: "ipfs://cached-round",
+          },
+        ],
       },
       artifactHash: `0x${"3".repeat(64)}`,
       canonicalJson: "{}",
@@ -274,8 +290,12 @@ describe("correlation snapshot publisher", () => {
       if (functionName === "authorizedSnapshotFrontend") {
         return "0x9999999999999999999999999999999999999999";
       }
+      if (functionName === "roundPayoutSnapshotKey") return SNAPSHOT_KEY;
+      if (functionName === "roundPayoutSnapshotConsumer") return SNAPSHOT_CONSUMER;
+      if (functionName === "roundPayoutSnapshotSourceReadyAt") return 100n;
       throw new Error(`unexpected readContract(${functionName})`);
     });
+    const getBlock = vi.fn().mockResolvedValue({ timestamp: 200n });
     const writeContract = vi.fn().mockResolvedValue("0xhash");
     const waitForTransactionReceipt = vi.fn().mockResolvedValue({
       status: "success",
@@ -292,7 +312,7 @@ describe("correlation snapshot publisher", () => {
     );
 
     const result = await publishConfiguredCorrelationSnapshots(
-      { readContract, waitForTransactionReceipt } as never,
+      { readContract, getBlock, waitForTransactionReceipt } as never,
       { writeContract } as never,
       { id: 31337 } as never,
       { address: ACCOUNT } as never,

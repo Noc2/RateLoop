@@ -20078,6 +20078,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "CORRELATION_EPOCH_COVERAGE_DOMAIN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "CORRELATION_EPOCH_DOMAIN",
           inputs: [],
           outputs: [
@@ -20163,6 +20176,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint64",
               internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MAX_CORRELATION_EPOCH_SOURCES",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -20322,6 +20348,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "correlationEpochCoverageDigest",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "correlationEpochSnapshot",
           inputs: [
             {
@@ -20334,8 +20379,7 @@ const deployedContracts: GenericContractsDeclaration = {
             {
               name: "",
               type: "tuple",
-              internalType:
-                "struct ClusterPayoutOracle.CorrelationEpochSnapshot",
+              internalType: "struct ClusterPayoutOracle.CorrelationEpochSnapshot",
               components: [
                 {
                   name: "epochId",
@@ -20408,6 +20452,30 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint256",
                 },
               ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "correlationEpochSnapshotCoverageDigest",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -20817,6 +20885,33 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "string",
               internalType: "string",
             },
+            {
+              name: "sourceRefs",
+              type: "tuple[]",
+              internalType: "struct IClusterPayoutOracle.CorrelationEpochSourceRef[]",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+              ],
+            },
           ],
           outputs: [],
           stateMutability: "payable",
@@ -20828,8 +20923,7 @@ const deployedContracts: GenericContractsDeclaration = {
             {
               name: "input",
               type: "tuple",
-              internalType:
-                "struct IClusterPayoutOracle.RoundPayoutSnapshotInput",
+              internalType: "struct IClusterPayoutOracle.RoundPayoutSnapshotInput",
               components: [
                 {
                   name: "domain",
@@ -21151,8 +21245,7 @@ const deployedContracts: GenericContractsDeclaration = {
                 {
                   name: "snapshot",
                   type: "tuple",
-                  internalType:
-                    "struct IClusterPayoutOracle.RoundPayoutSnapshot",
+                  internalType: "struct IClusterPayoutOracle.RoundPayoutSnapshot",
                   components: [
                     {
                       name: "snapshotKey",
@@ -53298,6 +53391,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "CORRELATION_EPOCH_COVERAGE_DOMAIN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "CORRELATION_EPOCH_DOMAIN",
           inputs: [],
           outputs: [
@@ -53383,6 +53489,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint64",
               internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MAX_CORRELATION_EPOCH_SOURCES",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -53542,6 +53661,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "correlationEpochCoverageDigest",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "correlationEpochSnapshot",
           inputs: [
             {
@@ -53554,8 +53692,7 @@ const deployedContracts: GenericContractsDeclaration = {
             {
               name: "",
               type: "tuple",
-              internalType:
-                "struct ClusterPayoutOracle.CorrelationEpochSnapshot",
+              internalType: "struct ClusterPayoutOracle.CorrelationEpochSnapshot",
               components: [
                 {
                   name: "epochId",
@@ -53628,6 +53765,30 @@ const deployedContracts: GenericContractsDeclaration = {
                   internalType: "uint256",
                 },
               ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "correlationEpochSnapshotCoverageDigest",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -54037,6 +54198,33 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "string",
               internalType: "string",
             },
+            {
+              name: "sourceRefs",
+              type: "tuple[]",
+              internalType: "struct IClusterPayoutOracle.CorrelationEpochSourceRef[]",
+              components: [
+                {
+                  name: "domain",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "rewardPoolId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "contentId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "roundId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+              ],
+            },
           ],
           outputs: [],
           stateMutability: "payable",
@@ -54048,8 +54236,7 @@ const deployedContracts: GenericContractsDeclaration = {
             {
               name: "input",
               type: "tuple",
-              internalType:
-                "struct IClusterPayoutOracle.RoundPayoutSnapshotInput",
+              internalType: "struct IClusterPayoutOracle.RoundPayoutSnapshotInput",
               components: [
                 {
                   name: "domain",
@@ -54371,8 +54558,7 @@ const deployedContracts: GenericContractsDeclaration = {
                 {
                   name: "snapshot",
                   type: "tuple",
-                  internalType:
-                    "struct IClusterPayoutOracle.RoundPayoutSnapshot",
+                  internalType: "struct IClusterPayoutOracle.RoundPayoutSnapshot",
                   components: [
                     {
                       name: "snapshotKey",

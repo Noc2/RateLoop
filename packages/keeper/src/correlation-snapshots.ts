@@ -48,13 +48,17 @@ export interface CorrelationEpochArtifact {
   parameterHash: `0x${string}`;
   artifactHash: `0x${string}`;
   artifactURI: string;
+  sourceRefs?: CorrelationEpochSourceRefArtifact[];
 }
 
-export interface RoundPayoutSnapshotArtifact {
+export interface CorrelationEpochSourceRefArtifact {
   domain: number;
   rewardPoolId: string | number | bigint;
   contentId: string | number | bigint;
   roundId: string | number | bigint;
+}
+
+export interface RoundPayoutSnapshotArtifact extends CorrelationEpochSourceRefArtifact {
   correlationEpochId: string | number | bigint;
   rawEligibleVoters: number;
   effectiveParticipantUnits: number;
@@ -161,7 +165,7 @@ async function loadConfiguredCorrelationSnapshotArtifact(
 
 async function roundSnapshotSourceReady(
   publicClient: PublicClient,
-  snapshot: RoundPayoutSnapshotArtifact,
+  snapshot: CorrelationEpochSourceRefArtifact,
   logger: Logger,
 ): Promise<boolean> {
   try {
@@ -226,6 +230,68 @@ async function roundSnapshotSourceReady(
     });
     return false;
   }
+}
+
+async function readyCorrelationEpochSourceRefs(
+  publicClient: PublicClient,
+  artifact: CorrelationSnapshotArtifactFile,
+  epoch: CorrelationEpochArtifact,
+  logger: Logger,
+) {
+  const epochId = BigInt(epoch.epochId);
+  const configuredRefs =
+    epoch.sourceRefs ??
+    (artifact.roundPayoutSnapshots ?? []).filter(
+      (snapshot) => BigInt(snapshot.correlationEpochId) === epochId,
+    );
+  if (configuredRefs.length === 0) {
+    logger.warn("Skipping correlation epoch snapshot because no covered sources are listed", {
+      epochId: epochId.toString(),
+    });
+    return null;
+  }
+
+  const keyedRefs = await Promise.all(
+    configuredRefs.map(async (sourceRef) => ({
+      sourceRef,
+      snapshotKey: (await publicClient.readContract({
+        address: config.contracts.clusterPayoutOracle,
+        abi: ClusterPayoutOracleAbi,
+        functionName: "roundPayoutSnapshotKey",
+        args: [
+          sourceRef.domain,
+          BigInt(sourceRef.rewardPoolId),
+          BigInt(sourceRef.contentId),
+          BigInt(sourceRef.roundId),
+        ],
+      })) as `0x${string}`,
+    })),
+  );
+  keyedRefs.sort((left, right) => left.snapshotKey.localeCompare(right.snapshotKey));
+
+  for (let i = 1; i < keyedRefs.length; i += 1) {
+    if (keyedRefs[i]!.snapshotKey === keyedRefs[i - 1]!.snapshotKey) {
+      logger.warn("Skipping correlation epoch snapshot because covered sources contain a duplicate", {
+        epochId: epochId.toString(),
+        snapshotKey: keyedRefs[i]!.snapshotKey,
+      });
+      return null;
+    }
+  }
+
+  const sourceRefs = keyedRefs.map(({ sourceRef }) => ({
+    domain: sourceRef.domain,
+    rewardPoolId: BigInt(sourceRef.rewardPoolId),
+    contentId: BigInt(sourceRef.contentId),
+    roundId: BigInt(sourceRef.roundId),
+  }));
+  for (const sourceRef of sourceRefs) {
+    if (!(await roundSnapshotSourceReady(publicClient, sourceRef, logger))) {
+      return null;
+    }
+  }
+
+  return sourceRefs;
 }
 
 export async function publishConfiguredCorrelationSnapshots(
@@ -554,6 +620,16 @@ async function publishCorrelationSnapshotArtifact(
         continue;
       }
 
+      const sourceRefs = await readyCorrelationEpochSourceRefs(
+        publicClient,
+        artifact,
+        epoch,
+        logger,
+      );
+      if (!sourceRefs) {
+        continue;
+      }
+
       try {
         await writeContractAndConfirm(publicClient, walletClient, {
           account,
@@ -569,6 +645,7 @@ async function publishCorrelationSnapshotArtifact(
             epoch.parameterHash,
             epoch.artifactHash,
             epoch.artifactURI,
+            sourceRefs,
           ],
         });
         result.epochsProposed += 1;
