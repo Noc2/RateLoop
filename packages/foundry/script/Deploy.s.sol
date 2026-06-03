@@ -370,7 +370,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
                 governance,
                 address(registry),
                 address(frontendRegistry),
-                address(questionRewardPoolEscrow)
+                address(questionRewardPoolEscrow),
+                address(feedbackBonusEscrow)
             );
             governor = new RateLoopGovernor(
                 IVotes(address(lrepToken)), TimelockController(payable(governance)), excludedHolders
@@ -546,9 +547,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         address treasury,
         address contentRegistry,
         address frontendRegistry,
-        address questionRewardPoolEscrow
+        address questionRewardPoolEscrow,
+        address feedbackBonusEscrow
     ) internal pure returns (address[] memory holders) {
-        address[] memory temp = new address[](7);
+        address[] memory temp = new address[](8);
         uint256 count;
         count = _appendUnique(temp, count, launchDistribution);
         count = _appendUnique(temp, count, rewardDistributor);
@@ -557,6 +559,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         count = _appendUnique(temp, count, contentRegistry);
         count = _appendUnique(temp, count, frontendRegistry);
         count = _appendUnique(temp, count, questionRewardPoolEscrow);
+        count = _appendUnique(temp, count, feedbackBonusEscrow);
 
         holders = new address[](count);
         for (uint256 i = 0; i < count; i++) {
