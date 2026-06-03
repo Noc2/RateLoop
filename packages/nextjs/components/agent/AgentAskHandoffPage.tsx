@@ -9,15 +9,19 @@ import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
 import {
   ArrowPathIcon,
   CheckCircleIcon,
+  ClockIcon,
+  DocumentTextIcon,
   ExclamationTriangleIcon,
   PhotoIcon,
   ShieldCheckIcon,
+  TagIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import { DEFAULT_QUESTION_ROUND_CONFIG, formatDurationLabel } from "~~/lib/questionRoundConfig";
 import { notification } from "~~/utils/scaffold-eth";
 
 type JsonRecord = Record<string, unknown>;
@@ -91,6 +95,23 @@ type ImageSignatureStep = {
   status: "pending" | "signed";
 };
 
+type QuestionSummary = {
+  categoryId: string;
+  contextUrl: string;
+  description: string;
+  tags: string[];
+  templateId: string;
+  title: string;
+  videoUrl: string;
+};
+
+type RoundSettings = {
+  epochDuration: bigint;
+  maxDuration: bigint;
+  maxVoters: bigint;
+  minVoters: bigint;
+};
+
 function sameAddress(left: string | undefined | null, right: string | undefined | null) {
   return Boolean(left && right && left.toLowerCase() === right.toLowerCase());
 }
@@ -115,16 +136,91 @@ function readToken(searchParams: URLSearchParams) {
   return searchParams.get("token") ?? "";
 }
 
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readDisplayValue(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "bigint") return value.toString();
+  return "";
+}
+
+function readPositiveBigInt(value: unknown) {
+  const rawValue =
+    typeof value === "string" || typeof value === "number" || typeof value === "bigint" ? String(value).trim() : "";
+  if (!/^\d+$/.test(rawValue)) return null;
+  const parsed = BigInt(rawValue);
+  return parsed > 0n ? parsed : null;
+}
+
+function readFirstPositiveBigInt(source: JsonRecord | null, keys: string[], fallback: bigint) {
+  if (!source) return fallback;
+  for (const key of keys) {
+    const parsed = readPositiveBigInt(source[key]);
+    if (parsed !== null) return parsed;
+  }
+  return fallback;
+}
+
+function readQuestionRecords(handoff: Handoff | null): JsonRecord[] {
+  const requestBody = handoff?.requestBody;
+  if (!requestBody) return [];
+  if (isJsonRecord(requestBody.question)) return [requestBody.question];
+  if (Array.isArray(requestBody.questions)) return requestBody.questions.filter(isJsonRecord);
+  return readString(requestBody.title) ? [requestBody] : [];
+}
+
+function readQuestionTags(value: unknown) {
+  const tags = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return tags.map(tag => readString(tag)).filter(Boolean);
+}
+
+function readQuestionSummaries(handoff: Handoff | null): QuestionSummary[] {
+  return readQuestionRecords(handoff).map((question, index) => ({
+    categoryId: readDisplayValue(question.categoryId),
+    contextUrl: readString(question.contextUrl),
+    description: readString(question.description),
+    tags: readQuestionTags(question.tags),
+    templateId: readString(question.templateId),
+    title: readString(question.title) || `Question ${index + 1}`,
+    videoUrl: readString(question.videoUrl),
+  }));
+}
+
+function readRoundSettings(handoff: Handoff | null): RoundSettings {
+  const requestBody = handoff?.requestBody ?? null;
+  const firstQuestion = readQuestionRecords(handoff)[0];
+  const source = isJsonRecord(requestBody?.roundConfig)
+    ? requestBody.roundConfig
+    : isJsonRecord(firstQuestion?.roundConfig)
+      ? firstQuestion.roundConfig
+      : null;
+
+  return {
+    epochDuration: readFirstPositiveBigInt(
+      source,
+      ["epochDuration", "blindPhaseSeconds", "blindSeconds"],
+      DEFAULT_QUESTION_ROUND_CONFIG.epochDuration,
+    ),
+    maxDuration: readFirstPositiveBigInt(
+      source,
+      ["maxDuration", "maxDurationSeconds", "deadlineSeconds"],
+      DEFAULT_QUESTION_ROUND_CONFIG.maxDuration,
+    ),
+    maxVoters: readFirstPositiveBigInt(source, ["maxVoters"], DEFAULT_QUESTION_ROUND_CONFIG.maxVoters),
+    minVoters: readFirstPositiveBigInt(source, ["minVoters"], DEFAULT_QUESTION_ROUND_CONFIG.minVoters),
+  };
+}
+
 function readQuestionTitle(handoff: Handoff | null) {
-  const question = handoff?.requestBody?.question;
-  if (question && typeof question === "object" && !Array.isArray(question)) {
-    const title = (question as JsonRecord).title;
-    return typeof title === "string" && title.trim() ? title.trim() : "RateLoop ask";
-  }
-  const questions = handoff?.requestBody?.questions;
-  if (Array.isArray(questions) && questions.length > 0) {
-    return `${questions.length} question bundle`;
-  }
+  const questions = readQuestionRecords(handoff);
+  if (questions.length === 1) return readString(questions[0].title) || "RateLoop ask";
+  if (questions.length > 1) return `${questions.length} question bundle`;
   return "RateLoop ask";
 }
 
@@ -454,6 +550,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     wagmiConfig,
   ]);
 
+  const questionSummaries = readQuestionSummaries(handoff);
+  const roundSettings = readRoundSettings(handoff);
+  const hasQuestionBundle = questionSummaries.length > 1;
+
   return (
     <AppPageShell contentClassName="space-y-5" paddingTopClassName="pt-6">
       <section className="surface-card rounded-lg p-6">
@@ -524,6 +624,110 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 This prepared ask is on chain {handoff.chainId}. Your wallet is on chain {connectedChainId}.
               </p>
             ) : null}
+          </section>
+
+          <section className="surface-card rounded-lg p-5">
+            <div className="flex items-center gap-2">
+              <DocumentTextIcon className="h-5 w-5 text-base-content/60" />
+              <h2 className="text-lg font-semibold">Ask details</h2>
+            </div>
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
+              <div className="space-y-3">
+                {questionSummaries.length > 0 ? (
+                  questionSummaries.map((question, index) => (
+                    <div key={`${question.title}-${index}`} className="surface-card-nested rounded-lg p-4">
+                      {hasQuestionBundle ? (
+                        <p className="text-sm font-semibold text-base-content/75">{question.title}</p>
+                      ) : null}
+                      <div className={hasQuestionBundle ? "mt-3" : ""}>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                          Description
+                        </p>
+                        {question.description ? (
+                          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-base-content/78">
+                            {question.description}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-sm text-base-content/45">No description provided</p>
+                        )}
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Category</p>
+                          <p className="mt-1 text-sm font-medium">{question.categoryId || "Not set"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Template</p>
+                          <p className="mt-1 text-sm font-medium">{question.templateId || "Default"}</p>
+                        </div>
+                      </div>
+
+                      {question.tags.length > 0 ? (
+                        <div className="mt-4">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            <TagIcon className="h-3.5 w-3.5" />
+                            <span>Tags</span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {question.tags.map(tag => (
+                              <span key={tag} className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {question.contextUrl || question.videoUrl ? (
+                        <div className="mt-4 space-y-2">
+                          {question.contextUrl ? (
+                            <p className="break-all text-xs text-base-content/55">
+                              <span className="font-semibold text-base-content/70">Context:</span> {question.contextUrl}
+                            </p>
+                          ) : null}
+                          {question.videoUrl ? (
+                            <p className="break-all text-xs text-base-content/55">
+                              <span className="font-semibold text-base-content/70">Video:</span> {question.videoUrl}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))
+                ) : (
+                  <div className="surface-card-nested rounded-lg p-4 text-sm text-base-content/55">
+                    Question details are unavailable for this handoff.
+                  </div>
+                )}
+              </div>
+
+              <div className="surface-card-nested rounded-lg p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-base-content/75">
+                  <ClockIcon className="h-4 w-4" />
+                  <span>Round settings</span>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Blind phase</p>
+                    <p className="mt-1 text-sm font-medium">{formatDurationLabel(roundSettings.epochDuration)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Max duration</p>
+                    <p className="mt-1 text-sm font-medium">{formatDurationLabel(roundSettings.maxDuration)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Min voters</p>
+                    <p className="mt-1 text-sm font-medium">{roundSettings.minVoters.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-base-content/45">Max voters</p>
+                    <p className="mt-1 text-sm font-medium">{roundSettings.maxVoters.toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </section>
 
           {handoff.assets?.length ? (
