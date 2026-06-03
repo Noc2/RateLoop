@@ -71,6 +71,25 @@ const DEFAULT_HANDOFF_TTL_MS = 30 * 60 * 1000;
 const MAX_HANDOFF_TTL_MS = 24 * 60 * 60 * 1000;
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 const HANDOFF_TOKEN_HEADER = "x-rateloop-handoff-token";
+const HANDOFF_DRAFT_MIGRATION_PATH = "packages/nextjs/drizzle/0003_agent_handoff_drafts.sql";
+const HANDOFF_DRAFT_COLUMNS = [
+  "original_request_body",
+  "draft_revision",
+  "prepared_draft_revision",
+  "edited_by_user",
+] as const;
+const HANDOFF_DRAFT_MIGRATION_MESSAGE =
+  `Agent ask handoff database migration is pending. Apply ${HANDOFF_DRAFT_MIGRATION_PATH} ` +
+  "to the handoff database before creating or preparing browser handoff links.";
+
+type ErrorWithCause = {
+  cause?: unknown;
+  code?: unknown;
+  message?: unknown;
+};
+
+let handoffDraftSchemaReadyPromise: Promise<void> | null = null;
+let handoffDraftSchemaReadyForTests: boolean | null = null;
 
 export class AgentAskHandoffError extends Error {
   readonly status: number;
@@ -80,6 +99,69 @@ export class AgentAskHandoffError extends Error {
     this.name = "AgentAskHandoffError";
     this.status = status;
   }
+}
+
+function pendingHandoffDraftMigrationError() {
+  return new AgentAskHandoffError(HANDOFF_DRAFT_MIGRATION_MESSAGE, 503);
+}
+
+function isMissingHandoffDraftSchemaError(error: unknown, depth = 0): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const candidate = error as ErrorWithCause;
+  const code = typeof candidate.code === "string" ? candidate.code : "";
+  const message = typeof candidate.message === "string" ? candidate.message : "";
+  const mentionsHandoffTable = message.includes("agent_ask_handoff_intents");
+  const mentionsDraftColumn = HANDOFF_DRAFT_COLUMNS.some(column => message.includes(column));
+
+  if ((code === "42703" || code === "42P01") && (mentionsHandoffTable || mentionsDraftColumn)) {
+    return true;
+  }
+  if (message.includes("column") && message.includes("does not exist") && mentionsDraftColumn) {
+    return true;
+  }
+  if (message.includes("relation") && message.includes("does not exist") && mentionsHandoffTable) {
+    return true;
+  }
+
+  return depth < 3 && candidate.cause !== undefined
+    ? isMissingHandoffDraftSchemaError(candidate.cause, depth + 1)
+    : false;
+}
+
+async function checkHandoffDraftSchemaReady() {
+  try {
+    await dbClient.execute(`
+      SELECT original_request_body, draft_revision, prepared_draft_revision, edited_by_user
+      FROM agent_ask_handoff_intents
+      LIMIT 0
+    `);
+  } catch (error) {
+    if (isMissingHandoffDraftSchemaError(error)) {
+      throw pendingHandoffDraftMigrationError();
+    }
+    throw error;
+  }
+}
+
+export async function assertAgentAskHandoffDraftSchemaReady() {
+  if (handoffDraftSchemaReadyForTests === false) {
+    throw pendingHandoffDraftMigrationError();
+  }
+  if (handoffDraftSchemaReadyForTests === true) {
+    return;
+  }
+
+  handoffDraftSchemaReadyPromise ??= checkHandoffDraftSchemaReady().catch(error => {
+    handoffDraftSchemaReadyPromise = null;
+    throw error;
+  });
+  await handoffDraftSchemaReadyPromise;
+}
+
+export function __setAgentAskHandoffDraftSchemaReadyForTests(value: boolean | null) {
+  handoffDraftSchemaReadyForTests = value;
+  handoffDraftSchemaReadyPromise = null;
 }
 
 function nowDate() {
@@ -499,6 +581,8 @@ export async function createAgentAskHandoff(params: {
   const validationImageUrls = assets.map(asset => assetImageUrl(params.origin, asset.attachmentId));
   const normalized = normalizeAgentAskHandoffRequestBody({ requestBody, validationImageUrls });
 
+  await assertAgentAskHandoffDraftSchemaReady();
+
   await dbClient.execute({
     sql: `
       INSERT INTO agent_ask_handoff_intents (
@@ -601,6 +685,8 @@ export async function updateAgentAskHandoffStatus(params: {
   transactionPlan?: JsonObject | null;
   walletAddress?: Address | null;
 }) {
+  await assertAgentAskHandoffDraftSchemaReady();
+
   const now = nowDate();
   const result = await dbClient.execute({
     sql: `
@@ -666,6 +752,8 @@ export async function updateAgentAskHandoffDraft(params: {
   validationImageUrls?: string[];
 }) {
   assertHandoffCanEditDraft(params.handoff);
+  await assertAgentAskHandoffDraftSchemaReady();
+
   const normalized = normalizeAgentAskHandoffRequestBody({
     fieldName: "requestBody",
     requestBody: params.requestBody,

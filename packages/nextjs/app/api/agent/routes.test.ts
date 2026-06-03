@@ -20,6 +20,7 @@ type AgentHandoffCompleteRouteModule = typeof import("./handoffs/[handoffId]/com
 type AgentHandoffPrepareRouteModule = typeof import("./handoffs/[handoffId]/prepare/route");
 type AgentHandoffRouteModule = typeof import("./handoffs/[handoffId]/route");
 type AgentHandoffsRouteModule = typeof import("./handoffs/route");
+type AgentHandoffsModule = typeof import("~~/lib/agent/handoffs");
 type AgentQuoteRouteModule = typeof import("./quote/route");
 type AgentResultsByClientRouteModule = typeof import("./results/by-client-request/route");
 type AgentResultsOperationRouteModule = typeof import("./results/[operationKey]/route");
@@ -57,6 +58,7 @@ let handoffCompleteRoute: AgentHandoffCompleteRouteModule;
 let handoffPrepareRoute: AgentHandoffPrepareRouteModule;
 let handoffRoute: AgentHandoffRouteModule;
 let handoffsRoute: AgentHandoffsRouteModule;
+let handoffsModule: AgentHandoffsModule;
 let mcpBudgetModule: McpBudgetModule;
 let mcpToolsModule: McpToolsModule;
 let quoteRoute: AgentQuoteRouteModule;
@@ -504,6 +506,7 @@ before(async () => {
   handoffPrepareRoute = await import("./handoffs/[handoffId]/prepare/route");
   handoffRoute = await import("./handoffs/[handoffId]/route");
   handoffsRoute = await import("./handoffs/route");
+  handoffsModule = await import("~~/lib/agent/handoffs");
   quoteRoute = await import("./quote/route");
   resultsByClientRoute = await import("./results/by-client-request/route");
   resultsOperationRoute = await import("./results/[operationKey]/route");
@@ -522,6 +525,7 @@ beforeEach(async () => {
   });
   mcpToolsModule.__setMcpToolTestOverridesForTests(null);
   callbackLifecycleModule.__setAgentLifecycleTestOverridesForTests(null);
+  handoffsModule.__setAgentAskHandoffDraftSchemaReadyForTests(null);
   await dbModule.dbClient.execute("DELETE FROM agent_callback_events");
   await dbModule.dbClient.execute("DELETE FROM agent_callback_subscriptions");
   await dbModule.dbClient.execute("DELETE FROM api_rate_limits");
@@ -539,6 +543,7 @@ beforeEach(async () => {
 after(() => {
   urlSafetyModule.__setUrlSafetyDnsResolversForTests(null);
   mcpToolsModule.__setMcpToolTestOverridesForTests(null);
+  handoffsModule.__setAgentAskHandoffDraftSchemaReadyForTests(null);
   dbModule.__setDatabaseResourcesForTests(null);
   restoreEnv("RATELOOP_MCP_AGENTS", originalAgents);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
@@ -811,6 +816,27 @@ test("agent ask handoff route stages generated image bytes behind a browser link
   assert.equal(prepareBody.uploadChallenges?.length, 1);
   assert.equal(prepareBody.uploadChallenges?.[0]?.assetId, readBody.assets?.[0]?.id);
   assert.match(String(prepareBody.uploadChallenges?.[0]?.challengeId), /^[a-f0-9]{32}$/);
+});
+
+test("agent ask handoff route reports a pending draft migration clearly", async () => {
+  handoffsModule.__setAgentAskHandoffDraftSchemaReadyForTests(false);
+
+  const response = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: {
+        ...questionPayload("agent-handoff-missing-draft-migration"),
+        maxPaymentAmount: "1500000",
+      },
+      ttlMs: 300000,
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 503);
+  assert.equal(body.code, "service_unavailable");
+  assert.equal(body.retryable, true);
+  assert.match(String(body.message), /0003_agent_handoff_drafts\.sql/);
+  assert.match(String(body.message), /before creating or preparing browser handoff links/);
 });
 
 test("agent ask handoff route prepares and completes no-image wallet-call asks", async () => {
