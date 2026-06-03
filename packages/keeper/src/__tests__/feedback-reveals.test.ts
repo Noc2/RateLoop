@@ -113,6 +113,25 @@ describe("feedback reveal keeper", () => {
     expect((resultCall?.[1]?.headers as Headers).get("Authorization")).toBe("Bearer shared-secret");
   });
 
+  it("preserves configured app base paths for keeper API calls", async () => {
+    const harness = buildHarness();
+
+    await revealQueuedFeedback(
+      harness.publicClient as never,
+      harness.walletClient as never,
+      { id: 31337 } as never,
+      { address: "0x9999999999999999999999999999999999999999" } as never,
+      harness.logger,
+      { ...settings, apiBaseUrl: "https://app.example.com/rateloop" },
+    );
+
+    expect(String(harness.fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://app.example.com/rateloop/api/feedback/keeper/pending-reveals?limit=10&leaseSeconds=120&chainId=31337",
+    );
+    const resultCall = harness.fetchMock.mock.calls.find(call => String(call[0]).includes("/reveal-results"));
+    expect(String(resultCall?.[0])).toBe("https://app.example.com/rateloop/api/feedback/keeper/reveal-results");
+  });
+
   it("marks jobs already revealed when the registry record has revealedAt", async () => {
     const harness = buildHarness({
       record: [FEEDBACK_HASH, AUTHOR, 100n, 123n, "0x0000000000000000000000000000000000000001"],

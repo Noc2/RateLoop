@@ -76,7 +76,14 @@ function buildKeeperApiUrl(settings: FeedbackRevealKeeperSettings, pathname: str
     throw new Error("Feedback reveal API base URL is not configured");
   }
 
-  return new URL(pathname, settings.apiBaseUrl);
+  const baseUrl = new URL(settings.apiBaseUrl);
+  const targetUrl = new URL(pathname, "http://rateloop.local");
+  const basePath = baseUrl.pathname.replace(/\/$/, "");
+
+  baseUrl.pathname = `${basePath}${targetUrl.pathname}`;
+  baseUrl.search = targetUrl.search;
+  baseUrl.hash = "";
+  return baseUrl;
 }
 
 async function fetchKeeperJson<T>(
