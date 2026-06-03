@@ -893,6 +893,16 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
 test("agent ask handoff route saves edited drafts before prepare", async () => {
   let preparedPayload: unknown = null;
   installAskOverrides({
+    preflightX402QuestionSubmission: async params => ({
+      operation: {
+        canonicalPayload: {} as never,
+        operationKey: OPERATION_KEY,
+        payloadHash: "payload-hash",
+      },
+      paymentAmount: params.payload.bounty.amount,
+      resolvedCategoryIds: [5n],
+      submissionKeys: [`0x${"2".repeat(64)}` as const],
+    }),
     preparePermissionlessWalletQuestionSubmissionRequest: async params => {
       preparedPayload = params.payload;
       return {
@@ -922,7 +932,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
 
   const originalRequest = {
     ...questionPayload("agent-handoff-editable"),
-    maxPaymentAmount: "3000000",
+    maxPaymentAmount: "1000000",
   };
   const editedRequest = {
     ...originalRequest,
@@ -930,6 +940,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
       ...originalRequest.bounty,
       amount: "2500000",
     },
+    maxPaymentAmount: "2500000",
     question: {
       ...originalRequest.question,
       description: "Edited after the agent handoff.",
@@ -977,6 +988,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(patchBody.status, "pending");
   assert.equal(patchBody.draftRevision, 1);
   assert.equal(patchBody.editedByUser, true);
+  assert.equal(patchRequestBody.maxPaymentAmount, "2500000");
   assert.equal(patchQuestion.title, "Edited pitch interest");
   assert.equal(patchOriginalQuestion.title, "Pitch interest");
 

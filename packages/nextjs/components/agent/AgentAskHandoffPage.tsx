@@ -308,6 +308,13 @@ function readBountyAmountAtomic(handoff: Handoff | null) {
   }
 }
 
+function readFeedbackBonusUsdcAmountAtomic(requestBody: JsonRecord) {
+  if (!isJsonRecord(requestBody.feedbackBonus)) return 0n;
+  const asset = readString(requestBody.feedbackBonus.asset).toUpperCase() || "USDC";
+  if (asset !== "USDC") return 0n;
+  return readPositiveBigInt(requestBody.feedbackBonus.amount) ?? 0n;
+}
+
 function formatUsdcInput(value: bigint | null) {
   if (value === null) return "";
   return formatSubmissionRewardAmount(value, "usdc").replace(/ USDC$/, "");
@@ -563,6 +570,7 @@ function buildDraftRequestBody(handoff: Handoff, form: DraftForm): JsonRecord {
     amount: bountyAmount.toString(),
     asset: "USDC",
   };
+  requestBody.maxPaymentAmount = (bountyAmount + readFeedbackBonusUsdcAmountAtomic(requestBody)).toString();
   requestBody.roundConfig = {
     epochDuration: blindSeconds.toString(),
     maxDuration: maxDurationSeconds.toString(),
