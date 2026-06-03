@@ -37,6 +37,8 @@ const DIRECT_DEPLOYMENT_NAMES = new Set([
 const ROLE_HASHES = {
   defaultAdmin:
     "0x0000000000000000000000000000000000000000000000000000000000000000",
+  admin:
+    "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775",
   config:
     "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5",
   arbiter:
@@ -47,14 +49,72 @@ const ROLE_HASHES = {
     "0xb09aa5aeb3702cfd50b6b62bc4532604938f21248a27a1d5ca736082b6819cc1",
   timelockCanceller:
     "0xfd643c72710c63c0180259aba6b2d05451e3591a24e58b62239378085726f783",
+  pauser:
+    "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a",
+  seeder:
+    "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1",
 };
 
 const PROTOCOL_CONFIG_PROXY_COMPLETION_SELECTORS = [
+  ["ProtocolConfig.setClusterPayoutOracle", "0x440616e4"],
   ["ProtocolConfig.setLaunchDistributionPool", "0xa0ad8aa9"],
   ["ProtocolConfig.renounceRole", "0x36568abe"],
 ];
 
 const REQUIRED_COMPLETION_CALLS = [
+  {
+    label: "RaterRegistry.freezeWorldIdVerifierConfig",
+    contractName: "RaterRegistry",
+    functionName: "freezeWorldIdVerifierConfig()",
+  },
+  {
+    label: "RaterRegistry.renounceRole(ADMIN_ROLE)",
+    contractName: "RaterRegistry",
+    functionName: "renounceRole(bytes32,address)",
+    firstArgument: ROLE_HASHES.admin,
+  },
+  {
+    label: "RaterRegistry.renounceRole(SEEDER_ROLE)",
+    contractName: "RaterRegistry",
+    functionName: "renounceRole(bytes32,address)",
+    firstArgument: ROLE_HASHES.seeder,
+  },
+  {
+    label: "FeedbackRegistry.renounceRole(CONFIG_ROLE)",
+    contractName: "FeedbackRegistry",
+    functionName: "renounceRole(bytes32,address)",
+    firstArgument: ROLE_HASHES.config,
+  },
+  {
+    label: "ContentRegistry.renounceRole(CONFIG_ROLE)",
+    contractName: "ContentRegistry",
+    functionName: "renounceRole(bytes32,address)",
+    firstArgument: ROLE_HASHES.config,
+  },
+  {
+    label: "ContentRegistry.renounceRole(PAUSER_ROLE)",
+    contractName: "ContentRegistry",
+    functionName: "renounceRole(bytes32,address)",
+    firstArgument: ROLE_HASHES.pauser,
+  },
+  {
+    label: "ProfileRegistry.renounceRole(ADMIN_ROLE)",
+    contractName: "ProfileRegistry",
+    functionName: "renounceRole(bytes32,address)",
+    firstArgument: ROLE_HASHES.admin,
+  },
+  {
+    label: "FrontendRegistry.renounceRole(ADMIN_ROLE)",
+    contractName: "FrontendRegistry",
+    functionName: "renounceRole(bytes32,address)",
+    firstArgument: ROLE_HASHES.admin,
+  },
+  {
+    label: "CategoryRegistry.renounceRole(ADMIN_ROLE)",
+    contractName: "CategoryRegistry",
+    functionName: "renounceRole(bytes32,address)",
+    firstArgument: ROLE_HASHES.admin,
+  },
   {
     label: "ClusterPayoutOracle.setRoundPayoutSnapshotConsumer",
     contractName: "ClusterPayoutOracle",

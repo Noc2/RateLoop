@@ -66,6 +66,13 @@ function pushProtocolConfigProxyCall(transactions, receipts, protocolConfigProxy
   receipts.push(successfulReceipt());
 }
 
+function removeRequiredCall(transactions, receipts, predicate) {
+  const index = transactions.findIndex(predicate);
+  assert.notEqual(index, -1, "test fixture should contain required call");
+  transactions.splice(index, 1);
+  receipts.splice(index, 1);
+}
+
 function completeBroadcast() {
   const transactions = [];
   const receipts = [];
@@ -98,6 +105,8 @@ function completeBroadcast() {
 
   const defaultAdminRole =
     "0x0000000000000000000000000000000000000000000000000000000000000000";
+  const adminRole =
+    "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775";
   const configRole =
     "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5";
   const arbiterRole =
@@ -108,17 +117,36 @@ function completeBroadcast() {
     "0xb09aa5aeb3702cfd50b6b62bc4532604938f21248a27a1d5ca736082b6819cc1";
   const cancellerRole =
     "0xfd643c72710c63c0180259aba6b2d05451e3591a24e58b62239378085726f783";
+  const pauserRole =
+    "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a";
+  const seederRole =
+    "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1";
   const deployer = address(101);
   const governance = address(102);
   const governor = directAddressByName.get("RateLoopGovernor");
   const clusterOracle = directAddressByName.get("ClusterPayoutOracle");
   const launchPool = directAddressByName.get("LaunchDistributionPool");
+  const categoryRegistry = directAddressByName.get("CategoryRegistry");
+  const frontendRegistry = proxyAddressByName.get("FrontendRegistry");
+  const profileRegistry = proxyAddressByName.get("ProfileRegistry");
+  const contentRegistry = proxyAddressByName.get("ContentRegistry");
   const votingEngine = proxyAddressByName.get("RoundVotingEngine");
   const questionEscrow = proxyAddressByName.get("QuestionRewardPoolEscrow");
   const rewardDistributor = proxyAddressByName.get("RoundRewardDistributor");
+  const raterRegistry = proxyAddressByName.get("RaterRegistry");
+  const feedbackRegistry = proxyAddressByName.get("FeedbackRegistry");
   const advisoryRecorder = directAddressByName.get("AdvisoryVoteRecorder");
   const protocolConfig = proxyAddressByName.get("ProtocolConfig");
 
+  pushCall(transactions, receipts, "RaterRegistry", "freezeWorldIdVerifierConfig()", [], raterRegistry);
+  pushCall(transactions, receipts, "RaterRegistry", "renounceRole(bytes32,address)", [adminRole, deployer], raterRegistry);
+  pushCall(transactions, receipts, "RaterRegistry", "renounceRole(bytes32,address)", [seederRole, deployer], raterRegistry);
+  pushCall(transactions, receipts, "FeedbackRegistry", "renounceRole(bytes32,address)", [configRole, deployer], feedbackRegistry);
+  pushCall(transactions, receipts, "ContentRegistry", "renounceRole(bytes32,address)", [configRole, deployer], contentRegistry);
+  pushCall(transactions, receipts, "ContentRegistry", "renounceRole(bytes32,address)", [pauserRole, deployer], contentRegistry);
+  pushCall(transactions, receipts, "ProfileRegistry", "renounceRole(bytes32,address)", [adminRole, deployer], profileRegistry);
+  pushCall(transactions, receipts, "FrontendRegistry", "renounceRole(bytes32,address)", [adminRole, deployer], frontendRegistry);
+  pushCall(transactions, receipts, "CategoryRegistry", "renounceRole(bytes32,address)", [adminRole, deployer], categoryRegistry);
   pushCall(transactions, receipts, "ClusterPayoutOracle", "setRoundPayoutSnapshotConsumer(uint8,address)", ["1", questionEscrow], clusterOracle);
   pushCall(transactions, receipts, "ClusterPayoutOracle", "setRoundPayoutSnapshotConsumer(uint8,address)", ["2", launchPool], clusterOracle);
   pushCall(transactions, receipts, "ClusterPayoutOracle", "grantRole(bytes32,address)", [defaultAdminRole, governance], clusterOracle);
@@ -177,14 +205,14 @@ test("reconstructDeploymentExportFromBroadcast maps proxies and proxy admins", (
 
 test("reconstructDeploymentExportFromBroadcast rejects missing completion calls", () => {
   const { transactions, receipts } = completeBroadcast();
-  const minterRenounceIndex = transactions.findIndex(
+  removeRequiredCall(
+    transactions,
+    receipts,
     (tx) =>
       tx.contractName === "LoopReputation" &&
       tx.function === "renounceRole(bytes32,address)" &&
       tx.arguments?.[0] === "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6"
   );
-  transactions.splice(minterRenounceIndex, 1);
-  receipts.splice(minterRenounceIndex, 1);
 
   assert.throws(
     () =>
@@ -193,6 +221,62 @@ test("reconstructDeploymentExportFromBroadcast rejects missing completion calls"
         "worldchainSepolia"
       ),
     /Broadcast is missing required completion calls: LoopReputation\.renounceRole\(MINTER_ROLE\)/
+  );
+});
+
+test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs", () => {
+  const cases = [
+    {
+      label: /RaterRegistry\.freezeWorldIdVerifierConfig/,
+      predicate: (tx) =>
+        tx.contractName === "RaterRegistry" &&
+        tx.function === "freezeWorldIdVerifierConfig()",
+    },
+    {
+      label: /ContentRegistry\.renounceRole\(PAUSER_ROLE\)/,
+      predicate: (tx) =>
+        tx.contractName === "ContentRegistry" &&
+        tx.function === "renounceRole(bytes32,address)" &&
+        tx.arguments?.[0] === "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a",
+    },
+    {
+      label: /CategoryRegistry\.renounceRole\(ADMIN_ROLE\)/,
+      predicate: (tx) =>
+        tx.contractName === "CategoryRegistry" &&
+        tx.function === "renounceRole(bytes32,address)",
+    },
+  ];
+
+  for (const { label, predicate } of cases) {
+    const { transactions, receipts } = completeBroadcast();
+    removeRequiredCall(transactions, receipts, predicate);
+
+    assert.throws(
+      () =>
+        reconstructDeploymentExportFromBroadcast(
+          { transactions, receipts },
+          "worldchainSepolia"
+        ),
+      label
+    );
+  }
+});
+
+test("reconstructDeploymentExportFromBroadcast rejects missing protocol oracle config", () => {
+  const { transactions, receipts } = completeBroadcast();
+  removeRequiredCall(
+    transactions,
+    receipts,
+    (tx) => tx.input?.startsWith("0x440616e4")
+  );
+
+  assert.throws(
+    () =>
+      reconstructDeploymentExportFromBroadcast(
+        { transactions, receipts },
+        "worldchainSepolia"
+      ),
+    /ProtocolConfig\.setClusterPayoutOracle/
   );
 });
 
