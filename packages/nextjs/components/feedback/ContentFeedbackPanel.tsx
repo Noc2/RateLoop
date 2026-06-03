@@ -3,12 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { zeroHash } from "viem";
 import { useAccount } from "wagmi";
-import {
-  ArrowTopRightOnSquareIcon,
-  BanknotesIcon,
-  ChatBubbleLeftEllipsisIcon,
-  LockClosedIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowTopRightOnSquareIcon, BanknotesIcon, ChatBubbleLeftEllipsisIcon } from "@heroicons/react/24/outline";
 import { AwardFeedbackBonusModal } from "~~/components/feedback/AwardFeedbackBonusModal";
 import { SafeExternalLink } from "~~/components/shared/SafeExternalLink";
 import { TooltipAnchor } from "~~/components/ui/InfoTooltip";
@@ -57,14 +52,6 @@ function hasHexFeedbackHash(item: ContentFeedbackItem) {
   return typeof item.feedbackHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(item.feedbackHash);
 }
 
-function isOnchainRevealedFeedback(item: ContentFeedbackItem) {
-  return (
-    item.onchainRevealStatus === "revealed" ||
-    item.visibilityStatus === "public_onchain" ||
-    String(item.id).startsWith("protocol:")
-  );
-}
-
 function FeedbackItem({
   item,
   awardablePoolCount,
@@ -76,10 +63,7 @@ function FeedbackItem({
   isAwarded?: boolean;
   onAward?: (item: ContentFeedbackItem) => void;
 }) {
-  const visibilityLabel = item.isPublic ? "Public" : "Private";
-  const visibilityTooltip = item.isPublic
-    ? "This feedback is visible to everyone because it was published on-chain."
-    : "Only you can see this legacy feedback entry because it has not been published on-chain.";
+  const visibilityTooltip = "This feedback is visible to everyone because it was published on-chain.";
   const canAwardFeedback = Boolean(awardablePoolCount && awardablePoolCount > 0);
 
   return (
@@ -125,9 +109,9 @@ function FeedbackItem({
             <span
               tabIndex={0}
               className="rounded-full bg-base-content/[0.07] px-2 py-1 text-[0.66rem] font-semibold leading-none text-base-content/58"
-              aria-label={`${visibilityLabel}: ${visibilityTooltip}`}
+              aria-label={`Public: ${visibilityTooltip}`}
             >
-              {visibilityLabel}
+              Public
             </span>
           </TooltipAnchor>
         </div>
@@ -200,10 +184,6 @@ export function ContentFeedbackPanel({
     isOwnContent,
   });
   const submitButtonToneClassName = isFeedbackOpen && hasCurrentRoundVote ? "vote-feedback" : "vote-light";
-  const ownHiddenCopy =
-    feedback.ownHiddenCount > 0
-      ? `${feedback.ownHiddenCount} private note${feedback.ownHiddenCount === 1 ? "" : "s"} from you`
-      : null;
   const panelClassName = isSheet
     ? "flex min-h-0 flex-col overflow-visible"
     : "surface-card flex min-h-0 max-h-[clamp(24rem,46vh,34rem)] flex-col overflow-hidden rounded-lg p-3.5";
@@ -233,7 +213,7 @@ export function ContentFeedbackPanel({
     });
   };
   const getAwardablePoolsForFeedback = (feedbackItem: ContentFeedbackItem): ContentFeedbackBonusPool[] => {
-    return isOnchainRevealedFeedback(feedbackItem) ? getOpenPoolsForFeedback(feedbackItem) : [];
+    return getOpenPoolsForFeedback(feedbackItem);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -273,16 +253,10 @@ export function ContentFeedbackPanel({
           </h3>
         </div>
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-base-content/[0.07] px-2.5 py-1 text-xs font-semibold leading-none text-base-content/62">
-          <LockClosedIcon className="h-3.5 w-3.5" />
+          <ChatBubbleLeftEllipsisIcon className="h-3.5 w-3.5" />
           {feedback.publicCount}
         </span>
       </div>
-
-      {ownHiddenCopy ? (
-        <div className="surface-card-nested mt-3 rounded-lg px-3 py-2">
-          <p className="text-xs leading-relaxed text-base-content/60">{ownHiddenCopy}</p>
-        </div>
-      ) : null}
 
       <form className="mt-3 flex shrink-0 flex-col gap-2.5" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor={`feedback-type-${item?.id?.toString() ?? "none"}`}>

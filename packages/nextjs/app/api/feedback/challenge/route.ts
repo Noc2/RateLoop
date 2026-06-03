@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   CONTENT_FEEDBACK_CHALLENGE_TITLE,
   CREATE_CONTENT_FEEDBACK_ACTION,
-  READ_CONTENT_FEEDBACK_ACTION,
   hashContentFeedbackPayload,
-  hashContentFeedbackReadPayload,
 } from "~~/lib/auth/contentFeedbackChallenge";
 import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
 import { getPrimaryServerTargetNetwork } from "~~/lib/env/server";
@@ -13,7 +11,6 @@ import {
   assertContentFeedbackVoterEligibility,
   buildContentFeedbackChallengePayload,
   normalizeContentFeedbackInput,
-  normalizeContentFeedbackReadInput,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
 import { createContentFeedbackNonce } from "~~/lib/feedback/feedbackHash";
@@ -38,7 +35,6 @@ export async function POST(request: NextRequest) {
       feedbackType?: unknown;
       body?: unknown;
       sourceUrl?: unknown;
-      intent?: "read";
     };
     // WS-6 (2026-05-21 repo audit): fail-closed when the rate-limit store is unavailable.
     // The downstream `issueSignedActionChallenge` writes to the same store anyway, so an
@@ -46,31 +42,9 @@ export async function POST(request: NextRequest) {
     // letting unbounded challenge-creation traffic through during the outage.
     const limited = await checkRateLimit(request, RATE_LIMIT, {
       allowOnStoreUnavailable: false,
-      extraKeyParts: [typeof body.address === "string" ? body.address : undefined, body.intent ?? "create"],
+      extraKeyParts: [typeof body.address === "string" ? body.address : undefined],
     });
     if (limited) return limited;
-
-    if (body.intent === "read") {
-      const normalized = normalizeContentFeedbackReadInput({
-        address: body.address,
-        contentId: body.contentId,
-      });
-      if (!normalized.ok) {
-        return NextResponse.json({ error: normalized.error }, { status: 400 });
-      }
-      if (!normalized.payload.normalizedAddress) {
-        return NextResponse.json({ error: "Invalid wallet address" }, { status: 400 });
-      }
-
-      const challenge = await issueSignedActionChallenge({
-        title: CONTENT_FEEDBACK_CHALLENGE_TITLE,
-        action: READ_CONTENT_FEEDBACK_ACTION,
-        walletAddress: normalized.payload.normalizedAddress,
-        payloadHash: hashContentFeedbackReadPayload(normalized.payload),
-      });
-
-      return NextResponse.json(challenge);
-    }
 
     const normalized = normalizeContentFeedbackInput(body);
     if (!normalized.ok) {

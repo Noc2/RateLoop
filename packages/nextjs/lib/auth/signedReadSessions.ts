@@ -6,7 +6,6 @@ export const WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_watchlist_rea
 export const NOTIFICATION_PREFERENCES_SIGNED_READ_SESSION_COOKIE_NAME =
   "rateloop_notification_preferences_read_session";
 export const NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_notification_email_read_session";
-export const CONTENT_FEEDBACK_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_content_feedback_read_session";
 export const AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME = "rateloop_agent_policies_read_session";
 const SIGNED_READ_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -14,7 +13,6 @@ export const SIGNED_READ_SESSION_SCOPES = [
   "watchlist",
   "notification_preferences",
   "notification_email",
-  "content_feedback",
   "agent_policies",
 ] as const;
 
@@ -24,7 +22,6 @@ export const SIGNED_READ_SESSION_COOKIE_NAMES: Record<SignedReadSessionScope, st
   watchlist: WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME,
   notification_preferences: NOTIFICATION_PREFERENCES_SIGNED_READ_SESSION_COOKIE_NAME,
   notification_email: NOTIFICATION_EMAIL_SIGNED_READ_SESSION_COOKIE_NAME,
-  content_feedback: CONTENT_FEEDBACK_SIGNED_READ_SESSION_COOKIE_NAME,
   agent_policies: AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME,
 };
 

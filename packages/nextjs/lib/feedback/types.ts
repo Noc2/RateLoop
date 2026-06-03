@@ -42,10 +42,6 @@ export const CONTENT_FEEDBACK_TYPE_LABELS: Record<ContentFeedbackType, string> =
 export const CONTENT_FEEDBACK_BODY_MAX_LENGTH = 1500;
 export const CONTENT_FEEDBACK_SOURCE_URL_MAX_LENGTH = 2048;
 
-export const CONTENT_FEEDBACK_ONCHAIN_REVEAL_STATUSES = ["pending", "revealed", "failed"] as const;
-
-export type ContentFeedbackOnchainRevealStatus = (typeof CONTENT_FEEDBACK_ONCHAIN_REVEAL_STATUSES)[number];
-
 export interface ContentFeedbackItem {
   id: number | string;
   contentId: string;
@@ -59,13 +55,8 @@ export interface ContentFeedbackItem {
   feedbackHash: string | null;
   clientNonce: string | null;
   moderationStatus: string;
-  visibilityStatus: string;
-  onchainRevealStatus?: ContentFeedbackOnchainRevealStatus;
-  onchainRevealAttempts?: number;
-  onchainRevealLeaseUntil?: string | null;
-  onchainRevealTxHash?: string | null;
-  onchainRevealError?: string | null;
-  onchainRevealedAt?: string | null;
+  publicationTxHash: string | null;
+  publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
   isOwn: boolean;
@@ -77,10 +68,8 @@ export interface ContentFeedbackListResult {
   items: ContentFeedbackItem[];
   count: number;
   publicCount: number;
-  ownHiddenCount: number;
   settlementComplete: boolean;
   openRoundId: string | null;
-  hasReadSession?: boolean;
   awardableFeedbackBonusPools?: ContentFeedbackBonusPool[];
 }
 

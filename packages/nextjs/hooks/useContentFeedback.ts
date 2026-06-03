@@ -44,10 +44,8 @@ const EMPTY_FEEDBACK_RESPONSE: ContentFeedbackListResult = {
   items: [],
   count: 0,
   publicCount: 0,
-  ownHiddenCount: 0,
   settlementComplete: false,
   openRoundId: null,
-  hasReadSession: false,
   awardableFeedbackBonusPools: [],
 };
 

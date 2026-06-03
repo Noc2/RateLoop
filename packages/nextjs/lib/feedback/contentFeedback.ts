@@ -1,6 +1,6 @@
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE, type RoundState } from "@rateloop/contracts/protocol";
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type Abi, type Address, createPublicClient, http, zeroHash } from "viem";
 import { db } from "~~/lib/db";
 import { contentFeedback } from "~~/lib/db/schema";
@@ -12,7 +12,6 @@ import {
 } from "~~/lib/feedback/feedbackHash";
 import {
   CONTENT_FEEDBACK_BODY_MAX_LENGTH,
-  CONTENT_FEEDBACK_ONCHAIN_REVEAL_STATUSES,
   CONTENT_FEEDBACK_SOURCE_URL_MAX_LENGTH,
   CONTENT_FEEDBACK_TYPES,
   CONTENT_FEEDBACK_TYPE_LABELS,
@@ -20,7 +19,6 @@ import {
   type ContentFeedbackBonusPool,
   type ContentFeedbackItem,
   type ContentFeedbackListResult,
-  type ContentFeedbackOnchainRevealStatus,
   type ContentFeedbackType,
 } from "~~/lib/feedback/types";
 import { isValidWalletAddress, normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
@@ -35,11 +33,6 @@ import { containsBlockedText, containsBlockedUrl } from "~~/utils/contentFilter"
 
 const CONTENT_FEEDBACK_LIST_LIMIT = 100;
 const APPROVED_MODERATION_STATUS = "approved";
-const PUBLIC_ONCHAIN_STATUS = "public_onchain";
-const ONCHAIN_REVEAL_PENDING_STATUS = "pending" satisfies ContentFeedbackOnchainRevealStatus;
-const ONCHAIN_REVEAL_REVEALED_STATUS = "revealed" satisfies ContentFeedbackOnchainRevealStatus;
-const ONCHAIN_REVEAL_FAILED_STATUS = "failed" satisfies ContentFeedbackOnchainRevealStatus;
-const MAX_REVEAL_ATTEMPTS = 8;
 
 export interface NormalizedContentFeedbackInput {
   normalizedAddress: `0x${string}`;
@@ -57,7 +50,7 @@ export interface PreparedContentFeedbackInput extends ContentFeedbackChallengePa
   publicationTxHash?: `0x${string}` | null;
 }
 
-export interface NormalizedContentFeedbackReadInput {
+export interface NormalizedContentFeedbackListInput {
   contentId: string;
   normalizedAddress: `0x${string}` | null;
 }
@@ -66,23 +59,7 @@ export interface ContentFeedbackRoundContext {
   openRoundId: string | null;
   currentRoundId: string | null;
   terminalRoundIds: Set<string>;
-  revealableRoundIds: Set<string>;
   settlementComplete: boolean;
-}
-
-export interface ContentFeedbackRevealCandidate {
-  id: number;
-  contentId: string;
-  roundId: string;
-  chainId: number;
-  authorAddress: `0x${string}`;
-  feedbackType: string;
-  body: string;
-  sourceUrl: string | null;
-  feedbackHash: `0x${string}`;
-  commitKey: `0x${string}`;
-  clientNonce: `0x${string}`;
-  attempt: number;
 }
 
 type FeedbackRow = typeof contentFeedback.$inferSelect;
@@ -236,12 +213,6 @@ export function normalizeContentFeedbackTxHash(value: unknown): `0x${string}` | 
   return normalizeBytes32Hex(value);
 }
 
-function normalizeOnchainRevealStatus(value: unknown): ContentFeedbackOnchainRevealStatus {
-  return CONTENT_FEEDBACK_ONCHAIN_REVEAL_STATUSES.includes(value as ContentFeedbackOnchainRevealStatus)
-    ? (value as ContentFeedbackOnchainRevealStatus)
-    : ONCHAIN_REVEAL_PENDING_STATUS;
-}
-
 export function normalizeContentFeedbackInput(input: {
   address?: string;
   contentId?: unknown;
@@ -294,10 +265,10 @@ export function normalizeContentFeedbackInput(input: {
   };
 }
 
-export function normalizeContentFeedbackReadInput(input: {
+export function normalizeContentFeedbackListInput(input: {
   address?: string | null;
   contentId?: unknown;
-}): { ok: true; payload: NormalizedContentFeedbackReadInput } | { ok: false; error: string } {
+}): { ok: true; payload: NormalizedContentFeedbackListInput } | { ok: false; error: string } {
   const contentId = normalizeContentId(input.contentId);
   if (!contentId) {
     return { ok: false, error: "Missing or invalid contentId" };
@@ -348,12 +319,6 @@ function isTerminalRoundState(state: unknown): state is Exclude<RoundState, type
   );
 }
 
-function isFeedbackRevealableRoundState(
-  state: unknown,
-): state is typeof ROUND_STATE.Settled | typeof ROUND_STATE.Tied | typeof ROUND_STATE.RevealFailed {
-  return state === ROUND_STATE.Settled || state === ROUND_STATE.Tied || state === ROUND_STATE.RevealFailed;
-}
-
 export function buildContentFeedbackRoundContext(
   rounds: Array<{ roundId?: string | number | bigint | null; state?: unknown }>,
   openRoundId?: string | number | bigint | null,
@@ -361,7 +326,6 @@ export function buildContentFeedbackRoundContext(
   const normalizedOpenRoundId = openRoundId !== undefined && openRoundId !== null ? String(openRoundId) : null;
   let latestRoundId: string | null = null;
   const terminalRoundIds = new Set<string>();
-  const revealableRoundIds = new Set<string>();
 
   for (const round of rounds) {
     if (round.roundId === undefined || round.roundId === null) continue;
@@ -371,9 +335,6 @@ export function buildContentFeedbackRoundContext(
     }
     if (isTerminalRoundState(round.state)) {
       terminalRoundIds.add(roundId);
-    }
-    if (isFeedbackRevealableRoundState(round.state)) {
-      revealableRoundIds.add(roundId);
     }
   }
 
@@ -388,7 +349,6 @@ export function buildContentFeedbackRoundContext(
     openRoundId: resolvedOpenRoundId,
     currentRoundId: resolvedOpenRoundId ?? latestRoundId,
     terminalRoundIds,
-    revealableRoundIds,
     settlementComplete: resolvedOpenRoundId === null && terminalRoundIds.size > 0,
   };
 }
@@ -687,34 +647,12 @@ export async function assertContentFeedbackVoterEligibility(params: FeedbackVote
   }
 }
 
-function isFeedbackPublic(
-  row: Pick<FeedbackRow, "onchainRevealStatus" | "roundId" | "visibilityStatus">,
-  context: ContentFeedbackRoundContext,
-) {
-  if (row.visibilityStatus === PUBLIC_ONCHAIN_STATUS || row.onchainRevealStatus === ONCHAIN_REVEAL_REVEALED_STATUS) {
-    return true;
-  }
-  if (!row.roundId) {
-    return context.settlementComplete;
-  }
-  return context.terminalRoundIds.has(row.roundId);
+function isFeedbackPublic(row: Pick<FeedbackRow, "publishedAt">) {
+  return row.publishedAt !== null;
 }
 
-function buildPublicFeedbackCondition(context: ContentFeedbackRoundContext) {
-  const publicRoundConditions = [
-    eq(contentFeedback.visibilityStatus, PUBLIC_ONCHAIN_STATUS),
-    eq(contentFeedback.onchainRevealStatus, ONCHAIN_REVEAL_REVEALED_STATUS),
-  ];
-  if (context.settlementComplete) {
-    publicRoundConditions.push(isNull(contentFeedback.roundId));
-  }
-  const terminalRoundIds = Array.from(context.terminalRoundIds);
-  if (terminalRoundIds.length > 0) {
-    publicRoundConditions.push(inArray(contentFeedback.roundId, terminalRoundIds));
-  }
-
-  if (publicRoundConditions.length === 0) return undefined;
-  return publicRoundConditions.length === 1 ? publicRoundConditions[0] : or(...publicRoundConditions);
+function buildPublicFeedbackCondition() {
+  return sql`${contentFeedback.publishedAt} IS NOT NULL`;
 }
 
 function mapFeedbackRow(
@@ -735,7 +673,7 @@ function mapFeedbackRow(
   }
 
   const isOwn = params.viewerAddress === authorAddress;
-  const isPublic = isFeedbackPublic(row, params.context);
+  const isPublic = isFeedbackPublic(row);
   if (!isPublic && !isOwn) {
     return null;
   }
@@ -753,13 +691,8 @@ function mapFeedbackRow(
     feedbackHash: row.feedbackHash,
     clientNonce: row.clientNonce,
     moderationStatus: row.moderationStatus,
-    visibilityStatus: row.visibilityStatus,
-    onchainRevealStatus: normalizeOnchainRevealStatus(row.onchainRevealStatus),
-    onchainRevealAttempts: row.onchainRevealAttempts,
-    onchainRevealLeaseUntil: row.onchainRevealLeaseUntil?.toISOString() ?? null,
-    onchainRevealTxHash: row.onchainRevealTxHash,
-    onchainRevealError: row.onchainRevealError,
-    onchainRevealedAt: row.onchainRevealedAt?.toISOString() ?? null,
+    publicationTxHash: row.publicationTxHash,
+    publishedAt: row.publishedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     isOwn,
@@ -813,13 +746,8 @@ function mapProtocolFeedbackRow(
     feedbackHash: row.feedbackHash,
     clientNonce: row.clientNonce ?? null,
     moderationStatus: APPROVED_MODERATION_STATUS,
-    visibilityStatus: "public_onchain",
-    onchainRevealStatus: ONCHAIN_REVEAL_REVEALED_STATUS,
-    onchainRevealAttempts: 0,
-    onchainRevealLeaseUntil: null,
-    onchainRevealTxHash: null,
-    onchainRevealError: null,
-    onchainRevealedAt: unixSecondsToIso(row.revealedAt ?? row.committedAt),
+    publicationTxHash: row.revealTxHash ?? row.commitTxHash ?? null,
+    publishedAt: unixSecondsToIso(row.revealedAt ?? row.committedAt),
     createdAt,
     updatedAt: unixSecondsToIso(row.updatedAt ?? row.revealedAt ?? row.committedAt),
     isOwn,
@@ -854,85 +782,6 @@ async function listProtocolContentFeedback(params: {
 
 function isHexHash(value: string | null | undefined): value is `0x${string}` {
   return normalizeBytes32Hex(value) !== null;
-}
-
-function computeRevealRetryDelayMs(attempts: number) {
-  const exponent = Math.max(0, Math.min(attempts - 1, 6));
-  return Math.min(5 * 60 * 1000 * 2 ** exponent, 6 * 60 * 60 * 1000);
-}
-
-export async function leaseContentFeedbackRevealCandidates(
-  params: {
-    chainId?: number;
-    limit?: number;
-    leaseSeconds?: number;
-    now?: Date;
-  } = {},
-): Promise<ContentFeedbackRevealCandidate[]> {
-  void params;
-  return [];
-}
-
-export async function recordContentFeedbackRevealSuccess(params: {
-  id: number;
-  txHash?: `0x${string}` | string | null;
-  now?: Date;
-}): Promise<boolean> {
-  const now = params.now ?? createContentFeedbackTimestamp();
-  const txHash = normalizeBytes32Hex(params.txHash) ?? null;
-  const [updated] = await db
-    .update(contentFeedback)
-    .set({
-      onchainRevealStatus: ONCHAIN_REVEAL_REVEALED_STATUS,
-      onchainRevealLeaseUntil: null,
-      onchainRevealNextAttemptAt: null,
-      onchainRevealTxHash: txHash,
-      onchainRevealError: null,
-      onchainRevealedAt: now,
-      updatedAt: now,
-    })
-    .where(eq(contentFeedback.id, params.id))
-    .returning({ id: contentFeedback.id });
-
-  return Boolean(updated);
-}
-
-export async function recordContentFeedbackRevealFailure(params: {
-  id: number;
-  error: string;
-  retryable?: boolean;
-  txHash?: `0x${string}` | string | null;
-  now?: Date;
-}): Promise<{ retryScheduled: boolean; terminal: boolean }> {
-  const now = params.now ?? createContentFeedbackTimestamp();
-  const [row] = await db
-    .select({
-      attempts: contentFeedback.onchainRevealAttempts,
-    })
-    .from(contentFeedback)
-    .where(eq(contentFeedback.id, params.id))
-    .limit(1);
-  const attempts = row?.attempts ?? 0;
-  const retryScheduled = Boolean(params.retryable && attempts < MAX_REVEAL_ATTEMPTS);
-  const nextAttemptAt = retryScheduled ? new Date(now.getTime() + computeRevealRetryDelayMs(attempts)) : null;
-  const txHash = normalizeBytes32Hex(params.txHash) ?? null;
-
-  await db
-    .update(contentFeedback)
-    .set({
-      onchainRevealStatus: retryScheduled ? ONCHAIN_REVEAL_PENDING_STATUS : ONCHAIN_REVEAL_FAILED_STATUS,
-      onchainRevealLeaseUntil: null,
-      onchainRevealNextAttemptAt: nextAttemptAt,
-      onchainRevealTxHash: txHash,
-      onchainRevealError: params.error.slice(0, 1000),
-      updatedAt: now,
-    })
-    .where(eq(contentFeedback.id, params.id));
-
-  return {
-    retryScheduled,
-    terminal: !retryScheduled,
-  };
 }
 
 function mapFeedbackBonusPool(row: PonderFeedbackBonusPool): ContentFeedbackBonusPool | null {
@@ -1104,14 +953,8 @@ export async function addContentFeedback(
         clientNonce: payload.clientNonce,
         payloadSignature: payload.payloadSignature,
         moderationStatus: APPROVED_MODERATION_STATUS,
-        visibilityStatus: PUBLIC_ONCHAIN_STATUS,
-        onchainRevealStatus: ONCHAIN_REVEAL_REVEALED_STATUS,
-        onchainRevealAttempts: 0,
-        onchainRevealNextAttemptAt: null,
-        onchainRevealLeaseUntil: null,
-        onchainRevealTxHash: payload.publicationTxHash ?? null,
-        onchainRevealError: null,
-        onchainRevealedAt: now,
+        publicationTxHash: payload.publicationTxHash ?? null,
+        publishedAt: now,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -1149,12 +992,8 @@ export async function listContentFeedback(params: {
       eq(contentFeedback.moderationStatus, APPROVED_MODERATION_STATUS),
       isNull(contentFeedback.deletedAt),
     );
-    const publicCondition = buildPublicFeedbackCondition(params.context);
-    const visibleCondition = params.viewerAddress
-      ? publicCondition
-        ? or(publicCondition, eq(contentFeedback.authorAddress, params.viewerAddress))
-        : eq(contentFeedback.authorAddress, params.viewerAddress)
-      : publicCondition;
+    const publicCondition = buildPublicFeedbackCondition();
+    const visibleCondition = publicCondition;
 
     if (publicCondition) {
       const [countRow] = await db
@@ -1179,7 +1018,6 @@ export async function listContentFeedback(params: {
       items: [],
       count: 0,
       publicCount: 0,
-      ownHiddenCount: 0,
       settlementComplete: params.context.settlementComplete,
       openRoundId: params.context.openRoundId,
       awardableFeedbackBonusPools: [],
@@ -1216,14 +1054,12 @@ export async function listContentFeedback(params: {
       feedbackBonusAwards: feedbackHash ? (awardsByFeedbackHash.get(feedbackHash) ?? []) : [],
     };
   });
-  const ownHiddenCount = items.filter(item => item.isOwn && !item.isPublic).length;
   const mergedPublicCount = items.filter(item => item.isPublic).length;
 
   return {
     items: annotatedItems,
     count: annotatedItems.length,
     publicCount: Math.max(publicCount, mergedPublicCount),
-    ownHiddenCount,
     settlementComplete: params.context.settlementComplete,
     openRoundId: params.context.openRoundId,
     awardableFeedbackBonusPools: terminalAwardablePools,
@@ -1241,19 +1077,15 @@ export async function listContentFeedbackCounts(params: {
 
   let rows: Array<{
     contentId: string;
-    roundId: string | null;
-    onchainRevealStatus: string;
     moderationStatus: string;
-    visibilityStatus: string;
+    publishedAt: Date | null;
   }>;
   try {
     rows = await db
       .select({
         contentId: contentFeedback.contentId,
-        roundId: contentFeedback.roundId,
-        onchainRevealStatus: contentFeedback.onchainRevealStatus,
         moderationStatus: contentFeedback.moderationStatus,
-        visibilityStatus: contentFeedback.visibilityStatus,
+        publishedAt: contentFeedback.publishedAt,
       })
       .from(contentFeedback)
       .where(and(inArray(contentFeedback.contentId, params.contentIds), isNull(contentFeedback.deletedAt)));
@@ -1267,7 +1099,7 @@ export async function listContentFeedbackCounts(params: {
   for (const row of rows) {
     if (row.moderationStatus !== APPROVED_MODERATION_STATUS) continue;
     const context = params.contextByContentId.get(row.contentId);
-    if (!context || !isFeedbackPublic(row, context)) continue;
+    if (!context || !isFeedbackPublic(row)) continue;
     counts[row.contentId] = (counts[row.contentId] ?? 0) + 1;
   }
 

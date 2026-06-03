@@ -104,10 +104,12 @@ CREATE TABLE "content_feedback" (
 	"body" text NOT NULL,
 	"source_url" text,
 	"feedback_hash" text,
+	"commit_key" text,
 	"client_nonce" text,
 	"payload_signature" text,
 	"moderation_status" text DEFAULT 'approved' NOT NULL,
-	"visibility_status" text DEFAULT 'hidden_until_settlement' NOT NULL,
+	"publication_tx_hash" text,
+	"published_at" timestamp with time zone,
 	"created_at" timestamp with time zone NOT NULL,
 	"updated_at" timestamp with time zone NOT NULL,
 	"deleted_at" timestamp with time zone
@@ -330,6 +332,7 @@ CREATE INDEX "api_rate_limits_expires_at_idx" ON "api_rate_limits" USING btree (
 CREATE INDEX "content_feedback_content_created_at_idx" ON "content_feedback" USING btree ("content_id","created_at");--> statement-breakpoint
 CREATE INDEX "content_feedback_content_round_idx" ON "content_feedback" USING btree ("content_id","round_id");--> statement-breakpoint
 CREATE INDEX "content_feedback_author_created_at_idx" ON "content_feedback" USING btree ("author_address","created_at");--> statement-breakpoint
+CREATE INDEX "content_feedback_commit_key_idx" ON "content_feedback" USING btree ("commit_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "content_feedback_feedback_hash_unique" ON "content_feedback" USING btree ("feedback_hash");--> statement-breakpoint
 CREATE UNIQUE INDEX "content_feedback_active_author_round_unique" ON "content_feedback" USING btree ("content_id","round_id","author_address") WHERE "content_feedback"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "free_transaction_quotas_token_chain_env_unique" ON "free_transaction_quotas" USING btree ("voter_id_token_id","chain_id","environment");--> statement-breakpoint

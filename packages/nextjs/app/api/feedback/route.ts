@@ -18,7 +18,7 @@ import {
   listContentFeedback,
   normalizeContentFeedbackCommitKey,
   normalizeContentFeedbackInput,
-  normalizeContentFeedbackReadInput,
+  normalizeContentFeedbackListInput,
   normalizeContentFeedbackTxHash,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const normalized = normalizeContentFeedbackReadInput({
+    const normalized = normalizeContentFeedbackListInput({
       address,
       contentId: contentIdParam,
     });
@@ -56,10 +56,7 @@ export async function GET(request: NextRequest) {
       viewerAddress: requestedViewerAddress,
     });
 
-    return NextResponse.json({
-      ...result,
-      hasReadSession: Boolean(requestedViewerAddress),
-    });
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Error fetching feedback:", error);
     return NextResponse.json({ error: "Failed to fetch feedback" }, { status: 500 });

@@ -63,7 +63,6 @@ describe("keeper config", () => {
     expect(config.chainName).toBe("Foundry");
     expect(config.cleanupBatchSize).toBe(25);
     expect(config.frontendFees.enabled).toBe(false);
-    expect(config.feedbackReveals.enabled).toBe(false);
     expect(config.persistence.databaseUrl).toBeNull();
   });
 
@@ -201,39 +200,11 @@ describe("keeper config", () => {
     ).rejects.toThrow("PONDER_BASE_URL must be an HTTPS URL in production");
   });
 
-  it("loads legacy feedback reveal keeper settings without auto-enabling jobs", async () => {
-    const { config } = await loadKeeperConfig({
-      KEEPER_FEEDBACK_REVEAL_API_BASE_URL: "https://app.example.com/",
-      KEEPER_FEEDBACK_REVEAL_SECRET: "shared-secret",
-      KEEPER_FEEDBACK_REVEAL_BATCH_SIZE: "7",
-      KEEPER_FEEDBACK_REVEAL_LEASE_SECONDS: "45",
-    });
-
-    expect(config.feedbackReveals.enabled).toBe(false);
-    expect(config.feedbackReveals.apiBaseUrl).toBe("https://app.example.com");
-    expect(config.feedbackReveals.secret).toBe("shared-secret");
-    expect(config.feedbackReveals.batchSize).toBe(7);
-    expect(config.feedbackReveals.leaseSeconds).toBe(45);
-    expect(config.contracts.feedbackRegistry).toMatch(/^0x[a-fA-F0-9]{40}$/);
-  });
-
-  it("allows the legacy feedback reveal flag without now-unused API settings", async () => {
-    const { config } = await loadKeeperConfig({
-      KEEPER_FEEDBACK_REVEALS_ENABLED: "true",
-    });
-
-    expect(config.feedbackReveals.enabled).toBe(true);
-    expect(config.feedbackReveals.apiBaseUrl).toBeNull();
-    expect(config.feedbackReveals.secret).toBeNull();
-  });
-
   it.each([
     ["CHAIN_ID", "4801abc", "CHAIN_ID must be a positive integer"],
     ["KEEPER_INTERVAL_MS", "30000ms", "KEEPER_INTERVAL_MS must be a positive integer"],
     ["KEEPER_STARTUP_JITTER_MS", "0ms", "KEEPER_STARTUP_JITTER_MS must be a non-negative integer"],
     ["KEEPER_CLEANUP_BATCH_SIZE", "25items", "KEEPER_CLEANUP_BATCH_SIZE must be a positive integer"],
-    ["KEEPER_FEEDBACK_REVEAL_BATCH_SIZE", "25items", "KEEPER_FEEDBACK_REVEAL_BATCH_SIZE must be a positive integer"],
-    ["KEEPER_FEEDBACK_REVEAL_LEASE_SECONDS", "120s", "KEEPER_FEEDBACK_REVEAL_LEASE_SECONDS must be a positive integer"],
     ["KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK", "50rounds", "KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK must be a non-negative integer"],
     ["KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK", "50rounds", "KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK must be a non-negative integer"],
     ["MAX_GAS_PER_TX", "2000000gas", "MAX_GAS_PER_TX must be a positive integer"],

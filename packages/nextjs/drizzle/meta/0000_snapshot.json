@@ -938,6 +938,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "commit_key": {
+          "name": "commit_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "client_nonce": {
           "name": "client_nonce",
           "type": "text",
@@ -957,12 +963,17 @@
           "notNull": true,
           "default": "'approved'"
         },
-        "visibility_status": {
-          "name": "visibility_status",
+        "publication_tx_hash": {
+          "name": "publication_tx_hash",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'hidden_until_settlement'"
+          "notNull": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1037,6 +1048,21 @@
             },
             {
               "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "content_feedback_commit_key_idx": {
+          "name": "content_feedback_commit_key_idx",
+          "columns": [
+            {
+              "expression": "commit_key",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

@@ -32,16 +32,15 @@ after(() => {
 });
 
 test("signed read responses only issue the verified read scope", async () => {
-  const response = await signedRouteHelpers.createSignedReadResponse(WALLET, "content_feedback", { ok: true });
+  const response = await signedRouteHelpers.createSignedReadResponse(WALLET, "agent_policies", { ok: true });
 
-  const feedbackCookie = response.cookies.get(signedReadSessions.CONTENT_FEEDBACK_SIGNED_READ_SESSION_COOKIE_NAME);
   const agentPoliciesCookie = response.cookies.get(signedReadSessions.AGENT_POLICIES_SIGNED_READ_SESSION_COOKIE_NAME);
 
-  assert.ok(feedbackCookie?.value, "requested read scope cookie should be set");
-  assert.equal(agentPoliciesCookie, undefined);
+  assert.ok(agentPoliciesCookie?.value, "requested read scope cookie should be set");
+  assert.equal(response.cookies.get(signedReadSessions.WATCHLIST_SIGNED_READ_SESSION_COOKIE_NAME), undefined);
   assert.equal(
-    await signedReadSessions.verifySignedReadSession(feedbackCookie.value, WALLET, "content_feedback"),
+    await signedReadSessions.verifySignedReadSession(agentPoliciesCookie.value, WALLET, "agent_policies"),
     true,
   );
-  assert.equal(await signedReadSessions.verifySignedReadSession(feedbackCookie.value, WALLET, "agent_policies"), false);
+  assert.equal(await signedReadSessions.verifySignedReadSession(agentPoliciesCookie.value, WALLET, "watchlist"), false);
 });

@@ -23,6 +23,7 @@ const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
 const OTHER_WALLET = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd" as const;
 const CHAIN_ID = 31337;
 const SIGNATURE = `0x${"11".repeat(65)}` as `0x${string}`;
+const DEFAULT_PUBLICATION_TX_HASH = `0x${"44".repeat(32)}` as `0x${string}`;
 let nonceCounter = 1n;
 
 function nextNonce(): `0x${string}` {
@@ -36,6 +37,7 @@ function prepareFeedback(payload: NormalizedContentFeedbackInput, context: Conte
     roundId: context.currentRoundId,
     commitKey: nextNonce(),
     clientNonce: nextNonce(),
+    publicationTxHash: DEFAULT_PUBLICATION_TX_HASH,
     payloadSignature: SIGNATURE,
   });
 }
@@ -418,9 +420,10 @@ test("public reads show active round feedback immediately", async () => {
     viewerAddress: WALLET,
   });
   assert.equal(ownerResult.count, 1);
-  assert.equal(ownerResult.ownHiddenCount, 0);
   assert.equal(ownerResult.items[0]?.chainId, CHAIN_ID);
   assert.equal(ownerResult.items[0]?.feedbackHash?.length, 66);
+  assert.equal(ownerResult.items[0]?.publicationTxHash, DEFAULT_PUBLICATION_TX_HASH);
+  assert.ok(ownerResult.items[0]?.publishedAt);
 
   const otherResult = await contentFeedback.listContentFeedback({
     contentId: "12",
@@ -455,7 +458,7 @@ test("terminal round feedback becomes public", async () => {
   assert.equal(result.items[0]?.isPublic, true);
 });
 
-test("does not lease reveal candidates for immediately published feedback", async () => {
+test("stores publication metadata for immediately published feedback", async () => {
   const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
   const payload = contentFeedback.normalizeContentFeedbackInput({
     address: WALLET,
@@ -470,157 +473,16 @@ test("does not lease reveal candidates for immediately published feedback", asyn
     prepareFeedback(payload.payload, activeContext),
     activeContext,
   );
-  assert.equal(added.onchainRevealStatus, "revealed");
+  assert.equal(added.publicationTxHash, DEFAULT_PUBLICATION_TX_HASH);
+  assert.ok(added.publishedAt);
 
-  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
-    getContentById: async () => ({ content: { openRound: { roundId: "8" } } }) as any,
-    getAllRounds: async () => [buildRoundItem({ contentId: "31", roundId: "8", state: ROUND_STATE.Open })],
-  });
-  const activeCandidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
-    chainId: CHAIN_ID,
-    limit: 5,
-    now: new Date("2026-06-03T05:00:00.000Z"),
-  });
-  assert.equal(activeCandidates.length, 0);
-
-  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
-    getContentById: async () => ({ content: { openRound: null } }) as any,
-    getAllRounds: async () => [buildRoundItem({ contentId: "31", roundId: "8", state: ROUND_STATE.Settled })],
-    resolveOnchainOpenRoundId: async () => null,
-  });
-  const settledCandidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
-    chainId: CHAIN_ID,
-    limit: 5,
-    now: new Date("2026-06-03T05:01:00.000Z"),
-  });
-
-  assert.equal(settledCandidates.length, 0);
-});
-
-test("does not lease cancelled round feedback for on-chain reveal", async () => {
-  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
-  const payload = contentFeedback.normalizeContentFeedbackInput({
-    address: WALLET,
-    contentId: "32",
-    feedbackType: "concern",
-    body: "This cancelled round note can be displayed locally but cannot be revealed on-chain.",
-  });
-  assert.equal(payload.ok, true);
-  if (!payload.ok) return;
-
-  await contentFeedback.addContentFeedback(prepareFeedback(payload.payload, activeContext), activeContext);
-  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
-    getContentById: async () => ({ content: { openRound: null } }) as any,
-    getAllRounds: async () => [buildRoundItem({ contentId: "32", roundId: "8", state: ROUND_STATE.Cancelled })],
-    resolveOnchainOpenRoundId: async () => null,
-  });
-
-  const candidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
-    chainId: CHAIN_ID,
-    limit: 5,
-    now: new Date("2026-06-03T05:02:00.000Z"),
-  });
-
-  assert.equal(candidates.length, 0);
-});
-
-test("legacy malformed reveal metadata is not leased after direct publishing", async () => {
-  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
-  const settledContext = contentFeedback.buildContentFeedbackRoundContext([
-    { roundId: "8", state: ROUND_STATE.Settled },
-  ]);
-  const payload = contentFeedback.normalizeContentFeedbackInput({
-    address: WALLET,
-    contentId: "34",
-    feedbackType: "vote_rationale",
-    body: "This legacy feedback row has no on-chain reveal payload yet.",
-  });
-  assert.equal(payload.ok, true);
-  if (!payload.ok) return;
-
-  const added = await contentFeedback.addContentFeedback(
-    prepareFeedback(payload.payload, activeContext),
-    activeContext,
-  );
-  await dbModule.dbClient.execute(`
-    UPDATE content_feedback
-    SET feedback_hash = NULL,
-        commit_key = NULL,
-        client_nonce = NULL,
-        updated_at = '2026-06-03T05:02:30.000Z'
-    WHERE id = ${added.id}
-  `);
-
-  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
-    getContentById: async () => ({ content: { openRound: { roundId: "8" } } }) as any,
-    getAllRounds: async () => [buildRoundItem({ contentId: "34", roundId: "8", state: ROUND_STATE.Open })],
-  });
-  const activeCandidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
-    chainId: CHAIN_ID,
-    limit: 5,
-    now: new Date("2026-06-03T05:03:00.000Z"),
-  });
-  assert.equal(activeCandidates.length, 0);
-
-  const activeResult = await contentFeedback.listContentFeedback({
-    contentId: "34",
+  const result = await contentFeedback.listContentFeedback({
+    contentId: "31",
     context: activeContext,
-    viewerAddress: WALLET,
   });
-  assert.equal(activeResult.items[0]?.onchainRevealStatus, "revealed");
-  assert.equal(activeResult.items[0]?.onchainRevealError, null);
-
-  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
-    getContentById: async () => ({ content: { openRound: null } }) as any,
-    getAllRounds: async () => [buildRoundItem({ contentId: "34", roundId: "8", state: ROUND_STATE.Settled })],
-    resolveOnchainOpenRoundId: async () => null,
-  });
-  const settledCandidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
-    chainId: CHAIN_ID,
-    limit: 5,
-    now: new Date("2026-06-03T05:04:00.000Z"),
-  });
-  assert.equal(settledCandidates.length, 0);
-
-  const settledResult = await contentFeedback.listContentFeedback({
-    contentId: "34",
-    context: settledContext,
-    viewerAddress: WALLET,
-  });
-  assert.equal(settledResult.items[0]?.onchainRevealStatus, "revealed");
-  assert.equal(settledResult.items[0]?.onchainRevealError, null);
-});
-
-test("records legacy reveal success state", async () => {
-  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
-  const payload = contentFeedback.normalizeContentFeedbackInput({
-    address: WALLET,
-    contentId: "33",
-    feedbackType: "clarification",
-    body: "This note has already been published on-chain.",
-  });
-  assert.equal(payload.ok, true);
-  if (!payload.ok) return;
-
-  const added = await contentFeedback.addContentFeedback(
-    prepareFeedback(payload.payload, activeContext),
-    activeContext,
-  );
-
-  await contentFeedback.recordContentFeedbackRevealSuccess({
-    id: added.id as number,
-    txHash: `0x${"44".repeat(32)}`,
-    now: new Date("2026-06-03T05:05:00.000Z"),
-  });
-  const successResult = await contentFeedback.listContentFeedback({
-    contentId: "33",
-    context: contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Settled }]),
-    viewerAddress: WALLET,
-  });
-
-  assert.equal(successResult.items[0]?.onchainRevealStatus, "revealed");
-  assert.equal(successResult.items[0]?.onchainRevealTxHash, `0x${"44".repeat(32)}`);
-  assert.equal(successResult.items[0]?.onchainRevealError, null);
+  assert.equal(result.count, 1);
+  assert.equal(result.items[0]?.publicationTxHash, DEFAULT_PUBLICATION_TX_HASH);
+  assert.equal(result.items[0]?.publishedAt, added.publishedAt);
 });
 
 test("returns awardable feedback bonus pools and awards for public feedback", async () => {

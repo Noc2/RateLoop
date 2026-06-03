@@ -35,7 +35,6 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `VOTING_ENGINE_ADDRESS`                           | Auto-derived for supported chains                                   | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `CONTENT_REGISTRY_ADDRESS`                        | Auto-derived for supported chains                                   | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `ADVISORY_VOTE_RECORDER_ADDRESS`                  | Auto-derived for supported chains                                   | Local `31337` override only; used to reveal and credit zero-stake advisory votes                                   |
-| `FEEDBACK_REGISTRY_ADDRESS`                       | Auto-derived for supported chains                                   | Legacy local `31337` override; feedback is now published directly by users                                        |
 | `ROUND_REWARD_DISTRIBUTOR_ADDRESS`                | Auto-derived when frontend-fee sweep is enabled on supported chains | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `FRONTEND_REGISTRY_ADDRESS`                       | Auto-derived when frontend-fee sweep is enabled on supported chains | Local `31337` override only; live chains require shared deployment artifacts                                       |
 | `CLUSTER_PAYOUT_ORACLE_ADDRESS`                   | Auto-derived for supported chains                                   | Required when correlation snapshot publication is enabled                                                          |
@@ -48,11 +47,6 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `KEEPER_STARTUP_JITTER_MS`                        | `0`                                                                 | Random startup delay for multi-instance staggering                                                                 |
 | `KEEPER_CLEANUP_BATCH_SIZE`                       | `25`                                                                | Max commit window processed per `processUnrevealedVotes()` batch                                                   |
 | `KEEPER_DATABASE_URL`                             | —                                                                   | Optional Postgres URL for keeper-only correlation artifact cache and advisory locks                                |
-| `KEEPER_FEEDBACK_REVEAL_API_BASE_URL`             | —                                                                   | Deprecated legacy no-op; feedback no longer uses keeper reveal jobs                                                |
-| `KEEPER_FEEDBACK_REVEAL_SECRET`                   | —                                                                   | Deprecated legacy no-op                                                                                           |
-| `KEEPER_FEEDBACK_REVEALS_ENABLED`                 | `false`                                                             | Deprecated legacy no-op                                                                                           |
-| `KEEPER_FEEDBACK_REVEAL_BATCH_SIZE`               | `25`                                                                | Deprecated legacy no-op                                                                                           |
-| `KEEPER_FEEDBACK_REVEAL_LEASE_SECONDS`            | `120`                                                               | Deprecated legacy no-op                                                                                           |
 | `METRICS_ENABLED`                                 | `true`                                                              | Enable Prometheus metrics server                                                                                   |
 | `METRICS_BIND_ADDRESS`                            | `127.0.0.1`                                                         | Metrics server bind address                                                                                        |
 | `METRICS_PORT`                                    | `9090`                                                              | Metrics server port                                                                                                |
@@ -89,8 +83,6 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 
 Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), and `keeper_unrevealed_cleanup_batches_total` (counter).
 
-Feedback is published directly by the rater through `FeedbackRegistry.publishFeedback(...)` when it is submitted. The legacy feedback reveal keeper settings are retained as inert compatibility knobs and do not lease or submit jobs.
-
 When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes a bounded cursor through recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also withdraw accumulated `FrontendRegistry.claimFees()` credits.
 
 When `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, the worker checks that the keeper wallet resolves through `FrontendRegistry.authorizedSnapshotFrontend(...)` to an eligible frontend operator only when a missing/rejected proposal slot actually needs a proposal. The keeper wallet can be the registered frontend wallet itself, or a separate operational wallet assigned by that frontend operator. The worker proposes missing correlation epoch and round payout roots from the keeper wallet and finalizes already-proposed roots after the challenge window. In `auto` mode it first preflights on-chain status so already-proposed/finalized snapshots do not rebuild artifacts, then asks Ponder for settled USDC bounty rounds only when proposal data is needed, builds deterministic payout weights with `@rateloop/node-utils/correlationScoring`, stores the public artifact, and publishes the roots. In `file` mode it reads the same artifact shape from `KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH`.
@@ -110,7 +102,6 @@ src/
 ├── correlation-artifact-builder.ts # Ponder-backed automatic ClusterPayoutOracle artifacts
 ├── correlation-artifact-storage.ts # Canonical artifact hashing and storage
 ├── correlation-snapshots.ts # Optional ClusterPayoutOracle publication
-├── feedback-reveals.ts # Legacy no-op compatibility module for retired feedback reveal jobs
 ├── frontend-fees.ts # Optional hosted frontend fee sweeps
 ├── keeper-state.ts # Optional Postgres cache and advisory locks
 ├── config.ts     # Configuration from environment

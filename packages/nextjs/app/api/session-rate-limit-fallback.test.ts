@@ -24,8 +24,6 @@ type NotificationEmailSessionRoute = typeof import("./notifications/email/sessio
 type FreeTransactionSessionRoute = typeof import("./transactions/free/session/route");
 type FeedbackChallengeRoute = typeof import("./feedback/challenge/route");
 type FeedbackRoute = typeof import("./feedback/route");
-type FeedbackReadRoute = typeof import("./feedback/read/route");
-type FeedbackSessionRoute = typeof import("./feedback/session/route");
 type FeedbackCountsRoute = typeof import("./feedback/counts/route");
 
 let rateLimit: RateLimitModule;
@@ -36,8 +34,6 @@ let notificationEmailSessionRoute: NotificationEmailSessionRoute;
 let freeTransactionSessionRoute: FreeTransactionSessionRoute;
 let feedbackChallengeRoute: FeedbackChallengeRoute;
 let feedbackRoute: FeedbackRoute;
-let feedbackReadRoute: FeedbackReadRoute;
-let feedbackSessionRoute: FeedbackSessionRoute;
 let feedbackCountsRoute: FeedbackCountsRoute;
 
 function makeRequest(pathname: string) {
@@ -57,8 +53,6 @@ before(async () => {
   freeTransactionSessionRoute = await import("./transactions/free/session/route");
   feedbackChallengeRoute = await import("./feedback/challenge/route");
   feedbackRoute = await import("./feedback/route");
-  feedbackReadRoute = await import("./feedback/read/route");
-  feedbackSessionRoute = await import("./feedback/session/route");
   feedbackCountsRoute = await import("./feedback/counts/route");
 });
 
@@ -188,27 +182,6 @@ test("feedback submit route continues past rate limit store outages", async () =
       body: JSON.stringify({ address: TEST_ADDRESS }),
     }),
   );
-
-  assert.equal(response.status, 400);
-});
-
-test("feedback read route continues past rate limit store outages", async () => {
-  const response = await feedbackReadRoute.POST(
-    new NextRequest("https://rateloop.ai/api/feedback/read", {
-      method: "POST",
-      headers: new Headers({
-        "content-type": "application/json",
-        "x-forwarded-for": TEST_IP,
-      }),
-      body: JSON.stringify({ address: TEST_ADDRESS }),
-    }),
-  );
-
-  assert.equal(response.status, 400);
-});
-
-test("feedback session route continues past rate limit store outages", async () => {
-  const response = await feedbackSessionRoute.GET(makeRequest("/api/feedback/session?address=invalid"));
 
   assert.equal(response.status, 400);
 });

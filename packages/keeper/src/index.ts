@@ -20,13 +20,11 @@ import {
 import { resolveRounds, validateKeeperContracts } from "./keeper.js";
 import { claimConfiguredFrontendFees } from "./frontend-fees.js";
 import { publishConfiguredCorrelationSnapshots } from "./correlation-snapshots.js";
-import { revealQueuedFeedback } from "./feedback-reveals.js";
 import { closeKeeperState } from "./keeper-state.js";
 import {
   startMetricsServer,
   setHealthThreshold,
   recordRun,
-  recordFeedbackRevealRun,
   recordError,
   setGauge,
   getConsecutiveErrors,
@@ -48,7 +46,6 @@ async function main() {
     frontendFeesEnabled: config.frontendFees.enabled,
     frontendFeeAddress: config.frontendFees.frontendAddress ?? account.address,
     correlationSnapshotsEnabled: config.correlationSnapshots.enabled,
-    feedbackRevealsEnabled: config.feedbackReveals.enabled,
   });
 
   await validateKeeperConnectivity(publicClient);
@@ -152,26 +149,8 @@ async function main() {
             logger,
           )
         : null;
-      const feedbackRevealResult = config.feedbackReveals.enabled
-        ? await revealQueuedFeedback(
-            publicClient,
-            walletClient,
-            chain,
-            account,
-            logger,
-            {
-              ...config.feedbackReveals,
-              chainId: config.chainId,
-              feedbackRegistry: config.contracts.feedbackRegistry,
-              maxGasPerTx: config.maxGasPerTx,
-            },
-          )
-        : null;
       const duration = Date.now() - start;
       recordRun(result, duration);
-      if (feedbackRevealResult) {
-        recordFeedbackRevealRun(feedbackRevealResult);
-      }
 
       // Log summary only when something happened
       const total =
@@ -205,16 +184,6 @@ async function main() {
       ) {
         logger.info("Correlation snapshot publication complete", {
           ...correlationSnapshotResult,
-        });
-      }
-      if (
-        feedbackRevealResult &&
-        (feedbackRevealResult.revealed > 0 ||
-          feedbackRevealResult.alreadyRevealed > 0 ||
-          feedbackRevealResult.failures > 0)
-      ) {
-        logger.info("Feedback reveal publication complete", {
-          ...feedbackRevealResult,
         });
       }
     } catch (err: any) {

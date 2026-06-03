@@ -17,10 +17,6 @@ const counters: Record<string, number> = {
   keeper_advisory_launch_credits_claimed_total: 0,
   keeper_unrevealed_cleanup_batches_total: 0,
   keeper_content_marked_dormant_total: 0,
-  keeper_feedback_reveal_jobs_leased_total: 0,
-  keeper_feedback_reveals_total: 0,
-  keeper_feedback_reveal_failures_total: 0,
-  keeper_feedback_reveal_already_revealed_total: 0,
   keeper_runs_total: 0,
   keeper_errors_total: 0,
   keeper_decrypt_failures_total: 0,
@@ -76,18 +72,6 @@ export function recordRun(result: KeeperResult, durationMs: number) {
   lastRunTime = new Date();
 }
 
-export function recordFeedbackRevealRun(result: {
-  jobsLeased: number;
-  revealed: number;
-  failures: number;
-  alreadyRevealed: number;
-}) {
-  counters.keeper_feedback_reveal_jobs_leased_total += result.jobsLeased;
-  counters.keeper_feedback_reveals_total += result.revealed;
-  counters.keeper_feedback_reveal_failures_total += result.failures;
-  counters.keeper_feedback_reveal_already_revealed_total += result.alreadyRevealed;
-}
-
 /** Record a keeper error. */
 export function recordError() {
   counters.keeper_errors_total++;
@@ -107,10 +91,6 @@ function renderMetrics(): string {
     keeper_advisory_launch_credits_claimed_total: "Total advisory launch credits claimed by keeper",
     keeper_unrevealed_cleanup_batches_total: "Total unrevealed-vote cleanup batches processed by keeper",
     keeper_content_marked_dormant_total: "Total content items marked dormant",
-    keeper_feedback_reveal_jobs_leased_total: "Legacy no-op feedback reveal jobs leased from the app queue",
-    keeper_feedback_reveals_total: "Legacy no-op content feedback reveals submitted by keeper",
-    keeper_feedback_reveal_failures_total: "Legacy no-op content feedback reveal jobs reported failed by keeper",
-    keeper_feedback_reveal_already_revealed_total: "Legacy no-op content feedback jobs already revealed on-chain",
     keeper_runs_total: "Total keeper run cycles",
     keeper_errors_total: "Total keeper run errors",
     keeper_decrypt_failures_total: "Total tlock decryption failures",

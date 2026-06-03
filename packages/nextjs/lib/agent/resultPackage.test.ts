@@ -60,10 +60,11 @@ function feedback(overrides: Partial<ContentFeedbackItem> = {}): ContentFeedback
     isOwn: false,
     isPublic: true,
     moderationStatus: "approved",
+    publicationTxHash: `0x${"6".repeat(64)}`,
+    publishedAt: "2026-01-01T00:00:00.000Z",
     roundId: "2",
     sourceUrl: null,
     updatedAt: "2026-01-01T00:00:00.000Z",
-    visibilityStatus: "hidden_until_settlement",
     ...overrides,
   };
 }

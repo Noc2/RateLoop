@@ -386,22 +386,6 @@ function loadConfig() {
     rejectLocalhostInProduction: true,
     requireHttpsInProduction: true,
   });
-  const feedbackRevealApiBaseUrl = readOptionalUrlEnv(
-    "KEEPER_FEEDBACK_REVEAL_API_BASE_URL",
-    errors,
-    {
-      rejectLocalhostInProduction: true,
-      requireHttpsInProduction: true,
-    },
-  );
-  const feedbackRevealSecret =
-    readEnv("KEEPER_FEEDBACK_REVEAL_SECRET") ||
-    readEnv("RATELOOP_FEEDBACK_REVEAL_SECRET");
-  const feedbackRevealsEnabled = parseBooleanEnv(
-    readEnv("KEEPER_FEEDBACK_REVEALS_ENABLED"),
-    false,
-    "KEEPER_FEEDBACK_REVEALS_ENABLED",
-  );
 
   if (!keystoreAccount && !privateKey) {
     errors.push("KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY is required");
@@ -472,13 +456,6 @@ function loadConfig() {
         chainId,
         envName: "ADVISORY_VOTE_RECORDER_ADDRESS",
         contractName: "AdvisoryVoteRecorder",
-        errors,
-        warnings,
-      }),
-      feedbackRegistry: resolveContractAddress({
-        chainId,
-        envName: "FEEDBACK_REGISTRY_ADDRESS",
-        contractName: "FeedbackRegistry",
         errors,
         warnings,
       }),
@@ -572,23 +549,6 @@ function loadConfig() {
         "KEEPER_FRONTEND_FEE_WITHDRAW",
       ),
       contracts: frontendFeeContracts,
-    },
-
-    // Content feedback reveal ops
-    feedbackReveals: {
-      enabled: feedbackRevealsEnabled,
-      apiBaseUrl: feedbackRevealApiBaseUrl ?? null,
-      secret: feedbackRevealSecret ?? null,
-      batchSize: readPositiveIntEnv(
-        "KEEPER_FEEDBACK_REVEAL_BATCH_SIZE",
-        "25",
-        errors,
-      ),
-      leaseSeconds: readPositiveIntEnv(
-        "KEEPER_FEEDBACK_REVEAL_LEASE_SECONDS",
-        "120",
-        errors,
-      ),
     },
 
     // Correlation snapshot publication
