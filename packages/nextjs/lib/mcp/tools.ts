@@ -285,7 +285,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: true,
     },
     description:
-      "Get browser handoff status by handoffId and handoffToken. Use this after sharing a handoffUrl to know whether the user has prepared or submitted the ask.",
+      "Get browser handoff status by handoffId and handoffToken. Use this after sharing a handoffUrl to know whether the user has edited, prepared, or submitted the ask; inspect requestBody, originalRequestBody, draftRevision, and editedByUser for pre-submit browser edits.",
     inputSchema: agentHandoffStatusInputSchema,
     name: "rateloop_get_handoff_status",
     outputSchema: agentAskHandoffOutputSchema,

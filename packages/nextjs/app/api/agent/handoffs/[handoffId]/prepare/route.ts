@@ -79,6 +79,7 @@ function readImageSignatures(value: unknown): ImageSignatureInput[] {
 async function buildUploadChallenges(params: {
   assets: Awaited<ReturnType<typeof listAgentAskHandoffAssets>>;
   chainId: number;
+  draftRevision: number;
   handoffId: string;
   walletAddress: Address;
 }) {
@@ -112,6 +113,7 @@ async function buildUploadChallenges(params: {
 
   await updateAgentAskHandoffStatus({
     chainId: params.chainId,
+    expectedDraftRevision: params.draftRevision,
     handoffId: params.handoffId,
     status: "awaiting_image_signatures",
     walletAddress: params.walletAddress,
@@ -209,9 +211,11 @@ async function prepareAsk(params: {
 
   await updateAgentAskHandoffStatus({
     chainId: params.chainId,
+    expectedDraftRevision: handoff.draftRevision,
     handoffId: params.handoffId,
     operationKey,
     payloadHash,
+    preparedDraftRevision: handoff.draftRevision,
     status: "prepared",
     transactionPlan,
     walletAddress: params.walletAddress,
@@ -245,6 +249,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
         return NextResponse.json({ error: "Connected wallet does not match this handoff." }, { status: 403 });
       }
       if (handoff.status === "prepared") {
+        if (handoff.preparedDraftRevision !== handoff.draftRevision) {
+          return NextResponse.json(
+            { error: "Prepared transaction plan is stale. Review the saved draft and prepare again." },
+            { status: 409 },
+          );
+        }
         const assets = await listAgentAskHandoffAssets(handoff.id);
         return buildAgentAskHandoffResponse({ assets, handoff, includeImageData: true });
       }
@@ -252,7 +262,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ha
       let assets = await listAgentAskHandoffAssets(handoff.id);
       const stagedAssets = assets.filter(asset => asset.status === "staged");
       if (stagedAssets.length > 0 && imageSignatures.length === 0) {
-        const uploadChallenges = await buildUploadChallenges({ assets, chainId, handoffId, walletAddress });
+        const uploadChallenges = await buildUploadChallenges({
+          assets,
+          chainId,
+          draftRevision: handoff.draftRevision,
+          handoffId,
+          walletAddress,
+        });
         const updatedHandoff = await loadAgentAskHandoffByToken({ handoffId, token });
         assets = await listAgentAskHandoffAssets(updatedHandoff.id);
         return {

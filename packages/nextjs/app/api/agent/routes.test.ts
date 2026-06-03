@@ -36,6 +36,7 @@ type DbTestMemoryModule = typeof import("../../../lib/db/testMemory");
 type McpBudgetModule = typeof import("~~/lib/mcp/budget");
 type McpToolsModule = typeof import("~~/lib/mcp/tools");
 type UrlSafetyModule = typeof import("~~/utils/urlSafety");
+type McpToolTestOverrides = NonNullable<Parameters<McpToolsModule["__setMcpToolTestOverridesForTests"]>[0]>;
 
 const OPERATION_KEY = `0x${"1".repeat(64)}` as const;
 
@@ -108,6 +109,17 @@ function makePublicPost(url: string, body: unknown, headers: Record<string, stri
       ...headers,
     }),
     method: "POST",
+  });
+}
+
+function makePublicPatch(url: string, body: unknown, headers: Record<string, string> = {}) {
+  return new NextRequest(url, {
+    body: JSON.stringify(body),
+    headers: new Headers({
+      "content-type": "application/json",
+      ...headers,
+    }),
+    method: "PATCH",
   });
 }
 
@@ -310,7 +322,7 @@ function installQuoteOverrides() {
   });
 }
 
-function installAskOverrides() {
+function installAskOverrides(overrides: McpToolTestOverrides = {}) {
   installQuoteOverrides();
   mcpToolsModule.__setMcpToolTestOverridesForTests({
     getMcpAgentBudgetSummary: async () => ({
@@ -464,6 +476,7 @@ function installAskOverrides() {
         usdcAddress: "0x0000000000000000000000000000000000000001",
       }) as never,
     updateMcpBudgetReservation: async () => null,
+    ...overrides,
   });
 }
 
@@ -849,6 +862,175 @@ test("agent ask handoff route prepares and completes no-image wallet-call asks",
   assert.equal(completeResponse.status, 200);
   assert.equal(completeBody.status, "submitted");
   assert.deepEqual(completeBody.transactionHashes, [`0x${"4".repeat(64)}`]);
+});
+
+test("agent ask handoff route saves edited drafts before prepare", async () => {
+  let preparedPayload: unknown = null;
+  installAskOverrides({
+    preparePermissionlessWalletQuestionSubmissionRequest: async params => {
+      preparedPayload = params.payload;
+      return {
+        body: {
+          chainId: params.payload.chainId,
+          clientRequestId: params.payload.clientRequestId,
+          operationKey: OPERATION_KEY,
+          payment: {
+            amount: params.payload.bounty.amount.toString(),
+            asset: "USDC",
+            bountyAmount: params.payload.bounty.amount.toString(),
+            decimals: 6,
+            spender: "0x0000000000000000000000000000000000000002",
+            tokenAddress: "0x0000000000000000000000000000000000000001",
+          },
+          status: "awaiting_wallet_signature",
+          transactionPlan: {
+            calls: [{ id: "approve-usdc", to: "0x0000000000000000000000000000000000000001" }],
+            requiresOrderedExecution: true,
+          },
+          wallet: { address: params.walletAddress, fundingMode: "permissionless_wallet" },
+        },
+        status: 202,
+      };
+    },
+  });
+
+  const originalRequest = {
+    ...questionPayload("agent-handoff-editable"),
+    maxPaymentAmount: "3000000",
+  };
+  const editedRequest = {
+    ...originalRequest,
+    bounty: {
+      ...originalRequest.bounty,
+      amount: "2500000",
+    },
+    question: {
+      ...originalRequest.question,
+      description: "Edited after the agent handoff.",
+      tags: ["agents", "running"],
+      title: "Edited pitch interest",
+    },
+    roundConfig: {
+      epochDuration: "600",
+      maxDuration: "7200",
+      maxVoters: "40",
+      minVoters: "4",
+    },
+  };
+
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: originalRequest,
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+  assert.equal(createBody.draftRevision, 0);
+  assert.equal(createBody.editedByUser, false);
+
+  const patchResponse = await handoffRoute.PATCH(
+    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      requestBody: editedRequest,
+      token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const patchBody = (await patchResponse.json()) as Record<string, unknown>;
+  const patchRequestBody = patchBody.requestBody as Record<string, unknown>;
+  const patchOriginalRequestBody = patchBody.originalRequestBody as Record<string, unknown>;
+  const patchQuestion = patchRequestBody.question as Record<string, unknown>;
+  const patchOriginalQuestion = patchOriginalRequestBody.question as Record<string, unknown>;
+
+  assert.equal(patchResponse.status, 200);
+  assert.equal(patchBody.status, "pending");
+  assert.equal(patchBody.draftRevision, 1);
+  assert.equal(patchBody.editedByUser, true);
+  assert.equal(patchQuestion.title, "Edited pitch interest");
+  assert.equal(patchOriginalQuestion.title, "Pitch interest");
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: 4801,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
+  const payload = preparedPayload as {
+    bounty: { amount: bigint };
+    questions: Array<{ description: string; tagList: string[]; title: string }>;
+    roundConfig: { epochDuration: bigint; maxDuration: bigint; maxVoters: bigint; minVoters: bigint };
+  };
+
+  assert.equal(prepareResponse.status, 200);
+  assert.equal(prepareBody.status, "prepared");
+  assert.equal(prepareBody.draftRevision, 1);
+  assert.equal(prepareBody.preparedDraftRevision, 1);
+  assert.equal(payload.questions[0]?.title, "Edited pitch interest");
+  assert.equal(payload.questions[0]?.description, "Edited after the agent handoff.");
+  assert.deepEqual(payload.questions[0]?.tagList, ["agents", "running"]);
+  assert.equal(payload.bounty.amount, 2_500_000n);
+  assert.equal(payload.roundConfig.epochDuration, 600n);
+  assert.equal(payload.roundConfig.maxDuration, 7200n);
+  assert.equal(payload.roundConfig.minVoters, 4n);
+  assert.equal(payload.roundConfig.maxVoters, 40n);
+});
+
+test("agent ask handoff route blocks draft edits after prepare", async () => {
+  installAskOverrides();
+
+  const originalRequest = {
+    ...questionPayload("agent-handoff-edit-blocked"),
+    maxPaymentAmount: "1500000",
+  };
+  const createResponse = await handoffsRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/handoffs", {
+      request: originalRequest,
+      ttlMs: 300000,
+    }),
+  );
+  const createBody = (await createResponse.json()) as Record<string, unknown>;
+  const handoffId = String(createBody.handoffId);
+  const handoffUrl = new URL(String(createBody.handoffUrl));
+  const token = new URLSearchParams(handoffUrl.hash.replace(/^#/, "")).get("token");
+
+  assert.equal(createResponse.status, 200);
+  assert.ok(token);
+
+  const prepareResponse = await handoffPrepareRoute.POST(
+    makePublicPost(`https://rateloop.ai/api/agent/handoffs/${handoffId}/prepare`, {
+      chainId: 4801,
+      token,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  assert.equal(prepareResponse.status, 200);
+
+  const patchResponse = await handoffRoute.PATCH(
+    makePublicPatch(`https://rateloop.ai/api/agent/handoffs/${handoffId}`, {
+      requestBody: {
+        ...originalRequest,
+        question: {
+          ...originalRequest.question,
+          title: "Too late to edit",
+        },
+      },
+      token,
+    }),
+    { params: Promise.resolve({ handoffId }) },
+  );
+  const patchBody = (await patchResponse.json()) as Record<string, unknown>;
+
+  assert.equal(patchResponse.status, 409);
+  assert.match(String(patchBody.message), /cannot be edited after preparation has started/);
 });
 
 test("agent ask handoff route funds feedback bonus after submitting the ask", async () => {

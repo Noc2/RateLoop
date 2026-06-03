@@ -23,12 +23,16 @@ export type AgentAskHandoffRecord = {
   clientRequestId: string | null;
   completedAt: Date | null;
   createdAt: Date;
+  draftRevision: number;
+  editedByUser: boolean;
   error: string | null;
   expiresAt: Date;
   id: string;
   operationKey: `0x${string}` | null;
+  originalRequestBody: JsonObject;
   payloadHash: string | null;
   paymentMode: "wallet_calls";
+  preparedDraftRevision: number | null;
   requestBody: JsonObject;
   status: AgentAskHandoffStatus;
   tokenHash: string;
@@ -173,12 +177,19 @@ function rowToHandoff(row: Record<string, unknown> | undefined): AgentAskHandoff
           ? new Date(String(row.completed_at))
           : null,
     createdAt: row.created_at instanceof Date ? row.created_at : new Date(String(row.created_at)),
+    draftRevision: row.draft_revision === null || row.draft_revision === undefined ? 0 : Number(row.draft_revision),
+    editedByUser: row.edited_by_user === true || row.edited_by_user === "true",
     error: typeof row.error === "string" ? row.error : null,
     expiresAt: row.expires_at instanceof Date ? row.expires_at : new Date(String(row.expires_at)),
     id: String(row.id),
     operationKey: typeof row.operation_key === "string" ? (row.operation_key as `0x${string}`) : null,
+    originalRequestBody: parseStoredJson(String(row.original_request_body ?? row.request_body)),
     payloadHash: typeof row.payload_hash === "string" ? row.payload_hash : null,
     paymentMode: "wallet_calls",
+    preparedDraftRevision:
+      row.prepared_draft_revision === null || row.prepared_draft_revision === undefined
+        ? null
+        : Number(row.prepared_draft_revision),
     requestBody: parseStoredJson(String(row.request_body)),
     status: String(row.status) as AgentAskHandoffStatus,
     tokenHash: String(row.token_hash),
@@ -324,6 +335,44 @@ function stripHandoffOnlyValidationFields(requestBody: JsonObject) {
   return cloned;
 }
 
+function assertWalletCallsPaymentMode(requestBody: JsonObject) {
+  const paymentMode = readOptionalString(requestBody.paymentMode ?? requestBody.fundingMode) || "wallet_calls";
+  if (paymentMode !== "wallet_calls") {
+    throw new AgentAskHandoffError("Browser handoff links currently support paymentMode=wallet_calls.");
+  }
+}
+
+export function buildAgentAskHandoffValidationImageUrls(params: {
+  assets: AgentAskHandoffAssetRecord[];
+  origin: string;
+}) {
+  return params.assets.map(asset => asset.imageUrl ?? assetImageUrl(params.origin, asset.attachmentId));
+}
+
+export function normalizeAgentAskHandoffRequestBody(params: {
+  fieldName?: string;
+  requestBody: unknown;
+  validationImageUrls?: string[];
+}) {
+  const requestBody = asJsonObject(params.requestBody, params.fieldName ?? "Handoff request body");
+  assertWalletCallsPaymentMode(requestBody);
+
+  const validationBody = stripHandoffOnlyValidationFields(
+    cloneWithImageUrls(requestBody, params.validationImageUrls ?? []),
+  );
+  const parsed = parseX402QuestionRequest(validationBody);
+  const walletAddress = readOptionalAddress(
+    requestBody.walletAddress ?? requestBody.agentWalletAddress,
+    "walletAddress",
+  );
+
+  return {
+    parsed,
+    requestBody,
+    walletAddress,
+  };
+}
+
 function assertFresh(handoff: AgentAskHandoffRecord) {
   if (handoff.expiresAt.getTime() <= Date.now()) {
     throw new AgentAskHandoffError("Handoff link has expired.", 410);
@@ -408,12 +457,16 @@ export function buildAgentAskHandoffResponse(params: {
     clientRequestId: params.handoff.clientRequestId,
     completedAt: params.handoff.completedAt?.toISOString() ?? null,
     createdAt: params.handoff.createdAt.toISOString(),
+    draftRevision: params.handoff.draftRevision,
+    editedByUser: params.handoff.editedByUser,
     error: params.handoff.error,
     expiresAt: params.handoff.expiresAt.toISOString(),
     id: params.handoff.id,
     operationKey: params.handoff.operationKey,
+    originalRequestBody: params.handoff.originalRequestBody,
     payloadHash: params.handoff.payloadHash,
     paymentMode: params.handoff.paymentMode,
+    preparedDraftRevision: params.handoff.preparedDraftRevision,
     requestBody: params.handoff.requestBody,
     status: params.handoff.status,
     transactionHashes: params.handoff.transactionHashes,
@@ -430,10 +483,7 @@ export async function createAgentAskHandoff(params: {
   ttlMs?: number;
 }) {
   const requestBody = asJsonObject(params.requestBody, "Handoff request body");
-  const paymentMode = readOptionalString(requestBody.paymentMode ?? requestBody.fundingMode) || "wallet_calls";
-  if (paymentMode !== "wallet_calls") {
-    throw new AgentAskHandoffError("Browser handoff links currently support paymentMode=wallet_calls.");
-  }
+  assertWalletCallsPaymentMode(requestBody);
 
   const generatedImages = readGeneratedImages(params.generatedImages);
   const id = randomHandoffId();
@@ -447,12 +497,7 @@ export async function createAgentAskHandoff(params: {
     id: randomAssetId(),
   }));
   const validationImageUrls = assets.map(asset => assetImageUrl(params.origin, asset.attachmentId));
-  const validationBody = stripHandoffOnlyValidationFields(cloneWithImageUrls(requestBody, validationImageUrls));
-  const parsed = parseX402QuestionRequest(validationBody);
-  const walletAddress = readOptionalAddress(
-    requestBody.walletAddress ?? requestBody.agentWalletAddress,
-    "walletAddress",
-  );
+  const normalized = normalizeAgentAskHandoffRequestBody({ requestBody, validationImageUrls });
 
   await dbClient.execute({
     sql: `
@@ -465,11 +510,15 @@ export async function createAgentAskHandoff(params: {
         payment_mode,
         wallet_address,
         request_body,
+        original_request_body,
+        draft_revision,
+        prepared_draft_revision,
+        edited_by_user,
         expires_at,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     args: [
       id,
@@ -477,11 +526,15 @@ export async function createAgentAskHandoff(params: {
       // Both image and image-free handoffs start in "pending"; image handoffs
       // advance to awaiting_image_signatures only once prepare is called.
       "pending",
-      parsed.chainId,
-      parsed.clientRequestId,
+      normalized.parsed.chainId,
+      normalized.parsed.clientRequestId,
       "wallet_calls",
-      walletAddress,
+      normalized.walletAddress,
       JSON.stringify(requestBody),
+      JSON.stringify(requestBody),
+      0,
+      null,
+      false,
       expiresAt,
       now,
       now,
@@ -538,16 +591,18 @@ export async function createAgentAskHandoff(params: {
 export async function updateAgentAskHandoffStatus(params: {
   chainId?: number | null;
   error?: string | null;
+  expectedDraftRevision?: number;
   handoffId: string;
   operationKey?: string | null;
   payloadHash?: string | null;
+  preparedDraftRevision?: number | null;
   status: AgentAskHandoffStatus;
   transactionHashes?: Hex[];
   transactionPlan?: JsonObject | null;
   walletAddress?: Address | null;
 }) {
   const now = nowDate();
-  await dbClient.execute({
+  const result = await dbClient.execute({
     sql: `
       UPDATE agent_ask_handoff_intents
       SET status = ?,
@@ -555,12 +610,15 @@ export async function updateAgentAskHandoffStatus(params: {
           wallet_address = COALESCE(?, wallet_address),
           operation_key = COALESCE(?, operation_key),
           payload_hash = COALESCE(?, payload_hash),
+          prepared_draft_revision = COALESCE(?, prepared_draft_revision),
           transaction_plan = COALESCE(?, transaction_plan),
           transaction_hashes = COALESCE(?, transaction_hashes),
           error = ?,
           completed_at = CASE WHEN ? = 'submitted' THEN ? ELSE completed_at END,
           updated_at = ?
-      WHERE id = ? AND status NOT IN ('submitted', 'expired')
+      WHERE id = ?
+        AND status NOT IN ('submitted', 'expired')
+        AND (? IS NULL OR draft_revision = ?)
     `,
     args: [
       params.status,
@@ -568,6 +626,7 @@ export async function updateAgentAskHandoffStatus(params: {
       params.walletAddress ?? null,
       params.operationKey ?? null,
       params.payloadHash ?? null,
+      params.preparedDraftRevision ?? null,
       params.transactionPlan === undefined
         ? null
         : params.transactionPlan
@@ -579,8 +638,72 @@ export async function updateAgentAskHandoffStatus(params: {
       now,
       now,
       params.handoffId,
+      params.expectedDraftRevision ?? null,
+      params.expectedDraftRevision ?? null,
     ],
   });
+  if (params.expectedDraftRevision !== undefined && result.rowCount === 0) {
+    throw new AgentAskHandoffError(
+      "Handoff draft changed while preparing. Review the saved draft and prepare again.",
+      409,
+    );
+  }
+}
+
+export function assertHandoffCanEditDraft(handoff: AgentAskHandoffRecord) {
+  assertFresh(handoff);
+  if (handoff.status !== "pending" && handoff.status !== "failed") {
+    throw new AgentAskHandoffError(
+      `Handoff draft cannot be edited after preparation has started. Current status: ${handoff.status}.`,
+      409,
+    );
+  }
+}
+
+export async function updateAgentAskHandoffDraft(params: {
+  handoff: AgentAskHandoffRecord;
+  requestBody: unknown;
+  validationImageUrls?: string[];
+}) {
+  assertHandoffCanEditDraft(params.handoff);
+  const normalized = normalizeAgentAskHandoffRequestBody({
+    fieldName: "requestBody",
+    requestBody: params.requestBody,
+    validationImageUrls: params.validationImageUrls,
+  });
+  const now = nowDate();
+  const result = await dbClient.execute({
+    sql: `
+      UPDATE agent_ask_handoff_intents
+      SET status = 'pending',
+          chain_id = ?,
+          client_request_id = ?,
+          wallet_address = ?,
+          request_body = ?,
+          draft_revision = draft_revision + 1,
+          edited_by_user = true,
+          prepared_draft_revision = NULL,
+          operation_key = NULL,
+          payload_hash = NULL,
+          transaction_plan = NULL,
+          transaction_hashes = NULL,
+          error = NULL,
+          updated_at = ?
+      WHERE id = ?
+        AND status IN ('pending', 'failed')
+    `,
+    args: [
+      normalized.parsed.chainId,
+      normalized.parsed.clientRequestId,
+      normalized.walletAddress,
+      JSON.stringify(normalized.requestBody),
+      now,
+      params.handoff.id,
+    ],
+  });
+  if (result.rowCount === 0) {
+    throw new AgentAskHandoffError("Handoff draft changed state before it could be saved.", 409);
+  }
 }
 
 export async function updateAgentAskHandoffAsset(params: {

@@ -166,10 +166,32 @@ const agentFeedbackBonusInputSchema = {
 const agentRoundConfigInputSchema = {
   additionalProperties: false,
   properties: {
-    epochDuration: { type: ["integer", "string"] },
-    maxDuration: { type: ["integer", "string"] },
-    maxVoters: { type: ["integer", "string"] },
-    minVoters: { type: ["integer", "string"] },
+    epochDuration: {
+      description: "Blind/private vote phase duration in seconds. Aliases: blindPhaseSeconds, blindSeconds.",
+      type: ["integer", "string"],
+    },
+    blindPhaseSeconds: {
+      description: "Alias for epochDuration.",
+      type: ["integer", "string"],
+    },
+    blindSeconds: {
+      description: "Alias for epochDuration.",
+      type: ["integer", "string"],
+    },
+    maxDuration: {
+      description: "Maximum round duration in seconds. Aliases: maxDurationSeconds, deadlineSeconds.",
+      type: ["integer", "string"],
+    },
+    maxDurationSeconds: {
+      description: "Alias for maxDuration.",
+      type: ["integer", "string"],
+    },
+    deadlineSeconds: {
+      description: "Alias for maxDuration.",
+      type: ["integer", "string"],
+    },
+    maxVoters: { description: "Maximum voters accepted by the private round.", type: ["integer", "string"] },
+    minVoters: { description: "Minimum voters required before settlement.", type: ["integer", "string"] },
   },
   type: "object",
 } satisfies JsonSchema;
@@ -424,15 +446,42 @@ export const agentAskHandoffOutputSchema = {
   additionalProperties: true,
   properties: {
     assets: { items: { type: "object" }, type: "array" },
+    draftRevision: {
+      description: "Current editable draft revision. Increments when the browser user saves changes before prepare.",
+      type: "integer",
+    },
+    editedByUser: {
+      description: "True when the browser user changed the agent-created draft before preparing the ask.",
+      type: "boolean",
+    },
     handoffId: { type: "string" },
     handoffToken: { type: "string" },
     handoffUrl: { type: "string" },
+    id: { type: "string" },
     nextAction: { type: "string" },
+    operationKey: { type: ["string", "null"] },
+    originalRequestBody: {
+      additionalProperties: true,
+      description: "The immutable ask request originally created by the agent.",
+      type: "object",
+    },
+    preparedDraftRevision: {
+      description: "Draft revision used to build the current transaction plan, or null before prepare.",
+      type: ["integer", "null"],
+    },
+    requestBody: {
+      additionalProperties: true,
+      description: "The current browser-reviewed ask request body that prepare/submit will use.",
+      type: "object",
+    },
     resultTool: { type: "string" },
     status: { type: "string" },
     statusTool: { type: "string" },
+    transactionPlan: { type: ["object", "null"] },
+    updatedAt: { type: "string" },
+    walletAddress: { type: ["string", "null"] },
   },
-  required: ["handoffId", "handoffToken", "handoffUrl", "status", "nextAction"],
+  required: ["status"],
   type: "object",
 } satisfies JsonSchema;
 
