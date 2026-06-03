@@ -391,7 +391,7 @@ test("rejects feedback eligibility when neither indexed nor advisory votes exist
   );
 });
 
-test("public reads hide active round feedback while owner reads include it", async () => {
+test("public reads show active round feedback immediately", async () => {
   const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "7", state: ROUND_STATE.Open }]);
   const payload = contentFeedback.normalizeContentFeedbackInput({
     address: WALLET,
@@ -408,8 +408,9 @@ test("public reads hide active round feedback while owner reads include it", asy
     contentId: "12",
     context: activeContext,
   });
-  assert.equal(publicResult.count, 0);
-  assert.equal(publicResult.publicCount, 0);
+  assert.equal(publicResult.count, 1);
+  assert.equal(publicResult.publicCount, 1);
+  assert.equal(publicResult.items[0]?.isPublic, true);
 
   const ownerResult = await contentFeedback.listContentFeedback({
     contentId: "12",
@@ -417,7 +418,7 @@ test("public reads hide active round feedback while owner reads include it", asy
     viewerAddress: WALLET,
   });
   assert.equal(ownerResult.count, 1);
-  assert.equal(ownerResult.ownHiddenCount, 1);
+  assert.equal(ownerResult.ownHiddenCount, 0);
   assert.equal(ownerResult.items[0]?.chainId, CHAIN_ID);
   assert.equal(ownerResult.items[0]?.feedbackHash?.length, 66);
 
@@ -426,7 +427,7 @@ test("public reads hide active round feedback while owner reads include it", asy
     context: activeContext,
     viewerAddress: OTHER_WALLET,
   });
-  assert.equal(otherResult.count, 0);
+  assert.equal(otherResult.count, 1);
 });
 
 test("terminal round feedback becomes public", async () => {
@@ -454,7 +455,7 @@ test("terminal round feedback becomes public", async () => {
   assert.equal(result.items[0]?.isPublic, true);
 });
 
-test("leases reveal candidates only after a revealable terminal round", async () => {
+test("does not lease reveal candidates for immediately published feedback", async () => {
   const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
   const payload = contentFeedback.normalizeContentFeedbackInput({
     address: WALLET,
@@ -469,7 +470,7 @@ test("leases reveal candidates only after a revealable terminal round", async ()
     prepareFeedback(payload.payload, activeContext),
     activeContext,
   );
-  assert.equal(added.onchainRevealStatus, "pending");
+  assert.equal(added.onchainRevealStatus, "revealed");
 
   contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
     getContentById: async () => ({ content: { openRound: { roundId: "8" } } }) as any,
@@ -493,12 +494,7 @@ test("leases reveal candidates only after a revealable terminal round", async ()
     now: new Date("2026-06-03T05:01:00.000Z"),
   });
 
-  assert.equal(settledCandidates.length, 1);
-  assert.equal(settledCandidates[0]?.id, added.id);
-  assert.equal(settledCandidates[0]?.commitKey.length, 66);
-  assert.equal(settledCandidates[0]?.feedbackHash, added.feedbackHash);
-  assert.equal(settledCandidates[0]?.clientNonce, added.clientNonce);
-  assert.equal(settledCandidates[0]?.attempt, 1);
+  assert.equal(settledCandidates.length, 0);
 });
 
 test("does not lease cancelled round feedback for on-chain reveal", async () => {
@@ -528,7 +524,7 @@ test("does not lease cancelled round feedback for on-chain reveal", async () => 
   assert.equal(candidates.length, 0);
 });
 
-test("defers malformed reveal metadata failure until the round is revealable", async () => {
+test("legacy malformed reveal metadata is not leased after direct publishing", async () => {
   const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
   const settledContext = contentFeedback.buildContentFeedbackRoundContext([
     { roundId: "8", state: ROUND_STATE.Settled },
@@ -571,7 +567,7 @@ test("defers malformed reveal metadata failure until the round is revealable", a
     context: activeContext,
     viewerAddress: WALLET,
   });
-  assert.equal(activeResult.items[0]?.onchainRevealStatus, "pending");
+  assert.equal(activeResult.items[0]?.onchainRevealStatus, "revealed");
   assert.equal(activeResult.items[0]?.onchainRevealError, null);
 
   contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
@@ -591,22 +587,17 @@ test("defers malformed reveal metadata failure until the round is revealable", a
     context: settledContext,
     viewerAddress: WALLET,
   });
-  assert.equal(settledResult.items[0]?.onchainRevealStatus, "failed");
-  assert.equal(settledResult.items[0]?.onchainRevealError, "Feedback is missing on-chain reveal metadata");
+  assert.equal(settledResult.items[0]?.onchainRevealStatus, "revealed");
+  assert.equal(settledResult.items[0]?.onchainRevealError, null);
 });
 
-test("records reveal success and retryable failure state", async () => {
+test("records legacy reveal success state", async () => {
   const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
-  const settledOverrides = {
-    getContentById: async () => ({ content: { openRound: null } }) as any,
-    getAllRounds: async () => [buildRoundItem({ contentId: "33", roundId: "8", state: ROUND_STATE.Settled })],
-    resolveOnchainOpenRoundId: async () => null,
-  };
   const payload = contentFeedback.normalizeContentFeedbackInput({
     address: WALLET,
     contentId: "33",
     feedbackType: "clarification",
-    body: "This note should eventually become awardable after the keeper reveal.",
+    body: "This note has already been published on-chain.",
   });
   assert.equal(payload.ok, true);
   if (!payload.ok) return;
@@ -615,29 +606,6 @@ test("records reveal success and retryable failure state", async () => {
     prepareFeedback(payload.payload, activeContext),
     activeContext,
   );
-  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests(settledOverrides);
-  const [candidate] = await contentFeedback.leaseContentFeedbackRevealCandidates({
-    chainId: CHAIN_ID,
-    limit: 1,
-    now: new Date("2026-06-03T05:03:00.000Z"),
-  });
-  assert.equal(candidate?.id, added.id);
-
-  const failure = await contentFeedback.recordContentFeedbackRevealFailure({
-    id: added.id as number,
-    error: "RPC temporarily unavailable",
-    retryable: true,
-    now: new Date("2026-06-03T05:04:00.000Z"),
-  });
-  assert.equal(failure.retryScheduled, true);
-
-  const retryResult = await contentFeedback.listContentFeedback({
-    contentId: "33",
-    context: contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Settled }]),
-    viewerAddress: WALLET,
-  });
-  assert.equal(retryResult.items[0]?.onchainRevealStatus, "pending");
-  assert.equal(retryResult.items[0]?.onchainRevealError, "RPC temporarily unavailable");
 
   await contentFeedback.recordContentFeedbackRevealSuccess({
     id: added.id as number,
@@ -690,6 +658,14 @@ test("returns awardable feedback bonus pools and awards for public feedback", as
     }),
   });
 
+  const activeResult = await contentFeedback.listContentFeedback({
+    contentId: "13",
+    context: activeContext,
+    awarderAddress: WALLET,
+  });
+  assert.equal(activeResult.items[0]?.isPublic, true);
+  assert.equal(activeResult.awardableFeedbackBonusPools?.length, 0);
+
   const result = await contentFeedback.listContentFeedback({
     contentId: "13",
     context: settledContext,
@@ -706,7 +682,7 @@ test("returns awardable feedback bonus pools and awards for public feedback", as
   assert.equal(result.items[0]?.feedbackBonusAwards?.[0]?.currency, "LREP");
 });
 
-test("public feedback remains visible behind newer hidden active-round rows", async () => {
+test("public feedback includes newer active-round rows", async () => {
   const initialContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
   const currentContext = contentFeedback.buildContentFeedbackRoundContext([
     { roundId: "8", state: ROUND_STATE.Settled },
@@ -725,16 +701,16 @@ test("public feedback remains visible behind newer hidden active-round rows", as
 
   for (let index = 0; index < 100; index++) {
     const wallet = `0x${(index + 1).toString(16).padStart(40, "0")}` as const;
-    const hiddenPayload = contentFeedback.normalizeContentFeedbackInput({
+    const activePayload = contentFeedback.normalizeContentFeedbackInput({
       address: wallet,
       contentId: "21",
       feedbackType: "concern",
-      body: `Active round private feedback number ${index}.`,
+      body: `Active round public feedback number ${index}.`,
     });
-    assert.equal(hiddenPayload.ok, true);
-    if (!hiddenPayload.ok) return;
+    assert.equal(activePayload.ok, true);
+    if (!activePayload.ok) return;
 
-    await contentFeedback.addContentFeedback(prepareFeedback(hiddenPayload.payload, currentContext), currentContext);
+    await contentFeedback.addContentFeedback(prepareFeedback(activePayload.payload, currentContext), currentContext);
   }
 
   const result = await contentFeedback.listContentFeedback({
@@ -742,9 +718,9 @@ test("public feedback remains visible behind newer hidden active-round rows", as
     context: currentContext,
   });
 
-  assert.equal(result.count, 1);
-  assert.equal(result.publicCount, 1);
-  assert.equal(result.items[0]?.body, "The settled answer includes clear supporting evidence.");
+  assert.equal(result.count, 100);
+  assert.equal(result.publicCount, 101);
+  assert.equal(result.items[0]?.body, "Active round public feedback number 99.");
 });
 
 test("rejects duplicate feedback from the same author in the same round", async () => {

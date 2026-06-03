@@ -32,14 +32,7 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
     uint256[49] private __gap;
 
     event VotingEngineUpdated(address votingEngine);
-    event FeedbackCommitted(
-        uint256 indexed contentId,
-        uint256 indexed roundId,
-        bytes32 indexed commitKey,
-        address author,
-        bytes32 feedbackHash
-    );
-    event FeedbackRevealed(
+    event FeedbackPublished(
         uint256 indexed contentId,
         uint256 indexed roundId,
         bytes32 indexed commitKey,
@@ -72,23 +65,7 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         _setVotingEngine(votingEngine_);
     }
 
-    function commitFeedbackHash(uint256 contentId, uint256 roundId, bytes32 commitKey, bytes32 feedbackHash) external {
-        require(feedbackHash != bytes32(0), "Feedback hash required");
-        RoundVotingEngine engine = votingEngine;
-        require(_roundState(engine, contentId, roundId) == RoundLib.RoundState.Open, "Round not open");
-        address author = _requireCommitAuthor(engine, contentId, roundId, commitKey);
-
-        FeedbackRecord storage record = feedbackByCommitKey[contentId][roundId][commitKey];
-        require(record.feedbackHash == bytes32(0), "Feedback already committed");
-        record.feedbackHash = feedbackHash;
-        record.author = author;
-        record.committedAt = uint48(block.timestamp);
-        record.votingEngineSnapshot = engine;
-
-        emit FeedbackCommitted(contentId, roundId, commitKey, author, feedbackHash);
-    }
-
-    function revealFeedback(
+    function publishFeedback(
         uint256 contentId,
         uint256 roundId,
         bytes32 commitKey,
@@ -97,24 +74,25 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         string calldata sourceUrl,
         bytes32 clientNonce
     ) external {
-        FeedbackRecord storage record = feedbackByCommitKey[contentId][roundId][commitKey];
-        require(record.feedbackHash != bytes32(0), "Feedback not committed");
-        require(record.revealedAt == 0, "Feedback already revealed");
-        RoundVotingEngine engine = record.votingEngineSnapshot;
-        if (address(engine) == address(0)) engine = votingEngine;
-        require(_isTerminalRound(_roundState(engine, contentId, roundId)), "Round not terminal");
+        RoundVotingEngine engine = votingEngine;
+        require(_roundState(engine, contentId, roundId) == RoundLib.RoundState.Open, "Round not open");
+        address author = _requireCommitAuthor(engine, contentId, roundId, commitKey);
         require(bytes(feedbackType).length > 0 && bytes(feedbackType).length <= MAX_FEEDBACK_TYPE_LENGTH, "Bad type");
         require(bytes(body).length > 0 && bytes(body).length <= MAX_FEEDBACK_BODY_LENGTH, "Bad body");
         require(bytes(sourceUrl).length <= MAX_SOURCE_URL_LENGTH, "Source too long");
 
-        bytes32 expectedHash =
-            buildContentFeedbackHash(contentId, roundId, record.author, feedbackType, body, sourceUrl, clientNonce);
-        require(expectedHash == record.feedbackHash, "Feedback hash mismatch");
-        _requireRevealedCommit(engine, contentId, roundId, commitKey);
-
+        FeedbackRecord storage record = feedbackByCommitKey[contentId][roundId][commitKey];
+        require(record.feedbackHash == bytes32(0), "Feedback already published");
+        bytes32 feedbackHash =
+            buildContentFeedbackHash(contentId, roundId, author, feedbackType, body, sourceUrl, clientNonce);
+        record.feedbackHash = feedbackHash;
+        record.author = author;
+        record.committedAt = uint48(block.timestamp);
         record.revealedAt = uint48(block.timestamp);
-        emit FeedbackRevealed(
-            contentId, roundId, commitKey, record.author, expectedHash, feedbackType, body, sourceUrl, clientNonce
+        record.votingEngineSnapshot = engine;
+
+        emit FeedbackPublished(
+            contentId, roundId, commitKey, author, feedbackHash, feedbackType, body, sourceUrl, clientNonce
         );
     }
 
@@ -176,24 +154,11 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         return msg.sender;
     }
 
-    function _requireRevealedCommit(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
-        internal
-        view
-    {
-        (address voter,,,, bool revealed,,) = engine.commitCore(contentId, roundId, commitKey);
-        require(voter != address(0) && revealed, "Vote not revealed");
-    }
-
     function _roundState(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
         internal
         view
         returns (RoundLib.RoundState state)
     {
         (, state,,,,,,,,,,,,) = engine.rounds(contentId, roundId);
-    }
-
-    function _isTerminalRound(RoundLib.RoundState state) internal pure returns (bool) {
-        return state == RoundLib.RoundState.Settled || state == RoundLib.RoundState.Tied
-            || state == RoundLib.RoundState.RevealFailed;
     }
 }

@@ -164,7 +164,7 @@ RoundVotingEngine.commitVote(
           <strong>Revealing votes:</strong> After each 20-minute epoch ends, the service decrypts tlock ciphertexts
           using the drand randomness beacon and calls{" "}
           <code>revealVoteByCommitKey(contentId, roundId, commitKey, isUp, predictedUpBps, salt)</code> for each
-          unrevealed commit. Private reports stay hidden until this step runs.
+          unrevealed commit. Vote choices stay hidden until this step runs.
         </li>
         <li>
           <strong>Settling rounds:</strong> Once at least 3 votes are revealed and all past-epoch votes have been

@@ -7,7 +7,6 @@ import { encodePacked, keccak256, zeroHash } from "viem";
 import { useConfig, usePublicClient, useSignMessage, useWriteContract } from "wagmi";
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
-import { ensurePrivateAccountReadSession } from "~~/hooks/usePrivateAccountSession";
 import type { ContentFeedbackItem, ContentFeedbackListResult, ContentFeedbackType } from "~~/lib/feedback/types";
 import {
   getConfiguredFeedbackRegistryAddress,
@@ -20,6 +19,9 @@ interface SignedChallengeResponse {
   message?: string;
   chainId?: number;
   roundId?: string;
+  feedbackType?: ContentFeedbackType;
+  body?: string;
+  sourceUrl?: string | null;
   clientNonce?: string;
   feedbackHash?: string;
   error?: string;
@@ -78,8 +80,6 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     [normalizedAddress, normalizedContentId],
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUnlocking, setIsUnlocking] = useState(false);
-  const [isRevealing, setIsRevealing] = useState(false);
 
   const resolveCommitKey = useCallback(
     async (roundId: string, knownCommitHash?: `0x${string}` | null): Promise<`0x${string}` | null> => {
@@ -103,10 +103,13 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     [address, normalizedContentId, publicClient, targetNetwork.id],
   );
 
-  const commitFeedbackHashOnchain = useCallback(
+  const publishFeedbackOnchain = useCallback(
     async (params: {
       roundId: string;
-      feedbackHash: `0x${string}`;
+      feedbackType: ContentFeedbackType;
+      body: string;
+      sourceUrl?: string;
+      clientNonce: `0x${string}`;
       commitHash?: `0x${string}` | null;
     }): Promise<{ commitKey: `0x${string}`; txHash: `0x${string}` } | null> => {
       if (!normalizedContentId) return null;
@@ -121,8 +124,16 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       const txHash = await writeContractAsync({
         address: feedbackRegistryAddress,
         abi: FeedbackRegistryAbi,
-        functionName: "commitFeedbackHash",
-        args: [BigInt(normalizedContentId), BigInt(params.roundId), commitKey, params.feedbackHash],
+        functionName: "publishFeedback",
+        args: [
+          BigInt(normalizedContentId),
+          BigInt(params.roundId),
+          commitKey,
+          params.feedbackType,
+          params.body,
+          params.sourceUrl ?? "",
+          params.clientNonce,
+        ],
       });
       await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
       return { commitKey, txHash };
@@ -179,6 +190,8 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
           !challenge.challengeId ||
           !challenge.chainId ||
           !challenge.roundId ||
+          !challenge.feedbackType ||
+          !challenge.body ||
           !challenge.clientNonce ||
           !challenge.feedbackHash
         ) {
@@ -186,12 +199,15 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         }
 
         const signature = await signMessageAsync({ message: challenge.message });
-        const committedFeedback = await commitFeedbackHashOnchain({
+        const publishedFeedback = await publishFeedbackOnchain({
           roundId: challenge.roundId,
-          feedbackHash: challenge.feedbackHash as `0x${string}`,
+          feedbackType: challenge.feedbackType,
+          body: challenge.body,
+          sourceUrl: challenge.sourceUrl ?? undefined,
+          clientNonce: challenge.clientNonce as `0x${string}`,
           commitHash: input.commitHash,
         });
-        if (!committedFeedback) {
+        if (!publishedFeedback) {
           throw new Error("Feedback registry is not deployed for this chain");
         }
         await readResponseBody<{ ok: true; item: ContentFeedbackItem }>(
@@ -201,14 +217,15 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
             body: JSON.stringify({
               address,
               contentId: normalizedContentId,
-              feedbackType: input.feedbackType,
-              body: input.body,
-              sourceUrl: input.sourceUrl,
+              feedbackType: challenge.feedbackType,
+              body: challenge.body,
+              sourceUrl: challenge.sourceUrl,
               chainId: challenge.chainId,
               roundId: challenge.roundId,
               clientNonce: challenge.clientNonce,
               feedbackHash: challenge.feedbackHash,
-              commitKey: committedFeedback.commitKey,
+              commitKey: publishedFeedback.commitKey,
+              publicationTxHash: publishedFeedback.txHash,
               signature,
               challengeId: challenge.challengeId,
             }),
@@ -232,93 +249,8 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         setIsSubmitting(false);
       }
     },
-    [address, commitFeedbackHashOnchain, normalizedContentId, queryClient, queryKey, signMessageAsync],
+    [address, normalizedContentId, publishFeedbackOnchain, queryClient, queryKey, signMessageAsync],
   );
-
-  const revealFeedback = useCallback(
-    async (item: ContentFeedbackItem): Promise<ContentFeedbackActionResult> => {
-      if (!address || !normalizedContentId) {
-        return { ok: false, reason: "not_connected" };
-      }
-      if (!item.roundId || !item.feedbackHash || !item.clientNonce) {
-        return { ok: false, reason: "request_failed", error: "Feedback is missing on-chain reveal metadata" };
-      }
-
-      const feedbackRegistryAddress = getConfiguredFeedbackRegistryAddress(targetNetwork.id);
-      if (!feedbackRegistryAddress) {
-        return { ok: false, reason: "request_failed", error: "Feedback registry is not deployed for this chain" };
-      }
-
-      setIsRevealing(true);
-      try {
-        const commitKey = await resolveCommitKey(item.roundId);
-        if (!commitKey) {
-          return { ok: false, reason: "request_failed", error: "Vote commitment not found for this feedback" };
-        }
-
-        await writeContractAsync({
-          address: feedbackRegistryAddress,
-          abi: FeedbackRegistryAbi,
-          functionName: "revealFeedback",
-          args: [
-            BigInt(normalizedContentId),
-            BigInt(item.roundId),
-            commitKey,
-            item.feedbackType,
-            item.body,
-            item.sourceUrl ?? "",
-            item.clientNonce as `0x${string}`,
-          ],
-        });
-
-        await queryClient.invalidateQueries({ queryKey });
-        return { ok: true };
-      } catch (error) {
-        if (isSignatureRejected(error)) {
-          return { ok: false, reason: "rejected" };
-        }
-        return {
-          ok: false,
-          reason: "request_failed",
-          error: error instanceof Error ? error.message : "Failed to reveal feedback",
-        };
-      } finally {
-        setIsRevealing(false);
-      }
-    },
-    [address, normalizedContentId, queryClient, queryKey, resolveCommitKey, targetNetwork.id, writeContractAsync],
-  );
-
-  const requestReadAccess = useCallback(async (): Promise<ContentFeedbackActionResult> => {
-    if (!address || !normalizedContentId) {
-      return { ok: false, reason: "not_connected" };
-    }
-
-    setIsUnlocking(true);
-    try {
-      await ensurePrivateAccountReadSession(address, signMessageAsync);
-      const params = new URLSearchParams({ contentId: normalizedContentId, address });
-      const response = await readResponseBody<ContentFeedbackListResult>(
-        await fetch(`/api/feedback?${params.toString()}`),
-        "Failed to load feedback",
-      );
-
-      queryClient.setQueryData(queryKey, response);
-      return { ok: true };
-    } catch (error) {
-      if (isSignatureRejected(error)) {
-        return { ok: false, reason: "rejected" };
-      }
-
-      return {
-        ok: false,
-        reason: "request_failed",
-        error: error instanceof Error ? error.message : "Failed to load feedback",
-      };
-    } finally {
-      setIsUnlocking(false);
-    }
-  }, [address, normalizedContentId, queryClient, queryKey, signMessageAsync]);
 
   const feedback = feedbackQuery.data ?? EMPTY_FEEDBACK_RESPONSE;
 
@@ -328,11 +260,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
     isLoading: feedbackQuery.isLoading,
     isFetching: feedbackQuery.isFetching,
     isSubmitting,
-    isUnlocking,
-    isRevealing,
     submitFeedback,
-    revealFeedback,
-    requestReadAccess,
     refetchFeedback: feedbackQuery.refetch,
   };
 }

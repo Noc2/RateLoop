@@ -56,8 +56,8 @@ const HowItWorks: NextPage = () => {
         <strong>{protocolDocFacts.openPhaseWeightLabel}</strong> reward weight.
       </p>
       <p>
-        Private reports stay hidden through the commit-reveal flow until the blind phase ends. The keeper normally
-        derives the reveal data after the epoch closes; users can self-reveal if the automatic path is delayed.
+        Vote choices stay hidden through the commit-reveal flow until the blind phase ends. Optional written feedback is
+        published on-chain when it is submitted.
       </p>
 
       <h3>Voting Rules</h3>

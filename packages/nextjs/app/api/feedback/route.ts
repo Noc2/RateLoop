@@ -4,24 +4,22 @@ import {
   buildContentFeedbackChallengeMessage,
   hashContentFeedbackPayload,
 } from "~~/lib/auth/contentFeedbackChallenge";
-import {
-  CONTENT_FEEDBACK_SIGNED_READ_SESSION_COOKIE_NAME,
-  setSignedReadSessionCookie,
-  verifySignedReadSession,
-} from "~~/lib/auth/signedReadSessions";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
 import {
   ContentFeedbackDuplicateError,
+  ContentFeedbackPublicationMissingError,
   ContentFeedbackStorageUnavailableError,
   ContentFeedbackVoterEligibilityError,
   type PreparedContentFeedbackInput,
   addContentFeedback,
+  assertContentFeedbackPublishedOnchain,
   assertContentFeedbackVoterEligibility,
   buildPreparedContentFeedbackInput,
   listContentFeedback,
   normalizeContentFeedbackCommitKey,
   normalizeContentFeedbackInput,
   normalizeContentFeedbackReadInput,
+  normalizeContentFeedbackTxHash,
   resolveContentFeedbackRoundContext,
 } from "~~/lib/feedback/contentFeedback";
 import { normalizeContentFeedbackHashMetadata } from "~~/lib/feedback/feedbackHash";
@@ -50,25 +48,17 @@ export async function GET(request: NextRequest) {
     }
 
     const requestedViewerAddress = normalized.payload.normalizedAddress;
-    const hasReadSession = requestedViewerAddress
-      ? await verifySignedReadSession(
-          request.cookies.get(CONTENT_FEEDBACK_SIGNED_READ_SESSION_COOKIE_NAME)?.value,
-          requestedViewerAddress,
-          "content_feedback",
-        )
-      : false;
-    const viewerAddress = hasReadSession ? requestedViewerAddress : null;
     const context = await resolveContentFeedbackRoundContext(normalized.payload.contentId);
     const result = await listContentFeedback({
       contentId: normalized.payload.contentId,
       context,
       awarderAddress: requestedViewerAddress,
-      viewerAddress,
+      viewerAddress: requestedViewerAddress,
     });
 
     return NextResponse.json({
       ...result,
-      hasReadSession,
+      hasReadSession: Boolean(requestedViewerAddress),
     });
   } catch (error) {
     console.error("Error fetching feedback:", error);
@@ -97,6 +87,7 @@ export async function POST(request: NextRequest) {
       clientNonce?: unknown;
       commitKey?: unknown;
       feedbackHash?: unknown;
+      publicationTxHash?: unknown;
       signature?: `0x${string}`;
       challengeId?: string;
     };
@@ -129,12 +120,17 @@ export async function POST(request: NextRequest) {
     if (!commitKey) {
       return NextResponse.json({ error: "Missing or invalid feedback commit key" }, { status: 400 });
     }
+    const publicationTxHash = normalizeContentFeedbackTxHash(body.publicationTxHash);
+    if (!publicationTxHash) {
+      return NextResponse.json({ error: "Missing or invalid feedback publication transaction" }, { status: 400 });
+    }
 
     let preparedPayload: PreparedContentFeedbackInput;
     try {
       preparedPayload = buildPreparedContentFeedbackInput(payload, {
         ...metadata.metadata,
         commitKey,
+        publicationTxHash,
         payloadSignature: body.signature,
       });
     } catch (error) {
@@ -163,14 +159,6 @@ export async function POST(request: NextRequest) {
     }
 
     const context = await resolveContentFeedbackRoundContext(payload.contentId, preparedPayload.chainId);
-    if (
-      !context.currentRoundId ||
-      context.currentRoundId !== preparedPayload.roundId ||
-      context.openRoundId !== preparedPayload.roundId
-    ) {
-      return NextResponse.json({ error: "Feedback is only open while voting is active" }, { status: 409 });
-    }
-
     try {
       await assertContentFeedbackVoterEligibility({
         contentId: payload.contentId,
@@ -184,11 +172,24 @@ export async function POST(request: NextRequest) {
       }
       throw error;
     }
+    try {
+      await assertContentFeedbackPublishedOnchain({
+        contentId: payload.contentId,
+        roundId: preparedPayload.roundId,
+        address: payload.normalizedAddress,
+        chainId: preparedPayload.chainId,
+        commitKey: preparedPayload.commitKey,
+        feedbackHash: preparedPayload.feedbackHash,
+      });
+    } catch (error) {
+      if (error instanceof ContentFeedbackPublicationMissingError) {
+        return NextResponse.json({ error: "Feedback has not been published on-chain yet" }, { status: 409 });
+      }
+      throw error;
+    }
 
     const item = await addContentFeedback(preparedPayload, context);
-    const response = NextResponse.json({ ok: true, item });
-
-    return setSignedReadSessionCookie(response, payload.normalizedAddress, "content_feedback");
+    return NextResponse.json({ ok: true, item });
   } catch (error) {
     if (error instanceof ContentFeedbackStorageUnavailableError) {
       return NextResponse.json({ error: "Feedback storage is not ready yet" }, { status: 503 });

@@ -14,39 +14,7 @@ async function touchContent(context: { db: any }, contentId: bigint, timestamp: 
   }
 }
 
-ponder.on("FeedbackRegistry:FeedbackCommitted", async ({ event, context }) => {
-  const { contentId, roundId, commitKey, author, feedbackHash } = event.args;
-
-  await context.db
-    .insert(contentFeedback)
-    .values({
-      id: feedbackRowId(contentId, roundId, commitKey),
-      contentId,
-      roundId,
-      commitKey,
-      author,
-      feedbackHash,
-      committedAt: event.block.timestamp,
-      commitTxHash: event.transaction.hash,
-      commitBlockNumber: event.block.number,
-      commitLogIndex: Number(event.log?.logIndex ?? 0),
-      revealed: false,
-      updatedAt: event.block.timestamp,
-    })
-    .onConflictDoUpdate(() => ({
-      author,
-      feedbackHash,
-      committedAt: event.block.timestamp,
-      commitTxHash: event.transaction.hash,
-      commitBlockNumber: event.block.number,
-      commitLogIndex: Number(event.log?.logIndex ?? 0),
-      updatedAt: event.block.timestamp,
-    }));
-
-  await touchContent(context, contentId, event.block.timestamp);
-});
-
-ponder.on("FeedbackRegistry:FeedbackRevealed", async ({ event, context }) => {
+ponder.on("FeedbackRegistry:FeedbackPublished", async ({ event, context }) => {
   const {
     contentId,
     roundId,
@@ -69,6 +37,9 @@ ponder.on("FeedbackRegistry:FeedbackRevealed", async ({ event, context }) => {
       author,
       feedbackHash,
       committedAt: event.block.timestamp,
+      commitTxHash: event.transaction.hash,
+      commitBlockNumber: event.block.number,
+      commitLogIndex: Number(event.log?.logIndex ?? 0),
       revealed: true,
       feedbackType,
       body,

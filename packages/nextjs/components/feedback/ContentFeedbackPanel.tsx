@@ -65,70 +65,20 @@ function isOnchainRevealedFeedback(item: ContentFeedbackItem) {
   );
 }
 
-type FeedbackRevealBadge = {
-  label: string;
-  tooltip: string;
-  className: string;
-  ariaLabel: string;
-};
-
-function isLeaseActive(value: string | null | undefined) {
-  if (!value) return false;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) && timestamp > Date.now();
-}
-
-function getFeedbackRevealBadge(item: ContentFeedbackItem, hasOpenBonusPool: boolean): FeedbackRevealBadge | null {
-  if (!hasOpenBonusPool || isOnchainRevealedFeedback(item)) return null;
-
-  if (item.onchainRevealStatus === "failed") {
-    return {
-      label: "Needs attention",
-      tooltip: "Automatic on-chain publication could not finish. The feedback author can use manual publish.",
-      className: "bg-warning/10 text-warning",
-      ariaLabel: "Automatic feedback publication needs attention",
-    };
-  }
-
-  if (isLeaseActive(item.onchainRevealLeaseUntil)) {
-    return {
-      label: "Publishing",
-      tooltip: "The keeper is publishing this settled feedback on-chain for Feedback Bonus eligibility.",
-      className: "bg-info/10 text-info",
-      ariaLabel: "Feedback publication is in progress",
-    };
-  }
-
-  return {
-    label: "Queued",
-    tooltip: "The keeper will publish this settled feedback on-chain for Feedback Bonus eligibility.",
-    className: "bg-base-content/[0.07] text-base-content/58",
-    ariaLabel: "Feedback is queued for automatic on-chain publication",
-  };
-}
-
 function FeedbackItem({
   item,
   awardablePoolCount,
-  canReveal,
   isAwarded,
-  isRevealing,
-  revealBadge,
   onAward,
-  onReveal,
 }: {
   item: ContentFeedbackItem;
   awardablePoolCount?: number;
-  canReveal?: boolean;
   isAwarded?: boolean;
-  isRevealing?: boolean;
-  revealBadge?: FeedbackRevealBadge | null;
   onAward?: (item: ContentFeedbackItem) => void;
-  onReveal?: (item: ContentFeedbackItem) => void;
 }) {
   const visibilityLabel = item.isPublic ? "Public" : "Private until settlement";
   const visibilityTooltip = item.isPublic
-    ? "This feedback is visible to everyone because the round has settled."
+    ? "This feedback is visible to everyone because it was published on-chain."
     : "Only you can see this feedback while voting is active. It becomes public after settlement.";
   const canAwardFeedback = Boolean(awardablePoolCount && awardablePoolCount > 0);
 
@@ -170,40 +120,6 @@ function FeedbackItem({
                 Awarded
               </span>
             </TooltipAnchor>
-          ) : revealBadge ? (
-            <TooltipAnchor text={revealBadge.tooltip} position="top" className="rounded-full">
-              <span
-                tabIndex={0}
-                className={`rounded-full px-2 py-1 text-[0.66rem] font-semibold leading-none ${revealBadge.className}`}
-                aria-label={revealBadge.ariaLabel}
-              >
-                {revealBadge.label}
-              </span>
-            </TooltipAnchor>
-          ) : null}
-          {canReveal ? (
-            <TooltipAnchor
-              text="Manual fallback: publish this settled feedback on-chain"
-              position="top"
-              className="rounded-full"
-            >
-              <button
-                type="button"
-                className="vote-btn vote-btn-sm vote-light"
-                onClick={() => onReveal?.(item)}
-                disabled={isRevealing}
-                aria-label="Publish feedback on-chain"
-              >
-                <span className="vote-bg" />
-                <span className="vote-symbol">
-                  {isRevealing ? (
-                    <span className="loading loading-spinner loading-xs" />
-                  ) : (
-                    <ArrowTopRightOnSquareIcon className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </span>
-              </button>
-            </TooltipAnchor>
           ) : null}
           <TooltipAnchor text={visibilityTooltip} position="top" className="rounded-full">
             <span
@@ -239,8 +155,10 @@ export function ContentFeedbackPanel({
   onRequestConnect,
 }: ContentFeedbackPanelProps) {
   const { address } = useAccount();
-  const { feedback, items, isLoading, isSubmitting, isRevealing, submitFeedback, revealFeedback, refetchFeedback } =
-    useContentFeedback(item?.id ?? null, address);
+  const { feedback, items, isLoading, isSubmitting, submitFeedback, refetchFeedback } = useContentFeedback(
+    item?.id ?? null,
+    address,
+  );
   const [feedbackType, setFeedbackType] = useState<ContentFeedbackType>("vote_rationale");
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -343,17 +261,6 @@ export function ContentFeedbackPanel({
 
     setBody("");
     setSourceUrl("");
-    notification.success("Feedback saved until settlement");
-  };
-
-  const handleRevealFeedback = async (feedbackItem: ContentFeedbackItem) => {
-    const result = await revealFeedback(feedbackItem);
-    if (!result.ok) {
-      if (result.reason === "rejected") return;
-      notification.error(result.error || "Failed to publish feedback on-chain");
-      return;
-    }
-
     notification.success("Feedback published on-chain");
   };
 
@@ -455,24 +362,13 @@ export function ContentFeedbackPanel({
         ) : visibleItems.length > 0 ? (
           <ul className="flex flex-col gap-2">
             {visibleItems.map(feedbackItem => {
-              const openPoolCount = getOpenPoolsForFeedback(feedbackItem).length;
               return (
                 <FeedbackItem
                   key={feedbackItem.id}
                   item={feedbackItem}
                   awardablePoolCount={getAwardablePoolsForFeedback(feedbackItem).length}
-                  canReveal={
-                    feedback.settlementComplete &&
-                    feedbackItem.isOwn &&
-                    !isOnchainRevealedFeedback(feedbackItem) &&
-                    hasHexFeedbackHash(feedbackItem) &&
-                    Boolean(feedbackItem.clientNonce)
-                  }
                   isAwarded={(feedbackItem.feedbackBonusAwards ?? []).length > 0}
-                  isRevealing={isRevealing}
-                  revealBadge={getFeedbackRevealBadge(feedbackItem, openPoolCount > 0)}
                   onAward={setAwardTarget}
-                  onReveal={handleRevealFeedback}
                 />
               );
             })}

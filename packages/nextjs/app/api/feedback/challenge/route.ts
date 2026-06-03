@@ -118,6 +118,9 @@ export async function POST(request: NextRequest) {
       ...challenge,
       chainId: challengePayload.chainId,
       roundId: challengePayload.roundId,
+      feedbackType: normalized.payload.feedbackType,
+      body: normalized.payload.body,
+      sourceUrl: normalized.payload.sourceUrl,
       clientNonce: challengePayload.clientNonce,
       feedbackHash: challengePayload.feedbackHash,
     });
