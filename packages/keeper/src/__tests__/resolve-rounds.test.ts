@@ -355,6 +355,8 @@ function makeHarness(options: {
             return tupleResults ? toRoundConfigTuple(roundConfig) : roundConfig;
           case "roundRevealGracePeriodSnapshot":
             return options.revealGracePeriod ?? 3600n;
+          case "isDormancyBlocked":
+            return options.roundHasHumanVerifiedCommit ?? true;
           case "revealGracePeriod":
             return options.revealGracePeriod ?? 3600n;
           case "lastCommitRevealableAfter":
@@ -366,8 +368,6 @@ function makeHarness(options: {
                   : max;
               }, 0n)
             );
-          case "roundHasHumanVerifiedCommit":
-            return options.roundHasHumanVerifiedCommit ?? true;
           case "getRoundCommitKey":
             return commitKeys[Number(args[2])] ?? zeroHash;
           case "commitRevealData":
@@ -1257,8 +1257,8 @@ describe("resolveRounds", () => {
     });
     expect(publicClient.readContract).toHaveBeenCalledWith(
       expect.objectContaining({
-        functionName: "roundHasHumanVerifiedCommit",
-        args: [1n, 1n],
+        functionName: "isDormancyBlocked",
+        args: [1n],
       }),
     );
     expect(walletClient.writeContract).toHaveBeenCalledWith(

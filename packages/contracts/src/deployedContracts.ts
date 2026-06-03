@@ -1619,6 +1619,29 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "lockForGovernanceUntil",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "unlockTime",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "mint",
           inputs: [
             {
@@ -2608,6 +2631,19 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "PROPOSAL_COOLDOWN_BLOCKS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_CHAIN_BLOCK_TIME_SECONDS",
           inputs: [],
           outputs: [
             {
@@ -4316,6 +4352,27 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "expectedStates",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+        },
+        {
+          type: "error",
+          name: "InsufficientTransferableProposalStake",
+          inputs: [
+            {
+              name: "proposer",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "required",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "transferable",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
         },
@@ -8426,6 +8483,30 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint16",
               internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundRevealGracePeriodSnapshot",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -29806,6 +29887,29 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "lockForGovernanceUntil",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "unlockTime",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "mint",
           inputs: [
             {
@@ -34531,6 +34635,30 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint16",
               internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundRevealGracePeriodSnapshot",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",

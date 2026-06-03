@@ -195,6 +195,19 @@ export const RateLoopGovernorAbi = [
   },
   {
     "type": "function",
+    "name": "WORLD_CHAIN_BLOCK_TIME_SECONDS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "cancel",
     "inputs": [
       {
@@ -1891,6 +1904,27 @@ export const RateLoopGovernorAbi = [
         "name": "expectedStates",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientTransferableProposalStake",
+    "inputs": [
+      {
+        "name": "proposer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "required",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "transferable",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   },

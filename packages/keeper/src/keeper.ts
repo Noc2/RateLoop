@@ -660,17 +660,17 @@ export async function resolveRounds(
         // --- 2. SETTLE: If threshold reached (enough RBTS votes revealed) ---
         const rbtsRevealQuorum =
           roundConfig.minVoters > 3n ? roundConfig.minVoters : 3n;
-        let roundHasHumanVerifiedCommit: boolean | undefined;
-        const readRoundHasHumanVerifiedCommit = async () => {
-          if (roundHasHumanVerifiedCommit === undefined) {
-            roundHasHumanVerifiedCommit = (await publicClient.readContract({
+        let activeRoundBlocksDormancy: boolean | undefined;
+        const readActiveRoundBlocksDormancy = async () => {
+          if (activeRoundBlocksDormancy === undefined) {
+            activeRoundBlocksDormancy = (await publicClient.readContract({
               address: engineAddr,
               abi: RoundVotingEngineAbi,
-              functionName: "roundHasHumanVerifiedCommit",
-              args: [contentId, activeRoundId],
+              functionName: "isDormancyBlocked",
+              args: [contentId],
             })) as boolean;
           }
-          return roundHasHumanVerifiedCommit;
+          return activeRoundBlocksDormancy;
         };
 
         if (
@@ -738,7 +738,7 @@ export async function resolveRounds(
           round.revealedCount < rbtsRevealQuorum
         ) {
           try {
-            const [lastCommitRevealableAfter, revealGracePeriod, hasHumanVerifiedCommit] =
+            const [lastCommitRevealableAfter, revealGracePeriod, blocksDormancy] =
               await Promise.all([
                 publicClient.readContract({
                   address: engineAddr,
@@ -752,7 +752,7 @@ export async function resolveRounds(
                   contentId,
                   activeRoundId,
                 ),
-                readRoundHasHumanVerifiedCommit(),
+                readActiveRoundBlocksDormancy(),
               ]);
 
             const revealFailedEligibleAt =
@@ -762,7 +762,7 @@ export async function resolveRounds(
                 : round.startTime + roundConfig.maxDuration + revealGracePeriod;
 
             if (
-              hasHumanVerifiedCommit &&
+              blocksDormancy &&
               lastCommitRevealableAfter > 0n &&
               now >= revealFailedEligibleAt
             ) {
@@ -801,11 +801,11 @@ export async function resolveRounds(
           now >= round.startTime + roundConfig.maxDuration
         ) {
           try {
-            const hasHumanVerifiedCommit =
+            const blocksDormancy =
               round.voteCount < rbtsRevealQuorum
                 ? true
-                : await readRoundHasHumanVerifiedCommit();
-            if (round.voteCount < rbtsRevealQuorum || !hasHumanVerifiedCommit) {
+                : await readActiveRoundBlocksDormancy();
+            if (round.voteCount < rbtsRevealQuorum || !blocksDormancy) {
               await writeContractAndConfirm(publicClient, walletClient, {
                 chain,
                 account,

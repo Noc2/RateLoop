@@ -1512,7 +1512,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint256))) internal epochUnrevealedCount;
 
     // Per-round reveal grace period snapshot for governance consistency across open rounds.
-    mapping(uint256 => mapping(uint256 => uint256)) internal roundRevealGracePeriodSnapshot;
+    mapping(uint256 => mapping(uint256 => uint256)) public roundRevealGracePeriodSnapshot;
 
     // Per-round drand config snapshot so reveal timing stays stable across governance updates.
     mapping(uint256 => mapping(uint256 => bytes32)) internal roundDrandChainHashSnapshot;
