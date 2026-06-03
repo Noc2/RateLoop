@@ -379,6 +379,9 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             contentId, roundId, commitKey, FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
         );
         assertTrue(feedbackRegistry.isAwardableFeedback(contentId, roundId, commitKey, feedbackHash));
+        assertEq(
+            feedbackRegistry.awardableFeedbackPublishedAt(contentId, roundId, commitKey, feedbackHash), block.timestamp
+        );
     }
 
     function testPublishedFeedbackCanReceiveAwardAfterSettlement() public {
@@ -392,6 +395,36 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
         assertEq(recipientAmount, 10e6);
         assertEq(usdc.balanceOf(voter1), 1_010e6);
+    }
+
+    function testAwardRejectsFeedbackPublishedAfterRequestedClose() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 requestedDeadline = block.timestamp + 100;
+        uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);
+        (bytes32 salt1, bytes32 commitKey1) = _commitFeedbackVote(voter1, contentId, true, 0, address(0));
+        (bytes32 salt2, bytes32 commitKey2) = _commitFeedbackVote(voter2, contentId, true, 1, address(0));
+        (bytes32 salt3, bytes32 commitKey3) = _commitFeedbackVote(voter3, contentId, false, 2, address(0));
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        bytes32 feedbackHash = _feedbackHash(contentId, roundId, voter1);
+
+        vm.warp(block.timestamp + 101);
+        vm.prank(voter1);
+        feedbackRegistry.publishFeedback(
+            contentId, roundId, commitKey1, FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+        assertTrue(feedbackRegistry.isAwardableFeedback(contentId, roundId, commitKey1, feedbackHash));
+
+        _warpPastTlockRevealTime(
+            uint256(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).startTime) + EPOCH_DURATION
+        );
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey1, true, 5_000, salt1);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey2, true, 5_000, salt2);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, commitKey3, false, 5_000, salt3);
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+
+        vm.prank(funder);
+        vm.expectRevert("Feedback not timely");
+        feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, feedbackHash, 10e6);
     }
 
     function testPublishFeedbackRejectsAfterRoundLeavesOpenState() public {

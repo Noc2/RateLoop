@@ -102,7 +102,17 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         returns (bool)
     {
         FeedbackRecord storage record = feedbackByCommitKey[contentId][roundId][commitKey];
-        return record.revealedAt != 0 && record.feedbackHash == feedbackHash;
+        return _isAwardableFeedback(record, feedbackHash);
+    }
+
+    function awardableFeedbackPublishedAt(uint256 contentId, uint256 roundId, bytes32 commitKey, bytes32 feedbackHash)
+        external
+        view
+        returns (uint256 publishedAt)
+    {
+        FeedbackRecord storage record = feedbackByCommitKey[contentId][roundId][commitKey];
+        if (!_isAwardableFeedback(record, feedbackHash)) return 0;
+        return uint256(record.revealedAt);
     }
 
     function buildContentFeedbackHash(
@@ -160,5 +170,9 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         returns (RoundLib.RoundState state)
     {
         (, state,,,,,,,,,,,,) = engine.rounds(contentId, roundId);
+    }
+
+    function _isAwardableFeedback(FeedbackRecord storage record, bytes32 feedbackHash) private view returns (bool) {
+        return record.revealedAt != 0 && record.feedbackHash == feedbackHash;
     }
 }

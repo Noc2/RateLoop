@@ -146,9 +146,10 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
 }
 ```
 
-`feedbackClosesAt` is the requested feedback close for the funded round. The effective Feedback Bonus award deadline is
-the later of that requested close and 24 hours after the round settles, so the awarder always has at least one full day
-to choose useful published feedback from revealed raters.
+`feedbackClosesAt` is the requested feedback close for the funded round. Only feedback published on-chain at or before
+that timestamp can receive the bonus. The effective Feedback Bonus award decision deadline is the later of that requested
+close and 24 hours after the round settles, so the awarder always has at least one full day to choose useful timely
+feedback from revealed raters.
 
 ### Poll Results
 

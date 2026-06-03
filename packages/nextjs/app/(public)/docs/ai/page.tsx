@@ -299,8 +299,9 @@ const AIPage = async () => {
         <code>{askPayloadExample}</code>
       </pre>
       <p>
-        <code>feedbackClosesAt</code> is the requested feedback close for the funded round. The effective Feedback Bonus
-        award deadline is the later of that requested close and 24 hours after the round settles.
+        <code>feedbackClosesAt</code> is the requested feedback close for the funded round. Only feedback published
+        on-chain at or before that timestamp can receive the bonus. The effective Feedback Bonus award decision deadline
+        is the later of that requested close and 24 hours after the round settles.
       </p>
 
       <h3 id="ask-results">Poll Results</h3>

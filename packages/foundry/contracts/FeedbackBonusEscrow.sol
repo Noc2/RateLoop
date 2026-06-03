@@ -326,10 +326,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             !identityKeyAwarded[poolId][identityKey] && !identityKeyAwarded[poolId][awardIdentityKey],
             "Rater already awarded"
         );
-        require(
-            feedbackRegistry.isAwardableFeedback(pool.contentId, pool.roundId, commitKey, feedbackHash),
-            "Feedback not revealed"
-        );
+        uint256 feedbackPublishedAt =
+            feedbackRegistry.awardableFeedbackPublishedAt(pool.contentId, pool.roundId, commitKey, feedbackHash);
+        require(feedbackPublishedAt != 0, "Feedback not revealed");
+        require(feedbackPublishedAt <= pool.feedbackClosesAt, "Feedback not timely");
 
         uint256 frontendFee;
         address frontendRecipient;

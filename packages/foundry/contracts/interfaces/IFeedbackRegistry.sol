@@ -6,4 +6,9 @@ interface IFeedbackRegistry {
         external
         view
         returns (bool);
+
+    function awardableFeedbackPublishedAt(uint256 contentId, uint256 roundId, bytes32 commitKey, bytes32 feedbackHash)
+        external
+        view
+        returns (uint256 publishedAt);
 }
