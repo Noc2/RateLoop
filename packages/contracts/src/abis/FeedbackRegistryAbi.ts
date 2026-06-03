@@ -84,6 +84,40 @@ export const FeedbackRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "awardableFeedbackPublishedAt",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "commitKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "feedbackHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "publishedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "buildContentFeedbackHash",
     "inputs": [
       {

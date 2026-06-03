@@ -117,6 +117,19 @@ export const RateLoopGovernorAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_QUORUM_NUMERATOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_VOTING_DELAY_BLOCKS",
     "inputs": [],
     "outputs": [
@@ -1910,6 +1923,11 @@ export const RateLoopGovernorAbi = [
   {
     "type": "error",
     "name": "InvalidProposalThreshold",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidQuorumNumerator",
     "inputs": []
   },
   {
