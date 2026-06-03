@@ -615,6 +615,7 @@ contract QuestionRewardPoolEscrow is
         returns (uint256 receivedAmount)
     {
         uint256 balanceBefore = usdcToken.balanceOf(address(this));
+        // slither-disable-next-line reentrancy-balance
         IReceiveWithAuthorizationToken(address(usdcToken))
             .receiveWithAuthorization(
                 authorization.from,

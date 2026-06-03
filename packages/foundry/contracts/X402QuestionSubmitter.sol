@@ -4,12 +4,13 @@ pragma solidity ^0.8.34;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 
-contract X402QuestionSubmitter is Ownable {
+contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
     uint8 internal constant REWARD_ASSET_USDC = 1;
@@ -55,7 +56,7 @@ contract X402QuestionSubmitter is Ownable {
         RoundLib.RoundConfig memory roundConfig,
         ContentRegistry.QuestionSpecCommitment memory spec,
         Eip3009Authorization calldata paymentAuthorization
-    ) external returns (uint256 contentId) {
+    ) external nonReentrant returns (uint256 contentId) {
         require(rewardTerms.asset == REWARD_ASSET_USDC, "USDC required");
         require(paymentAuthorization.from != address(0), "Invalid payer");
         require(paymentAuthorization.to == address(this), "Bad payee");
@@ -84,6 +85,7 @@ contract X402QuestionSubmitter is Ownable {
         require(registry.questionRewardPoolEscrow() == questionRewardPoolEscrow, "Stale escrow");
 
         uint256 balanceBefore = usdcToken.balanceOf(address(this));
+        // slither-disable-next-line reentrancy-balance
         IReceiveWithAuthorizationToken(address(usdcToken))
             .receiveWithAuthorization(
                 paymentAuthorization.from,
