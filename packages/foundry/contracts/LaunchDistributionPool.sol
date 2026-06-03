@@ -277,14 +277,14 @@ contract LaunchDistributionPool is
     ///         RoundVotingEngine). Must be set before the cluster oracle is enabled.
     function setRoundClusterReadyAtSource(address newSource) external onlyOwner {
         if (newSource == address(0) || newSource.code.length == 0) revert InvalidAddress();
-        // ABI shape probe — calling with (0,0) must not revert on a properly conforming
-        // source. The returned timestamp is intentionally discarded; the probe is purely
-        // a try/catch barrier to confirm the candidate decodes uint48.
-        // slither-disable-next-line unused-return
-        try IRoundClusterReadyAtSource(newSource).roundClusterPayoutReadyAt(0, 0) returns (uint48) { }
-        catch {
-            revert InvalidAddress();
-        }
+        // ABI shape probes — calling with (0,0) must not revert on a properly conforming
+        // source. Returned values are intentionally discarded; the probes verify the
+        // source-readiness and advisory-grace views used at runtime.
+        (bool readyAtOk,) = _roundReadyAtView(newSource, 0, 0);
+        (bool roundCoreOk,) = _roundCoreSettledAtView(newSource, 0, 0);
+        address protocolConfig = _roundSourceProtocolConfig(newSource);
+        (bool revealGraceOk,) = _revealGracePeriodView(protocolConfig);
+        if (!readyAtOk || !roundCoreOk || !revealGraceOk) revert InvalidAddress();
         roundClusterReadyAtSource = IRoundClusterReadyAtSource(newSource);
         emit RoundClusterReadyAtSourceUpdated(newSource);
     }
@@ -825,7 +825,9 @@ contract LaunchDistributionPool is
     ) internal {
         address oracle = address(clusterPayoutOracle);
         if (oracle == address(0) || sourceReadyAt == 0) revert SnapshotNotFinalized();
-        uint64 creditReadyAt = _roundClusterSourceReadyAt(contentId, roundId);
+        IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
+        uint64 creditReadyAt =
+            address(source) == address(0) ? 0 : _roundClusterSourceReadyAt(source, contentId, roundId);
         if (creditReadyAt == 0) {
             creditReadyAt = uint64(block.timestamp);
             if (sourceReadyAt > creditReadyAt) {
@@ -944,39 +946,96 @@ contract LaunchDistributionPool is
         returns (uint64)
     {
         if (domain != PAYOUT_DOMAIN_LAUNCH_CREDIT || rewardPoolId != 0) return 0;
-        uint64 sourceReadyAt = _roundClusterSourceReadyAt(contentId, roundId);
-        if (sourceReadyAt != 0) return sourceReadyAt;
+        IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
+        if (address(source) != address(0)) return _roundClusterSourceReadyAt(source, contentId, roundId);
         return launchRoundSourceReadyAt[contentId][roundId];
     }
 
-    function _roundClusterSourceReadyAt(uint256 contentId, uint256 roundId) private view returns (uint64) {
-        IRoundClusterReadyAtSource source = roundClusterReadyAtSource;
-        if (address(source) != address(0)) {
-            try source.roundClusterPayoutReadyAt(contentId, roundId) returns (uint48 readyAt) {
-                if (readyAt != 0) return _launchSnapshotReadyAtAfterAdvisoryGrace(source, contentId, roundId, readyAt);
-            } catch { }
+    function _roundClusterSourceReadyAt(IRoundClusterReadyAtSource source, uint256 contentId, uint256 roundId)
+        private
+        view
+        returns (uint64)
+    {
+        (bool readyAtOk, uint48 readyAt) = _roundReadyAtView(address(source), contentId, roundId);
+        if (readyAtOk && readyAt != 0) {
+            return _launchSnapshotReadyAtAfterAdvisoryGrace(address(source), contentId, roundId, readyAt);
         }
         return 0;
     }
 
     function _launchSnapshotReadyAtAfterAdvisoryGrace(
-        IRoundClusterReadyAtSource source,
+        address source,
         uint256 contentId,
         uint256 roundId,
         uint48 readyAt
     ) private view returns (uint64) {
         uint64 sourceReadyAt = uint64(readyAt);
-        try source.roundCore(contentId, roundId) returns (
-            uint48, uint8, uint16, uint16, uint64, uint48, uint48 settledAt
-        ) {
-            if (settledAt == 0) return sourceReadyAt;
-            try source.protocolConfig() returns (IRevealGraceConfig protocolConfig) {
-                uint256 graceReadyAt = uint256(settledAt) + protocolConfig.revealGracePeriod();
-                if (graceReadyAt > type(uint64).max) return type(uint64).max;
-                if (graceReadyAt > sourceReadyAt) return graceReadyAt.toUint64();
-            } catch { }
-        } catch { }
+        (bool roundCoreOk, uint48 settledAt) = _roundCoreSettledAtView(source, contentId, roundId);
+        if (!roundCoreOk || settledAt == 0) return 0;
+        address protocolConfig = _roundSourceProtocolConfig(source);
+        (bool revealGraceOk, uint256 revealGracePeriod) = _revealGracePeriodView(protocolConfig);
+        if (!revealGraceOk) return 0;
+        uint256 settledAtUint = uint256(settledAt);
+        if (revealGracePeriod > type(uint256).max - settledAtUint) return type(uint64).max;
+        uint256 graceReadyAt = settledAtUint + revealGracePeriod;
+        if (graceReadyAt > type(uint64).max) return type(uint64).max;
+        if (graceReadyAt > sourceReadyAt) return graceReadyAt.toUint64();
         return sourceReadyAt;
+    }
+
+    function _roundReadyAtView(address source, uint256 contentId, uint256 roundId)
+        private
+        view
+        returns (bool ok, uint48 readyAt)
+    {
+        bytes memory data;
+        (ok, data) = source.staticcall(
+            abi.encodeCall(IRoundClusterReadyAtSource.roundClusterPayoutReadyAt, (contentId, roundId))
+        );
+        if (!ok || data.length < 32) return (false, 0);
+        uint256 rawReadyAt;
+        assembly ("memory-safe") {
+            rawReadyAt := mload(add(data, 32))
+        }
+        if (rawReadyAt > type(uint48).max) return (false, 0);
+        return (true, uint48(rawReadyAt));
+    }
+
+    function _roundCoreSettledAtView(address source, uint256 contentId, uint256 roundId)
+        private
+        view
+        returns (bool ok, uint48 settledAt)
+    {
+        bytes memory data;
+        (ok, data) = source.staticcall(abi.encodeCall(IRoundClusterReadyAtSource.roundCore, (contentId, roundId)));
+        if (!ok || data.length < 224) return (false, 0);
+        uint256 rawSettledAt;
+        assembly ("memory-safe") {
+            rawSettledAt := mload(add(data, 224))
+        }
+        if (rawSettledAt > type(uint48).max) return (false, 0);
+        return (true, uint48(rawSettledAt));
+    }
+
+    function _roundSourceProtocolConfig(address source) private view returns (address protocolConfig) {
+        (bool ok, bytes memory data) = source.staticcall(abi.encodeCall(IRoundClusterReadyAtSource.protocolConfig, ()));
+        if (!ok || data.length < 32) return address(0);
+        uint256 rawAddress;
+        assembly ("memory-safe") {
+            rawAddress := mload(add(data, 32))
+        }
+        if (rawAddress > type(uint160).max) return address(0);
+        return address(uint160(rawAddress));
+    }
+
+    function _revealGracePeriodView(address protocolConfig) private view returns (bool ok, uint256 revealGracePeriod) {
+        bytes memory data;
+        (ok, data) = protocolConfig.staticcall(abi.encodeCall(IRevealGraceConfig.revealGracePeriod, ()));
+        if (!ok || data.length < 32) return (false, 0);
+        assembly ("memory-safe") {
+            revealGracePeriod := mload(add(data, 32))
+        }
+        return (true, revealGracePeriod);
     }
 
     function _assignLaunchCap(address rater, uint256 fullCap, LaunchRewardPolicy memory policy)

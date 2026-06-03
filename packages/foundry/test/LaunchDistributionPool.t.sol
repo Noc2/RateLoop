@@ -201,6 +201,9 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(address(pool.roundClusterReadyAtSource()), address(0));
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         pool.setRoundClusterReadyAtSource(address(0));
+        MockWeakClusterSource weakReadySource = new MockWeakClusterSource();
+        vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
+        pool.setRoundClusterReadyAtSource(address(weakReadySource));
         MockAlwaysReadyClusterSource readySource = new MockAlwaysReadyClusterSource();
         pool.setRoundClusterReadyAtSource(address(readySource));
         assertEq(address(pool.roundClusterReadyAtSource()), address(readySource));
@@ -873,6 +876,22 @@ contract LaunchDistributionPoolTest is Test {
 
         vm.warp(expectedReadyAt);
         _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 1, payout, keccak256("epoch-artifact"));
+    }
+
+    function test_LaunchSnapshotSourceFailsClosedWhenAdvisoryGraceUnavailable() public {
+        uint48 settledAt = uint48(block.timestamp);
+        uint256 revealGrace = 60 minutes;
+        MockGraceClusterSource source = new MockGraceClusterSource(settledAt, revealGrace);
+        pool.setRoundClusterReadyAtSource(address(source));
+
+        uint64 expectedReadyAt = uint64(uint256(settledAt) + revealGrace);
+        assertEq(pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1), expectedReadyAt);
+
+        stdstore.target(address(pool)).sig("launchRoundSourceReadyAt(uint256,uint256)").with_key(uint256(1))
+            .with_key(uint256(1)).checked_write(uint256(settledAt));
+
+        source.setRevealGraceReverts(true);
+        assertEq(pool.roundPayoutSnapshotSourceReadyAt(pool.PAYOUT_DOMAIN_LAUNCH_CREDIT(), 0, 1, 1), 0);
     }
 
     function test_PendingLaunchOracleCreditsReserveUnverifiedRoundSlotsAtRecordTime() public {
@@ -2558,11 +2577,30 @@ contract MockAlwaysReadyClusterSource {
     function roundClusterPayoutReadyAt(uint256, uint256) external pure returns (uint48) {
         return 1;
     }
+
+    function roundCore(uint256, uint256) external pure returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48) {
+        return (1, 1, 0, 0, 0, 0, 1);
+    }
+
+    function protocolConfig() external view returns (address) {
+        return address(this);
+    }
+
+    function revealGracePeriod() external pure returns (uint256) {
+        return 0;
+    }
+}
+
+contract MockWeakClusterSource {
+    function roundClusterPayoutReadyAt(uint256, uint256) external pure returns (uint48) {
+        return 1;
+    }
 }
 
 contract MockGraceClusterSource {
     uint48 internal immutable settledAt;
     uint256 internal immutable gracePeriod;
+    bool internal revealGraceReverts;
 
     constructor(uint48 _settledAt, uint256 _gracePeriod) {
         settledAt = _settledAt;
@@ -2582,6 +2620,11 @@ contract MockGraceClusterSource {
     }
 
     function revealGracePeriod() external view returns (uint256) {
+        if (revealGraceReverts) revert("revealGracePeriod");
         return gracePeriod;
+    }
+
+    function setRevealGraceReverts(bool value) external {
+        revealGraceReverts = value;
     }
 }
