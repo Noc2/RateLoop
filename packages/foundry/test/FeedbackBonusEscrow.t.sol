@@ -368,6 +368,22 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(funder), funderBalanceBefore);
     }
 
+    function testCreateFeedbackBonusPoolWithAuthorizationRejectsShortReceipt() public {
+        uint256 contentId = _submitQuestion("authorized-feedback-bonus-short-receipt");
+        FeedbackBonusEscrow.AuthorizedFeedbackBonusParams memory params = _authorizedFeedbackBonusParams(contentId);
+        Eip3009Authorization memory authorization = _feedbackBonusAuthorization(funder, params);
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(feedbackBonusEscrow));
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+        usdc.setAuthorizationTransferShortfall(1);
+
+        vm.expectRevert("Fee token unsupported");
+        feedbackBonusEscrow.createFeedbackBonusPoolWithAuthorization(params, authorization);
+
+        assertFalse(usdc.authorizationState(funder, authorization.nonce));
+        assertEq(usdc.balanceOf(address(feedbackBonusEscrow)), escrowBalanceBefore);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore);
+    }
+
     function testFeedbackPublishIsImmediatelyAwardableOnChain() public {
         uint256 contentId = _submitQuestion("");
         (, bytes32 commitKey) = _commitFeedbackVote(voter1, contentId, true, 0, address(0));

@@ -332,6 +332,22 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(funder), funderBalanceBefore);
     }
 
+    function testCreateRewardPoolWithAuthorizationRejectsShortReceipt() public {
+        uint256 contentId = _submitQuestion("authorized-reward-pool-short-receipt");
+        AuthorizedRewardPoolParams memory params = _authorizedRewardPoolParams(contentId);
+        Eip3009Authorization memory authorization = _rewardPoolAuthorization(funder, params);
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+        usdc.setAuthorizationTransferShortfall(1);
+
+        vm.expectRevert("Bad token");
+        rewardPoolEscrow.createRewardPoolWithAuthorization(params, authorization);
+
+        assertFalse(usdc.authorizationState(funder, authorization.nonce));
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore);
+    }
+
     function testVerifiedHumanBountyCountsOnlyVerifiedHumansWhileVotingStaysOpen() public {
         raterIdentityRegistry.revokeHumanCredential(voter4);
 
@@ -4353,6 +4369,44 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
         assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore + question.rewardTerms.amount);
         assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore - question.rewardTerms.amount);
+    }
+
+    function testX402QuestionSubmissionRejectsShortReceipt() public {
+        address agentWallet = _x402AgentWallet();
+        X402TestQuestion memory question = _x402TestQuestion();
+        Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
+
+        usdc.mint(agentWallet, question.rewardTerms.amount);
+        uint256 escrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
+        uint256 gatewayBalanceBefore = usdc.balanceOf(address(x402QuestionSubmitter));
+        uint256 agentBalanceBefore = usdc.balanceOf(agentWallet);
+        uint256 nextContentIdBefore = registry.nextContentId();
+
+        _reserveX402Question(agentWallet, question);
+        vm.warp(block.timestamp + 1);
+        usdc.setAuthorizationTransferShortfall(1);
+
+        vm.expectRevert("Bad token");
+        x402QuestionSubmitter.submitQuestionWithX402Payment(
+            question.contextUrl,
+            question.imageUrls,
+            "",
+            question.title,
+            question.description,
+            question.tags,
+            CATEGORY_ID,
+            question.salt,
+            question.rewardTerms,
+            question.roundConfig,
+            question.spec,
+            authorization
+        );
+
+        assertFalse(usdc.authorizationState(agentWallet, authorization.nonce));
+        assertEq(registry.nextContentId(), nextContentIdBefore);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), escrowBalanceBefore);
+        assertEq(usdc.balanceOf(address(x402QuestionSubmitter)), gatewayBalanceBefore);
+        assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore);
     }
 
     function testDelegatedAgentSubmitterHolderCannotClaimQuestionReward() public {

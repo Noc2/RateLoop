@@ -83,6 +83,7 @@ contract X402QuestionSubmitter is Ownable {
 
         require(registry.questionRewardPoolEscrow() == questionRewardPoolEscrow, "Stale escrow");
 
+        uint256 balanceBefore = usdcToken.balanceOf(address(this));
         IReceiveWithAuthorizationToken(address(usdcToken))
             .receiveWithAuthorization(
                 paymentAuthorization.from,
@@ -95,6 +96,8 @@ contract X402QuestionSubmitter is Ownable {
                 paymentAuthorization.r,
                 paymentAuthorization.s
             );
+        uint256 receivedAmount = usdcToken.balanceOf(address(this)) - balanceBefore;
+        require(receivedAmount == paymentAuthorization.value, "Bad token");
         usdcToken.forceApprove(questionRewardPoolEscrow, paymentAuthorization.value);
 
         contentId = registry.submitQuestionFromX402Gateway(

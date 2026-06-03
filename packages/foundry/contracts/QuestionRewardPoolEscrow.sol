@@ -614,6 +614,7 @@ contract QuestionRewardPoolEscrow is
         private
         returns (uint256 receivedAmount)
     {
+        uint256 balanceBefore = usdcToken.balanceOf(address(this));
         IReceiveWithAuthorizationToken(address(usdcToken))
             .receiveWithAuthorization(
                 authorization.from,
@@ -626,7 +627,8 @@ contract QuestionRewardPoolEscrow is
                 authorization.r,
                 authorization.s
             );
-        receivedAmount = authorization.value;
+        receivedAmount = usdcToken.balanceOf(address(this)) - balanceBefore;
+        require(receivedAmount == authorization.value, "Bad token");
     }
 
     function _snapshotRewardPoolClusterPayoutOracle(uint256 rewardPoolId, uint8 asset) private {

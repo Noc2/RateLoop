@@ -15,6 +15,7 @@ contract MockERC20 is ERC20, EIP712 {
     );
     mapping(address => mapping(bytes32 => bool)) public authorizationState;
     mapping(address => bool) public blockedRecipients;
+    uint256 public authorizationTransferShortfall;
 
     constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) EIP712(name, "2") {
         _decimals = decimals_;
@@ -31,6 +32,10 @@ contract MockERC20 is ERC20, EIP712 {
 
     function setBlockedRecipient(address recipient, bool blocked) external {
         blockedRecipients[recipient] = blocked;
+    }
+
+    function setAuthorizationTransferShortfall(uint256 shortfall) external {
+        authorizationTransferShortfall = shortfall;
     }
 
     function DOMAIN_SEPARATOR() external view returns (bytes32) {
@@ -71,7 +76,13 @@ contract MockERC20 is ERC20, EIP712 {
             "MockERC20: invalid authorization signature"
         );
         authorizationState[from][nonce] = true;
-        _transfer(from, to, value);
+        uint256 transferAmount = value;
+        uint256 shortfall = authorizationTransferShortfall;
+        if (shortfall != 0) {
+            require(shortfall <= value, "MockERC20: shortfall exceeds value");
+            transferAmount = value - shortfall;
+        }
+        _transfer(from, to, transferAmount);
     }
 
     function _update(address from, address to, uint256 value) internal override {
