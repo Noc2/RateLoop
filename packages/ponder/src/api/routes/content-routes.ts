@@ -25,6 +25,11 @@ import {
   profileTotalRewardsClaimedExpr,
   profileTotalVotesExpr,
 } from "../profile-aggregate-expressions.js";
+import {
+  emptyProfileEarningsSummary,
+  getProfileEarningsSummary,
+  getRecentProfileEarnings,
+} from "../earnings.js";
 import { getFollowStatsMap } from "../follow-utils.js";
 import type { ApiApp } from "../shared.js";
 import { attachOpenRoundSummary, jsonBig, parseBigIntList } from "../shared.js";
@@ -1116,6 +1121,10 @@ export function registerContentRoutes(app: ApiApp) {
       .where(eq(rewardClaim.voter, address))
       .orderBy(desc(rewardClaim.claimedAt))
       .limit(20);
+    const [earningsSummary, recentEarnings] = await Promise.all([
+      getProfileEarningsSummary(address),
+      getRecentProfileEarnings(address, 20),
+    ]);
 
     const recentSubmissions = await db
       .select({
@@ -1154,9 +1163,11 @@ export function registerContentRoutes(app: ApiApp) {
         totalRewardsClaimed:
           rewardSummary?.total ?? item?.totalRewardsClaimed ?? 0n,
       },
+      earningsSummary: earningsSummary ?? emptyProfileEarningsSummary(),
       social: followStats,
       recentVotes,
       recentRewards,
+      recentEarnings,
       recentSubmissions,
     });
   });

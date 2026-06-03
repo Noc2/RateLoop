@@ -202,6 +202,8 @@ function mockPonderModules<T>(result: T) {
       frontendFee: "feedbackBonusAward.frontendFee",
       grossAmount: "feedbackBonusAward.grossAmount",
       id: "feedbackBonusAward.id",
+      poolId: "feedbackBonusAward.poolId",
+      recipient: "feedbackBonusAward.recipient",
       recipientAmount: "feedbackBonusAward.recipientAmount",
       roundId: "feedbackBonusAward.roundId",
     },
@@ -240,8 +242,12 @@ function mockPonderModules<T>(result: T) {
     },
     questionBundleClaim: {
       amount: "questionBundleClaim.amount",
+      bundleId: "questionBundleClaim.bundleId",
+      claimedAt: "questionBundleClaim.claimedAt",
+      claimant: "questionBundleClaim.claimant",
       frontendFee: "questionBundleClaim.frontendFee",
       grossAmount: "questionBundleClaim.grossAmount",
+      id: "questionBundleClaim.id",
       roundSetIndex: "questionBundleClaim.roundSetIndex",
     },
     questionBundleQuestion: {
@@ -294,6 +300,9 @@ function mockPonderModules<T>(result: T) {
     },
     questionRewardPoolClaim: {
       amount: "questionRewardPoolClaim.amount",
+      claimedAt: "questionRewardPoolClaim.claimedAt",
+      claimant: "questionRewardPoolClaim.claimant",
+      contentId: "questionRewardPoolClaim.contentId",
       frontendFee: "questionRewardPoolClaim.frontendFee",
       grossAmount: "questionRewardPoolClaim.grossAmount",
       id: "questionRewardPoolClaim.id",
@@ -338,7 +347,11 @@ function mockPonderModules<T>(result: T) {
     },
     rewardClaim: {
       claimedAt: "rewardClaim.claimedAt",
+      contentId: "rewardClaim.contentId",
+      id: "rewardClaim.id",
       lrepReward: "rewardClaim.lrepReward",
+      roundId: "rewardClaim.roundId",
+      source: "rewardClaim.source",
       stakePayer: "rewardClaim.stakePayer",
       stakeReturned: "rewardClaim.stakeReturned",
       voter: "rewardClaim.voter",
@@ -998,6 +1011,49 @@ describe("registerLeaderboardRoutes", () => {
     expect(queryBuilder.limit).toHaveBeenCalledWith(50);
     expect(queryBuilder.offset).toHaveBeenCalledWith(25);
     expect(queryBuilder.limit).not.toHaveBeenCalledWith(1000);
+  });
+
+  it("builds earnings leaderboards from net recipient reward amounts", async () => {
+    const { db, queryBuilder } = mockPonderModules([]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/earnings-leaderboard?window=30d&asset=usdc&source=bounty&limit=25&offset=5",
+    );
+
+    expect(response.status).toBe(200);
+    expect(queryBuilder.innerJoin).toHaveBeenCalled();
+    expect(queryBuilder.leftJoin).toHaveBeenCalled();
+    const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
+    expect(selection).toContain("questionRewardPoolClaim.amount");
+    expect(selection).not.toContain("questionRewardPoolClaim.grossAmount");
+
+    const whereArg = queryBuilder.where.mock.calls[0]?.[0];
+    const serializedWhere = serializeExpression(whereArg);
+    expect(serializedWhere).toContain("questionRewardPool.asset");
+    expect(serializedWhere).toContain("questionRewardPoolClaim.claimedAt");
+  });
+
+  it("rejects unsupported earnings leaderboard filters", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/earnings-leaderboard?asset=eth",
+    );
+
+    expect(response.status).toBe(400);
+    expect(db.select).not.toHaveBeenCalled();
   });
 
   it("accepts signal-score accuracy leaderboards without stake-based ordering", async () => {

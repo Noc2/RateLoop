@@ -24,6 +24,11 @@ import {
   profileTotalRewardsClaimedExpr,
   profileTotalVotesExpr,
 } from "../profile-aggregate-expressions.js";
+import {
+  getEarningsLeaderboard,
+  parseEarningsAssetFilter,
+  parseEarningsSourceFilter,
+} from "../earnings.js";
 import { credentialStatus, raterTypeName } from "../reputation-utils.js";
 import type { ApiApp } from "../shared.js";
 import { jsonBig } from "../shared.js";
@@ -711,6 +716,40 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       window: windowBounds.window,
       startsAt: null,
       endsAt: null,
+    });
+  });
+
+  app.get("/earnings-leaderboard", async (c) => {
+    const windowBounds = resolveAccuracyLeaderboardWindow(c.req.query("window"));
+    if (windowBounds === null) return c.json({ error: "Invalid window" }, 400);
+
+    const asset = parseEarningsAssetFilter(c.req.query("asset"));
+    if (asset === null) return c.json({ error: "Invalid asset" }, 400);
+
+    const source = parseEarningsSourceFilter(c.req.query("source"));
+    if (source === null) return c.json({ error: "Invalid source" }, 400);
+
+    const limit = safeLimit(c.req.query("limit"), 20, 100);
+    const offset = safeOffset(c.req.query("offset"));
+    if (Number.isNaN(offset)) return c.json({ error: "Invalid offset" }, 400);
+
+    const items = await getEarningsLeaderboard({
+      asset,
+      bounds: windowBounds,
+      limit,
+      offset,
+      source,
+    });
+
+    return jsonBig(c, {
+      items,
+      asset,
+      source,
+      window: windowBounds.window,
+      startsAt: windowBounds.startsAt,
+      endsAt: windowBounds.endsAt,
+      limit,
+      offset,
     });
   });
 }
