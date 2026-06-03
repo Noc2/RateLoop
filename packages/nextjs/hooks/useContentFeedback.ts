@@ -38,7 +38,12 @@ interface ContentFeedbackActionResult {
   ok: boolean;
   reason?: "not_connected" | "rejected" | "request_failed";
   error?: string;
+  alreadyPublished?: boolean;
 }
+
+type PublishedFeedbackResult =
+  | { commitKey: `0x${string}`; txHash: `0x${string}`; alreadyPublished?: false }
+  | { commitKey: `0x${string}`; txHash: null; alreadyPublished: true };
 
 const EMPTY_FEEDBACK_RESPONSE: ContentFeedbackListResult = {
   items: [],
@@ -62,6 +67,22 @@ async function readResponseBody<T>(response: Response, fallbackError: string): P
   }
 
   return body as T;
+}
+
+function readFeedbackRecordHash(record: unknown): string | null {
+  if (Array.isArray(record)) {
+    return typeof record[0] === "string" ? record[0] : null;
+  }
+  if (record && typeof record === "object" && "feedbackHash" in record) {
+    const hash = (record as { feedbackHash?: unknown }).feedbackHash;
+    return typeof hash === "string" ? hash : null;
+  }
+  return null;
+}
+
+function hasPublishedFeedbackRecord(record: unknown) {
+  const feedbackHash = readFeedbackRecordHash(record);
+  return typeof feedbackHash === "string" && feedbackHash !== zeroHash;
 }
 
 export function useContentFeedback(contentId: bigint | string | number | null | undefined, address?: string) {
@@ -109,7 +130,7 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       sourceUrl?: string;
       clientNonce: `0x${string}`;
       commitHash?: `0x${string}` | null;
-    }): Promise<{ commitKey: `0x${string}`; txHash: `0x${string}` } | null> => {
+    }): Promise<PublishedFeedbackResult | null> => {
       if (!normalizedContentId) return null;
       const feedbackRegistryAddress = getConfiguredFeedbackRegistryAddress(targetNetwork.id);
       if (!feedbackRegistryAddress) return null;
@@ -119,24 +140,57 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         throw new Error("Vote on this question before saving feedback");
       }
 
-      const txHash = await writeContractAsync({
-        address: feedbackRegistryAddress,
-        abi: FeedbackRegistryAbi,
-        functionName: "publishFeedback",
-        args: [
-          BigInt(normalizedContentId),
-          BigInt(params.roundId),
-          commitKey,
-          params.feedbackType,
-          params.body,
-          params.sourceUrl ?? "",
-          params.clientNonce,
-        ],
-      });
-      await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
+      const hasAlreadyPublishedFeedback = async () => {
+        if (!publicClient) return false;
+        try {
+          const record = await publicClient.readContract({
+            address: feedbackRegistryAddress,
+            abi: FeedbackRegistryAbi,
+            functionName: "feedbackByCommitKey",
+            args: [BigInt(normalizedContentId), BigInt(params.roundId), commitKey],
+          });
+          return hasPublishedFeedbackRecord(record);
+        } catch {
+          return false;
+        }
+      };
+
+      if (await hasAlreadyPublishedFeedback()) {
+        return { commitKey, txHash: null, alreadyPublished: true };
+      }
+
+      let txHash: `0x${string}`;
+      try {
+        txHash = await writeContractAsync({
+          address: feedbackRegistryAddress,
+          abi: FeedbackRegistryAbi,
+          functionName: "publishFeedback",
+          args: [
+            BigInt(normalizedContentId),
+            BigInt(params.roundId),
+            commitKey,
+            params.feedbackType,
+            params.body,
+            params.sourceUrl ?? "",
+            params.clientNonce,
+          ],
+        });
+      } catch (error) {
+        if (await hasAlreadyPublishedFeedback()) {
+          return { commitKey, txHash: null, alreadyPublished: true };
+        }
+        throw error;
+      }
+      try {
+        await waitForTransactionReceipt(wagmiConfig, { hash: txHash });
+      } catch (error) {
+        if (!(await hasAlreadyPublishedFeedback())) {
+          throw error;
+        }
+      }
       return { commitKey, txHash };
     },
-    [normalizedContentId, resolveCommitKey, targetNetwork.id, wagmiConfig, writeContractAsync],
+    [normalizedContentId, publicClient, resolveCommitKey, targetNetwork.id, wagmiConfig, writeContractAsync],
   );
 
   const feedbackQuery = useQuery({
@@ -207,6 +261,10 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
         });
         if (!publishedFeedback) {
           throw new Error("Feedback registry is not deployed for this chain");
+        }
+        if (publishedFeedback.alreadyPublished) {
+          await queryClient.invalidateQueries({ queryKey });
+          return { ok: true, alreadyPublished: true };
         }
         await readResponseBody<{ ok: true; item: ContentFeedbackItem }>(
           await fetch("/api/feedback", {

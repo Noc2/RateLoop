@@ -1,13 +1,19 @@
 export const OWN_CONTENT_FEEDBACK_DISABLED_REASON = "You cannot give feedback on your own question.";
+export const EXISTING_CONTENT_FEEDBACK_DISABLED_REASON = "You already published feedback for this round.";
 
 export function getContentFeedbackSubmitTooltip(params: {
   canSubmitDraft: boolean;
   hasCurrentRoundVote: boolean;
+  hasCurrentRoundFeedback?: boolean;
   isFeedbackOpen: boolean;
   isOwnContent: boolean;
 }) {
   if (params.isOwnContent) {
     return OWN_CONTENT_FEEDBACK_DISABLED_REASON;
+  }
+
+  if (params.hasCurrentRoundFeedback) {
+    return EXISTING_CONTENT_FEEDBACK_DISABLED_REASON;
   }
 
   if (!params.isFeedbackOpen) {

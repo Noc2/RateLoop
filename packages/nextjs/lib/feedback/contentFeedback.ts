@@ -978,6 +978,35 @@ export async function addContentFeedback(
   return item;
 }
 
+export async function getExistingActiveContentFeedbackForAuthor(params: {
+  contentId: string;
+  roundId: string;
+  authorAddress: `0x${string}`;
+  context: ContentFeedbackRoundContext;
+}): Promise<ContentFeedbackItem | null> {
+  try {
+    const [row] = await db
+      .select()
+      .from(contentFeedback)
+      .where(
+        and(
+          eq(contentFeedback.contentId, params.contentId),
+          eq(contentFeedback.roundId, params.roundId),
+          eq(contentFeedback.authorAddress, params.authorAddress),
+          isNull(contentFeedback.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    return row ? mapFeedbackRow(row, { context: params.context, viewerAddress: params.authorAddress }) : null;
+  } catch (error) {
+    if (isContentFeedbackStorageUnavailableError(error)) {
+      throw new ContentFeedbackStorageUnavailableError();
+    }
+    throw error;
+  }
+}
+
 export async function listContentFeedback(params: {
   contentId: string;
   context: ContentFeedbackRoundContext;

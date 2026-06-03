@@ -15,6 +15,7 @@ import {
   assertContentFeedbackPublishedOnchain,
   assertContentFeedbackVoterEligibility,
   buildPreparedContentFeedbackInput,
+  getExistingActiveContentFeedbackForAuthor,
   listContentFeedback,
   normalizeContentFeedbackCommitKey,
   normalizeContentFeedbackInput,
@@ -185,8 +186,23 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
-    const item = await addContentFeedback(preparedPayload, context);
-    return NextResponse.json({ ok: true, item });
+    try {
+      const item = await addContentFeedback(preparedPayload, context);
+      return NextResponse.json({ ok: true, item });
+    } catch (error) {
+      if (error instanceof ContentFeedbackDuplicateError) {
+        const existingItem = await getExistingActiveContentFeedbackForAuthor({
+          contentId: preparedPayload.contentId,
+          roundId: preparedPayload.roundId,
+          authorAddress: preparedPayload.normalizedAddress,
+          context,
+        });
+        if (existingItem?.feedbackHash?.toLowerCase() === preparedPayload.feedbackHash) {
+          return NextResponse.json({ ok: true, item: existingItem, duplicate: true });
+        }
+      }
+      throw error;
+    }
   } catch (error) {
     if (error instanceof ContentFeedbackStorageUnavailableError) {
       return NextResponse.json({ error: "Feedback storage is not ready yet" }, { status: 503 });

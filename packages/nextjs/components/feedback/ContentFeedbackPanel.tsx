@@ -52,6 +52,15 @@ function hasHexFeedbackHash(item: ContentFeedbackItem) {
   return typeof item.feedbackHash === "string" && /^0x[0-9a-fA-F]{64}$/.test(item.feedbackHash);
 }
 
+function isFeedbackForRound(item: ContentFeedbackItem, roundId: bigint) {
+  if (!item.roundId || roundId <= 0n) return false;
+  try {
+    return BigInt(item.roundId) === roundId;
+  } catch {
+    return false;
+  }
+}
+
 function FeedbackItem({
   item,
   awardablePoolCount,
@@ -174,12 +183,23 @@ export function ContentFeedbackPanel({
   const hasCurrentRoundVote =
     hasOptimisticCurrentRoundVote || hasNonZeroCommit(myCommitHash) || hasNonZeroCommit(myAdvisoryCommitKey);
   const isFeedbackOpen = openRoundId > 0n;
+  const hasCurrentRoundFeedback = useMemo(
+    () => items.some(feedbackItem => feedbackItem.isOwn && isFeedbackForRound(feedbackItem, openRoundId)),
+    [items, openRoundId],
+  );
   const canSubmitDraft = Boolean(item && bodyLength >= 4 && bodyLength <= CONTENT_FEEDBACK_BODY_MAX_LENGTH);
   const isOwnContent = Boolean(item?.isOwnContent);
-  const submitDisabled = !canSubmitDraft || isSubmitting || !isFeedbackOpen || !hasCurrentRoundVote || isOwnContent;
+  const submitDisabled =
+    !canSubmitDraft ||
+    isSubmitting ||
+    !isFeedbackOpen ||
+    !hasCurrentRoundVote ||
+    hasCurrentRoundFeedback ||
+    isOwnContent;
   const submitTooltip = getContentFeedbackSubmitTooltip({
     canSubmitDraft,
     hasCurrentRoundVote,
+    hasCurrentRoundFeedback,
     isFeedbackOpen,
     isOwnContent,
   });
@@ -218,7 +238,7 @@ export function ContentFeedbackPanel({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canSubmitDraft || !isFeedbackOpen || !hasCurrentRoundVote || isOwnContent) return;
+    if (!canSubmitDraft || !isFeedbackOpen || !hasCurrentRoundVote || hasCurrentRoundFeedback || isOwnContent) return;
 
     if (!address) {
       notification.info("Sign in to add feedback.");
@@ -241,7 +261,9 @@ export function ContentFeedbackPanel({
 
     setBody("");
     setSourceUrl("");
-    notification.success("Feedback published on-chain");
+    notification.success(
+      result.alreadyPublished ? "Feedback already published on-chain" : "Feedback published on-chain",
+    );
   };
 
   return (

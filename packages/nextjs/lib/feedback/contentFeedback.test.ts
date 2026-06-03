@@ -585,6 +585,33 @@ test("public feedback includes newer active-round rows", async () => {
   assert.equal(result.items[0]?.body, "Active round public feedback number 99.");
 });
 
+test("loads existing active feedback for idempotent confirmations", async () => {
+  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "9", state: ROUND_STATE.Open }]);
+  const payload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "14",
+    feedbackType: "clarification",
+    body: "The question should specify which source of truth wins.",
+  });
+  assert.equal(payload.ok, true);
+  if (!payload.ok) return;
+
+  const added = await contentFeedback.addContentFeedback(
+    prepareFeedback(payload.payload, activeContext),
+    activeContext,
+  );
+  const existing = await contentFeedback.getExistingActiveContentFeedbackForAuthor({
+    contentId: payload.payload.contentId,
+    roundId: activeContext.currentRoundId!,
+    authorAddress: payload.payload.normalizedAddress,
+    context: activeContext,
+  });
+
+  assert.equal(existing?.id, added.id);
+  assert.equal(existing?.body, added.body);
+  assert.equal(existing?.isOwn, true);
+});
+
 test("rejects duplicate feedback from the same author in the same round", async () => {
   const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "9", state: ROUND_STATE.Open }]);
   const payload = contentFeedback.normalizeContentFeedbackInput({

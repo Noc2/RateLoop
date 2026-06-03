@@ -1,4 +1,8 @@
-import { OWN_CONTENT_FEEDBACK_DISABLED_REASON, getContentFeedbackSubmitTooltip } from "./contentFeedbackSubmitState";
+import {
+  EXISTING_CONTENT_FEEDBACK_DISABLED_REASON,
+  OWN_CONTENT_FEEDBACK_DISABLED_REASON,
+  getContentFeedbackSubmitTooltip,
+} from "./contentFeedbackSubmitState";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -23,6 +27,19 @@ test("feedback submit tooltip explains closed voting before vote gating", () => 
       isOwnContent: false,
     }),
     "Feedback is only open while voting is active.",
+  );
+});
+
+test("feedback submit tooltip explains existing feedback before vote gating", () => {
+  assert.equal(
+    getContentFeedbackSubmitTooltip({
+      canSubmitDraft: true,
+      hasCurrentRoundFeedback: true,
+      hasCurrentRoundVote: false,
+      isFeedbackOpen: true,
+      isOwnContent: false,
+    }),
+    EXISTING_CONTENT_FEEDBACK_DISABLED_REASON,
   );
 });
 
