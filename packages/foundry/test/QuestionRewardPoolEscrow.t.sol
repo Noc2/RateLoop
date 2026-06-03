@@ -5214,10 +5214,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     {
         sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](1);
         sources[0] = IClusterPayoutOracle.CorrelationEpochSourceRef({
-            domain: 1,
-            rewardPoolId: rewardPoolId,
-            contentId: contentId,
-            roundId: roundId
+            domain: 1, rewardPoolId: rewardPoolId, contentId: contentId, roundId: roundId
         });
     }
 

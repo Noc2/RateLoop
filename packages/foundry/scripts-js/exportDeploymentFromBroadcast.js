@@ -37,22 +37,16 @@ const DIRECT_DEPLOYMENT_NAMES = new Set([
 const ROLE_HASHES = {
   defaultAdmin:
     "0x0000000000000000000000000000000000000000000000000000000000000000",
-  admin:
-    "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775",
-  config:
-    "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5",
-  arbiter:
-    "0xbb08418a67729a078f87bbc8d02a770929bb68f5bfdf134ae2ead6ed38e2f4ae",
-  minter:
-    "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6",
+  admin: "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775",
+  config: "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5",
+  arbiter: "0xbb08418a67729a078f87bbc8d02a770929bb68f5bfdf134ae2ead6ed38e2f4ae",
+  minter: "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6",
   timelockProposer:
     "0xb09aa5aeb3702cfd50b6b62bc4532604938f21248a27a1d5ca736082b6819cc1",
   timelockCanceller:
     "0xfd643c72710c63c0180259aba6b2d05451e3591a24e58b62239378085726f783",
-  pauser:
-    "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a",
-  seeder:
-    "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1",
+  pauser: "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a",
+  seeder: "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1",
 };
 
 const PROTOCOL_CONFIG_PROXY_COMPLETION_SELECTORS = [
@@ -285,7 +279,9 @@ function receiptForTransaction(tx, receiptByHash) {
   const hash = normalizeHash(txHash(tx));
   if (!hash) {
     throw new Error(
-      `Broadcast transaction is missing hash for ${tx.contractName || "unknown contract"}`
+      `Broadcast transaction is missing hash for ${
+        tx.contractName || "unknown contract"
+      }`
     );
   }
   const receipt = receiptByHash.get(hash);
@@ -302,7 +298,9 @@ function receiptSucceeded(receipt) {
 function requireSuccessfulReceipt(tx, receiptByHash) {
   const receipt = receiptForTransaction(tx, receiptByHash);
   if (!receiptSucceeded(receipt)) {
-    throw new Error(`Broadcast transaction ${normalizeHash(txHash(tx))} failed`);
+    throw new Error(
+      `Broadcast transaction ${normalizeHash(txHash(tx))} failed`
+    );
   }
   return receipt;
 }
@@ -313,7 +311,10 @@ function callMatches(tx, receiptByHash, requirement) {
   if (tx.function !== requirement.functionName) return false;
   if (requirement.firstArgument) {
     const firstArgument = tx.arguments?.[0];
-    if (typeof firstArgument !== "string" || firstArgument.toLowerCase() !== requirement.firstArgument.toLowerCase()) {
+    if (
+      typeof firstArgument !== "string" ||
+      firstArgument.toLowerCase() !== requirement.firstArgument.toLowerCase()
+    ) {
       return false;
     }
   }
@@ -321,22 +322,32 @@ function callMatches(tx, receiptByHash, requirement) {
   return true;
 }
 
-function assertRequiredCompletionCalls(transactions, receiptByHash, deployments) {
+function assertRequiredCompletionCalls(
+  transactions,
+  receiptByHash,
+  deployments
+) {
   const missing = [];
   for (const requirement of REQUIRED_COMPLETION_CALLS) {
-    const count = transactions.filter((tx) => callMatches(tx, receiptByHash, requirement)).length;
+    const count = transactions.filter((tx) =>
+      callMatches(tx, receiptByHash, requirement)
+    ).length;
     if (count < (requirement.minCount || 1)) {
       missing.push(requirement.label);
     }
   }
 
   const protocolConfigAddress = Object.entries(deployments).find(
-    ([address, contractName]) => address.startsWith("0x") && contractName === "ProtocolConfig"
+    ([address, contractName]) =>
+      address.startsWith("0x") && contractName === "ProtocolConfig"
   )?.[0];
   if (!protocolConfigAddress) {
     missing.push("ProtocolConfig deployment");
   } else {
-    for (const [label, selector] of PROTOCOL_CONFIG_PROXY_COMPLETION_SELECTORS) {
+    for (const [
+      label,
+      selector,
+    ] of PROTOCOL_CONFIG_PROXY_COMPLETION_SELECTORS) {
       const found = transactions.some((tx, index) => {
         const target = txTarget(tx);
         const matches =
@@ -353,7 +364,9 @@ function assertRequiredCompletionCalls(transactions, receiptByHash, deployments)
   }
 
   if (missing.length > 0) {
-    throw new Error(`Broadcast is missing required completion calls: ${missing.join(", ")}`);
+    throw new Error(
+      `Broadcast is missing required completion calls: ${missing.join(", ")}`
+    );
   }
 }
 

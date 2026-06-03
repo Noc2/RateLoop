@@ -50,7 +50,14 @@ function successfulReceipt(transactionHash, blockNumber = "0xc8", logs = []) {
   return { transactionHash, blockNumber, logs, status: "0x1" };
 }
 
-function pushCall(transactions, receipts, contractName, functionName, args, targetAddress) {
+function pushCall(
+  transactions,
+  receipts,
+  contractName,
+  functionName,
+  args,
+  targetAddress
+) {
   const hash = nextTxHash(transactions);
   transactions.push({
     transactionType: "CALL",
@@ -64,7 +71,12 @@ function pushCall(transactions, receipts, contractName, functionName, args, targ
   receipts.push(successfulReceipt(hash));
 }
 
-function pushProtocolConfigProxyCall(transactions, receipts, protocolConfigProxy, selector) {
+function pushProtocolConfigProxyCall(
+  transactions,
+  receipts,
+  protocolConfigProxy,
+  selector
+) {
   const hash = nextTxHash(transactions);
   transactions.push({
     transactionType: "CALL",
@@ -116,7 +128,12 @@ function completeBroadcast() {
       contractAddress: proxyAddress,
       hash,
     });
-    receipts.push(successfulReceipt(hash, "0xc8", [{ address: proxyAddress }, { address: adminAddress }]));
+    receipts.push(
+      successfulReceipt(hash, "0xc8", [
+        { address: proxyAddress },
+        { address: adminAddress },
+      ])
+    );
   }
 
   const defaultAdminRole =
@@ -154,41 +171,278 @@ function completeBroadcast() {
   const advisoryRecorder = directAddressByName.get("AdvisoryVoteRecorder");
   const protocolConfig = proxyAddressByName.get("ProtocolConfig");
 
-  pushCall(transactions, receipts, "RaterRegistry", "freezeWorldIdVerifierConfig()", [], raterRegistry);
-  pushCall(transactions, receipts, "RaterRegistry", "renounceRole(bytes32,address)", [adminRole, deployer], raterRegistry);
-  pushCall(transactions, receipts, "RaterRegistry", "renounceRole(bytes32,address)", [seederRole, deployer], raterRegistry);
-  pushCall(transactions, receipts, "FeedbackRegistry", "renounceRole(bytes32,address)", [configRole, deployer], feedbackRegistry);
-  pushCall(transactions, receipts, "ContentRegistry", "renounceRole(bytes32,address)", [configRole, deployer], contentRegistry);
-  pushCall(transactions, receipts, "ContentRegistry", "renounceRole(bytes32,address)", [pauserRole, deployer], contentRegistry);
-  pushCall(transactions, receipts, "ProfileRegistry", "renounceRole(bytes32,address)", [adminRole, deployer], profileRegistry);
-  pushCall(transactions, receipts, "FrontendRegistry", "renounceRole(bytes32,address)", [adminRole, deployer], frontendRegistry);
-  pushCall(transactions, receipts, "CategoryRegistry", "renounceRole(bytes32,address)", [adminRole, deployer], categoryRegistry);
-  pushCall(transactions, receipts, "ClusterPayoutOracle", "setRoundPayoutSnapshotConsumer(uint8,address)", ["1", questionEscrow], clusterOracle);
-  pushCall(transactions, receipts, "ClusterPayoutOracle", "setRoundPayoutSnapshotConsumer(uint8,address)", ["2", launchPool], clusterOracle);
-  pushCall(transactions, receipts, "ClusterPayoutOracle", "grantRole(bytes32,address)", [defaultAdminRole, governance], clusterOracle);
-  pushCall(transactions, receipts, "ClusterPayoutOracle", "grantRole(bytes32,address)", [configRole, governance], clusterOracle);
-  pushCall(transactions, receipts, "ClusterPayoutOracle", "grantRole(bytes32,address)", [arbiterRole, governance], clusterOracle);
-  pushCall(transactions, receipts, "ClusterPayoutOracle", "setOracleConfig(uint64,uint256,address)", ["43200", "5000000", governance], clusterOracle);
-  pushCall(transactions, receipts, "ClusterPayoutOracle", "renounceRole(bytes32,address)", [arbiterRole, deployer], clusterOracle);
-  pushCall(transactions, receipts, "ClusterPayoutOracle", "renounceRole(bytes32,address)", [configRole, deployer], clusterOracle);
-  pushCall(transactions, receipts, "ClusterPayoutOracle", "renounceRole(bytes32,address)", [defaultAdminRole, deployer], clusterOracle);
-  pushProtocolConfigProxyCall(transactions, receipts, protocolConfig, "0x440616e4");
-  pushCall(transactions, receipts, "LaunchDistributionPool", "setRoundClusterReadyAtSource(address)", [votingEngine], launchPool);
-  pushCall(transactions, receipts, "LaunchDistributionPool", "setClusterPayoutOracle(address)", [clusterOracle], launchPool);
-  pushCall(transactions, receipts, "LaunchDistributionPool", "setAuthorizedCaller(address,bool)", [rewardDistributor, "true"], launchPool);
-  pushProtocolConfigProxyCall(transactions, receipts, protocolConfig, "0x8b099e2f");
-  pushCall(transactions, receipts, "LaunchDistributionPool", "setAuthorizedCaller(address,bool)", [advisoryRecorder, "true"], launchPool);
-  pushCall(transactions, receipts, "TimelockController", "grantRole(bytes32,address)", [proposerRole, governor], directAddressByName.get("TimelockController"));
-  pushCall(transactions, receipts, "TimelockController", "grantRole(bytes32,address)", [cancellerRole, governor], directAddressByName.get("TimelockController"));
-  pushCall(transactions, receipts, "TimelockController", "renounceRole(bytes32,address)", [defaultAdminRole, deployer], directAddressByName.get("TimelockController"));
-  pushCall(transactions, receipts, "LoopReputation", "setGovernor(address)", [governor], directAddressByName.get("LoopReputation"));
-  pushCall(transactions, receipts, "LoopReputation", "renounceRole(bytes32,address)", [configRole, deployer], directAddressByName.get("LoopReputation"));
-  pushCall(transactions, receipts, "LaunchDistributionPool", "accountPrefundedPoolDeposit(uint256)", ["75000000000000"], launchPool);
-  pushCall(transactions, receipts, "LaunchDistributionPool", "setLegacyContributorRoot(bytes32,uint256)", [`0x${"a".repeat(64)}`, "9000000000000"], launchPool);
-  pushCall(transactions, receipts, "LaunchDistributionPool", "transferOwnership(address)", [governance], launchPool);
-  pushCall(transactions, receipts, "LoopReputation", "renounceRole(bytes32,address)", [minterRole, deployer], directAddressByName.get("LoopReputation"));
-  pushProtocolConfigProxyCall(transactions, receipts, protocolConfig, "0xa0ad8aa9");
-  pushProtocolConfigProxyCall(transactions, receipts, protocolConfig, "0x36568abe");
+  pushCall(
+    transactions,
+    receipts,
+    "RaterRegistry",
+    "freezeWorldIdVerifierConfig()",
+    [],
+    raterRegistry
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "RaterRegistry",
+    "renounceRole(bytes32,address)",
+    [adminRole, deployer],
+    raterRegistry
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "RaterRegistry",
+    "renounceRole(bytes32,address)",
+    [seederRole, deployer],
+    raterRegistry
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "FeedbackRegistry",
+    "renounceRole(bytes32,address)",
+    [configRole, deployer],
+    feedbackRegistry
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ContentRegistry",
+    "renounceRole(bytes32,address)",
+    [configRole, deployer],
+    contentRegistry
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ContentRegistry",
+    "renounceRole(bytes32,address)",
+    [pauserRole, deployer],
+    contentRegistry
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ProfileRegistry",
+    "renounceRole(bytes32,address)",
+    [adminRole, deployer],
+    profileRegistry
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "FrontendRegistry",
+    "renounceRole(bytes32,address)",
+    [adminRole, deployer],
+    frontendRegistry
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "CategoryRegistry",
+    "renounceRole(bytes32,address)",
+    [adminRole, deployer],
+    categoryRegistry
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "setRoundPayoutSnapshotConsumer(uint8,address)",
+    ["1", questionEscrow],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "setRoundPayoutSnapshotConsumer(uint8,address)",
+    ["2", launchPool],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "grantRole(bytes32,address)",
+    [defaultAdminRole, governance],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "grantRole(bytes32,address)",
+    [configRole, governance],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "grantRole(bytes32,address)",
+    [arbiterRole, governance],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "setOracleConfig(uint64,uint256,address)",
+    ["43200", "5000000", governance],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "renounceRole(bytes32,address)",
+    [arbiterRole, deployer],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "renounceRole(bytes32,address)",
+    [configRole, deployer],
+    clusterOracle
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "ClusterPayoutOracle",
+    "renounceRole(bytes32,address)",
+    [defaultAdminRole, deployer],
+    clusterOracle
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "0x440616e4"
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LaunchDistributionPool",
+    "setRoundClusterReadyAtSource(address)",
+    [votingEngine],
+    launchPool
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LaunchDistributionPool",
+    "setClusterPayoutOracle(address)",
+    [clusterOracle],
+    launchPool
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LaunchDistributionPool",
+    "setAuthorizedCaller(address,bool)",
+    [rewardDistributor, "true"],
+    launchPool
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "0x8b099e2f"
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LaunchDistributionPool",
+    "setAuthorizedCaller(address,bool)",
+    [advisoryRecorder, "true"],
+    launchPool
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "TimelockController",
+    "grantRole(bytes32,address)",
+    [proposerRole, governor],
+    directAddressByName.get("TimelockController")
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "TimelockController",
+    "grantRole(bytes32,address)",
+    [cancellerRole, governor],
+    directAddressByName.get("TimelockController")
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "TimelockController",
+    "renounceRole(bytes32,address)",
+    [defaultAdminRole, deployer],
+    directAddressByName.get("TimelockController")
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LoopReputation",
+    "setGovernor(address)",
+    [governor],
+    directAddressByName.get("LoopReputation")
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LoopReputation",
+    "renounceRole(bytes32,address)",
+    [configRole, deployer],
+    directAddressByName.get("LoopReputation")
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LaunchDistributionPool",
+    "accountPrefundedPoolDeposit(uint256)",
+    ["75000000000000"],
+    launchPool
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LaunchDistributionPool",
+    "setLegacyContributorRoot(bytes32,uint256)",
+    [`0x${"a".repeat(64)}`, "9000000000000"],
+    launchPool
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LaunchDistributionPool",
+    "transferOwnership(address)",
+    [governance],
+    launchPool
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LoopReputation",
+    "renounceRole(bytes32,address)",
+    [minterRole, deployer],
+    directAddressByName.get("LoopReputation")
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "0xa0ad8aa9"
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "0x36568abe"
+  );
 
   return { transactions, receipts };
 }
@@ -227,7 +481,8 @@ test("reconstructDeploymentExportFromBroadcast rejects missing completion calls"
     (tx) =>
       tx.contractName === "LoopReputation" &&
       tx.function === "renounceRole(bytes32,address)" &&
-      tx.arguments?.[0] === "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6"
+      tx.arguments?.[0] ===
+        "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6"
   );
 
   assert.throws(
@@ -253,7 +508,8 @@ test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs
       predicate: (tx) =>
         tx.contractName === "ContentRegistry" &&
         tx.function === "renounceRole(bytes32,address)" &&
-        tx.arguments?.[0] === "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a",
+        tx.arguments?.[0] ===
+          "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a",
     },
     {
       label: /CategoryRegistry\.renounceRole\(ADMIN_ROLE\)/,
@@ -280,10 +536,8 @@ test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs
 
 test("reconstructDeploymentExportFromBroadcast rejects missing protocol oracle config", () => {
   const { transactions, receipts } = completeBroadcast();
-  removeRequiredCall(
-    transactions,
-    receipts,
-    (tx) => tx.input?.startsWith("0x440616e4")
+  removeRequiredCall(transactions, receipts, (tx) =>
+    tx.input?.startsWith("0x440616e4")
   );
 
   assert.throws(
@@ -302,9 +556,14 @@ test("reconstructDeploymentExportFromBroadcast rejects missing receipts", () => 
     (tx) =>
       tx.contractName === "LoopReputation" &&
       tx.function === "renounceRole(bytes32,address)" &&
-      tx.arguments?.[0] === "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6"
+      tx.arguments?.[0] ===
+        "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6"
   );
-  assert.notEqual(minterRenounceIndex, -1, "test fixture should contain required call");
+  assert.notEqual(
+    minterRenounceIndex,
+    -1,
+    "test fixture should contain required call"
+  );
   receipts.splice(minterRenounceIndex, 1);
 
   assert.throws(
@@ -323,10 +582,18 @@ test("reconstructDeploymentExportFromBroadcast rejects failed receipts", () => {
     (tx) =>
       tx.contractName === "LoopReputation" &&
       tx.function === "renounceRole(bytes32,address)" &&
-      tx.arguments?.[0] === "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6"
+      tx.arguments?.[0] ===
+        "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6"
   );
-  assert.notEqual(minterRenounceIndex, -1, "test fixture should contain required call");
-  receipts[minterRenounceIndex] = { ...receipts[minterRenounceIndex], status: "0x0" };
+  assert.notEqual(
+    minterRenounceIndex,
+    -1,
+    "test fixture should contain required call"
+  );
+  receipts[minterRenounceIndex] = {
+    ...receipts[minterRenounceIndex],
+    status: "0x0",
+  };
 
   assert.throws(
     () =>

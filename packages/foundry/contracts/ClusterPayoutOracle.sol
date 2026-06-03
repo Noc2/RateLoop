@@ -927,17 +927,17 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (sourceCount == 0 || sourceCount > MAX_CORRELATION_EPOCH_SOURCES) revert InvalidSnapshot();
 
         bytes32[] memory snapshotKeys = new bytes32[](sourceCount);
-        coverageDigest = keccak256(
-            abi.encode(CORRELATION_EPOCH_COVERAGE_DOMAIN, epochId, fromRoundId, toRoundId, sourceCount)
-        );
+        coverageDigest =
+            keccak256(abi.encode(CORRELATION_EPOCH_COVERAGE_DOMAIN, epochId, fromRoundId, toRoundId, sourceCount));
 
         for (uint256 i; i < sourceCount;) {
             CorrelationEpochSourceRef calldata sourceRef = sourceRefs[i];
             _validateCorrelationEpochSourceShape(sourceRef);
             if (sourceRef.roundId < fromRoundId || sourceRef.roundId > toRoundId) revert InvalidSnapshot();
 
-            bytes32 snapshotKey =
-                roundPayoutSnapshotKey(sourceRef.domain, sourceRef.rewardPoolId, sourceRef.contentId, sourceRef.roundId);
+            bytes32 snapshotKey = roundPayoutSnapshotKey(
+                sourceRef.domain, sourceRef.rewardPoolId, sourceRef.contentId, sourceRef.roundId
+            );
             for (uint256 j; j < i;) {
                 if (snapshotKeys[j] == snapshotKey) revert InvalidSnapshot();
                 unchecked {
