@@ -704,7 +704,7 @@ export async function updateAgentAskHandoffStatus(params: {
           updated_at = ?
       WHERE id = ?
         AND status NOT IN ('submitted', 'expired')
-        AND (? IS NULL OR draft_revision = ?)
+        AND draft_revision = COALESCE(CAST(? AS integer), draft_revision)
     `,
     args: [
       params.status,
@@ -724,7 +724,6 @@ export async function updateAgentAskHandoffStatus(params: {
       now,
       now,
       params.handoffId,
-      params.expectedDraftRevision ?? null,
       params.expectedDraftRevision ?? null,
     ],
   });
