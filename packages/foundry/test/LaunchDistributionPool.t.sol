@@ -27,10 +27,7 @@ function _launchEpochSourcesForRange(uint256 fromRoundId, uint256 toRoundId)
     sources = new IClusterPayoutOracle.CorrelationEpochSourceRef[](sourceCount);
     for (uint256 i; i < sourceCount;) {
         sources[i] = IClusterPayoutOracle.CorrelationEpochSourceRef({
-            domain: 2,
-            rewardPoolId: 0,
-            contentId: 1,
-            roundId: fromRoundId + i
+            domain: 2, rewardPoolId: 0, contentId: 1, roundId: fromRoundId + i
         });
         unchecked {
             ++i;
@@ -130,6 +127,33 @@ contract LaunchDistributionPoolTest is Test {
         );
     }
 
+    function test_AccountPrefundedPoolDepositTracksDirectMint() public {
+        LoopReputation directLrep = new LoopReputation(address(this), address(this));
+        LaunchDistributionPool directPool =
+            new LaunchDistributionPool(address(directLrep), address(registry), address(this));
+        uint256 amount = directPool.TOTAL_POOL_AMOUNT();
+
+        directLrep.mint(address(directPool), amount);
+        directPool.accountPrefundedPoolDeposit(amount);
+
+        assertEq(directPool.poolBalance(), amount);
+        assertEq(directLrep.balanceOf(address(directPool)), amount);
+    }
+
+    function test_AccountPrefundedPoolDepositOnlyOwnerAndCannotOverAccount() public {
+        lrep.mint(address(pool), 1e6);
+
+        vm.prank(alice);
+        vm.expectRevert();
+        pool.accountPrefundedPoolDeposit(1e6);
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.accountPrefundedPoolDeposit(2e6);
+
+        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
+        pool.accountPrefundedPoolDeposit(0);
+    }
+
     function test_ConstructorRejectsInvalidRaterRegistryIntegration() public {
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         new LaunchDistributionPool(address(lrep), address(0xBEEF), address(this));
@@ -190,10 +214,9 @@ contract LaunchDistributionPoolTest is Test {
         vm.prank(deployer);
         interruptedPool = new LaunchDistributionPool(address(interruptedLrep), address(registry), intendedGovernance);
 
-        interruptedLrep.mint(deployer, interruptedPool.TOTAL_POOL_AMOUNT());
+        interruptedLrep.mint(address(interruptedPool), interruptedPool.TOTAL_POOL_AMOUNT());
         vm.startPrank(deployer);
-        interruptedLrep.approve(address(interruptedPool), interruptedPool.TOTAL_POOL_AMOUNT());
-        interruptedPool.depositPool(interruptedPool.TOTAL_POOL_AMOUNT());
+        interruptedPool.accountPrefundedPoolDeposit(interruptedPool.TOTAL_POOL_AMOUNT());
 
         vm.expectRevert(LaunchDistributionPool.InvalidAddress.selector);
         interruptedPool.setGovernance(deployer);
@@ -205,6 +228,7 @@ contract LaunchDistributionPoolTest is Test {
 
         assertEq(interruptedPool.poolBalance(), interruptedPool.TOTAL_POOL_AMOUNT());
         assertEq(interruptedLrep.balanceOf(address(interruptedPool)), interruptedPool.TOTAL_POOL_AMOUNT());
+        assertEq(interruptedLrep.balanceOf(deployer), 0);
     }
 
     function test_WithdrawRemainingOnlyWithdrawsSurplusAboveReservedLaunchBuckets() public {

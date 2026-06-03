@@ -386,9 +386,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             lrepToken.renounceRole(lrepToken.CONFIG_ROLE(), deployer);
         }
 
-        lrepToken.mint(deployer, LAUNCH_DISTRIBUTION_AMOUNT);
-        lrepToken.approve(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
-        launchDistributionPool.depositPool(LAUNCH_DISTRIBUTION_AMOUNT);
+        _fundLaunchDistributionPool(lrepToken, launchDistributionPool);
         _activateLegacyContributorRoot(launchDistributionPool);
         if (!isLocalDev) {
             launchDistributionPool.transferOwnership(governance);
@@ -468,6 +466,13 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
     function _activateLegacyContributorRoot(LaunchDistributionPool launchDistributionPool) internal {
         launchDistributionPool.setLegacyContributorRoot(LEGACY_CONTRIBUTOR_ROOT, LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL);
+    }
+
+    function _fundLaunchDistributionPool(LoopReputation lrepToken, LaunchDistributionPool launchDistributionPool)
+        internal
+    {
+        lrepToken.mint(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
+        launchDistributionPool.accountPrefundedPoolDeposit(LAUNCH_DISTRIBUTION_AMOUNT);
     }
 
     function _proxyAdmin(address proxy) internal view returns (address) {

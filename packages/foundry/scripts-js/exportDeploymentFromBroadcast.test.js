@@ -139,7 +139,7 @@ function completeBroadcast() {
   pushCall(transactions, receipts, "TimelockController", "renounceRole(bytes32,address)", [defaultAdminRole, deployer], directAddressByName.get("TimelockController"));
   pushCall(transactions, receipts, "LoopReputation", "setGovernor(address)", [governor], directAddressByName.get("LoopReputation"));
   pushCall(transactions, receipts, "LoopReputation", "renounceRole(bytes32,address)", [configRole, deployer], directAddressByName.get("LoopReputation"));
-  pushCall(transactions, receipts, "LaunchDistributionPool", "depositPool(uint256)", ["75000000000000"], launchPool);
+  pushCall(transactions, receipts, "LaunchDistributionPool", "accountPrefundedPoolDeposit(uint256)", ["75000000000000"], launchPool);
   pushCall(transactions, receipts, "LaunchDistributionPool", "setLegacyContributorRoot(bytes32,uint256)", [`0x${"a".repeat(64)}`, "9000000000000"], launchPool);
   pushCall(transactions, receipts, "LaunchDistributionPool", "transferOwnership(address)", [governance], launchPool);
   pushCall(transactions, receipts, "LoopReputation", "renounceRole(bytes32,address)", [minterRole, deployer], directAddressByName.get("LoopReputation"));

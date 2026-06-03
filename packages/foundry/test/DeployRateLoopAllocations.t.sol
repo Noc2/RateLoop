@@ -42,6 +42,10 @@ contract DeployRateLoopHarness is DeployRateLoop {
     function activateLegacyContributorRoot(LaunchDistributionPool launchPool) external {
         _activateLegacyContributorRoot(launchPool);
     }
+
+    function fundLaunchDistributionPool(LoopReputation lrepToken, LaunchDistributionPool launchPool) external {
+        _fundLaunchDistributionPool(lrepToken, launchPool);
+    }
 }
 
 contract RevertingDecimalsToken {
@@ -79,6 +83,24 @@ contract DeployRateLoopAllocationsTest is Test {
             "launch pool split should equal 75M"
         );
         assertEq(deployScript.TREASURY_AMOUNT(), 25_000_000 * 1e6, "treasury should be 25M");
+    }
+
+    function test_FundLaunchDistributionPoolMintsDirectlyToPool() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        LoopReputation lrepToken = new LoopReputation(address(deployScript), address(this));
+        RaterRegistry raterRegistry = new RaterRegistry(
+            address(this), address(this), address(new MockWorldIDRouter()), bytes32("rate-loop"), 1, 365 days
+        );
+        LaunchDistributionPool launchPool =
+            new LaunchDistributionPool(address(lrepToken), address(raterRegistry), address(deployScript));
+        launchPool.transferOwnership(address(deployScript));
+
+        deployScript.fundLaunchDistributionPool(lrepToken, launchPool);
+
+        assertEq(lrepToken.balanceOf(address(launchPool)), deployScript.LAUNCH_DISTRIBUTION_AMOUNT());
+        assertEq(launchPool.poolBalance(), deployScript.LAUNCH_DISTRIBUTION_AMOUNT());
+        assertEq(lrepToken.balanceOf(address(deployScript)), 0);
+        assertEq(lrepToken.allowance(address(deployScript), address(launchPool)), 0);
     }
 
     function test_ActivateLegacyContributorRootConfiguresGeneratedManifestRoot() public {

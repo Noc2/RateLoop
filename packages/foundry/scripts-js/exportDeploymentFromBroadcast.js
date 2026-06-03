@@ -148,9 +148,9 @@ const REQUIRED_COMPLETION_CALLS = [
     firstArgument: ROLE_HASHES.config,
   },
   {
-    label: "LaunchDistributionPool.depositPool",
+    label: "LaunchDistributionPool.accountPrefundedPoolDeposit",
     contractName: "LaunchDistributionPool",
-    functionName: "depositPool(uint256)",
+    functionName: "accountPrefundedPoolDeposit(uint256)",
   },
   {
     label: "LaunchDistributionPool.setLegacyContributorRoot",

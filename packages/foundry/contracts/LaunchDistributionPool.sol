@@ -379,6 +379,15 @@ contract LaunchDistributionPool is
         emit PoolDeposit(amount);
     }
 
+    function accountPrefundedPoolDeposit(uint256 amount) external onlyOwner {
+        if (amount == 0) revert InvalidAmount();
+        uint256 actualBalance = lrepToken.balanceOf(address(this));
+        uint256 untracked = actualBalance > poolBalance ? actualBalance - poolBalance : 0;
+        if (amount > untracked) revert InvalidAmount();
+        poolBalance += amount;
+        emit PoolDeposit(amount);
+    }
+
     function withdrawRemaining(address to, uint256 amount) external onlyOwner nonReentrant returns (uint256 withdrawn) {
         if (to == address(0)) revert InvalidAddress();
         if (owner() != governance) revert InvalidAddress();
