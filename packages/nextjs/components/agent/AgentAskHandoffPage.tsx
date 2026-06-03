@@ -19,6 +19,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
+import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { DEFAULT_QUESTION_ROUND_CONFIG, formatDurationLabel } from "~~/lib/questionRoundConfig";
@@ -85,7 +86,6 @@ type PrepareResponse = Handoff & {
 
 type ExecutionStep = {
   hash?: string;
-  label: string;
   status: "pending" | "sent" | "confirmed";
 };
 
@@ -260,37 +260,6 @@ function assertZeroValue(value: unknown, field: string) {
   throw new Error(`${field} must be zero.`);
 }
 
-const KNOWN_ERC20_SELECTORS = {
-  "0x095ea7b3": { argLabels: ["spender", "amount"], name: "approve" },
-  "0x23b872dd": { argLabels: ["from", "to", "amount"], name: "transferFrom" },
-  "0xa9059cbb": { argLabels: ["recipient", "amount"], name: "transfer" },
-} as const satisfies Record<string, { argLabels: readonly string[]; name: string }>;
-
-type DecodedCall = { args: Array<{ label: string; value: string }>; name: string } | null;
-
-function decodeKnownErc20Call(data: string): DecodedCall {
-  if (typeof data !== "string" || data.length < 10) return null;
-  const selector = data.slice(0, 10).toLowerCase();
-  const definition = (KNOWN_ERC20_SELECTORS as Record<string, { argLabels: readonly string[]; name: string }>)[
-    selector
-  ];
-  if (!definition) return null;
-  const body = data.slice(10);
-  if (body.length < definition.argLabels.length * 64) return null;
-  const args = definition.argLabels.map((label, index) => {
-    const word = body.slice(index * 64, (index + 1) * 64);
-    if (label === "amount") {
-      try {
-        return { label, value: BigInt(`0x${word}`).toString() };
-      } catch {
-        return { label, value: `0x${word}` };
-      }
-    }
-    return { label, value: `0x${word.slice(-40)}` };
-  });
-  return { args, name: definition.name };
-}
-
 function readResponseError(value: unknown, fallback: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
   const record = value as { error?: unknown; message?: unknown };
@@ -346,19 +315,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const needsChainSwitch = Boolean(
     hasTransactionPlan && handoff?.chainId && connectedChainId && connectedChainId !== handoff.chainId,
   );
-  const canPrepare = Boolean(
+  const isBusy = isPreparing || isExecuting || isSigningMessage || switchingChainId !== null;
+  const canSubmit = Boolean(
     token &&
       address &&
-      connectedChainId &&
       handoff &&
-      canPrepareHandoffStatus(handoff.status) &&
       !connectedMismatch &&
-      !isPreparing &&
-      !isExecuting &&
-      !isTerminalStatus,
-  );
-  const canExecute = Boolean(
-    address && handoff && hasTransactionPlan && !connectedMismatch && !isExecuting && !isTerminalStatus,
+      !isTerminalStatus &&
+      !isBusy &&
+      (hasTransactionPlan || (connectedChainId && canPrepareHandoffStatus(handoff.status))),
   );
 
   const loadHandoff = useCallback(async () => {
@@ -410,21 +375,22 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [address, connectedChainId, handoffId, token],
   );
 
-  const handlePrepare = useCallback(async () => {
+  const prepareHandoff = useCallback(async () => {
     if (!address) {
       notification.error("Connect the wallet that will fund this ask.");
-      return;
+      return null;
     }
     if (!connectedChainId) {
       notification.error("Connect a supported network before preparing this ask.");
-      return;
+      return null;
     }
     if (connectedMismatch) {
       notification.error("Connected wallet does not match this handoff.");
-      return;
+      return null;
     }
 
     setIsPreparing(true);
+    setSteps([]);
     setImageSignatureSteps([]);
     setError(null);
     try {
@@ -455,23 +421,98 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       }
 
       setHandoff(prepared);
-      notification.success("RateLoop ask is ready for wallet execution.");
+      setImageSignatureSteps([]);
+      return prepared;
     } catch (prepareError) {
       setError(prepareError instanceof Error ? prepareError.message : "Failed to prepare handoff.");
+      return null;
     } finally {
       setIsPreparing(false);
     }
   }, [address, connectedChainId, connectedMismatch, postPrepare, signMessageAsync]);
 
-  const handleExecute = useCallback(async () => {
-    if (!handoff?.transactionPlan?.calls?.length) {
-      notification.error(
-        isFeedbackBonusStep
-          ? "Feedback Bonus funding is not prepared yet."
-          : "Prepare this handoff before submitting wallet calls.",
-      );
-      return;
-    }
+  const executeHandoff = useCallback(
+    async (targetHandoff: Handoff) => {
+      const calls = targetHandoff.transactionPlan?.calls ?? [];
+      const isExecutingFeedbackBonus = targetHandoff.status === "feedback_bonus_prepared";
+      if (!calls.length) {
+        notification.error(
+          isExecutingFeedbackBonus
+            ? "Feedback Bonus funding is not prepared yet."
+            : "This ask could not prepare wallet calls.",
+        );
+        return;
+      }
+      if (!address) {
+        notification.error("Connect the wallet that will fund this ask.");
+        return;
+      }
+      if (connectedMismatch) {
+        notification.error("Connected wallet does not match this handoff.");
+        return;
+      }
+
+      setIsExecuting(true);
+      setError(null);
+      const hashes: Hex[] = [];
+      const nextSteps: ExecutionStep[] = calls.map(() => ({ status: "pending" }));
+      setSteps(nextSteps);
+
+      try {
+        if (targetHandoff.chainId && connectedChainId !== targetHandoff.chainId) {
+          await switchToChain(targetHandoff.chainId);
+        }
+
+        const handoffChainId = targetHandoff.chainId ?? undefined;
+        for (const [index, call] of calls.entries()) {
+          const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
+          const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
+          const value = assertZeroValue(call.value, `transactionPlan.calls[${index}].value`);
+          const hash = await sendTransaction(wagmiConfig, { chainId: handoffChainId, data, to, value });
+          hashes.push(hash);
+          setSteps(current =>
+            current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "sent" } : step)),
+          );
+          await waitForTransactionReceipt(wagmiConfig, { chainId: handoffChainId, hash });
+          setSteps(current =>
+            current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "confirmed" } : step)),
+          );
+          if (call.waitAfterMs && call.waitAfterMs > 0) {
+            await delay(call.waitAfterMs);
+          }
+        }
+
+        const response = await fetch(`/api/agent/handoffs/${handoffId}/complete`, {
+          body: JSON.stringify({ token, transactionHashes: hashes }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        });
+        const body = (await response.json()) as Handoff | { error?: string; message?: string };
+        if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
+        const nextHandoff = body as Handoff;
+        setHandoff(current => ({
+          ...nextHandoff,
+          publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? null,
+        }));
+        setSteps([]);
+        if (nextHandoff.status === "feedback_bonus_prepared") {
+          notification.success("Ask submitted. Feedback Bonus funding is ready.");
+        } else if (isExecutingFeedbackBonus) {
+          notification.success("Feedback Bonus funded.");
+        } else {
+          notification.success("Ask submitted to RateLoop.");
+        }
+      } catch (executeError) {
+        setError(executeError instanceof Error ? executeError.message : "Failed to execute wallet calls.");
+      } finally {
+        setIsExecuting(false);
+      }
+    },
+    [address, connectedChainId, connectedMismatch, handoffId, switchToChain, token, wagmiConfig],
+  );
+
+  const handleSubmitAsk = useCallback(async () => {
+    if (!handoff) return;
     if (!address) {
       notification.error("Connect the wallet that will fund this ask.");
       return;
@@ -481,74 +522,35 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       return;
     }
 
-    setIsExecuting(true);
-    setError(null);
-    const hashes: Hex[] = [];
-    const nextSteps: ExecutionStep[] = handoff.transactionPlan.calls.map(call => ({
-      label: call.description || call.phase || call.id || "Wallet call",
-      status: "pending",
-    }));
-    setSteps(nextSteps);
-
-    try {
-      if (handoff.chainId && connectedChainId !== handoff.chainId) {
-        await switchToChain(handoff.chainId);
+    let executableHandoff = handoff;
+    if (!executableHandoff.transactionPlan?.calls?.length) {
+      if (isFeedbackBonusStep) {
+        notification.error("Feedback Bonus funding is waiting for a transaction plan.");
+        return;
       }
-
-      const handoffChainId = handoff.chainId ?? undefined;
-      for (const [index, call] of handoff.transactionPlan.calls.entries()) {
-        const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
-        const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
-        const value = assertZeroValue(call.value, `transactionPlan.calls[${index}].value`);
-        const hash = await sendTransaction(wagmiConfig, { chainId: handoffChainId, data, to, value });
-        hashes.push(hash);
-        setSteps(current =>
-          current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "sent" } : step)),
-        );
-        await waitForTransactionReceipt(wagmiConfig, { chainId: handoffChainId, hash });
-        setSteps(current =>
-          current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "confirmed" } : step)),
-        );
-        if (call.waitAfterMs && call.waitAfterMs > 0) {
-          await delay(call.waitAfterMs);
-        }
-      }
-
-      const response = await fetch(`/api/agent/handoffs/${handoffId}/complete`, {
-        body: JSON.stringify({ token, transactionHashes: hashes }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
-      const body = (await response.json()) as Handoff | { error?: string; message?: string };
-      if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
-      const nextHandoff = body as Handoff;
-      setHandoff(current => ({
-        ...nextHandoff,
-        publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? null,
-      }));
-      if (nextHandoff.status === "feedback_bonus_prepared") {
-        notification.success("Ask submitted. Feedback Bonus funding is ready.");
-      } else if (isFeedbackBonusStep) {
-        notification.success("Feedback Bonus funded.");
-      } else {
-        notification.success("Ask submitted to RateLoop.");
-      }
-    } catch (executeError) {
-      setError(executeError instanceof Error ? executeError.message : "Failed to execute wallet calls.");
-    } finally {
-      setIsExecuting(false);
+      const prepared = await prepareHandoff();
+      if (!prepared) return;
+      executableHandoff = prepared;
     }
-  }, [
-    address,
-    connectedChainId,
-    connectedMismatch,
-    handoff,
-    handoffId,
-    isFeedbackBonusStep,
-    switchToChain,
-    token,
-    wagmiConfig,
-  ]);
+
+    await executeHandoff(executableHandoff);
+  }, [address, connectedMismatch, executeHandoff, handoff, isFeedbackBonusStep, prepareHandoff]);
+
+  const submitLabel = (() => {
+    if (switchingChainId !== null) return "Switching...";
+    if (isPreparing || isSigningMessage) return "Preparing...";
+    if (isFeedbackBonusStep) return isExecuting ? "Funding..." : "Fund Bonus";
+    return isExecuting ? "Submitting..." : "Submit";
+  })();
+  const confirmedStepCount = steps.filter(step => step.status === "confirmed").length;
+  const progressLabel =
+    steps.length > 0
+      ? confirmedStepCount === steps.length
+        ? "Wallet calls confirmed."
+        : `Confirming wallet call ${Math.min(confirmedStepCount + 1, steps.length)} of ${steps.length}.`
+      : isPreparing || isSigningMessage
+        ? "Preparing the ask in your wallet."
+        : null;
 
   const questionSummaries = readQuestionSummaries(handoff);
   const roundSettings = readRoundSettings(handoff);
@@ -779,94 +781,40 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 <h2 className="text-lg font-semibold">{isFeedbackBonusStep ? "Fund Feedback Bonus" : "Submit Ask"}</h2>
                 <p className="mt-1 text-sm text-base-content/60">
                   {isFeedbackBonusStep
-                    ? "The question is submitted. Execute the remaining wallet calls to fund the optional Feedback Bonus."
-                    : "The connected wallet signs generated-image uploads first, then funds and submits the ask."}
+                    ? "The question is submitted. Fund the optional Feedback Bonus with the connected wallet."
+                    : "The connected wallet signs image uploads first, then funds and submits the ask."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button className="btn btn-outline btn-sm" type="button" onClick={() => void loadHandoff()}>
+                <button
+                  className="btn btn-outline btn-sm"
+                  disabled={isBusy}
+                  type="button"
+                  onClick={() => void loadHandoff()}
+                >
                   <ArrowPathIcon className="h-4 w-4" />
                   Refresh
                 </button>
-                <button
-                  className="btn btn-primary btn-sm"
-                  disabled={!canPrepare || isSigningMessage || switchingChainId !== null}
-                  type="button"
-                  onClick={() => void handlePrepare()}
+                <GradientActionButton
+                  className="min-w-28"
+                  disabled={!canSubmit}
+                  motion={getGradientActionMotion(isBusy)}
+                  size="sm"
+                  onClick={() => void handleSubmitAsk()}
                 >
-                  {isPreparing || isSigningMessage ? "Preparing..." : "Prepare"}
-                </button>
-                <button
-                  className="btn btn-primary btn-sm"
-                  disabled={!canExecute || switchingChainId !== null}
-                  type="button"
-                  onClick={() => void handleExecute()}
-                >
-                  {isFeedbackBonusStep
-                    ? isExecuting
-                      ? "Funding..."
-                      : "Fund Bonus"
-                    : isExecuting
-                      ? "Submitting..."
-                      : "Submit"}
-                </button>
+                  {isBusy ? (
+                    <span className="flex items-center gap-2">
+                      <span className="loading loading-spinner loading-xs" />
+                      <span>{submitLabel}</span>
+                    </span>
+                  ) : (
+                    submitLabel
+                  )}
+                </GradientActionButton>
               </div>
             </div>
 
-            {handoff.transactionPlan?.calls?.length ? (
-              <div className="mt-4 space-y-2">
-                {handoff.transactionPlan.calls.map((call, index) => (
-                  <div
-                    key={`${call.id ?? call.phase ?? "call"}-${index}`}
-                    className="surface-card-nested rounded-lg p-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium">{call.description ?? call.phase ?? "Wallet call"}</span>
-                      <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">
-                        {steps[index]?.status ?? "ready"}
-                      </span>
-                    </div>
-                    <p className="mt-1 break-all font-mono text-xs text-base-content/55">to: {call.to}</p>
-                    {call.value && call.value !== "0" && call.value !== "0x0" ? (
-                      <p className="mt-1 break-all font-mono text-xs text-base-content/55">value: {call.value}</p>
-                    ) : null}
-                    {call.data ? (
-                      <div className="mt-1 space-y-1">
-                        <p className="font-mono text-xs text-base-content/55">
-                          selector: <span className="text-base-content/75">{call.data.slice(0, 10)}</span>
-                        </p>
-                        {(() => {
-                          const decoded = decodeKnownErc20Call(call.data);
-                          if (!decoded) return null;
-                          return (
-                            <p className="font-mono text-xs text-warning">
-                              decoded: {decoded.name}(
-                              {decoded.args.map((arg, argIndex) => (
-                                <span key={arg.label}>
-                                  {argIndex > 0 ? ", " : ""}
-                                  {arg.label}=<span className="text-base-content/85">{arg.value}</span>
-                                </span>
-                              ))}
-                              )
-                            </p>
-                          );
-                        })()}
-                        <p className="break-all font-mono text-[10px] text-base-content/40">data: {call.data}</p>
-                      </div>
-                    ) : null}
-                    {steps[index]?.hash ? (
-                      <p className="mt-1 break-all font-mono text-xs text-base-content/55">tx: {steps[index].hash}</p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-base-content/60">
-                {isFeedbackBonusStep
-                  ? "Feedback Bonus funding is waiting for a transaction plan."
-                  : "Prepare this handoff to sign staged images and fetch the wallet transaction calls."}
-              </p>
-            )}
+            {progressLabel ? <p className="mt-4 text-sm text-base-content/60">{progressLabel}</p> : null}
 
             {handoff.publicUrl ? (
               <Link className="btn btn-outline btn-sm mt-4" href={handoff.publicUrl}>
