@@ -612,6 +612,30 @@ contract GovernanceTest is Test {
         assertEq(governor.proposalThreshold(), thresholdBefore);
     }
 
+    function test_GovernorAllowsQuorumNumeratorAtCap() public {
+        _executeSingleCallProposal(
+            address(governor),
+            abi.encodeWithSignature("updateQuorumNumerator(uint256)", governor.MAX_QUORUM_NUMERATOR()),
+            "Update quorum numerator at cap",
+            false
+        );
+
+        assertEq(governor.quorumNumerator(), governor.MAX_QUORUM_NUMERATOR());
+    }
+
+    function test_GovernorRejectsTooHighQuorumNumerator() public {
+        uint256 numeratorBefore = governor.quorumNumerator();
+
+        _executeSingleCallProposal(
+            address(governor),
+            abi.encodeWithSignature("updateQuorumNumerator(uint256)", governor.MAX_QUORUM_NUMERATOR() + 1),
+            "Reject too high quorum numerator",
+            true
+        );
+
+        assertEq(governor.quorumNumerator(), numeratorBefore);
+    }
+
     function test_GovernorRejectsTooHighVotingDelay() public {
         uint256 delayBefore = governor.votingDelay();
 

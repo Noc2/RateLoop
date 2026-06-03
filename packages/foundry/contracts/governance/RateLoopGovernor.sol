@@ -48,6 +48,8 @@ contract RateLoopGovernor is
     uint256 public constant MINIMUM_QUORUM = 100_000 * 1e6;
     /// @notice Highest threshold governance may set, preventing self-bricked proposal creation.
     uint256 public constant MAX_PROPOSAL_THRESHOLD = MINIMUM_QUORUM;
+    /// @notice Highest quorum numerator governance may set, preventing quorum self-bricking.
+    uint256 public constant MAX_QUORUM_NUMERATOR = 20;
     /// @notice Highest voting delay governance may set (~1 week on World Chain blocks).
     uint48 public constant MAX_VOTING_DELAY_BLOCKS = 604_800;
     /// @notice Voting period bounds governance may set (~1 day to ~30 days on World Chain blocks).
@@ -75,6 +77,7 @@ contract RateLoopGovernor is
     error InvalidExcludedHolder();
     error ProposalCooldownActive(address proposer, uint256 nextProposalBlock);
     error InvalidProposalThreshold();
+    error InvalidQuorumNumerator();
     error InvalidGovernanceTiming();
 
     event ExcludedHolderReplaced(address indexed oldHolder, address indexed newHolder);
@@ -168,6 +171,11 @@ contract RateLoopGovernor is
             revert InvalidProposalThreshold();
         }
         super._setProposalThreshold(newProposalThreshold);
+    }
+
+    function _updateQuorumNumerator(uint256 newQuorumNumerator) internal override {
+        if (newQuorumNumerator > MAX_QUORUM_NUMERATOR) revert InvalidQuorumNumerator();
+        super._updateQuorumNumerator(newQuorumNumerator);
     }
 
     /// @notice Dynamic quorum: 4% of circulating supply (total minus excluded protocol-controlled balances)
