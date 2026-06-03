@@ -31,6 +31,10 @@ function address(index) {
   return `0x${index.toString(16).padStart(40, "0")}`;
 }
 
+function txHash(index) {
+  return `0x${index.toString(16).padStart(64, "0")}`;
+}
+
 function deploymentAt(deploymentExport, targetAddress) {
   const match = Object.entries(deploymentExport).find(
     ([candidate]) => candidate.toLowerCase() === targetAddress.toLowerCase()
@@ -38,11 +42,16 @@ function deploymentAt(deploymentExport, targetAddress) {
   return match?.[1];
 }
 
-function successfulReceipt(blockNumber = "0xc8", logs = []) {
-  return { blockNumber, logs, status: "0x1" };
+function nextTxHash(transactions) {
+  return txHash(transactions.length + 1);
+}
+
+function successfulReceipt(transactionHash, blockNumber = "0xc8", logs = []) {
+  return { transactionHash, blockNumber, logs, status: "0x1" };
 }
 
 function pushCall(transactions, receipts, contractName, functionName, args, targetAddress) {
+  const hash = nextTxHash(transactions);
   transactions.push({
     transactionType: "CALL",
     contractName,
@@ -50,11 +59,13 @@ function pushCall(transactions, receipts, contractName, functionName, args, targ
     function: functionName,
     arguments: args,
     input: "0x12345678",
+    hash,
   });
-  receipts.push(successfulReceipt());
+  receipts.push(successfulReceipt(hash));
 }
 
 function pushProtocolConfigProxyCall(transactions, receipts, protocolConfigProxy, selector) {
+  const hash = nextTxHash(transactions);
   transactions.push({
     transactionType: "CALL",
     contractName: "TransparentUpgradeableProxy",
@@ -62,8 +73,9 @@ function pushProtocolConfigProxyCall(transactions, receipts, protocolConfigProxy
     function: null,
     arguments: null,
     input: `${selector}${"0".repeat(64)}`,
+    hash,
   });
-  receipts.push(successfulReceipt());
+  receipts.push(successfulReceipt(hash));
 }
 
 function removeRequiredCall(transactions, receipts, predicate) {
@@ -82,25 +94,29 @@ function completeBroadcast() {
 
   for (const contractName of directNames) {
     const contractAddress = address(nextAddress++);
+    const hash = nextTxHash(transactions);
     directAddressByName.set(contractName, contractAddress);
     transactions.push({
       transactionType: "CREATE",
       contractName,
       contractAddress,
+      hash,
     });
-    receipts.push({ blockNumber: "0x64", logs: [] });
+    receipts.push(successfulReceipt(hash, "0x64"));
   }
 
   for (const contractName of proxyNames) {
     const proxyAddress = address(nextAddress++);
     const adminAddress = address(nextAddress++);
+    const hash = nextTxHash(transactions);
     proxyAddressByName.set(contractName, proxyAddress);
     transactions.push({
       transactionType: "CREATE",
       contractName: "TransparentUpgradeableProxy",
       contractAddress: proxyAddress,
+      hash,
     });
-    receipts.push(successfulReceipt("0xc8", [{ address: proxyAddress }, { address: adminAddress }]));
+    receipts.push(successfulReceipt(hash, "0xc8", [{ address: proxyAddress }, { address: adminAddress }]));
   }
 
   const defaultAdminRole =
@@ -280,7 +296,50 @@ test("reconstructDeploymentExportFromBroadcast rejects missing protocol oracle c
   );
 });
 
+test("reconstructDeploymentExportFromBroadcast rejects missing receipts", () => {
+  const { transactions, receipts } = completeBroadcast();
+  const minterRenounceIndex = transactions.findIndex(
+    (tx) =>
+      tx.contractName === "LoopReputation" &&
+      tx.function === "renounceRole(bytes32,address)" &&
+      tx.arguments?.[0] === "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6"
+  );
+  assert.notEqual(minterRenounceIndex, -1, "test fixture should contain required call");
+  receipts.splice(minterRenounceIndex, 1);
+
+  assert.throws(
+    () =>
+      reconstructDeploymentExportFromBroadcast(
+        { transactions, receipts },
+        "worldchainSepolia"
+      ),
+    /Missing receipt for transaction/
+  );
+});
+
+test("reconstructDeploymentExportFromBroadcast rejects failed receipts", () => {
+  const { transactions, receipts } = completeBroadcast();
+  const minterRenounceIndex = transactions.findIndex(
+    (tx) =>
+      tx.contractName === "LoopReputation" &&
+      tx.function === "renounceRole(bytes32,address)" &&
+      tx.arguments?.[0] === "0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6"
+  );
+  assert.notEqual(minterRenounceIndex, -1, "test fixture should contain required call");
+  receipts[minterRenounceIndex] = { ...receipts[minterRenounceIndex], status: "0x0" };
+
+  assert.throws(
+    () =>
+      reconstructDeploymentExportFromBroadcast(
+        { transactions, receipts },
+        "worldchainSepolia"
+      ),
+    /failed/
+  );
+});
+
 test("reconstructDeploymentExportFromBroadcast rejects partial proxy runs", () => {
+  const hash = txHash(1);
   assert.throws(
     () =>
       reconstructDeploymentExportFromBroadcast(
@@ -290,12 +349,15 @@ test("reconstructDeploymentExportFromBroadcast rejects partial proxy runs", () =
               transactionType: "CREATE",
               contractName: "TransparentUpgradeableProxy",
               contractAddress: address(1),
+              hash,
             },
           ],
           receipts: [
             {
+              transactionHash: hash,
               blockNumber: "0x1",
               logs: [{ address: address(1) }, { address: address(2) }],
+              status: "0x1",
             },
           ],
         },

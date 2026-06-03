@@ -258,12 +258,57 @@ function txTarget(tx) {
   return tx?.contractAddress || tx?.to || tx?.transaction?.to;
 }
 
-function receiptSucceeded(receipt) {
-  return !receipt || receipt.status === undefined || receipt.status === null || receipt.status === "0x1" || receipt.status === 1;
+function txHash(tx) {
+  return tx?.hash || tx?.transaction?.hash || tx?.transactionHash;
 }
 
-function callMatches(tx, receipt, requirement) {
-  if (tx.transactionType !== "CALL" || !receiptSucceeded(receipt)) return false;
+function normalizeHash(value) {
+  return typeof value === "string" ? value.toLowerCase() : "";
+}
+
+function buildReceiptByTransactionHash(receipts) {
+  const receiptByHash = new Map();
+  for (const [index, receipt] of receipts.entries()) {
+    const receiptHash = normalizeHash(receipt?.transactionHash);
+    if (!receiptHash) {
+      throw new Error(`Receipt ${index} is missing transactionHash`);
+    }
+    if (receiptByHash.has(receiptHash)) {
+      throw new Error(`Duplicate receipt for transaction ${receiptHash}`);
+    }
+    receiptByHash.set(receiptHash, receipt);
+  }
+  return receiptByHash;
+}
+
+function receiptForTransaction(tx, receiptByHash) {
+  const hash = normalizeHash(txHash(tx));
+  if (!hash) {
+    throw new Error(
+      `Broadcast transaction is missing hash for ${tx.contractName || "unknown contract"}`
+    );
+  }
+  const receipt = receiptByHash.get(hash);
+  if (!receipt) {
+    throw new Error(`Missing receipt for transaction ${hash}`);
+  }
+  return receipt;
+}
+
+function receiptSucceeded(receipt) {
+  return receipt.status === "0x1" || receipt.status === 1;
+}
+
+function requireSuccessfulReceipt(tx, receiptByHash) {
+  const receipt = receiptForTransaction(tx, receiptByHash);
+  if (!receiptSucceeded(receipt)) {
+    throw new Error(`Broadcast transaction ${normalizeHash(txHash(tx))} failed`);
+  }
+  return receipt;
+}
+
+function callMatches(tx, receiptByHash, requirement) {
+  if (tx.transactionType !== "CALL") return false;
   if (tx.contractName !== requirement.contractName) return false;
   if (tx.function !== requirement.functionName) return false;
   if (requirement.firstArgument) {
@@ -272,13 +317,14 @@ function callMatches(tx, receipt, requirement) {
       return false;
     }
   }
+  requireSuccessfulReceipt(tx, receiptByHash);
   return true;
 }
 
-function assertRequiredCompletionCalls(transactions, receipts, deployments) {
+function assertRequiredCompletionCalls(transactions, receiptByHash, deployments) {
   const missing = [];
   for (const requirement of REQUIRED_COMPLETION_CALLS) {
-    const count = transactions.filter((tx, index) => callMatches(tx, receipts[index], requirement)).length;
+    const count = transactions.filter((tx) => callMatches(tx, receiptByHash, requirement)).length;
     if (count < (requirement.minCount || 1)) {
       missing.push(requirement.label);
     }
@@ -293,13 +339,14 @@ function assertRequiredCompletionCalls(transactions, receipts, deployments) {
     for (const [label, selector] of PROTOCOL_CONFIG_PROXY_COMPLETION_SELECTORS) {
       const found = transactions.some((tx, index) => {
         const target = txTarget(tx);
-        return (
+        const matches =
           tx.transactionType === "CALL" &&
-          receiptSucceeded(receipts[index]) &&
           typeof target === "string" &&
           target.toLowerCase() === protocolConfigAddress.toLowerCase() &&
-          txInput(tx).toLowerCase().startsWith(selector)
-        );
+          txInput(tx).toLowerCase().startsWith(selector);
+        if (!matches) return false;
+        requireSuccessfulReceipt(tx, receiptByHash);
+        return true;
       });
       if (!found) missing.push(label);
     }
@@ -316,23 +363,27 @@ export function reconstructDeploymentExportFromBroadcast(
 ) {
   const transactions = broadcastData.transactions || [];
   const receipts = broadcastData.receipts || [];
+  const receiptByHash = buildReceiptByTransactionHash(receipts);
   const deployments = {};
   let latestBlockNumber = 0;
   let proxyIndex = 0;
 
-  for (let i = 0; i < transactions.length; i++) {
-    const tx = transactions[i];
-    const receipt = receipts[i];
+  for (const receipt of receipts) {
     latestBlockNumber = Math.max(
       latestBlockNumber,
       parseBlockNumber(receipt?.blockNumber)
     );
+  }
+
+  for (let i = 0; i < transactions.length; i++) {
+    const tx = transactions[i];
 
     if (tx.transactionType !== "CREATE" && tx.transactionType !== "CREATE2") {
       continue;
     }
 
     if (!tx.contractAddress) continue;
+    const receipt = requireSuccessfulReceipt(tx, receiptByHash);
 
     if (tx.contractName === "TransparentUpgradeableProxy") {
       const deploymentName = PROXY_DEPLOYMENT_NAMES[proxyIndex];
@@ -363,7 +414,7 @@ export function reconstructDeploymentExportFromBroadcast(
   if (latestBlockNumber === 0) {
     throw new Error("Latest broadcast has no receipt block numbers");
   }
-  assertRequiredCompletionCalls(transactions, receipts, deployments);
+  assertRequiredCompletionCalls(transactions, receiptByHash, deployments);
 
   deployments.deploymentBlockNumber = latestBlockNumber;
   deployments.deploymentComplete = "true";
