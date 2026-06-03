@@ -9,7 +9,6 @@ import {
   stringToHex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { packVoteRoundContext } from "@rateloop/contracts";
 import {
   ContentRegistryAbi,
   LoopReputationAbi,
@@ -18,6 +17,7 @@ import {
 } from "@rateloop/contracts/abis";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { buildRbtsCommitHash } from "@rateloop/contracts/voting";
+import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 
 const roundCommitPreviewAbi = [
   {

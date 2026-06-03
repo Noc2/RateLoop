@@ -10,7 +10,8 @@
     "./deployedContracts": "./src/deployedContracts.ts",
     "./protocol": "./src/protocol.ts",
     "./types": "./src/types.ts",
-    "./voting": "./src/voting.ts"
+    "./voting": "./src/voting.ts",
+    "./votingCore": "./src/votingCore.ts"
   },
   "scripts": {
     "test": "node ../../scripts/run-node-tests.mjs src",

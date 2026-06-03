@@ -1,7 +1,7 @@
-import { LoopReputationAbi, packVoteRoundContext } from "@rateloop/contracts";
-import { AdvisoryVoteRecorderAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { AdvisoryVoteRecorderAbi, LoopReputationAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 import { createHash } from "crypto";
 import {
   type Abi,

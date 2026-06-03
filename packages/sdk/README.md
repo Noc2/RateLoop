@@ -31,7 +31,7 @@ Framework-specific hooks and UI components should live in a follow-up package ra
 ## Quick Example
 
 ```ts
-import { packVoteRoundContext } from "@rateloop/contracts";
+import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";
 

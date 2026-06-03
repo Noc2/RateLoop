@@ -1,5 +1,4 @@
-import { LoopReputationAbi } from "@rateloop/contracts";
-import { AdvisoryVoteRecorderAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { AdvisoryVoteRecorderAbi, LoopReputationAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { type Abi, type Hex, concatHex, encodeAbiParameters, encodeFunctionData } from "viem";
 
 type EvmAddress = `0x${string}`;

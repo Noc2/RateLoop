@@ -144,7 +144,7 @@ const SdkPage: NextPage = () => {
         package, docs, and public protocol are RateLoop.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{`import { packVoteRoundContext } from "@rateloop/contracts";
+        <code>{`import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 import { createRateLoopClient } from "@rateloop/sdk";
 import { buildCommitVoteParams } from "@rateloop/sdk/vote";`}</code>
       </pre>

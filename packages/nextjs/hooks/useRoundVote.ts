@@ -2,12 +2,13 @@
 
 import { useCallback, useRef, useState } from "react";
 import {
+  AdvisoryVoteRecorderAbi,
+  ContentRegistryAbi,
   LoopReputationAbi,
-  type VoteTlockRuntime,
-  getVoteTlockChainInfo,
-  packVoteRoundContext,
-} from "@rateloop/contracts";
-import { AdvisoryVoteRecorderAbi, ContentRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+  RoundVotingEngineAbi,
+} from "@rateloop/contracts/abis";
+import { type VoteTlockRuntime, getVoteTlockChainInfo } from "@rateloop/contracts/voting";
+import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 import { buildCommitVoteParams, buildStakeAmountWei } from "@rateloop/sdk/vote";
 import { useQueryClient } from "@tanstack/react-query";
 import { type Address } from "viem";

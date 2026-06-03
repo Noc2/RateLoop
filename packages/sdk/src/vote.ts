@@ -6,7 +6,7 @@ import {
   type VoteDrandChainHash,
   type VoteCommitHash,
   type VoteTlockRuntime,
-} from "@rateloop/contracts";
+} from "@rateloop/contracts/voting";
 import { type Address } from "viem";
 
 export interface CommitVoteParams {

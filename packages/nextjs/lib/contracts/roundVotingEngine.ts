@@ -1,8 +1,6 @@
 import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { RoundData } from "~~/types/votingTypes";
 
-export { buildStakeAmountWei, resolveFrontendCode } from "@rateloop/sdk/vote";
-
 export type RoundPhase = "voting" | "settled" | "cancelled" | "tied" | "revealFailed" | "none";
 
 export interface VotingConfig {
@@ -131,6 +129,14 @@ export const DEFAULT_VOTING_CONFIG: VotingConfig = {
   maxVoters: DEFAULT_ROUND_CONFIG.maxVoters,
 };
 const RBTS_MIN_REVEALS = 3;
+
+export function buildStakeAmountWei(stakeAmount: number): bigint {
+  return BigInt(Math.round(stakeAmount * 1e6));
+}
+
+export function resolveFrontendCode(frontendCode?: `0x${string}`, defaultFrontendCode?: `0x${string}`): `0x${string}` {
+  return frontendCode ?? defaultFrontendCode ?? "0x0000000000000000000000000000000000000000";
+}
 
 function toBigInt(value: unknown, fallback = 0n): bigint {
   if (typeof value === "bigint") return value;
