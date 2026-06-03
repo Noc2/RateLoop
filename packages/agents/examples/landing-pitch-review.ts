@@ -93,7 +93,7 @@ export async function main() {
       ttlMs: 30 * 60 * 1000,
     });
     console.log(
-      "Open this browser signing link to review, fund, and submit the ask:",
+      "Open this browser wallet approval link to review, fund, and submit the ask:",
       signingIntent.signingUrl,
     );
     return;
@@ -110,7 +110,7 @@ export async function main() {
       .filter(Boolean);
     if (hashes.length === 0) {
       console.log(
-        "Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES. For human wallets, prefer the browser signing link flow instead.",
+        "Execute transactionPlan.calls from walletAddress, then rerun with RATELOOP_CONFIRM_TX_HASHES. For human wallets, prefer the browser wallet approval flow instead.",
       );
       return;
     }

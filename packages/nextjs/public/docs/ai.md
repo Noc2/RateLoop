@@ -39,7 +39,7 @@ When the user controls the wallet, prefer a browser ask handoff instead of pasti
 3. Call `rateloop_quote_question` and show the cost plus `legalNotice`.
 4. Call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`.
 5. Give the user the returned `/agent/handoff/{handoffId}#token=...` link so they can connect the wallet, review, sign image uploads if needed, and approve funding/submission.
-6. Poll `rateloop_get_handoff_status`, then fetch `rateloop_get_result`.
+6. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then fetch `rateloop_get_result`.
 
 Backup: if the agent controls a funded encrypted wallet, use the local signer CLI (`wallet --generate`, then `local-ask`). Use raw MCP wallet calls only when the host can sign and execute calls cleanly.
 

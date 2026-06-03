@@ -53,7 +53,7 @@ const agentSteps = [
   "For a local or generated image, keep the bytes for generatedImages instead of asking the user to host it.",
   "Call rateloop_quote_question to price the ask before spending.",
   "Call rateloop_create_ask_handoff_link with the same payload plus optional generatedImages, then share the returned handoffUrl.",
-  "Poll rateloop_get_handoff_status, then read rateloop_get_result.",
+  "Poll rateloop_get_handoff_status, then rateloop_get_question_status, then read rateloop_get_result.",
 ] as const;
 
 export const metadata = {

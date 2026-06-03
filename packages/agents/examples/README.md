@@ -4,14 +4,14 @@ These examples keep one loop stable across runtimes:
 
 1. quote before spending
 2. use a stable `clientRequestId`
-3. prefer a browser signing link for human wallets, or a local signer for agent-controlled wallets
-4. wait through a signed callback or poll status
+3. prefer a browser handoff link for human wallets, or a local signer for agent-controlled wallets
+4. wait through a signed callback or poll handoff/question status
 5. fetch the structured result
 6. store `publicUrl`, `operationKey`, and the outcome in memory or logs
 
 ## Files
 
-- `landing-pitch-review.ts`: canonical SDK loop; public wallet mode prints a browser signing link by default
+- `landing-pitch-review.ts`: canonical SDK loop; public wallet mode prints a browser wallet approval link by default
 - `questions/landing-pitch-review.json`: generic rating demo for landing-page clarity
 - `questions/ai-website-feedback-service.json`: canonical AI website generation plus human feedback market-interest ask
 - `questions/generated-mockup-feedback.json`: single generated mockup feedback ask that uses an uploaded RateLoop `imageUrl`
@@ -56,22 +56,23 @@ leave reproducible failure notes in feedback.
 When comparing options, do not ask one multiple-choice question. Use `ranked_option_member` or
 `pairwise_output_preference`, submit one question per option in the same bundle, then compare the settled ratings.
 
-When the artifact is an AI-generated mockup or screenshot, upload image bytes to RateLoop first. Do not ask the user to
-host the image elsewhere. Managed agents call `rateloop_upload_image` directly; public wallet-mode agents call
-`rateloop_prepare_image_upload`, get the wallet signature, then call `rateloop_upload_image`. If wallet message signing
-is awkward in chat, use the Ask page upload/signing UI instead of pasting raw challenges. Use the returned `imageUrl` in
-`question.imageUrls`; see `generated-mockup-upload.md` and `questions/generated-mockup-feedback.json`.
+When the artifact is an AI-generated mockup or screenshot, keep the bytes for `generatedImages` in the browser handoff.
+Do not ask the user to host the image elsewhere. Managed agents can call `rateloop_upload_image` directly; public
+wallet-mode raw uploads use `rateloop_prepare_image_upload`, a wallet signature, then `rateloop_upload_image` only when
+the host can present wallet signing cleanly. If wallet message signing is awkward in chat, use the Ask page
+upload/signing UI instead of pasting raw challenges. See `generated-mockup-upload.md` and
+`questions/generated-mockup-feedback.json`.
 
 ## First Funded Ask
 
 Before the first paid ask, fund the configured `walletAddress` with World Chain USDC. Quote with
-`rateloop_quote_question`, then prefer a browser signing link for human wallets:
+`rateloop_quote_question`, then prefer a browser handoff link for human wallets:
 
 ```text
-POST /api/agent/signing-intents
+rateloop_create_ask_handoff_link
 ```
 
-Share the returned `/agent/sign/{intentId}#token=...` URL. Use `local-ask` when the agent controls a funded encrypted
+Share the returned `/agent/handoff/{handoffId}#token=...` URL. Use `local-ask` when the agent controls a funded encrypted
 wallet. Use raw MCP `transactionPlan.calls` only when the host can execute or present wallet calls cleanly. Example
 bounty amounts are atomic USDC units. Set `bountyStartBy` to the latest acceptable first-round start timestamp, then set
 `bountyWindowSeconds` and `feedbackWindowSeconds` to the active windows after that first round starts.

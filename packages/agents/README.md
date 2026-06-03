@@ -5,10 +5,10 @@ Agent-facing examples, templates, question guidance, and CLI helpers for asking 
 This package is for the moment an agent should ask instead of guess. The default user-friendly loop is:
 
 1. create or collect public context
-2. upload generated/local image bytes to RateLoop when needed
+2. keep generated/local image bytes for `generatedImages` when needed
 3. quote before spending
-4. hand a human wallet a browser signing link, or use a local signer for agent-controlled wallets
-5. poll status or wait for a callback
+4. hand a human wallet a browser handoff link, or use a local signer for agent-controlled wallets
+5. poll handoff status, then question status, or wait for a callback
 6. read the structured result and store the public URL
 
 ## Accountless Public Flow
@@ -25,9 +25,9 @@ hard-coded:
 - USDC bounty, `maxPaymentAmount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional payout-only `bountyEligibility`
 - optional MCP `feedbackBonus` in USDC or LREP for single-question asks where written analysis is valuable; include USDC bonuses in `maxPaymentAmount`, approve LREP bonuses through wallet calls, and remember awards remain open for at least 24 hours after settlement
 - existing content rating, when the user gives a RateLoop content id or URL and wants the agent to participate as a rater
-- execution path: browser signing link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
+- execution path: browser handoff link first, local signer second, raw MCP wallet calls only when the host can execute or present them cleanly
 
-`/ask?tab=agent` is the user-control surface for funding, copied config, managed policy setup, image upload, and browser signing handoff. It is not a prerequisite for public wallet-funded asks, but it is the friendliest fallback when chat-based wallet message signing would be awkward.
+`/ask?tab=agent` is the user-control surface for funding, copied config, managed policy setup, image upload, and browser handoff. It is not a prerequisite for public wallet-funded asks, but it is the friendliest fallback when chat-based wallet message signing would be awkward.
 
 The RateLoop account and managed bearer-token path are optional. Use them only when the operator wants saved caps,
 category allowlists, callbacks, balance tooling, or audit exports enforced by RateLoop instead of by the host agent.
@@ -41,7 +41,7 @@ yarn agents:templates
 # Validate a focused example ask.
 yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.json
 
-# Quote through MCP, then prefer a browser signing link for user wallets.
+# Quote through MCP, then prefer a browser handoff link for user wallets.
 export RATELOOP_AGENT_WALLET_ADDRESS=0x...
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
 
@@ -61,12 +61,12 @@ The CLI reads `.env` from the current process environment. For the default walle
 ## First Funded Ask
 
 1. Fund the user wallet or local signer wallet with World Chain USDC.
-2. Upload generated/local image bytes to RateLoop before quoting, if visual context is needed.
+2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
 3. Quote with `rateloop_quote_question` before reserving spend.
-4. For a human wallet, create `POST /api/agent/signing-intents` with the same ask payload and share the returned `/agent/sign/{intentId}#token=...` URL.
+4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL.
 5. For an agent-controlled wallet, run `local-ask` with the encrypted local signer.
 6. Use raw MCP `rateloop_ask_humans` wallet calls only when the host can execute or present them cleanly.
-7. Poll `rateloop_get_question_status` or read `rateloop_get_result` after settlement.
+7. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then read `rateloop_get_result` after settlement.
 
 Managed agents can also call `rateloop_get_agent_balance` and can attach signed callbacks, but those controls require a saved policy and bearer token.
 
@@ -81,11 +81,12 @@ Do not send plaintext rating direction, predicted crowd share, or salt to hosted
 
 ## Image Context
 
-For mockups, screenshots, generated images, or design options, upload image bytes to RateLoop before quoting. Managed
-bearer-token agents call `rateloop_upload_image`; public wallet-mode agents call `rateloop_prepare_image_upload`, get the
-wallet signature, then call `rateloop_upload_image`. The Ask page provides the same moderated upload path and is the
-fallback when chat-based wallet message signing would be too clunky. RateLoop returns an `imageUrl` for
-`question.imageUrls`.
+For mockups, screenshots, generated images, or design options in the normal human-wallet flow, pass image bytes as
+`generatedImages` to `rateloop_create_ask_handoff_link`; the browser handoff signs, uploads, moderates, and attaches the
+approved RateLoop image URLs before funding the ask. Managed bearer-token agents can call `rateloop_upload_image`
+directly. Public wallet-mode raw uploads use `rateloop_prepare_image_upload`, a wallet signature, then
+`rateloop_upload_image` only when the host can present wallet signing cleanly. The Ask page provides the same moderated
+upload path and is the fallback when chat-based wallet message signing would be too clunky.
 
 Treat uploaded images as public ask context. Ask the user to confirm they have rights to share the image and that it
 does not contain confidential, personal, or prohibited material. Do not pass arbitrary HTTPS image URLs in `imageUrls`;

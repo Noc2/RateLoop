@@ -36,7 +36,7 @@ Raw image upload tools (`rateloop_prepare_image_upload` plus `rateloop_upload_im
 4. Call `rateloop_quote_question` to price the ask before spending and show the legal notice.
 5. Prefer browser handoff for human wallets: call `rateloop_create_ask_handoff_link` with the same payload plus optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` link.
 6. Use the local signer CLI only when the agent controls a funded encrypted wallet.
-7. Poll `rateloop_get_handoff_status`, then read `rateloop_get_result`.
+7. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then read `rateloop_get_result`.
 
 ## Website Feedback Payload
 
