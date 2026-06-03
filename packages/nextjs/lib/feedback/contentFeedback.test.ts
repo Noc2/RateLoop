@@ -528,6 +528,73 @@ test("does not lease cancelled round feedback for on-chain reveal", async () => 
   assert.equal(candidates.length, 0);
 });
 
+test("defers malformed reveal metadata failure until the round is revealable", async () => {
+  const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
+  const settledContext = contentFeedback.buildContentFeedbackRoundContext([
+    { roundId: "8", state: ROUND_STATE.Settled },
+  ]);
+  const payload = contentFeedback.normalizeContentFeedbackInput({
+    address: WALLET,
+    contentId: "34",
+    feedbackType: "vote_rationale",
+    body: "This legacy feedback row has no on-chain reveal payload yet.",
+  });
+  assert.equal(payload.ok, true);
+  if (!payload.ok) return;
+
+  const added = await contentFeedback.addContentFeedback(
+    prepareFeedback(payload.payload, activeContext),
+    activeContext,
+  );
+  await dbModule.dbClient.execute(`
+    UPDATE content_feedback
+    SET feedback_hash = NULL,
+        commit_key = NULL,
+        client_nonce = NULL,
+        updated_at = '2026-06-03T05:02:30.000Z'
+    WHERE id = ${added.id}
+  `);
+
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => ({ content: { openRound: { roundId: "8" } } }) as any,
+    getAllRounds: async () => [buildRoundItem({ contentId: "34", roundId: "8", state: ROUND_STATE.Open })],
+  });
+  const activeCandidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
+    chainId: CHAIN_ID,
+    limit: 5,
+    now: new Date("2026-06-03T05:03:00.000Z"),
+  });
+  assert.equal(activeCandidates.length, 0);
+
+  const activeResult = await contentFeedback.listContentFeedback({
+    contentId: "34",
+    context: activeContext,
+    viewerAddress: WALLET,
+  });
+  assert.equal(activeResult.items[0]?.onchainRevealStatus, "pending");
+  assert.equal(activeResult.items[0]?.onchainRevealError, null);
+
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => ({ content: { openRound: null } }) as any,
+    getAllRounds: async () => [buildRoundItem({ contentId: "34", roundId: "8", state: ROUND_STATE.Settled })],
+    resolveOnchainOpenRoundId: async () => null,
+  });
+  const settledCandidates = await contentFeedback.leaseContentFeedbackRevealCandidates({
+    chainId: CHAIN_ID,
+    limit: 5,
+    now: new Date("2026-06-03T05:04:00.000Z"),
+  });
+  assert.equal(settledCandidates.length, 0);
+
+  const settledResult = await contentFeedback.listContentFeedback({
+    contentId: "34",
+    context: settledContext,
+    viewerAddress: WALLET,
+  });
+  assert.equal(settledResult.items[0]?.onchainRevealStatus, "failed");
+  assert.equal(settledResult.items[0]?.onchainRevealError, "Feedback is missing on-chain reveal metadata");
+});
+
 test("records reveal success and retryable failure state", async () => {
   const activeContext = contentFeedback.buildContentFeedbackRoundContext([{ roundId: "8", state: ROUND_STATE.Open }]);
   const settledOverrides = {

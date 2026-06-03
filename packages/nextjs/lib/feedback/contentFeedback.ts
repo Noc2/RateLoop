@@ -855,8 +855,8 @@ export async function leaseContentFeedbackRevealCandidates(
   for (const row of rows) {
     if (candidates.length >= limit) break;
 
-    const candidateShape = mapRevealCandidate(row);
-    if (!candidateShape) {
+    const hasRevealTarget = Boolean(row.roundId && typeof row.chainId === "number");
+    if (!hasRevealTarget) {
       await recordContentFeedbackRevealFailure({
         id: row.id,
         error: "Feedback is missing on-chain reveal metadata",
@@ -868,6 +868,17 @@ export async function leaseContentFeedbackRevealCandidates(
 
     const context = await resolveContentFeedbackRoundContext(row.contentId, row.chainId ?? undefined);
     if (!isFeedbackRevealable(row, context)) {
+      continue;
+    }
+
+    const candidateShape = mapRevealCandidate(row);
+    if (!candidateShape) {
+      await recordContentFeedbackRevealFailure({
+        id: row.id,
+        error: "Feedback is missing on-chain reveal metadata",
+        retryable: false,
+        now,
+      });
       continue;
     }
 
