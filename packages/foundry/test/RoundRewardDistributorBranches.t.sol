@@ -241,8 +241,14 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         RoundLib.Round memory r2 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         if (r2.thresholdReachedAt > 0) {
-            vm.roll(block.number + 1);
+            uint256 seedBlock = block.number + 1;
+            vm.roll(seedBlock);
             try votingEngine.settleRound(contentId, roundId) { } catch { }
+            RoundLib.Round memory r3 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+            if (r3.state == RoundLib.RoundState.Open) {
+                vm.roll(seedBlock + 1);
+                try votingEngine.settleRound(contentId, roundId) { } catch { }
+            }
         }
     }
 
