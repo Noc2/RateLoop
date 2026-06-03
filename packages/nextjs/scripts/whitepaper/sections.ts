@@ -585,8 +585,8 @@ export const SECTIONS: Section[] = [
               rows: [
                 ["Proposal threshold", protocolDocFacts.governanceProposalThresholdLabel],
                 ["Quorum", protocolDocFacts.governanceQuorumLabel],
-                ["Voting delay", "~1 day (86,400 blocks)"],
-                ["Voting period", "~1 week (604,800 blocks)"],
+                ["Voting delay", "~1 day (43,200 blocks on the 2s World Chain clock)"],
+                ["Voting period", "~1 week (302,400 blocks on the 2s World Chain clock)"],
                 ["Timelock delay", protocolDocFacts.governanceTimelockDelayLabel],
                 ["Governance lock", "7 days transfer-locked after voting or proposing"],
               ],

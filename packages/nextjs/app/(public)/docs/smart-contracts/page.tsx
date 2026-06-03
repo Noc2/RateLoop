@@ -653,11 +653,11 @@ const SmartContracts: NextPage = () => {
           <tbody>
             <tr>
               <td>Voting delay</td>
-              <td>~1 day (86,400 blocks on the 1s World Chain clock)</td>
+              <td>~1 day (43,200 blocks on the 2s World Chain clock)</td>
             </tr>
             <tr>
               <td>Voting period</td>
-              <td>~1 week (604,800 blocks on the 1s World Chain clock)</td>
+              <td>~1 week (302,400 blocks on the 2s World Chain clock)</td>
             </tr>
             <tr>
               <td>Proposal threshold</td>
