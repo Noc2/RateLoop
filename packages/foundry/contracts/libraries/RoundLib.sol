@@ -32,7 +32,7 @@ library RoundLib {
     }
 
     struct Round {
-        uint48 startTime; // When first vote was committed
+        uint48 startTime; // When round timing was anchored (by openRound or first commit)
         RoundState state;
         uint16 voteCount; // Total commits across all epochs
         uint16 revealedCount; // Total revealed votes
