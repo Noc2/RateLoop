@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress } from "viem";
@@ -24,6 +25,10 @@ import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHead
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { DEFAULT_QUESTION_ROUND_CONFIG, formatDurationLabel } from "~~/lib/questionRoundConfig";
 import { notification } from "~~/utils/scaffold-eth";
+
+const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(module => module.ShareModal), {
+  ssr: false,
+});
 
 type JsonRecord = Record<string, unknown>;
 
@@ -84,6 +89,11 @@ type PrepareResponse = Handoff & {
   uploadChallenges?: UploadChallenge[];
 };
 
+type CompleteResponse = Handoff & {
+  ask?: JsonRecord | null;
+  nextAction?: string;
+};
+
 type ExecutionStep = {
   hash?: string;
   status: "pending" | "sent" | "confirmed";
@@ -110,6 +120,13 @@ type RoundSettings = {
   maxDuration: bigint;
   maxVoters: bigint;
   minVoters: bigint;
+};
+
+type SubmittedContentModalState = {
+  description: string;
+  id: bigint;
+  lastActivityAt: string | null;
+  title: string;
 };
 
 function sameAddress(left: string | undefined | null, right: string | undefined | null) {
@@ -156,6 +173,20 @@ function readPositiveBigInt(value: unknown) {
   if (!/^\d+$/.test(rawValue)) return null;
   const parsed = BigInt(rawValue);
   return parsed > 0n ? parsed : null;
+}
+
+function readSubmittedContentId(source: JsonRecord | null) {
+  if (!source) return null;
+  const directContentId = readPositiveBigInt(source.contentId);
+  if (directContentId !== null) return directContentId;
+
+  const contentIds = source.contentIds;
+  if (!Array.isArray(contentIds)) return null;
+  for (const contentId of contentIds) {
+    const parsedContentId = readPositiveBigInt(contentId);
+    if (parsedContentId !== null) return parsedContentId;
+  }
+  return null;
 }
 
 function readFirstPositiveBigInt(source: JsonRecord | null, keys: string[], fallback: bigint) {
@@ -222,6 +253,23 @@ function readQuestionTitle(handoff: Handoff | null) {
   if (questions.length === 1) return readString(questions[0].title) || "RateLoop ask";
   if (questions.length > 1) return `${questions.length} question bundle`;
   return "RateLoop ask";
+}
+
+function readSubmittedContentForShare(handoff: Handoff | null, ask: unknown): SubmittedContentModalState | null {
+  const contentId = readSubmittedContentId(isJsonRecord(ask) ? ask : null);
+  if (contentId === null) return null;
+
+  const questions = readQuestionSummaries(handoff);
+  const primaryQuestion = questions[0];
+  return {
+    description:
+      questions.length > 1
+        ? `${questions.length} question bundle. Answer all questions to qualify for the bounty.`
+        : (primaryQuestion?.description ?? ""),
+    id: contentId,
+    lastActivityAt: new Date().toISOString(),
+    title: primaryQuestion?.title || readQuestionTitle(handoff),
+  };
 }
 
 function readBounty(handoff: Handoff | null) {
@@ -298,6 +346,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [steps, setSteps] = useState<ExecutionStep[]>([]);
   const [imageSignatureSteps, setImageSignatureSteps] = useState<ImageSignatureStep[]>([]);
+  const [submittedContent, setSubmittedContent] = useState<SubmittedContentModalState | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -487,14 +536,23 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           headers: { "content-type": "application/json" },
           method: "POST",
         });
-        const body = (await response.json()) as Handoff | { error?: string; message?: string };
+        const body = (await response.json()) as CompleteResponse | { error?: string; message?: string };
         if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
-        const nextHandoff = body as Handoff;
+        const nextHandoff = body as CompleteResponse;
         setHandoff(current => ({
           ...nextHandoff,
           publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? null,
         }));
         setSteps([]);
+        if (
+          !isExecutingFeedbackBonus &&
+          (nextHandoff.status === "submitted" || nextHandoff.status === "feedback_bonus_prepared")
+        ) {
+          const nextSubmittedContent = readSubmittedContentForShare(targetHandoff, nextHandoff.ask);
+          if (nextSubmittedContent) {
+            setSubmittedContent(nextSubmittedContent);
+          }
+        }
         if (nextHandoff.status === "feedback_bonus_prepared") {
           notification.success("Ask submitted. Feedback Bonus funding is ready.");
         } else if (isExecutingFeedbackBonus) {
@@ -535,6 +593,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
     await executeHandoff(executableHandoff);
   }, [address, connectedMismatch, executeHandoff, handoff, isFeedbackBonusStep, prepareHandoff]);
+
+  const handleCloseShareModal = useCallback(() => {
+    setSubmittedContent(null);
+  }, []);
 
   const submitLabel = (() => {
     if (switchingChainId !== null) return "Switching...";
@@ -823,6 +885,16 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             ) : null}
           </section>
         </>
+      ) : null}
+
+      {submittedContent ? (
+        <ShareModal
+          contentId={submittedContent.id}
+          title={submittedContent.title}
+          description={submittedContent.description}
+          lastActivityAt={submittedContent.lastActivityAt}
+          onClose={handleCloseShareModal}
+        />
       ) : null}
     </AppPageShell>
   );
