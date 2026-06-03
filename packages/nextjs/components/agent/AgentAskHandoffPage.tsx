@@ -1575,11 +1575,11 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold">{isFeedbackBonusStep ? "Fund Feedback Bonus" : "Submit Ask"}</h2>
-                <p className="mt-1 text-sm text-base-content/60">
-                  {isFeedbackBonusStep
-                    ? "The question is submitted. Fund the optional Feedback Bonus with the connected wallet."
-                    : "The connected wallet signs image uploads first, then funds and submits the ask."}
-                </p>
+                {isFeedbackBonusStep ? (
+                  <p className="mt-1 text-sm text-base-content/60">
+                    The question is submitted. Fund the optional Feedback Bonus with the connected wallet.
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
