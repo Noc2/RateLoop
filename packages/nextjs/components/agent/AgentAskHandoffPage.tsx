@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -22,12 +22,15 @@ import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
+import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { formatSubmissionRewardAmount, parseSubmissionRewardAmount } from "~~/lib/questionRewardPools";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
   DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS,
+  QUESTION_ROUND_MAX_EPOCH_COUNT,
   formatDurationLabel,
+  getQuestionRoundMaxDurationForEpoch,
   isQuestionRoundMaxDurationValidForEpoch,
 } from "~~/lib/questionRoundConfig";
 import { notification } from "~~/utils/scaffold-eth";
@@ -158,6 +161,45 @@ type SubmittedContentModalState = {
   lastActivityAt: string | null;
   title: string;
 };
+
+const SECONDS_PER_MINUTE = 60;
+const ROUND_BLIND_MINUTE_BOUNDS = {
+  min: Math.ceil(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minEpochDuration / SECONDS_PER_MINUTE),
+  max: Math.max(1, Math.floor(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxEpochDuration / SECONDS_PER_MINUTE)),
+};
+const ROUND_MIN_VOTER_BOUNDS = {
+  min: DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minSettlementVoters,
+  max: DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxSettlementVoters,
+};
+const ROUND_MAX_VOTER_BOUNDS = {
+  min: DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minVoterCap,
+  max: DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxVoterCap,
+};
+
+const BOUNTY_AMOUNT_TOOLTIP =
+  "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
+const BLIND_MINUTES_TOOLTIP = `Private response window before reveal/open voting. Must be ${formatDurationLabel(
+  DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minEpochDuration,
+)}-${formatDurationLabel(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxEpochDuration)}.`;
+const MAX_MINUTES_TOOLTIP = `Total round duration. It must be at least the blind window, no more than ${formatDurationLabel(
+  DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxRoundDuration,
+)}, and can span at most ${QUESTION_ROUND_MAX_EPOCH_COUNT.toLocaleString()} blind phases.`;
+const MIN_VOTERS_TOOLTIP = `Eligible revealed voters required before a round can settle. Must be ${ROUND_MIN_VOTER_BOUNDS.min}-${ROUND_MIN_VOTER_BOUNDS.max}.`;
+const MAX_VOTERS_TOOLTIP = `Per-round voter cap. Must be ${ROUND_MAX_VOTER_BOUNDS.min}-${ROUND_MAX_VOTER_BOUNDS.max} and cannot be below min voters.`;
+
+function DraftFieldLabel({ children, htmlFor, tooltip }: { children: ReactNode; htmlFor: string; tooltip: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <label
+        htmlFor={htmlFor}
+        className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45"
+      >
+        {children}
+      </label>
+      <InfoTooltip text={tooltip} position="top" className="text-base-content/45" />
+    </div>
+  );
+}
 
 function sameAddress(left: string | undefined | null, right: string | undefined | null) {
   return Boolean(left && right && left.toLowerCase() === right.toLowerCase());
@@ -360,8 +402,58 @@ function parsePositiveInteger(value: string, fieldName: string) {
   return parsed;
 }
 
+function normalizeWholeNumberInput(value: string): string | null {
+  if (value === "" || /^\d+$/.test(value)) {
+    return value;
+  }
+
+  return null;
+}
+
+function normalizeUsdcAmountInput(value: string): string | null {
+  if (value === "" || /^[\d,]*(?:\.\d{0,6})?$/.test(value)) {
+    return value;
+  }
+
+  return null;
+}
+
+function parseWholeNumberInput(value: string): number {
+  const normalized = normalizeWholeNumberInput(value);
+  if (normalized === null || normalized === "") {
+    return 0;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : 0;
+}
+
+function clampWholeNumberInput(value: string, min: number, max: number): string {
+  const parsed = parseWholeNumberInput(value);
+  return String(Math.min(Math.max(parsed, min), max));
+}
+
+function getRoundMaxDurationMinuteBoundsForBlind(blindMinutes: number) {
+  const blindSeconds = Math.max(1, Math.floor(blindMinutes)) * SECONDS_PER_MINUTE;
+  const maxDurationSeconds = getQuestionRoundMaxDurationForEpoch(
+    blindSeconds,
+    DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.maxRoundDuration,
+  );
+  const minSeconds = Math.max(DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS.minRoundDuration, blindSeconds);
+  const min = Math.ceil(minSeconds / SECONDS_PER_MINUTE);
+  const max = Math.max(min, Math.floor(maxDurationSeconds / SECONDS_PER_MINUTE));
+  return { min, max };
+}
+
+function getEffectiveBlindMinutes(value: string): number {
+  const parsed = parseWholeNumberInput(value);
+  return parsed >= ROUND_BLIND_MINUTE_BOUNDS.min && parsed <= ROUND_BLIND_MINUTE_BOUNDS.max
+    ? parsed
+    : ROUND_BLIND_MINUTE_BOUNDS.min;
+}
+
 function parseRoundSecondsFromMinutes(value: string, fieldName: string) {
-  return BigInt(parsePositiveInteger(value, fieldName)) * 60n;
+  return BigInt(parsePositiveInteger(value, fieldName)) * BigInt(SECONDS_PER_MINUTE);
 }
 
 function parseTagsInput(value: string) {
@@ -649,6 +741,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
   const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && isDraftDirty && !isBusy);
+  const draftRoundMaxDurationMinuteBounds = useMemo(
+    () => getRoundMaxDurationMinuteBoundsForBlind(getEffectiveBlindMinutes(draftForm?.roundBlindMinutes ?? "")),
+    [draftForm?.roundBlindMinutes],
+  );
   const canSubmit = Boolean(
     token &&
       address &&
@@ -685,6 +781,111 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     setDraftForm(current => (current ? { ...current, [field]: value } : current));
     setDraftError(null);
   }, []);
+
+  const updateDraftBountyAmount = useCallback(
+    (value: string) => {
+      const normalizedValue = normalizeUsdcAmountInput(value);
+      if (normalizedValue === null) return;
+
+      updateDraftField("bountyAmount", normalizedValue);
+    },
+    [updateDraftField],
+  );
+
+  const formatDraftBountyAmount = useCallback(() => {
+    setDraftForm(current => {
+      if (!current) return current;
+      const parsedAmount = parseSubmissionRewardAmount(current.bountyAmount);
+      return parsedAmount === null ? current : { ...current, bountyAmount: formatUsdcInput(parsedAmount) };
+    });
+  }, []);
+
+  const updateDraftWholeNumberField = useCallback(
+    (field: "roundBlindMinutes" | "roundMaxDurationMinutes" | "roundMaxVoters" | "roundMinVoters", value: string) => {
+      const normalizedValue = normalizeWholeNumberInput(value);
+      if (normalizedValue === null) return;
+
+      setDraftForm(current => {
+        if (!current) return current;
+        const next = { ...current, [field]: normalizedValue };
+        if (field !== "roundBlindMinutes" || normalizedValue === "") {
+          return next;
+        }
+
+        const maxDurationBounds = getRoundMaxDurationMinuteBoundsForBlind(parseWholeNumberInput(normalizedValue));
+        next.roundMaxDurationMinutes = clampWholeNumberInput(
+          next.roundMaxDurationMinutes,
+          maxDurationBounds.min,
+          maxDurationBounds.max,
+        );
+        return next;
+      });
+      setDraftError(null);
+    },
+    [],
+  );
+
+  const clampDraftWholeNumberField = useCallback(
+    (field: "roundBlindMinutes" | "roundMaxDurationMinutes" | "roundMaxVoters" | "roundMinVoters") => {
+      setDraftForm(current => {
+        if (!current) return current;
+
+        if (field === "roundBlindMinutes") {
+          const roundBlindMinutes = clampWholeNumberInput(
+            current.roundBlindMinutes,
+            ROUND_BLIND_MINUTE_BOUNDS.min,
+            ROUND_BLIND_MINUTE_BOUNDS.max,
+          );
+          const maxDurationBounds = getRoundMaxDurationMinuteBoundsForBlind(parseWholeNumberInput(roundBlindMinutes));
+          return {
+            ...current,
+            roundBlindMinutes,
+            roundMaxDurationMinutes: clampWholeNumberInput(
+              current.roundMaxDurationMinutes,
+              maxDurationBounds.min,
+              maxDurationBounds.max,
+            ),
+          };
+        }
+
+        if (field === "roundMaxDurationMinutes") {
+          const maxDurationBounds = getRoundMaxDurationMinuteBoundsForBlind(
+            getEffectiveBlindMinutes(current.roundBlindMinutes),
+          );
+          return {
+            ...current,
+            roundMaxDurationMinutes: clampWholeNumberInput(
+              current.roundMaxDurationMinutes,
+              maxDurationBounds.min,
+              maxDurationBounds.max,
+            ),
+          };
+        }
+
+        if (field === "roundMinVoters") {
+          return {
+            ...current,
+            roundMinVoters: clampWholeNumberInput(
+              current.roundMinVoters,
+              ROUND_MIN_VOTER_BOUNDS.min,
+              ROUND_MIN_VOTER_BOUNDS.max,
+            ),
+          };
+        }
+
+        return {
+          ...current,
+          roundMaxVoters: clampWholeNumberInput(
+            current.roundMaxVoters,
+            ROUND_MAX_VOTER_BOUNDS.min,
+            ROUND_MAX_VOTER_BOUNDS.max,
+          ),
+        };
+      });
+      setDraftError(null);
+    },
+    [],
+  );
 
   const updateDraftQuestion = useCallback((index: number, patch: Partial<DraftQuestionForm>) => {
     setDraftForm(current => {
@@ -1152,76 +1353,98 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               </div>
 
               <div className="surface-card-nested rounded-lg p-4">
-                <label className="form-control">
-                  <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                <div className="form-control">
+                  <DraftFieldLabel htmlFor="agent-ask-bounty-amount" tooltip={BOUNTY_AMOUNT_TOOLTIP}>
                     Bounty
-                  </span>
+                  </DraftFieldLabel>
                   <input
+                    id="agent-ask-bounty-amount"
                     className="input input-bordered mt-1 w-full"
                     disabled={!canEditDraft}
                     inputMode="decimal"
                     value={draftForm?.bountyAmount ?? ""}
-                    onChange={event => updateDraftField("bountyAmount", event.target.value)}
+                    onBlur={formatDraftBountyAmount}
+                    onChange={event => updateDraftBountyAmount(event.target.value)}
                   />
-                </label>
+                </div>
 
                 <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-base-content/75">
                   <ClockIcon className="h-4 w-4" />
                   <span>Round settings</span>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                  <label className="form-control">
-                    <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                  <div className="form-control">
+                    <DraftFieldLabel htmlFor="agent-ask-round-blind-minutes" tooltip={BLIND_MINUTES_TOOLTIP}>
                       Blind minutes
-                    </span>
+                    </DraftFieldLabel>
                     <input
+                      id="agent-ask-round-blind-minutes"
+                      type="number"
                       className="input input-bordered mt-1 w-full"
                       disabled={!canEditDraft}
                       inputMode="numeric"
-                      min={1}
+                      min={ROUND_BLIND_MINUTE_BOUNDS.min}
+                      max={ROUND_BLIND_MINUTE_BOUNDS.max}
+                      step={1}
                       value={draftForm?.roundBlindMinutes ?? ""}
-                      onChange={event => updateDraftField("roundBlindMinutes", event.target.value)}
+                      onBlur={() => clampDraftWholeNumberField("roundBlindMinutes")}
+                      onChange={event => updateDraftWholeNumberField("roundBlindMinutes", event.target.value)}
                     />
-                  </label>
-                  <label className="form-control">
-                    <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                  </div>
+                  <div className="form-control">
+                    <DraftFieldLabel htmlFor="agent-ask-round-max-minutes" tooltip={MAX_MINUTES_TOOLTIP}>
                       Max minutes
-                    </span>
+                    </DraftFieldLabel>
                     <input
+                      id="agent-ask-round-max-minutes"
+                      type="number"
                       className="input input-bordered mt-1 w-full"
                       disabled={!canEditDraft}
                       inputMode="numeric"
-                      min={1}
+                      min={draftRoundMaxDurationMinuteBounds.min}
+                      max={draftRoundMaxDurationMinuteBounds.max}
+                      step={1}
                       value={draftForm?.roundMaxDurationMinutes ?? ""}
-                      onChange={event => updateDraftField("roundMaxDurationMinutes", event.target.value)}
+                      onBlur={() => clampDraftWholeNumberField("roundMaxDurationMinutes")}
+                      onChange={event => updateDraftWholeNumberField("roundMaxDurationMinutes", event.target.value)}
                     />
-                  </label>
-                  <label className="form-control">
-                    <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                  </div>
+                  <div className="form-control">
+                    <DraftFieldLabel htmlFor="agent-ask-round-min-voters" tooltip={MIN_VOTERS_TOOLTIP}>
                       Min voters
-                    </span>
+                    </DraftFieldLabel>
                     <input
+                      id="agent-ask-round-min-voters"
+                      type="number"
                       className="input input-bordered mt-1 w-full"
                       disabled={!canEditDraft}
                       inputMode="numeric"
-                      min={1}
+                      min={ROUND_MIN_VOTER_BOUNDS.min}
+                      max={ROUND_MIN_VOTER_BOUNDS.max}
+                      step={1}
                       value={draftForm?.roundMinVoters ?? ""}
-                      onChange={event => updateDraftField("roundMinVoters", event.target.value)}
+                      onBlur={() => clampDraftWholeNumberField("roundMinVoters")}
+                      onChange={event => updateDraftWholeNumberField("roundMinVoters", event.target.value)}
                     />
-                  </label>
-                  <label className="form-control">
-                    <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                  </div>
+                  <div className="form-control">
+                    <DraftFieldLabel htmlFor="agent-ask-round-max-voters" tooltip={MAX_VOTERS_TOOLTIP}>
                       Max voters
-                    </span>
+                    </DraftFieldLabel>
                     <input
+                      id="agent-ask-round-max-voters"
+                      type="number"
                       className="input input-bordered mt-1 w-full"
                       disabled={!canEditDraft}
                       inputMode="numeric"
-                      min={1}
+                      min={ROUND_MAX_VOTER_BOUNDS.min}
+                      max={ROUND_MAX_VOTER_BOUNDS.max}
+                      step={1}
                       value={draftForm?.roundMaxVoters ?? ""}
-                      onChange={event => updateDraftField("roundMaxVoters", event.target.value)}
+                      onBlur={() => clampDraftWholeNumberField("roundMaxVoters")}
+                      onChange={event => updateDraftWholeNumberField("roundMaxVoters", event.target.value)}
                     />
-                  </label>
+                  </div>
                 </div>
               </div>
             </div>
