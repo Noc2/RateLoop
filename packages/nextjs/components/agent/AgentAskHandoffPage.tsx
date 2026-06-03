@@ -9,6 +9,7 @@ import { useAccount, useConfig, useSignMessage } from "wagmi";
 import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
 import {
   ArrowPathIcon,
+  ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ClockIcon,
   DocumentTextIcon,
@@ -25,7 +26,11 @@ import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHead
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
-import { formatSubmissionRewardAmount, parseSubmissionRewardAmount } from "~~/lib/questionRewardPools";
+import {
+  formatFeedbackBonusAmount,
+  formatSubmissionRewardAmount,
+  parseSubmissionRewardAmount,
+} from "~~/lib/questionRewardPools";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
   DEFAULT_QUESTION_ROUND_CONFIG_BOUNDS,
@@ -295,6 +300,19 @@ function readFeedbackBonusUsdcAmountAtomic(requestBody: JsonRecord) {
   const asset = readString(requestBody.feedbackBonus.asset).toUpperCase() || "USDC";
   if (asset !== "USDC") return 0n;
   return readPositiveBigInt(requestBody.feedbackBonus.amount) ?? 0n;
+}
+
+function readFeedbackBonusSummary(handoff: Handoff | null) {
+  const feedbackBonus = handoff?.requestBody?.feedbackBonus;
+  if (!isJsonRecord(feedbackBonus)) return null;
+  const amount = readPositiveBigInt(feedbackBonus.amount);
+  if (amount === null) return null;
+  const asset = readString(feedbackBonus.asset).toUpperCase() === "LREP" ? "lrep" : "usdc";
+  return {
+    amount,
+    asset,
+    label: formatFeedbackBonusAmount(amount, asset),
+  };
 }
 
 function formatUsdcInput(value: bigint | null) {
@@ -1213,6 +1231,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
   const questionSummaries = readQuestionSummaries(handoff);
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
+  const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
+  const showMissingFeedbackBonusNotice = Boolean(
+    handoff && !hasQuestionBundle && !feedbackBonusSummary && !isFeedbackBonusStep && !isTerminalStatus,
+  );
 
   return (
     <AppPageShell contentClassName="space-y-5" paddingTopClassName="pt-6">
@@ -1250,7 +1272,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       {handoff ? (
         <>
           <section className="surface-card rounded-lg p-5">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <div className="surface-card-nested rounded-lg p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <WalletIcon className="h-4 w-4" />
@@ -1264,6 +1286,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   <span>Bounty</span>
                 </div>
                 <p className="mt-2 text-lg font-semibold">{readDraftBountyLabel(draftForm, handoff)}</p>
+              </div>
+              <div className="surface-card-nested rounded-lg p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
+                  <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                  <span>Feedback Bonus</span>
+                </div>
+                <p className={`mt-2 text-sm font-semibold ${feedbackBonusSummary ? "" : "text-warning"}`}>
+                  {feedbackBonusSummary?.label ?? "Not included"}
+                </p>
               </div>
               <div className="surface-card-nested rounded-lg p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
@@ -1283,6 +1314,19 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               <p className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
                 This prepared ask is on chain {handoff.chainId}. Your wallet is on chain {connectedChainId}.
               </p>
+            ) : null}
+            {showMissingFeedbackBonusNotice ? (
+              <div className="surface-card-nested mt-4 rounded-lg p-3 text-sm text-warning">
+                <div className="flex items-start gap-2">
+                  <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+                  <div>
+                    <p className="font-semibold">You may get a rating without written reasons.</p>
+                    <p className="mt-1 text-warning/80">
+                      Ask the agent to include a Feedback Bonus before submitting if explanations matter.
+                    </p>
+                  </div>
+                </div>
+              </div>
             ) : null}
           </section>
 
