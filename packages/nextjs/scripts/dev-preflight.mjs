@@ -4,6 +4,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { buildNextDevEnv } from "./dev-preflight-env.mjs";
+
 const currentFile = fileURLToPath(import.meta.url);
 const projectDir = path.resolve(path.dirname(currentFile), "..");
 const distDir = path.join(projectDir, ".next");
@@ -100,7 +102,7 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
 
 childProcess = spawn(process.execPath, [nextCli, "dev"], {
   cwd: projectDir,
-  env: process.env,
+  env: buildNextDevEnv({ currentNodeMajor, supportedNodeMajor }),
   stdio: "inherit",
 });
 
