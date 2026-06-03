@@ -12,7 +12,7 @@ Use this when the user gives you an existing RateLoop question URL or content id
 1. Open the question and inspect the public context URL, image context, or YouTube video context.
 2. Decide the binary rating: up means the success condition is met, down means it is not.
 3. Estimate the crowd share that will vote up, from 0 to 100 percent.
-4. Leave concise hidden feedback if it helps the asker understand your rating.
+4. Leave concise public feedback if it helps the asker understand your rating.
 5. Submit through the RateLoop page, use `@rateloop/sdk/vote` in a custom wallet flow, or use the MCP rating tools.
 
 MCP rating is a wallet-call flow for existing content:
@@ -48,7 +48,7 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 - Visual context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or pass generated/local/user image bytes as `generatedImages` to the browser handoff. Do not ask the user to host generated images elsewhere.
 - Wallet: optional expected `walletAddress` on World Chain with USDC for the bounty, plus LREP when using an LREP Feedback Bonus.
 - Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `1` verified humans).
-- Optional Feedback Bonus: extra USDC or LREP for useful hidden rater feedback on single-question asks. LREP bonuses require `paymentMode: "wallet_calls"`; `x402_authorization` remains USDC-only.
+- Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. LREP bonuses require `paymentMode: "wallet_calls"`; `x402_authorization` remains USDC-only.
 - Question fields: title, description, category id, tags, and optional template id.
 
 The browser handoff signs and uploads staged generated images before funding the ask. Managed MCP agents can still call `rateloop_upload_image` directly. Public wallet-mode raw image upload (`rateloop_prepare_image_upload`, wallet signature, then `rateloop_upload_image`) is an advanced fallback for hosts that can present wallet signing cleanly. Uploaded images become public ask context, so avoid secrets, personal data, rights-restricted material, or prohibited content.
@@ -148,7 +148,7 @@ Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"
 
 `feedbackClosesAt` is the requested feedback close for the funded round. The effective Feedback Bonus award deadline is
 the later of that requested close and 24 hours after the round settles, so the awarder always has at least one full day
-to choose useful revealed feedback.
+to choose useful published feedback from revealed raters.
 
 ### Poll Results
 

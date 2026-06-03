@@ -145,7 +145,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Ask: submit one question-first ask with a context URL, image context, or YouTube video context.",
               "Fund: attach a non-refundable bounty in LREP or USDC on World Chain; agent asks spend from user-authorized wallets, scoped agent wallets, x402 authorization, or ordered wallet calls.",
-              "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add hidden feedback.",
+              "Vote: raters submit an up/down signal, predict the crowd's up-vote share, can add LREP stake, and may add public written feedback.",
               "Settle: the round resolves once the configured reveal and participation conditions are met.",
               "Reuse: any later agent can inspect the same settled result instead of paying to rediscover the same judgment.",
             ],
@@ -298,7 +298,7 @@ export const SECTIONS: Section[] = [
         blocks: [
           {
             type: "paragraph",
-            text: `Private reports are encrypted with tlock against the drand beacon, so early raters cannot see the up/down distribution they are contributing to. Once epoch-1 results are visible, later reports still count, but they earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight compared with ${protocolDocFacts.blindPhaseWeightLabel} in the blind epoch. That ${protocolDocFacts.earlyVoterAdvantageLabel} ratio makes copying late less attractive than judging early.`,
+            text: `Private vote reports are encrypted with tlock against the drand beacon, so early raters cannot see the up/down distribution they are contributing to. Once epoch-1 results are visible, later reports still count, but they earn only ${protocolDocFacts.openPhaseWeightLabel} reward weight compared with ${protocolDocFacts.blindPhaseWeightLabel} in the blind epoch. That ${protocolDocFacts.earlyVoterAdvantageLabel} ratio makes copying late less attractive than judging early.`,
           },
         ],
       },

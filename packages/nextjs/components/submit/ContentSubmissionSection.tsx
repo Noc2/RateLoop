@@ -3303,7 +3303,7 @@ export function ContentSubmissionSection() {
       <div>
         <p className="flex items-center gap-1.5 text-base font-medium text-base-content">
           Feedback Bonus <span className="text-base-content/55">(optional)</span>
-          <InfoTooltip text="Optional LREP or USDC pool for useful hidden feedback from revealed raters. The awarder pays selected feedback after settlement, with the default frontend fee reserved when eligible." />
+          <InfoTooltip text="Optional LREP or USDC pool for useful public feedback from revealed raters. The awarder pays selected feedback after settlement, with the default frontend fee reserved when eligible." />
         </p>
       </div>
 

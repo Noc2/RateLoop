@@ -76,10 +76,10 @@ function FeedbackItem({
   isAwarded?: boolean;
   onAward?: (item: ContentFeedbackItem) => void;
 }) {
-  const visibilityLabel = item.isPublic ? "Public" : "Private until settlement";
+  const visibilityLabel = item.isPublic ? "Public" : "Private";
   const visibilityTooltip = item.isPublic
     ? "This feedback is visible to everyone because it was published on-chain."
-    : "Only you can see this feedback while voting is active. It becomes public after settlement.";
+    : "Only you can see this legacy feedback entry because it has not been published on-chain.";
   const canAwardFeedback = Boolean(awardablePoolCount && awardablePoolCount > 0);
 
   return (
@@ -202,7 +202,7 @@ export function ContentFeedbackPanel({
   const submitButtonToneClassName = isFeedbackOpen && hasCurrentRoundVote ? "vote-feedback" : "vote-light";
   const ownHiddenCopy =
     feedback.ownHiddenCount > 0
-      ? `${feedback.ownHiddenCount} hidden note${feedback.ownHiddenCount === 1 ? "" : "s"} from you`
+      ? `${feedback.ownHiddenCount} private note${feedback.ownHiddenCount === 1 ? "" : "s"} from you`
       : null;
   const panelClassName = isSheet
     ? "flex min-h-0 flex-col overflow-visible"

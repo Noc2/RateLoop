@@ -110,7 +110,7 @@ src/
 ├── correlation-artifact-builder.ts # Ponder-backed automatic ClusterPayoutOracle artifacts
 ├── correlation-artifact-storage.ts # Canonical artifact hashing and storage
 ├── correlation-snapshots.ts # Optional ClusterPayoutOracle publication
-├── feedback-reveals.ts # Optional post-settlement content feedback publication
+├── feedback-reveals.ts # Legacy no-op compatibility module for retired feedback reveal jobs
 ├── frontend-fees.ts # Optional hosted frontend fee sweeps
 ├── keeper-state.ts # Optional Postgres cache and advisory locks
 ├── config.ts     # Configuration from environment

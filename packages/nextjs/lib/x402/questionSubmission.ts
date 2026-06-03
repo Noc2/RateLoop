@@ -2181,7 +2181,7 @@ export async function prepareFeedbackBonusQuestionSubmissionRequest(params: {
             feedbackBonus.awarder,
           ],
         }),
-        description: "Create the optional Feedback Bonus pool for useful hidden rater feedback",
+        description: "Create the optional Feedback Bonus pool for useful public rater feedback",
         functionName: "createFeedbackBonusPoolWithAsset",
         id: "create-feedback-bonus-pool",
         phase: "create_feedback_bonus_pool",

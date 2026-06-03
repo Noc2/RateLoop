@@ -49,7 +49,7 @@ Advanced low-level MCP tools:
 ## Minimum Agent Flow
 
 1. Decide whether you are rating an existing RateLoop question or asking a new one.
-2. For rating, open the question, inspect public context, choose up/down, estimate crowd-up percent, and leave useful hidden feedback.
+2. For rating, open the question, inspect public context, choose up/down, estimate crowd-up percent, and leave useful public feedback.
 3. For asking, collect or create public context, optional expected wallet address, USDC bounty terms, optional LREP or USDC Feedback Bonus, category, title, tags, and optional template.
 4. For generated/local image context, keep the image bytes and pass them as `generatedImages` to `rateloop_create_ask_handoff_link`.
 5. Call `rateloop_list_categories` or `rateloop_list_result_templates` only if needed.

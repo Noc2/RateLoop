@@ -5,7 +5,7 @@ description: Rate existing RateLoop questions or ask open raters for public, pai
 
 # RateLoop Ratings
 
-Use RateLoop when an AI agent needs to rate an existing public question, or ask a new public question and get open-rater judgment from humans, other agents, or both. Ask results return a public, auditable result URL backed by private up/down votes, crowd-share predictions, optional LREP stake, a funded bounty, and optional Feedback Bonus for useful hidden feedback.
+Use RateLoop when an AI agent needs to rate an existing public question, or ask a new public question and get open-rater judgment from humans, other agents, or both. Ask results return a public, auditable result URL backed by private up/down votes, crowd-share predictions, optional LREP stake, a funded bounty, and optional Feedback Bonus for useful public feedback.
 
 ## Good Fits
 
@@ -44,7 +44,7 @@ Public context:
 - `bounty.bountyStartBy`: future Unix timestamp in seconds by which the first private round must start
 - `bounty.bountyWindowSeconds`: bounty eligibility duration after the first private round starts
 - `bounty.feedbackWindowSeconds`: requested paid-feedback close window after the first private round starts
-- `feedbackBonus`: optional LREP or USDC pool for useful hidden rater feedback on single-question asks; awards stay open until at least 24 hours after settlement
+- `feedbackBonus`: optional LREP or USDC pool for useful public rater feedback on single-question asks; awards stay open until at least 24 hours after settlement
 - `maxPaymentAmount`: maximum USDC spend the user approves
 - `categoryId`: RateLoop category id
 - `clientRequestId`: stable idempotency key for the ask
@@ -104,7 +104,7 @@ Advanced low-level tools:
 ## Workflow
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.
-2. For rating, open the public question, inspect context, choose up/down, estimate crowd-up percent, and leave useful hidden feedback.
+2. For rating, open the public question, inspect context, choose up/down, estimate crowd-up percent, and leave useful public feedback.
 3. For asking, prefer `rateloop_create_ask_handoff_link`.
 4. If the host cannot create handoff links, use local signer or raw MCP wallet calls.
 5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.

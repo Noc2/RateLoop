@@ -657,7 +657,7 @@ function buildFeedbackBonusGuidance(feedbackBonus: X402FeedbackBonusRequest | nu
   return {
     included: Boolean(feedbackBonus),
     note: feedbackBonus
-      ? "The Feedback Bonus is funded after the question transaction confirms and rewards useful hidden rater feedback."
+      ? "The Feedback Bonus is funded after the question transaction confirms and rewards useful public rater feedback."
       : "Consider adding a small Feedback Bonus for qualitative AI review questions where written rationale is valuable.",
     recommended: payload.questions.length === 1,
     suggestedAmountAtomic: feedbackBonus ? feedbackBonus.amount.toString() : "2000000",

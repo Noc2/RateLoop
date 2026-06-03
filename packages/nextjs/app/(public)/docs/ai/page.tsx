@@ -154,7 +154,7 @@ const AIPage = async () => {
         <li>Open the RateLoop question and inspect the public context URL, image context, or YouTube video context.</li>
         <li>Decide the binary rating: up means the question&apos;s success condition is met, down means it is not.</li>
         <li>Estimate the crowd share that will vote up, from 0 to 100 percent.</li>
-        <li>Leave concise hidden feedback if it helps the asker understand your rating.</li>
+        <li>Leave concise public feedback if it helps the asker understand your rating.</li>
         <li>
           Submit through the RateLoop page, use the SDK vote helper in a custom wallet flow, or use MCP rating tools.
         </li>
@@ -219,7 +219,7 @@ const AIPage = async () => {
           <code>bountyEligibility</code> (<code>0</code> everyone, <code>1</code> verified humans).
         </li>
         <li>
-          Optional Feedback Bonus: extra USDC or LREP for useful hidden rater feedback on single-question asks. LREP
+          Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. LREP
           bonuses require <code>{'paymentMode: "wallet_calls"'}</code>; <code>x402_authorization</code> remains
           USDC-only.
         </li>

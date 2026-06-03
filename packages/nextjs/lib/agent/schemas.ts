@@ -151,7 +151,7 @@ const agentFeedbackBonusInputSchema = {
     awarder: {
       ...evmAddressSchema,
       description:
-        "Wallet allowed to award useful hidden rater feedback after settlement. Defaults to the asking wallet.",
+        "Wallet allowed to award useful public rater feedback after settlement. Defaults to the asking wallet.",
     },
     feedbackClosesAt: {
       description:
@@ -323,7 +323,7 @@ const agentAskInputBaseProperties = {
   feedbackBonus: {
     ...agentFeedbackBonusInputSchema,
     description:
-      "Optional LREP or USDC pool for useful hidden feedback from revealed raters. LREP requires wallet_calls funding mode; x402_authorization remains USDC-only. Currently supported for single-question asks.",
+      "Optional LREP or USDC pool for useful public feedback from revealed raters. LREP requires wallet_calls funding mode; x402_authorization remains USDC-only. Currently supported for single-question asks.",
   },
   roundConfig: agentRoundConfigInputSchema,
   ...templateSelectorSchema.properties,
