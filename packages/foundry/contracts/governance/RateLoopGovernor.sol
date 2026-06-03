@@ -14,7 +14,9 @@ import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 
 interface IGovernanceLockableVotes is IVotes {
+    function getTransferableBalance(address account) external view returns (uint256);
     function lockForGovernance(address account, uint256 amount) external;
+    function lockForGovernanceUntil(address account, uint256 amount, uint256 unlockTime) external;
 }
 
 /// @title RateLoopGovernor
@@ -25,7 +27,7 @@ interface IGovernanceLockableVotes is IVotes {
 ///      - Dynamic quorum: 4% of circulating supply (total minus protocol-controlled balances)
 ///      - Bootstrap quorum floor of 100K LREP to prevent early capture while circulation is thin
 ///      - Timelock execution for security
-///      - 7-day token lock when voting or proposing
+///      - Token locks when voting or proposing
 contract RateLoopGovernor is
     Governor,
     GovernorSettings,
@@ -64,6 +66,8 @@ contract RateLoopGovernor is
     uint256 public constant MAX_EXCLUDED_HOLDERS = 64;
     /// @notice Minimum blocks a proposer must wait between successful proposals (~1 day on World Chain's 2s block clock).
     uint256 public constant PROPOSAL_COOLDOWN_BLOCKS = 43_200;
+    /// @notice World Chain block time used to convert governance block windows into LREP lock seconds.
+    uint256 public constant WORLD_CHAIN_BLOCK_TIME_SECONDS = 2;
     bytes10 private constant PROPOSER_SUFFIX_MARKER = "#proposer=";
     uint256 private constant PROPOSER_SUFFIX_MARKER_LENGTH = 10;
     uint256 private constant PROPOSER_SUFFIX_ADDRESS_LENGTH = 42;
@@ -76,6 +80,7 @@ contract RateLoopGovernor is
     error ExcludedHolderCannotGovern(address holder);
     error InvalidExcludedHolder();
     error ProposalCooldownActive(address proposer, uint256 nextProposalBlock);
+    error InsufficientTransferableProposalStake(address proposer, uint256 required, uint256 transferable);
     error InvalidProposalThreshold();
     error InvalidQuorumNumerator();
     error InvalidGovernanceTiming();
@@ -272,7 +277,7 @@ contract RateLoopGovernor is
         return weight;
     }
 
-    /// @dev Override propose to lock the proposal threshold amount for 7 days.
+    /// @dev Override propose to lock a fresh proposal-threshold stake through the proposal window.
     function propose(
         address[] memory targets,
         uint256[] memory values,
@@ -285,14 +290,23 @@ contract RateLoopGovernor is
             revert ProposalCooldownActive(msg.sender, nextBlock);
         }
 
+        uint256 threshold = proposalThreshold();
+        uint256 transferable = reputationToken.getTransferableBalance(msg.sender);
+        if (transferable < threshold) {
+            revert InsufficientTransferableProposalStake(msg.sender, threshold, transferable);
+        }
+
         uint256 proposalId = super.propose(targets, values, calldatas, description);
         proposalCreatedBlock[proposalId] = block.number;
         nextProposalBlock[msg.sender] = block.number + PROPOSAL_COOLDOWN_BLOCKS;
 
-        // Lock proposal threshold amount for the proposer
-        reputationToken.lockForGovernance(msg.sender, proposalThreshold());
+        reputationToken.lockForGovernanceUntil(msg.sender, threshold, _proposalLockUntil());
 
         return proposalId;
+    }
+
+    function _proposalLockUntil() internal view returns (uint256) {
+        return block.timestamp + ((votingDelay() + votingPeriod() + 1) * WORLD_CHAIN_BLOCK_TIME_SECONDS);
     }
 
     /// @notice Reject proposals whose description does not bind to the proposer's address.

@@ -61,14 +61,23 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
 
     function lockForGovernance(address account, uint256 amount) external {
         require(msg.sender == governor, "Only governor");
+        _lockForGovernanceUntil(account, amount, block.timestamp + GOVERNANCE_LOCK_DURATION);
+    }
+
+    function lockForGovernanceUntil(address account, uint256 amount, uint256 unlockTime) external {
+        require(msg.sender == governor, "Only governor");
+        _lockForGovernanceUntil(account, amount, unlockTime);
+    }
+
+    function _lockForGovernanceUntil(address account, uint256 amount, uint256 unlockTime) internal {
         require(amount > 0, "Amount must be > 0");
         require(balanceOf(account) >= amount, "Insufficient balance for governance lock");
+        require(unlockTime > block.timestamp, "Unlock time must be future");
 
         GovernanceLock storage lock = _governanceLock[account];
-        uint256 newUnlockTime = block.timestamp + GOVERNANCE_LOCK_DURATION;
         if (lock.unlockTime <= block.timestamp) {
             lock.amount = amount;
-            lock.unlockTime = newUnlockTime;
+            lock.unlockTime = unlockTime;
         } else {
             uint256 currentBalance = balanceOf(account);
             uint256 lockableBase = currentBalance > amount ? currentBalance : amount;
@@ -80,7 +89,9 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
             // continuous governance cadence.
             if (additionalLock > 0) {
                 lock.amount += additionalLock;
-                lock.unlockTime = newUnlockTime;
+                if (unlockTime > lock.unlockTime) {
+                    lock.unlockTime = unlockTime;
+                }
             }
         }
 

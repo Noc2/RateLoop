@@ -81,4 +81,24 @@ contract LoopReputationTest is Test {
         token.transfer(recipient, 700e6);
         assertEq(token.balanceOf(rater), 0);
     }
+
+    function test_GovernanceLockUntilDoesNotShortenLongerActiveLock() public {
+        vm.prank(admin);
+        token.mint(rater, 2_000e6);
+
+        vm.prank(governance);
+        token.setGovernor(governor);
+
+        uint256 longUnlockTime = block.timestamp + 30 days;
+
+        vm.prank(governor);
+        token.lockForGovernanceUntil(rater, 500e6, longUnlockTime);
+
+        vm.prank(governor);
+        token.lockForGovernance(rater, 500e6);
+
+        (uint256 amount, uint256 unlockTime) = token.getGovernanceLock(rater);
+        assertEq(amount, 1_000e6);
+        assertEq(unlockTime, longUnlockTime);
+    }
 }

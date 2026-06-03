@@ -181,8 +181,12 @@ contract GovernanceTest is Test {
         uint256[] memory values = new uint256[](1);
         bytes[] memory calldatas = new bytes[](1);
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RateLoopGovernor.InsufficientTransferableProposalStake.selector, voter1, governor.proposalThreshold(), 1
+            )
+        );
         vm.prank(voter1);
-        vm.expectRevert("Insufficient balance for governance lock");
         governor.propose(targets, values, calldatas, _boundDescription("Transferred away threshold", voter1));
     }
 
@@ -680,6 +684,12 @@ contract GovernanceTest is Test {
         );
         assertEq(governor.votingPeriod(), periodBefore);
 
+        vm.warp(
+            block.timestamp
+                + ((governor.votingDelay() + governor.votingPeriod() + 1) * governor.WORLD_CHAIN_BLOCK_TIME_SECONDS())
+                + 1
+        );
+
         _executeSingleCallProposal(
             address(governor),
             abi.encodeWithSignature("setVotingPeriod(uint32)", uint32(governor.MAX_VOTING_PERIOD_BLOCKS() + 1)),
@@ -790,6 +800,21 @@ contract GovernanceTest is Test {
         assertEq(governor.nextProposalBlock(voter1), block.number + governor.PROPOSAL_COOLDOWN_BLOCKS());
     }
 
+    function test_CreateProposal_LocksThresholdThroughProposalWindow() public {
+        vm.roll(block.number + 1);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = _emptyTimelockProposal();
+        uint256 expectedUnlockTime = block.timestamp
+            + ((governor.votingDelay() + governor.votingPeriod() + 1) * governor.WORLD_CHAIN_BLOCK_TIME_SECONDS());
+
+        vm.prank(voter1);
+        governor.propose(targets, values, calldatas, _boundDescription("Proposal lock window", voter1));
+
+        (uint256 amount, uint256 unlockTime) = token.getGovernanceLock(voter1);
+        assertEq(amount, governor.proposalThreshold());
+        assertEq(unlockTime, expectedUnlockTime);
+    }
+
     function test_CreateProposal_RequiresExactProposerSuffixMarker() public {
         vm.roll(block.number + 1);
 
@@ -831,6 +856,59 @@ contract GovernanceTest is Test {
             governor.propose(targets, values, calldatas, _boundDescription("Cooldown proposal #2", voter1));
 
         assertTrue(proposalId != 0);
+    }
+
+    function test_ProposerNeedsFreshTransferableThresholdAfterCooldown() public {
+        address proposer = address(200);
+        uint256 threshold = governor.proposalThreshold();
+
+        vm.prank(deployer);
+        token.mint(proposer, threshold);
+        vm.roll(block.number + 1);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = _emptyTimelockProposal();
+
+        vm.prank(proposer);
+        governor.propose(targets, values, calldatas, _boundDescription("Exact threshold proposal #1", proposer));
+
+        uint256 nextBlock = governor.nextProposalBlock(proposer);
+        assertEq(token.getTransferableBalance(proposer), 0);
+
+        vm.roll(nextBlock);
+
+        vm.prank(proposer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RateLoopGovernor.InsufficientTransferableProposalStake.selector, proposer, threshold, 0
+            )
+        );
+        governor.propose(targets, values, calldatas, _boundDescription("Exact threshold proposal #2", proposer));
+        assertEq(governor.nextProposalBlock(proposer), nextBlock);
+    }
+
+    function test_ProposerCanCreateSecondProposalWithFreshThresholdStake() public {
+        address proposer = address(201);
+        uint256 threshold = governor.proposalThreshold();
+
+        vm.prank(deployer);
+        token.mint(proposer, threshold * 2);
+        vm.roll(block.number + 1);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) = _emptyTimelockProposal();
+
+        vm.prank(proposer);
+        governor.propose(targets, values, calldatas, _boundDescription("Double threshold proposal #1", proposer));
+
+        vm.roll(governor.nextProposalBlock(proposer));
+
+        vm.prank(proposer);
+        uint256 proposalId =
+            governor.propose(targets, values, calldatas, _boundDescription("Double threshold proposal #2", proposer));
+
+        (uint256 amount,) = token.getGovernanceLock(proposer);
+        assertTrue(proposalId != 0);
+        assertEq(amount, threshold * 2);
+        assertEq(token.getTransferableBalance(proposer), 0);
     }
 
     function test_VoteOnProposal() public {

@@ -295,13 +295,15 @@ contract FormalVerification_GovernanceTest is Test {
 
     // ==================== Test 9: Governance Lock Prevents Vote-Then-Sell ====================
 
-    /// @notice Voting locks tokens for 7 days, preventing transfer.
+    /// @notice Voting locks tokens, and a proposer-voter keeps the longer proposal lock window.
     function test_GovernanceLock_PreventsVoteThenSell() public {
         address voter = address(200);
         _mintCirculating(voter, 1_000_000e6);
 
         vm.roll(block.number + 1);
 
+        uint256 proposalUnlockTime = block.timestamp
+            + ((governor.votingDelay() + governor.votingPeriod() + 1) * governor.WORLD_CHAIN_BLOCK_TIME_SECONDS());
         uint256 pid = _propose(voter, "Lock test");
         vm.roll(block.number + governor.votingDelay() + 1);
 
@@ -317,9 +319,12 @@ contract FormalVerification_GovernanceTest is Test {
         vm.expectRevert("Exceeds transferable balance (governance locked)");
         token.transfer(address(300), 1);
 
-        // After 7 days, can transfer
+        // After 7 days, the aggregate lock remains until the longer proposal window expires.
         vm.warp(block.timestamp + 7 days + 1);
-        assertEq(token.getLockedBalance(voter), 0, "Lock expired after 7 days");
+        assertEq(token.getLockedBalance(voter), 1_000_000e6, "Longer proposal lock still active");
+
+        vm.warp(proposalUnlockTime + 1);
+        assertEq(token.getLockedBalance(voter), 0, "Lock expired after proposal window");
 
         vm.prank(voter);
         token.transfer(address(300), 100e6);
