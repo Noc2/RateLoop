@@ -386,6 +386,22 @@ function loadConfig() {
     rejectLocalhostInProduction: true,
     requireHttpsInProduction: true,
   });
+  const feedbackRevealApiBaseUrl = readOptionalUrlEnv(
+    "KEEPER_FEEDBACK_REVEAL_API_BASE_URL",
+    errors,
+    {
+      rejectLocalhostInProduction: true,
+      requireHttpsInProduction: true,
+    },
+  );
+  const feedbackRevealSecret =
+    readEnv("KEEPER_FEEDBACK_REVEAL_SECRET") ||
+    readEnv("RATELOOP_FEEDBACK_REVEAL_SECRET");
+  const feedbackRevealsEnabled = parseBooleanEnv(
+    readEnv("KEEPER_FEEDBACK_REVEALS_ENABLED"),
+    Boolean(feedbackRevealApiBaseUrl && feedbackRevealSecret),
+    "KEEPER_FEEDBACK_REVEALS_ENABLED",
+  );
 
   if (!keystoreAccount && !privateKey) {
     errors.push("KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY is required");
@@ -456,6 +472,13 @@ function loadConfig() {
         chainId,
         envName: "ADVISORY_VOTE_RECORDER_ADDRESS",
         contractName: "AdvisoryVoteRecorder",
+        errors,
+        warnings,
+      }),
+      feedbackRegistry: resolveContractAddress({
+        chainId,
+        envName: "FEEDBACK_REGISTRY_ADDRESS",
+        contractName: "FeedbackRegistry",
         errors,
         warnings,
       }),
@@ -551,6 +574,23 @@ function loadConfig() {
       contracts: frontendFeeContracts,
     },
 
+    // Content feedback reveal ops
+    feedbackReveals: {
+      enabled: feedbackRevealsEnabled,
+      apiBaseUrl: feedbackRevealApiBaseUrl ?? null,
+      secret: feedbackRevealSecret ?? null,
+      batchSize: readPositiveIntEnv(
+        "KEEPER_FEEDBACK_REVEAL_BATCH_SIZE",
+        "25",
+        errors,
+      ),
+      leaseSeconds: readPositiveIntEnv(
+        "KEEPER_FEEDBACK_REVEAL_LEASE_SECONDS",
+        "120",
+        errors,
+      ),
+    },
+
     // Correlation snapshot publication
     correlationSnapshots: {
       enabled: correlationSnapshotsEnabled,
@@ -619,6 +659,19 @@ function loadConfig() {
     if (loadedConfig.contracts.clusterPayoutOracle === ZERO_ADDRESS) {
       errors.push(
         "CLUSTER_PAYOUT_ORACLE_ADDRESS or a shared ClusterPayoutOracle deployment artifact is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true",
+      );
+    }
+  }
+
+  if (feedbackRevealsEnabled) {
+    if (!loadedConfig.feedbackReveals.apiBaseUrl) {
+      errors.push(
+        "KEEPER_FEEDBACK_REVEAL_API_BASE_URL is required when KEEPER_FEEDBACK_REVEALS_ENABLED=true",
+      );
+    }
+    if (!loadedConfig.feedbackReveals.secret) {
+      errors.push(
+        "KEEPER_FEEDBACK_REVEAL_SECRET or RATELOOP_FEEDBACK_REVEAL_SECRET is required when KEEPER_FEEDBACK_REVEALS_ENABLED=true",
       );
     }
   }

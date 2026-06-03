@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const ENGINE = "0x1111111111111111111111111111111111111111" as const;
 const REGISTRY = "0x2222222222222222222222222222222222222222" as const;
+const FEEDBACK_REGISTRY = "0x4444444444444444444444444444444444444444" as const;
 const ACCOUNT = "0x3333333333333333333333333333333333333333" as const;
 
 type KeeperIndexOptions = {
@@ -69,6 +70,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
       contracts: {
         votingEngine: ENGINE,
         contentRegistry: REGISTRY,
+        feedbackRegistry: FEEDBACK_REGISTRY,
         clusterPayoutOracle: "0x0000000000000000000000000000000000000000",
       },
       intervalMs: 30_000,
@@ -91,6 +93,13 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
               frontendRegistry: "0x5555555555555555555555555555555555555555",
             }
           : null,
+      },
+      feedbackReveals: {
+        enabled: false,
+        apiBaseUrl: null,
+        secret: null,
+        batchSize: 25,
+        leaseSeconds: 120,
       },
       correlationSnapshots: {
         enabled: false,
@@ -126,10 +135,14 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
   vi.doMock("../frontend-fees.js", () => ({
     claimConfiguredFrontendFees,
   }));
+  vi.doMock("../feedback-reveals.js", () => ({
+    revealQueuedFeedback: vi.fn(),
+  }));
   vi.doMock("../metrics.js", () => ({
     startMetricsServer: vi.fn(),
     setHealthThreshold: vi.fn(),
     recordRun,
+    recordFeedbackRevealRun: vi.fn(),
     recordError,
     setGauge,
     getConsecutiveErrors,
