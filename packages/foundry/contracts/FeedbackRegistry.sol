@@ -100,7 +100,6 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         FeedbackRecord storage record = feedbackByCommitKey[contentId][roundId][commitKey];
         require(record.feedbackHash != bytes32(0), "Feedback not committed");
         require(record.revealedAt == 0, "Feedback already revealed");
-        require(record.author == msg.sender, "Only author");
         RoundVotingEngine engine = record.votingEngineSnapshot;
         if (address(engine) == address(0)) engine = votingEngine;
         require(_isTerminalRound(_roundState(engine, contentId, roundId)), "Round not terminal");

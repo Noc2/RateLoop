@@ -412,6 +412,92 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         assertTrue(feedbackRegistry.isAwardableFeedback(contentId, roundId, commitKeys[0], feedbackHash));
     }
 
+    function testNonAuthorCanRevealFeedbackAfterSettlementAndAward() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+        (uint256 roundId, bytes32[] memory commitKeys) =
+            _settleRoundWithCommittedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+
+        vm.prank(address(0xBEEF));
+        feedbackRegistry.revealFeedback(
+            contentId, roundId, commitKeys[0], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+
+        assertTrue(feedbackRegistry.isAwardableFeedback(contentId, roundId, commitKeys[0], FEEDBACK_HASH));
+        vm.prank(funder);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+        assertEq(recipientAmount, 10e6);
+        assertEq(usdc.balanceOf(voter1), 1_010e6);
+    }
+
+    function testFeedbackRevealRejectsBeforeTerminalRound() public {
+        uint256 contentId = _submitQuestion("");
+        (bytes32 salt, bytes32 commitKey) = _commitFeedbackVote(voter1, contentId, true, 0, address(0));
+        salt;
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        vm.prank(voter1);
+        feedbackRegistry.commitFeedbackHash(contentId, roundId, commitKey, FEEDBACK_HASH);
+
+        vm.prank(address(0xBEEF));
+        vm.expectRevert("Round not terminal");
+        feedbackRegistry.revealFeedback(
+            contentId, roundId, commitKey, FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+    }
+
+    function testFeedbackRevealRejectsWrongPlaintextFromNonAuthor() public {
+        uint256 contentId = _submitQuestion("");
+        (uint256 roundId, bytes32[] memory commitKeys) =
+            _settleRoundWithCommittedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+
+        vm.prank(address(0xBEEF));
+        vm.expectRevert("Feedback hash mismatch");
+        feedbackRegistry.revealFeedback(
+            contentId,
+            roundId,
+            commitKeys[0],
+            FEEDBACK_TYPE,
+            "Wrong feedback body.",
+            FEEDBACK_SOURCE_URL,
+            FEEDBACK_NONCE
+        );
+    }
+
+    function testFeedbackRevealRejectsDuplicateReveal() public {
+        uint256 contentId = _submitQuestion("");
+        (uint256 roundId, bytes32[] memory commitKeys) =
+            _settleRoundWithCommittedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+
+        vm.prank(address(0xBEEF));
+        feedbackRegistry.revealFeedback(
+            contentId, roundId, commitKeys[0], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+
+        vm.prank(voter1);
+        vm.expectRevert("Feedback already revealed");
+        feedbackRegistry.revealFeedback(
+            contentId, roundId, commitKeys[0], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+    }
+
+    function testFeedbackRevealRejectsCancelledRound() public {
+        uint256 contentId = _submitQuestion("");
+        (bytes32 salt, bytes32 commitKey) = _commitFeedbackVote(voter1, contentId, true, 0, address(0));
+        salt;
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        vm.prank(voter1);
+        feedbackRegistry.commitFeedbackHash(contentId, roundId, commitKey, FEEDBACK_HASH);
+
+        vm.warp(block.timestamp + 7 days + 1);
+        votingEngine.cancelExpiredRound(contentId, roundId);
+
+        vm.prank(address(0xBEEF));
+        vm.expectRevert("Round not terminal");
+        feedbackRegistry.revealFeedback(
+            contentId, roundId, commitKey, FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+        );
+    }
+
     function testAwardPaysRevealedVoterAndVoteAttributedFrontend() public {
         _registerFrontend(frontend1);
         uint256 contentId = _submitQuestion("");
@@ -1080,8 +1166,25 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bool[] memory directions,
         address frontend
     ) internal returns (uint256 roundId) {
+        bytes32[] memory commitKeys;
+        (roundId, commitKeys) = _settleRoundWithCommittedFeedback(voters, contentId, directions, frontend);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            vm.prank(voters[i]);
+            feedbackRegistry.revealFeedback(
+                contentId, roundId, commitKeys[i], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
+            );
+        }
+    }
+
+    function _settleRoundWithCommittedFeedback(
+        address[] memory voters,
+        uint256 contentId,
+        bool[] memory directions,
+        address frontend
+    ) internal returns (uint256 roundId, bytes32[] memory commitKeys) {
         bytes32[] memory salts = new bytes32[](voters.length);
-        bytes32[] memory commitKeys = new bytes32[](voters.length);
+        commitKeys = new bytes32[](voters.length);
 
         for (uint256 i = 0; i < voters.length; i++) {
             (salts[i], commitKeys[i]) = _commitFeedbackVote(voters[i], contentId, directions[i], i, frontend);
@@ -1101,13 +1204,6 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         }
 
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
-
-        for (uint256 i = 0; i < voters.length; i++) {
-            vm.prank(voters[i]);
-            feedbackRegistry.revealFeedback(
-                contentId, roundId, commitKeys[i], FEEDBACK_TYPE, FEEDBACK_BODY, FEEDBACK_SOURCE_URL, FEEDBACK_NONCE
-            );
-        }
     }
 
     function _commitFeedbackVote(address voter, uint256 contentId, bool isUp, uint256 index, address frontend)
