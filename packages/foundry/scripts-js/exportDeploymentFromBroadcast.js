@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { getAddress } from "viem";
+import { decodeFunctionData, getAddress, parseAbi } from "viem";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -49,173 +49,255 @@ const ROLE_HASHES = {
   seeder: "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1",
 };
 
-const PROTOCOL_CONFIG_PROXY_COMPLETION_SELECTORS = [
-  ["ProtocolConfig.setClusterPayoutOracle", "0x440616e4"],
-  ["ProtocolConfig.setLaunchDistributionPool", "0xa0ad8aa9"],
-  ["ProtocolConfig.renounceRole", "0x36568abe"],
-];
+const PROTOCOL_CONFIG_COMPLETION_ABI = parseAbi([
+  "function setClusterPayoutOracle(address value)",
+  "function setAdvisoryVoteRecorder(address value)",
+  "function setLaunchDistributionPool(address value)",
+  "function renounceRole(bytes32 role,address account)",
+]);
 
 const REQUIRED_COMPLETION_CALLS = [
   {
     label: "RaterRegistry.renounceRole(ADMIN_ROLE)",
     contractName: "RaterRegistry",
+    target: "RaterRegistry",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.admin,
+    args: (ctx) => [ROLE_HASHES.admin, ctx.deployer],
   },
   {
     label: "RaterRegistry.renounceRole(SEEDER_ROLE)",
     contractName: "RaterRegistry",
+    target: "RaterRegistry",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.seeder,
+    args: (ctx) => [ROLE_HASHES.seeder, ctx.deployer],
   },
   {
     label: "FeedbackRegistry.renounceRole(CONFIG_ROLE)",
     contractName: "FeedbackRegistry",
+    target: "FeedbackRegistry",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.config,
+    args: (ctx) => [ROLE_HASHES.config, ctx.deployer],
   },
   {
     label: "ContentRegistry.renounceRole(CONFIG_ROLE)",
     contractName: "ContentRegistry",
+    target: "ContentRegistry",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.config,
+    args: (ctx) => [ROLE_HASHES.config, ctx.deployer],
   },
   {
     label: "ContentRegistry.renounceRole(PAUSER_ROLE)",
     contractName: "ContentRegistry",
+    target: "ContentRegistry",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.pauser,
+    args: (ctx) => [ROLE_HASHES.pauser, ctx.deployer],
   },
   {
     label: "ProfileRegistry.renounceRole(ADMIN_ROLE)",
     contractName: "ProfileRegistry",
+    target: "ProfileRegistry",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.admin,
+    args: (ctx) => [ROLE_HASHES.admin, ctx.deployer],
   },
   {
     label: "FrontendRegistry.renounceRole(ADMIN_ROLE)",
     contractName: "FrontendRegistry",
+    target: "FrontendRegistry",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.admin,
+    args: (ctx) => [ROLE_HASHES.admin, ctx.deployer],
   },
   {
     label: "CategoryRegistry.renounceRole(ADMIN_ROLE)",
     contractName: "CategoryRegistry",
+    target: "CategoryRegistry",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.admin,
+    args: (ctx) => [ROLE_HASHES.admin, ctx.deployer],
   },
   {
-    label: "ClusterPayoutOracle.setRoundPayoutSnapshotConsumer",
+    label:
+      "ClusterPayoutOracle.setRoundPayoutSnapshotConsumer(QUESTION_REWARD)",
     contractName: "ClusterPayoutOracle",
+    target: "ClusterPayoutOracle",
     functionName: "setRoundPayoutSnapshotConsumer(uint8,address)",
-    minCount: 2,
+    args: (ctx) => ["1", ctx.questionRewardPoolEscrow],
+  },
+  {
+    label: "ClusterPayoutOracle.setRoundPayoutSnapshotConsumer(LAUNCH_CREDIT)",
+    contractName: "ClusterPayoutOracle",
+    target: "ClusterPayoutOracle",
+    functionName: "setRoundPayoutSnapshotConsumer(uint8,address)",
+    args: (ctx) => ["2", ctx.launchDistributionPool],
   },
   {
     label: "ClusterPayoutOracle.grantRole(DEFAULT_ADMIN_ROLE)",
     contractName: "ClusterPayoutOracle",
+    target: "ClusterPayoutOracle",
     functionName: "grantRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.defaultAdmin,
+    args: (ctx) => [ROLE_HASHES.defaultAdmin, ctx.governance],
   },
   {
     label: "ClusterPayoutOracle.grantRole(CONFIG_ROLE)",
     contractName: "ClusterPayoutOracle",
+    target: "ClusterPayoutOracle",
     functionName: "grantRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.config,
+    args: (ctx) => [ROLE_HASHES.config, ctx.governance],
   },
   {
     label: "ClusterPayoutOracle.grantRole(ARBITER_ROLE)",
     contractName: "ClusterPayoutOracle",
+    target: "ClusterPayoutOracle",
     functionName: "grantRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.arbiter,
+    args: (ctx) => [ROLE_HASHES.arbiter, ctx.governance],
   },
   {
     label: "ClusterPayoutOracle.setOracleConfig",
     contractName: "ClusterPayoutOracle",
+    target: "ClusterPayoutOracle",
     functionName: "setOracleConfig(uint64,uint256,address)",
+    args: (ctx) => ["43200", "5000000", ctx.governance],
   },
   {
     label: "ClusterPayoutOracle.renounceRole(DEFAULT_ADMIN_ROLE)",
     contractName: "ClusterPayoutOracle",
+    target: "ClusterPayoutOracle",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.defaultAdmin,
+    args: (ctx) => [ROLE_HASHES.defaultAdmin, ctx.deployer],
   },
   {
     label: "ClusterPayoutOracle.renounceRole(CONFIG_ROLE)",
     contractName: "ClusterPayoutOracle",
+    target: "ClusterPayoutOracle",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.config,
+    args: (ctx) => [ROLE_HASHES.config, ctx.deployer],
   },
   {
     label: "ClusterPayoutOracle.renounceRole(ARBITER_ROLE)",
     contractName: "ClusterPayoutOracle",
+    target: "ClusterPayoutOracle",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.arbiter,
+    args: (ctx) => [ROLE_HASHES.arbiter, ctx.deployer],
+  },
+  {
+    label: "ProtocolConfig.setClusterPayoutOracle",
+    contractName: "TransparentUpgradeableProxy",
+    target: "ProtocolConfig",
+    functionName: "setClusterPayoutOracle",
+    abi: PROTOCOL_CONFIG_COMPLETION_ABI,
+    args: (ctx) => [ctx.clusterPayoutOracle],
   },
   {
     label: "LaunchDistributionPool.setClusterPayoutOracle",
     contractName: "LaunchDistributionPool",
+    target: "LaunchDistributionPool",
     functionName: "setClusterPayoutOracle(address)",
+    args: (ctx) => [ctx.clusterPayoutOracle],
   },
   {
     label: "LaunchDistributionPool.setRoundClusterReadyAtSource",
     contractName: "LaunchDistributionPool",
+    target: "LaunchDistributionPool",
     functionName: "setRoundClusterReadyAtSource(address)",
+    args: (ctx) => [ctx.roundVotingEngine],
   },
   {
-    label: "LaunchDistributionPool.setAuthorizedCaller",
+    label: "LaunchDistributionPool.setAuthorizedCaller(RoundRewardDistributor)",
     contractName: "LaunchDistributionPool",
+    target: "LaunchDistributionPool",
     functionName: "setAuthorizedCaller(address,bool)",
-    minCount: 2,
+    args: (ctx) => [ctx.roundRewardDistributor, true],
+  },
+  {
+    label: "ProtocolConfig.setAdvisoryVoteRecorder",
+    contractName: "TransparentUpgradeableProxy",
+    target: "ProtocolConfig",
+    functionName: "setAdvisoryVoteRecorder",
+    abi: PROTOCOL_CONFIG_COMPLETION_ABI,
+    args: (ctx) => [ctx.advisoryVoteRecorder],
+  },
+  {
+    label: "LaunchDistributionPool.setAuthorizedCaller(AdvisoryVoteRecorder)",
+    contractName: "LaunchDistributionPool",
+    target: "LaunchDistributionPool",
+    functionName: "setAuthorizedCaller(address,bool)",
+    args: (ctx) => [ctx.advisoryVoteRecorder, true],
   },
   {
     label: "TimelockController.grantRole(PROPOSER_ROLE)",
     contractName: "TimelockController",
+    target: "TimelockController",
     functionName: "grantRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.timelockProposer,
+    args: (ctx) => [ROLE_HASHES.timelockProposer, ctx.governor],
   },
   {
     label: "TimelockController.grantRole(CANCELLER_ROLE)",
     contractName: "TimelockController",
+    target: "TimelockController",
     functionName: "grantRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.timelockCanceller,
+    args: (ctx) => [ROLE_HASHES.timelockCanceller, ctx.governor],
   },
   {
     label: "TimelockController.renounceRole(DEFAULT_ADMIN_ROLE)",
     contractName: "TimelockController",
+    target: "TimelockController",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.defaultAdmin,
+    args: (ctx) => [ROLE_HASHES.defaultAdmin, ctx.deployer],
   },
   {
     label: "LoopReputation.setGovernor",
     contractName: "LoopReputation",
+    target: "LoopReputation",
     functionName: "setGovernor(address)",
+    args: (ctx) => [ctx.governor],
   },
   {
     label: "LoopReputation.renounceRole(CONFIG_ROLE)",
     contractName: "LoopReputation",
+    target: "LoopReputation",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.config,
+    args: (ctx) => [ROLE_HASHES.config, ctx.deployer],
   },
   {
     label: "LaunchDistributionPool.accountPrefundedPoolDeposit",
     contractName: "LaunchDistributionPool",
+    target: "LaunchDistributionPool",
     functionName: "accountPrefundedPoolDeposit(uint256)",
+    args: () => ["75000000000000"],
   },
   {
     label: "LaunchDistributionPool.setLegacyContributorRoot",
     contractName: "LaunchDistributionPool",
+    target: "LaunchDistributionPool",
     functionName: "setLegacyContributorRoot(bytes32,uint256)",
   },
   {
     label: "LaunchDistributionPool.transferOwnership",
     contractName: "LaunchDistributionPool",
+    target: "LaunchDistributionPool",
     functionName: "transferOwnership(address)",
+    args: (ctx) => [ctx.governance],
   },
   {
     label: "LoopReputation.renounceRole(MINTER_ROLE)",
     contractName: "LoopReputation",
+    target: "LoopReputation",
     functionName: "renounceRole(bytes32,address)",
-    firstArgument: ROLE_HASHES.minter,
+    args: (ctx) => [ROLE_HASHES.minter, ctx.deployer],
+  },
+  {
+    label: "ProtocolConfig.setLaunchDistributionPool",
+    contractName: "TransparentUpgradeableProxy",
+    target: "ProtocolConfig",
+    functionName: "setLaunchDistributionPool",
+    abi: PROTOCOL_CONFIG_COMPLETION_ABI,
+    args: (ctx) => [ctx.launchDistributionPool],
+  },
+  {
+    label: "ProtocolConfig.renounceRole",
+    contractName: "TransparentUpgradeableProxy",
+    target: "ProtocolConfig",
+    functionName: "renounceRole",
+    abi: PROTOCOL_CONFIG_COMPLETION_ABI,
+    args: (ctx) => [ROLE_HASHES.config, ctx.deployer],
   },
 ];
 
@@ -245,6 +327,12 @@ function txInput(tx) {
 
 function txTarget(tx) {
   return tx?.contractAddress || tx?.to || tx?.transaction?.to;
+}
+
+function txTargets(tx) {
+  return [tx?.contractAddress, tx?.to, tx?.transaction?.to].filter(
+    (target) => typeof target === "string" && target !== ""
+  );
 }
 
 function txHash(tx) {
@@ -300,19 +388,185 @@ function requireSuccessfulReceipt(tx, receiptByHash) {
   return receipt;
 }
 
-function callMatches(tx, receiptByHash, requirement) {
-  if (tx.transactionType !== "CALL") return false;
-  if (tx.contractName !== requirement.contractName) return false;
-  if (tx.function !== requirement.functionName) return false;
-  if (requirement.firstArgument) {
-    const firstArgument = tx.arguments?.[0];
-    if (
-      typeof firstArgument !== "string" ||
-      firstArgument.toLowerCase() !== requirement.firstArgument.toLowerCase()
-    ) {
+function deploymentAddressByName(deployments, contractName) {
+  return Object.entries(deployments).find(
+    ([address, deployedContractName]) =>
+      address.startsWith("0x") && deployedContractName === contractName
+  )?.[0];
+}
+
+function requireDeploymentAddress(deployments, contractName) {
+  const address = deploymentAddressByName(deployments, contractName);
+  if (!address)
+    throw new Error(`Missing deployment address for ${contractName}`);
+  return address;
+}
+
+function firstBroadcaster(transactions) {
+  const sender = transactions
+    .map((tx) => tx?.transaction?.from || tx?.from)
+    .find((from) => typeof from === "string" && from !== "");
+  if (!sender) {
+    throw new Error("Broadcast is missing deployer sender");
+  }
+  return checksum(sender);
+}
+
+function completionContext(transactions, deployments) {
+  return {
+    deployer: firstBroadcaster(transactions),
+    governance: requireDeploymentAddress(deployments, "TimelockController"),
+    timelockController: requireDeploymentAddress(
+      deployments,
+      "TimelockController"
+    ),
+    loopReputation: requireDeploymentAddress(deployments, "LoopReputation"),
+    governor: requireDeploymentAddress(deployments, "RateLoopGovernor"),
+    categoryRegistry: requireDeploymentAddress(deployments, "CategoryRegistry"),
+    clusterPayoutOracle: requireDeploymentAddress(
+      deployments,
+      "ClusterPayoutOracle"
+    ),
+    launchDistributionPool: requireDeploymentAddress(
+      deployments,
+      "LaunchDistributionPool"
+    ),
+    advisoryVoteRecorder: requireDeploymentAddress(
+      deployments,
+      "AdvisoryVoteRecorder"
+    ),
+    frontendRegistry: requireDeploymentAddress(deployments, "FrontendRegistry"),
+    profileRegistry: requireDeploymentAddress(deployments, "ProfileRegistry"),
+    contentRegistry: requireDeploymentAddress(deployments, "ContentRegistry"),
+    protocolConfig: requireDeploymentAddress(deployments, "ProtocolConfig"),
+    roundVotingEngine: requireDeploymentAddress(
+      deployments,
+      "RoundVotingEngine"
+    ),
+    roundRewardDistributor: requireDeploymentAddress(
+      deployments,
+      "RoundRewardDistributor"
+    ),
+    raterRegistry: requireDeploymentAddress(deployments, "RaterRegistry"),
+    questionRewardPoolEscrow: requireDeploymentAddress(
+      deployments,
+      "QuestionRewardPoolEscrow"
+    ),
+    feedbackRegistry: requireDeploymentAddress(deployments, "FeedbackRegistry"),
+    feedbackBonusEscrow: requireDeploymentAddress(
+      deployments,
+      "FeedbackBonusEscrow"
+    ),
+  };
+}
+
+function expectedTargetAddress(requirement, ctx) {
+  if (typeof requirement.target === "function") return requirement.target(ctx);
+  return ctx[lowerFirst(requirement.target)];
+}
+
+function lowerFirst(value) {
+  return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+function addressEquals(left, right) {
+  try {
+    return checksum(left) === checksum(right);
+  } catch {
+    return false;
+  }
+}
+
+function targetMatches(tx, expectedTarget) {
+  const targets = txTargets(tx);
+  return (
+    targets.length > 0 &&
+    targets.every((target) => addressEquals(target, expectedTarget))
+  );
+}
+
+function decodedCall(tx, requirement) {
+  if (!requirement.abi) {
+    return null;
+  }
+  const data = txInput(tx);
+  if (!data || data === "0x") {
+    return null;
+  }
+  try {
+    return decodeFunctionData({ abi: requirement.abi, data });
+  } catch {
+    return null;
+  }
+}
+
+function txFunctionName(tx, requirement) {
+  const decoded = decodedCall(tx, requirement);
+  return decoded?.functionName || tx.function;
+}
+
+function txArguments(tx, requirement) {
+  if (Array.isArray(tx.arguments)) {
+    return tx.arguments;
+  }
+  const decoded = decodedCall(tx, requirement);
+  return decoded?.args || [];
+}
+
+function argumentMatches(actual, expected) {
+  if (typeof expected === "boolean") {
+    return (
+      actual === expected || String(actual).toLowerCase() === String(expected)
+    );
+  }
+  if (typeof expected === "number" || typeof expected === "bigint") {
+    try {
+      return BigInt(actual) === BigInt(expected);
+    } catch {
       return false;
     }
   }
+  if (
+    typeof expected === "string" &&
+    expected.startsWith("0x") &&
+    expected.length === 42
+  ) {
+    return typeof actual === "string" && addressEquals(actual, expected);
+  }
+  if (typeof expected === "string" && expected.startsWith("0x")) {
+    return (
+      typeof actual === "string" &&
+      actual.toLowerCase() === expected.toLowerCase()
+    );
+  }
+  try {
+    return BigInt(actual) === BigInt(expected);
+  } catch {
+    return String(actual).toLowerCase() === String(expected).toLowerCase();
+  }
+}
+
+function argumentsMatch(actualArgs, expectedArgs) {
+  if (!expectedArgs) return true;
+  if (!Array.isArray(actualArgs) || actualArgs.length < expectedArgs.length) {
+    return false;
+  }
+  return expectedArgs.every((expected, index) =>
+    argumentMatches(actualArgs[index], expected)
+  );
+}
+
+function callMatches(tx, receiptByHash, requirement, ctx) {
+  if (tx.transactionType !== "CALL") return false;
+  if (tx.contractName !== requirement.contractName) return false;
+  if (!targetMatches(tx, expectedTargetAddress(requirement, ctx))) return false;
+  if (txFunctionName(tx, requirement) !== requirement.functionName)
+    return false;
+  const expectedArgs =
+    typeof requirement.args === "function"
+      ? requirement.args(ctx)
+      : requirement.args;
+  if (!argumentsMatch(txArguments(tx, requirement), expectedArgs)) return false;
   requireSuccessfulReceipt(tx, receiptByHash);
   return true;
 }
@@ -322,39 +576,14 @@ function assertRequiredCompletionCalls(
   receiptByHash,
   deployments
 ) {
+  const ctx = completionContext(transactions, deployments);
   const missing = [];
   for (const requirement of REQUIRED_COMPLETION_CALLS) {
     const count = transactions.filter((tx) =>
-      callMatches(tx, receiptByHash, requirement)
+      callMatches(tx, receiptByHash, requirement, ctx)
     ).length;
-    if (count < (requirement.minCount || 1)) {
+    if (count < 1) {
       missing.push(requirement.label);
-    }
-  }
-
-  const protocolConfigAddress = Object.entries(deployments).find(
-    ([address, contractName]) =>
-      address.startsWith("0x") && contractName === "ProtocolConfig"
-  )?.[0];
-  if (!protocolConfigAddress) {
-    missing.push("ProtocolConfig deployment");
-  } else {
-    for (const [
-      label,
-      selector,
-    ] of PROTOCOL_CONFIG_PROXY_COMPLETION_SELECTORS) {
-      const found = transactions.some((tx, index) => {
-        const target = txTarget(tx);
-        const matches =
-          tx.transactionType === "CALL" &&
-          typeof target === "string" &&
-          target.toLowerCase() === protocolConfigAddress.toLowerCase() &&
-          txInput(tx).toLowerCase().startsWith(selector);
-        if (!matches) return false;
-        requireSuccessfulReceipt(tx, receiptByHash);
-        return true;
-      });
-      if (!found) missing.push(label);
     }
   }
 

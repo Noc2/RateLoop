@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { encodeFunctionData, parseAbi } from "viem";
 
 import { reconstructDeploymentExportFromBroadcast } from "./exportDeploymentFromBroadcast.js";
 
@@ -27,9 +28,18 @@ const proxyNames = [
   "FeedbackBonusEscrow",
 ];
 
+const protocolConfigAbi = parseAbi([
+  "function setClusterPayoutOracle(address value)",
+  "function setAdvisoryVoteRecorder(address value)",
+  "function setLaunchDistributionPool(address value)",
+  "function renounceRole(bytes32 role,address account)",
+]);
+
 function address(index) {
   return `0x${index.toString(16).padStart(40, "0")}`;
 }
+
+const fixtureDeployer = address(101);
 
 function txHash(index) {
   return `0x${index.toString(16).padStart(64, "0")}`;
@@ -66,6 +76,7 @@ function pushCall(
     function: functionName,
     arguments: args,
     input: "0x12345678",
+    transaction: { from: fixtureDeployer, to: targetAddress },
     hash,
   });
   receipts.push(successfulReceipt(hash));
@@ -75,7 +86,8 @@ function pushProtocolConfigProxyCall(
   transactions,
   receipts,
   protocolConfigProxy,
-  selector
+  functionName,
+  args
 ) {
   const hash = nextTxHash(transactions);
   transactions.push({
@@ -84,7 +96,8 @@ function pushProtocolConfigProxyCall(
     contractAddress: protocolConfigProxy,
     function: null,
     arguments: null,
-    input: `${selector}${"0".repeat(64)}`,
+    input: encodeFunctionData({ abi: protocolConfigAbi, functionName, args }),
+    transaction: { from: fixtureDeployer, to: protocolConfigProxy },
     hash,
   });
   receipts.push(successfulReceipt(hash));
@@ -97,12 +110,33 @@ function removeRequiredCall(transactions, receipts, predicate) {
   receipts.splice(index, 1);
 }
 
+function findRequiredCall(transactions, predicate) {
+  const tx = transactions.find(predicate);
+  assert.ok(tx, "test fixture should contain required call");
+  return tx;
+}
+
+function assertRejectsTamperedCompletion(mutator, expectedLabel) {
+  const { transactions, receipts } = completeBroadcast();
+  mutator(transactions);
+
+  assert.throws(
+    () =>
+      reconstructDeploymentExportFromBroadcast(
+        { transactions, receipts },
+        "worldchainSepolia"
+      ),
+    expectedLabel
+  );
+}
+
 function completeBroadcast() {
   const transactions = [];
   const receipts = [];
   let nextAddress = 1;
   const directAddressByName = new Map();
   const proxyAddressByName = new Map();
+  const deployer = fixtureDeployer;
 
   for (const contractName of directNames) {
     const contractAddress = address(nextAddress++);
@@ -112,6 +146,7 @@ function completeBroadcast() {
       transactionType: "CREATE",
       contractName,
       contractAddress,
+      transaction: { from: deployer },
       hash,
     });
     receipts.push(successfulReceipt(hash, "0x64"));
@@ -126,6 +161,7 @@ function completeBroadcast() {
       transactionType: "CREATE",
       contractName: "TransparentUpgradeableProxy",
       contractAddress: proxyAddress,
+      transaction: { from: deployer },
       hash,
     });
     receipts.push(
@@ -154,8 +190,7 @@ function completeBroadcast() {
     "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a";
   const seederRole =
     "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1";
-  const deployer = address(101);
-  const governance = address(102);
+  const governance = directAddressByName.get("TimelockController");
   const governor = directAddressByName.get("RateLoopGovernor");
   const clusterOracle = directAddressByName.get("ClusterPayoutOracle");
   const launchPool = directAddressByName.get("LaunchDistributionPool");
@@ -311,7 +346,8 @@ function completeBroadcast() {
     transactions,
     receipts,
     protocolConfig,
-    "0x440616e4"
+    "setClusterPayoutOracle",
+    [clusterOracle]
   );
   pushCall(
     transactions,
@@ -341,7 +377,8 @@ function completeBroadcast() {
     transactions,
     receipts,
     protocolConfig,
-    "0x8b099e2f"
+    "setAdvisoryVoteRecorder",
+    [advisoryRecorder]
   );
   pushCall(
     transactions,
@@ -427,13 +464,15 @@ function completeBroadcast() {
     transactions,
     receipts,
     protocolConfig,
-    "0xa0ad8aa9"
+    "setLaunchDistributionPool",
+    [launchPool]
   );
   pushProtocolConfigProxyCall(
     transactions,
     receipts,
     protocolConfig,
-    "0x36568abe"
+    "renounceRole",
+    [configRole, deployer]
   );
 
   return { transactions, receipts };
@@ -550,6 +589,124 @@ test("reconstructDeploymentExportFromBroadcast rejects missing protocol oracle c
       ),
     /ProtocolConfig\.setClusterPayoutOracle/
   );
+});
+
+test("reconstructDeploymentExportFromBroadcast rejects tampered completion arguments and targets", () => {
+  const adminRole =
+    "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775";
+  const defaultAdminRole =
+    "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+  const cases = [
+    {
+      label: /RaterRegistry\.renounceRole\(ADMIN_ROLE\)/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "RaterRegistry" &&
+            candidate.function === "renounceRole(bytes32,address)" &&
+            candidate.arguments?.[0] === adminRole
+        );
+        tx.arguments[1] = address(202);
+      },
+    },
+    {
+      label: /ClusterPayoutOracle\.grantRole\(DEFAULT_ADMIN_ROLE\)/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "ClusterPayoutOracle" &&
+            candidate.function === "grantRole(bytes32,address)" &&
+            candidate.arguments?.[0] === defaultAdminRole
+        );
+        tx.arguments[1] = address(203);
+      },
+    },
+    {
+      label: /LaunchDistributionPool\.setClusterPayoutOracle/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "LaunchDistributionPool" &&
+            candidate.function === "setClusterPayoutOracle(address)"
+        );
+        tx.contractAddress = address(204);
+      },
+    },
+    {
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(QUESTION_REWARD\)/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "ClusterPayoutOracle" &&
+            candidate.function ===
+              "setRoundPayoutSnapshotConsumer(uint8,address)" &&
+            candidate.arguments?.[0] === "1"
+        );
+        tx.arguments[1] = address(205);
+      },
+    },
+    {
+      label:
+        /LaunchDistributionPool\.setAuthorizedCaller\(RoundRewardDistributor\)/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "LaunchDistributionPool" &&
+            candidate.function === "setAuthorizedCaller(address,bool)" &&
+            candidate.arguments?.[1] === "true"
+        );
+        tx.arguments[1] = "false";
+      },
+    },
+    {
+      label: /ProtocolConfig\.setClusterPayoutOracle/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(transactions, (candidate) =>
+          candidate.input?.startsWith("0x440616e4")
+        );
+        tx.input = encodeFunctionData({
+          abi: protocolConfigAbi,
+          functionName: "setClusterPayoutOracle",
+          args: [address(206)],
+        });
+      },
+    },
+    {
+      label: /LaunchDistributionPool\.transferOwnership/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "LaunchDistributionPool" &&
+            candidate.function === "transferOwnership(address)"
+        );
+        tx.arguments[0] = address(207);
+      },
+    },
+    {
+      label: /LoopReputation\.setGovernor/,
+      mutate: (transactions) => {
+        const tx = findRequiredCall(
+          transactions,
+          (candidate) =>
+            candidate.contractName === "LoopReputation" &&
+            candidate.function === "setGovernor(address)"
+        );
+        tx.arguments[0] = address(208);
+      },
+    },
+  ];
+
+  for (const { mutate, label } of cases) {
+    assertRejectsTamperedCompletion(mutate, label);
+  }
 });
 
 test("reconstructDeploymentExportFromBroadcast rejects missing receipts", () => {
