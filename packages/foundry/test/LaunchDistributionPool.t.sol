@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
@@ -253,6 +254,23 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(interruptedPool.poolBalance(), interruptedPool.TOTAL_POOL_AMOUNT());
         assertEq(interruptedLrep.balanceOf(address(interruptedPool)), interruptedPool.TOTAL_POOL_AMOUNT());
         assertEq(interruptedLrep.balanceOf(deployer), 0);
+    }
+
+    function test_SetGovernanceTransfersOwnershipAndRevokesOldOwnerControl() public {
+        address oldGovernance = address(this);
+        address newGovernance = address(0xBEEF);
+
+        pool.setGovernance(newGovernance);
+
+        assertEq(pool.governance(), newGovernance);
+        assertEq(pool.owner(), newGovernance);
+
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, oldGovernance));
+        pool.setAuthorizedCaller(address(0xCA11), true);
+
+        vm.prank(newGovernance);
+        pool.setAuthorizedCaller(address(0xCA11), true);
+        assertTrue(pool.authorizedCallers(address(0xCA11)));
     }
 
     function test_WithdrawRemainingOnlyWithdrawsSurplusAboveReservedLaunchBuckets() public {

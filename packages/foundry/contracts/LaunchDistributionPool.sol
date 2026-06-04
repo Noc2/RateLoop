@@ -257,6 +257,7 @@ contract LaunchDistributionPool is
         if (newGovernance == address(0)) revert InvalidAddress();
         if (owner() != governance) revert InvalidAddress();
         governance = newGovernance;
+        _transferOwnership(newGovernance);
         emit GovernanceUpdated(newGovernance);
     }
 
