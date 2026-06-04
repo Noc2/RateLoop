@@ -13,10 +13,7 @@ import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning"
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
-import {
-  ContextDocumentUploader,
-  type UploadedContextDocument,
-} from "~~/components/submit/ContextDocumentUploader";
+import { ContextDocumentUploader, type UploadedContextDocument } from "~~/components/submit/ContextDocumentUploader";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { serializeTags } from "~~/constants/categories";
@@ -1499,7 +1496,9 @@ export function ContentSubmissionSection() {
     const trimmedTitle = draft.title.trim();
     const trimmedDescription = draft.description.trim();
     const trimmedContextUrl =
-      draft.contextSourceMode === "document" ? (draft.contextDocument?.contextUrl.trim() ?? "") : draft.contextUrl.trim();
+      draft.contextSourceMode === "document"
+        ? (draft.contextDocument?.contextUrl.trim() ?? "")
+        : draft.contextUrl.trim();
     const submittedContextUrl = normalizeSubmissionContextUrl(trimmedContextUrl) ?? "";
     const submittedImageUrls =
       draft.mediaMode === "images"
@@ -1514,11 +1513,12 @@ export function ContentSubmissionSection() {
       value.trim() ? getMediaUrlValidationError(value, "images") : null,
     );
     const nextVideoUrlError = getMediaUrlValidationError(draft.videoUrl, "video");
-    const nextContextUrlError = draft.contextSourceMode === "document"
-      ? draft.contextDocument && trimmedContextUrl
-        ? getContextUrlValidationError(trimmedContextUrl)
-        : null
-      : getContextUrlValidationError(trimmedContextUrl);
+    const nextContextUrlError =
+      draft.contextSourceMode === "document"
+        ? draft.contextDocument && trimmedContextUrl
+          ? getContextUrlValidationError(trimmedContextUrl)
+          : null
+        : getContextUrlValidationError(trimmedContextUrl);
     const nextTitleError = trimmedTitle ? getContentTitleValidationError(trimmedTitle) : null;
     const nextDescriptionError = trimmedDescription ? getContentDescriptionValidationError(trimmedDescription) : null;
     const blockedContentTags = findBlockedContentTags(draft.selectedSubcategories);

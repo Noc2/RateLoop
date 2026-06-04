@@ -1,13 +1,16 @@
-import {
-  createContextDocumentFromBuffer,
-  getContextDocument,
-  getContextDocumentUrl,
-} from "~~/lib/attachments/contextDocuments";
-import { __setDatabaseResourcesForTests } from "~~/lib/db";
-import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { after, beforeEach, test } from "node:test";
+import {
+  attachContextDocumentToContent,
+  createContextDocumentFromBuffer,
+  getContextDocument,
+  getContextDocumentSubmissionValidationError,
+  getContextDocumentUrl,
+  parseContextDocumentIdFromContextUrl,
+} from "~~/lib/attachments/contextDocuments";
+import { __setDatabaseResourcesForTests } from "~~/lib/db";
+import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAppUrl = env.APP_URL;
@@ -93,4 +96,82 @@ test("getContextDocumentUrl uses configured app origin", () => {
     getContextDocumentUrl("https://localhost:3000/api/attachments/documents/upload", "doc_testcontextdocument03"),
     "https://www.rateloop.ai/context/documents/doc_testcontextdocument03",
   );
+});
+
+test("parseContextDocumentIdFromContextUrl rejects lookalike origins", () => {
+  assert.equal(
+    parseContextDocumentIdFromContextUrl("https://www.rateloop.ai/context/documents/doc_testcontextdocument04"),
+    "doc_testcontextdocument04",
+  );
+  assert.equal(
+    parseContextDocumentIdFromContextUrl("https://example.com/context/documents/doc_testcontextdocument04"),
+    null,
+  );
+});
+
+test("getContextDocumentSubmissionValidationError requires approved owner", async () => {
+  const buffer = Buffer.from("This is public supporting context.", "utf8");
+  const contextUrl = "https://www.rateloop.ai/context/documents/doc_testcontextdocument05";
+  await createContextDocumentFromBuffer({
+    buffer,
+    documentId: "doc_testcontextdocument05",
+    filename: "context.txt",
+    mimeType: "text/plain",
+    requestUrl: "https://rateloop.ai/api/attachments/documents/upload",
+    sha256: sha256(buffer),
+    sizeBytes: buffer.byteLength,
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    },
+  });
+
+  assert.equal(
+    await getContextDocumentSubmissionValidationError({
+      contextUrl,
+      ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
+    }),
+    null,
+  );
+  assert.match(
+    (await getContextDocumentSubmissionValidationError({
+      contextUrl,
+      ownerWalletAddress: "0x00000000000000000000000000000000000000bb",
+    })) ?? "",
+    /submitting wallet or agent/i,
+  );
+  assert.equal(
+    await getContextDocumentSubmissionValidationError({
+      contextUrl: "https://example.com/research",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000bb",
+    }),
+    null,
+  );
+});
+
+test("attachContextDocumentToContent records the submitted content id", async () => {
+  const buffer = Buffer.from("Post-submit document bookkeeping.", "utf8");
+  const contextUrl = "https://www.rateloop.ai/context/documents/doc_testcontextdocument06";
+  await createContextDocumentFromBuffer({
+    buffer,
+    documentId: "doc_testcontextdocument06",
+    filename: "bookkeeping.md",
+    mimeType: "text/markdown",
+    requestUrl: "https://rateloop.ai/api/attachments/documents/upload",
+    sha256: sha256(buffer),
+    sizeBytes: buffer.byteLength,
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    },
+  });
+
+  await attachContextDocumentToContent({
+    contentId: "42",
+    contextUrl,
+    ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+  });
+
+  const document = await getContextDocument("doc_testcontextdocument06");
+  assert.equal(document?.contentId, "42");
 });

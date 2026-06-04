@@ -15,6 +15,7 @@ const DEFAULT_CONTEXT_DOCUMENT_TEXT_PREVIEW_LENGTH = 600;
 const OPENAI_MODERATION_MODEL = "omni-moderation-latest";
 const MODERATION_CHUNK_MAX_CHARS = 10_000;
 const CONTEXT_DOCUMENT_ID_PATTERN = /^doc_[A-Za-z0-9_-]{16,80}$/;
+const PRODUCTION_CONTEXT_DOCUMENT_ORIGINS = ["https://rateloop.ai", "https://www.rateloop.ai"];
 const BLOCKED_MODERATION_CATEGORIES = new Set([
   "sexual/minors",
   "sexual",
@@ -102,9 +103,45 @@ export function getContextDocumentUrl(requestUrl: string, documentId: string) {
   return new URL(getContextDocumentPath(documentId), getConfiguredContextDocumentBaseUrl() ?? requestUrl).toString();
 }
 
+function getAllowedContextDocumentOrigins() {
+  const origins = new Set(PRODUCTION_CONTEXT_DOCUMENT_ORIGINS);
+  const rawValues = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL, process.env.VERCEL_URL];
+
+  for (const rawValue of rawValues) {
+    const trimmed = rawValue?.trim();
+    if (!trimmed) continue;
+
+    const value =
+      rawValue === process.env.VERCEL_URL && !/^https?:\/\//i.test(trimmed) ? `https://${trimmed}` : trimmed;
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        origins.add(parsed.origin);
+      }
+    } catch {
+      // Ignore malformed deployment URL config and fall back to the known production origins.
+    }
+  }
+
+  return origins;
+}
+
+function isLocalContextDocumentOrigin(parsed: URL) {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]")
+  );
+}
+
+function isAllowedContextDocumentOrigin(parsed: URL) {
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  return getAllowedContextDocumentOrigins().has(parsed.origin) || isLocalContextDocumentOrigin(parsed);
+}
+
 export function parseContextDocumentIdFromContextUrl(value: string): string | null {
   try {
     const parsed = new URL(value);
+    if (!isAllowedContextDocumentOrigin(parsed)) return null;
     const match = parsed.pathname.match(/^\/context\/documents\/(doc_[A-Za-z0-9_-]{16,80})$/);
     return match?.[1] ?? null;
   } catch {
@@ -379,7 +416,9 @@ export async function getContextDocumentSubmissionValidationError(params: {
   const ownedByWallet =
     ownerWalletAddress !== null && document.ownerWalletAddress?.trim().toLowerCase() === ownerWalletAddress;
 
-  return ownedByAgent || ownedByWallet ? null : "Uploaded document context must belong to the submitting wallet or agent.";
+  return ownedByAgent || ownedByWallet
+    ? null
+    : "Uploaded document context must belong to the submitting wallet or agent.";
 }
 
 export async function attachContextDocumentToContent(params: {

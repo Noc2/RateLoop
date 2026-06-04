@@ -21,6 +21,10 @@ import {
   keccak256,
   parseSignature,
 } from "viem";
+import {
+  attachContextDocumentToContent,
+  getContextDocumentSubmissionValidationError,
+} from "~~/lib/attachments/contextDocuments";
 import { getImageAttachmentSubmissionValidationError } from "~~/lib/attachments/imageAttachments";
 import { dbClient } from "~~/lib/db";
 import {
@@ -62,7 +66,7 @@ type WalletSubmissionReceiptMode =
   | "permissionless-wallet-plan"
   | "permissionless-x402-authorization";
 
-type ImageAttachmentSubmissionIdentity = {
+type AttachmentSubmissionIdentity = {
   agentId?: string | null;
   ownerWalletAddress?: string | null;
 };
@@ -70,6 +74,7 @@ type ImageAttachmentSubmissionIdentity = {
 type StoredWalletSubmissionPlanReceipt = {
   agentId?: string;
   expectedContentHashes?: Hex[];
+  expectedContextUrls?: string[];
   feedbackBonus?: StoredFeedbackBonusRequest;
   expectedRewardTerms?: StoredQuestionRewardTerms;
   expectedRoundConfig?: ReturnType<typeof serializeQuestionRoundConfig>;
@@ -303,9 +308,13 @@ function getQuestionImageUrls(payload: X402QuestionPayload): string[] {
   return payload.questions.flatMap(question => question.imageUrls);
 }
 
+function getQuestionContextUrls(payload: X402QuestionPayload): string[] {
+  return payload.questions.map(question => question.contextUrl).filter(Boolean);
+}
+
 async function assertApprovedImageAttachmentsForSubmission(
   payload: X402QuestionPayload,
-  identity: ImageAttachmentSubmissionIdentity,
+  identity: AttachmentSubmissionIdentity,
 ) {
   const error = await getImageAttachmentSubmissionValidationError({
     agentId: identity.agentId,
@@ -317,8 +326,36 @@ async function assertApprovedImageAttachmentsForSubmission(
   }
 }
 
+async function assertApprovedContextDocumentsForSubmission(
+  payload: X402QuestionPayload,
+  identity: AttachmentSubmissionIdentity,
+) {
+  for (const contextUrl of [...new Set(getQuestionContextUrls(payload))]) {
+    const error = await getContextDocumentSubmissionValidationError({
+      agentId: identity.agentId,
+      contextUrl,
+      ownerWalletAddress: identity.ownerWalletAddress,
+    });
+    if (error) {
+      throw new X402QuestionInputError(error);
+    }
+  }
+}
+
+async function assertApprovedAttachmentsForSubmission(
+  payload: X402QuestionPayload,
+  identity: AttachmentSubmissionIdentity,
+) {
+  await assertApprovedImageAttachmentsForSubmission(payload, identity);
+  await assertApprovedContextDocumentsForSubmission(payload, identity);
+}
+
 function buildExpectedQuestionContentHashes(payload: X402QuestionPayload): Hex[] {
   return payload.questions.map(question => buildQuestionContentHash(question));
+}
+
+function buildExpectedQuestionContextUrls(payload: X402QuestionPayload): string[] {
+  return payload.questions.map(question => question.contextUrl);
 }
 
 function serializeExpectedRewardTerms(payload: X402QuestionPayload): StoredQuestionRewardTerms {
@@ -394,6 +431,9 @@ function parseStoredSubmissionPlanReceipt(value: string | null): StoredWalletSub
     const expectedContentHashes = Array.isArray(parsed.expectedContentHashes)
       ? parsed.expectedContentHashes.filter(isBytes32Hex).map(hash => hash.toLowerCase() as Hex)
       : undefined;
+    const expectedContextUrls = Array.isArray(parsed.expectedContextUrls)
+      ? parsed.expectedContextUrls.filter((url): url is string => typeof url === "string")
+      : undefined;
     const expectedRewardTerms =
       parsed.expectedRewardTerms && typeof parsed.expectedRewardTerms === "object"
         ? (parsed.expectedRewardTerms as StoredQuestionRewardTerms)
@@ -406,6 +446,7 @@ function parseStoredSubmissionPlanReceipt(value: string | null): StoredWalletSub
     return {
       agentId: typeof parsed.agentId === "string" && parsed.agentId ? parsed.agentId : undefined,
       expectedContentHashes,
+      expectedContextUrls,
       feedbackBonus: parseStoredFeedbackBonusRequest(parsed.feedbackBonus),
       expectedRewardTerms,
       expectedRoundConfig,
@@ -921,12 +962,12 @@ async function assertBountyMeetsProtocolMinimum(params: {
 }
 
 async function preflightX402QuestionSubmissionWithClient(params: {
+  attachmentIdentity?: AttachmentSubmissionIdentity;
   config: X402QuestionSubmissionConfig;
-  imageAttachmentIdentity?: ImageAttachmentSubmissionIdentity;
   payload: X402QuestionPayload;
   publicClient: X402PublicClient;
 }): Promise<{ resolvedCategoryIds: bigint[]; submissionKeys: Hex[] }> {
-  await assertApprovedImageAttachmentsForSubmission(params.payload, params.imageAttachmentIdentity ?? {});
+  await assertApprovedAttachmentsForSubmission(params.payload, params.attachmentIdentity ?? {});
   await assertBountyMeetsProtocolMinimum(params);
 
   const resolvedCategoryIds: bigint[] = [];
@@ -986,11 +1027,11 @@ export async function preflightX402QuestionSubmission(params: {
   const operation = buildX402QuestionOperation(params.payload);
   const publicClient = createPublicQuestionClient(params.config);
   const preflight = await preflightX402QuestionSubmissionWithClient({
-    config: params.config,
-    imageAttachmentIdentity: {
+    attachmentIdentity: {
       agentId: params.agentId,
       ownerWalletAddress: params.ownerWalletAddress,
     },
+    config: params.config,
     payload: params.payload,
     publicClient,
   });
@@ -1139,11 +1180,11 @@ async function buildAgentWalletQuestionSubmissionPlan(params: {
   const publicClient = createPublicQuestionClient(params.config);
   const operation = buildX402QuestionOperation(params.payload);
   const preflight = await preflightX402QuestionSubmissionWithClient({
-    config: params.config,
-    imageAttachmentIdentity: {
+    attachmentIdentity: {
       agentId: params.agentId,
       ownerWalletAddress: params.walletAddress,
     },
+    config: params.config,
     payload: params.payload,
     publicClient,
   });
@@ -1346,11 +1387,11 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
   const publicClient = createPublicQuestionClient(params.config);
   const operation = buildX402QuestionOperation(params.payload);
   const preflight = await preflightX402QuestionSubmissionWithClient({
-    config: params.config,
-    imageAttachmentIdentity: {
+    attachmentIdentity: {
       agentId: params.agentId,
       ownerWalletAddress: params.walletAddress,
     },
+    config: params.config,
     payload: params.payload,
     publicClient,
   });
@@ -1770,6 +1811,30 @@ function matchConfirmedSubmissionPlan(params: {
   };
 }
 
+async function attachContextDocumentsToConfirmedSubmission(params: {
+  contentIds: bigint[];
+  record: X402QuestionSubmissionRecord;
+  walletAddress: string;
+}) {
+  const planReceipt = parseStoredSubmissionPlanReceipt(params.record.paymentReceipt);
+  const expectedContextUrls = planReceipt?.expectedContextUrls ?? [];
+  if (expectedContextUrls.length === 0) return;
+
+  await Promise.all(
+    expectedContextUrls.map((contextUrl, index) => {
+      const contentId = params.contentIds[index];
+      if (!contextUrl || contentId === undefined) return Promise.resolve();
+
+      return attachContextDocumentToContent({
+        agentId: planReceipt?.agentId ?? null,
+        contentId: contentId.toString(),
+        contextUrl,
+        ownerWalletAddress: params.walletAddress,
+      });
+    }),
+  );
+}
+
 function x402QuestionSubmissionStatusBody(params: {
   config: X402QuestionSubmissionConfig;
   operation: X402QuestionOperation;
@@ -1820,6 +1885,7 @@ async function recordAgentWalletSubmissionPlan(params: {
   const receipt = JSON.stringify({
     ...(params.agentId ? { agentId: params.agentId } : {}),
     expectedContentHashes: buildExpectedQuestionContentHashes(params.payload),
+    expectedContextUrls: buildExpectedQuestionContextUrls(params.payload),
     ...(params.feedbackBonus ? { feedbackBonus: serializeFeedbackBonusRequest(params.feedbackBonus) } : {}),
     expectedRewardTerms: serializeExpectedRewardTerms(params.payload),
     expectedRoundConfig: serializeQuestionRoundConfig(params.payload.roundConfig),
@@ -1917,6 +1983,7 @@ async function recordNativeX402SubmissionPlan(params: {
     ...(params.agentId ? { agentId: params.agentId } : {}),
     authorization: params.plan.authorization,
     expectedContentHashes: buildExpectedQuestionContentHashes(params.payload),
+    expectedContextUrls: buildExpectedQuestionContextUrls(params.payload),
     ...(params.feedbackBonus ? { feedbackBonus: serializeFeedbackBonusRequest(params.feedbackBonus) } : {}),
     expectedRewardTerms: serializeExpectedRewardTerms(params.payload),
     expectedRoundConfig: serializeQuestionRoundConfig(params.payload.roundConfig),
@@ -2467,7 +2534,7 @@ async function prepareWalletQuestionSubmissionRequest(params: {
     };
   }
 
-  await assertApprovedImageAttachmentsForSubmission(params.payload, {
+  await assertApprovedAttachmentsForSubmission(params.payload, {
     agentId: params.agentId,
     ownerWalletAddress: params.walletAddress,
   });
@@ -2562,7 +2629,7 @@ async function prepareNativeQuestionSubmissionRequest(params: {
     };
   }
 
-  await assertApprovedImageAttachmentsForSubmission(params.payload, {
+  await assertApprovedAttachmentsForSubmission(params.payload, {
     agentId: params.agentId,
     ownerWalletAddress: params.walletAddress,
   });
@@ -2670,6 +2737,11 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     rewardPoolId,
     status: "submitted",
     transactionHashes: params.transactionHashes,
+  });
+  await attachContextDocumentsToConfirmedSubmission({
+    contentIds,
+    record,
+    walletAddress,
   });
 
   const updatedRecord = await getX402QuestionSubmissionByOperationKey(params.operationKey);

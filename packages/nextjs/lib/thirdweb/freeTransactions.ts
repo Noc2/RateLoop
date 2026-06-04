@@ -18,6 +18,7 @@ import {
   toHex,
 } from "viem";
 import { parseTags } from "~~/constants/categories";
+import { getContextDocumentSubmissionValidationError } from "~~/lib/attachments/contextDocuments";
 import { getImageAttachmentSubmissionValidationError } from "~~/lib/attachments/imageAttachments";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
@@ -818,7 +819,13 @@ async function validateSponsoredSubmissionQuestion(
     imageUrls: question.imageUrls,
     ownerWalletAddress: walletAddress,
   });
-  return imageValidationError === null;
+  if (imageValidationError) return false;
+
+  const contextDocumentValidationError = await getContextDocumentSubmissionValidationError({
+    contextUrl: question.contextUrl,
+    ownerWalletAddress: walletAddress,
+  });
+  return contextDocumentValidationError === null;
 }
 
 async function validateSponsoredContentRegistryCall(
