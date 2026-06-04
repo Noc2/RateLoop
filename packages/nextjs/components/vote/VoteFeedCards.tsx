@@ -169,7 +169,7 @@ function getPrimaryMediaItem(item: ContentItem): ContentMediaItem | null {
 function getMediaPlatformType(media: ContentMediaItem | null) {
   if (!media?.url) return "text";
   if (media.mediaType === "video") return "youtube";
-  if (isUploadedImageUrl(media.url)) return "image";
+  if (media.mediaType === "image" || isUploadedImageUrl(media.url)) return "image";
   return detectPlatform(media.url).type;
 }
 
