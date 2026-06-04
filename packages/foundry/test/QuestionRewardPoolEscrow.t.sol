@@ -2429,6 +2429,38 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
+    function testMissedStartByOpenRoundLateFirstStakeRefundsWithoutTerminalRound() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 openedAt = block.timestamp;
+        uint256 bountyStartBy = openedAt + 1 days;
+        uint256 bountyWindowSeconds = 1 hours;
+
+        vm.startPrank(funder);
+        usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
+        uint256 rewardPoolId = rewardPoolEscrow.createRewardPool(
+            contentId, REWARD_POOL_AMOUNT, 3, 1, bountyStartBy, bountyWindowSeconds, 0
+        );
+        vm.stopPrank();
+
+        vm.prank(voter1);
+        votingEngine.openRound(contentId);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        assertEq(RoundEngineReadHelpers.round(votingEngine, contentId, roundId).voteCount, 0);
+
+        vm.warp(bountyStartBy + 1);
+        _commitPrediction(voter1, contentId, 6_000, 1e6, keccak256("late first stake"));
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Open));
+        assertEq(round.voteCount, 1);
+
+        uint256 funderBalanceBefore = usdc.balanceOf(funder);
+        vm.prank(address(0xCAFE));
+        uint256 refundAmount = rewardPoolEscrow.refundExpiredRewardPool(rewardPoolId);
+
+        assertEq(refundAmount, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(funder), funderBalanceBefore + REWARD_POOL_AMOUNT);
+    }
+
     function testOpenRoundThatReachedThresholdBeforeExpiryBlocksRefundAndCanQualify() public {
         uint256 contentId = _submitQuestion("");
         uint256 expiresAt = block.timestamp + EPOCH_DURATION + 10;

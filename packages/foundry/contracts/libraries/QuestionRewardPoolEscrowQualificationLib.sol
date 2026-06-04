@@ -96,6 +96,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         RoundVotingEngine votingEngine,
         uint256 contentId,
         uint256 nextRoundToEvaluate,
+        uint64 bountyOpensAt,
         uint64 bountyClosesAt
     ) external view {
         (uint48 startedAt, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(contentId, nextRoundToEvaluate);
@@ -106,8 +107,15 @@ library QuestionRewardPoolEscrowQualificationLib {
             //  - bountyClosesAt == 0: the window never activated, which only happens when the cursor
             //    round has no commits (see WindowLib.activateRewardPoolWindowForRound), so it cannot qualify;
             //  - startedAt == 0: the round was never created/started;
-            //  - startedAt > bountyClosesAt: the round opened after its bounty window had already closed.
-            if (bountyClosesAt == 0 || startedAt == 0 || startedAt > bountyClosesAt) return;
+            //  - startedAt > bountyClosesAt: the round opened after its bounty window had already closed;
+            //  - bountyOpensAt > bountyClosesAt: the first stake missed bountyStartBy, so the timed
+            //    window is explicitly failed even if the zero-stake round opened before the deadline.
+            if (
+                bountyClosesAt == 0 || startedAt == 0 || startedAt > bountyClosesAt
+                    || (bountyOpensAt != 0 && bountyOpensAt > bountyClosesAt)
+            ) {
+                return;
+            }
         }
         // A finished cursor round must be qualified or skipped first: it may itself be qualifiable, or it
         // may precede a later finished round that is, so the cursor has to advance before unallocated funds
