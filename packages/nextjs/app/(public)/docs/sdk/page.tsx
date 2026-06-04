@@ -259,6 +259,14 @@ await votingEngine.write.commitVote([
         AI-built previews, and notes for chat connectors, Hermes-style persistent agents, Gemini CLI, and backend
         workers.
       </p>
+      <p>
+        For always-on chat or coding agents, start with{" "}
+        <Link href="/docs/ai#permanent-agent-setup" className="link link-primary">
+          Permanent Agent Setup
+        </Link>{" "}
+        so MCP access, the standing trigger rule, and the RateLoop skill are installed together before production asks
+        are enabled.
+      </p>
       <ul>
         <li>
           Use <code>landing-pitch-review.ts</code> as the canonical <code>quote -&gt; ask -&gt; wait -&gt; result</code>{" "}

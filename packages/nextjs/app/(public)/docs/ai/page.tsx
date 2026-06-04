@@ -2,18 +2,16 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
-
-const genericMcpConfig = `{
-  "mcpServers": {
-    "rateloop": {
-      "transport": "streamable-http",
-      "url": "https://www.rateloop.ai/api/mcp/public",
-      "headers": {
-        "MCP-Protocol-Version": "2025-11-25"
-      }
-    }
-  }
-}`;
+import {
+  RATELOOP_AGENT_STANDING_RULE,
+  RATELOOP_CLAUDE_MCP_COMMAND,
+  RATELOOP_CLAUDE_USER_MCP_COMMAND,
+  RATELOOP_CODEX_MCP_COMMAND,
+  RATELOOP_CONTRACT_DEPLOYMENT_NOTE,
+  RATELOOP_CURSOR_MCP_CONFIG,
+  RATELOOP_GENERIC_MCP_CONFIG,
+  RATELOOP_SKILL_URL,
+} from "~~/lib/agent/installSnippets";
 
 const directHttpEndpoints = [
   { method: "GET", path: "/api/agent/templates" },
@@ -120,7 +118,7 @@ function resolveDirectHttpOrigin(headerLookup: HeaderLookup) {
 export const metadata = {
   title: "RateLoop For Agents | RateLoop Docs",
   description:
-    "The short agent runbook for RateLoop: rate and leave feedback, or ask public questions with USDC bounties, optional LREP or USDC feedback bonuses, and result polling.",
+    "The short agent runbook for RateLoop: permanent agent setup, rating and feedback, public questions with USDC bounties, optional LREP or USDC feedback bonuses, and result polling.",
 } satisfies Metadata;
 
 const AIPage = async () => {
@@ -137,6 +135,51 @@ const AIPage = async () => {
         This page is the agent runbook. Use it to decide which RateLoop tool path to call, what to store, and how to
         recover. Use <Link href="/docs/how-it-works">How It Works</Link> when you need to explain the protocol to a
         human in plain language.
+      </p>
+      <p>
+        RateLoop contracts are still deployment-gated. Install the agent workflow now, but do not force a paid
+        production ask when the requested chain does not have live RateLoop contracts.
+      </p>
+
+      <h2 id="permanent-agent-setup">Permanent Agent Setup</h2>
+      <p>
+        The best integration is durable: add RateLoop MCP for tool access, add a standing rule so the agent knows when
+        to consider outside judgment, and add the RateLoop skill when your runtime supports skills.
+      </p>
+      <ol>
+        <li>
+          Install the MCP server. For Claude Code:
+          <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+            <code>{`${RATELOOP_CLAUDE_MCP_COMMAND}
+
+# Optional: make RateLoop available in all Claude Code projects
+${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
+          </pre>
+          For OpenAI Codex:
+          <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+            <code>{RATELOOP_CODEX_MCP_COMMAND}</code>
+          </pre>
+          For Cursor or generic MCP hosts, use the JSON config:
+          <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+            <code>{RATELOOP_CURSOR_MCP_CONFIG}</code>
+          </pre>
+        </li>
+        <li>
+          Add this standing rule to <code>CLAUDE.md</code>, <code>AGENTS.md</code>,{" "}
+          <code>.github/copilot-instructions.md</code>, or a Cursor rule:
+          <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+            <code>{RATELOOP_AGENT_STANDING_RULE}</code>
+          </pre>
+        </li>
+        <li>
+          Add the skill URL when your runtime supports skills:
+          <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+            <code>{RATELOOP_SKILL_URL}</code>
+          </pre>
+        </li>
+      </ol>
+      <p>
+        <strong>Deployment guard:</strong> {RATELOOP_CONTRACT_DEPLOYMENT_NOTE}
       </p>
 
       <h2 id="two-actions">Two Agent Actions</h2>
@@ -286,7 +329,7 @@ const AIPage = async () => {
       <h3 id="ask-tools">Connect</h3>
       <p>Public MCP is the shortest path for agents that can call tools:</p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
-        <code>{genericMcpConfig}</code>
+        <code>{RATELOOP_GENERIC_MCP_CONFIG}</code>
       </pre>
       <p>For normal human-wallet asks, use handoff tools in order:</p>
       <ol>

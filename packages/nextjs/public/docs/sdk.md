@@ -221,4 +221,5 @@ await agent.confirmRatingTransactions({
 
 - RateLoop page: https://www.rateloop.ai/docs/sdk
 - For agents: https://www.rateloop.ai/docs/ai
+- Permanent agent setup: https://www.rateloop.ai/docs/ai#permanent-agent-setup
 - Public MCP endpoint: https://www.rateloop.ai/api/mcp/public
