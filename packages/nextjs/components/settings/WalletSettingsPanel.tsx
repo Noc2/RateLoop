@@ -133,8 +133,7 @@ export function WalletSettingsPanel({ address }: { address?: string }) {
           </div>
           <h3 className="mt-3 text-2xl font-semibold text-base-content">Top Up Network Fees</h3>
           <p className="mt-3 text-base leading-relaxed text-base-content/65">
-            Buy native ETH directly to the connected wallet. ETH covers World Chain gas for normal wallet transactions
-            after sponsored RateLoop Wallet transactions are used or unavailable.
+            Buy native ETH directly to the connected wallet.
           </p>
 
           {targetIsWorldChain && !connectedToWorldChain ? (
