@@ -897,11 +897,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         SubmissionMetadata memory metadata,
         bytes32 mediaHash,
         uint256 resolvedCategoryId
-    )
-        internal
-        pure
-        returns (bytes32)
-    {
+    ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
                 "rateloop-question-context-v2",

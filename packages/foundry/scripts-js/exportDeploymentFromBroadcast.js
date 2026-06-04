@@ -863,7 +863,10 @@ function assertNoUnexpectedAuthorityMutations(transactions, deployments) {
     if (targetMatches(tx, ctx.timelockController)) {
       const { functionName, args } = callInfo(tx, TIMELOCK_AUTHORITY_ABI);
       const [role, account] = args;
-      if (functionName === "grantRole" || functionName === "grantRole(bytes32,address)") {
+      if (
+        functionName === "grantRole" ||
+        functionName === "grantRole(bytes32,address)"
+      ) {
         if (
           role === ROLE_HASHES.timelockProposer ||
           role === ROLE_HASHES.timelockCanceller
@@ -892,18 +895,28 @@ function assertNoUnexpectedAuthorityMutations(transactions, deployments) {
     }
 
     if (targetMatches(tx, ctx.loopReputation)) {
-      const { functionName, args } = callInfo(tx, LOOP_REPUTATION_AUTHORITY_ABI);
+      const { functionName, args } = callInfo(
+        tx,
+        LOOP_REPUTATION_AUTHORITY_ABI
+      );
       if (
-        (functionName === "setGovernor" || functionName === "setGovernor(address)") &&
+        (functionName === "setGovernor" ||
+          functionName === "setGovernor(address)") &&
         !addressEquals(args[0], ctx.governor)
       ) {
-        throw new Error("LoopReputation.setGovernor targets unexpected account");
+        throw new Error(
+          "LoopReputation.setGovernor targets unexpected account"
+        );
       }
     }
   }
 }
 
-function assertContentRegistryEndsUnpaused(transactions, receiptByHash, deployments) {
+function assertContentRegistryEndsUnpaused(
+  transactions,
+  receiptByHash,
+  deployments
+) {
   const ctx = completionContext(transactions, deployments);
   let paused = false;
   for (const tx of transactions) {
@@ -947,7 +960,10 @@ function assertRequiredCompletionCalls(
       const shaped = transactions.filter((tx) =>
         callShapeMatches(tx, receiptByHash, requirement, ctx)
       );
-      if (shaped.length > 0 && !callMatches(shaped[shaped.length - 1], receiptByHash, requirement, ctx)) {
+      if (
+        shaped.length > 0 &&
+        !callMatches(shaped[shaped.length - 1], receiptByHash, requirement, ctx)
+      ) {
         staleFinal.push(requirement.label);
       }
     }
@@ -960,7 +976,9 @@ function assertRequiredCompletionCalls(
   }
   if (staleFinal.length > 0) {
     throw new Error(
-      `Broadcast final state does not match required completion calls: ${staleFinal.join(", ")}`
+      `Broadcast final state does not match required completion calls: ${staleFinal.join(
+        ", "
+      )}`
     );
   }
 }

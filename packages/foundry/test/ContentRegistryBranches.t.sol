@@ -1442,10 +1442,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         assertEq(contentIds.length, 2);
-        assertTrue(
-            firstSubmissionKey != secondSubmissionKey,
-            "different media variants get different submission keys"
-        );
+        assertTrue(firstSubmissionKey != secondSubmissionKey, "different media variants get different submission keys");
     }
 
     function test_SubmitQuestionBundleWithReward_RejectsExactMediaDuplicate() public {
@@ -2221,53 +2218,19 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 20e6);
         bytes32 firstSubmissionKey = _reserveQuestionMediaSubmission(
-            registry,
-            url,
-            firstImageUrls,
-            "",
-            title,
-            description,
-            tags,
-            1,
-            keccak256("media-variant-a"),
-            submitter
+            registry, url, firstImageUrls, "", title, description, tags, 1, keccak256("media-variant-a"), submitter
         );
         vm.warp(block.timestamp + 1);
         uint256 firstContentId = registry.submitQuestion(
-            url,
-            firstImageUrls,
-            "",
-            title,
-            description,
-            tags,
-            1,
-            keccak256("media-variant-a"),
-            _defaultQuestionSpec()
+            url, firstImageUrls, "", title, description, tags, 1, keccak256("media-variant-a"), _defaultQuestionSpec()
         );
 
         bytes32 secondSubmissionKey = _reserveQuestionMediaSubmission(
-            registry,
-            url,
-            secondImageUrls,
-            "",
-            title,
-            description,
-            tags,
-            1,
-            keccak256("media-variant-b"),
-            submitter
+            registry, url, secondImageUrls, "", title, description, tags, 1, keccak256("media-variant-b"), submitter
         );
         vm.warp(block.timestamp + 1);
         uint256 secondContentId = registry.submitQuestion(
-            url,
-            secondImageUrls,
-            "",
-            title,
-            description,
-            tags,
-            1,
-            keccak256("media-variant-b"),
-            _defaultQuestionSpec()
+            url, secondImageUrls, "", title, description, tags, 1, keccak256("media-variant-b"), _defaultQuestionSpec()
         );
         vm.stopPrank();
 

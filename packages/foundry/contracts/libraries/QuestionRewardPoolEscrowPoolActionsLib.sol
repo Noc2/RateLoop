@@ -336,11 +336,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         // when the window never activated (bountyClosesAt == 0). Gating this on bountyClosesAt != 0 let an
         // empty leading round skip the check and drain funds owed to a later qualifiable round's voters.
         QuestionRewardPoolEscrowQualificationLib.requireNoPendingFinishedRound(
-            votingEngine,
-            rewardPool.contentId,
-            rewardPool.nextRoundToEvaluate,
-            rewardPool.bountyOpensAt,
-            bountyClosesAt
+            votingEngine, rewardPool.contentId, rewardPool.nextRoundToEvaluate, rewardPool.bountyOpensAt, bountyClosesAt
         );
         refundAmount = rewardPool.unallocatedAmount;
         require(refundAmount > 0, "No refund");

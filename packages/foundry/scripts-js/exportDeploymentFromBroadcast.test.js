@@ -50,7 +50,9 @@ const contentRegistryAbi = parseAbi([
   "function grantRole(bytes32 role,address account)",
 ]);
 
-const profileRegistryAbi = parseAbi(["function setRaterRegistry(address value)"]);
+const profileRegistryAbi = parseAbi([
+  "function setRaterRegistry(address value)",
+]);
 
 const frontendRegistryAbi = parseAbi([
   "function setVotingEngine(address value)",
@@ -153,7 +155,12 @@ function pushProxyCall(
   receipts.push(successfulReceipt(hash));
 }
 
-function removeRequiredCall(transactions, receipts, predicate, label = "required call") {
+function removeRequiredCall(
+  transactions,
+  receipts,
+  predicate,
+  label = "required call"
+) {
   const index = transactions.findIndex(predicate);
   assert.notEqual(index, -1, `test fixture should contain ${label}`);
   transactions.splice(index, 1);
@@ -260,7 +267,9 @@ function completeBroadcast() {
   const feedbackRegistry = proxyAddressByName.get("FeedbackRegistry");
   const advisoryRecorder = directAddressByName.get("AdvisoryVoteRecorder");
   const protocolConfig = proxyAddressByName.get("ProtocolConfig");
-  const x402QuestionSubmitter = directAddressByName.get("X402QuestionSubmitter");
+  const x402QuestionSubmitter = directAddressByName.get(
+    "X402QuestionSubmitter"
+  );
 
   pushProxyCall(
     transactions,
@@ -821,8 +830,7 @@ test("reconstructDeploymentExportFromBroadcast rejects missing critical wiring",
       label: /ContentRegistry\.grantRole\(X402_GATEWAY_ROLE\)/,
       selector: "0x2f2ff15d",
       target: address(13),
-      arg:
-        "0xf8fc5b762a56b84305af28ac287dfaf08d491f8de4965459339ae40cec115613",
+      arg: "0xf8fc5b762a56b84305af28ac287dfaf08d491f8de4965459339ae40cec115613",
     },
     {
       label: /ProtocolConfig\.setConfig/,
@@ -886,15 +894,22 @@ test("reconstructDeploymentExportFromBroadcast rejects missing critical wiring",
       (tx) => {
         if (selector && !tx.input?.startsWith(selector)) return false;
         if (functionName && tx.function !== functionName) return false;
-        if (target && tx.contractAddress.toLowerCase() !== target.toLowerCase()) {
+        if (
+          target &&
+          tx.contractAddress.toLowerCase() !== target.toLowerCase()
+        ) {
           return false;
         }
         if (!arg) return true;
         if (functionName) {
-          return tx.arguments?.some((value) => value.toLowerCase?.() === arg.toLowerCase());
+          return tx.arguments?.some(
+            (value) => value.toLowerCase?.() === arg.toLowerCase()
+          );
         }
         if (tx.input) return tx.input.toLowerCase().includes(arg.slice(2));
-        return tx.arguments?.some((value) => value.toLowerCase?.() === arg.toLowerCase());
+        return tx.arguments?.some(
+          (value) => value.toLowerCase?.() === arg.toLowerCase()
+        );
       },
       String(label)
     );

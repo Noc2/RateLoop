@@ -3441,10 +3441,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         );
 
         _expectAdvisoryRevert(
-            voter2,
-            contentId,
-            "advisory-unverified-cap-2",
-            AdvisoryVoteRecorder.UnverifiedAdvisoryCapReached.selector
+            voter2, contentId, "advisory-unverified-cap-2", AdvisoryVoteRecorder.UnverifiedAdvisoryCapReached.selector
         );
 
         (bytes32 commitKey,) = _commitWithTargetRound(

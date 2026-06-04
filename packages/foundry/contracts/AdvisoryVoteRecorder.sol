@@ -761,11 +761,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         return IRaterIdentityRegistry(snapshot);
     }
 
-    function _maxUnverifiedAdvisoryCommitsPerRound()
-        internal
-        view
-        returns (bool success, uint16 maxUnverifiedCommits)
-    {
+    function _maxUnverifiedAdvisoryCommitsPerRound() internal view returns (bool success, uint16 maxUnverifiedCommits) {
         address launchPool = protocolConfig.launchDistributionPool();
         if (launchPool == address(0)) {
             return (true, DEFAULT_MAX_UNVERIFIED_ADVISORY_COMMITS_PER_ROUND);
@@ -791,11 +787,11 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         }
     }
 
-    function _unverifiedAdvisoryCommitCapReached(
-        uint256 contentId,
-        uint256 roundId,
-        uint16 maxUnverifiedCommits
-    ) internal view returns (bool) {
+    function _unverifiedAdvisoryCommitCapReached(uint256 contentId, uint256 roundId, uint16 maxUnverifiedCommits)
+        internal
+        view
+        returns (bool)
+    {
         return roundUnverifiedAdvisoryCommitCount[contentId][roundId] >= maxUnverifiedCommits;
     }
 
