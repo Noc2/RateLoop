@@ -139,8 +139,68 @@ function runCompose(composeArgs, options = {}) {
   return spawnSync(compose.command, [...compose.args, "-f", composeFile, ...composeArgs], {
     cwd: repoRoot,
     stdio: options.stdio ?? "inherit",
+    encoding: options.encoding,
     env: options.env ?? process.env,
   });
+}
+
+function formatSpawnOutput(output) {
+  return Buffer.isBuffer(output) ? output.toString("utf8") : String(output ?? "");
+}
+
+function getSpawnOutput(result) {
+  return `${formatSpawnOutput(result.stdout)}${formatSpawnOutput(result.stderr)}`;
+}
+
+function replaySpawnOutput(result) {
+  const stdout = formatSpawnOutput(result.stdout);
+  const stderr = formatSpawnOutput(result.stderr);
+  if (stdout) process.stdout.write(stdout);
+  if (stderr) process.stderr.write(stderr);
+}
+
+export function composeOutputHasPortConflict(output, port) {
+  const escapedPort = String(port).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escapedPort}\\b[\\s\\S]*port is already allocated`, "i").test(output);
+}
+
+function listDockerContainersPublishingPort(port) {
+  const result = spawnSync(
+    "docker",
+    ["ps", "--filter", `publish=${port}`, "--format", "{{.Names}}\t{{.Ports}}"],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+    },
+  );
+
+  if (result.status !== 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [name, ports = ""] = line.split("\t");
+      return { name, ports };
+    });
+}
+
+export function buildLocalDatabasePortConflictMessage(config, containers = []) {
+  const nextPort = config.port === 5432 ? 55432 : config.port + 1;
+  const containerSummary = containers.length
+    ? ` Containers publishing host port ${config.port}: ${containers
+        .map(container => `${container.name} (${container.ports})`)
+        .join(", ")}.`
+    : "";
+
+  return (
+    `Local Postgres host port ${config.port} is already in use, so Docker cannot start the RateLoop Postgres container for ${formatDatabaseTarget(config)}.` +
+    containerSummary +
+    ` Stop the conflicting process/container, or set DATABASE_URL to this local database with a free host port such as ${nextPort} and rerun \`yarn dev:stack\`.`
+  );
 }
 
 function getHomebrewPostgresCommand(name) {
@@ -374,7 +434,6 @@ async function waitForDatabaseReady(config) {
 }
 
 export async function ensureLocalDatabase(config = resolveNextDatabaseConfig()) {
-
   if (config.isMemory) {
     return {
       skipped: true,
@@ -407,8 +466,19 @@ export async function ensureLocalDatabase(config = resolveNextDatabaseConfig()) 
   }
 
   console.log(`[dev-db] Starting local Postgres for ${formatDatabaseTarget(config)}...`);
-  const upResult = runCompose(["up", "-d", postgresServiceName], { env: getComposeEnv(config) });
+  const upResult = runCompose(["up", "-d", postgresServiceName], {
+    env: getComposeEnv(config),
+    stdio: "pipe",
+    encoding: "utf8",
+  });
   if (upResult.status !== 0) {
+    const composeOutput = getSpawnOutput(upResult);
+    replaySpawnOutput(upResult);
+
+    if (composeOutputHasPortConflict(composeOutput, config.port)) {
+      throw new Error(buildLocalDatabasePortConflictMessage(config, listDockerContainersPublishingPort(config.port)));
+    }
+
     console.warn("[dev-db] Docker-managed Postgres could not start; trying fallback Homebrew postgresql@16.");
     await ensureFallbackLocalDatabase(config);
     return {
@@ -418,6 +488,7 @@ export async function ensureLocalDatabase(config = resolveNextDatabaseConfig()) 
     };
   }
 
+  replaySpawnOutput(upResult);
   await waitForDatabaseReady(config);
   console.log(`[dev-db] Local Postgres is ready at ${formatDatabaseTarget(config)}.`);
 
