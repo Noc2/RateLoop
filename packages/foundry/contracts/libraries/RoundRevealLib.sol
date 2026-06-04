@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import { Blockhash } from "@openzeppelin/contracts/utils/Blockhash.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { RobustBtsMath } from "./RobustBtsMath.sol";
@@ -161,7 +162,6 @@ library RoundRevealLib {
         uint16 minParticipants;
         bytes32 settlementEntropy;
         uint48 thresholdReachedAt;
-        bool disableRewards;
     }
 
     function scoreRbtsRewards(
@@ -215,15 +215,6 @@ library RoundRevealLib {
             }
         }
         if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
-
-        // If the captured seed block is no longer available, do not replace it with a
-        // second deterministic reward seed that settlement callers can timing-select.
-        if (params.disableRewards) {
-            _returnScoredStakes(
-                roundCommits, commitRbtsWeight, commitRbtsStakeReturned, revealedKeysMem, revealedBuildIdx
-            );
-            return result;
-        }
 
         // Seed combines delayed closure entropy with the settlement-closed scoring set.
         result.scoreSeed = _rbtsScoreSeed(
@@ -285,26 +276,25 @@ library RoundRevealLib {
         uint256 seedWord = uint256(roundRbtsSeedEntropy[contentId][roundId]);
         if (seedWord < RBTS_SEED_BLOCK_FLAG) return false;
         uint256 seedBlock = uint64(seedWord);
-        return block.number > seedBlock && blockhash(seedBlock) == bytes32(0);
+        return block.number > seedBlock && Blockhash.blockHash(seedBlock) == bytes32(0);
     }
 
     function finalizeRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         uint256 contentId,
         uint256 roundId
-    ) external returns (bytes32 settlementEntropy, bool expiredSeed) {
+    ) external returns (bytes32 settlementEntropy) {
         settlementEntropy = roundRbtsSeedEntropy[contentId][roundId];
         uint256 seedWord = uint256(settlementEntropy);
-        if (seedWord < RBTS_SEED_BLOCK_FLAG) return (settlementEntropy, false);
+        if (seedWord < RBTS_SEED_BLOCK_FLAG) return settlementEntropy;
 
         uint256 seedBlock = uint64(seedWord);
         if (block.number <= seedBlock) revert RevealGraceActive();
-        bytes32 seedBlockhash = blockhash(seedBlock);
+        bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
         if (seedBlockhash == bytes32(0)) {
-            expiredSeed = true;
             settlementEntropy = _lowBitHash(
                 abi.encode(
-                    "rateloop.rbts.expired-seed.rewards-disabled.v1",
+                    "rateloop.rbts.expired-seed.fallback.v1",
                     block.chainid,
                     address(this),
                     contentId,
@@ -313,7 +303,7 @@ library RoundRevealLib {
                 )
             );
             emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
-            return (settlementEntropy, expiredSeed);
+            return settlementEntropy;
         }
         settlementEntropy = keccak256(
             abi.encode(
@@ -327,7 +317,7 @@ library RoundRevealLib {
             )
         );
         emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
-        return (settlementEntropy, false);
+        return settlementEntropy;
     }
 
     function _effectiveStake(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {

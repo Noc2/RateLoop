@@ -1278,8 +1278,7 @@ contract RoundVotingEngine is
         internal
         returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed)
     {
-        (bytes32 settlementEntropy, bool disableRbtsRewards) =
-            RoundRevealLib.finalizeRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
+        bytes32 settlementEntropy = RoundRevealLib.finalizeRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         RoundRevealLib.ScoreRbtsResult memory result = RoundRevealLib.scoreRbtsRewards(
             roundCommitHashes[contentId][roundId],
             commits[contentId][roundId],
@@ -1296,8 +1295,7 @@ contract RoundVotingEngine is
                 revealedCount: revealedCount,
                 minParticipants: MIN_RBTS_PARTICIPANTS,
                 settlementEntropy: settlementEntropy,
-                thresholdReachedAt: thresholdReachedAt,
-                disableRewards: disableRbtsRewards
+                thresholdReachedAt: thresholdReachedAt
             })
         );
 
