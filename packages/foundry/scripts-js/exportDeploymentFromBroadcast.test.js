@@ -48,6 +48,7 @@ const contentRegistryAbi = parseAbi([
   "function setProtocolConfig(address value)",
   "function setCategoryRegistry(address value)",
   "function grantRole(bytes32 role,address account)",
+  "function renounceRole(bytes32 role,address account)",
 ]);
 
 const profileRegistryAbi = parseAbi([
@@ -57,6 +58,14 @@ const profileRegistryAbi = parseAbi([
 const frontendRegistryAbi = parseAbi([
   "function setVotingEngine(address value)",
   "function initializeFeeCreditor(address value)",
+]);
+
+const raterRegistryAbi = parseAbi([
+  "function renounceRole(bytes32 role,address account)",
+]);
+
+const feedbackRegistryAbi = parseAbi([
+  "function renounceRole(bytes32 role,address account)",
 ]);
 
 const loopReputationAbi = parseAbi([
@@ -171,6 +180,18 @@ function findRequiredCall(transactions, predicate) {
   const tx = transactions.find(predicate);
   assert.ok(tx, "test fixture should contain required call");
   return tx;
+}
+
+function encodeExistingCallWithAbi(tx, abi, functionName) {
+  const args = tx.arguments || [];
+  tx.function = null;
+  tx.arguments = null;
+  tx.input = encodeFunctionData({ abi, functionName, args });
+}
+
+function encodeExistingProxyCallWithAbi(tx, abi, functionName) {
+  tx.contractName = "TransparentUpgradeableProxy";
+  encodeExistingCallWithAbi(tx, abi, functionName);
 }
 
 function assertRejectsTamperedCompletion(mutator, expectedLabel) {
@@ -705,6 +726,103 @@ test("reconstructDeploymentExportFromBroadcast maps proxies and proxy admins", (
     deploymentAt(deploymentExport, address(28)),
     "FeedbackBonusEscrowProxyAdmin"
   );
+});
+
+test("reconstructDeploymentExportFromBroadcast accepts Foundry proxy and decoded call shapes", () => {
+  const { transactions, receipts } = completeBroadcast();
+  const adminRole =
+    "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775";
+  const configRole =
+    "0x82db594318110a04b6349ce48645aa69f0892751bc893d15e61d9e2b9c4630f5";
+  const pauserRole =
+    "0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a";
+  const seederRole =
+    "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1";
+
+  encodeExistingProxyCallWithAbi(
+    findRequiredCall(
+      transactions,
+      (tx) =>
+        tx.contractName === "RaterRegistry" && tx.arguments?.[0] === adminRole
+    ),
+    raterRegistryAbi,
+    "renounceRole"
+  );
+  encodeExistingProxyCallWithAbi(
+    findRequiredCall(
+      transactions,
+      (tx) =>
+        tx.contractName === "RaterRegistry" && tx.arguments?.[0] === seederRole
+    ),
+    raterRegistryAbi,
+    "renounceRole"
+  );
+  encodeExistingProxyCallWithAbi(
+    findRequiredCall(
+      transactions,
+      (tx) =>
+        tx.contractName === "FeedbackRegistry" &&
+        tx.arguments?.[0] === configRole
+    ),
+    feedbackRegistryAbi,
+    "renounceRole"
+  );
+  encodeExistingProxyCallWithAbi(
+    findRequiredCall(
+      transactions,
+      (tx) =>
+        tx.contractName === "ContentRegistry" &&
+        tx.arguments?.[0] === configRole
+    ),
+    contentRegistryAbi,
+    "renounceRole"
+  );
+  encodeExistingProxyCallWithAbi(
+    findRequiredCall(
+      transactions,
+      (tx) =>
+        tx.contractName === "ContentRegistry" &&
+        tx.arguments?.[0] === pauserRole
+    ),
+    contentRegistryAbi,
+    "renounceRole"
+  );
+
+  for (const [functionName, predicate] of [
+    [
+      "mint",
+      (tx) =>
+        tx.contractName === "LoopReputation" &&
+        tx.function === "mint(address,uint256)" &&
+        tx.arguments?.[1] === "25000000000000",
+    ],
+    [
+      "setGovernor",
+      (tx) =>
+        tx.contractName === "LoopReputation" &&
+        tx.function === "setGovernor(address)",
+    ],
+    [
+      "mint",
+      (tx) =>
+        tx.contractName === "LoopReputation" &&
+        tx.function === "mint(address,uint256)" &&
+        tx.arguments?.[1] === "75000000000000",
+    ],
+  ]) {
+    encodeExistingCallWithAbi(
+      findRequiredCall(transactions, predicate),
+      loopReputationAbi,
+      functionName
+    );
+  }
+
+  const deploymentExport = reconstructDeploymentExportFromBroadcast(
+    { transactions, receipts },
+    "worldchainSepolia"
+  );
+
+  assert.equal(deploymentExport.deploymentComplete, "true");
 });
 
 test("reconstructDeploymentExportFromBroadcast rejects missing completion calls", () => {

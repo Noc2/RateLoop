@@ -74,6 +74,14 @@ const CONTENT_REGISTRY_COMPLETION_ABI = parseAbi([
   "function renounceRole(bytes32 role,address account)",
 ]);
 
+const RATER_REGISTRY_COMPLETION_ABI = parseAbi([
+  "function renounceRole(bytes32 role,address account)",
+]);
+
+const FEEDBACK_REGISTRY_COMPLETION_ABI = parseAbi([
+  "function renounceRole(bytes32 role,address account)",
+]);
+
 const PROFILE_REGISTRY_COMPLETION_ABI = parseAbi([
   "function setRaterRegistry(address value)",
   "function renounceRole(bytes32 role,address account)",
@@ -165,37 +173,42 @@ const REQUIRED_COMPLETION_CALLS = [
   },
   {
     label: "RaterRegistry.renounceRole(ADMIN_ROLE)",
-    contractName: "RaterRegistry",
+    contractNames: ["RaterRegistry", "TransparentUpgradeableProxy"],
     target: "RaterRegistry",
-    functionName: "renounceRole(bytes32,address)",
+    functionNames: ["renounceRole", "renounceRole(bytes32,address)"],
+    abi: RATER_REGISTRY_COMPLETION_ABI,
     args: (ctx) => [ROLE_HASHES.admin, ctx.deployer],
   },
   {
     label: "RaterRegistry.renounceRole(SEEDER_ROLE)",
-    contractName: "RaterRegistry",
+    contractNames: ["RaterRegistry", "TransparentUpgradeableProxy"],
     target: "RaterRegistry",
-    functionName: "renounceRole(bytes32,address)",
+    functionNames: ["renounceRole", "renounceRole(bytes32,address)"],
+    abi: RATER_REGISTRY_COMPLETION_ABI,
     args: (ctx) => [ROLE_HASHES.seeder, ctx.deployer],
   },
   {
     label: "FeedbackRegistry.renounceRole(CONFIG_ROLE)",
-    contractName: "FeedbackRegistry",
+    contractNames: ["FeedbackRegistry", "TransparentUpgradeableProxy"],
     target: "FeedbackRegistry",
-    functionName: "renounceRole(bytes32,address)",
+    functionNames: ["renounceRole", "renounceRole(bytes32,address)"],
+    abi: FEEDBACK_REGISTRY_COMPLETION_ABI,
     args: (ctx) => [ROLE_HASHES.config, ctx.deployer],
   },
   {
     label: "ContentRegistry.renounceRole(CONFIG_ROLE)",
-    contractName: "ContentRegistry",
+    contractNames: ["ContentRegistry", "TransparentUpgradeableProxy"],
     target: "ContentRegistry",
-    functionName: "renounceRole(bytes32,address)",
+    functionNames: ["renounceRole", "renounceRole(bytes32,address)"],
+    abi: CONTENT_REGISTRY_COMPLETION_ABI,
     args: (ctx) => [ROLE_HASHES.config, ctx.deployer],
   },
   {
     label: "ContentRegistry.renounceRole(PAUSER_ROLE)",
-    contractName: "ContentRegistry",
+    contractNames: ["ContentRegistry", "TransparentUpgradeableProxy"],
     target: "ContentRegistry",
-    functionName: "renounceRole(bytes32,address)",
+    functionNames: ["renounceRole", "renounceRole(bytes32,address)"],
+    abi: CONTENT_REGISTRY_COMPLETION_ABI,
     args: (ctx) => [ROLE_HASHES.pauser, ctx.deployer],
   },
   {
@@ -734,7 +747,19 @@ function txFunctionName(tx, requirement) {
 function functionNameMatches(tx, requirement) {
   const actual = txFunctionName(tx, requirement);
   const expectedNames = requirement.functionNames || [requirement.functionName];
-  return expectedNames.includes(actual);
+  return expectedNames.some((expected) =>
+    functionNamesEquivalent(actual, expected)
+  );
+}
+
+function functionNamesEquivalent(actual, expected) {
+  if (!actual || !expected) return false;
+  if (actual === expected) return true;
+  return functionBaseName(actual) === functionBaseName(expected);
+}
+
+function functionBaseName(functionName) {
+  return String(functionName).split("(")[0];
 }
 
 function txArguments(tx, requirement) {
