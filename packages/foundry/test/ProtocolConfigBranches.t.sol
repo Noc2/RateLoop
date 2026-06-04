@@ -72,9 +72,14 @@ contract MockFrontendRegistryForConfig {
 
 contract MockLaunchDistributionPoolForConfig {
     mapping(address => bool) public authorizedCallers;
+    address public clusterPayoutOracle;
 
     function setAuthorizedCaller(address caller, bool authorized) external {
         authorizedCallers[caller] = authorized;
+    }
+
+    function setClusterPayoutOracle(address oracle) external {
+        clusterPayoutOracle = oracle;
     }
 
     function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
@@ -354,6 +359,7 @@ contract ProtocolConfigBranchesTest is Test {
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setClusterPayoutOracle(address(mismatchedOracle));
 
+        launchPool.setClusterPayoutOracle(address(pinnedOracle));
         config.setClusterPayoutOracle(address(pinnedOracle));
         assertEq(config.clusterPayoutOracle(), address(pinnedOracle));
     }
@@ -369,6 +375,10 @@ contract ProtocolConfigBranchesTest is Test {
         config.setLaunchDistributionPool(address(launchPool));
 
         oracle.setLaunchConsumer(address(launchPool));
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setLaunchDistributionPool(address(launchPool));
+
+        launchPool.setClusterPayoutOracle(address(oracle));
         config.setLaunchDistributionPool(address(launchPool));
         assertEq(config.launchDistributionPool(), address(launchPool));
     }
@@ -380,12 +390,17 @@ contract ProtocolConfigBranchesTest is Test {
         MockClusterPayoutOracleForConfig oracle = new MockClusterPayoutOracleForConfig(address(launchPool));
 
         config.setClusterPayoutOracle(address(oracle));
+        launchPool.setClusterPayoutOracle(address(oracle));
         config.setLaunchDistributionPool(address(launchPool));
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.setLaunchDistributionPool(address(replacementLaunchPool));
 
         oracle.setLaunchConsumer(address(replacementLaunchPool));
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setLaunchDistributionPool(address(replacementLaunchPool));
+
+        replacementLaunchPool.setClusterPayoutOracle(address(oracle));
         config.setLaunchDistributionPool(address(replacementLaunchPool));
         assertEq(config.launchDistributionPool(), address(replacementLaunchPool));
     }

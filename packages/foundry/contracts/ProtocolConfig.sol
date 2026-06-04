@@ -316,6 +316,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value == address(0)) revert InvalidAddress();
         _validateLaunchDistributionPool(value);
         _validateConfiguredClusterPayoutOracleLaunchConsumer(value);
+        _validateConfiguredClusterPayoutOracleLaunchPool(value);
         launchDistributionPool = value;
         emit LaunchDistributionPoolUpdated(value);
     }
@@ -601,6 +602,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address launchPool = launchDistributionPool;
         if (launchPool != address(0)) {
             _validateClusterPayoutOracleLaunchConsumer(value, launchPool);
+            _validateLaunchDistributionPoolClusterPayoutOracle(launchPool, value);
         }
     }
 
@@ -610,11 +612,25 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         _validateClusterPayoutOracleLaunchConsumer(oracle, launchPool);
     }
 
+    function _validateConfiguredClusterPayoutOracleLaunchPool(address launchPool) internal view {
+        address oracle = clusterPayoutOracle;
+        if (oracle == address(0)) return;
+        _validateLaunchDistributionPoolClusterPayoutOracle(launchPool, oracle);
+    }
+
     function _validateClusterPayoutOracleLaunchConsumer(address oracle, address launchPool) internal view {
         try IClusterPayoutOracle(oracle).roundPayoutSnapshotConsumer(PAYOUT_DOMAIN_LAUNCH_CREDIT) returns (
             address consumer
         ) {
             if (consumer != launchPool) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _validateLaunchDistributionPoolClusterPayoutOracle(address launchPool, address oracle) internal view {
+        try ILaunchDistributionPool(launchPool).clusterPayoutOracle() returns (IClusterPayoutOracle poolOracle) {
+            if (address(poolOracle) != oracle) revert InvalidConfig();
         } catch {
             revert InvalidConfig();
         }

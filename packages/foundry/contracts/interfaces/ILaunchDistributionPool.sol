@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { RaterRegistry } from "../RaterRegistry.sol";
+import { IClusterPayoutOracle } from "./IClusterPayoutOracle.sol";
 
 interface ILaunchDistributionPool {
     struct LaunchRewardPolicy {
@@ -21,6 +22,7 @@ interface ILaunchDistributionPool {
     }
 
     function launchAnchorCredentialAgeSeconds() external view returns (uint32);
+    function clusterPayoutOracle() external view returns (IClusterPayoutOracle);
     function launchRewardPolicy()
         external
         view
