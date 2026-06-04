@@ -1007,7 +1007,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
     }
 
-    function test_RbtsExpiredSeedScoresWithFallbackEntropy() public {
+    function test_RbtsExpiredSeedReturnsStakesWithoutScoreRewards() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1031,17 +1031,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
-        assertGt(engine.roundRbtsRewardWeight(contentId, roundId), 0, "expired seed still scores rewards");
-        assertGt(engine.roundVoterPool(contentId, roundId), 0, "expired seed creates reward pool");
-        assertNotEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed scores draws");
-        assertGt(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 scored");
-        assertGt(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 0, "ck1 stake accounted");
-        assertGt(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 0, "ck2 stake accounted");
-        assertGt(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "ck3 stake accounted");
-        assertGt(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 0, "ck4 stake accounted");
+        assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "expired seed does not score rewards");
+        assertEq(engine.roundVoterPool(contentId, roundId), 0, "expired seed creates no reward pool");
+        assertEq(_roundRbtsForfeitedPool(engine, contentId, roundId), 0, "expired seed has no RBTS forfeits");
+        assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed has no sampler seed");
+        assertEq(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 not scored");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 10e6, "ck1 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 3e6, "ck2 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 3e6, "ck3 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 4e6, "ck4 stake returned");
     }
 
-    function test_AdvisoryLaunchCreditExpiredRbtsSeedUsesScoringSeed() public {
+    function test_AdvisoryLaunchCreditExpiredRbtsSeedPaysZeroWithoutScoring() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1065,16 +1066,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.roll(seedBlock + 257);
 
         engine.settleRound(contentId, roundId);
-        assertTrue(engine.roundRbtsScored(contentId, roundId), "round scored with fallback entropy");
-        assertNotEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed produces score seed");
+        assertTrue(engine.roundRbtsScored(contentId, roundId), "round reaches RBTS accounting");
+        assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed produces no score seed");
 
         (uint16 scoreBps, uint256 paidAmount) = advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
-        assertGt(scoreBps, 0, "expired seed allows advisory scoring");
+        assertEq(scoreBps, 0, "expired seed disables advisory scoring");
         assertEq(paidAmount, 0, "unset launch pool pays no launch credit");
 
         (,,,,,,,, bool launchCreditClaimed, uint16 storedScoreBps) =
             advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
-        assertFalse(launchCreditClaimed, "unset launch pool leaves launch claim open");
+        assertTrue(launchCreditClaimed, "zero score finalizes launch claim");
         assertEq(storedScoreBps, scoreBps, "expired seed stores advisory score");
 
         (uint16 repeatScoreBps, uint256 repeatPaidAmount) =
@@ -1109,7 +1110,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
     }
 
-    function test_RbtsExpiredFallbackSeedIgnoresFinalSettlementBlockEntropy() public {
+    function test_RbtsExpiredSeedDoesNotUseFallbackOrSettlementEntropy() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1125,63 +1126,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
 
         uint256 seedBlock = block.number;
-        vm.recordLogs();
         engine.settleRound(contentId, roundId);
-        bytes32 seedMarker = _rbtsEntropyFromLogs(vm.getRecordedLogs(), contentId, roundId);
         vm.roll(seedBlock + 257);
 
         bytes32 settlementPrevrandao = keccak256("expired-settlement-prevrandao");
         vm.prevrandao(settlementPrevrandao);
-        vm.recordLogs();
         engine.settleRound(contentId, roundId);
-        Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        bytes32 expiredFallbackEntropy = bytes32(
-            uint256(
-                keccak256(
-                    abi.encode(
-                        "rateloop.rbts.expired-seed.fallback.v1",
-                        block.chainid,
-                        address(engine),
-                        contentId,
-                        roundId,
-                        seedMarker
-                    )
-                )
-            ) & ((uint256(1) << 255) - 1)
-        );
-        bytes32 revealedSetHash;
-        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck1));
-        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck2));
-        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck3));
-        bytes32 expectedSeed = keccak256(
-            abi.encode(
-                block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, expiredFallbackEntropy
-            )
-        );
-        bytes32 settlementSeed = keccak256(
-            abi.encode(
-                block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, settlementPrevrandao
-            )
-        );
-        assertNotEq(expectedSeed, settlementSeed, "test setup needs distinct settlement entropy");
-
-        bytes32 expectedTopic =
-            keccak256("RbtsRewardsScored(uint256,uint256,bytes32,uint256,uint256,uint256,uint256,uint16)");
-        bool found;
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (
-                logs[i].emitter == address(engine) && logs[i].topics.length == 3 && logs[i].topics[0] == expectedTopic
-                    && uint256(logs[i].topics[1]) == contentId && uint256(logs[i].topics[2]) == roundId
-            ) {
-                (bytes32 scoreSeed,,,,,) =
-                    abi.decode(logs[i].data, (bytes32, uint256, uint256, uint256, uint256, uint16));
-                assertEq(scoreSeed, expectedSeed, "fallback seed must bind to the original marker");
-                found = true;
-                break;
-            }
-        }
-        assertTrue(found, "RbtsRewardsScored event not emitted");
+        assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed has no sampler seed");
+        assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "expired seed has no reward weight");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 10e6, "ck1 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 3e6, "ck2 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 3e6, "ck3 stake returned");
     }
 
     function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {

@@ -216,6 +216,13 @@ library RoundRevealLib {
         }
         if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
 
+        if (params.settlementEntropy == bytes32(0)) {
+            _returnScoredStakes(
+                roundCommits, commitRbtsWeight, commitRbtsStakeReturned, revealedKeysMem, revealedBuildIdx
+            );
+            return result;
+        }
+
         // Seed combines delayed closure entropy with the settlement-closed scoring set.
         result.scoreSeed = _rbtsScoreSeed(
             params.contentId, params.roundId, revealedBuildIdx, scoringSetHash, params.settlementEntropy
@@ -292,18 +299,8 @@ library RoundRevealLib {
         if (block.number <= seedBlock) revert RevealGraceActive();
         bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
         if (seedBlockhash == bytes32(0)) {
-            settlementEntropy = _lowBitHash(
-                abi.encode(
-                    "rateloop.rbts.expired-seed.fallback.v1",
-                    block.chainid,
-                    address(this),
-                    contentId,
-                    roundId,
-                    settlementEntropy
-                )
-            );
-            emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
-            return settlementEntropy;
+            emit RbtsSeedCaptured(contentId, roundId, bytes32(0));
+            return bytes32(0);
         }
         settlementEntropy = keccak256(
             abi.encode(
@@ -337,10 +334,6 @@ library RoundRevealLib {
         );
         roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
         emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
-    }
-
-    function _lowBitHash(bytes memory value) private pure returns (bytes32) {
-        return bytes32(uint256(keccak256(value)) & (RBTS_SEED_BLOCK_FLAG - 1));
     }
 
     function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {
