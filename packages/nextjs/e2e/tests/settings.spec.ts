@@ -49,6 +49,7 @@ test.describe("Settings page", () => {
     await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
     const credentialPrompt = page.getByRole("heading", { name: "Rater credential required for delegation" });
     await expect(credentialPrompt).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Delegation is only available", { exact: false })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Open rater setup" })).toHaveAttribute("href", "/governance");
     await expect(page.getByRole("heading", { name: "Transfer LREP" })).toBeVisible();
     await expect(page.getByLabel("Transfer recipient")).toBeVisible();

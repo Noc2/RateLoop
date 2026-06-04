@@ -309,10 +309,6 @@ export function DelegationSection() {
           <ShieldCheckIcon className="w-6 h-6" />
           Rater credential required for delegation
         </h2>
-        <p className="text-base leading-7 text-base-content/70">
-          Delegation is only available from the wallet that holds a rater credential. Set up the credential first, then
-          return here to authorize a delegate wallet.
-        </p>
         <Link href={GOVERNANCE_ROUTE} className="btn btn-primary w-full rounded-lg sm:w-auto">
           Open rater setup
         </Link>
