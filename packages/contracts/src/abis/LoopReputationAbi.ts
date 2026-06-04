@@ -82,6 +82,19 @@ export const LoopReputationAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_GOVERNANCE_LOCK_DURATION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_SUPPLY",
     "inputs": [],
     "outputs": [

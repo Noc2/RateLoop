@@ -515,6 +515,30 @@ export const AdvisoryVoteRecorderAbi = [
   },
   {
     "type": "function",
+    "name": "roundUnverifiedAdvisoryCommitCount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "setPaused",
     "inputs": [
       {
@@ -789,6 +813,11 @@ export const AdvisoryVoteRecorderAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidLaunchRewardPolicy",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidPrediction",
     "inputs": []
   },
@@ -883,6 +912,11 @@ export const AdvisoryVoteRecorderAbi = [
   {
     "type": "error",
     "name": "ThresholdReached",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnverifiedAdvisoryCapReached",
     "inputs": []
   },
   {

@@ -1116,6 +1116,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "MAX_GOVERNANCE_LOCK_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "MAX_SUPPLY",
           inputs: [],
           outputs: [
@@ -8465,6 +8478,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundRbtsScoringClosed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundReferenceRatingBpsForRound",
           inputs: [
             {
@@ -9783,6 +9820,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "claimAccountingStarted",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -12500,6 +12550,7 @@ const deployedContracts: GenericContractsDeclaration = {
         canClaimFeesForRound: "contracts/interfaces/IFrontendRegistry.sol",
         canReceiveHistoricalFees: "contracts/interfaces/IFrontendRegistry.sol",
         creditFees: "contracts/interfaces/IFrontendRegistry.sol",
+        feeCreditorForEngine: "contracts/interfaces/IFrontendRegistry.sol",
         getAccumulatedFees: "contracts/interfaces/IFrontendRegistry.sol",
         getFrontendInfo: "contracts/interfaces/IFrontendRegistry.sol",
         isAuthorizedSnapshotProposer:
@@ -14023,6 +14074,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "replaceRevokedRewardDistributor",
+          inputs: [
+            {
+              name: "oldValue",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "newValue",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "revealGracePeriod",
           inputs: [],
           outputs: [
@@ -14875,6 +14944,31 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bool",
               indexed: false,
               internalType: "bool",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RewardDistributorReplaced",
+          inputs: [
+            {
+              name: "oldDistributor",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newDistributor",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "engine",
+              type: "address",
+              indexed: true,
+              internalType: "address",
             },
           ],
           anonymous: false,
@@ -24300,6 +24394,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setQuestionRewardPoolEscrow",
+          inputs: [
+            {
+              name: "newEscrow",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "submitQuestionWithX402Payment",
           inputs: [
             {
@@ -24533,6 +24640,25 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "newOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "QuestionRewardPoolEscrowUpdated",
+          inputs: [
+            {
+              name: "previousEscrow",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "currentEscrow",
               type: "address",
               indexed: true,
               internalType: "address",
@@ -27681,10 +27807,12 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {
+        authorizedCallers: "contracts/interfaces/ILaunchDistributionPool.sol",
         claimLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         claimableLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
+        clusterPayoutOracle: "contracts/interfaces/ILaunchDistributionPool.sol",
         earnedRewardCreditRecorded:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         launchAnchorCredentialAgeSeconds:
@@ -28236,6 +28364,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundUnverifiedAdvisoryCommitCount",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "setPaused",
           inputs: [
             {
@@ -28510,6 +28662,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "InvalidLaunchRewardPolicy",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "InvalidPrediction",
           inputs: [],
         },
@@ -28604,6 +28761,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "ThresholdReached",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "UnverifiedAdvisoryCapReached",
           inputs: [],
         },
         {
@@ -29041,13 +29203,13 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "setVotingEngine",
           inputs: [
             {
-              name: "votingEngine_",
+              name: "",
               type: "address",
               internalType: "address",
             },
           ],
           outputs: [],
-          stateMutability: "nonpayable",
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -29372,6 +29534,19 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "GOVERNANCE_LOCK_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MAX_GOVERNANCE_LOCK_DURATION",
           inputs: [],
           outputs: [
             {
@@ -34617,6 +34792,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundRbtsScoringClosed",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundReferenceRatingBpsForRound",
           inputs: [
             {
@@ -35935,6 +36134,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "claimAccountingStarted",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -38652,6 +38864,7 @@ const deployedContracts: GenericContractsDeclaration = {
         canClaimFeesForRound: "contracts/interfaces/IFrontendRegistry.sol",
         canReceiveHistoricalFees: "contracts/interfaces/IFrontendRegistry.sol",
         creditFees: "contracts/interfaces/IFrontendRegistry.sol",
+        feeCreditorForEngine: "contracts/interfaces/IFrontendRegistry.sol",
         getAccumulatedFees: "contracts/interfaces/IFrontendRegistry.sol",
         getFrontendInfo: "contracts/interfaces/IFrontendRegistry.sol",
         isAuthorizedSnapshotProposer:
@@ -40175,6 +40388,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "replaceRevokedRewardDistributor",
+          inputs: [
+            {
+              name: "oldValue",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "newValue",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "revealGracePeriod",
           inputs: [],
           outputs: [
@@ -41027,6 +41258,31 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bool",
               indexed: false,
               internalType: "bool",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RewardDistributorReplaced",
+          inputs: [
+            {
+              name: "oldDistributor",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "newDistributor",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "engine",
+              type: "address",
+              indexed: true,
+              internalType: "address",
             },
           ],
           anonymous: false,
@@ -45804,13 +46060,13 @@ const deployedContracts: GenericContractsDeclaration = {
           name: "setVotingEngine",
           inputs: [
             {
-              name: "votingEngine_",
+              name: "",
               type: "address",
               internalType: "address",
             },
           ],
           outputs: [],
-          stateMutability: "nonpayable",
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -49513,6 +49769,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setQuestionRewardPoolEscrow",
+          inputs: [
+            {
+              name: "newEscrow",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "submitQuestionWithX402Payment",
           inputs: [
             {
@@ -49746,6 +50015,25 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "newOwner",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "QuestionRewardPoolEscrowUpdated",
+          inputs: [
+            {
+              name: "previousEscrow",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "currentEscrow",
               type: "address",
               indexed: true,
               internalType: "address",
@@ -52894,10 +53182,12 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {
+        authorizedCallers: "contracts/interfaces/ILaunchDistributionPool.sol",
         claimLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         claimableLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
+        clusterPayoutOracle: "contracts/interfaces/ILaunchDistributionPool.sol",
         earnedRewardCreditRecorded:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         launchAnchorCredentialAgeSeconds:
@@ -55863,6 +56153,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundUnverifiedAdvisoryCommitCount",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "setPaused",
           inputs: [
             {
@@ -56137,6 +56451,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "InvalidLaunchRewardPolicy",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "InvalidPrediction",
           inputs: [],
         },
@@ -56231,6 +56550,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "ThresholdReached",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "UnverifiedAdvisoryCapReached",
           inputs: [],
         },
         {

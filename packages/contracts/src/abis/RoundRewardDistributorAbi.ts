@@ -32,6 +32,19 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "function",
+    "name": "claimAccountingStarted",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "claimFrontendFee",
     "inputs": [
       {

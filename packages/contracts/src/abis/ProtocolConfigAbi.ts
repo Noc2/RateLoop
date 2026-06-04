@@ -764,6 +764,24 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "replaceRevokedRewardDistributor",
+    "inputs": [
+      {
+        "name": "oldValue",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "newValue",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "revealGracePeriod",
     "inputs": [],
     "outputs": [
@@ -1616,6 +1634,31 @@ export const ProtocolConfigAbi = [
         "type": "bool",
         "indexed": false,
         "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RewardDistributorReplaced",
+    "inputs": [
+      {
+        "name": "oldDistributor",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newDistributor",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "engine",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false

@@ -273,6 +273,19 @@ export const X402QuestionSubmitterAbi = [
   },
   {
     "type": "function",
+    "name": "setQuestionRewardPoolEscrow",
+    "inputs": [
+      {
+        "name": "newEscrow",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "submitQuestionWithX402Payment",
     "inputs": [
       {
@@ -506,6 +519,25 @@ export const X402QuestionSubmitterAbi = [
       },
       {
         "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "QuestionRewardPoolEscrowUpdated",
+    "inputs": [
+      {
+        "name": "previousEscrow",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "currentEscrow",
         "type": "address",
         "indexed": true,
         "internalType": "address"

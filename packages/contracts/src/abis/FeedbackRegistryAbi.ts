@@ -416,13 +416,13 @@ export const FeedbackRegistryAbi = [
     "name": "setVotingEngine",
     "inputs": [
       {
-        "name": "votingEngine_",
+        "name": "",
         "type": "address",
         "internalType": "address"
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
