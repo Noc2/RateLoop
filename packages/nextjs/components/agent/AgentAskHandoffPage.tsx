@@ -27,8 +27,10 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import {
+  type FeedbackBonusAsset,
   formatFeedbackBonusAmount,
   formatSubmissionRewardAmount,
+  parseFeedbackBonusAmount,
   parseSubmissionRewardAmount,
 } from "~~/lib/questionRewardPools";
 import {
@@ -155,6 +157,8 @@ type DraftQuestionForm = {
 
 type DraftForm = {
   bountyAmount: string;
+  feedbackBonusAmount: string | null;
+  feedbackBonusAsset: FeedbackBonusAsset | null;
   questions: DraftQuestionForm[];
   roundBlindMinutes: string;
   roundMaxDurationMinutes: string;
@@ -173,6 +177,8 @@ const SECONDS_PER_MINUTE = 60;
 
 const BOUNTY_AMOUNT_TOOLTIP =
   "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
+const FEEDBACK_BONUS_AMOUNT_TOOLTIP =
+  "Optional pool reserved for useful public feedback after settlement. Use up to 6 decimal places.";
 
 function DraftFieldLabel({ children, htmlFor, tooltip }: { children: ReactNode; htmlFor: string; tooltip: string }) {
   return (
@@ -297,9 +303,12 @@ function readBountyAmountAtomic(handoff: Handoff | null) {
 
 function readFeedbackBonusUsdcAmountAtomic(requestBody: JsonRecord) {
   if (!isJsonRecord(requestBody.feedbackBonus)) return 0n;
-  const asset = readString(requestBody.feedbackBonus.asset).toUpperCase() || "USDC";
-  if (asset !== "USDC") return 0n;
+  if (readFeedbackBonusAsset(requestBody.feedbackBonus) !== "usdc") return 0n;
   return readPositiveBigInt(requestBody.feedbackBonus.amount) ?? 0n;
+}
+
+function readFeedbackBonusAsset(feedbackBonus: JsonRecord): FeedbackBonusAsset {
+  return readString(feedbackBonus.asset).toUpperCase() === "LREP" ? "lrep" : "usdc";
 }
 
 function readFeedbackBonusSummary(handoff: Handoff | null) {
@@ -307,7 +316,7 @@ function readFeedbackBonusSummary(handoff: Handoff | null) {
   if (!isJsonRecord(feedbackBonus)) return null;
   const amount = readPositiveBigInt(feedbackBonus.amount);
   if (amount === null) return null;
-  const asset = readString(feedbackBonus.asset).toUpperCase() === "LREP" ? "lrep" : "usdc";
+  const asset = readFeedbackBonusAsset(feedbackBonus);
   return {
     amount,
     asset,
@@ -318,6 +327,11 @@ function readFeedbackBonusSummary(handoff: Handoff | null) {
 function formatUsdcInput(value: bigint | null) {
   if (value === null) return "";
   return formatSubmissionRewardAmount(value, "usdc").replace(/ USDC$/, "");
+}
+
+function formatFeedbackBonusInput(value: bigint | null, asset: FeedbackBonusAsset) {
+  if (value === null) return "";
+  return formatFeedbackBonusAmount(value, asset).replace(asset === "lrep" ? / LREP$/ : / USDC$/, "");
 }
 
 function readRoundSettings(handoff: Handoff | null): RoundSettings {
@@ -367,8 +381,13 @@ function secondsToMinutesInput(value: bigint) {
 function createDraftForm(handoff: Handoff): DraftForm {
   const roundSettings = readRoundSettings(handoff);
   const questions = readQuestionSummaries(handoff);
+  const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
   return {
     bountyAmount: formatUsdcInput(readBountyAmountAtomic(handoff)),
+    feedbackBonusAmount: feedbackBonusSummary
+      ? formatFeedbackBonusInput(feedbackBonusSummary.amount, feedbackBonusSummary.asset)
+      : null,
+    feedbackBonusAsset: feedbackBonusSummary?.asset ?? null,
     questions: questions.length
       ? questions.map(question => ({
           categoryId: question.categoryId,
@@ -614,7 +633,21 @@ function buildDraftRequestBody(
     amount: bountyAmount.toString(),
     asset: "USDC",
   };
-  requestBody.maxPaymentAmount = (bountyAmount + readFeedbackBonusUsdcAmountAtomic(requestBody)).toString();
+  let feedbackBonusUsdcAmount = readFeedbackBonusUsdcAmountAtomic(requestBody);
+  if (form.feedbackBonusAmount !== null && isJsonRecord(requestBody.feedbackBonus)) {
+    const feedbackBonusAmount = parseFeedbackBonusAmount(form.feedbackBonusAmount);
+    if (feedbackBonusAmount === null) {
+      throw new Error("Feedback Bonus must be a positive amount with up to 6 decimals.");
+    }
+    const feedbackBonusAsset = form.feedbackBonusAsset ?? readFeedbackBonusAsset(requestBody.feedbackBonus);
+    requestBody.feedbackBonus = {
+      ...requestBody.feedbackBonus,
+      amount: feedbackBonusAmount.toString(),
+      asset: feedbackBonusAsset === "lrep" ? "LREP" : "USDC",
+    };
+    feedbackBonusUsdcAmount = feedbackBonusAsset === "usdc" ? feedbackBonusAmount : 0n;
+  }
+  requestBody.maxPaymentAmount = (bountyAmount + feedbackBonusUsdcAmount).toString();
   requestBody.roundConfig = {
     epochDuration: blindSeconds.toString(),
     maxDuration: maxDurationSeconds.toString(),
@@ -665,6 +698,15 @@ function readBounty(handoff: Handoff | null) {
 function readDraftBountyLabel(form: DraftForm | null, handoff: Handoff | null) {
   const draftAmount = form?.bountyAmount.trim();
   return draftAmount ? `${draftAmount} USDC` : readBounty(handoff);
+}
+
+function readDraftFeedbackBonusLabel(form: DraftForm | null, handoff: Handoff | null) {
+  const draftAmount = form?.feedbackBonusAmount?.trim();
+  if (draftAmount && form?.feedbackBonusAsset) {
+    return `${draftAmount} ${form.feedbackBonusAsset === "lrep" ? "LREP" : "USDC"}`;
+  }
+
+  return readFeedbackBonusSummary(handoff)?.label ?? "Not included";
 }
 
 function normalizeHex(value: unknown, field: string): Hex {
@@ -881,11 +923,34 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     [updateDraftField],
   );
 
+  const updateDraftFeedbackBonusAmount = useCallback(
+    (value: string) => {
+      const normalizedValue = normalizeUsdcAmountInput(value);
+      if (normalizedValue === null) return;
+
+      updateDraftField("feedbackBonusAmount", normalizedValue);
+    },
+    [updateDraftField],
+  );
+
   const formatDraftBountyAmount = useCallback(() => {
     setDraftForm(current => {
       if (!current) return current;
       const parsedAmount = parseSubmissionRewardAmount(current.bountyAmount);
       return parsedAmount === null ? current : { ...current, bountyAmount: formatUsdcInput(parsedAmount) };
+    });
+  }, []);
+
+  const formatDraftFeedbackBonusAmount = useCallback(() => {
+    setDraftForm(current => {
+      if (!current || current.feedbackBonusAmount === null || !current.feedbackBonusAsset) return current;
+      const parsedAmount = parseFeedbackBonusAmount(current.feedbackBonusAmount);
+      return parsedAmount === null
+        ? current
+        : {
+            ...current,
+            feedbackBonusAmount: formatFeedbackBonusInput(parsedAmount, current.feedbackBonusAsset),
+          };
     });
   }, []);
 
@@ -1232,6 +1297,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const questionSummaries = readQuestionSummaries(handoff);
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
   const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
+  const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
   const showMissingFeedbackBonusNotice = Boolean(
     handoff && !hasQuestionBundle && !feedbackBonusSummary && !isFeedbackBonusStep && !isTerminalStatus,
   );
@@ -1293,7 +1359,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   <span>Feedback Bonus</span>
                 </div>
                 <p className={`mt-2 text-sm font-semibold ${feedbackBonusSummary ? "" : "text-warning"}`}>
-                  {feedbackBonusSummary?.label ?? "Not included"}
+                  {feedbackBonusDraftLabel}
                 </p>
               </div>
               <div className="surface-card-nested rounded-lg p-4">
@@ -1489,6 +1555,23 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                     onChange={event => updateDraftBountyAmount(event.target.value)}
                   />
                 </div>
+
+                {draftForm?.feedbackBonusAmount !== null ? (
+                  <div className="form-control mt-4">
+                    <DraftFieldLabel htmlFor="agent-ask-feedback-bonus-amount" tooltip={FEEDBACK_BONUS_AMOUNT_TOOLTIP}>
+                      Feedback Bonus {draftForm?.feedbackBonusAsset === "lrep" ? "LREP" : "USDC"}
+                    </DraftFieldLabel>
+                    <input
+                      id="agent-ask-feedback-bonus-amount"
+                      className="input input-bordered mt-1 w-full"
+                      disabled={!canEditDraft}
+                      inputMode="decimal"
+                      value={draftForm?.feedbackBonusAmount ?? ""}
+                      onBlur={formatDraftFeedbackBonusAmount}
+                      onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
+                    />
+                  </div>
+                ) : null}
 
                 <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-base-content/75">
                   <ClockIcon className="h-4 w-4" />
