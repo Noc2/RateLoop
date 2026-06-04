@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { decodeEventLog, encodeFunctionData, isAddress, toHex } from "viem";
 import { useAccount, useConfig, useReadContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
-import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ChevronDownIcon, DocumentTextIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
@@ -112,6 +112,10 @@ import { sanitizeExternalUrl } from "~~/utils/externalUrl";
 import { notification } from "~~/utils/scaffold-eth";
 
 const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(m => m.ShareModal), { ssr: false });
+const ContextDocumentModal = dynamic(
+  () => import("~~/components/attachments/ContextDocumentModal").then(m => m.ContextDocumentModal),
+  { ssr: false },
+);
 
 type MediaMode = "images" | "video";
 type ContextSourceMode = "website" | "document";
@@ -456,6 +460,7 @@ export function ContentSubmissionSection() {
   const [contextSourceMode, setContextSourceMode] = useState<ContextSourceMode>("website");
   const [contextUrl, setContextUrl] = useState("");
   const [contextDocument, setContextDocument] = useState<UploadedContextDocument | null>(null);
+  const [contextDocumentPreviewUrl, setContextDocumentPreviewUrl] = useState<string | null>(null);
   const [contextUrlError, setContextUrlError] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([""]);
   const [imageUrlErrors, setImageUrlErrors] = useState<(string | null)[]>([null]);
@@ -3775,14 +3780,24 @@ export function ContentSubmissionSection() {
                                 context
                               </p>
                             </div>
-                            <button
-                              type="button"
-                              onClick={handleRemoveContextDocument}
-                              className="btn btn-outline btn-square btn-sm"
-                              aria-label="Remove uploaded document"
-                            >
-                              <XMarkIcon className="h-4 w-4" />
-                            </button>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setContextDocumentPreviewUrl(contextDocument.contextUrl)}
+                                className="btn btn-outline btn-sm gap-2"
+                              >
+                                <DocumentTextIcon className="h-4 w-4" />
+                                Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleRemoveContextDocument}
+                                className="btn btn-outline btn-square btn-sm"
+                                aria-label="Remove uploaded document"
+                              >
+                                <XMarkIcon className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
                           {contextDocument.preview ? (
                             <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-base-content/68">
@@ -4162,6 +4177,12 @@ export function ContentSubmissionSection() {
           description={submittedContent.description}
           lastActivityAt={submittedContent.lastActivityAt}
           onClose={handleCloseShareModal}
+        />
+      ) : null}
+      {contextDocumentPreviewUrl ? (
+        <ContextDocumentModal
+          documentUrl={contextDocumentPreviewUrl}
+          onClose={() => setContextDocumentPreviewUrl(null)}
         />
       ) : null}
     </>

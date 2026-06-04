@@ -27,6 +27,7 @@ import { ContextDocumentUploader } from "~~/components/submit/ContextDocumentUpl
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import { parseContextDocumentPublicUrl } from "~~/lib/attachments/contextDocumentUrls";
 import {
   type FeedbackBonusAsset,
   formatFeedbackBonusAmount,
@@ -48,6 +49,12 @@ import { notification } from "~~/utils/scaffold-eth";
 const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(module => module.ShareModal), {
   ssr: false,
 });
+const ContextDocumentModal = dynamic(
+  () => import("~~/components/attachments/ContextDocumentModal").then(module => module.ContextDocumentModal),
+  {
+    ssr: false,
+  },
+);
 
 type JsonRecord = Record<string, unknown>;
 
@@ -774,6 +781,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [steps, setSteps] = useState<ExecutionStep[]>([]);
   const [imageSignatureSteps, setImageSignatureSteps] = useState<ImageSignatureStep[]>([]);
   const [submittedContent, setSubmittedContent] = useState<SubmittedContentModalState | null>(null);
+  const [contextDocumentPreviewUrl, setContextDocumentPreviewUrl] = useState<string | null>(null);
   const boundsChainId = handoff?.chainId ?? chain?.id ?? chainId;
   const { data: protocolRoundConfigBounds } = useScaffoldReadContract({
     contractName: "ProtocolConfig" as any,
@@ -1444,108 +1452,125 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
               <div className="space-y-3">
                 {draftForm?.questions.length ? (
-                  draftForm.questions.map((question, index) => (
-                    <div key={`${index}-${question.title}`} className="surface-card-nested rounded-lg p-4">
-                      <label className="form-control">
-                        <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                          {hasQuestionBundle ? `Question ${index + 1}` : "Question"}
-                        </span>
-                        <input
-                          className="input input-bordered mt-1 w-full"
-                          disabled={!canEditDraft}
-                          value={question.title}
-                          onChange={event => updateDraftQuestion(index, { title: event.target.value })}
-                        />
-                      </label>
+                  draftForm.questions.map((question, index) => {
+                    const contextDocument = parseContextDocumentPublicUrl(
+                      question.contextUrl,
+                      typeof window === "undefined" ? null : window.location.origin,
+                    );
 
-                      <label className="form-control mt-3">
-                        <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                          Description
-                        </span>
-                        <textarea
-                          className="textarea textarea-bordered mt-1 min-h-28 w-full leading-relaxed"
-                          disabled={!canEditDraft}
-                          value={question.description}
-                          onChange={event => updateDraftQuestion(index, { description: event.target.value })}
-                        />
-                      </label>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    return (
+                      <div key={`${index}-${question.title}`} className="surface-card-nested rounded-lg p-4">
                         <label className="form-control">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Category
+                            {hasQuestionBundle ? `Question ${index + 1}` : "Question"}
                           </span>
                           <input
                             className="input input-bordered mt-1 w-full"
                             disabled={!canEditDraft}
-                            value={question.categoryId}
-                            onChange={event => updateDraftQuestion(index, { categoryId: event.target.value })}
+                            value={question.title}
+                            onChange={event => updateDraftQuestion(index, { title: event.target.value })}
                           />
                         </label>
-                        <label className="form-control">
+
+                        <label className="form-control mt-3">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Template
+                            Description
                           </span>
-                          <input
-                            className="input input-bordered mt-1 w-full"
+                          <textarea
+                            className="textarea textarea-bordered mt-1 min-h-28 w-full leading-relaxed"
                             disabled={!canEditDraft}
-                            value={question.templateId}
-                            onChange={event => updateDraftQuestion(index, { templateId: event.target.value })}
+                            value={question.description}
+                            onChange={event => updateDraftQuestion(index, { description: event.target.value })}
                           />
                         </label>
-                      </div>
 
-                      <label className="form-control mt-4">
-                        <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                          <TagIcon className="h-3.5 w-3.5" />
-                          <span>Tags</span>
-                        </span>
-                        <input
-                          className="input input-bordered mt-1 w-full"
-                          disabled={!canEditDraft}
-                          value={question.tags}
-                          onChange={event => updateDraftQuestion(index, { tags: event.target.value })}
-                        />
-                      </label>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div className="form-control">
-                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Context URL
-                          </span>
-                          <input
-                            className="input input-bordered mt-1 w-full"
-                            disabled={!canEditDraft}
-                            value={question.contextUrl}
-                            onChange={event => updateDraftQuestion(index, { contextUrl: event.target.value })}
-                          />
-                          {canEditDraft ? (
-                            <div className="mt-2">
-                              <ContextDocumentUploader
-                                address={address}
-                                onUploaded={document =>
-                                  updateDraftQuestion(index, {
-                                    contextUrl: document.contextUrl,
-                                  })
-                                }
-                              />
-                            </div>
-                          ) : null}
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="form-control">
+                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                              Category
+                            </span>
+                            <input
+                              className="input input-bordered mt-1 w-full"
+                              disabled={!canEditDraft}
+                              value={question.categoryId}
+                              onChange={event => updateDraftQuestion(index, { categoryId: event.target.value })}
+                            />
+                          </label>
+                          <label className="form-control">
+                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                              Template
+                            </span>
+                            <input
+                              className="input input-bordered mt-1 w-full"
+                              disabled={!canEditDraft}
+                              value={question.templateId}
+                              onChange={event => updateDraftQuestion(index, { templateId: event.target.value })}
+                            />
+                          </label>
                         </div>
-                        <label className="form-control">
-                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Video URL
+
+                        <label className="form-control mt-4">
+                          <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            <TagIcon className="h-3.5 w-3.5" />
+                            <span>Tags</span>
                           </span>
                           <input
                             className="input input-bordered mt-1 w-full"
                             disabled={!canEditDraft}
-                            value={question.videoUrl}
-                            onChange={event => updateDraftQuestion(index, { videoUrl: event.target.value })}
+                            value={question.tags}
+                            onChange={event => updateDraftQuestion(index, { tags: event.target.value })}
                           />
                         </label>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div className="form-control">
+                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                              Context URL
+                            </span>
+                            <input
+                              className="input input-bordered mt-1 w-full"
+                              disabled={!canEditDraft}
+                              value={question.contextUrl}
+                              onChange={event => updateDraftQuestion(index, { contextUrl: event.target.value })}
+                            />
+                            {canEditDraft ? (
+                              <div className="mt-2">
+                                <ContextDocumentUploader
+                                  address={address}
+                                  onUploaded={document =>
+                                    updateDraftQuestion(index, {
+                                      contextUrl: document.contextUrl,
+                                    })
+                                  }
+                                />
+                              </div>
+                            ) : null}
+                            {contextDocument ? (
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm mt-2 gap-2"
+                                onClick={() => setContextDocumentPreviewUrl(question.contextUrl)}
+                              >
+                                <DocumentTextIcon className="h-4 w-4" />
+                                Preview document
+                              </button>
+                            ) : null}
+                          </div>
+                          <label className="form-control">
+                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                              Video URL
+                            </span>
+                            <input
+                              className="input input-bordered mt-1 w-full"
+                              disabled={!canEditDraft}
+                              value={question.videoUrl}
+                              onChange={event => updateDraftQuestion(index, { videoUrl: event.target.value })}
+                            />
+                          </label>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="surface-card-nested rounded-lg p-4 text-sm text-base-content/55">
                     Question details are unavailable for this handoff.
@@ -1768,6 +1793,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           description={submittedContent.description}
           lastActivityAt={submittedContent.lastActivityAt}
           onClose={handleCloseShareModal}
+        />
+      ) : null}
+      {contextDocumentPreviewUrl ? (
+        <ContextDocumentModal
+          documentUrl={contextDocumentPreviewUrl}
+          onClose={() => setContextDocumentPreviewUrl(null)}
         />
       ) : null}
     </AppPageShell>

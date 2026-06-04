@@ -1297,6 +1297,27 @@ body {
   color: var(--color-primary);
 }
 
+.context-document-prose {
+  overflow-wrap: anywhere;
+}
+
+.context-document-prose pre {
+  margin: 0;
+}
+
+.context-document-prose pre code {
+  display: block;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.context-document-prose blockquote p {
+  color: inherit;
+}
+
 /* Progress bar */
 #nprogress .bar {
   background: var(--rateloop-spectrum-gradient) !important;

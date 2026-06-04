@@ -7,6 +7,7 @@ import {
   ChatBubbleLeftRightIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 import { ShareIcon } from "@heroicons/react/24/outline";
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
@@ -24,6 +25,7 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
+import { parseContextDocumentPublicUrl } from "~~/lib/attachments/contextDocumentUrls";
 import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } from "~~/lib/contentMedia";
 import {
   getActiveBountyClosesAt,
@@ -38,6 +40,10 @@ import { detectPlatform } from "~~/utils/platforms";
 
 const ShareContentModal = dynamic(
   () => import("~~/components/shared/ShareContentModal").then(m => m.ShareContentModal),
+  { ssr: false },
+);
+const ContextDocumentModal = dynamic(
+  () => import("~~/components/attachments/ContextDocumentModal").then(m => m.ContextDocumentModal),
   { ssr: false },
 );
 
@@ -501,12 +507,16 @@ function FeedContentMetaCard({
   embedded = false,
 }: FeedContentMetaCardProps) {
   const [showShare, setShowShare] = useState(false);
+  const [documentModalUrl, setDocumentModalUrl] = useState<string | null>(null);
   const hasFollowButton = !(normalizedAddress && item.submitter.toLowerCase() === normalizedAddress);
   const description = item.description.trim();
   const hasDescription = description.length > 0;
   const contextUrl = item.url.trim();
   const contextLabel = getSourceLabel(contextUrl);
   const hasContextLink = contextUrl.length > 0 && contextLabel.trim().length > 0;
+  const contextDocument = hasContextLink
+    ? parseContextDocumentPublicUrl(contextUrl, typeof window === "undefined" ? null : window.location.origin)
+    : null;
   const rewardPoolTotal = getVisibleRewardPoolAmount(item);
   const rewardPoolCurrency = item.rewardPoolSummary?.currency;
   const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item);
@@ -615,7 +625,22 @@ function FeedContentMetaCard({
               size="sm"
             />
           </div>
-          {hasContextLink ? (
+          {contextDocument ? (
+            <button
+              type="button"
+              data-testid="content-source-link"
+              title={`Open context document: ${contextLabel}`}
+              aria-label={`Open context document: ${contextLabel}`}
+              onClick={() => {
+                onSourceOpen?.(item);
+                setDocumentModalUrl(contextUrl);
+              }}
+              className="inline-flex shrink-0 items-center gap-1.5 text-base font-semibold leading-snug text-primary underline-offset-4 transition-colors hover:text-primary-focus hover:underline"
+            >
+              <DocumentTextIcon className="h-4 w-4 shrink-0" />
+              <span>Document</span>
+            </button>
+          ) : hasContextLink ? (
             <SafeExternalLink
               href={contextUrl}
               allowExternalOpen
@@ -651,6 +676,9 @@ function FeedContentMetaCard({
           }
           onClose={() => setShowShare(false)}
         />
+      ) : null}
+      {documentModalUrl ? (
+        <ContextDocumentModal documentUrl={documentModalUrl} onClose={() => setDocumentModalUrl(null)} />
       ) : null}
     </>
   );
