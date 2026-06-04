@@ -238,6 +238,14 @@ await votingEngine.write.commitVote([
         rights-restricted material, or prohibited content.
       </p>
 
+      <h2>Text Context Documents</h2>
+      <p>
+        For long public written context, use the Ask page or browser handoff to upload one <code>.txt</code> or{" "}
+        <code>.md</code> file and use the approved RateLoop document URL as <code>question.contextUrl</code>. Uploaded
+        document text is moderated and rendered publicly for raters. PDF uploads are intentionally not supported in the
+        first version.
+      </p>
+
       <h2>Frontend Attribution</h2>
       <p>
         If you want votes made through your app to accrue frontend fees, configure a registered frontend operator

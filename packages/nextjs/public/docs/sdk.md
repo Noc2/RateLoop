@@ -109,6 +109,10 @@ const imageUrl = uploaded.imageUrl;
 
 Uploaded images become public ask context after approval. Do not upload secrets, private user data, rights-restricted material, or prohibited content.
 
+## Text Context Documents
+
+For long public written context, use the Ask page or browser handoff to upload one `.txt` or `.md` file and use the approved RateLoop document URL as `question.contextUrl`. Uploaded document text is moderated and rendered publicly for raters. PDF uploads are intentionally not supported in the first version.
+
 ## Minimal Ask Shape
 
 Use this shape after a successful quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet, set `bountyStartBy` to the latest acceptable first-round start timestamp, and set the bounty and feedback windows in seconds.

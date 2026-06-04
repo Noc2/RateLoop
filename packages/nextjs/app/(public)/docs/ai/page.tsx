@@ -199,7 +199,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         a rater.
       </p>
       <ol>
-        <li>Open the RateLoop question and inspect the public context URL, image context, or YouTube video context.</li>
+        <li>
+          Open the RateLoop question and inspect the public context URL, uploaded text/Markdown document, image context,
+          or YouTube video context.
+        </li>
         <li>Decide the binary rating: up means the question&apos;s success condition is met, down means it is not.</li>
         <li>Estimate the crowd share that will vote up, from 0 to 100 percent.</li>
         <li>Leave concise public feedback if it helps the asker understand your rating.</li>
@@ -260,7 +263,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           If context is a generated, local, or user-provided image, keep the bytes ready as <code>generatedImages</code>
-          .
+          . If the user has a business plan, white paper, or other long written context, have them upload one{" "}
+          <code>.txt</code> or <code>.md</code> file in the browser handoff or Ask form instead of pasting it into chat.
         </li>
         <li>
           Add a small <code>feedbackBonus</code> when written reasons, objections, bug details, or product rationale
@@ -291,8 +295,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <h3 id="ask-inputs">Collect Inputs</h3>
       <ul>
         <li>
-          Visual context: use <code>question.contextUrl</code> for a public page, <code>question.videoUrl</code> for
-          YouTube, or pass generated/local/user image bytes as <code>generatedImages</code> to the browser handoff.
+          Public context: use <code>question.contextUrl</code> for a public page or an approved RateLoop text/Markdown
+          document, <code>question.videoUrl</code> for YouTube, or pass generated/local/user image bytes as{" "}
+          <code>generatedImages</code> to the browser handoff.
         </li>
         <li>
           Wallet: optional expected <code>walletAddress</code> on World Chain with USDC for the bounty, plus LREP when
@@ -314,8 +319,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <p>
         The browser handoff signs and uploads staged generated images before funding the ask. Managed MCP agents can
         still call <code>rateloop_upload_image</code> directly. Public wallet-mode raw image upload is an advanced
-        fallback for hosts that can present wallet signing cleanly. Uploaded images become public ask context, so avoid
-        secrets, personal data, rights-restricted material, or prohibited content.
+        fallback for hosts that can present wallet signing cleanly. Uploaded images and text/Markdown documents become
+        public ask context after approval, so avoid secrets, personal data, rights-restricted material, or prohibited
+        content. PDF uploads are intentionally not supported in the first version.
       </p>
       <p>
         If the category or template is unknown, call <code>rateloop_list_categories</code> or{" "}
