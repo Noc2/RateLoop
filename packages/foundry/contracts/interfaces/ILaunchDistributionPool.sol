@@ -42,6 +42,7 @@ interface ILaunchDistributionPool {
     function raterRegistry() external view returns (RaterRegistry);
     function raterRoundCreditRecorded(address rater, uint256 contentId, uint256 roundId) external view returns (bool);
     function roundUnverifiedLaunchCreditCount(uint256 contentId, uint256 roundId) external view returns (uint16);
+    function authorizedCallers(address caller) external view returns (bool);
 
     function claimLegacyContributorAllocation(uint256 allocation, bytes32[] calldata proof)
         external

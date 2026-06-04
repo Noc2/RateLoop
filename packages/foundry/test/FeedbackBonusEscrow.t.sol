@@ -45,6 +45,10 @@ contract SlashedFrontendRegistryMock is IFrontendRegistry {
 
     function creditFees(address, uint256) external { }
 
+    function feeCreditorForEngine(address) external pure returns (address) {
+        return address(0);
+    }
+
     function getAccumulatedFees(address) external pure returns (uint256 lrepFees) {
         return 0;
     }

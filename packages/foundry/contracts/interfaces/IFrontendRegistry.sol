@@ -28,6 +28,9 @@ interface IFrontendRegistry {
     /// @param lrepAmount Amount of LREP fees
     function creditFees(address frontend, uint256 lrepAmount) external;
 
+    /// @notice Reward distributor authorized to credit fees for a voting engine.
+    function feeCreditorForEngine(address engine) external view returns (address creditor);
+
     /// @notice Get the accumulated LREP fees for a frontend
     /// @param frontend The frontend address
     /// @return lrepFees Accumulated LREP fees

@@ -51,6 +51,12 @@ contract MockRewardDistributorRevertingEngineForConfig {
 }
 
 contract MockFrontendRegistryForConfig {
+    mapping(address => address) public feeCreditorForEngine;
+
+    function setFeeCreditorForEngine(address engine, address creditor) external {
+        feeCreditorForEngine[engine] = creditor;
+    }
+
     function STAKE_AMOUNT() external pure returns (uint256) {
         return 1_000e6;
     }
@@ -65,6 +71,12 @@ contract MockFrontendRegistryForConfig {
 }
 
 contract MockLaunchDistributionPoolForConfig {
+    mapping(address => bool) public authorizedCallers;
+
+    function setAuthorizedCaller(address caller, bool authorized) external {
+        authorizedCallers[caller] = authorized;
+    }
+
     function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
         return 1 days;
     }
@@ -649,6 +661,34 @@ contract ProtocolConfigBranchesTest is Test {
         assertFalse(config.isRewardDistributor(firstDistributor));
         assertTrue(config.isRewardDistributor(replacementDistributor));
         assertEq(config.rewardDistributorForVotingEngine(engine), replacementDistributor);
+        assertTrue(config.isRewardDistributorForEngine(replacementDistributor, engine));
+    }
+
+    function test_ReplaceRevokedRewardDistributor_RequiresConfiguredPayoutIntegrations() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        address engine = address(0xE641);
+        address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        MockFrontendRegistryForConfig frontend = new MockFrontendRegistryForConfig();
+        MockLaunchDistributionPoolForConfig launchPool = new MockLaunchDistributionPoolForConfig();
+
+        config.setFrontendRegistry(address(frontend));
+        config.setLaunchDistributionPool(address(launchPool));
+        config.setRewardDistributor(firstDistributor);
+        config.revokeRewardDistributor(firstDistributor);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+
+        frontend.setFeeCreditorForEngine(engine, replacementDistributor);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+
+        launchPool.setAuthorizedCaller(replacementDistributor, true);
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+
+        assertEq(config.rewardDistributor(), replacementDistributor);
         assertTrue(config.isRewardDistributorForEngine(replacementDistributor, engine));
     }
 

@@ -276,6 +276,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
         address previousNewEngine = rewardDistributorVotingEngine[newValue];
         if (previousNewEngine != address(0) && previousNewEngine != engine) revert InvalidConfig();
+        _validateRewardDistributorReplacementIntegrations(newValue, engine);
 
         rewardDistributorVotingEngine[newValue] = engine;
         rewardDistributorForVotingEngine[engine] = newValue;
@@ -482,6 +483,26 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             return claimAccountingStarted;
         } catch {
             revert InvalidConfig();
+        }
+    }
+
+    function _validateRewardDistributorReplacementIntegrations(address value, address engine) internal view {
+        address frontendRegistry_ = frontendRegistry;
+        if (frontendRegistry_ != address(0)) {
+            try IFrontendRegistry(frontendRegistry_).feeCreditorForEngine(engine) returns (address creditor) {
+                if (creditor != value) revert InvalidConfig();
+            } catch {
+                revert InvalidConfig();
+            }
+        }
+
+        address launchPool = launchDistributionPool;
+        if (launchPool != address(0)) {
+            try ILaunchDistributionPool(launchPool).authorizedCallers(value) returns (bool authorized) {
+                if (!authorized) revert InvalidConfig();
+            } catch {
+                revert InvalidConfig();
+            }
         }
     }
 
