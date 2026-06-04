@@ -12,6 +12,7 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RoundRevealLib } from "../contracts/libraries/RoundRevealLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
@@ -1007,7 +1008,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
     }
 
-    function test_RbtsExpiredSeedReturnsStakesWithoutScoreRewards() public {
+    function test_RbtsExpiredSeedRevertsWithoutScoreRewards() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1028,21 +1029,22 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 257);
 
+        vm.expectRevert(RoundRevealLib.RbtsSeedUnavailable.selector);
         engine.settleRound(contentId, roundId);
-        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
+        RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(pendingRound.state), uint256(RoundLib.RoundState.Open));
         assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "expired seed does not score rewards");
         assertEq(engine.roundVoterPool(contentId, roundId), 0, "expired seed creates no reward pool");
         assertEq(_roundRbtsForfeitedPool(engine, contentId, roundId), 0, "expired seed has no RBTS forfeits");
         assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed has no sampler seed");
         assertEq(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 not scored");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 10e6, "ck1 stake returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 3e6, "ck2 stake returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 3e6, "ck3 stake returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 4e6, "ck4 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 0, "ck1 stake not returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 0, "ck2 stake not returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "ck3 stake not returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 0, "ck4 stake not returned");
     }
 
-    function test_AdvisoryLaunchCreditExpiredRbtsSeedPaysZeroWithoutScoring() public {
+    function test_AdvisoryLaunchCreditExpiredRbtsSeedCannotClaimWithoutScoring() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1065,23 +1067,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 257);
 
+        vm.expectRevert(RoundRevealLib.RbtsSeedUnavailable.selector);
         engine.settleRound(contentId, roundId);
-        assertTrue(engine.roundRbtsScored(contentId, roundId), "round reaches RBTS accounting");
+        assertFalse(engine.roundRbtsScored(contentId, roundId), "round does not reach RBTS accounting");
         assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed produces no score seed");
 
-        (uint16 scoreBps, uint256 paidAmount) = advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
-        assertEq(scoreBps, 0, "expired seed disables advisory scoring");
-        assertEq(paidAmount, 0, "unset launch pool pays no launch credit");
+        vm.expectRevert(AdvisoryVoteRecorder.RoundNotSettled.selector);
+        advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
 
         (,,,,,,,, bool launchCreditClaimed, uint16 storedScoreBps) =
             advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
-        assertTrue(launchCreditClaimed, "zero score finalizes launch claim");
-        assertEq(storedScoreBps, scoreBps, "expired seed stores advisory score");
-
-        (uint16 repeatScoreBps, uint256 repeatPaidAmount) =
-            advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
-        assertEq(repeatScoreBps, scoreBps, "repeat claim keeps score");
-        assertEq(repeatPaidAmount, 0, "repeat claim pays nothing");
+        assertFalse(launchCreditClaimed, "expired seed cannot finalize launch claim");
+        assertEq(storedScoreBps, 0, "expired seed stores no advisory score");
     }
 
     function test_AdvisoryLaunchCreditRevealAfterRbtsSeedCaptureRejected() public {
@@ -1131,13 +1128,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         bytes32 settlementPrevrandao = keccak256("expired-settlement-prevrandao");
         vm.prevrandao(settlementPrevrandao);
+        vm.expectRevert(RoundRevealLib.RbtsSeedUnavailable.selector);
         engine.settleRound(contentId, roundId);
 
         assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed has no sampler seed");
         assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "expired seed has no reward weight");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 10e6, "ck1 stake returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 3e6, "ck2 stake returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 3e6, "ck3 stake returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 0, "ck1 stake not returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 0, "ck2 stake not returned");
+        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "ck3 stake not returned");
     }
 
     function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {

@@ -28,6 +28,7 @@ library RoundRevealLib {
     error HashMismatch();
     error NotEnoughVotes();
     error RevealGraceActive();
+    error RbtsSeedUnavailable();
 
     event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
 
@@ -216,12 +217,7 @@ library RoundRevealLib {
         }
         if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
 
-        if (params.settlementEntropy == bytes32(0)) {
-            _returnScoredStakes(
-                roundCommits, commitRbtsWeight, commitRbtsStakeReturned, revealedKeysMem, revealedBuildIdx
-            );
-            return result;
-        }
+        if (params.settlementEntropy == bytes32(0)) revert RbtsSeedUnavailable();
 
         // Seed combines delayed closure entropy with the settlement-closed scoring set.
         result.scoreSeed = _rbtsScoreSeed(
@@ -300,7 +296,7 @@ library RoundRevealLib {
         bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
         if (seedBlockhash == bytes32(0)) {
             emit RbtsSeedCaptured(contentId, roundId, bytes32(0));
-            return bytes32(0);
+            revert RbtsSeedUnavailable();
         }
         settlementEntropy = keccak256(
             abi.encode(
