@@ -13,6 +13,7 @@ import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol
 
 contract MockRewardDistributorForConfig {
     address public votingEngine;
+    bool public claimAccountingStarted;
 
     constructor(address votingEngine_) {
         votingEngine = votingEngine_;
@@ -27,9 +28,21 @@ contract MockRewardDistributorWithClaimStateForConfig {
         votingEngine = votingEngine_;
         claimAccountingStarted = claimAccountingStarted_;
     }
+
+    function setClaimAccountingStarted(bool started) external {
+        claimAccountingStarted = started;
+    }
 }
 
 contract MockRewardDistributorWithoutEngineForConfig { }
+
+contract MockRewardDistributorWithoutClaimStateForConfig {
+    address public votingEngine;
+
+    constructor(address votingEngine_) {
+        votingEngine = votingEngine_;
+    }
+}
 
 contract MockRewardDistributorRevertingEngineForConfig {
     function votingEngine() external pure returns (address) {
@@ -531,6 +544,22 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.rewardDistributor(), address(0));
     }
 
+    function test_SetRewardDistributor_RejectsMissingOrStartedClaimAccounting() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        address engine = address(0xE641);
+        address missingClaimStateDistributor = address(new MockRewardDistributorWithoutClaimStateForConfig(engine));
+        address claimStartedDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, true));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(missingClaimStateDistributor);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(claimStartedDistributor);
+
+        assertFalse(config.isRewardDistributor(missingClaimStateDistributor));
+        assertFalse(config.isRewardDistributor(claimStartedDistributor));
+        assertEq(config.rewardDistributor(), address(0));
+    }
+
     function test_SetRewardDistributor_RejectsRevertingOrZeroVotingEngine() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
         address revertingDistributor = address(new MockRewardDistributorRevertingEngineForConfig());
@@ -627,7 +656,9 @@ contract ProtocolConfigBranchesTest is Test {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         address engine = address(0xE641);
-        address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        MockRewardDistributorWithClaimStateForConfig firstDistributorContract =
+            new MockRewardDistributorWithClaimStateForConfig(engine, false);
+        address firstDistributor = address(firstDistributorContract);
         address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
 
         config.setRewardDistributor(firstDistributor);
@@ -635,13 +666,11 @@ contract ProtocolConfigBranchesTest is Test {
         config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
 
         config.revokeRewardDistributor(firstDistributor);
-        address claimedOldDistributor = address(new MockRewardDistributorWithClaimStateForConfig(address(0xE642), true));
         address claimedNewDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, true));
 
-        config.setRewardDistributor(claimedOldDistributor);
-        config.revokeRewardDistributor(claimedOldDistributor);
+        firstDistributorContract.setClaimAccountingStarted(true);
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.replaceRevokedRewardDistributor(claimedOldDistributor, replacementDistributor);
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
 
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.replaceRevokedRewardDistributor(firstDistributor, claimedNewDistributor);
@@ -654,7 +683,7 @@ contract ProtocolConfigBranchesTest is Test {
         address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
         address differentEngineDistributor =
             address(new MockRewardDistributorWithClaimStateForConfig(address(0xE642), false));
-        address missingClaimStateDistributor = address(new MockRewardDistributorForConfig(engine));
+        address missingClaimStateDistributor = address(new MockRewardDistributorWithoutClaimStateForConfig(engine));
 
         config.setRewardDistributor(firstDistributor);
         config.revokeRewardDistributor(firstDistributor);

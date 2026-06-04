@@ -453,6 +453,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function _setRewardDistributor(address value) internal {
         if (value == address(0)) revert InvalidAddress();
         address engine = _readRewardDistributorVotingEngine(value);
+        if (_readRewardDistributorClaimAccountingStarted(value)) revert InvalidConfig();
         address previousForEngine = rewardDistributorForVotingEngine[engine];
         if (previousForEngine != address(0) && previousForEngine != value) revert InvalidConfig();
         rewardDistributorVotingEngine[value] = engine;
