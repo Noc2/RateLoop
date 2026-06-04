@@ -1083,6 +1083,32 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(repeatPaidAmount, 0, "repeat claim pays nothing");
     }
 
+    function test_AdvisoryLaunchCreditRevealAfterRbtsSeedCaptureRejected() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 advisoryCommitKey, bytes32 advisorySalt) = _recordAdvisory(voter5, contentId, "post-seed-advisory");
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+
+        engine.settleRound(contentId, roundId);
+        assertTrue(engine.roundRbtsScoringClosed(contentId, roundId), "seed capture closes scoring");
+
+        advisoryRecorder.revealAdvisoryVote(advisoryCommitKey, true, 5_000, advisorySalt);
+        _settleRoundAfterRbtsSeed(contentId, roundId);
+
+        vm.expectRevert(AdvisoryVoteRecorder.AdvisoryRevealedAfterSettlement.selector);
+        advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
+    }
+
     function test_RbtsExpiredFallbackSeedIgnoresFinalSettlementBlockEntropy() public {
         uint256 contentId = _submitContent();
 

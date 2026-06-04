@@ -398,7 +398,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         advisoryCommit.isUp = isUp;
         advisoryCommit.predictedUpBps = predictedUpBps;
         advisoryCommit.revealedAt = uint48(block.timestamp);
-        advisoryCommit.revealedAfterSettlement = _isTerminalRound(advisoryCommit.contentId, advisoryCommit.roundId);
+        advisoryCommit.revealedAfterSettlement = _isTerminalRound(advisoryCommit.contentId, advisoryCommit.roundId)
+            || votingEngine.roundRbtsScoringClosed(advisoryCommit.contentId, advisoryCommit.roundId);
 
         emit AdvisoryVoteRevealed(
             advisoryCommit.contentId,

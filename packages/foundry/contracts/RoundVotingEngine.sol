@@ -1423,6 +1423,10 @@ contract RoundVotingEngine is
         );
     }
 
+    function roundRbtsScoringClosed(uint256 contentId, uint256 roundId) external view returns (bool) {
+        return roundRbtsSeedEntropy[contentId][roundId] != bytes32(0);
+    }
+
     function roundDrandConfig(uint256 contentId, uint256 roundId)
         external
         view
