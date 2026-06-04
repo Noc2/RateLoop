@@ -244,7 +244,11 @@ export function SupportedAgentsSection() {
                     <span>{isCopied ? "Copied" : "Copy"}</span>
                   </button>
                 </div>
-                <pre className="mt-3 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-base-content/10 bg-base-300/60 p-3 font-mono text-xs leading-5 text-base-content/78">
+                <pre
+                  tabIndex={0}
+                  aria-label={`${snippet.label} snippet`}
+                  className="mt-3 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-base-content/10 bg-base-300/60 p-3 font-mono text-xs leading-5 text-base-content/78 focus:outline-none focus:ring-2 focus:ring-primary/45"
+                >
                   {snippet.text}
                 </pre>
               </article>
