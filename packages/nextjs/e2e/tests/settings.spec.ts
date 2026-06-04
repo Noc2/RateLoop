@@ -6,6 +6,14 @@ import { gotoWithRetry } from "../helpers/wait-helpers";
 import { setupWallet } from "../helpers/wallet-session";
 
 test.describe("Settings page", () => {
+  test("settings route defaults to the wallet tab", async ({ connectedPage: page }) => {
+    await gotoWithRetry(page, "/settings");
+
+    await expect(page).toHaveURL(/\/settings#wallet$/);
+    await expect(page.getByRole("button", { name: "Wallet", exact: true })).toHaveClass(/pill-active/);
+    await expect(page.getByRole("heading", { name: "Gas And Wallet Funding" })).toBeVisible({ timeout: 15_000 });
+  });
+
   test("wallet tab can transfer LREP to another address", async ({ connectedPage: page }) => {
     test.setTimeout(60_000);
 

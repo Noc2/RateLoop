@@ -70,14 +70,14 @@ function SettingsPageInner() {
   const { isRestoringWallet } = useWalletRestore();
   const pathname = usePathname() ?? SETTINGS_ROUTE;
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("notifications");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("wallet");
 
   useEffect(() => {
     const syncTabFromLocation = () => {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
       const hashTab = parseSettingsTab(window.location.hash.replace(/^#/, ""));
       const queryTab = parseSettingsTab(params.get("tab"));
-      const nextTab = hashTab ?? queryTab ?? "notifications";
+      const nextTab = hashTab ?? queryTab ?? "wallet";
 
       setActiveTab(nextTab);
 
