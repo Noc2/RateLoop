@@ -7,6 +7,10 @@ import { ERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/ERC2
 import { ERC20Votes } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import { Nonces } from "@openzeppelin/contracts/utils/Nonces.sol";
 
+interface IRateLoopGovernorToken {
+    function reputationToken() external view returns (address);
+}
+
 /// @title LoopReputation
 /// @notice Transferable capped reputation token for RateLoop governance with a 7-day lock window.
 /// @dev Uses 6 decimals. Lock is engaged by the governor when an account casts a governance vote.
@@ -18,6 +22,7 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
 
     uint256 public constant GOVERNANCE_LOCK_DURATION = 7 days;
+    uint256 public constant MAX_GOVERNANCE_LOCK_DURATION = 40 days;
 
     struct GovernanceLock {
         uint256 amount;
@@ -50,6 +55,12 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
 
     function setGovernor(address newGovernor) external onlyRole(CONFIG_ROLE) {
         require(newGovernor != address(0), "Invalid address");
+        require(newGovernor.code.length > 0, "Governor must be contract");
+        try IRateLoopGovernorToken(newGovernor).reputationToken() returns (address governorToken) {
+            require(governorToken == address(this), "Governor token mismatch");
+        } catch {
+            revert("Invalid governor");
+        }
         governor = newGovernor;
         emit GovernorSet(newGovernor);
     }
@@ -73,6 +84,7 @@ contract LoopReputation is ERC20, ERC20Permit, ERC20Votes, AccessControl {
         require(amount > 0, "Amount must be > 0");
         require(balanceOf(account) >= amount, "Insufficient balance for governance lock");
         require(unlockTime > block.timestamp, "Unlock time must be future");
+        require(unlockTime <= block.timestamp + MAX_GOVERNANCE_LOCK_DURATION, "Governance lock too long");
 
         GovernanceLock storage lock = _governanceLock[account];
         if (lock.unlockTime <= block.timestamp) {

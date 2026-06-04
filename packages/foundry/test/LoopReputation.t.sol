@@ -4,17 +4,26 @@ pragma solidity ^0.8.34;
 import { Test } from "forge-std/Test.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 
+contract MockLoopGovernorForReputation {
+    address public immutable reputationToken;
+
+    constructor(address reputationToken_) {
+        reputationToken = reputationToken_;
+    }
+}
+
 contract LoopReputationTest is Test {
     LoopReputation internal token;
 
     address internal admin = address(0xA11CE);
     address internal governance = address(0xB0B);
-    address internal governor = address(0xCAFE);
+    address internal governor;
     address internal rater = address(0x1234);
     address internal recipient = address(0x5678);
 
     function setUp() public {
         token = new LoopReputation(admin, governance);
+        governor = address(new MockLoopGovernorForReputation(address(token)));
     }
 
     function test_MetadataUsesRateLoopReputation() public view {
@@ -100,5 +109,31 @@ contract LoopReputationTest is Test {
         (uint256 amount, uint256 unlockTime) = token.getGovernanceLock(rater);
         assertEq(amount, 1_000e6);
         assertEq(unlockTime, longUnlockTime);
+    }
+
+    function test_SetGovernorRejectsEoaOrWrongToken() public {
+        vm.prank(governance);
+        vm.expectRevert("Governor must be contract");
+        token.setGovernor(address(0xCAFE));
+
+        LoopReputation otherToken = new LoopReputation(admin, governance);
+        address wrongTokenGovernor = address(new MockLoopGovernorForReputation(address(otherToken)));
+
+        vm.prank(governance);
+        vm.expectRevert("Governor token mismatch");
+        token.setGovernor(wrongTokenGovernor);
+    }
+
+    function test_GovernanceLockUntilRejectsExcessiveUnlockTime() public {
+        vm.prank(admin);
+        token.mint(rater, 1_000e6);
+
+        vm.prank(governance);
+        token.setGovernor(governor);
+
+        uint256 excessiveUnlockTime = block.timestamp + token.MAX_GOVERNANCE_LOCK_DURATION() + 1;
+        vm.prank(governor);
+        vm.expectRevert("Governance lock too long");
+        token.lockForGovernanceUntil(rater, 500e6, excessiveUnlockTime);
     }
 }

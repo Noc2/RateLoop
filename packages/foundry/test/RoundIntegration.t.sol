@@ -18,6 +18,14 @@ import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { IFrontendRegistry } from "../contracts/interfaces/IFrontendRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 
+contract MockRoundIntegrationGovernor {
+    address public immutable reputationToken;
+
+    constructor(address reputationToken_) {
+        reputationToken = reputationToken_;
+    }
+}
+
 /// @title Round-based integration tests for tlock commit-reveal flow with epoch-weighted rewards.
 /// @dev Covers: full lifecycle, multi-voter, concurrent rounds, tied rounds,
 ///      cancelled/expired rounds, consensus settlement, config snapshots.
@@ -1396,8 +1404,11 @@ contract RoundIntegrationTest is VotingTestBase {
         uint256 contentId = _submitContent();
 
         _setAcceptedDelegate(raterRegistry, voter1, delegate1);
+        address mockGovernor = address(new MockRoundIntegrationGovernor(address(lrepToken)));
         vm.startPrank(owner);
-        lrepToken.setGovernor(owner);
+        lrepToken.setGovernor(mockGovernor);
+        vm.stopPrank();
+        vm.startPrank(mockGovernor);
         lrepToken.lockForGovernance(delegate1, STAKE);
         vm.stopPrank();
 

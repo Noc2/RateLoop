@@ -4,13 +4,21 @@ pragma solidity ^0.8.34;
 import { Test } from "forge-std/Test.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 
+contract MockLoopGovernorForReputationBranches {
+    address public immutable reputationToken;
+
+    constructor(address reputationToken_) {
+        reputationToken = reputationToken_;
+    }
+}
+
 /// @title LoopReputation branch coverage tests
 contract LoopReputationBranchesTest is Test {
     LoopReputation public lrep;
 
     address public admin = address(1);
     address public governance = address(2);
-    address public mockGovernor = address(3);
+    address public mockGovernor;
     address public mockVotingEngine = address(4);
     address public mockContentRegistry = address(5);
     address public user1 = address(6);
@@ -23,6 +31,7 @@ contract LoopReputationBranchesTest is Test {
         vm.startPrank(admin);
 
         lrep = new LoopReputation(admin, governance);
+        mockGovernor = address(new MockLoopGovernorForReputationBranches(address(lrep)));
 
         // Admin has MINTER_ROLE from constructor
         lrep.mint(user1, 1_000e6);
