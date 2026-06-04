@@ -295,19 +295,19 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         feedbackBonusEscrow.setVotingEngine(address(0xBEEF));
     }
 
+    function testFeedbackRegistryVotingEngineIsPinnedAfterInitialization() public {
+        RoundVotingEngine replacementEngine = _deployReplacementEngine();
+
+        vm.prank(owner);
+        vm.expectRevert("Invalid engine");
+        feedbackRegistry.setVotingEngine(address(replacementEngine));
+
+        assertEq(address(feedbackRegistry.votingEngine()), address(votingEngine));
+    }
+
     function testCreateFeedbackBonusPoolRejectsStaleEscrowAfterEngineRotation() public {
         uint256 contentId = _submitQuestion("");
-        RoundVotingEngine replacementEngine = RoundVotingEngine(
-            address(
-                new ERC1967Proxy(
-                    address(new RoundVotingEngine()),
-                    abi.encodeCall(
-                        RoundVotingEngine.initialize,
-                        (owner, address(lrepToken), address(registry), address(protocolConfig))
-                    )
-                )
-            )
-        );
+        RoundVotingEngine replacementEngine = _deployReplacementEngine();
 
         vm.startPrank(owner);
         registry.pause();
@@ -320,6 +320,101 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.expectRevert("Stale engine");
         feedbackBonusEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
         vm.stopPrank();
+    }
+
+    function testExistingFeedbackBonusPoolCanAwardAfterRegistryEngineRotation() public {
+        uint256 contentId = _submitQuestion("");
+        uint256 poolId = _createFeedbackBonusPool(contentId);
+        (uint256 roundId, bytes32[] memory commitKeys) =
+            _settleRoundWithPublishedFeedback(_threeVoters(), contentId, _directions(true, true, false), address(0));
+        RoundVotingEngine replacementEngine = _deployReplacementEngine();
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.unpause();
+        vm.stopPrank();
+
+        assertEq(address(feedbackRegistry.votingEngine()), address(votingEngine));
+        assertTrue(feedbackRegistry.isAwardableFeedback(contentId, roundId, commitKeys[0], FEEDBACK_HASH));
+
+        vm.prank(funder);
+        uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, FEEDBACK_HASH, 10e6);
+
+        assertEq(recipientAmount, 10e6);
+        assertEq(usdc.balanceOf(voter1), 1_010e6);
+    }
+
+    function testReplacementFeedbackStackCanCreatePoolsAfterEngineRotation() public {
+        RoundVotingEngine replacementEngine = _deployReplacementEngine();
+        QuestionRewardPoolEscrow replacementQuestionEscrow = QuestionRewardPoolEscrow(
+            address(
+                new ERC1967Proxy(
+                    address(new QuestionRewardPoolEscrow()),
+                    abi.encodeCall(
+                        QuestionRewardPoolEscrow.initialize,
+                        (
+                            owner,
+                            address(lrepToken),
+                            address(usdc),
+                            address(registry),
+                            address(replacementEngine),
+                            address(raterRegistry)
+                        )
+                    )
+                )
+            )
+        );
+        FeedbackRegistry replacementFeedbackRegistry = FeedbackRegistry(
+            address(
+                new ERC1967Proxy(
+                    address(new FeedbackRegistry()),
+                    abi.encodeCall(FeedbackRegistry.initialize, (owner, owner, address(replacementEngine)))
+                )
+            )
+        );
+        FeedbackBonusEscrow replacementEscrow = FeedbackBonusEscrow(
+            address(
+                new ERC1967Proxy(
+                    address(new FeedbackBonusEscrow()),
+                    abi.encodeCall(
+                        FeedbackBonusEscrow.initialize,
+                        (
+                            owner,
+                            address(lrepToken),
+                            address(usdc),
+                            address(registry),
+                            address(replacementEngine),
+                            address(raterRegistry),
+                            address(replacementFeedbackRegistry)
+                        )
+                    )
+                )
+            )
+        );
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setVotingEngine(address(replacementEngine));
+        registry.setQuestionRewardPoolEscrow(address(replacementQuestionEscrow));
+        registry.unpause();
+        vm.stopPrank();
+
+        uint256 contentId = _submitQuestion("replacement-feedback-stack");
+
+        vm.startPrank(funder);
+        usdc.approve(address(replacementEscrow), BONUS_AMOUNT);
+        uint256 poolId =
+            replacementEscrow.createFeedbackBonusPool(contentId, 1, BONUS_AMOUNT, block.timestamp + 7 days, funder);
+        vm.stopPrank();
+
+        (uint64 storedId, uint64 storedContentId, uint64 storedRoundId,,,,,,,,,, uint256 fundedAmount,,,) =
+            replacementEscrow.feedbackBonusPools(poolId);
+        assertEq(storedId, poolId);
+        assertEq(storedContentId, contentId);
+        assertEq(storedRoundId, 1);
+        assertEq(fundedAmount, BONUS_AMOUNT);
+        assertEq(address(replacementFeedbackRegistry.votingEngine()), address(replacementEngine));
     }
 
     function testCreateFeedbackBonusPoolWithAuthorizationFundsUsdcPool() public {
@@ -1141,6 +1236,20 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             _defaultQuestionSpec()
         );
         vm.stopPrank();
+    }
+
+    function _deployReplacementEngine() internal returns (RoundVotingEngine replacementEngine) {
+        replacementEngine = RoundVotingEngine(
+            address(
+                new ERC1967Proxy(
+                    address(new RoundVotingEngine()),
+                    abi.encodeCall(
+                        RoundVotingEngine.initialize,
+                        (owner, address(lrepToken), address(registry), address(protocolConfig))
+                    )
+                )
+            )
+        );
     }
 
     function _createFeedbackBonusPool(uint256 contentId) internal returns (uint256 poolId) {
