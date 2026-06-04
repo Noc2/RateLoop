@@ -170,7 +170,128 @@ export function DelegationSection() {
     }
   };
 
-  if (credentialLoading || isLoading) {
+  const transferSection = (
+    <div className={`${hasActiveHumanCredential ? "border-t border-base-300 pt-5 " : ""}space-y-4`}>
+      <h3 className="text-lg font-semibold flex items-center gap-2">
+        <ArrowsRightLeftIcon className="w-5 h-5" />
+        Transfer LREP
+        <InfoTooltip text="Send LREP to your delegate or any other address." />
+      </h3>
+
+      <div className="space-y-1 text-base text-base-content/60">
+        <p>Balance {formattedBalance} LREP</p>
+        {address ? <p className="font-mono text-sm break-all">Connected wallet {address}</p> : null}
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-base font-medium">Recipient</label>
+          {hasDelegate && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={() => {
+                setTransferAddressInput(delegateTo);
+                if (transferError) {
+                  setTransferError(null);
+                }
+              }}
+              disabled={isTransferPending}
+            >
+              Use delegate
+            </button>
+          )}
+        </div>
+        <input
+          type="text"
+          aria-label="Transfer recipient"
+          inputMode="text"
+          placeholder="0x..."
+          className={`input input-bordered w-full bg-base-100 font-mono ${
+            normalizedTransferAddress.length > 0 && !isValidTransferAddress ? "input-error" : ""
+          }`}
+          value={transferAddressInput}
+          onChange={e => {
+            setTransferAddressInput(e.target.value);
+            if (transferError) {
+              setTransferError(null);
+            }
+          }}
+          disabled={isTransferPending}
+        />
+        {normalizedTransferAddress.length > 0 && !isValidTransferAddress && (
+          <p className="text-error text-base">Enter a valid address</p>
+        )}
+        {isValidTransferAddress && isTransferZeroAddress && (
+          <p className="text-warning text-base">Cannot send to the zero address</p>
+        )}
+        {isTransferSelfAddress && <p className="text-warning text-base">Cannot send to yourself</p>}
+
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-base font-medium">Amount</label>
+          <button
+            type="button"
+            className="btn btn-ghost btn-xs"
+            onClick={() => {
+              setTransferAmountInput(formatUnits(lrepBalanceMicro, LREP_DECIMALS));
+              if (transferError) {
+                setTransferError(null);
+              }
+            }}
+            disabled={isTransferPending || lrepBalanceMicro === 0n}
+          >
+            Max
+          </button>
+        </div>
+        <input
+          type="text"
+          aria-label="Transfer amount"
+          inputMode="decimal"
+          placeholder="0.0"
+          className={`input input-bordered w-full bg-base-100 font-mono ${
+            hasTransferAmount && !isValidTransferAmount ? "input-error" : ""
+          }`}
+          value={transferAmountInput}
+          onChange={e => {
+            setTransferAmountInput(e.target.value);
+            if (transferError) {
+              setTransferError(null);
+            }
+          }}
+          disabled={isTransferPending}
+        />
+        {hasTransferAmount && parsedTransferAmount === null && (
+          <p className="text-error text-base">Enter a valid amount</p>
+        )}
+        {parsedTransferAmount === 0n && <p className="text-warning text-base">Amount must be greater than 0</p>}
+        {exceedsTransferBalance && <p className="text-warning text-base">Amount exceeds your balance</p>}
+
+        <GradientActionButton
+          onClick={handleTransfer}
+          className="w-full"
+          motion={getGradientActionMotion(isTransferPending)}
+          disabled={isTransferPending || !canSubmitTransfer}
+        >
+          {isTransferPending ? (
+            <span className="flex items-center gap-2">
+              <span className="loading loading-spinner loading-sm"></span>
+              Sending...
+            </span>
+          ) : (
+            "Send LREP"
+          )}
+        </GradientActionButton>
+      </div>
+
+      {transferError && (
+        <div className="surface-card-nested rounded-lg p-4">
+          <p className="text-error text-base">{transferError}</p>
+        </div>
+      )}
+    </div>
+  );
+
+  if (credentialLoading || (hasActiveHumanCredential && isLoading)) {
     return (
       <div className="surface-card rounded-2xl p-6">
         <div className="flex items-center justify-center py-8">
@@ -190,11 +311,12 @@ export function DelegationSection() {
         </h2>
         <p className="text-base leading-7 text-base-content/70">
           Delegation is only available from the wallet that holds a rater credential. Set up the credential first, then
-          return here to authorize a delegate wallet or move LREP.
+          return here to authorize a delegate wallet.
         </p>
         <Link href={GOVERNANCE_ROUTE} className="btn btn-primary w-full rounded-lg sm:w-auto">
           Open rater setup
         </Link>
+        <div className="border-t border-base-300 pt-5">{transferSection}</div>
       </div>
     );
   }
@@ -288,124 +410,7 @@ export function DelegationSection() {
         </div>
       )}
 
-      <div className="border-t border-base-300 pt-5 space-y-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <ArrowsRightLeftIcon className="w-5 h-5" />
-          Transfer LREP
-          <InfoTooltip text="Send LREP to your delegate or any other address." />
-        </h3>
-
-        <div className="space-y-1 text-base text-base-content/60">
-          <p>Balance {formattedBalance} LREP</p>
-          {address ? <p className="font-mono text-sm break-all">Connected wallet {address}</p> : null}
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-base font-medium">Recipient</label>
-            {hasDelegate && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-xs"
-                onClick={() => {
-                  setTransferAddressInput(delegateTo);
-                  if (transferError) {
-                    setTransferError(null);
-                  }
-                }}
-                disabled={isTransferPending}
-              >
-                Use delegate
-              </button>
-            )}
-          </div>
-          <input
-            type="text"
-            aria-label="Transfer recipient"
-            inputMode="text"
-            placeholder="0x..."
-            className={`input input-bordered w-full bg-base-100 font-mono ${
-              normalizedTransferAddress.length > 0 && !isValidTransferAddress ? "input-error" : ""
-            }`}
-            value={transferAddressInput}
-            onChange={e => {
-              setTransferAddressInput(e.target.value);
-              if (transferError) {
-                setTransferError(null);
-              }
-            }}
-            disabled={isTransferPending}
-          />
-          {normalizedTransferAddress.length > 0 && !isValidTransferAddress && (
-            <p className="text-error text-base">Enter a valid address</p>
-          )}
-          {isValidTransferAddress && isTransferZeroAddress && (
-            <p className="text-warning text-base">Cannot send to the zero address</p>
-          )}
-          {isTransferSelfAddress && <p className="text-warning text-base">Cannot send to yourself</p>}
-
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-base font-medium">Amount</label>
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs"
-              onClick={() => {
-                setTransferAmountInput(formatUnits(lrepBalanceMicro, LREP_DECIMALS));
-                if (transferError) {
-                  setTransferError(null);
-                }
-              }}
-              disabled={isTransferPending || lrepBalanceMicro === 0n}
-            >
-              Max
-            </button>
-          </div>
-          <input
-            type="text"
-            aria-label="Transfer amount"
-            inputMode="decimal"
-            placeholder="0.0"
-            className={`input input-bordered w-full bg-base-100 font-mono ${
-              hasTransferAmount && !isValidTransferAmount ? "input-error" : ""
-            }`}
-            value={transferAmountInput}
-            onChange={e => {
-              setTransferAmountInput(e.target.value);
-              if (transferError) {
-                setTransferError(null);
-              }
-            }}
-            disabled={isTransferPending}
-          />
-          {hasTransferAmount && parsedTransferAmount === null && (
-            <p className="text-error text-base">Enter a valid amount</p>
-          )}
-          {parsedTransferAmount === 0n && <p className="text-warning text-base">Amount must be greater than 0</p>}
-          {exceedsTransferBalance && <p className="text-warning text-base">Amount exceeds your balance</p>}
-
-          <GradientActionButton
-            onClick={handleTransfer}
-            className="w-full"
-            motion={getGradientActionMotion(isTransferPending)}
-            disabled={isTransferPending || !canSubmitTransfer}
-          >
-            {isTransferPending ? (
-              <span className="flex items-center gap-2">
-                <span className="loading loading-spinner loading-sm"></span>
-                Sending...
-              </span>
-            ) : (
-              "Send LREP"
-            )}
-          </GradientActionButton>
-        </div>
-
-        {transferError && (
-          <div className="surface-card-nested rounded-lg p-4">
-            <p className="text-error text-base">{transferError}</p>
-          </div>
-        )}
-      </div>
+      {transferSection}
     </div>
   );
 }

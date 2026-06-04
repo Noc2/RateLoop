@@ -41,7 +41,7 @@ test.describe("Settings page", () => {
     expect(recipientBalanceAfter).toBe(recipientBalanceBefore + transferAmountMicro);
   });
 
-  test("wallet tab explains missing rater credential instead of rendering empty", async ({ page }) => {
+  test("wallet tab keeps LREP transfer visible without a rater credential", async ({ page }) => {
     await setupWallet(page, ANVIL_ACCOUNTS.account1.privateKey);
     await gotoWithRetry(page, "/settings#wallet", { ensureWalletConnected: true });
 
@@ -50,6 +50,9 @@ test.describe("Settings page", () => {
     const credentialPrompt = page.getByRole("heading", { name: "Rater credential required for delegation" });
     await expect(credentialPrompt).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("link", { name: "Open rater setup" })).toHaveAttribute("href", "/governance");
+    await expect(page.getByRole("heading", { name: "Transfer LREP" })).toBeVisible();
+    await expect(page.getByLabel("Transfer recipient")).toBeVisible();
+    await expect(page.getByLabel("Transfer amount")).toBeVisible();
   });
 
   test("frontend tab shows the registration surface", async ({ connectedPage: page }) => {
