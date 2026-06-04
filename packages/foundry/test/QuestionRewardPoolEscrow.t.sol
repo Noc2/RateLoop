@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
@@ -443,24 +444,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function testCreateRewardPoolRejectsStaleRegistryEscrow() public {
         uint256 contentId = _submitQuestion("");
-        QuestionRewardPoolEscrow replacementEscrow = QuestionRewardPoolEscrow(
-            address(
-                new ERC1967Proxy(
-                    address(new QuestionRewardPoolEscrow()),
-                    abi.encodeCall(
-                        QuestionRewardPoolEscrow.initialize,
-                        (
-                            owner,
-                            address(lrepToken),
-                            address(usdc),
-                            address(registry),
-                            address(votingEngine),
-                            address(raterIdentityRegistry)
-                        )
-                    )
-                )
-            )
-        );
+        QuestionRewardPoolEscrow replacementEscrow = _deployReplacementQuestionRewardPoolEscrow();
 
         vm.startPrank(owner);
         registry.pause();
@@ -4330,6 +4314,123 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore);
     }
 
+    function testX402QuestionSubmitterOwnerCanRefreshEscrowAfterRegistryRotation() public {
+        address agentWallet = _x402AgentWallet();
+        X402TestQuestion memory question = _x402TestQuestion();
+        QuestionRewardPoolEscrow replacementEscrow = _deployReplacementQuestionRewardPoolEscrow();
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setQuestionRewardPoolEscrow(address(replacementEscrow));
+        registry.unpause();
+        vm.expectEmit(true, true, false, false, address(x402QuestionSubmitter));
+        emit X402QuestionSubmitter.QuestionRewardPoolEscrowUpdated(
+            address(rewardPoolEscrow), address(replacementEscrow)
+        );
+        x402QuestionSubmitter.setQuestionRewardPoolEscrow(address(replacementEscrow));
+        vm.stopPrank();
+
+        Eip3009Authorization memory authorization = _x402Authorization(agentWallet, question);
+        usdc.mint(agentWallet, question.rewardTerms.amount);
+        uint256 replacementEscrowBalanceBefore = usdc.balanceOf(address(replacementEscrow));
+        uint256 oldEscrowBalanceBefore = usdc.balanceOf(address(rewardPoolEscrow));
+
+        _reserveX402Question(agentWallet, question);
+        vm.warp(block.timestamp + 1);
+
+        uint256 contentId = x402QuestionSubmitter.submitQuestionWithX402Payment(
+            question.contextUrl,
+            question.imageUrls,
+            "",
+            question.title,
+            question.description,
+            question.tags,
+            CATEGORY_ID,
+            question.salt,
+            question.rewardTerms,
+            question.roundConfig,
+            question.spec,
+            authorization
+        );
+
+        assertTrue(usdc.authorizationState(agentWallet, authorization.nonce));
+        assertEq(x402QuestionSubmitter.questionRewardPoolEscrow(), address(replacementEscrow));
+        assertEq(registry.nextContentId(), contentId + 1);
+        assertEq(
+            usdc.balanceOf(address(replacementEscrow)), replacementEscrowBalanceBefore + question.rewardTerms.amount
+        );
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), oldEscrowBalanceBefore);
+    }
+
+    function testX402QuestionSubmitterRefreshRequiresOwner() public {
+        QuestionRewardPoolEscrow replacementEscrow = _deployReplacementQuestionRewardPoolEscrow();
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setQuestionRewardPoolEscrow(address(replacementEscrow));
+        registry.unpause();
+        vm.stopPrank();
+
+        vm.prank(submitter);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, submitter));
+        x402QuestionSubmitter.setQuestionRewardPoolEscrow(address(replacementEscrow));
+
+        assertEq(x402QuestionSubmitter.questionRewardPoolEscrow(), address(rewardPoolEscrow));
+    }
+
+    function testX402QuestionSubmitterRefreshRejectsUnadoptedEscrow() public {
+        QuestionRewardPoolEscrow replacementEscrow = _deployReplacementQuestionRewardPoolEscrow();
+
+        vm.prank(owner);
+        vm.expectRevert("Stale escrow");
+        x402QuestionSubmitter.setQuestionRewardPoolEscrow(address(replacementEscrow));
+
+        assertEq(x402QuestionSubmitter.questionRewardPoolEscrow(), address(rewardPoolEscrow));
+    }
+
+    function testX402QuestionSubmissionRejectsOldEscrowNonceAfterRefreshBeforeUsdcAuthorization() public {
+        address agentWallet = _x402AgentWallet();
+        X402TestQuestion memory question = _x402TestQuestion();
+        Eip3009Authorization memory staleAuthorization = _x402Authorization(agentWallet, question);
+        QuestionRewardPoolEscrow replacementEscrow = _deployReplacementQuestionRewardPoolEscrow();
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setQuestionRewardPoolEscrow(address(replacementEscrow));
+        registry.unpause();
+        x402QuestionSubmitter.setQuestionRewardPoolEscrow(address(replacementEscrow));
+        vm.stopPrank();
+
+        usdc.mint(agentWallet, question.rewardTerms.amount);
+        uint256 replacementEscrowBalanceBefore = usdc.balanceOf(address(replacementEscrow));
+        uint256 agentBalanceBefore = usdc.balanceOf(agentWallet);
+        uint256 nextContentIdBefore = registry.nextContentId();
+
+        _reserveX402Question(agentWallet, question);
+        vm.warp(block.timestamp + 1);
+
+        vm.expectRevert("Bad nonce");
+        x402QuestionSubmitter.submitQuestionWithX402Payment(
+            question.contextUrl,
+            question.imageUrls,
+            "",
+            question.title,
+            question.description,
+            question.tags,
+            CATEGORY_ID,
+            question.salt,
+            question.rewardTerms,
+            question.roundConfig,
+            question.spec,
+            staleAuthorization
+        );
+
+        assertFalse(usdc.authorizationState(agentWallet, staleAuthorization.nonce));
+        assertEq(registry.nextContentId(), nextContentIdBefore);
+        assertEq(usdc.balanceOf(address(replacementEscrow)), replacementEscrowBalanceBefore);
+        assertEq(usdc.balanceOf(agentWallet), agentBalanceBefore);
+    }
+
     function testX402QuestionSubmissionConsumesUsdcAuthorizationWithDelegatedRaterIdentity() public {
         address agentWallet = _x402AgentWallet();
         X402TestQuestion memory question = _x402TestQuestion();
@@ -4777,6 +4878,30 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
     function _x402AgentWallet() internal pure returns (address) {
         return vm.addr(X402_AGENT_KEY);
+    }
+
+    function _deployReplacementQuestionRewardPoolEscrow()
+        internal
+        returns (QuestionRewardPoolEscrow replacementEscrow)
+    {
+        replacementEscrow = QuestionRewardPoolEscrow(
+            address(
+                new ERC1967Proxy(
+                    address(new QuestionRewardPoolEscrow()),
+                    abi.encodeCall(
+                        QuestionRewardPoolEscrow.initialize,
+                        (
+                            owner,
+                            address(lrepToken),
+                            address(usdc),
+                            address(registry),
+                            address(votingEngine),
+                            address(raterIdentityRegistry)
+                        )
+                    )
+                )
+            )
+        );
     }
 
     function _reserveX402Question(address agentWallet, X402TestQuestion memory question)

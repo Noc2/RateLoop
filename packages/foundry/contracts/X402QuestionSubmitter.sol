@@ -18,11 +18,12 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
 
     ContentRegistry public immutable registry;
     IERC20 public immutable usdcToken;
-    address public immutable questionRewardPoolEscrow;
+    address public questionRewardPoolEscrow;
 
     event X402QuestionSubmitted(
         uint256 indexed contentId, address indexed submitter, bytes32 indexed paymentNonce, uint256 amount
     );
+    event QuestionRewardPoolEscrowUpdated(address indexed previousEscrow, address indexed currentEscrow);
 
     constructor(ContentRegistry _registry, address _usdcToken, address _questionRewardPoolEscrow, address initialOwner)
         Ownable(initialOwner)
@@ -33,6 +34,12 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         registry = _registry;
         usdcToken = IERC20(_usdcToken);
         questionRewardPoolEscrow = _questionRewardPoolEscrow;
+    }
+
+    function setQuestionRewardPoolEscrow(address newEscrow) external onlyOwner {
+        require(newEscrow != address(0), "Invalid escrow");
+        require(registry.questionRewardPoolEscrow() == newEscrow, "Stale escrow");
+        _setQuestionRewardPoolEscrow(newEscrow);
     }
 
     /// @notice Recover ERC-20 tokens accidentally sent to this contract.
@@ -207,5 +214,12 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             }
         }
         return keccak256(abi.encodePacked(valueHashes));
+    }
+
+    function _setQuestionRewardPoolEscrow(address newEscrow) private {
+        require(newEscrow != address(0), "Invalid escrow");
+        address previousEscrow = questionRewardPoolEscrow;
+        questionRewardPoolEscrow = newEscrow;
+        emit QuestionRewardPoolEscrowUpdated(previousEscrow, newEscrow);
     }
 }
