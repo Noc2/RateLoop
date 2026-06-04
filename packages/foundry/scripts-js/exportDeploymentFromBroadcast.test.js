@@ -29,9 +29,37 @@ const proxyNames = [
 ];
 
 const protocolConfigAbi = parseAbi([
+  "function setConfig(uint256 epochDuration,uint256 maxDuration,uint256 minVoters,uint256 maxVoters)",
   "function setClusterPayoutOracle(address value)",
   "function setAdvisoryVoteRecorder(address value)",
   "function setLaunchDistributionPool(address value)",
+  "function setRewardDistributor(address value)",
+  "function setFrontendRegistry(address value)",
+  "function setCategoryRegistry(address value)",
+  "function setRaterRegistry(address value)",
+  "function renounceRole(bytes32 role,address account)",
+]);
+
+const contentRegistryAbi = parseAbi([
+  "function pause()",
+  "function unpause()",
+  "function setVotingEngine(address value)",
+  "function setQuestionRewardPoolEscrow(address value)",
+  "function setProtocolConfig(address value)",
+  "function setCategoryRegistry(address value)",
+  "function grantRole(bytes32 role,address account)",
+]);
+
+const profileRegistryAbi = parseAbi(["function setRaterRegistry(address value)"]);
+
+const frontendRegistryAbi = parseAbi([
+  "function setVotingEngine(address value)",
+  "function initializeFeeCreditor(address value)",
+]);
+
+const loopReputationAbi = parseAbi([
+  "function mint(address to,uint256 amount)",
+  "function setGovernor(address governor)",
   "function renounceRole(bytes32 role,address account)",
 ]);
 
@@ -103,9 +131,31 @@ function pushProtocolConfigProxyCall(
   receipts.push(successfulReceipt(hash));
 }
 
-function removeRequiredCall(transactions, receipts, predicate) {
+function pushProxyCall(
+  transactions,
+  receipts,
+  proxyAddress,
+  abi,
+  functionName,
+  args
+) {
+  const hash = nextTxHash(transactions);
+  transactions.push({
+    transactionType: "CALL",
+    contractName: "TransparentUpgradeableProxy",
+    contractAddress: proxyAddress,
+    function: null,
+    arguments: null,
+    input: encodeFunctionData({ abi, functionName, args }),
+    transaction: { from: fixtureDeployer, to: proxyAddress },
+    hash,
+  });
+  receipts.push(successfulReceipt(hash));
+}
+
+function removeRequiredCall(transactions, receipts, predicate, label = "required call") {
   const index = transactions.findIndex(predicate);
-  assert.notEqual(index, -1, "test fixture should contain required call");
+  assert.notEqual(index, -1, `test fixture should contain ${label}`);
   transactions.splice(index, 1);
   receipts.splice(index, 1);
 }
@@ -152,7 +202,7 @@ function completeBroadcast() {
     receipts.push(successfulReceipt(hash, "0x64"));
   }
 
-  for (const contractName of proxyNames) {
+  for (const [proxyIndex, contractName] of proxyNames.entries()) {
     const proxyAddress = address(nextAddress++);
     const adminAddress = address(nextAddress++);
     const hash = nextTxHash(transactions);
@@ -161,6 +211,11 @@ function completeBroadcast() {
       transactionType: "CREATE",
       contractName: "TransparentUpgradeableProxy",
       contractAddress: proxyAddress,
+      arguments: [
+        address(9000 + proxyIndex),
+        directAddressByName.get("TimelockController"),
+        "0x",
+      ],
       transaction: { from: deployer },
       hash,
     });
@@ -205,6 +260,119 @@ function completeBroadcast() {
   const feedbackRegistry = proxyAddressByName.get("FeedbackRegistry");
   const advisoryRecorder = directAddressByName.get("AdvisoryVoteRecorder");
   const protocolConfig = proxyAddressByName.get("ProtocolConfig");
+  const x402QuestionSubmitter = directAddressByName.get("X402QuestionSubmitter");
+
+  pushProxyCall(
+    transactions,
+    receipts,
+    contentRegistry,
+    contentRegistryAbi,
+    "pause",
+    []
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    contentRegistry,
+    contentRegistryAbi,
+    "setVotingEngine",
+    [votingEngine]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    contentRegistry,
+    contentRegistryAbi,
+    "setQuestionRewardPoolEscrow",
+    [questionEscrow]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    contentRegistry,
+    contentRegistryAbi,
+    "unpause",
+    []
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    contentRegistry,
+    contentRegistryAbi,
+    "setProtocolConfig",
+    [protocolConfig]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    contentRegistry,
+    contentRegistryAbi,
+    "setCategoryRegistry",
+    [categoryRegistry]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    contentRegistry,
+    contentRegistryAbi,
+    "grantRole",
+    [
+      "0xf8fc5b762a56b84305af28ac287dfaf08d491f8de4965459339ae40cec115613",
+      x402QuestionSubmitter,
+    ]
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "setRewardDistributor",
+    [rewardDistributor]
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "setFrontendRegistry",
+    [frontendRegistry]
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "setCategoryRegistry",
+    [categoryRegistry]
+  );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "setRaterRegistry",
+    [raterRegistry]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    profileRegistry,
+    profileRegistryAbi,
+    "setRaterRegistry",
+    [raterRegistry]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    frontendRegistry,
+    frontendRegistryAbi,
+    "setVotingEngine",
+    [votingEngine]
+  );
+  pushProxyCall(
+    transactions,
+    receipts,
+    frontendRegistry,
+    frontendRegistryAbi,
+    "initializeFeeCreditor",
+    [rewardDistributor]
+  );
 
   pushCall(
     transactions,
@@ -349,6 +517,13 @@ function completeBroadcast() {
     "setClusterPayoutOracle",
     [clusterOracle]
   );
+  pushProtocolConfigProxyCall(
+    transactions,
+    receipts,
+    protocolConfig,
+    "setConfig",
+    ["1200", "1200", "3", "100"]
+  );
   pushCall(
     transactions,
     receipts,
@@ -391,6 +566,14 @@ function completeBroadcast() {
   pushCall(
     transactions,
     receipts,
+    "LoopReputation",
+    "mint(address,uint256)",
+    [governance, "25000000000000"],
+    directAddressByName.get("LoopReputation")
+  );
+  pushCall(
+    transactions,
+    receipts,
     "TimelockController",
     "grantRole(bytes32,address)",
     [proposerRole, governor],
@@ -424,6 +607,14 @@ function completeBroadcast() {
     transactions,
     receipts,
     "LoopReputation",
+    "mint(address,uint256)",
+    [launchPool, "75000000000000"],
+    directAddressByName.get("LoopReputation")
+  );
+  pushCall(
+    transactions,
+    receipts,
+    "LoopReputation",
     "renounceRole(bytes32,address)",
     [configRole, deployer],
     directAddressByName.get("LoopReputation")
@@ -441,7 +632,10 @@ function completeBroadcast() {
     receipts,
     "LaunchDistributionPool",
     "setLegacyContributorRoot(bytes32,uint256)",
-    [`0x${"a".repeat(64)}`, "9000000000000"],
+    [
+      "0xcaa28d15e6c6c1bb47d347a413cb808e40c38a7e43171ce9a131983a92b97d18",
+      "9000000000000",
+    ],
     launchPool
   );
   pushCall(
@@ -588,6 +782,264 @@ test("reconstructDeploymentExportFromBroadcast rejects missing protocol oracle c
         "worldchainSepolia"
       ),
     /ProtocolConfig\.setClusterPayoutOracle/
+  );
+});
+
+test("reconstructDeploymentExportFromBroadcast rejects missing critical wiring", () => {
+  const cases = [
+    {
+      label: /ContentRegistry\.pause/,
+      selector: "0x8456cb59",
+      target: address(13),
+    },
+    {
+      label: /ContentRegistry\.setVotingEngine/,
+      selector: "0xf5a750c1",
+      target: address(13),
+    },
+    {
+      label: /ContentRegistry\.setQuestionRewardPoolEscrow/,
+      selector: "0x38df9df7",
+      target: address(13),
+    },
+    {
+      label: /ContentRegistry\.unpause/,
+      selector: "0x3f4ba83a",
+      target: address(13),
+    },
+    {
+      label: /ContentRegistry\.setProtocolConfig/,
+      selector: "0x736d5beb",
+      target: address(13),
+    },
+    {
+      label: /ContentRegistry\.setCategoryRegistry/,
+      selector: "0x1ea60576",
+      target: address(13),
+    },
+    {
+      label: /ContentRegistry\.grantRole\(X402_GATEWAY_ROLE\)/,
+      selector: "0x2f2ff15d",
+      target: address(13),
+      arg:
+        "0xf8fc5b762a56b84305af28ac287dfaf08d491f8de4965459339ae40cec115613",
+    },
+    {
+      label: /ProtocolConfig\.setConfig/,
+      selector: "0xe5c389cd",
+      target: address(15),
+    },
+    {
+      label: /ProtocolConfig\.setRewardDistributor/,
+      selector: "0xa1809b95",
+      target: address(15),
+    },
+    {
+      label: /ProtocolConfig\.setFrontendRegistry/,
+      selector: "0x6848070b",
+      target: address(15),
+    },
+    {
+      label: /ProtocolConfig\.setCategoryRegistry/,
+      selector: "0x1ea60576",
+      target: address(15),
+    },
+    {
+      label: /ProtocolConfig\.setRaterRegistry/,
+      selector: "0x4ae92ae4",
+      target: address(15),
+    },
+    {
+      label: /ProfileRegistry\.setRaterRegistry/,
+      selector: "0x4ae92ae4",
+      target: address(11),
+    },
+    {
+      label: /FrontendRegistry\.setVotingEngine/,
+      selector: "0xf5a750c1",
+      target: address(9),
+    },
+    {
+      label: /FrontendRegistry\.initializeFeeCreditor/,
+      selector: "0x93cca7c6",
+      target: address(9),
+    },
+    {
+      label: /LoopReputation\.mint\(Treasury\)/,
+      functionName: "mint(address,uint256)",
+      target: address(2),
+      arg: address(1),
+    },
+    {
+      label: /LoopReputation\.mint\(LaunchDistributionPool\)/,
+      functionName: "mint(address,uint256)",
+      target: address(2),
+      arg: address(7),
+    },
+  ];
+
+  for (const { label, selector, functionName, target, arg } of cases) {
+    const { transactions, receipts } = completeBroadcast();
+    removeRequiredCall(
+      transactions,
+      receipts,
+      (tx) => {
+        if (selector && !tx.input?.startsWith(selector)) return false;
+        if (functionName && tx.function !== functionName) return false;
+        if (target && tx.contractAddress.toLowerCase() !== target.toLowerCase()) {
+          return false;
+        }
+        if (!arg) return true;
+        if (functionName) {
+          return tx.arguments?.some((value) => value.toLowerCase?.() === arg.toLowerCase());
+        }
+        if (tx.input) return tx.input.toLowerCase().includes(arg.slice(2));
+        return tx.arguments?.some((value) => value.toLowerCase?.() === arg.toLowerCase());
+      },
+      String(label)
+    );
+
+    assert.throws(
+      () =>
+        reconstructDeploymentExportFromBroadcast(
+          { transactions, receipts },
+          "worldchainSepolia"
+        ),
+      label
+    );
+  }
+});
+
+test("reconstructDeploymentExportFromBroadcast rejects final-state rewrites after required calls", () => {
+  const cases = [
+    {
+      label: /ProtocolConfig\.setRewardDistributor/,
+      mutate: (transactions, receipts) => {
+        pushProtocolConfigProxyCall(
+          transactions,
+          receipts,
+          address(15),
+          "setRewardDistributor",
+          [address(601)]
+        );
+      },
+    },
+    {
+      label: /ContentRegistry\.setVotingEngine/,
+      mutate: (transactions, receipts) => {
+        pushProxyCall(
+          transactions,
+          receipts,
+          address(13),
+          contentRegistryAbi,
+          "setVotingEngine",
+          [address(602)]
+        );
+      },
+    },
+    {
+      label:
+        /LaunchDistributionPool\.setAuthorizedCaller\(RoundRewardDistributor\)/,
+      mutate: (transactions, receipts) => {
+        pushCall(
+          transactions,
+          receipts,
+          "LaunchDistributionPool",
+          "setAuthorizedCaller(address,bool)",
+          [address(19), "false"],
+          address(7)
+        );
+      },
+    },
+    {
+      label:
+        /ClusterPayoutOracle\.setRoundPayoutSnapshotConsumer\(QUESTION_REWARD\)/,
+      mutate: (transactions, receipts) => {
+        pushCall(
+          transactions,
+          receipts,
+          "ClusterPayoutOracle",
+          "setRoundPayoutSnapshotConsumer(uint8,address)",
+          ["1", address(603)],
+          address(6)
+        );
+      },
+    },
+  ];
+
+  for (const { label, mutate } of cases) {
+    const { transactions, receipts } = completeBroadcast();
+    mutate(transactions, receipts);
+
+    assert.throws(
+      () =>
+        reconstructDeploymentExportFromBroadcast(
+          { transactions, receipts },
+          "worldchainSepolia"
+        ),
+      label
+    );
+  }
+});
+
+test("reconstructDeploymentExportFromBroadcast rejects deployments left paused", () => {
+  const { transactions, receipts } = completeBroadcast();
+  pushProxyCall(
+    transactions,
+    receipts,
+    address(13),
+    contentRegistryAbi,
+    "pause",
+    []
+  );
+
+  assert.throws(
+    () =>
+      reconstructDeploymentExportFromBroadcast(
+        { transactions, receipts },
+        "worldchainSepolia"
+      ),
+    /ContentRegistry remains paused/
+  );
+});
+
+test("reconstructDeploymentExportFromBroadcast rejects non-governance proxy admins", () => {
+  const { transactions, receipts } = completeBroadcast();
+  const proxy = transactions.find(
+    (tx) => tx.contractName === "TransparentUpgradeableProxy"
+  );
+  proxy.arguments[1] = address(333);
+
+  assert.throws(
+    () =>
+      reconstructDeploymentExportFromBroadcast(
+        { transactions, receipts },
+        "worldchainSepolia"
+      ),
+    /FrontendRegistry proxy admin is not initialized to governance/
+  );
+});
+
+test("reconstructDeploymentExportFromBroadcast rejects unexpected authority mutations", () => {
+  const proposerRole =
+    "0xb09aa5aeb3702cfd50b6b62bc4532604938f21248a27a1d5ca736082b6819cc1";
+  const { transactions, receipts } = completeBroadcast();
+  pushCall(
+    transactions,
+    receipts,
+    "TimelockController",
+    "grantRole(bytes32,address)",
+    [proposerRole, address(555)],
+    address(1)
+  );
+
+  assert.throws(
+    () =>
+      reconstructDeploymentExportFromBroadcast(
+        { transactions, receipts },
+        "worldchainSepolia"
+      ),
+    /TimelockController grants governance role to unexpected account/
   );
 });
 

@@ -48,7 +48,10 @@ contract ScaffoldETHDeploy is Script {
         }
         _;
         _stopBroadcast();
-        exportDeployments(true);
+        // Non-local completion is stamped by exportDeploymentFromBroadcast.js after it
+        // reconstructs and validates the broadcast. The Solidity helper should not be
+        // a trusted readiness source on its own.
+        exportDeployments(block.chainid == 31337);
     }
 
     function _startBroadcast() internal returns (address) {
