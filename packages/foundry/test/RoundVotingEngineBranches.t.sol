@@ -24,6 +24,44 @@ import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
 import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 
+contract MockAdvisoryLaunchDistributionPool {
+    uint16 public maxUnverifiedCreditsPerRound;
+
+    constructor(uint16 cap) {
+        maxUnverifiedCreditsPerRound = cap;
+    }
+
+    function setMaxUnverifiedCreditsPerRound(uint16 cap) external {
+        maxUnverifiedCreditsPerRound = cap;
+    }
+
+    function launchAnchorCredentialAgeSeconds() external pure returns (uint32) {
+        return 1 days;
+    }
+
+    function launchRewardPolicy()
+        external
+        view
+        returns (
+            uint16 minQualifyingScoreBps,
+            uint16 minVoters,
+            uint16 minVerifiedHumans,
+            uint16 minDistinctVerifiedAnchors,
+            uint16 minDistinctAnchorRounds,
+            uint64 minLaunchCreditStake,
+            uint16 maxDistinctRatersPerVerifiedAnchor,
+            uint16 maxUnverifiedCreditsPerRound_,
+            uint16 unverifiedEarnedRaterCapBps,
+            uint32 minAnchorCredentialAgeSeconds,
+            uint32 eligibilityRatingCount,
+            uint32 rewardingRatingCount,
+            bool requireNoPendingCleanup
+        )
+    {
+        return (0, 3, 0, 0, 0, 0, 1, maxUnverifiedCreditsPerRound, 0, 1 days, 1, 1, false);
+    }
+}
+
 // =========================================================================
 // TEST CONTRACT
 // =========================================================================
@@ -3379,6 +3417,63 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         advisoryRecorder.recordAdvisoryVote(
             contentId, _roundContext(roundId, referenceRatingBps), targetRound, drandChainHash, commitHash, ciphertext
         );
+    }
+
+    function test_AdvisoryVoteCapsUnverifiedCommitsFromLaunchPolicy() public {
+        MockAdvisoryLaunchDistributionPool launchPool = new MockAdvisoryLaunchDistributionPool(1);
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
+
+        uint256 contentId = _submitContent();
+        _openStakedRound(voter4, contentId, "advisory-unverified-cap-open");
+        _recordAdvisory(voter1, contentId, "advisory-unverified-cap-1");
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+
+        assertEq(advisoryRecorder.roundUnverifiedAdvisoryCommitCount(contentId, roundId), 1);
+
+        vm.prank(voter2);
+        AdvisoryVoteRecorder.AdvisoryCommitAvailability memory availability =
+            advisoryRecorder.advisoryCommitAvailability(contentId);
+        assertFalse(availability.canCommit, "unverified caller cannot advisory-commit after cap");
+        assertEq(
+            uint256(availability.status),
+            uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.UnverifiedAdvisoryCapReached)
+        );
+
+        _expectAdvisoryRevert(
+            voter2,
+            contentId,
+            "advisory-unverified-cap-2",
+            AdvisoryVoteRecorder.UnverifiedAdvisoryCapReached.selector
+        );
+
+        (bytes32 commitKey,) = _commitWithTargetRound(
+            voter2, contentId, true, STAKE, _tlockCommitTargetRound(engine, contentId), "paid-after-advisory-cap"
+        );
+        assertTrue(commitKey != bytes32(0), "paid stake vote bypasses free advisory cap");
+    }
+
+    function test_VerifiedAdvisoryVoteBypassesUnverifiedCommitCap() public {
+        MockAdvisoryLaunchDistributionPool launchPool = new MockAdvisoryLaunchDistributionPool(1);
+        vm.prank(owner);
+        ProtocolConfig(protocolConfigAddress).setLaunchDistributionPool(address(launchPool));
+
+        uint256 contentId = _submitContent();
+        _openStakedRound(voter4, contentId, "advisory-verified-cap-open");
+        _recordAdvisory(voter1, contentId, "advisory-verified-cap-unverified");
+        uint256 roundId = engine.previewCommitRoundId(contentId);
+        mockRaterIdentityRegistry.mint(voter2, 42);
+
+        vm.prank(voter2);
+        AdvisoryVoteRecorder.AdvisoryCommitAvailability memory availability =
+            advisoryRecorder.advisoryCommitAvailability(contentId);
+        assertTrue(availability.canCommit, "verified caller can advisory-commit after unverified cap");
+        assertEq(uint256(availability.status), uint256(AdvisoryVoteRecorder.AdvisoryCommitAvailabilityStatus.Available));
+
+        _recordAdvisory(voter2, contentId, "advisory-verified-cap-verified");
+
+        assertEq(advisoryRecorder.roundUnverifiedAdvisoryCommitCount(contentId, roundId), 1);
+        assertEq(advisoryRecorder.roundAdvisoryCommitCount(contentId, roundId), 2);
     }
 
     function test_AdvisoryVoteUsesCorePreflightAndRaterIdentityDedupe() public {

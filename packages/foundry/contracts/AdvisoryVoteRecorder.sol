@@ -38,6 +38,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     error Paused();
     error IndexOutOfBounds();
     error MaxAdvisoryVotersReached();
+    error UnverifiedAdvisoryCapReached();
+    error InvalidLaunchRewardPolicy();
     error TargetRoundOutOfWindow();
     /// @notice Reveal-time drand chain hash differs from the value used at commit-time.
     /// @dev Surfaces silent desync between the ciphertext (encrypted under the commit-time
@@ -51,6 +53,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     ProtocolConfig public immutable protocolConfig;
 
     uint256 internal constant ADVISORY_VOTE_COOLDOWN = 24 hours;
+    uint16 internal constant DEFAULT_MAX_UNVERIFIED_ADVISORY_COMMITS_PER_ROUND = 3;
 
     bool public paused;
 
@@ -99,7 +102,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         OutsideBlindEpoch,
         ThresholdReached,
         MaxAdvisoryVotersReached,
-        InvalidConfig
+        InvalidConfig,
+        UnverifiedAdvisoryCapReached
     }
 
     struct AdvisoryCommitAvailability {
@@ -123,6 +127,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     mapping(uint256 => mapping(address => uint256)) public lastAdvisoryVoteTimestamp;
     mapping(uint256 => mapping(bytes32 => uint256)) public lastAdvisoryVoteTimestampByIdentity;
     mapping(uint256 => mapping(uint256 => bytes32[])) internal roundAdvisoryCommitKeys;
+    mapping(uint256 => mapping(uint256 => uint16)) public roundUnverifiedAdvisoryCommitCount;
 
     event AdvisoryVoteRecorded(
         uint256 indexed contentId,
@@ -250,6 +255,18 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             availability.status = AdvisoryCommitAvailabilityStatus.MaxAdvisoryVotersReached;
             return availability;
         }
+        (bool capLoaded, uint16 maxUnverifiedCommits) = _maxUnverifiedAdvisoryCommitsPerRound();
+        if (!capLoaded) {
+            availability.status = AdvisoryCommitAvailabilityStatus.InvalidConfig;
+            return availability;
+        }
+        if (
+            _unverifiedAdvisoryCommitCapReached(contentId, availability.roundId, maxUnverifiedCommits)
+                && !_hasActiveHumanCredentialForRound(contentId, availability.roundId, msg.sender)
+        ) {
+            availability.status = AdvisoryCommitAvailabilityStatus.UnverifiedAdvisoryCapReached;
+            return availability;
+        }
 
         availability.canCommit = true;
         availability.status = AdvisoryCommitAvailabilityStatus.Available;
@@ -307,6 +324,13 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         if (roundAdvisoryCommitKeys[contentId][roundId].length >= preparedRound.maxVoters) {
             revert MaxAdvisoryVotersReached();
         }
+        if (!resolved.hasActiveHumanCredential) {
+            (bool capLoaded, uint16 maxUnverifiedCommits) = _maxUnverifiedAdvisoryCommitsPerRound();
+            if (!capLoaded) revert InvalidLaunchRewardPolicy();
+            if (_unverifiedAdvisoryCommitCapReached(contentId, roundId, maxUnverifiedCommits)) {
+                revert UnverifiedAdvisoryCapReached();
+            }
+        }
 
         advisoryCommitKey = keccak256(abi.encodePacked(bytes1(0xa1), msg.sender, contentId, roundId, commitHash));
 
@@ -350,6 +374,9 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         }
         lastAdvisoryVoteTimestampByIdentity[contentId][resolved.identityKey] = block.timestamp;
         roundAdvisoryCommitKeys[contentId][roundId].push(advisoryCommitKey);
+        if (!resolved.hasActiveHumanCredential) {
+            roundUnverifiedAdvisoryCommitCount[contentId][roundId] += 1;
+        }
 
         emit AdvisoryVoteRecorded(
             contentId,
@@ -732,6 +759,57 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             snapshot = protocolConfig.raterRegistry();
         }
         return IRaterIdentityRegistry(snapshot);
+    }
+
+    function _maxUnverifiedAdvisoryCommitsPerRound()
+        internal
+        view
+        returns (bool success, uint16 maxUnverifiedCommits)
+    {
+        address launchPool = protocolConfig.launchDistributionPool();
+        if (launchPool == address(0)) {
+            return (true, DEFAULT_MAX_UNVERIFIED_ADVISORY_COMMITS_PER_ROUND);
+        }
+        try ILaunchDistributionPool(launchPool).launchRewardPolicy() returns (
+            uint16,
+            uint16,
+            uint16,
+            uint16,
+            uint16,
+            uint64,
+            uint16,
+            uint16 maxUnverifiedCreditsPerRound,
+            uint16,
+            uint32,
+            uint32,
+            uint32,
+            bool
+        ) {
+            return (true, maxUnverifiedCreditsPerRound);
+        } catch {
+            return (false, 0);
+        }
+    }
+
+    function _unverifiedAdvisoryCommitCapReached(
+        uint256 contentId,
+        uint256 roundId,
+        uint16 maxUnverifiedCommits
+    ) internal view returns (bool) {
+        return roundUnverifiedAdvisoryCommitCount[contentId][roundId] >= maxUnverifiedCommits;
+    }
+
+    function _hasActiveHumanCredentialForRound(uint256 contentId, uint256 roundId, address rater)
+        internal
+        view
+        returns (bool)
+    {
+        if (rater == address(0)) return false;
+        try _roundRaterRegistry(contentId, roundId).hasActiveHumanCredential(rater) returns (bool active) {
+            return active;
+        } catch {
+            return false;
+        }
     }
 
     function _validateAdvisoryCooldown(uint256 contentId, address voter, address identityHolder, bytes32 identityKey)
