@@ -93,6 +93,7 @@ test("document upload accepts managed agent markdown context", async () => {
     contextUrl: "https://www.rateloop.ai/context/documents/doc_routecontextdocument01",
     documentId: "doc_routecontextdocument01",
     error: null,
+    filename: "context.md",
     moderationStatus: "approved",
     nextAction: "Use contextUrl as the question context source.",
     preview: "# Business plan\n\nKeep the first launch focused.",
@@ -102,6 +103,24 @@ test("document upload accepts managed agent markdown context", async () => {
   const rows = await dbClient.execute("SELECT id, normalized_text FROM question_context_documents");
   assert.equal(rows.rows.length, 1);
   assert.equal(rows.rows[0]?.id, "doc_routecontextdocument01");
+});
+
+test("document upload returns the sanitized display filename", async () => {
+  const response = await POST(
+    uploadRequest({
+      content: "Launch memo context.",
+      documentId: "doc_routecontextdocument03",
+      filename: "folder\\\u202Ememo\u0001/final.txt",
+      mimeType: "text/plain",
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  const json = (await response.json()) as { filename?: string };
+  assert.equal(json.filename, "folder memo final.txt");
+
+  const rows = await dbClient.execute("SELECT original_filename FROM question_context_documents");
+  assert.equal(rows.rows[0]?.original_filename, "folder memo final.txt");
 });
 
 test("document upload rejects unsupported file extensions", async () => {

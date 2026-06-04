@@ -64,10 +64,35 @@ test("createContextDocumentFromBuffer stores approved normalized text", async ()
 
   assert.equal(result.status, "approved");
   assert.equal(result.contextUrl, "https://www.rateloop.ai/context/documents/doc_testcontextdocument01");
+  assert.equal(result.filename, "plan.md");
 
   const document = await getContextDocument("doc_testcontextdocument01");
+  assert.equal(document?.originalFilename, "plan.md");
   assert.equal(document?.normalizedText, "# Plan\n\nShip the narrow version first.");
   assert.equal(document?.mimeType, "text/markdown");
+});
+
+test("createContextDocumentFromBuffer stores a sanitized display filename", async () => {
+  const buffer = Buffer.from("Public written context with a tricky filename.", "utf8");
+  const result = await createContextDocumentFromBuffer({
+    buffer,
+    documentId: "doc_testcontextdocument07",
+    filename: "../\u202Esecret\u0007/report.md",
+    mimeType: "text/markdown",
+    requestUrl: "https://rateloop.ai/api/attachments/documents/upload",
+    sha256: sha256(buffer),
+    sizeBytes: buffer.byteLength,
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    },
+  });
+
+  assert.equal(result.status, "approved");
+  assert.equal(result.filename, "secret report.md");
+
+  const document = await getContextDocument("doc_testcontextdocument07");
+  assert.equal(document?.originalFilename, "secret report.md");
 });
 
 test("createContextDocumentFromBuffer rejects binary-like control characters", async () => {

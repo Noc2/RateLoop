@@ -34,6 +34,7 @@ type UploadResponse = {
   contextUrl?: string | null;
   documentId?: string;
   error?: string | null;
+  filename?: string;
   preview?: string | null;
   sha256?: string;
   sizeBytes?: number;
@@ -140,7 +141,7 @@ export function ContextDocumentUploader({ address, disabled = false, onUploaded 
       onUploaded({
         contextUrl: uploadResult.contextUrl,
         documentId: uploadResult.documentId,
-        filename: file.name,
+        filename: uploadResult.filename ?? file.name,
         preview: uploadResult.preview ?? null,
         sha256,
         sizeBytes: file.size,

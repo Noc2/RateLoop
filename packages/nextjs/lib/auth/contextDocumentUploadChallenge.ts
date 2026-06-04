@@ -2,6 +2,7 @@ import "server-only";
 import {
   getMaxContextDocumentUploadSizeBytes,
   normalizeContextDocumentMimeType,
+  sanitizeContextDocumentFilename,
 } from "~~/lib/auth/contextDocumentUploadChallenge.shared";
 import { buildSignedActionMessage, hashSignedActionPayload } from "~~/lib/auth/signedActions";
 import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
@@ -36,9 +37,14 @@ export function normalizeContextDocumentUploadChallengeInput(
     return { ok: false, error: "Invalid document id." };
   }
 
-  const filename = typeof body.filename === "string" ? body.filename.trim().slice(0, 180) : "";
-  if (!filename) {
+  const rawFilename = typeof body.filename === "string" ? body.filename.trim() : "";
+  if (!rawFilename) {
     return { ok: false, error: "Filename is required." };
+  }
+
+  const filename = sanitizeContextDocumentFilename(rawFilename);
+  if (!filename) {
+    return { ok: false, error: "Upload a TXT or Markdown document." };
   }
 
   const mimeType = normalizeContextDocumentMimeType(filename, typeof body.mimeType === "string" ? body.mimeType : "");

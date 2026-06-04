@@ -6,6 +6,7 @@ import {
   CONTEXT_DOCUMENT_MIME_TYPE_TEXT,
   getMaxContextDocumentUploadSizeBytes,
   normalizeContextDocumentMimeType,
+  sanitizeContextDocumentFilename,
 } from "~~/lib/auth/contextDocumentUploadChallenge.shared";
 import { db } from "~~/lib/db";
 import { type QuestionContextDocument, questionContextDocuments } from "~~/lib/db/schema";
@@ -62,6 +63,7 @@ export type ContextDocumentUploadResult = {
   contextUrl: string | null;
   documentId: string;
   error: string | null;
+  filename: string;
   moderationStatus: string;
   nextAction: string;
   preview: string | null;
@@ -320,6 +322,7 @@ function uploadResult(params: { document: QuestionContextDocument; requestUrl: s
       params.document.status === "approved" ? getContextDocumentUrl(params.requestUrl, params.document.id) : null,
     documentId: params.document.id,
     error: params.document.error,
+    filename: params.document.originalFilename,
     moderationStatus: params.document.moderationStatus,
     nextAction:
       params.document.status === "approved"
@@ -335,7 +338,8 @@ export async function createContextDocumentFromBuffer(params: CreateContextDocum
     throw new Error("Invalid document id.");
   }
 
-  const normalizedMimeType = normalizeContextDocumentMimeType(params.filename, params.mimeType);
+  const sanitizedFilename = sanitizeContextDocumentFilename(params.filename);
+  const normalizedMimeType = normalizeContextDocumentMimeType(sanitizedFilename, params.mimeType);
   if (!normalizedMimeType) {
     throw new Error("Upload a TXT or Markdown document.");
   }
@@ -347,7 +351,7 @@ export async function createContextDocumentFromBuffer(params: CreateContextDocum
     ownerWalletAddress: params.uploader.ownerWalletAddress,
     agentId: params.uploader.kind === "agent" ? params.uploader.agentId : null,
     clientRequestId: params.clientRequestId ?? null,
-    originalFilename: params.filename.slice(0, 180),
+    originalFilename: sanitizedFilename,
     mimeType: normalizedMimeType,
     sizeBytes: params.sizeBytes,
     sha256: params.sha256,
@@ -363,7 +367,7 @@ export async function createContextDocumentFromBuffer(params: CreateContextDocum
   try {
     assertSupportedDocumentInput({
       buffer: params.buffer,
-      filename: params.filename,
+      filename: sanitizedFilename,
       mimeType: normalizedMimeType,
       sha256: params.sha256,
       sizeBytes: params.sizeBytes,
