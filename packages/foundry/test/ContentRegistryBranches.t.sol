@@ -1382,6 +1382,114 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_SubmitQuestionBundleWithReward_AllowsSameTextWithDifferentMedia() public {
+        ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
+        questions[0] = ContentRegistry.BundleQuestionInput({
+            contextUrl: "https://example.com/bundle-media-variant",
+            imageUrls: _singleImageUrls(_uploadedImageUrl("bundle-media-variant-a")),
+            videoUrl: "",
+            title: "Question?",
+            description: "Context voters should consider",
+            tags: "Products",
+            categoryId: 1,
+            salt: keccak256("bundle-media-variant-a"),
+            spec: _defaultQuestionSpec()
+        });
+        questions[1] = ContentRegistry.BundleQuestionInput({
+            contextUrl: "https://example.com/bundle-media-variant",
+            imageUrls: _singleImageUrls(_uploadedImageUrl("bundle-media-variant-b")),
+            videoUrl: "",
+            title: "Question?",
+            description: "Context voters should consider",
+            tags: "Products",
+            categoryId: 1,
+            salt: keccak256("bundle-media-variant-b"),
+            spec: _defaultQuestionSpec()
+        });
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
+            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            _defaultSubmissionRewardAmount(registry) * 2,
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            block.timestamp + 30 days
+        );
+        RoundLib.RoundConfig memory roundConfig = _bundleContentRoundConfig();
+        (, bytes32 firstSubmissionKey) = registry.previewQuestionSubmissionKey(
+            questions[0].contextUrl,
+            questions[0].imageUrls,
+            questions[0].videoUrl,
+            questions[0].title,
+            questions[0].description,
+            questions[0].tags,
+            questions[0].categoryId
+        );
+        (, bytes32 secondSubmissionKey) = registry.previewQuestionSubmissionKey(
+            questions[1].contextUrl,
+            questions[1].imageUrls,
+            questions[1].videoUrl,
+            questions[1].title,
+            questions[1].description,
+            questions[1].tags,
+            questions[1].categoryId
+        );
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), rewardTerms.amount);
+        registry.reserveSubmission(_bundleRevealCommitment(questions, rewardTerms, roundConfig, submitter));
+        vm.warp(block.timestamp + 1);
+        (, uint256[] memory contentIds) =
+            registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, roundConfig);
+        vm.stopPrank();
+
+        assertEq(contentIds.length, 2);
+        assertTrue(
+            firstSubmissionKey != secondSubmissionKey,
+            "different media variants get different submission keys"
+        );
+    }
+
+    function test_SubmitQuestionBundleWithReward_RejectsExactMediaDuplicate() public {
+        string[] memory imageUrls = _singleImageUrls(_uploadedImageUrl("bundle-media-duplicate"));
+        ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
+        questions[0] = ContentRegistry.BundleQuestionInput({
+            contextUrl: "https://example.com/bundle-media-duplicate",
+            imageUrls: imageUrls,
+            videoUrl: "",
+            title: "Question?",
+            description: "Context voters should consider",
+            tags: "Products",
+            categoryId: 1,
+            salt: keccak256("bundle-media-duplicate-a"),
+            spec: _defaultQuestionSpec()
+        });
+        questions[1] = ContentRegistry.BundleQuestionInput({
+            contextUrl: "https://example.com/bundle-media-duplicate",
+            imageUrls: imageUrls,
+            videoUrl: "",
+            title: "Question?",
+            description: "Context voters should consider",
+            tags: "Products",
+            categoryId: 1,
+            salt: keccak256("bundle-media-duplicate-b"),
+            spec: _defaultQuestionSpec()
+        });
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
+            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            _defaultSubmissionRewardAmount(registry) * 2,
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            block.timestamp + 30 days
+        );
+        RoundLib.RoundConfig memory roundConfig = _bundleContentRoundConfig();
+
+        vm.startPrank(submitter);
+        registry.reserveSubmission(_bundleRevealCommitment(questions, rewardTerms, roundConfig, submitter));
+        vm.warp(block.timestamp + 1);
+        vm.expectRevert("Question already submitted");
+        registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, roundConfig);
+        vm.stopPrank();
+    }
+
     function test_SubmitQuestionBundleWithReward_RequiresBountyClose() public {
         ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
         questions[0] = ContentRegistry.BundleQuestionInput({
@@ -2076,6 +2184,96 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _defaultQuestionSpec()
         );
         vm.stopPrank();
+    }
+
+    function test_SubmitContent_DuplicateMediaVariant_Reverts() public {
+        string memory url = "https://example.com/media-duplicate";
+        string memory title = "goal";
+        string memory description = "goal";
+        string memory tags = "tags";
+        string[] memory imageUrls = _singleImageUrls(_uploadedImageUrl("media-duplicate"));
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 20e6);
+        _reserveQuestionMediaSubmission(
+            registry, url, imageUrls, "", title, description, tags, 1, keccak256("media-duplicate-a"), submitter
+        );
+        vm.warp(block.timestamp + 1);
+        registry.submitQuestion(
+            url, imageUrls, "", title, description, tags, 1, keccak256("media-duplicate-a"), _defaultQuestionSpec()
+        );
+
+        vm.expectRevert("Question already submitted");
+        registry.submitQuestion(
+            url, imageUrls, "", title, description, tags, 1, keccak256("media-duplicate-b"), _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+    }
+
+    function test_SubmitContent_AllowsSameQuestionTextWithDifferentMedia() public {
+        string memory url = "https://example.com/media-variant";
+        string memory title = "goal";
+        string memory description = "goal";
+        string memory tags = "tags";
+        string[] memory firstImageUrls = _singleImageUrls(_uploadedImageUrl("media-variant-a"));
+        string[] memory secondImageUrls = _singleImageUrls(_uploadedImageUrl("media-variant-b"));
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 20e6);
+        bytes32 firstSubmissionKey = _reserveQuestionMediaSubmission(
+            registry,
+            url,
+            firstImageUrls,
+            "",
+            title,
+            description,
+            tags,
+            1,
+            keccak256("media-variant-a"),
+            submitter
+        );
+        vm.warp(block.timestamp + 1);
+        uint256 firstContentId = registry.submitQuestion(
+            url,
+            firstImageUrls,
+            "",
+            title,
+            description,
+            tags,
+            1,
+            keccak256("media-variant-a"),
+            _defaultQuestionSpec()
+        );
+
+        bytes32 secondSubmissionKey = _reserveQuestionMediaSubmission(
+            registry,
+            url,
+            secondImageUrls,
+            "",
+            title,
+            description,
+            tags,
+            1,
+            keccak256("media-variant-b"),
+            submitter
+        );
+        vm.warp(block.timestamp + 1);
+        uint256 secondContentId = registry.submitQuestion(
+            url,
+            secondImageUrls,
+            "",
+            title,
+            description,
+            tags,
+            1,
+            keccak256("media-variant-b"),
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+
+        assertTrue(firstSubmissionKey != secondSubmissionKey, "media variants use distinct submission keys");
+        assertEq(firstContentId, 1);
+        assertEq(secondContentId, 2);
     }
 
     function test_SubmitContent_EmptyUrl_Reverts() public {

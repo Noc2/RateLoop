@@ -538,7 +538,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 question.categoryId
             );
             uint256 resolvedCategoryId = _resolveQuestionSubmissionCategory(metadata);
-            bytes32 submissionKey = _deriveQuestionMediaSubmissionKey(metadata, resolvedCategoryId);
+            bytes32 mediaHash = _submissionMediaHash(question.imageUrls, question.videoUrl);
+            bytes32 submissionKey = _deriveQuestionMediaSubmissionKey(metadata, mediaHash, resolvedCategoryId);
             // Eager write in this loop also catches duplicates WITHIN the same bundle --
             // without it, two identical questions in one bundle would both pass the
             // check here and later point at the same submissionKey, so releasing one
@@ -552,7 +553,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
             metadataList[i] = metadata;
             submissionKeys[i] = submissionKey;
-            mediaHashes[i] = _submissionMediaHash(question.imageUrls, question.videoUrl);
+            mediaHashes[i] = mediaHash;
             resolvedCategoryIds[i] = resolvedCategoryId;
         }
 
@@ -810,7 +811,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal returns (uint256 resolvedCategoryId, bytes32 submissionKey, PendingSubmission memory pending) {
         _validateQuestionSpec(spec);
         resolvedCategoryId = _resolveQuestionSubmissionCategory(metadata);
-        submissionKey = _deriveQuestionMediaSubmissionKey(metadata, resolvedCategoryId);
+        bytes32 mediaHash = _submissionMediaHash(imageUrls, videoUrl);
+        submissionKey = _deriveQuestionMediaSubmissionKey(metadata, mediaHash, resolvedCategoryId);
         require(!submissionKeyUsed[submissionKey], "Question already submitted");
         // A zero salt collapses the reveal commitment's entropy and lets a front-runner
         // pre-reserve the same (metadata, ..., salt=0) tuple. Force non-zero salt so every
@@ -819,7 +821,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         _validateSubmissionReward(rewardTerms);
         require(rewardTerms.requiredVoters <= roundConfig.maxVoters, "Voters exceed max");
 
-        bytes32 mediaHash = _submissionMediaHash(imageUrls, videoUrl);
         bytes32 revealCommitment = _computeRevealCommitment(
             submissionKey,
             mediaHash,
@@ -892,15 +893,20 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         return metadata.categoryId;
     }
 
-    function _deriveQuestionMediaSubmissionKey(SubmissionMetadata memory metadata, uint256 resolvedCategoryId)
+    function _deriveQuestionMediaSubmissionKey(
+        SubmissionMetadata memory metadata,
+        bytes32 mediaHash,
+        uint256 resolvedCategoryId
+    )
         internal
         pure
         returns (bytes32)
     {
         return keccak256(
             abi.encode(
-                "rateloop-question-context-v1",
+                "rateloop-question-context-v2",
                 resolvedCategoryId,
+                mediaHash,
                 metadata.url,
                 metadata.title,
                 metadata.description,
@@ -1224,7 +1230,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             contextUrl, imageUrls, videoUrl, title, description, tags, categoryId
         );
         resolvedCategoryId = _resolveQuestionSubmissionCategory(metadata);
-        submissionKey = _deriveQuestionMediaSubmissionKey(metadata, resolvedCategoryId);
+        submissionKey =
+            _deriveQuestionMediaSubmissionKey(metadata, _submissionMediaHash(imageUrls, videoUrl), resolvedCategoryId);
     }
 
     function _computeRevealCommitment(
