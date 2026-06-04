@@ -2782,6 +2782,32 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(voter1), voter1BalBefore, "late reveals are not accepted after reveal failure");
     }
 
+    function test_RevealAfterFinalRevealFailedDeadline_RevertsBeforeQuorum() public {
+        uint256 contentId = _submitContent();
+
+        mockRaterIdentityRegistry.setHolder(voter1);
+        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, STAKE);
+        _commit(voter3, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        uint256 finalDeadline = round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+
+        vm.warp(finalDeadline - 1);
+        _reveal(contentId, roundId, ck1, true, s1);
+
+        vm.warp(finalDeadline);
+        vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
+        _reveal(contentId, roundId, ck2, false, s2);
+
+        engine.finalizeRevealFailedRound(contentId, roundId);
+        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 2, "two unrevealed votes queued");
+
+        RoundLib.Round memory failedRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(failedRound.state), uint256(RoundLib.RoundState.RevealFailed));
+    }
+
     function test_FinalizeRevealFailed_AllSybilQuorum_StaysCancellable() public {
         uint256 contentId = _submitContent();
 

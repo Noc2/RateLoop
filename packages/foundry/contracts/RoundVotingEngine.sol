@@ -1325,6 +1325,7 @@ contract RoundVotingEngine is
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint256 targetRoundRevealableAt = _targetRoundRevealableAt(contentId, roundId, commit.targetRound);
         if (roundRbtsSeedEntropy[contentId][roundId] != bytes32(0)) revert UnrevealedPastEpochVotes();
+        if (_canFinalizeRevealFailedRound(contentId, roundId, round)) revert UnrevealedPastEpochVotes();
         uint256 thresholdBlock = roundThresholdReachedBlock[contentId][roundId];
         if (thresholdBlock != 0 && _isSettlementRevealGraceElapsed(contentId, roundId, round)) {
             revert UnrevealedPastEpochVotes();
