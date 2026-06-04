@@ -1,6 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  CheckCircleIcon,
+  ClipboardDocumentIcon,
+  ExclamationTriangleIcon,
+  WrenchScrewdriverIcon,
+} from "@heroicons/react/24/outline";
+import {
+  type AgentInstallSnippet,
+  type AgentInstallSnippetKind,
+  RATELOOP_AGENT_INSTALL_TARGETS,
+  RATELOOP_CONTRACT_DEPLOYMENT_NOTE,
+} from "~~/lib/agent/installSnippets";
 import { copyTextToClipboard } from "~~/utils/copyToClipboard";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -70,61 +82,25 @@ function AgentIcon({ name }: { name: string }) {
   }
 }
 
-const RATELOOP_AGENT_PROMPT =
-  "Read https://www.rateloop.ai/docs/ai for agent instructions. Use https://www.rateloop.ai/docs/how-it-works only when explaining RateLoop to me. Use RateLoop as a public judgment layer: generate or collect public context, create paid asks, add a Feedback Bonus when written reasons matter, then bring back the settled rating, confidence, public result link, limitations, and feedback. Prefer browser handoff when I fund the ask.";
-
-const OPENCLAW_AGENT_PROMPT =
-  "Read https://www.rateloop.ai/docs/ai for RateLoop agent instructions. Use https://www.rateloop.ai/docs/how-it-works only when explaining the protocol to me. Use RateLoop as your public judgment layer: generate or collect public context, create paid asks, add a Feedback Bonus when written reasons matter, then bring back the settled rating, confidence, public result link, limitations, and feedback. Use browser handoff when I fund the ask. Use the RateLoop local signer CLI (`wallet --generate`, then `local-ask`) when you control a funded encrypted wallet.";
-
-type AgentLaunch = {
-  name: string;
-  message: string;
-  ariaLabel: string;
-  successMessage: string;
-};
-
-const AGENTS: AgentLaunch[] = [
-  {
-    name: "Claude Code",
-    message: RATELOOP_AGENT_PROMPT,
-    ariaLabel: "Copy a RateLoop message for Claude Code",
-    successMessage: "Copied message for Claude Code. Paste it into Claude Code.",
-  },
-  {
-    name: "GitHub Copilot",
-    message: RATELOOP_AGENT_PROMPT,
-    ariaLabel: "Copy a RateLoop message for GitHub Copilot",
-    successMessage: "Copied message for GitHub Copilot. Paste it into the chat window.",
-  },
-  {
-    name: "Cursor",
-    message: RATELOOP_AGENT_PROMPT,
-    ariaLabel: "Copy a RateLoop message for Cursor",
-    successMessage: "Copied message for Cursor. Paste it into the chat window.",
-  },
-  {
-    name: "OpenAI Codex",
-    message: RATELOOP_AGENT_PROMPT,
-    ariaLabel: "Copy a RateLoop message for OpenAI Codex",
-    successMessage: "Copied message for OpenAI Codex. Paste it into Codex.",
-  },
-  {
-    name: "Gemini CLI",
-    message: RATELOOP_AGENT_PROMPT,
-    ariaLabel: "Copy a RateLoop message for Gemini CLI",
-    successMessage: "Copied message for Gemini CLI. Paste it into your terminal.",
-  },
-  {
-    name: "OpenClaw",
-    message: OPENCLAW_AGENT_PROMPT,
-    ariaLabel: "Copy a RateLoop message for OpenClaw",
-    successMessage: "Copied message for OpenClaw. Paste it into OpenClaw.",
-  },
-];
+function getSnippetKindLabel(kind: AgentInstallSnippetKind) {
+  switch (kind) {
+    case "prompt":
+      return "Try once";
+    case "mcp":
+      return "MCP tools";
+    case "rule":
+      return "Standing rule";
+    case "skill":
+      return "Skill";
+  }
+}
 
 export function SupportedAgentsSection() {
-  const [activeAgentName, setActiveAgentName] = useState<string | null>(null);
+  const [selectedAgentName, setSelectedAgentName] = useState(RATELOOP_AGENT_INSTALL_TARGETS[0]?.name ?? "");
+  const [copiedSnippetKey, setCopiedSnippetKey] = useState<string | null>(null);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedAgent =
+    RATELOOP_AGENT_INSTALL_TARGETS.find(agent => agent.name === selectedAgentName) ?? RATELOOP_AGENT_INSTALL_TARGETS[0];
 
   useEffect(() => {
     return () => {
@@ -134,59 +110,67 @@ export function SupportedAgentsSection() {
     };
   }, []);
 
-  const markAgentActive = (agentName: string) => {
-    setActiveAgentName(agentName);
-
+  const markSnippetCopied = (snippetKey: string) => {
+    setCopiedSnippetKey(snippetKey);
     if (resetTimeoutRef.current !== null) {
       clearTimeout(resetTimeoutRef.current);
     }
 
     resetTimeoutRef.current = setTimeout(() => {
-      setActiveAgentName(null);
+      setCopiedSnippetKey(null);
       resetTimeoutRef.current = null;
     }, 1600);
   };
 
-  const handleAgentLaunch = async (agent: AgentLaunch) => {
-    markAgentActive(agent.name);
-
-    const copied = await copyTextToClipboard(agent.message);
+  const handleSnippetCopy = async (snippet: AgentInstallSnippet, snippetIndex: number) => {
+    if (!selectedAgent) return;
+    const copied = await copyTextToClipboard(snippet.text);
     if (!copied) {
-      console.error("Failed to copy RateLoop agent message.");
-      notification.error(`Could not copy the message for ${agent.name}.`, {
-        id: "rateloop-agent-prompt-launch",
+      console.error("Failed to copy RateLoop agent setup snippet.");
+      notification.error(`Could not copy ${snippet.label} for ${selectedAgent.name}.`, {
+        id: "rateloop-agent-install-copy",
       });
       return;
     }
 
-    notification.success(agent.successMessage, {
+    markSnippetCopied(`${selectedAgent.name}-${snippetIndex}`);
+    notification.success(`Copied ${snippet.label} for ${selectedAgent.name}.`, {
       duration: 2400,
-      id: "rateloop-agent-prompt-launch",
+      id: "rateloop-agent-install-copy",
     });
   };
 
+  if (!selectedAgent) return null;
+
   return (
-    <section className="relative z-20 mt-10 w-full sm:mt-12 lg:mt-32 xl:mt-40">
-      <div className="mb-4 text-center sm:mb-5">
-        <p className="text-base leading-7 text-base-content/70 sm:text-lg">Ask your favorite AI agent about RateLoop</p>
+    <section className="relative z-20 mt-14 w-full sm:mt-16 lg:mt-32 xl:mt-40">
+      <div className="mx-auto max-w-3xl text-center">
+        <span className="font-mono text-xs uppercase tracking-widest text-base-content/50">Agent setup</span>
+        <h2 className="mt-3 text-[2rem] font-bold leading-tight text-base-content sm:text-[2.75rem]">
+          Install RateLoop once
+        </h2>
+        <p className="mt-4 text-base leading-7 text-base-content/68 sm:text-lg">
+          Give your agent a durable rule plus MCP access so it knows when public open-rater judgment is worth asking
+          for.
+        </p>
       </div>
 
-      <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:flex-nowrap sm:gap-2.5 sm:px-0 lg:gap-3">
-        {AGENTS.map(agent => {
-          const isHighlighted = activeAgentName === agent.name;
+      <div className="mx-auto mt-7 flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:gap-2.5 sm:px-0 lg:gap-3">
+        {RATELOOP_AGENT_INSTALL_TARGETS.map(agent => {
+          const isSelected = selectedAgent.name === agent.name;
           return (
             <button
               key={agent.name}
               type="button"
-              onClick={() => void handleAgentLaunch(agent)}
+              onClick={() => setSelectedAgentName(agent.name)}
               aria-label={agent.ariaLabel}
               className={`
-                flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors
+                flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 transition-colors
                 hover:border-base-content/25 hover:bg-base-content/[0.08] hover:text-base-content
                 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content
                 sm:px-3.5 lg:px-4
                 ${
-                  isHighlighted
+                  isSelected
                     ? "border-base-content bg-base-content text-base-100"
                     : "border-base-content/10 bg-base-content/[0.055] text-base-content/76"
                 }
@@ -198,8 +182,78 @@ export function SupportedAgentsSection() {
           );
         })}
       </div>
+
+      <div className="mx-auto mt-7 grid max-w-5xl grid-cols-1 gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <div className="border-l-2 border-[#03CEA4] py-2 pl-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-base-content/72">
+            <WrenchScrewdriverIcon className="h-4 w-4" />
+            <span>{selectedAgent.name} setup</span>
+          </div>
+          <p className="mt-4 text-base leading-7 text-base-content/64">
+            Recommended path: install MCP, add a standing rule, then add the RateLoop skill when your agent supports
+            skills.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {selectedAgent.recommended.map(kind => (
+              <span
+                key={`${selectedAgent.name}-${kind}`}
+                className="rounded-md border border-base-content/10 bg-base-content/[0.06] px-3 py-1.5 text-xs font-semibold text-base-content/72"
+              >
+                {getSnippetKindLabel(kind)}
+              </span>
+            ))}
+          </div>
+          <div className="mt-6 rounded-lg border border-warning/35 bg-warning/10 p-4 text-left text-sm leading-6 text-base-content/72">
+            <div className="flex items-start gap-3">
+              <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+              <p>{RATELOOP_CONTRACT_DEPLOYMENT_NOTE}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3">
+          {selectedAgent.snippets.map((snippet, snippetIndex) => {
+            const snippetKey = `${selectedAgent.name}-${snippetIndex}`;
+            const isCopied = copiedSnippetKey === snippetKey;
+            return (
+              <article
+                key={`${selectedAgent.name}-${snippet.label}`}
+                className="rounded-lg border border-base-content/10 bg-base-content/[0.04] p-4 text-left"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-md bg-base-content/[0.08] px-2.5 py-1 text-xs font-semibold text-base-content/70">
+                        {getSnippetKindLabel(snippet.kind)}
+                      </span>
+                      <h3 className="text-base font-bold text-base-content">{snippet.label}</h3>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-base-content/62">{snippet.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-sm min-h-9 shrink-0 rounded-md border-base-content/10 bg-base-content/[0.06] text-base-content hover:border-base-content/20 hover:bg-base-content/[0.1]"
+                    onClick={() => void handleSnippetCopy(snippet, snippetIndex)}
+                    aria-label={`Copy ${snippet.label} for ${selectedAgent.name}`}
+                  >
+                    {isCopied ? (
+                      <CheckCircleIcon className="h-4 w-4 text-success" />
+                    ) : (
+                      <ClipboardDocumentIcon className="h-4 w-4" />
+                    )}
+                    <span>{isCopied ? "Copied" : "Copy"}</span>
+                  </button>
+                </div>
+                <pre className="mt-3 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-base-content/10 bg-base-300/60 p-3 font-mono text-xs leading-5 text-base-content/78">
+                  {snippet.text}
+                </pre>
+              </article>
+            );
+          })}
+        </div>
+      </div>
       <span aria-live="polite" className="sr-only">
-        {activeAgentName ? `Copied RateLoop message for ${activeAgentName}` : ""}
+        {copiedSnippetKey ? "Copied RateLoop agent setup snippet" : ""}
       </span>
     </section>
   );
