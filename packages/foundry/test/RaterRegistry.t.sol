@@ -501,6 +501,10 @@ contract RaterRegistryTest is Test {
         vm.stopPrank();
 
         vm.prank(admin);
+        vm.expectRevert();
+        registry.freezeWorldIdV4VerifierConfig();
+
+        vm.prank(governance);
         registry.freezeWorldIdV4VerifierConfig();
 
         vm.prank(governance);
