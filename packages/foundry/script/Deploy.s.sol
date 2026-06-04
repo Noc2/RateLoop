@@ -229,9 +229,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         RaterRegistry raterRegistry = RaterRegistry(address(raterRegistryProxy));
         if (!isLocalDev) {
-            raterRegistry.freezeWorldIdVerifierConfig();
-            raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), deployer);
-            raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), deployer);
+            _renounceRaterRegistryDeployerRoles(raterRegistry, deployer);
         }
         TransparentUpgradeableProxy questionRewardPoolEscrowProxy = new TransparentUpgradeableProxy(
             address(questionRewardPoolEscrowImpl),
@@ -515,6 +513,11 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
     function _resolveWorldIdAction() internal view returns (string memory) {
         return vm.envOr("NEXT_PUBLIC_WORLD_ID_ACTION", DEFAULT_WORLD_ID_ACTION);
+    }
+
+    function _renounceRaterRegistryDeployerRoles(RaterRegistry raterRegistry, address temporaryDeployer) internal {
+        raterRegistry.renounceRole(raterRegistry.ADMIN_ROLE(), temporaryDeployer);
+        raterRegistry.renounceRole(raterRegistry.SEEDER_ROLE(), temporaryDeployer);
     }
 
     function _resolveWorldIdExternalNullifierHash(bool isLocalDev, string memory action)

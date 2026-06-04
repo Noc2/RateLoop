@@ -175,14 +175,6 @@ function completeBroadcast() {
     transactions,
     receipts,
     "RaterRegistry",
-    "freezeWorldIdVerifierConfig()",
-    [],
-    raterRegistry
-  );
-  pushCall(
-    transactions,
-    receipts,
-    "RaterRegistry",
     "renounceRole(bytes32,address)",
     [adminRole, deployer],
     raterRegistry
@@ -498,10 +490,20 @@ test("reconstructDeploymentExportFromBroadcast rejects missing completion calls"
 test("reconstructDeploymentExportFromBroadcast rejects missing deployer handoffs", () => {
   const cases = [
     {
-      label: /RaterRegistry\.freezeWorldIdVerifierConfig/,
+      label: /RaterRegistry\.renounceRole\(ADMIN_ROLE\)/,
       predicate: (tx) =>
         tx.contractName === "RaterRegistry" &&
-        tx.function === "freezeWorldIdVerifierConfig()",
+        tx.function === "renounceRole(bytes32,address)" &&
+        tx.arguments?.[0] ===
+          "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775",
+    },
+    {
+      label: /RaterRegistry\.renounceRole\(SEEDER_ROLE\)/,
+      predicate: (tx) =>
+        tx.contractName === "RaterRegistry" &&
+        tx.function === "renounceRole(bytes32,address)" &&
+        tx.arguments?.[0] ===
+          "0x240afcd1926e36e0297a1eb63ba484f52ddbef788e7f4e9b38b0dcc66de129e1",
     },
     {
       label: /ContentRegistry\.renounceRole\(PAUSER_ROLE\)/,

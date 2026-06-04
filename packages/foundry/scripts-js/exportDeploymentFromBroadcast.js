@@ -57,11 +57,6 @@ const PROTOCOL_CONFIG_PROXY_COMPLETION_SELECTORS = [
 
 const REQUIRED_COMPLETION_CALLS = [
   {
-    label: "RaterRegistry.freezeWorldIdVerifierConfig",
-    contractName: "RaterRegistry",
-    functionName: "freezeWorldIdVerifierConfig()",
-  },
-  {
     label: "RaterRegistry.renounceRole(ADMIN_ROLE)",
     contractName: "RaterRegistry",
     functionName: "renounceRole(bytes32,address)",

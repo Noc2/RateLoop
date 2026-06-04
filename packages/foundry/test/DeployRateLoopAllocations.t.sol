@@ -19,6 +19,10 @@ contract DeployRateLoopHarness is DeployRateLoop {
         _validateUsdcToken(token);
     }
 
+    function renounceRaterRegistryDeployerRoles(RaterRegistry raterRegistry, address temporaryDeployer) external {
+        _renounceRaterRegistryDeployerRoles(raterRegistry, temporaryDeployer);
+    }
+
     function buildQuorumExcludedHolders(
         address launchDistribution,
         address rewardDistributor,
@@ -129,6 +133,39 @@ contract DeployRateLoopAllocationsTest is Test {
             deployScript.worldIdExternalNullifierHash("app_staging_rateloop_local", "rateloop-human-credential-v1"),
             253743144824180352641159477734894791954336336003057463640256567965128781153
         );
+    }
+
+    function test_RaterRegistryDeployHandoffLeavesLegacyWorldIdConfigMutable() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        address governance = address(0xBEEF);
+        MockWorldIDRouter initialRouter = new MockWorldIDRouter();
+        MockWorldIDRouter correctedRouter = new MockWorldIDRouter();
+        RaterRegistry raterRegistry = new RaterRegistry(
+            address(deployScript), governance, address(initialRouter), bytes32("wrong-scope"), 123, 365 days
+        );
+
+        assertFalse(raterRegistry.worldIdVerifierConfigFrozen());
+        assertTrue(raterRegistry.hasRole(raterRegistry.ADMIN_ROLE(), address(deployScript)));
+        assertTrue(raterRegistry.hasRole(raterRegistry.SEEDER_ROLE(), address(deployScript)));
+
+        deployScript.renounceRaterRegistryDeployerRoles(raterRegistry, address(deployScript));
+
+        assertFalse(raterRegistry.worldIdVerifierConfigFrozen());
+        assertFalse(raterRegistry.hasRole(raterRegistry.ADMIN_ROLE(), address(deployScript)));
+        assertFalse(raterRegistry.hasRole(raterRegistry.SEEDER_ROLE(), address(deployScript)));
+        assertTrue(raterRegistry.hasRole(raterRegistry.ADMIN_ROLE(), governance));
+        assertTrue(raterRegistry.hasRole(raterRegistry.SEEDER_ROLE(), governance));
+
+        vm.prank(governance);
+        raterRegistry.setWorldIdVerifierConfig(address(correctedRouter), bytes32("fixed-scope"), 456, 365 days);
+
+        assertEq(address(raterRegistry.worldIdRouter()), address(correctedRouter));
+        assertEq(raterRegistry.worldIdScope(), bytes32("fixed-scope"));
+        assertEq(raterRegistry.worldIdExternalNullifierHash(), 456);
+
+        vm.prank(governance);
+        raterRegistry.freezeWorldIdVerifierConfig();
+        assertTrue(raterRegistry.worldIdVerifierConfigFrozen());
     }
 
     function test_ValidateUsdcTokenRequiresCodeAndSixDecimals() public {
