@@ -853,6 +853,9 @@ settle_seeded_content_one_round() {
   seed_reveal 1 "$roundId" true "$SALT3A" "$VOTER3_KEY"
 
   echo "Settling content 1 round $roundId..."
+  # RBTS settlement is two-step: capture the seed, then finalize in the next block.
+  cast send "$VOTING_ENGINE" "settleRound(uint256,uint256)" 1 "$roundId" \
+    --private-key "$VOTER1_KEY" --rpc-url "$RPC" > /dev/null
   cast send "$VOTING_ENGINE" "settleRound(uint256,uint256)" 1 "$roundId" \
     --private-key "$VOTER1_KEY" --rpc-url "$RPC" > /dev/null
 

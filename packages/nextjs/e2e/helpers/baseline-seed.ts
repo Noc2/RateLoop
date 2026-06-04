@@ -1,4 +1,13 @@
-import { approveLREP, commitVoteDirect, submitContentDirect, waitForPonderIndexed } from "./admin-helpers";
+import {
+  approveLREP,
+  commitVoteDirect,
+  getActiveRoundId,
+  revealVoteDirect,
+  settleRoundDirect,
+  submitContentDirect,
+  waitForPonderIndexed,
+  waitForPonderSync,
+} from "./admin-helpers";
 import { ANVIL_ACCOUNTS } from "./anvil-accounts";
 import { CONTRACT_ADDRESSES } from "./contracts";
 import { getContentById, getContentList } from "./ponder-api";
@@ -8,6 +17,7 @@ const SUBMIT_STAKE = BigInt(10e6);
 const VOTE_STAKE = BigInt(5e6);
 const DEFAULT_EPOCH_DURATION_SECONDS = 20 * 60;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const BASELINE_SETTLED_CONTENT_TITLE = "Should this support agent approve the refund?";
 const CATEGORY_REGISTRY_ABI = [
   {
     name: "getCategoryBySlug",
@@ -223,7 +233,7 @@ const BASELINE_CONTENT = [
 
 const BASELINE_COMMITS = [
   {
-    title: "Should this support agent approve the refund?",
+    title: BASELINE_SETTLED_CONTENT_TITLE,
     voter: ANVIL_ACCOUNTS.account9.address,
     isUp: true,
   },
@@ -233,9 +243,14 @@ const BASELINE_COMMITS = [
     isUp: true,
   },
   {
-    title: "Should this support agent approve the refund?",
+    title: BASELINE_SETTLED_CONTENT_TITLE,
     voter: ANVIL_ACCOUNTS.account10.address,
     isUp: false,
+  },
+  {
+    title: BASELINE_SETTLED_CONTENT_TITLE,
+    voter: ANVIL_ACCOUNTS.account8.address,
+    isUp: true,
   },
   {
     title: "Does this source answer the agent's API question?",
@@ -247,6 +262,63 @@ const BASELINE_COMMITS = [
 async function getBaselineContentByTitle(): Promise<Map<string, { id: string; title: string }>> {
   const { items } = await getContentList({ status: "all", limit: 500 });
   return new Map(items.map(item => [item.title, { id: item.id, title: item.title }]));
+}
+
+type SeededCommit = {
+  contentId: bigint;
+  voter: string;
+  commitKey: `0x${string}`;
+  isUp: boolean;
+  salt: `0x${string}`;
+};
+
+async function hasSettledBaselineRound(contentId: bigint): Promise<boolean> {
+  const data = await getContentById(contentId.toString());
+  return data.rounds.some(round => round.state === 1) && data.ratings.length > 0;
+}
+
+async function ensureBaselineContentSettled(contentId: bigint, seededCommits: SeededCommit[]): Promise<void> {
+  if (await hasSettledBaselineRound(contentId)) return;
+
+  const roundId = await getActiveRoundId(contentId, CONTRACT_ADDRESSES.RoundVotingEngine);
+  if (roundId > 0n) {
+    for (const commit of seededCommits.filter(commit => commit.contentId === contentId)) {
+      const revealed = await revealVoteDirect(
+        contentId,
+        roundId,
+        commit.commitKey,
+        commit.isUp,
+        commit.salt,
+        commit.voter,
+        CONTRACT_ADDRESSES.RoundVotingEngine,
+      );
+      if (!revealed) {
+        throw new Error(`Failed to reveal baseline vote for content ${contentId.toString()}`);
+      }
+    }
+
+    await waitForPonderSync(120_000, 2_000);
+    const settled = await settleRoundDirect(
+      contentId,
+      roundId,
+      ANVIL_ACCOUNTS.account9.address,
+      CONTRACT_ADDRESSES.RoundVotingEngine,
+    );
+    if (!settled) {
+      throw new Error(`Failed to settle baseline content ${contentId.toString()} round ${roundId.toString()}`);
+    }
+    await waitForPonderSync(120_000, 2_000);
+  }
+
+  const settledIndexed = await waitForPonderIndexed(
+    () => hasSettledBaselineRound(contentId),
+    120_000,
+    2_000,
+    "seedBaselineSettledRound",
+  );
+  if (!settledIndexed) {
+    throw new Error("Baseline content #1 settled round did not finish indexing in Ponder");
+  }
 }
 
 export async function ensureBaselineSeedData(): Promise<void> {
@@ -336,6 +408,9 @@ export async function ensureBaselineSeedData(): Promise<void> {
   }
 
   if (votesAlreadySeeded) {
+    const settledContent = contentByTitle.get(BASELINE_SETTLED_CONTENT_TITLE);
+    if (!settledContent) throw new Error(`Missing baseline settled content: ${BASELINE_SETTLED_CONTENT_TITLE}`);
+    await ensureBaselineContentSettled(BigInt(settledContent.id), []);
     console.log(`  ✓ Baseline seed data already present (${existing.total} content items indexed)`);
     return;
   }
@@ -357,11 +432,12 @@ export async function ensureBaselineSeedData(): Promise<void> {
     }
   }
 
+  const seededCommits: SeededCommit[] = [];
   for (const vote of BASELINE_COMMITS) {
     const contentId = voteTargetsByTitle.get(vote.title);
     if (contentId === undefined) throw new Error(`Missing vote target for ${vote.title}`);
 
-    const { success } = await commitVoteDirect(
+    const result = await commitVoteDirect(
       contentId,
       vote.isUp,
       VOTE_STAKE,
@@ -370,9 +446,16 @@ export async function ensureBaselineSeedData(): Promise<void> {
       CONTRACT_ADDRESSES.RoundVotingEngine,
       DEFAULT_EPOCH_DURATION_SECONDS,
     );
-    if (!success) {
+    if (!result.success) {
       throw new Error(`Failed to seed vote for content ${contentId.toString()}`);
     }
+    seededCommits.push({
+      contentId,
+      voter: vote.voter,
+      commitKey: result.commitKey,
+      isUp: result.isUp,
+      salt: result.salt,
+    });
   }
 
   const votesIndexed = await waitForPonderIndexed(
@@ -392,6 +475,10 @@ export async function ensureBaselineSeedData(): Promise<void> {
   if (!votesIndexed) {
     throw new Error("Baseline votes did not finish indexing in Ponder");
   }
+
+  const settledContent = contentByTitle.get(BASELINE_SETTLED_CONTENT_TITLE);
+  if (!settledContent) throw new Error(`Missing baseline settled content: ${BASELINE_SETTLED_CONTENT_TITLE}`);
+  await ensureBaselineContentSettled(BigInt(settledContent.id), seededCommits);
 
   console.log(`  ✓ Seeded ${BASELINE_CONTENT.length} baseline content items and ${BASELINE_COMMITS.length} commits`);
 }
