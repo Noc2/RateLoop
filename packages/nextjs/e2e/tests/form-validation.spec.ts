@@ -37,7 +37,7 @@ test.describe("Ask form validation", () => {
 
     await continueToBountyStep(page);
 
-    await expect(page.getByText("Add a context link, image, or YouTube video before submitting.")).toBeVisible({
+    await expect(page.getByText("Add a website, document, image, or YouTube video before submitting.")).toBeVisible({
       timeout: 5_000,
     });
   });

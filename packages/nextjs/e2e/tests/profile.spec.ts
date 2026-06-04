@@ -17,8 +17,8 @@ test.describe("Profile management", () => {
   const updateProfileAccount = ANVIL_ACCOUNTS.account2;
 
   async function openSettingsWithConnectedWallet(page: Parameters<typeof gotoWithRetry>[0]) {
-    await gotoWithRetry(page, "/settings", { ensureWalletConnected: true });
-    await waitForVisibleWithReload(page, () => page.getByRole("button", { name: "Notifications", exact: true }), {
+    await gotoWithRetry(page, "/settings?tab=notifications", { ensureWalletConnected: true });
+    await waitForVisibleWithReload(page, () => page.getByRole("heading", { name: /Notification settings/i }), {
       timeout: 10_000,
     });
   }
