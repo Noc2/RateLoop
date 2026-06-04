@@ -79,6 +79,9 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
 
     event RewardDistributorUpdated(address rewardDistributor);
     event RewardDistributorAuthorizationUpdated(address rewardDistributor, bool authorized);
+    event RewardDistributorReplaced(
+        address indexed oldDistributor, address indexed newDistributor, address indexed engine
+    );
     event FrontendRegistryUpdated(address frontendRegistry);
     event CategoryRegistryUpdated(address categoryRegistry);
     event TreasuryUpdated(address treasury);
@@ -255,6 +258,34 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         // so a fresh same-engine distributor would reopen historical claims.
         rewardDistributorAuthorized[value] = false;
         emit RewardDistributorAuthorizationUpdated(value, false);
+    }
+
+    function replaceRevokedRewardDistributor(address oldValue, address newValue) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (oldValue == address(0) || newValue == address(0)) revert InvalidAddress();
+        if (oldValue == newValue) revert InvalidConfig();
+
+        address engine = rewardDistributorVotingEngine[oldValue];
+        if (engine == address(0)) revert InvalidConfig();
+        if (rewardDistributorForVotingEngine[engine] != oldValue) revert InvalidConfig();
+        if (rewardDistributorAuthorized[oldValue]) revert InvalidConfig();
+        if (_readRewardDistributorClaimAccountingStarted(oldValue)) revert InvalidConfig();
+
+        address newEngine = _readRewardDistributorVotingEngine(newValue);
+        if (newEngine != engine) revert InvalidConfig();
+        if (_readRewardDistributorClaimAccountingStarted(newValue)) revert InvalidConfig();
+
+        address previousNewEngine = rewardDistributorVotingEngine[newValue];
+        if (previousNewEngine != address(0) && previousNewEngine != engine) revert InvalidConfig();
+
+        rewardDistributorVotingEngine[newValue] = engine;
+        rewardDistributorForVotingEngine[engine] = newValue;
+        rewardDistributor = newValue;
+        if (!rewardDistributorAuthorized[newValue]) {
+            rewardDistributorAuthorized[newValue] = true;
+            emit RewardDistributorAuthorizationUpdated(newValue, true);
+        }
+        emit RewardDistributorUpdated(newValue);
+        emit RewardDistributorReplaced(oldValue, newValue, engine);
     }
 
     function setFrontendRegistry(address value) external onlyRole(CONFIG_ROLE) {
@@ -439,6 +470,15 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         try IRoundRewardDistributor(value).votingEngine() returns (address distributorEngine) {
             engine = distributorEngine;
             if (engine == address(0)) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
+    function _readRewardDistributorClaimAccountingStarted(address value) internal view returns (bool started) {
+        if (value.code.length == 0) revert InvalidAddress();
+        try IRoundRewardDistributor(value).claimAccountingStarted() returns (bool claimAccountingStarted) {
+            return claimAccountingStarted;
         } catch {
             revert InvalidConfig();
         }

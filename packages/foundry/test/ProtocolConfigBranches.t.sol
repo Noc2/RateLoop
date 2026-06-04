@@ -19,6 +19,16 @@ contract MockRewardDistributorForConfig {
     }
 }
 
+contract MockRewardDistributorWithClaimStateForConfig {
+    address public votingEngine;
+    bool public claimAccountingStarted;
+
+    constructor(address votingEngine_, bool claimAccountingStarted_) {
+        votingEngine = votingEngine_;
+        claimAccountingStarted = claimAccountingStarted_;
+    }
+}
+
 contract MockRewardDistributorWithoutEngineForConfig { }
 
 contract MockRewardDistributorRevertingEngineForConfig {
@@ -149,6 +159,9 @@ contract ProtocolConfigBranchesTest is Test {
     event DrandConfigUpdated(bytes32 drandChainHash, uint64 genesisTime, uint64 period);
     event RewardDistributorUpdated(address rewardDistributor);
     event RewardDistributorAuthorizationUpdated(address rewardDistributor, bool authorized);
+    event RewardDistributorReplaced(
+        address indexed oldDistributor, address indexed newDistributor, address indexed engine
+    );
     event RatingConfigUpdated(
         uint256 smoothingAlpha,
         uint256 smoothingBeta,
@@ -583,6 +596,97 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.rewardDistributor(), firstDistributor);
         assertFalse(config.isRewardDistributor(replacementDistributor));
         assertFalse(config.isRewardDistributorForEngine(replacementDistributor, engine));
+    }
+
+    function test_ReplaceRevokedRewardDistributor_AllowsDefaultAdminBeforeClaims() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        address engine = address(0xE641);
+        address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+
+        config.setRewardDistributor(firstDistributor);
+        config.revokeRewardDistributor(firstDistributor);
+
+        vm.expectEmit(false, false, false, true);
+        emit RewardDistributorAuthorizationUpdated(replacementDistributor, true);
+        vm.expectEmit(false, false, false, true);
+        emit RewardDistributorUpdated(replacementDistributor);
+        vm.expectEmit(true, true, true, true);
+        emit RewardDistributorReplaced(firstDistributor, replacementDistributor, engine);
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+
+        assertEq(config.rewardDistributor(), replacementDistributor);
+        assertFalse(config.isRewardDistributor(firstDistributor));
+        assertTrue(config.isRewardDistributor(replacementDistributor));
+        assertEq(config.rewardDistributorForVotingEngine(engine), replacementDistributor);
+        assertTrue(config.isRewardDistributorForEngine(replacementDistributor, engine));
+    }
+
+    function test_ReplaceRevokedRewardDistributor_RejectsActiveOrClaimStartedDistributor() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        address engine = address(0xE641);
+        address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+
+        config.setRewardDistributor(firstDistributor);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+
+        config.revokeRewardDistributor(firstDistributor);
+        address claimedOldDistributor = address(new MockRewardDistributorWithClaimStateForConfig(address(0xE642), true));
+        address claimedNewDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, true));
+
+        config.setRewardDistributor(claimedOldDistributor);
+        config.revokeRewardDistributor(claimedOldDistributor);
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.replaceRevokedRewardDistributor(claimedOldDistributor, replacementDistributor);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.replaceRevokedRewardDistributor(firstDistributor, claimedNewDistributor);
+    }
+
+    function test_ReplaceRevokedRewardDistributor_RejectsWrongEngineOrMissingClaimStateAbi() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        address engine = address(0xE641);
+        address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        address differentEngineDistributor =
+            address(new MockRewardDistributorWithClaimStateForConfig(address(0xE642), false));
+        address missingClaimStateDistributor = address(new MockRewardDistributorForConfig(engine));
+
+        config.setRewardDistributor(firstDistributor);
+        config.revokeRewardDistributor(firstDistributor);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.replaceRevokedRewardDistributor(firstDistributor, differentEngineDistributor);
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.replaceRevokedRewardDistributor(firstDistributor, missingClaimStateDistributor);
+    }
+
+    function test_ReplaceRevokedRewardDistributor_RequiresDefaultAdmin() public {
+        address deployAdmin = address(0xA11CE);
+        address governance = address(0xB0B);
+        ProtocolConfig config = deployInitializedProtocolConfig(deployAdmin, governance);
+
+        address engine = address(0xE641);
+        address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+
+        vm.prank(deployAdmin);
+        config.setRewardDistributor(firstDistributor);
+        vm.prank(deployAdmin);
+        config.revokeRewardDistributor(firstDistributor);
+
+        vm.prank(deployAdmin);
+        vm.expectRevert();
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+
+        vm.prank(governance);
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+        assertTrue(config.isRewardDistributorForEngine(replacementDistributor, engine));
     }
 
     function test_SetDrandConfig_RejectsZeroHashOrPeriod() public {

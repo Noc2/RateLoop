@@ -99,6 +99,12 @@
     {
       "slot": 16,
       "offset": 0,
+      "label": "claimAccountingStarted",
+      "type": "t_bool"
+    },
+    {
+      "slot": 17,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -113,8 +119,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[30]",
-      "numberOfBytes": "960",
+      "label": "uint256[29]",
+      "numberOfBytes": "928",
       "base": "t_uint256"
     },
     {

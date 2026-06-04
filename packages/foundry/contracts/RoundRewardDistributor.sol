@@ -225,6 +225,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         }
         require(commit.revealed, "Vote not revealed");
 
+        claimAccountingStarted = true;
         rewardCommitClaimed[contentId][roundId][commitKey] = true;
         rewardClaimed[contentId][roundId][commit.voter] = true;
 
@@ -488,6 +489,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         uint16 scoreBps = votingEngine.commitRbtsScoreBps(contentId, roundId, commitKey);
         require(scoreBps != 0, "No launch score");
 
+        claimAccountingStarted = true;
         delete pendingLaunchCreditRetry[contentId][roundId][commitKey];
 
         LaunchCreditAttempt attempt = _tryRecordLaunchRaterCredit(
@@ -532,6 +534,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         address expectedCaller = operator != address(0) ? operator : frontend;
         if (msg.sender != expectedCaller) revert UnauthorizedFrontendFeeCaller();
 
+        claimAccountingStarted = true;
         _consumeFrontendFeeClaim(contentId, roundId, frontend, fee);
         _payoutFrontendFee(contentId, roundId, frontend, fee, disposition, snapshotRegistryAddress);
         emit FrontendFeeClaimed(contentId, roundId, frontend, fee);
@@ -550,6 +553,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             _resolveFrontendFeeDisposition(contentId, roundId, frontend, roundSettledAt);
         if (disposition != FrontendFeeDisposition.Protocol) revert FrontendFeeNotConfiscatable();
 
+        claimAccountingStarted = true;
         _consumeFrontendFeeClaim(contentId, roundId, frontend, fee);
         _routeRewardToProtocol(fee);
         emit FrontendFeeConfiscated(contentId, roundId, frontend, fee);
@@ -604,6 +608,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         releasedDust = _finalizableDust(voterPool, expectedTotal, roundVoterRewardClaimedAmount[contentId][roundId]);
         if (releasedDust == 0) revert NoRewardDust();
 
+        claimAccountingStarted = true;
         roundVoterRewardDustFinalized[contentId][roundId] = true;
         roundVoterRewardClaimedAmount[contentId][roundId] += releasedDust;
         _routeRewardToProtocol(releasedDust);
@@ -618,6 +623,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         nonReentrant
         returns (uint256 releasedDust)
     {
+        claimAccountingStarted = true;
         _processFrontendFeeDustBatch(contentId, roundId, sortedFrontends);
         releasedDust = _finalizeProcessedFrontendFeeDust(contentId, roundId);
     }
@@ -629,6 +635,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         nonReentrant
         returns (uint256 processedCount, uint256 expectedTotal)
     {
+        claimAccountingStarted = true;
         (processedCount, expectedTotal) = _processFrontendFeeDustBatch(contentId, roundId, sortedFrontends);
     }
 
@@ -639,6 +646,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         nonReentrant
         returns (uint256 releasedDust)
     {
+        claimAccountingStarted = true;
         releasedDust = _finalizeProcessedFrontendFeeDust(contentId, roundId);
     }
 
@@ -646,6 +654,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     function resetFrontendFeeDustBatch(uint256 contentId, uint256 roundId) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (roundFrontendFeeDustFinalized[contentId][roundId]) revert RewardDustAlreadyFinalized();
 
+        claimAccountingStarted = true;
         delete roundFrontendFeeDustProcessedCount[contentId][roundId];
         delete roundFrontendFeeDustExpectedTotal[contentId][roundId];
         delete roundFrontendFeeDustLastFrontend[contentId][roundId];
@@ -951,6 +960,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     ///         is the correct "no pending retry" semantic.
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => PendingLaunchCredit))) public pendingLaunchCreditRetry;
 
+    /// @notice True once this distributor has mutated reward, frontend-fee, or dust claim accounting.
+    bool public claimAccountingStarted;
+
     // --- Storage Gap for Future Upgrades ---
-    uint256[30] private __gap;
+    uint256[29] private __gap;
 }
