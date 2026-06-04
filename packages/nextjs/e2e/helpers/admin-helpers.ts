@@ -27,6 +27,42 @@ const ESTIMATED_TX_GAS_BUFFER = 300_000n;
 const DIRECT_VOTE_COMMIT_ATTEMPTS = 3;
 const DEFAULT_UP_PREDICTION_BPS = 8_000;
 const DEFAULT_DOWN_PREDICTION_BPS = 2_000;
+const ROUND_STATE_OPEN = 0;
+const ROUND_STATE_SETTLED = 1;
+const ROUND_STATE_TIED = 3;
+const SETTLE_ROUND_ABI = [
+  {
+    name: "settleRound",
+    type: "function",
+    inputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "roundId", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+const ROUND_STATE_ABI = [
+  {
+    name: "rounds",
+    type: "function",
+    inputs: [
+      { name: "contentId", type: "uint256" },
+      { name: "roundId", type: "uint256" },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "startTime", type: "uint256" },
+          { name: "state", type: "uint8" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+] as const;
 
 function defaultPredictedUpBps(isUp: boolean) {
   return isUp ? DEFAULT_UP_PREDICTION_BPS : DEFAULT_DOWN_PREDICTION_BPS;
@@ -1682,6 +1718,19 @@ export async function revealVoteDirect(
   return sendTx(fromAddress, contractAddress, data);
 }
 
+async function readRoundStateLatest(contractAddress: string, contentId: bigint, roundId: bigint): Promise<number | null> {
+  const { encodeFunctionData } = await import("viem");
+  const data = encodeFunctionData({
+    abi: ROUND_STATE_ABI,
+    functionName: "rounds",
+    args: [contentId, roundId],
+  });
+  const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, "latest"]);
+  if (!result || result.length < 130) return null;
+
+  return Number(BigInt(`0x${result.slice(66, 130)}`));
+}
+
 /**
  * Settle a round via contract call.
  * Calls settleRound(contentId, roundId).
@@ -1694,76 +1743,27 @@ export async function settleRoundDirect(
   contractAddress: string,
 ): Promise<boolean> {
   const { encodeFunctionData } = await import("viem");
+
   const data = encodeFunctionData({
-    abi: [
-      {
-        name: "settleRound",
-        type: "function",
-        inputs: [
-          { name: "contentId", type: "uint256" },
-          { name: "roundId", type: "uint256" },
-        ],
-        outputs: [],
-        stateMutability: "nonpayable",
-      },
-    ],
+    abi: SETTLE_ROUND_ABI,
     functionName: "settleRound",
     args: [BigInt(contentId), BigInt(roundId)],
   });
-  const ok = await sendTx(fromAddress, contractAddress, data);
-  if (ok) return true;
 
-  // The keeper may have already settled this round — check round state.
-  // State 1 = Settled, 3 = Tied — both are acceptable outcomes.
-  const stateData = encodeFunctionData({
-    abi: [
-      {
-        name: "rounds",
-        type: "function",
-        inputs: [
-          { name: "contentId", type: "uint256" },
-          { name: "roundId", type: "uint256" },
-        ],
-        outputs: [
-          {
-            name: "",
-            type: "tuple",
-            components: [
-              { name: "startTime", type: "uint256" },
-              { name: "state", type: "uint8" },
-            ],
-          },
-        ],
-        stateMutability: "view",
-      },
-    ],
-    functionName: "rounds",
-    args: [BigInt(contentId), BigInt(roundId)],
-  });
-  try {
-    const res = await fetch(ANVIL_RPC, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "eth_call",
-        params: [{ to: contractAddress, data: stateData }, "latest"],
-        id: Date.now(),
-      }),
-    });
-    const json = await res.json();
-    if (json.result) {
-      // state is at byte offset 32 (second word in the tuple)
-      const stateHex = "0x" + json.result.slice(66, 130);
-      const state = parseInt(stateHex, 16);
-      if (state === 1 || state === 3) {
-        console.log(`[settleRoundDirect] Round already settled by keeper (state=${state})`);
-        return true;
-      }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ok = await sendTx(fromAddress, contractAddress, data);
+    const state = await readRoundStateLatest(contractAddress, BigInt(contentId), BigInt(roundId));
+    if (state === ROUND_STATE_SETTLED || state === ROUND_STATE_TIED) {
+      return true;
     }
-  } catch {
-    // Fall through — return false
+    if (!ok) return false;
+    if (state === ROUND_STATE_OPEN && attempt === 0) {
+      console.log("[settleRoundDirect] RBTS seed captured; submitting final settlement transaction");
+      continue;
+    }
+    return false;
   }
+
   return false;
 }
 
