@@ -237,7 +237,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         );
     }
 
-    function freezeWorldIdVerifierConfig() external onlyRole(ADMIN_ROLE) {
+    function freezeWorldIdVerifierConfig() external onlyRole(DEFAULT_ADMIN_ROLE) {
         worldIdVerifierConfigFrozen = true;
         emit WorldIdVerifierConfigLocked(msg.sender);
     }

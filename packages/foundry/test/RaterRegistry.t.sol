@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { Test } from "forge-std/Test.sol";
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
@@ -416,10 +417,18 @@ contract RaterRegistryTest is Test {
         vm.stopPrank();
     }
 
-    function test_AdminRoleCanFreezeWorldIdVerifierConfig() public {
+    function test_DefaultAdminRoleCanFreezeWorldIdVerifierConfig() public {
         MockWorldIDRouter replacementRouter = new MockWorldIDRouter();
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, admin, registry.DEFAULT_ADMIN_ROLE()
+            )
+        );
         vm.prank(admin);
+        registry.freezeWorldIdVerifierConfig();
+
+        vm.prank(governance);
         registry.freezeWorldIdVerifierConfig();
 
         assertTrue(registry.worldIdVerifierConfigFrozen());
