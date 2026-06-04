@@ -23,6 +23,7 @@ import { RateLoopConnectButton } from "~~/components/scaffold-eth";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
+import { ContextDocumentUploader } from "~~/components/submit/ContextDocumentUploader";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
@@ -1508,7 +1509,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       </label>
 
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <label className="form-control">
+                        <div className="form-control">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                             Context URL
                           </span>
@@ -1518,7 +1519,19 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                             value={question.contextUrl}
                             onChange={event => updateDraftQuestion(index, { contextUrl: event.target.value })}
                           />
-                        </label>
+                          {canEditDraft ? (
+                            <div className="mt-2">
+                              <ContextDocumentUploader
+                                address={address}
+                                onUploaded={document =>
+                                  updateDraftQuestion(index, {
+                                    contextUrl: document.contextUrl,
+                                  })
+                                }
+                              />
+                            </div>
+                          ) : null}
+                        </div>
                         <label className="form-control">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                             Video URL
