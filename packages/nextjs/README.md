@@ -104,6 +104,7 @@ Key environment variables (see `.env.example` for the full list):
 | `OPENAI_API_KEY`                                  | OpenAI API key used for automated uploaded-image and text-document moderation in production                                                                                                  |
 | `RATELOOP_IMAGE_MODERATION_MODE`                  | Optional development override; set to `disabled` only for local testing of the image pipeline                                                                                                |
 | `RATELOOP_CONTEXT_DOCUMENT_MODERATION_MODE`       | Optional development override; set to `disabled` only for local testing of TXT/Markdown context document uploads                                                                             |
+| `RATELOOP_CONTEXT_DOCUMENT_SWEEP_SECRET`          | Bearer/header secret for the context document sweep route that deletes old unattached TXT/Markdown uploads                                                                                   |
 | `RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR`             | Optional development directory for filesystem-backed image uploads when `BLOB_READ_WRITE_TOKEN` is empty. Defaults to `.local/image-attachments`.                                            |
 
 Notes:

@@ -8,8 +8,10 @@ import {
   getContextDocumentSubmissionValidationError,
   getContextDocumentUrl,
   parseContextDocumentIdFromContextUrl,
+  sweepOrphanedContextDocuments,
 } from "~~/lib/attachments/contextDocuments";
-import { __setDatabaseResourcesForTests } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, db } from "~~/lib/db";
+import { questionContextDocuments } from "~~/lib/db/schema";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 
 const env = process.env as Record<string, string | undefined>;
@@ -276,4 +278,75 @@ test("attachContextDocumentToContent records the submitted content id", async ()
 
   const document = await getContextDocument("doc_testcontextdocument06");
   assert.equal(document?.contentId, "42");
+});
+
+test("sweepOrphanedContextDocuments deletes expired unattached document text", async () => {
+  const oldDate = new Date("2026-05-25T10:00:00Z");
+  const recentDate = new Date("2026-05-26T09:30:00Z");
+  const sweepDate = new Date("2026-05-26T12:00:00Z");
+
+  await db.insert(questionContextDocuments).values([
+    {
+      id: "doc_expiredorphan001",
+      uploaderKind: "wallet",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+      originalFilename: "expired.md",
+      mimeType: "text/markdown",
+      sizeBytes: 64,
+      sha256: "a".repeat(64),
+      normalizedText: "Expired public context.",
+      status: "approved",
+      moderationStatus: "approved",
+      createdAt: oldDate,
+      updatedAt: oldDate,
+    },
+    {
+      id: "doc_retainedorphan01",
+      uploaderKind: "wallet",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+      originalFilename: "retained.md",
+      mimeType: "text/markdown",
+      sizeBytes: 64,
+      sha256: "b".repeat(64),
+      normalizedText: "Recent public context.",
+      status: "approved",
+      moderationStatus: "approved",
+      createdAt: recentDate,
+      updatedAt: recentDate,
+    },
+    {
+      id: "doc_attachedorphan01",
+      uploaderKind: "wallet",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+      contentId: "42",
+      originalFilename: "attached.md",
+      mimeType: "text/markdown",
+      sizeBytes: 64,
+      sha256: "c".repeat(64),
+      normalizedText: "Attached public context.",
+      status: "approved",
+      moderationStatus: "approved",
+      createdAt: oldDate,
+      updatedAt: oldDate,
+    },
+  ]);
+
+  assert.deepEqual(
+    await sweepOrphanedContextDocuments({
+      now: sweepDate,
+      unattachedTtlMs: 24 * 60 * 60 * 1000,
+    }),
+    { deleted: 1, scanned: 1 },
+  );
+
+  const deleted = await getContextDocument("doc_expiredorphan001");
+  const retained = await getContextDocument("doc_retainedorphan01");
+  const attached = await getContextDocument("doc_attachedorphan01");
+  assert.equal(deleted?.status, "deleted");
+  assert.equal(deleted?.normalizedText, null);
+  assert.match(deleted?.error ?? "", /expired unattached/i);
+  assert.equal(retained?.status, "approved");
+  assert.equal(retained?.normalizedText, "Recent public context.");
+  assert.equal(attached?.status, "approved");
+  assert.equal(attached?.normalizedText, "Attached public context.");
 });

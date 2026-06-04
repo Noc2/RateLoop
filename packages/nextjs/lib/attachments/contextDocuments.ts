@@ -8,7 +8,7 @@ import {
   normalizeContextDocumentMimeType,
   sanitizeContextDocumentFilename,
 } from "~~/lib/auth/contextDocumentUploadChallenge.shared";
-import { db } from "~~/lib/db";
+import { db, dbPool } from "~~/lib/db";
 import { type QuestionContextDocument, questionContextDocuments } from "~~/lib/db/schema";
 
 const CONTEXT_DOCUMENT_ROUTE_PREFIX = "/context/documents";
@@ -17,6 +17,8 @@ const OPENAI_MODERATION_MODEL = "omni-moderation-latest";
 const MODERATION_CHUNK_MAX_CHARS = 10_000;
 const OPENAI_MODERATION_MAX_ATTEMPTS = 2;
 const OPENAI_MODERATION_REQUEST_TIMEOUT_MS = 10_000;
+const DEFAULT_CONTEXT_DOCUMENT_ORPHAN_SWEEP_LIMIT = 100;
+const DEFAULT_UNATTACHED_CONTEXT_DOCUMENT_ORPHAN_TTL_MS = 24 * 60 * 60 * 1000;
 const CONTEXT_DOCUMENT_ID_PATTERN = /^doc_[A-Za-z0-9_-]{16,80}$/;
 const PRODUCTION_CONTEXT_DOCUMENT_ORIGINS = ["https://rateloop.ai", "https://www.rateloop.ai"];
 const BLOCKED_MODERATION_CATEGORIES = new Set([
@@ -507,6 +509,59 @@ export async function attachContextDocumentToContent(params: {
           : eq(questionContextDocuments.ownerWalletAddress, params.ownerWalletAddress ?? ""),
       ),
     );
+}
+
+export async function sweepOrphanedContextDocuments(
+  params: {
+    limit?: number;
+    now?: Date;
+    unattachedTtlMs?: number;
+  } = {},
+) {
+  const now = params.now ?? nowDate();
+  const limit = Math.max(1, Math.min(Math.floor(params.limit ?? DEFAULT_CONTEXT_DOCUMENT_ORPHAN_SWEEP_LIMIT), 500));
+  const unattachedTtlMs = Math.max(1, params.unattachedTtlMs ?? DEFAULT_UNATTACHED_CONTEXT_DOCUMENT_ORPHAN_TTL_MS);
+  const expiresBefore = new Date(now.getTime() - unattachedTtlMs);
+
+  const candidates = await dbPool.query<{
+    id: string;
+    status: ContextDocumentStatus;
+  }>(
+    `
+      SELECT id, status
+      FROM question_context_documents
+      WHERE content_id IS NULL
+        AND status IN ('approved', 'blocked', 'failed')
+        AND created_at <= $1
+      ORDER BY created_at ASC
+      LIMIT $2
+    `,
+    [expiresBefore, limit],
+  );
+
+  let deleted = 0;
+  for (const candidate of candidates.rows) {
+    const claimed = await dbPool.query<{ id: string }>(
+      `
+        UPDATE question_context_documents
+        SET status = 'deleted',
+            normalized_text = NULL,
+            updated_at = $2,
+            error = COALESCE(error, 'Expired unattached context document.')
+        WHERE id = $1
+          AND status = $3
+          AND content_id IS NULL
+        RETURNING id
+      `,
+      [candidate.id, now, candidate.status],
+    );
+    if (claimed.rows[0]) deleted += 1;
+  }
+
+  return {
+    deleted,
+    scanned: candidates.rows.length,
+  };
 }
 
 export function getContextDocumentKind(document: Pick<QuestionContextDocument, "mimeType">) {
