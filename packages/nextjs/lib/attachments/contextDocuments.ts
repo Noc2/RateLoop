@@ -15,6 +15,8 @@ const CONTEXT_DOCUMENT_ROUTE_PREFIX = "/context/documents";
 const DEFAULT_CONTEXT_DOCUMENT_TEXT_PREVIEW_LENGTH = 600;
 const OPENAI_MODERATION_MODEL = "omni-moderation-latest";
 const MODERATION_CHUNK_MAX_CHARS = 10_000;
+const OPENAI_MODERATION_MAX_ATTEMPTS = 2;
+const OPENAI_MODERATION_REQUEST_TIMEOUT_MS = 10_000;
 const CONTEXT_DOCUMENT_ID_PATTERN = /^doc_[A-Za-z0-9_-]{16,80}$/;
 const PRODUCTION_CONTEXT_DOCUMENT_ORIGINS = ["https://rateloop.ai", "https://www.rateloop.ai"];
 const BLOCKED_MODERATION_CATEGORIES = new Set([
@@ -57,6 +59,15 @@ type ModerationDecision = {
   provider: string;
   result: unknown;
   status: "approved" | "blocked" | "review_required";
+};
+
+type OpenAiModerationResult = {
+  categories?: Record<string, boolean>;
+  flagged?: boolean;
+};
+
+type OpenAiModerationResponse = {
+  results?: OpenAiModerationResult[];
 };
 
 export type ContextDocumentUploadResult = {
@@ -233,6 +244,73 @@ function textChunks(text: string) {
   return chunks;
 }
 
+function isRetryableModerationStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function moderationFetchErrorResult(error: unknown, attempt: number) {
+  return {
+    attempt,
+    error: error instanceof Error ? error.message : "OpenAI moderation request failed.",
+    name: error instanceof Error ? error.name : "UnknownError",
+  };
+}
+
+async function fetchOpenAiModerationChunk(params: {
+  apiKey: string;
+  chunk: string;
+}): Promise<{ ok: true; result: OpenAiModerationResult } | { ok: false; result: unknown }> {
+  let lastFetchError: unknown = null;
+
+  for (let attempt = 1; attempt <= OPENAI_MODERATION_MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch("https://api.openai.com/v1/moderations", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${params.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: AbortSignal.timeout(OPENAI_MODERATION_REQUEST_TIMEOUT_MS),
+        body: JSON.stringify({
+          model: OPENAI_MODERATION_MODEL,
+          input: params.chunk,
+        }),
+      });
+
+      const result = (await response.json().catch(() => null)) as OpenAiModerationResponse | null;
+      if (response.ok) {
+        return { ok: true, result: result?.results?.[0] ?? {} };
+      }
+
+      const retryable = isRetryableModerationStatus(response.status);
+      if (attempt < OPENAI_MODERATION_MAX_ATTEMPTS && retryable) continue;
+
+      return {
+        ok: false,
+        result: result ?? {
+          attempts: attempt,
+          error: `OpenAI moderation failed with ${response.status}`,
+          retryable,
+          status: response.status,
+        },
+      };
+    } catch (error) {
+      lastFetchError = error;
+      if (attempt < OPENAI_MODERATION_MAX_ATTEMPTS) continue;
+    }
+  }
+
+  return {
+    ok: false,
+    result: {
+      attempts: OPENAI_MODERATION_MAX_ATTEMPTS,
+      error: "OpenAI moderation request failed.",
+      lastError: moderationFetchErrorResult(lastFetchError, OPENAI_MODERATION_MAX_ATTEMPTS),
+      timeoutMs: OPENAI_MODERATION_REQUEST_TIMEOUT_MS,
+    },
+  };
+}
+
 async function moderateContextDocumentText(text: string): Promise<ModerationDecision> {
   const chunks = textChunks(text);
   if (isDevelopmentModerationExplicitlyDisabled()) {
@@ -255,40 +333,19 @@ async function moderateContextDocumentText(text: string): Promise<ModerationDeci
     return { provider: "openai", status: "review_required", result: { error: "OPENAI_API_KEY is not configured" } };
   }
 
-  const results: Array<{
-    categories?: Record<string, boolean>;
-    flagged?: boolean;
-  }> = [];
+  const results: OpenAiModerationResult[] = [];
 
   for (const chunk of chunks) {
-    const response = await fetch("https://api.openai.com/v1/moderations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODERATION_MODEL,
-        input: chunk,
-      }),
-    });
-
-    const result = (await response.json().catch(() => null)) as {
-      results?: Array<{
-        categories?: Record<string, boolean>;
-        flagged?: boolean;
-      }>;
-    } | null;
-
-    if (!response.ok) {
+    const moderation = await fetchOpenAiModerationChunk({ apiKey, chunk });
+    if (!moderation.ok) {
       return {
         provider: "openai",
         status: "review_required",
-        result: result ?? { error: `OpenAI moderation failed with ${response.status}` },
+        result: moderation.result,
       };
     }
 
-    results.push(result?.results?.[0] ?? {});
+    results.push(moderation.result);
   }
 
   const flagged = results.some(result => Boolean(result.flagged));
@@ -374,7 +431,8 @@ export async function createContextDocumentFromBuffer(params: CreateContextDocum
     });
     normalizedText = normalizeContextDocumentText(params.buffer);
     moderation = await moderateContextDocumentText(normalizedText);
-    status = moderation.status === "approved" ? "approved" : "blocked";
+    status =
+      moderation.status === "approved" ? "approved" : moderation.status === "review_required" ? "failed" : "blocked";
     error = moderation.status === "review_required" ? "Document requires moderation review before publication." : null;
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "Document processing failed.";

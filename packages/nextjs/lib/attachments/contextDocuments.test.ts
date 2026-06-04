@@ -15,6 +15,7 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 const env = process.env as Record<string, string | undefined>;
 const originalAppUrl = env.APP_URL;
 const originalDatabaseUrl = env.DATABASE_URL;
+const originalFetch = globalThis.fetch;
 const originalModerationMode = env.RATELOOP_CONTEXT_DOCUMENT_MODERATION_MODE;
 const originalOpenAiKey = env.OPENAI_API_KEY;
 
@@ -30,8 +31,13 @@ function sha256(buffer: Buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
+function setFetchForTest(fetchImplementation: typeof fetch) {
+  globalThis.fetch = fetchImplementation;
+}
+
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  setFetchForTest(originalFetch);
   env.APP_URL = "https://www.rateloop.ai";
   env.DATABASE_URL = "memory:";
   env.RATELOOP_CONTEXT_DOCUMENT_MODERATION_MODE = "disabled";
@@ -40,6 +46,7 @@ beforeEach(() => {
 
 after(() => {
   __setDatabaseResourcesForTests(null);
+  setFetchForTest(originalFetch);
   restoreEnv("APP_URL", originalAppUrl);
   restoreEnv("DATABASE_URL", originalDatabaseUrl);
   restoreEnv("OPENAI_API_KEY", originalOpenAiKey);
@@ -114,6 +121,76 @@ test("createContextDocumentFromBuffer rejects binary-like control characters", a
   assert.equal(result.status, "failed");
   assert.equal(result.contextUrl, null);
   assert.match(result.error ?? "", /control characters/i);
+});
+
+test("createContextDocumentFromBuffer retries transient OpenAI moderation failures", async () => {
+  delete env.RATELOOP_CONTEXT_DOCUMENT_MODERATION_MODE;
+  env.OPENAI_API_KEY = "test-openai-key";
+  let attempts = 0;
+  setFetchForTest(async () => {
+    attempts += 1;
+    if (attempts === 1) {
+      return new Response(JSON.stringify({ error: "temporarily unavailable" }), { status: 503 });
+    }
+    return new Response(JSON.stringify({ results: [{ categories: {}, flagged: false }] }), { status: 200 });
+  });
+
+  const buffer = Buffer.from("Context that needs live moderation.", "utf8");
+  const result = await createContextDocumentFromBuffer({
+    buffer,
+    documentId: "doc_testcontextdocument08",
+    filename: "moderated.txt",
+    mimeType: "text/plain",
+    requestUrl: "https://rateloop.ai/api/attachments/documents/upload",
+    sha256: sha256(buffer),
+    sizeBytes: buffer.byteLength,
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    },
+  });
+
+  assert.equal(attempts, 2);
+  assert.equal(result.status, "approved");
+
+  const document = await getContextDocument("doc_testcontextdocument08");
+  assert.equal(document?.moderationStatus, "approved");
+  assert.equal(document?.normalizedText, "Context that needs live moderation.");
+});
+
+test("createContextDocumentFromBuffer leaves moderation timeouts unpublished", async () => {
+  delete env.RATELOOP_CONTEXT_DOCUMENT_MODERATION_MODE;
+  env.OPENAI_API_KEY = "test-openai-key";
+  let attempts = 0;
+  setFetchForTest(async () => {
+    attempts += 1;
+    throw Object.assign(new Error("deadline exceeded"), { name: "TimeoutError" });
+  });
+
+  const buffer = Buffer.from("Context that cannot be moderated yet.", "utf8");
+  const result = await createContextDocumentFromBuffer({
+    buffer,
+    documentId: "doc_testcontextdocument09",
+    filename: "moderation-timeout.txt",
+    mimeType: "text/plain",
+    requestUrl: "https://rateloop.ai/api/attachments/documents/upload",
+    sha256: sha256(buffer),
+    sizeBytes: buffer.byteLength,
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    },
+  });
+
+  assert.equal(attempts, 2);
+  assert.equal(result.status, "failed");
+  assert.equal(result.contextUrl, null);
+  assert.equal(result.moderationStatus, "review_required");
+  assert.match(result.error ?? "", /moderation review/i);
+
+  const document = await getContextDocument("doc_testcontextdocument09");
+  assert.equal(document?.normalizedText, null);
+  assert.equal(document?.moderationStatus, "review_required");
 });
 
 test("getContextDocumentUrl uses configured app origin", () => {
