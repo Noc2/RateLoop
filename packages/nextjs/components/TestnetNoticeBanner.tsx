@@ -40,7 +40,15 @@ export function TestnetNoticeBanner({ targetChainId }: { targetChainId: number }
       <div className="mx-auto flex max-w-6xl items-start gap-3 xl:max-w-none">
         <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-500" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-sm font-medium leading-5 text-base-content">
-          RateLoop is in Beta right now, and the smart contracts might be redeployed.
+          RateLoop is in Beta right now, and the smart contracts might be redeployed. Feel free to contribute:{" "}
+          <a
+            href="https://github.com/Noc2/RateLoop"
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-base-content underline decoration-base-content/40 underline-offset-4 transition-colors hover:text-white hover:decoration-white"
+          >
+            Noc2/RateLoop
+          </a>
         </p>
         <button
           type="button"
