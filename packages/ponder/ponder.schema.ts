@@ -172,6 +172,8 @@ export const vote = onchainTable(
     identityKey: t.hex(), // resolved RaterRegistry identity key at commit time, when available
     identityHolder: t.hex(), // resolved RaterRegistry holder at commit time, or voter when unavailable
     identityVoter: t.hex(), // compatibility alias for identityHolder
+    credentialMask: t.integer().notNull().default(0), // active World ID credential kinds at commit time
+    freshCredentialMask: t.integer().notNull().default(0), // recent user-presence rechecks at commit time
     commitKey: t.hex().notNull(),
     commitHash: t.hex().notNull(),
     ciphertextHash: t.hex().notNull(),
@@ -753,6 +755,53 @@ export const raterHumanCredential = onchainTable(
     providerIdx: index().on(table.provider),
     revokedIdx: index().on(table.revoked),
     expiresAtIdx: index().on(table.expiresAt),
+  }),
+);
+
+export const raterWorldCredential = onchainTable(
+  "rater_world_credential",
+  (t) => ({
+    id: t.text().primaryKey(), // `${rater}-${kind}`
+    rater: t.hex().notNull(),
+    kind: t.integer().notNull(), // 1=Selfie Check, 2=Passport, 3=Proof of Human
+    verified: t.boolean().notNull(),
+    revoked: t.boolean().notNull(),
+    nullifierHash: t.hex().notNull(),
+    scope: t.hex().notNull(),
+    verifiedAt: t.bigint().notNull(),
+    expiresAt: t.bigint().notNull(),
+    evidenceHash: t.hex().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    raterIdx: index().on(table.rater),
+    kindIdx: index().on(table.kind),
+    raterKindIdx: index().on(table.rater, table.kind),
+    nullifierIdx: index().on(table.nullifierHash),
+    revokedIdx: index().on(table.revoked),
+    expiresAtIdx: index().on(table.expiresAt),
+  }),
+);
+
+export const raterHumanPresence = onchainTable(
+  "rater_human_presence",
+  (t) => ({
+    id: t.text().primaryKey(), // `${rater}-${kind}`
+    rater: t.hex().notNull(),
+    kind: t.integer().notNull(), // credential kind rechecked by World ID user presence
+    verified: t.boolean().notNull(),
+    nullifierHash: t.hex().notNull(),
+    lastRecheckedAt: t.bigint().notNull(),
+    freshUntil: t.bigint().notNull(),
+    evidenceHash: t.hex().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    raterIdx: index().on(table.rater),
+    kindIdx: index().on(table.kind),
+    raterKindIdx: index().on(table.rater, table.kind),
+    nullifierIdx: index().on(table.nullifierHash),
+    freshUntilIdx: index().on(table.freshUntil),
   }),
 );
 

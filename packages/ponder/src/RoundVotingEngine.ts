@@ -118,6 +118,44 @@ async function resolveVoteIdentityAtCommit(params: {
   }
 }
 
+async function resolveCommitCredentialMasks(params: {
+  context: any;
+  contentId: bigint;
+  roundId: bigint;
+  commitKey: `0x${string}`;
+}) {
+  const engineAddress = firstContractAddress(
+    params.context.contracts?.RoundVotingEngine?.address,
+  );
+  if (!params.context.client?.readContract || !engineAddress) {
+    return { credentialMask: 0, freshCredentialMask: 0 };
+  }
+
+  try {
+    const [credentialMask, freshCredentialMask] = await Promise.all([
+      params.context.client.readContract({
+        abi: RoundVotingEngineAbi as any,
+        address: engineAddress,
+        functionName: "commitCredentialMask",
+        args: [params.contentId, params.roundId, params.commitKey],
+      }),
+      params.context.client.readContract({
+        abi: RoundVotingEngineAbi as any,
+        address: engineAddress,
+        functionName: "commitFreshCredentialMask",
+        args: [params.contentId, params.roundId, params.commitKey],
+      }),
+    ]);
+
+    return {
+      credentialMask: Number(credentialMask),
+      freshCredentialMask: Number(freshCredentialMask),
+    };
+  } catch {
+    return { credentialMask: 0, freshCredentialMask: 0 };
+  }
+}
+
 function voteIdentity(voteRow: {
   voter: `0x${string}`;
   identityVoter?: `0x${string}` | null;
@@ -623,6 +661,13 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       voter: rawVoter,
       commitKey,
     });
+  const { credentialMask, freshCredentialMask } =
+    await resolveCommitCredentialMasks({
+      context,
+      contentId,
+      roundId,
+      commitKey,
+    });
   const referenceRatingBps = Number(roundReferenceRatingBps);
 
   // Upsert round record — VoteCommitted is the first event for a new round
@@ -705,6 +750,8 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       identityKey,
       identityHolder,
       identityVoter,
+      credentialMask,
+      freshCredentialMask,
       commitKey,
       commitHash,
       ciphertextHash,

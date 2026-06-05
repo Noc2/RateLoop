@@ -23,7 +23,9 @@ import {
   roundPayoutSnapshot,
   raterFollow,
   raterHumanCredential,
+  raterHumanPresence,
   raterProfile,
+  raterWorldCredential,
   rewardClaim,
   round,
   tokenTransfer,
@@ -56,6 +58,14 @@ const SNAPSHOT_STATUS_FINALIZED = 3;
 const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 const HEX_BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const PAYOUT_PROOF_ENRICHMENT_CONCURRENCY = 8;
+const WORLD_CREDENTIAL_SELFIE = 1;
+const WORLD_CREDENTIAL_PASSPORT = 2;
+const WORLD_CREDENTIAL_PROOF_OF_HUMAN = 3;
+const WORLD_CREDENTIAL_KINDS = [
+  WORLD_CREDENTIAL_SELFIE,
+  WORLD_CREDENTIAL_PASSPORT,
+  WORLD_CREDENTIAL_PROOF_OF_HUMAN,
+] as const;
 
 const STREAK_MILESTONES = [
   { days: 7, baseBonus: 10 },
@@ -77,6 +87,31 @@ function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
     inArray(vote.identityHolder, addresses),
     inArray(vote.identityVoter, addresses),
   );
+}
+
+function worldCredentialKindName(kind: number) {
+  if (kind === WORLD_CREDENTIAL_SELFIE) return "selfie";
+  if (kind === WORLD_CREDENTIAL_PASSPORT) return "passport";
+  if (kind === WORLD_CREDENTIAL_PROOF_OF_HUMAN) return "proof_of_human";
+  return "unknown";
+}
+
+function credentialKindBit(kind: number) {
+  return 1 << kind;
+}
+
+function presenceStatus(
+  presence:
+    | {
+        verified: boolean;
+        freshUntil: bigint;
+      }
+    | undefined,
+  nowSeconds: bigint,
+) {
+  if (!presence?.verified) return "missing";
+  if (presence.freshUntil <= nowSeconds) return "expired";
+  return "fresh";
 }
 
 async function mapWithConcurrency<T, R>(
@@ -555,6 +590,8 @@ export function registerDataRoutes(app: ApiApp) {
     const [
       [profile],
       [humanCredential],
+      worldCredentialRows,
+      humanPresenceRows,
       [launchProgress],
       [launchPolicy],
       [advisoryStats],
@@ -569,6 +606,14 @@ export function registerDataRoutes(app: ApiApp) {
         .from(raterHumanCredential)
         .where(eq(raterHumanCredential.rater, address))
         .limit(1),
+      db
+        .select()
+        .from(raterWorldCredential)
+        .where(eq(raterWorldCredential.rater, address)),
+      db
+        .select()
+        .from(raterHumanPresence)
+        .where(eq(raterHumanPresence.rater, address)),
       db
         .select()
         .from(launchRaterRewardProgress)
@@ -597,6 +642,8 @@ export function registerDataRoutes(app: ApiApp) {
       maxBigInt([
         profile?.updatedAt,
         humanCredential?.updatedAt,
+        ...worldCredentialRows.map((row) => row.updatedAt),
+        ...humanPresenceRows.map((row) => row.updatedAt),
         launchProgress?.updatedAt,
         launchPolicy?.updatedAt,
         advisoryStats?.latestCommittedAt,
@@ -608,6 +655,48 @@ export function registerDataRoutes(app: ApiApp) {
     const humanCredentialStatus = credentialStatus(
       humanCredential,
       statusTimestamp,
+    );
+    const worldCredentialByKind = new Map(
+      worldCredentialRows.map((row) => [row.kind, row]),
+    );
+    const humanPresenceByKind = new Map(
+      humanPresenceRows.map((row) => [row.kind, row]),
+    );
+    let activeCredentialMask = 0;
+    let freshRecheckMask = 0;
+    const worldCredentials = Object.fromEntries(
+      WORLD_CREDENTIAL_KINDS.map((kind) => {
+        const credential = worldCredentialByKind.get(kind);
+        const presence = humanPresenceByKind.get(kind);
+        const status = credentialStatus(credential, statusTimestamp);
+        const recheckStatus = presenceStatus(presence, statusTimestamp);
+        if (status === "verified") {
+          activeCredentialMask |= credentialKindBit(kind);
+        }
+        if (recheckStatus === "fresh") {
+          freshRecheckMask |= credentialKindBit(kind);
+        }
+
+        return [
+          worldCredentialKindName(kind),
+          {
+            kind,
+            verified: credential?.verified ?? false,
+            revoked: credential?.revoked ?? false,
+            status,
+            verifiedAt: credential?.verifiedAt ?? null,
+            expiresAt: credential?.expiresAt ?? null,
+            evidenceHash: credential?.evidenceHash ?? null,
+            recheck: {
+              verified: presence?.verified ?? false,
+              status: recheckStatus,
+              lastRecheckedAt: presence?.lastRecheckedAt ?? null,
+              freshUntil: presence?.freshUntil ?? null,
+              evidenceHash: presence?.evidenceHash ?? null,
+            },
+          },
+        ];
+      }),
     );
     const participationLane =
       humanCredentialStatus === "verified" ? "verified_human" : "open";
@@ -656,6 +745,11 @@ export function registerDataRoutes(app: ApiApp) {
         verifiedAt: humanCredential?.verifiedAt ?? null,
         expiresAt: humanCredential?.expiresAt ?? null,
         evidenceHash: humanCredential?.evidenceHash ?? null,
+      },
+      worldCredentials: {
+        activeMask: activeCredentialMask,
+        freshRecheckMask,
+        kinds: worldCredentials,
       },
       launchRewards: {
         eligible: launchEligible,

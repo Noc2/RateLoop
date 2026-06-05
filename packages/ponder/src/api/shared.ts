@@ -489,6 +489,32 @@ function formatQuestionRewardAsset(value: number | string | bigint | null | unde
   };
 }
 
+const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
+const BOUNTY_ELIGIBILITY_KIND_MASK = 0x7f;
+
+function bountyEligibilityKindName(kind: number) {
+  if (kind === 0) return "everyone";
+  if (kind === 1) return "selfie";
+  if (kind === 2) return "passport";
+  if (kind === 3) return "proof_of_human";
+  return "unknown";
+}
+
+function formatBountyEligibilityPolicy(
+  eligibilityValue: number | string | bigint | null,
+) {
+  if (eligibilityValue === null) return null;
+  const value = toNumberValue(eligibilityValue);
+  const kind = value & BOUNTY_ELIGIBILITY_KIND_MASK;
+  return {
+    value,
+    kind,
+    kindName: bountyEligibilityKindName(kind),
+    requiresRecentRecheck:
+      (value & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) !== 0,
+  };
+}
+
 function formatRewardPoolSummary(row: {
   asset: number | string | bigint | null;
   bountyEligibility: number | string | bigint | null;
@@ -529,6 +555,7 @@ function formatRewardPoolSummary(row: {
     decimals: 6,
     rewardPoolCount: toNumberValue(row.rewardPoolCount),
     bountyEligibility: row.bountyEligibility === null ? null : toNumberValue(row.bountyEligibility),
+    bountyEligibilityPolicy: formatBountyEligibilityPolicy(row.bountyEligibility),
     bountyEligibilityDataHash: row.bountyEligibilityDataHash,
     activeRewardPoolCount,
     expiredRewardPoolCount: toNumberValue(row.expiredRewardPoolCount),

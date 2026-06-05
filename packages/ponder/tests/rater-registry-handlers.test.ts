@@ -21,7 +21,9 @@ vi.mock("ponder:registry", () => ({
 vi.mock("ponder:schema", () => ({
   raterFollow: "raterFollow",
   raterHumanCredential: "raterHumanCredential",
+  raterHumanPresence: "raterHumanPresence",
   raterProfile: "raterProfile",
+  raterWorldCredential: "raterWorldCredential",
 }));
 
 function createDb() {
@@ -199,6 +201,110 @@ describe("RaterRegistry ponder handlers", () => {
           revoked: false,
           provider: 1,
           updatedAt: 100n,
+        }),
+      },
+    ]);
+  });
+
+  it("indexes World ID v4 credential kinds and mirrors Proof of Human", async () => {
+    const { db, upserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "RaterRegistry:WorldCredentialVerified",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          rater: "0x0000000000000000000000000000000000001234",
+          kind: 3,
+          nullifierHash: `0x${"44".repeat(32)}`,
+          scope: `0x${"55".repeat(32)}`,
+          verifiedAt: 100n,
+          expiresAt: 200n,
+          evidenceHash: `0x${"66".repeat(32)}`,
+        },
+        block: { timestamp: 100n },
+      },
+      context: { db },
+    });
+
+    expect(upserts).toEqual([
+      {
+        table: "raterWorldCredential",
+        values: expect.objectContaining({
+          id: "0x0000000000000000000000000000000000001234-3",
+          rater: "0x0000000000000000000000000000000000001234",
+          kind: 3,
+          verified: true,
+          revoked: false,
+        }),
+        update: expect.objectContaining({
+          verified: true,
+          revoked: false,
+          updatedAt: 100n,
+        }),
+      },
+      {
+        table: "raterHumanCredential",
+        values: expect.objectContaining({
+          rater: "0x0000000000000000000000000000000000001234",
+          verified: true,
+          revoked: false,
+          provider: 3,
+        }),
+        update: expect.objectContaining({
+          verified: true,
+          revoked: false,
+          provider: 3,
+          updatedAt: 100n,
+        }),
+      },
+    ]);
+  });
+
+  it("indexes fresh World ID user-presence rechecks", async () => {
+    const { db, upserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "RaterRegistry:HumanPresenceVerified",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          rater: "0x0000000000000000000000000000000000001234",
+          kind: 2,
+          nullifierHash: `0x${"77".repeat(32)}`,
+          lastRecheckedAt: 1_000n,
+          freshUntil: 1_900n,
+          evidenceHash: `0x${"88".repeat(32)}`,
+        },
+        block: { timestamp: 1_000n },
+      },
+      context: { db },
+    });
+
+    expect(upserts).toEqual([
+      {
+        table: "raterHumanPresence",
+        values: expect.objectContaining({
+          id: "0x0000000000000000000000000000000000001234-2",
+          rater: "0x0000000000000000000000000000000000001234",
+          kind: 2,
+          verified: true,
+          lastRecheckedAt: 1_000n,
+          freshUntil: 1_900n,
+        }),
+        update: expect.objectContaining({
+          verified: true,
+          lastRecheckedAt: 1_000n,
+          freshUntil: 1_900n,
+          updatedAt: 1_000n,
         }),
       },
     ]);
