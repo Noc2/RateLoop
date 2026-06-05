@@ -109,6 +109,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceNullifier;
     mapping(uint8 => WorldIdV4Config) private _worldCredentialConfigs;
     mapping(uint8 => WorldIdV4Config) private _worldPresenceConfigs;
+    mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceProof;
     mapping(address => mapping(address => bool)) public isFollowing;
     mapping(address => uint256) public followingCount;
     mapping(address => uint256) public followerCount;
@@ -135,7 +136,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     bool public worldIdV4PresenceConfigFrozen;
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[31] private __gap;
+    uint256[30] private __gap;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -951,9 +952,26 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (!config.enabled || address(config.verifier) == address(0)) revert WorldIdV4VerifierNotConfigured();
         if (nullifier == 0) revert InvalidCredential();
         bytes32 storedNullifier = bytes32(nullifier);
-        if (_usedWorldPresenceNullifier[kind][storedNullifier]) revert NullifierAlreadyAssigned();
 
         uint256 signalHash = worldPresenceSignalHash(msg.sender, kind);
+        bytes32 proofReplayKey = keccak256(
+            abi.encode(
+                "world-id-v4-presence-proof",
+                kind,
+                block.chainid,
+                address(config.verifier),
+                config.rpId,
+                config.action,
+                config.issuerSchemaId,
+                config.credentialGenesisIssuedAtMin,
+                storedNullifier,
+                nonce,
+                signalHash,
+                expiresAtMin
+            )
+        );
+        if (_usedWorldPresenceProof[kind][proofReplayKey]) revert NullifierAlreadyAssigned();
+
         config.verifier
             .verify(
                 nullifier,
@@ -985,7 +1003,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             )
         );
 
-        _usedWorldPresenceNullifier[kind][storedNullifier] = true;
+        _usedWorldPresenceProof[kind][proofReplayKey] = true;
         _humanPresence[msg.sender][kind] = HumanPresence({
             verified: true,
             kind: kind,

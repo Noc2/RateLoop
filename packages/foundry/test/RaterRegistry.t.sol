@@ -824,10 +824,11 @@ contract RaterRegistryTest is Test {
         assertEq(freshMask, 0);
     }
 
-    function test_AttestHumanPresenceWithV4ProofRejectsReusedPresenceNullifier() public {
+    function test_AttestHumanPresenceWithV4ProofAllowsFreshNonceForSamePresenceNullifier() public {
         uint8 kind = registry.WORLD_CREDENTIAL_PROOF_OF_HUMAN();
         uint256 presenceNullifier = uint256(keccak256("presence-nullifier"));
         uint64 expiresAtMin = uint64(block.timestamp + 1 hours);
+        uint256 signalHash = registry.worldPresenceSignalHash(rater, kind);
         uint256[5] memory proof;
 
         vm.prank(rater);
@@ -835,11 +836,26 @@ contract RaterRegistryTest is Test {
             uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 2 hours), _emptyV4Proof()
         );
 
+        worldIdRouter.setExpectedAction(WORLD_ID_V4_PRESENCE_ACTION);
+        worldIdRouter.setExpectedSignalHash(signalHash);
+        worldIdRouter.setExpectedNonce(1);
+
         vm.prank(rater);
         registry.attestHumanPresenceWithV4Proof(kind, presenceNullifier, 1, expiresAtMin, proof);
+
         vm.prank(rater);
         vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
+        registry.attestHumanPresenceWithV4Proof(kind, presenceNullifier, 1, expiresAtMin, proof);
+
+        vm.warp(block.timestamp + 5 minutes);
+        worldIdRouter.setExpectedNonce(2);
+
+        vm.prank(rater);
         registry.attestHumanPresenceWithV4Proof(kind, presenceNullifier, 2, expiresAtMin, proof);
+
+        RaterRegistry.HumanPresence memory presence = registry.getHumanPresence(rater, kind);
+        assertEq(presence.lastRecheckedAt, uint64(block.timestamp));
+        assertEq(presence.freshUntil, uint64(block.timestamp + WORLD_ID_V4_PRESENCE_TTL));
     }
 
     function test_AttestHumanCredentialWithV4ProofBubblesInvalidProof() public {
