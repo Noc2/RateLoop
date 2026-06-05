@@ -26,7 +26,8 @@ function asQuestionArray(request: AgentAskExample): AgentQuestionExample[] {
 function looksLikeHttpsUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
   try {
-    return new URL(value).protocol === "https:";
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password;
   } catch {
     return false;
   }

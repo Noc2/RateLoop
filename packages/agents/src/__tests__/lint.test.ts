@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { lintAgentAskRequest, summarizeLintFindings } from "../questions/lint.js";
 
 const UPLOADED_IMAGE_URL = "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp";
+const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop";
+const DETAILS_HASH = `0x${"4".repeat(64)}`;
 
 const VALID_REQUEST = {
   bounty: {
@@ -64,6 +66,38 @@ describe("agent question linting", () => {
       ok: true,
       warningCount: 0,
     });
+  });
+
+  it("accepts public HTTPS details URLs with matching hashes", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        detailsHash: DETAILS_HASH,
+        detailsUrl: DETAILS_URL,
+      },
+    });
+
+    expect(summarizeLintFindings(findings)).toEqual({
+      errorCount: 0,
+      ok: true,
+      warningCount: 0,
+    });
+  });
+
+  it("rejects details URLs with embedded credentials", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        detailsHash: DETAILS_HASH,
+        detailsUrl: "https://user:pass@www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ level: "error", path: "question.detailsUrl" })]),
+    );
   });
 
   it("rejects arbitrary HTTPS image URLs", () => {
