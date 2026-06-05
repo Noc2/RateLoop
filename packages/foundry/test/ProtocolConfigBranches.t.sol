@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import { RatingLib } from "../contracts/libraries/RatingLib.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {RatingLib} from "../contracts/libraries/RatingLib.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {MockRaterIdentityRegistry} from "./mocks/MockRaterIdentityRegistry.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {deployInitializedProtocolConfig} from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
-    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
-        keccak256("rateloop.round-reward-distributor.v1");
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
     address public votingEngine;
     address public registry;
     address public lrepToken;
@@ -24,10 +23,10 @@ contract MockRewardDistributorForConfig {
         if (votingEngine_.code.length != 0) {
             try MockVotingEngineForConfig(votingEngine_).registry() returns (address registry_) {
                 registry = registry_;
-            } catch { }
+            } catch {}
             try MockVotingEngineForConfig(votingEngine_).lrepToken() returns (address lrepToken_) {
                 lrepToken = lrepToken_;
-            } catch { }
+            } catch {}
         }
     }
 }
@@ -42,11 +41,10 @@ contract MockRewardDistributorWithClaimStateForConfig is MockRewardDistributorFo
     }
 }
 
-contract MockRewardDistributorWithoutEngineForConfig { }
+contract MockRewardDistributorWithoutEngineForConfig {}
 
 contract MockRewardDistributorWithoutClaimStateForConfig {
-    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
-        keccak256("rateloop.round-reward-distributor.v1");
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
     address public votingEngine;
     address public registry;
     address public lrepToken;
@@ -56,17 +54,16 @@ contract MockRewardDistributorWithoutClaimStateForConfig {
         if (votingEngine_.code.length != 0) {
             try MockVotingEngineForConfig(votingEngine_).registry() returns (address registry_) {
                 registry = registry_;
-            } catch { }
+            } catch {}
             try MockVotingEngineForConfig(votingEngine_).lrepToken() returns (address lrepToken_) {
                 lrepToken = lrepToken_;
-            } catch { }
+            } catch {}
         }
     }
 }
 
 contract MockRewardDistributorRevertingEngineForConfig {
-    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
-        keccak256("rateloop.round-reward-distributor.v1");
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
     bool public claimAccountingStarted;
 
     function votingEngine() external pure returns (address) {
@@ -83,6 +80,14 @@ contract MockVotingEngineForConfig {
         protocolConfig = protocolConfig_;
         registry = registry_;
         lrepToken = lrepToken_;
+    }
+
+    function rewardDistributorConfigShape()
+        external
+        view
+        returns (address registry_, address lrepToken_, address protocolConfig_)
+    {
+        return (registry, lrepToken, protocolConfig);
     }
 }
 

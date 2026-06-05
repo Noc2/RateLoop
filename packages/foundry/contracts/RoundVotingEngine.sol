@@ -1,29 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import { ContentRegistry } from "./ContentRegistry.sol";
-import { ProtocolConfig } from "./ProtocolConfig.sol";
-import { RoundLib } from "./libraries/RoundLib.sol";
-import { RatingLib } from "./libraries/RatingLib.sol";
-import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEffectsLib.sol";
-import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
-import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
-import { RoundCreationLib } from "./libraries/RoundCreationLib.sol";
-import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
-import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
-import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
-import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
+import {ContentRegistry} from "./ContentRegistry.sol";
+import {ProtocolConfig} from "./ProtocolConfig.sol";
+import {RoundLib} from "./libraries/RoundLib.sol";
+import {RatingLib} from "./libraries/RatingLib.sol";
+import {RoundSettlementSideEffectsLib} from "./libraries/RoundSettlementSideEffectsLib.sol";
+import {RoundSettlementDistributionLib} from "./libraries/RoundSettlementDistributionLib.sol";
+import {RoundCleanupLib} from "./libraries/RoundCleanupLib.sol";
+import {RoundCreationLib} from "./libraries/RoundCreationLib.sol";
+import {RoundRevealLib} from "./libraries/RoundRevealLib.sol";
+import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
+import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
+import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
+import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
 
 /// @title RoundVotingEngine
 /// @notice Per-content round-based parimutuel voting with keeper-assisted/self-reveal and epoch-weighted rewards.
@@ -294,6 +294,14 @@ contract RoundVotingEngine is
         lrepToken.safeTransfer(msg.sender, lrepToken.balanceOf(address(this)) - accountedLrepBalance);
     }
 
+    function rewardDistributorConfigShape()
+        external
+        view
+        returns (address registry_, address lrepToken_, address protocolConfig_)
+    {
+        return (address(registry), address(lrepToken), address(protocolConfig));
+    }
+
     /// @notice Transfer LREP reward tokens to a recipient. Only callable by RewardDistributor.
     function transferReward(address recipient, uint256 lrepAmount) external {
         if (!protocolConfig.isRewardDistributorForEngine(msg.sender, address(this))) revert Unauthorized();
@@ -550,8 +558,8 @@ contract RoundVotingEngine is
         // stake safeTransferFrom in _commitVote fails closed. (Kept inline
         // rather than in a library to avoid embedding another library-address
         // push in RoundVotingEngine's EIP-170-constrained bytecode.)
-        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) { }
-            catch { }
+        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) {}
+            catch {}
     }
 
     function _computeCommitEpoch(RoundLib.Round storage round, RoundLib.RoundConfig memory roundCfg)
