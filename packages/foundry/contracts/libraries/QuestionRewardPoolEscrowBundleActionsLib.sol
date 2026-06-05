@@ -1059,9 +1059,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             roundSetIndex,
             voter
         )
-            && _isBundleBountyEligible(
-            bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundle, bundleId, roundSetIndex, voter
-        )
             && _completedBundleRoundSetCommitIgnoringCleanup(
             bundleQuestions,
             bundleRoundIds,
@@ -1071,6 +1068,17 @@ library QuestionRewardPoolEscrowBundleActionsLib {
             bundle.bountyClosesAt,
             bundleId,
             roundSetIndex,
+            voter
+        )
+            && _bundleRoundSetCommitBountyEligible(
+            bundleQuestions,
+            bundleRoundIds,
+            votingEngine,
+            protocolConfig,
+            bundle,
+            bundleId,
+            roundSetIndex,
+            firstCommitKey,
             voter
         );
     }
@@ -1198,7 +1206,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
     }
 
-    function _isBundleBountyEligible(
+    function _bundleRoundSetCommitBountyEligible(
         mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
         mapping(
             uint256
@@ -1211,39 +1219,33 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         BundleReward storage bundle,
         uint256 bundleId,
         uint256 roundSetIndex,
+        bytes32 firstCommitKey,
         address account
     ) private view returns (bool) {
-        address eligibilityAccount = _bundleBountyEligibilityAccount(
-            bundleQuestions, bundleRoundIds, votingEngine, protocolConfig, bundleId, roundSetIndex, account
-        );
-        return QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-            votingEngine.protocolConfig(), bundle.bountyEligibility, eligibilityAccount
-        );
-    }
+        if (bundle.bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) return true;
 
-    function _bundleBountyEligibilityAccount(
-        mapping(uint256 => BundleQuestion[]) storage bundleQuestions,
-        mapping(
-            uint256
-                => mapping(
-                uint256 => mapping(uint256 => uint64)
-            )
-        ) storage bundleRoundIds,
-        RoundVotingEngine votingEngine,
-        ProtocolConfig protocolConfig,
-        uint256 bundleId,
-        uint256 roundSetIndex,
-        address account
-    ) private view returns (address) {
-        if (bundleQuestions[bundleId].length == 0) return account;
-        BundleQuestion storage firstQuestion = bundleQuestions[bundleId][0];
-        uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        if (firstRoundId == 0) return account;
-        (, bytes32 commitKey, address rewardRecipient) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
-            votingEngine, protocolConfig, firstQuestion.contentId, firstRoundId, account
-        );
-        if (commitKey == bytes32(0)) return account;
-        return rewardRecipient == address(0) ? account : rewardRecipient;
+        BundleQuestion[] storage questions = bundleQuestions[bundleId];
+        for (uint256 i = 0; i < questions.length;) {
+            uint256 roundId = bundleRoundIds[bundleId][i][roundSetIndex];
+            bytes32 commitKey = firstCommitKey;
+            if (i != 0) {
+                (, commitKey,) = QuestionRewardPoolEscrowVoterLib.resolveRoundRewardClaim(
+                    votingEngine, protocolConfig, questions[i].contentId, roundId, account
+                );
+            }
+            if (commitKey == bytes32(0)) return false;
+            (,,, uint8 credentialMask, uint8 freshCredentialMask,) =
+                votingEngine.commitIdentityState(questions[i].contentId, roundId, commitKey);
+            if (!QuestionRewardPoolEscrowEligibilityLib.isCommitEligibleForBounty(
+                    bundle.bountyEligibility, credentialMask, freshCredentialMask
+                )) {
+                return false;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return true;
     }
 
     function _isBundleRoundSetComplete(

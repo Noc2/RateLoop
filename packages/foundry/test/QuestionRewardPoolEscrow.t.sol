@@ -1364,6 +1364,29 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
     }
 
+    function testVerifiedHumanBundleRejectsCompleterVerifiedBeforeDeferredRoundSetQualification() public {
+        raterIdentityRegistry.revokeHumanCredential(voter4);
+
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundleWithEligibility(
+            contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
+
+        address[] memory voters = _fourVoters();
+        bool[] memory directions = _directions(true, true, false, true);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+
+        raterIdentityRegistry.setHolder(voter4);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter4), 0);
+        vm.prank(voter4);
+        vm.expectRevert("Not bounty eligible");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
+    }
+
     function testVerifiedHumanBundleAllowsQualifiedCompleterAfterCredentialRevoked() public {
         uint256[] memory contentIds = _submitBundleQuestions();
         uint256 bundleId = _createSubmissionBundleWithEligibility(
@@ -1380,6 +1403,80 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
         vm.prank(voter1);
         assertGt(rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0), 0);
+    }
+
+    function testVerifiedHumanBundleAllowsQualifiedCompleterRevokedBeforeDeferredRoundSetQualification() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundleWithEligibility(
+            contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+
+        raterIdentityRegistry.revokeHumanCredential(voter1);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
+
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+        vm.prank(voter1);
+        assertGt(rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0), 0);
+    }
+
+    function testRecentRecheckBundleUsesFreshnessSnapshotAtCommit() public {
+        uint8 humanBit = uint8(1 << BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+        uint8 recentHumanEligibility = BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, humanBit);
+        raterIdentityRegistry.setCredentialStatusMasks(voter2, humanBit, humanBit);
+        raterIdentityRegistry.setCredentialStatusMasks(voter3, humanBit, humanBit);
+
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundleWithEligibility(
+            contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, recentHumanEligibility
+        );
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, 0);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
+
+        assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+        vm.prank(voter1);
+        assertGt(rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0), 0);
+    }
+
+    function testRecentRecheckBundleRequiresEveryQuestionCommitFreshAtCommit() public {
+        uint8 humanBit = uint8(1 << BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+        uint8 recentHumanEligibility = BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, humanBit);
+        raterIdentityRegistry.setCredentialStatusMasks(voter2, humanBit, humanBit);
+        raterIdentityRegistry.setCredentialStatusMasks(voter3, humanBit, humanBit);
+
+        uint256[] memory contentIds = _submitBundleQuestions();
+        uint256 bundleId = _createSubmissionBundleWithEligibility(
+            contentIds, funder, REWARD_ASSET_USDC, REWARD_POOL_AMOUNT, 3, recentHumanEligibility
+        );
+
+        address[] memory voters = _threeVoters();
+        bool[] memory directions = _directions(true, true, false);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, 0);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, humanBit);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
+
+        assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
+        vm.prank(voter1);
+        vm.expectRevert("Bundle not claimable");
+        rewardPoolEscrow.claimQuestionBundleReward(bundleId, 0);
     }
 
     function testBundleRewardSupportsOpenWalletCompletersWithoutRaterIdentity() public {
