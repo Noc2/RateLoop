@@ -11,9 +11,9 @@ import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 
 contract GasBudgetTest is RoundIntegrationTest {
-    // Content submission validates uploaded media URLs and uses a live CategoryRegistry lookup,
-    // so the baseline is higher than the initial pre-media measurement.
-    uint256 internal constant MAX_SUBMIT_CONTENT_GAS = 750_000;
+    // Content submission validates uploaded media URLs, uses a live CategoryRegistry lookup,
+    // and emits digest/spec anchor logs for off-chain reconstruction.
+    uint256 internal constant MAX_SUBMIT_CONTENT_GAS = 950_000;
     // commitVote validates the full armored AGE envelope and emits ciphertext for indexed availability,
     // while storing only compact hash/tlock metadata on-chain.
     uint256 internal constant MAX_COMMIT_VOTE_GAS = 2_700_000;
