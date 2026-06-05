@@ -67,7 +67,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint256 internal constant MAX_FRONTEND_FEE_BPS = 500;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
-    uint8 internal constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1;
+    uint8 internal constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 3;
+    uint8 internal constant BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
 
     mapping(uint256 => mapping(uint256 => uint256)) internal mockedRoundCommitCount;
 
@@ -399,6 +400,53 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+    }
+
+    function testRecentRecheckBountyUsesFreshnessSnapshotAtCommit() public {
+        uint8 humanBit = uint8(1 << BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+        uint8 recentHumanEligibility = BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, humanBit);
+        raterIdentityRegistry.setCredentialStatusMasks(voter2, humanBit, humanBit);
+        raterIdentityRegistry.setCredentialStatusMasks(voter3, humanBit, humanBit);
+
+        uint256 contentId = _submitQuestion("recent-recheck-snapshot");
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, recentHumanEligibility);
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, 0);
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(snapshot.rawEligibleVoters, 3);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
+    }
+
+    function testRecentRecheckBountyRejectsVoterRecheckedAfterCommit() public {
+        uint8 humanBit = uint8(1 << BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+        uint8 recentHumanEligibility = BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, humanBit);
+        raterIdentityRegistry.setCredentialStatusMasks(voter2, humanBit, humanBit);
+        raterIdentityRegistry.setCredentialStatusMasks(voter3, humanBit, humanBit);
+        raterIdentityRegistry.setCredentialStatusMasks(voter4, humanBit, 0);
+
+        uint256 contentId = _submitQuestion("recent-recheck-too-late");
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, recentHumanEligibility);
+        uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
+
+        raterIdentityRegistry.setCredentialStatusMasks(voter4, humanBit, humanBit);
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(snapshot.rawEligibleVoters, 3);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
+
+        vm.prank(voter4);
+        vm.expectRevert("Not bounty eligible");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
@@ -5021,7 +5069,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 metadata,
                 question.imageUrls,
                 "",
-            _emptySubmissionDetails(),
+                _emptySubmissionDetails(),
                 question.salt,
                 question.rewardTerms,
                 question.roundConfig,

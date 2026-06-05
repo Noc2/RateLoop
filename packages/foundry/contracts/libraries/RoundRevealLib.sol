@@ -294,8 +294,7 @@ library RoundRevealLib {
         uint256 seedBlock = uint64(seedWord);
         if (block.number <= seedBlock || Blockhash.blockHash(seedBlock) != bytes32(0)) return false;
 
-        bytes32 refreshedMarker =
-            bytes32((seedWord & ~uint256(type(uint64).max)) | uint256(block.number.toUint64()));
+        bytes32 refreshedMarker = bytes32((seedWord & ~uint256(type(uint64).max)) | uint256(block.number.toUint64()));
         roundRbtsSeedEntropy[contentId][roundId] = refreshedMarker;
         emit RbtsSeedCaptured(contentId, roundId, refreshedMarker);
         return true;

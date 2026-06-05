@@ -7190,6 +7190,64 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "commitCredentialMask",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "commitFreshCredentialMask",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "commitIdentityHolder",
           inputs: [
             {
@@ -22397,24 +22455,44 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "_worldIdRouter",
+              name: "_worldIdV4Verifier",
               type: "address",
               internalType: "address",
             },
             {
-              name: "_worldIdScope",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "_worldIdV4RpId",
+              type: "uint64",
+              internalType: "uint64",
             },
             {
-              name: "_worldIdExternalNullifierHash",
+              name: "_worldIdV4Action",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "_worldIdCredentialTtl",
+              name: "_worldIdV4PresenceAction",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "_worldIdV4CredentialTtl",
               type: "uint64",
               internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4PresenceTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4IssuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4CredentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "nonpayable",
@@ -22441,6 +22519,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "DEFAULT_PRESENCE_TTL",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -22486,13 +22577,78 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "WORLD_ID_GROUP_ID",
+          name: "WORLD_CREDENTIAL_PASSPORT",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "uint256",
-              internalType: "uint256",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_CREDENTIAL_PROOF_OF_HUMAN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_CREDENTIAL_SELFIE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_ISSUER_SCHEMA_PASSPORT",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_ISSUER_SCHEMA_SELFIE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -22525,22 +22681,27 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "attestHumanCredentialWithProof",
+          name: "attestHumanCredentialWithV4Proof",
           inputs: [
             {
-              name: "root",
+              name: "nullifier",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "nullifierHash",
+              name: "nonce",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "expiresAtMin",
+              type: "uint64",
+              internalType: "uint64",
             },
             {
               name: "proof",
-              type: "uint256[8]",
-              internalType: "uint256[8]",
+              type: "uint256[5]",
+              internalType: "uint256[5]",
             },
           ],
           outputs: [],
@@ -22548,8 +22709,46 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "attestHumanCredentialWithV4Proof",
+          name: "attestHumanPresenceWithV4Proof",
           inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "nullifier",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "nonce",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "expiresAtMin",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "proof",
+              type: "uint256[5]",
+              internalType: "uint256[5]",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "attestWorldCredentialWithV4Proof",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
             {
               name: "nullifier",
               type: "uint256",
@@ -22594,25 +22793,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "consumeWorldIdV4LaunchNullifier",
-          inputs: [
-            {
-              name: "v4NullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "launchIdentityKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "credentialIdentityKey",
           inputs: [
             {
@@ -22637,6 +22817,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "credentialKindBit",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "credentialScope",
           inputs: [
             {
@@ -22650,6 +22849,30 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "credentialStatusBits",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "activeMask",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "freshMask",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
           stateMutability: "view",
@@ -22745,6 +22968,26 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "freezeWorldCredentialV4Config",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "freezeWorldIdV4PresenceConfig",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "freezeWorldIdV4VerifierConfig",
           inputs: [],
           outputs: [],
@@ -22752,8 +22995,14 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "freezeWorldIdVerifierConfig",
-          inputs: [],
+          name: "freezeWorldPresenceV4Config",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
           outputs: [],
           stateMutability: "nonpayable",
         },
@@ -22805,6 +23054,57 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "expiresAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "evidenceHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getHumanPresence",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType: "struct RaterRegistry.HumanPresence",
+              components: [
+                {
+                  name: "verified",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "kind",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "lastRecheckedAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "freshUntil",
                   type: "uint64",
                   internalType: "uint64",
                 },
@@ -22875,6 +23175,72 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "getWorldCredential",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType: "struct RaterRegistry.WorldCredential",
+              components: [
+                {
+                  name: "verified",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "revoked",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "kind",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "nullifierHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "scope",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "verifiedAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "expiresAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "evidenceHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "grantRole",
           inputs: [
             {
@@ -22893,12 +23259,60 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "hasActiveCredentialKind",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "hasActiveHumanCredential",
           inputs: [
             {
               name: "rater",
               type: "address",
               internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "hasRecentCredentialRecheck",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
           outputs: [
@@ -22992,24 +23406,44 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "_worldIdRouter",
+              name: "_worldIdV4Verifier",
               type: "address",
               internalType: "address",
             },
             {
-              name: "_worldIdScope",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "_worldIdV4RpId",
+              type: "uint64",
+              internalType: "uint64",
             },
             {
-              name: "_worldIdExternalNullifierHash",
+              name: "_worldIdV4Action",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "_worldIdCredentialTtl",
+              name: "_worldIdV4PresenceAction",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "_worldIdV4CredentialTtl",
               type: "uint64",
               internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4PresenceTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4IssuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4CredentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           outputs: [],
@@ -23061,20 +23495,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bytes32",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "legacyWorldIdAttestationDisabled",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -23340,17 +23761,47 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setWorldIdV4LaunchNullifierAlias",
+          name: "setWorldCredentialV4Config",
           inputs: [
             {
-              name: "v4NullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
             },
             {
-              name: "legacyNullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "verifier",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "rpId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "action",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "credentialTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           outputs: [],
@@ -23358,12 +23809,37 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setWorldIdV4UnaliasedLaunchNullifiersAllowed",
+          name: "setWorldIdV4PresenceConfig",
           inputs: [
             {
-              name: "allowed",
-              type: "bool",
-              internalType: "bool",
+              name: "_worldIdV4Verifier",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_worldIdV4RpId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4PresenceAction",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "_worldIdV4PresenceTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4IssuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4CredentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           outputs: [],
@@ -23409,27 +23885,47 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setWorldIdVerifierConfig",
+          name: "setWorldPresenceV4Config",
           inputs: [
             {
-              name: "_worldIdRouter",
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "verifier",
               type: "address",
               internalType: "address",
             },
             {
-              name: "_worldIdScope",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "rpId",
+              type: "uint64",
+              internalType: "uint64",
             },
             {
-              name: "_worldIdExternalNullifierHash",
+              name: "action",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "_worldIdCredentialTtl",
+              name: "presenceTtl",
               type: "uint64",
               internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           outputs: [],
@@ -23469,21 +23965,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "worldIdCredentialTtl",
-          inputs: [],
-          outputs: [
+          name: "worldCredentialSignalHash",
+          inputs: [
             {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldIdExternalNullifierHash",
-          inputs: [],
           outputs: [
             {
               name: "",
@@ -23491,30 +23985,58 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
           ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
-          name: "worldIdRouter",
-          inputs: [],
-          outputs: [
+          name: "worldCredentialV4Config",
+          inputs: [
             {
-              name: "",
-              type: "address",
-              internalType: "contract IWorldIDRouter",
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldIdScope",
-          inputs: [],
           outputs: [
             {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "verifier",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "rpId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "action",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "ttl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "frozen",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -23605,38 +24127,39 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "worldIdV4LaunchNullifierAlias",
-          inputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
+          name: "worldIdV4PresenceAction",
+          inputs: [],
           outputs: [
             {
               name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
         },
         {
           type: "function",
-          name: "worldIdV4LaunchNullifierSeen",
-          inputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
+          name: "worldIdV4PresenceConfigFrozen",
+          inputs: [],
           outputs: [
             {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdV4PresenceTtl",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -23650,19 +24173,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint64",
               internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldIdV4UnaliasedLaunchNullifiersAllowed",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -23695,11 +24205,76 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "worldIdVerifierConfigFrozen",
-          inputs: [],
+          name: "worldPresenceSignalHash",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
           outputs: [
             {
               name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "worldPresenceV4Config",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "verifier",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "rpId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "action",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "ttl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "frozen",
               type: "bool",
               internalType: "bool",
             },
@@ -23914,6 +24489,49 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "HumanPresenceVerified",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "lastRecheckedAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "freshUntil",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "Initialized",
           inputs: [
             {
@@ -23921,19 +24539,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint64",
               indexed: false,
               internalType: "uint64",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "LegacyWorldIdAttestationDisabledSet",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              indexed: true,
-              internalType: "address",
             },
           ],
           anonymous: false,
@@ -24134,16 +24739,22 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "WorldIdV4LaunchNullifierAliasSet",
+          name: "WorldCredentialRevoked",
           inputs: [
             {
-              name: "v4NullifierHash",
-              type: "bytes32",
+              name: "rater",
+              type: "address",
               indexed: true,
-              internalType: "bytes32",
+              internalType: "address",
             },
             {
-              name: "legacyNullifierHash",
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "nullifierHash",
               type: "bytes32",
               indexed: true,
               internalType: "bytes32",
@@ -24153,13 +24764,123 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "WorldIdV4UnaliasedLaunchNullifiersAllowedSet",
+          name: "WorldCredentialV4ConfigLocked",
           inputs: [
             {
-              name: "allowed",
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WorldCredentialV4ConfigUpdated",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "verifier",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "rpId",
+              type: "uint64",
+              indexed: true,
+              internalType: "uint64",
+            },
+            {
+              name: "action",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "credentialTtl",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
               type: "bool",
               indexed: false,
               internalType: "bool",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WorldCredentialVerified",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "scope",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "verifiedAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "expiresAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
             },
           ],
           anonymous: false,
@@ -24222,8 +24943,14 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "WorldIdVerifierConfigLocked",
+          name: "WorldPresenceV4ConfigLocked",
           inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
             {
               name: "account",
               type: "address",
@@ -24235,31 +24962,55 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "WorldIdVerifierConfigUpdated",
+          name: "WorldPresenceV4ConfigUpdated",
           inputs: [
             {
-              name: "router",
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "verifier",
               type: "address",
               indexed: true,
               internalType: "address",
             },
             {
-              name: "scope",
-              type: "bytes32",
+              name: "rpId",
+              type: "uint64",
               indexed: true,
-              internalType: "bytes32",
+              internalType: "uint64",
             },
             {
-              name: "externalNullifierHash",
+              name: "action",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
             },
             {
-              name: "credentialTtl",
+              name: "presenceTtl",
               type: "uint64",
               indexed: false,
               internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
             },
           ],
           anonymous: false,
@@ -24327,11 +25078,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "LegacyWorldIdAttestationDisabled",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "NoDelegateSet",
           inputs: [],
         },
@@ -24352,6 +25098,21 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "UnsupportedCredentialKind",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "WorldCredentialConfigFrozen",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "WorldIdV4PresenceConfigFrozen",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "WorldIdV4VerifierConfigFrozen",
           inputs: [],
         },
@@ -24362,7 +25123,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "WorldIdVerifierConfigFrozen",
+          name: "WorldPresenceConfigFrozen",
           inputs: [],
         },
       ],
@@ -24382,6 +25143,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
         addressIdentityKey: "contracts/interfaces/IRaterIdentityRegistry.sol",
+        credentialStatusBits: "contracts/interfaces/IRaterIdentityRegistry.sol",
         hasActiveHumanCredential:
           "contracts/interfaces/IRaterIdentityRegistry.sol",
         resolveRater: "contracts/interfaces/IRaterIdentityRegistry.sol",
@@ -33775,6 +34537,64 @@ const deployedContracts: GenericContractsDeclaration = {
             },
             {
               name: "epochIndex",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "commitCredentialMask",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "commitFreshCredentialMask",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
               type: "uint8",
               internalType: "uint8",
             },
@@ -46695,136 +47515,6 @@ const deployedContracts: GenericContractsDeclaration = {
       },
       deployedOnBlock: 41,
     },
-    MockWorldIDRouter: {
-      address: "0xe8F76a822B57b973c7a89006092364fFF8f69040",
-      abi: [
-        {
-          type: "function",
-          name: "expectedExternalNullifierHash",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "expectedSignalHash",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "setExpectedExternalNullifierHash",
-          inputs: [
-            {
-              name: "value",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setExpectedSignalHash",
-          inputs: [
-            {
-              name: "value",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setShouldReject",
-          inputs: [
-            {
-              name: "value",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "shouldReject",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "verifyProof",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "signalHash",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "externalNullifierHash",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256[8]",
-              internalType: "uint256[8]",
-            },
-          ],
-          outputs: [],
-          stateMutability: "view",
-        },
-        {
-          type: "error",
-          name: "InvalidMockWorldIdProof",
-          inputs: [],
-        },
-      ],
-      inheritedFunctions: {
-        verifyProof: "contracts/interfaces/IWorldIDRouter.sol",
-      },
-      deployedOnBlock: 34,
-    },
     MockERC20: {
       address: "0x4e85DC48a70DA1298489d5B6FC2492767d98f384",
       abi: [
@@ -48051,24 +48741,44 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "_worldIdRouter",
+              name: "_worldIdV4Verifier",
               type: "address",
               internalType: "address",
             },
             {
-              name: "_worldIdScope",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "_worldIdV4RpId",
+              type: "uint64",
+              internalType: "uint64",
             },
             {
-              name: "_worldIdExternalNullifierHash",
+              name: "_worldIdV4Action",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "_worldIdCredentialTtl",
+              name: "_worldIdV4PresenceAction",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "_worldIdV4CredentialTtl",
               type: "uint64",
               internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4PresenceTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4IssuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4CredentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "nonpayable",
@@ -48095,6 +48805,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "DEFAULT_PRESENCE_TTL",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -48140,13 +48863,78 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "WORLD_ID_GROUP_ID",
+          name: "WORLD_CREDENTIAL_PASSPORT",
           inputs: [],
           outputs: [
             {
               name: "",
-              type: "uint256",
-              internalType: "uint256",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_CREDENTIAL_PROOF_OF_HUMAN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_CREDENTIAL_SELFIE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_ISSUER_SCHEMA_PASSPORT",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "WORLD_ISSUER_SCHEMA_SELFIE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -48179,22 +48967,27 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "attestHumanCredentialWithProof",
+          name: "attestHumanCredentialWithV4Proof",
           inputs: [
             {
-              name: "root",
+              name: "nullifier",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "nullifierHash",
+              name: "nonce",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "expiresAtMin",
+              type: "uint64",
+              internalType: "uint64",
             },
             {
               name: "proof",
-              type: "uint256[8]",
-              internalType: "uint256[8]",
+              type: "uint256[5]",
+              internalType: "uint256[5]",
             },
           ],
           outputs: [],
@@ -48202,8 +48995,46 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "attestHumanCredentialWithV4Proof",
+          name: "attestHumanPresenceWithV4Proof",
           inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "nullifier",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "nonce",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "expiresAtMin",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "proof",
+              type: "uint256[5]",
+              internalType: "uint256[5]",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "attestWorldCredentialWithV4Proof",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
             {
               name: "nullifier",
               type: "uint256",
@@ -48248,25 +49079,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "consumeWorldIdV4LaunchNullifier",
-          inputs: [
-            {
-              name: "v4NullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "launchIdentityKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "credentialIdentityKey",
           inputs: [
             {
@@ -48291,6 +49103,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "credentialKindBit",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "credentialScope",
           inputs: [
             {
@@ -48304,6 +49135,30 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "credentialStatusBits",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "activeMask",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "freshMask",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
           stateMutability: "view",
@@ -48399,6 +49254,26 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "freezeWorldCredentialV4Config",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "freezeWorldIdV4PresenceConfig",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "freezeWorldIdV4VerifierConfig",
           inputs: [],
           outputs: [],
@@ -48406,8 +49281,14 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "freezeWorldIdVerifierConfig",
-          inputs: [],
+          name: "freezeWorldPresenceV4Config",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
           outputs: [],
           stateMutability: "nonpayable",
         },
@@ -48459,6 +49340,57 @@ const deployedContracts: GenericContractsDeclaration = {
                 },
                 {
                   name: "expiresAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "evidenceHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getHumanPresence",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType: "struct RaterRegistry.HumanPresence",
+              components: [
+                {
+                  name: "verified",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "kind",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "lastRecheckedAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "freshUntil",
                   type: "uint64",
                   internalType: "uint64",
                 },
@@ -48529,6 +49461,72 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "getWorldCredential",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType: "struct RaterRegistry.WorldCredential",
+              components: [
+                {
+                  name: "verified",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "revoked",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "kind",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "nullifierHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "scope",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "verifiedAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "expiresAt",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "evidenceHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "grantRole",
           inputs: [
             {
@@ -48547,12 +49545,60 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "hasActiveCredentialKind",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "hasActiveHumanCredential",
           inputs: [
             {
               name: "rater",
               type: "address",
               internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "hasRecentCredentialRecheck",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
           outputs: [
@@ -48646,24 +49692,44 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "address",
             },
             {
-              name: "_worldIdRouter",
+              name: "_worldIdV4Verifier",
               type: "address",
               internalType: "address",
             },
             {
-              name: "_worldIdScope",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "_worldIdV4RpId",
+              type: "uint64",
+              internalType: "uint64",
             },
             {
-              name: "_worldIdExternalNullifierHash",
+              name: "_worldIdV4Action",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "_worldIdCredentialTtl",
+              name: "_worldIdV4PresenceAction",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "_worldIdV4CredentialTtl",
               type: "uint64",
               internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4PresenceTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4IssuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4CredentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           outputs: [],
@@ -48715,20 +49781,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bytes32",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "legacyWorldIdAttestationDisabled",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -48994,17 +50047,47 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setWorldIdV4LaunchNullifierAlias",
+          name: "setWorldCredentialV4Config",
           inputs: [
             {
-              name: "v4NullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
             },
             {
-              name: "legacyNullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "verifier",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "rpId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "action",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "credentialTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           outputs: [],
@@ -49012,12 +50095,37 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setWorldIdV4UnaliasedLaunchNullifiersAllowed",
+          name: "setWorldIdV4PresenceConfig",
           inputs: [
             {
-              name: "allowed",
-              type: "bool",
-              internalType: "bool",
+              name: "_worldIdV4Verifier",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_worldIdV4RpId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4PresenceAction",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "_worldIdV4PresenceTtl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4IssuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "_worldIdV4CredentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           outputs: [],
@@ -49063,27 +50171,47 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "setWorldIdVerifierConfig",
+          name: "setWorldPresenceV4Config",
           inputs: [
             {
-              name: "_worldIdRouter",
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "verifier",
               type: "address",
               internalType: "address",
             },
             {
-              name: "_worldIdScope",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "rpId",
+              type: "uint64",
+              internalType: "uint64",
             },
             {
-              name: "_worldIdExternalNullifierHash",
+              name: "action",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "_worldIdCredentialTtl",
+              name: "presenceTtl",
               type: "uint64",
               internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           outputs: [],
@@ -49123,21 +50251,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "worldIdCredentialTtl",
-          inputs: [],
-          outputs: [
+          name: "worldCredentialSignalHash",
+          inputs: [
             {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldIdExternalNullifierHash",
-          inputs: [],
           outputs: [
             {
               name: "",
@@ -49145,30 +50271,58 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
           ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
-          name: "worldIdRouter",
-          inputs: [],
-          outputs: [
+          name: "worldCredentialV4Config",
+          inputs: [
             {
-              name: "",
-              type: "address",
-              internalType: "contract IWorldIDRouter",
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldIdScope",
-          inputs: [],
           outputs: [
             {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "verifier",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "rpId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "action",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "ttl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "frozen",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -49259,38 +50413,39 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "worldIdV4LaunchNullifierAlias",
-          inputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
+          name: "worldIdV4PresenceAction",
+          inputs: [],
           outputs: [
             {
               name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
         },
         {
           type: "function",
-          name: "worldIdV4LaunchNullifierSeen",
-          inputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
+          name: "worldIdV4PresenceConfigFrozen",
+          inputs: [],
           outputs: [
             {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdV4PresenceTtl",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -49304,19 +50459,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint64",
               internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldIdV4UnaliasedLaunchNullifiersAllowed",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -49349,11 +50491,76 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "worldIdVerifierConfigFrozen",
-          inputs: [],
+          name: "worldPresenceSignalHash",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
           outputs: [
             {
               name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "worldPresenceV4Config",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [
+            {
+              name: "verifier",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "rpId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "action",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "ttl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "frozen",
               type: "bool",
               internalType: "bool",
             },
@@ -49568,6 +50775,49 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "HumanPresenceVerified",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "lastRecheckedAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "freshUntil",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "Initialized",
           inputs: [
             {
@@ -49575,19 +50825,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint64",
               indexed: false,
               internalType: "uint64",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "LegacyWorldIdAttestationDisabledSet",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              indexed: true,
-              internalType: "address",
             },
           ],
           anonymous: false,
@@ -49788,16 +51025,22 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "WorldIdV4LaunchNullifierAliasSet",
+          name: "WorldCredentialRevoked",
           inputs: [
             {
-              name: "v4NullifierHash",
-              type: "bytes32",
+              name: "rater",
+              type: "address",
               indexed: true,
-              internalType: "bytes32",
+              internalType: "address",
             },
             {
-              name: "legacyNullifierHash",
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "nullifierHash",
               type: "bytes32",
               indexed: true,
               internalType: "bytes32",
@@ -49807,13 +51050,123 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "WorldIdV4UnaliasedLaunchNullifiersAllowedSet",
+          name: "WorldCredentialV4ConfigLocked",
           inputs: [
             {
-              name: "allowed",
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WorldCredentialV4ConfigUpdated",
+          inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "verifier",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "rpId",
+              type: "uint64",
+              indexed: true,
+              internalType: "uint64",
+            },
+            {
+              name: "action",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "credentialTtl",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
               type: "bool",
               indexed: false,
               internalType: "bool",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WorldCredentialVerified",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "scope",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "verifiedAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "expiresAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
             },
           ],
           anonymous: false,
@@ -49876,8 +51229,14 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "WorldIdVerifierConfigLocked",
+          name: "WorldPresenceV4ConfigLocked",
           inputs: [
+            {
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
             {
               name: "account",
               type: "address",
@@ -49889,31 +51248,55 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "WorldIdVerifierConfigUpdated",
+          name: "WorldPresenceV4ConfigUpdated",
           inputs: [
             {
-              name: "router",
+              name: "kind",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "verifier",
               type: "address",
               indexed: true,
               internalType: "address",
             },
             {
-              name: "scope",
-              type: "bytes32",
+              name: "rpId",
+              type: "uint64",
               indexed: true,
-              internalType: "bytes32",
+              internalType: "uint64",
             },
             {
-              name: "externalNullifierHash",
+              name: "action",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
             },
             {
-              name: "credentialTtl",
+              name: "presenceTtl",
               type: "uint64",
               indexed: false,
               internalType: "uint64",
+            },
+            {
+              name: "issuerSchemaId",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "credentialGenesisIssuedAtMin",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "enabled",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
             },
           ],
           anonymous: false,
@@ -49981,11 +51364,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "LegacyWorldIdAttestationDisabled",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "NoDelegateSet",
           inputs: [],
         },
@@ -50006,6 +51384,21 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "UnsupportedCredentialKind",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "WorldCredentialConfigFrozen",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "WorldIdV4PresenceConfigFrozen",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "WorldIdV4VerifierConfigFrozen",
           inputs: [],
         },
@@ -50016,7 +51409,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "WorldIdVerifierConfigFrozen",
+          name: "WorldPresenceConfigFrozen",
           inputs: [],
         },
       ],
@@ -50036,6 +51429,7 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
         addressIdentityKey: "contracts/interfaces/IRaterIdentityRegistry.sol",
+        credentialStatusBits: "contracts/interfaces/IRaterIdentityRegistry.sol",
         hasActiveHumanCredential:
           "contracts/interfaces/IRaterIdentityRegistry.sol",
         resolveRater: "contracts/interfaces/IRaterIdentityRegistry.sol",

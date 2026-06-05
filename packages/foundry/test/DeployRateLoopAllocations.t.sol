@@ -8,11 +8,11 @@ import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol"
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract DeployRateLoopHarness is DeployRateLoop {
-    function worldIdExternalNullifierHash(string memory appId, string memory action) external pure returns (uint256) {
-        return _worldIdExternalNullifierHash(appId, action);
+    function worldIdActionHash(string memory action) external pure returns (uint256) {
+        return uint256(keccak256(bytes(action)));
     }
 
     function validateUsdcToken(address token) external view {
@@ -65,7 +65,16 @@ contract DeployRateLoopAllocationsTest is Test {
         DeployRateLoop deployScript = new DeployRateLoop();
         LoopReputation lrepToken = new LoopReputation(address(this), address(this));
         RaterRegistry raterRegistry = new RaterRegistry(
-            address(this), address(this), address(new MockWorldIDRouter()), bytes32("rate-loop"), 1, 365 days
+            address(this),
+            address(this),
+            address(new MockWorldIDVerifier()),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
         );
         LaunchDistributionPool launchPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), address(this));
@@ -95,7 +104,16 @@ contract DeployRateLoopAllocationsTest is Test {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         LoopReputation lrepToken = new LoopReputation(address(deployScript), address(this));
         RaterRegistry raterRegistry = new RaterRegistry(
-            address(this), address(this), address(new MockWorldIDRouter()), bytes32("rate-loop"), 1, 365 days
+            address(this),
+            address(this),
+            address(new MockWorldIDVerifier()),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
         );
         LaunchDistributionPool launchPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), address(deployScript));
@@ -113,7 +131,16 @@ contract DeployRateLoopAllocationsTest is Test {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         LoopReputation lrepToken = new LoopReputation(address(this), address(this));
         RaterRegistry raterRegistry = new RaterRegistry(
-            address(this), address(this), address(new MockWorldIDRouter()), bytes32("rate-loop"), 1, 365 days
+            address(this),
+            address(this),
+            address(new MockWorldIDVerifier()),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
         );
         LaunchDistributionPool launchPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), address(deployScript));
@@ -126,46 +153,57 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(launchPool.legacyContributorVestingStart(), block.timestamp);
     }
 
-    function test_WorldIdExternalNullifierHashMatchesLocalConfigVector() public {
+    function test_WorldIdActionHashMatchesLocalConfigVector() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
 
         assertEq(
-            deployScript.worldIdExternalNullifierHash("app_staging_rateloop_local", "rateloop-human-credential-v1"),
-            253743144824180352641159477734894791954336336003057463640256567965128781153
+            deployScript.worldIdActionHash("rateloop-human-credential-v1"),
+            uint256(keccak256(bytes("rateloop-human-credential-v1")))
         );
     }
 
-    function test_RaterRegistryDeployHandoffLeavesLegacyWorldIdConfigMutable() public {
+    function test_RaterRegistryDeployHandoffLeavesWorldIdV4ConfigMutable() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         address governance = address(0xBEEF);
-        MockWorldIDRouter initialRouter = new MockWorldIDRouter();
-        MockWorldIDRouter correctedRouter = new MockWorldIDRouter();
+        MockWorldIDVerifier initialVerifier = new MockWorldIDVerifier();
+        MockWorldIDVerifier correctedVerifier = new MockWorldIDVerifier();
         RaterRegistry raterRegistry = new RaterRegistry(
-            address(deployScript), governance, address(initialRouter), bytes32("wrong-scope"), 123, 365 days
+            address(deployScript),
+            governance,
+            address(initialVerifier),
+            42,
+            uint256(keccak256("wrong-credential-action")),
+            uint256(keccak256("wrong-presence-action")),
+            365 days,
+            15 minutes,
+            7,
+            0
         );
 
-        assertFalse(raterRegistry.worldIdVerifierConfigFrozen());
+        assertFalse(raterRegistry.worldIdV4VerifierConfigFrozen());
         assertTrue(raterRegistry.hasRole(raterRegistry.ADMIN_ROLE(), address(deployScript)));
         assertTrue(raterRegistry.hasRole(raterRegistry.SEEDER_ROLE(), address(deployScript)));
 
         deployScript.renounceRaterRegistryDeployerRoles(raterRegistry, address(deployScript));
 
-        assertFalse(raterRegistry.worldIdVerifierConfigFrozen());
+        assertFalse(raterRegistry.worldIdV4VerifierConfigFrozen());
         assertFalse(raterRegistry.hasRole(raterRegistry.ADMIN_ROLE(), address(deployScript)));
         assertFalse(raterRegistry.hasRole(raterRegistry.SEEDER_ROLE(), address(deployScript)));
         assertTrue(raterRegistry.hasRole(raterRegistry.ADMIN_ROLE(), governance));
         assertTrue(raterRegistry.hasRole(raterRegistry.SEEDER_ROLE(), governance));
 
         vm.prank(governance);
-        raterRegistry.setWorldIdVerifierConfig(address(correctedRouter), bytes32("fixed-scope"), 456, 365 days);
+        raterRegistry.setWorldIdV4VerifierConfig(
+            address(correctedVerifier), 43, uint256(keccak256("fixed-action")), 365 days, 8, 11
+        );
 
-        assertEq(address(raterRegistry.worldIdRouter()), address(correctedRouter));
-        assertEq(raterRegistry.worldIdScope(), bytes32("fixed-scope"));
-        assertEq(raterRegistry.worldIdExternalNullifierHash(), 456);
+        assertEq(address(raterRegistry.worldIdV4Verifier()), address(correctedVerifier));
+        assertEq(raterRegistry.worldIdV4RpId(), 43);
+        assertEq(raterRegistry.worldIdV4Action(), uint256(keccak256("fixed-action")));
 
         vm.prank(governance);
-        raterRegistry.freezeWorldIdVerifierConfig();
-        assertTrue(raterRegistry.worldIdVerifierConfigFrozen());
+        raterRegistry.freezeWorldIdV4VerifierConfig();
+        assertTrue(raterRegistry.worldIdV4VerifierConfigFrozen());
     }
 
     function test_ValidateUsdcTokenRequiresCodeAndSixDecimals() public {

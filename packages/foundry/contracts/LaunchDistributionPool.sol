@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {RaterRegistry} from "./RaterRegistry.sol";
-import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
-import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { RaterRegistry } from "./RaterRegistry.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @dev M-Oracle-1: minimal view shape on RoundVotingEngine that LaunchDistributionPool needs to
 ///      authoritatively answer whether a (contentId, roundId) payload is source-ready for a
@@ -833,8 +833,9 @@ contract LaunchDistributionPool is
                 creditReadyAt = sourceReadyAt;
             }
         }
-        pendingEarnedRaterCredits[contentId][roundId][commitKey] =
-            PendingEarnedRaterCredit({rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true});
+        pendingEarnedRaterCredits[contentId][roundId][commitKey] = PendingEarnedRaterCredit({
+            rater: rater, oracle: oracle, scoreBps: scoreBps, policy: policy, pending: true
+        });
         pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey] = creditReadyAt;
         // M-Oracle-1: record the earliest sourceReadyAt for this round so the cluster oracle can
         // reject snapshot proposals submitted before any credit has been recorded.
@@ -1360,11 +1361,7 @@ contract LaunchDistributionPool is
     function _activeHumanCredential(address rater)
         internal
         view
-        returns (
-            bytes32 nullifierHash,
-            bytes32 credentialKey,
-            RaterRegistry.HumanCredentialProvider provider
-        )
+        returns (bytes32 nullifierHash, bytes32 credentialKey, RaterRegistry.HumanCredentialProvider provider)
     {
         RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(rater);
         if (
@@ -1377,14 +1374,11 @@ contract LaunchDistributionPool is
         }
     }
 
-    function _consumeCredentialClaimKey(
-        RaterRegistry.HumanCredentialProvider provider,
-        bytes32 nullifierHash,
-        bytes32 credentialKey
-    ) internal returns (bytes32) {
-        if (provider == RaterRegistry.HumanCredentialProvider.WorldIdV4) {
-            return raterRegistry.consumeWorldIdV4LaunchNullifier(nullifierHash);
-        }
+    function _consumeCredentialClaimKey(RaterRegistry.HumanCredentialProvider, bytes32, bytes32 credentialKey)
+        internal
+        pure
+        returns (bytes32)
+    {
         return credentialKey;
     }
 
@@ -1417,7 +1411,7 @@ contract LaunchDistributionPool is
         RaterRegistry registry = RaterRegistry(newRegistry);
         address sample = address(uint160(uint256(keccak256("rateloop.rater-registry.validation"))));
         bytes32 expectedSampleKey = keccak256(abi.encodePacked("rateloop.address-identity-v1", sample));
-        try registry.getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) {}
+        try registry.getHumanCredential(address(0)) returns (RaterRegistry.HumanCredential memory) { }
         catch {
             revert InvalidAddress();
         }
@@ -1452,14 +1446,14 @@ contract LaunchDistributionPool is
         if (newOracle == address(0) || newOracle.code.length == 0) revert InvalidAddress();
         try IClusterPayoutOracle(newOracle).roundPayoutSnapshotKey(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, 0, 0) returns (
             bytes32
-        ) {}
+        ) { }
         catch {
             revert InvalidAddress();
         }
         try IClusterPayoutOracle(newOracle)
             .roundPayoutSnapshotProposedAt(PAYOUT_DOMAIN_LAUNCH_CREDIT, 0, 0, 0) returns (
             uint64
-        ) {}
+        ) { }
         catch {
             revert InvalidAddress();
         }

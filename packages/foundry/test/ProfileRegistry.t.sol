@@ -7,7 +7,7 @@ import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
 import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract WeakProfileRaterRegistry {
     function resolveRater(address actor) external pure returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
@@ -45,7 +45,16 @@ contract ProfileRegistryTest is Test {
             address(new ERC1967Proxy(address(impl), abi.encodeCall(ProfileRegistry.initialize, (admin, admin))))
         );
         raterRegistry = new RaterRegistry(
-            admin, admin, address(new MockWorldIDRouter()), keccak256("rateloop-human-v1"), 12_345, 365 days
+            admin,
+            admin,
+            address(new MockWorldIDVerifier()),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
         );
         registry.setRaterRegistry(address(raterRegistry));
         _seedIdentity(user1, bytes32(uint256(uint160(user1))));
@@ -444,7 +453,7 @@ contract ProfileRegistryTest is Test {
         vm.expectRevert("No code");
         registry.setRaterRegistry(address(0xBEEF));
 
-        MockWorldIDRouter wrongContract = new MockWorldIDRouter();
+        MockWorldIDVerifier wrongContract = new MockWorldIDVerifier();
         vm.prank(admin);
         vm.expectRevert("Invalid registry");
         registry.setRaterRegistry(address(wrongContract));

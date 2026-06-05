@@ -5,7 +5,12 @@ import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
 import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import { RewardPool, RoundSnapshot, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN } from "./QuestionRewardPoolEscrowTypes.sol";
+import {
+    RewardPool,
+    RoundSnapshot,
+    BOUNTY_ELIGIBILITY_KIND_MASK,
+    BOUNTY_ELIGIBILITY_OPEN
+} from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
@@ -443,7 +448,7 @@ library QuestionRewardPoolEscrowClaimLib {
         ProtocolConfig protocolConfig,
         RoundSnapshot storage snapshot
     ) private view returns (bool) {
-        if (rewardPool.bountyEligibility != BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) {
+        if ((rewardPool.bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK) == BOUNTY_ELIGIBILITY_OPEN) {
             return true;
         }
         if (!snapshot.qualified) {

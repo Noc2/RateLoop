@@ -399,6 +399,18 @@
     {
       "slot": 66,
       "offset": 0,
+      "label": "commitCredentialMask",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8)))"
+    },
+    {
+      "slot": 67,
+      "offset": 0,
+      "label": "commitFreshCredentialMask",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8)))"
+    },
+    {
+      "slot": 68,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -420,8 +432,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[20]",
-      "numberOfBytes": "640",
+      "label": "uint256[18]",
+      "numberOfBytes": "576",
       "base": "t_uint256"
     },
     {
@@ -541,6 +553,14 @@
       "value": "t_uint48"
     },
     {
+      "id": "t_mapping(t_bytes32,t_uint8)",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => uint8)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_uint8"
+    },
+    {
       "id": "t_mapping(t_uint256,t_address)",
       "encoding": "mapping",
       "label": "mapping(uint256 => address)",
@@ -653,6 +673,14 @@
       "value": "t_mapping(t_bytes32,t_uint48)"
     },
     {
+      "id": "t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(bytes32 => uint8))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_bytes32,t_uint8)"
+    },
+    {
       "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))",
       "encoding": "mapping",
       "label": "mapping(uint256 => mapping(uint256 => address))",
@@ -763,6 +791,14 @@
       "numberOfBytes": "32",
       "key": "t_uint256",
       "value": "t_mapping(t_uint256,t_mapping(t_bytes32,t_uint48))"
+    },
+    {
+      "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8)))",
+      "encoding": "mapping",
+      "label": "mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8)))",
+      "numberOfBytes": "32",
+      "key": "t_uint256",
+      "value": "t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8))"
     },
     {
       "id": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_uint256,t_uint256)))",

@@ -2,7 +2,11 @@
 pragma solidity ^0.8.34;
 
 uint8 constant BOUNTY_ELIGIBILITY_OPEN = 0;
-uint8 constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1;
+uint8 constant BOUNTY_ELIGIBILITY_SELFIE = 1;
+uint8 constant BOUNTY_ELIGIBILITY_PASSPORT = 2;
+uint8 constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 3;
+uint8 constant BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
+uint8 constant BOUNTY_ELIGIBILITY_KIND_MASK = 0x7f;
 
 struct RewardPool {
     uint64 id;

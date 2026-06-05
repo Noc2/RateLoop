@@ -13,7 +13,7 @@ import { RaterRegistry } from "../../contracts/RaterRegistry.sol";
 import { RoundVotingEngine } from "../../contracts/RoundVotingEngine.sol";
 import { RatingLib } from "../../contracts/libraries/RatingLib.sol";
 import { RoundLib } from "../../contracts/libraries/RoundLib.sol";
-import { MockWorldIDRouter } from "../../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../../contracts/mocks/MockWorldIDVerifier.sol";
 import { MockQuestionRewardPoolEscrow } from "../mocks/MockQuestionRewardPoolEscrow.sol";
 import { RoundEngineReadHelpers } from "./RoundEngineReadHelpers.sol";
 
@@ -737,7 +737,16 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     function _deployRaterRegistry(address admin, address governance) internal returns (RaterRegistry raterRegistry) {
         raterRegistry = new RaterRegistry(
-            admin, governance, address(new MockWorldIDRouter()), keccak256("rateloop-human-v1"), 12_345, 365 days
+            admin,
+            governance,
+            address(new MockWorldIDVerifier()),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
         );
     }
 

@@ -19,7 +19,8 @@ import {
     BundleQuestion,
     BundleRoundSetSnapshot,
     CreateSubmissionBundleParams,
-    BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+    BOUNTY_ELIGIBILITY_KIND_MASK,
+    BOUNTY_ELIGIBILITY_OPEN
 } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { RoundLib } from "./RoundLib.sol";
@@ -1021,7 +1022,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 roundSetIndex,
         bytes32 firstCommitKey
     ) private view returns (bool) {
-        if (bundle.bountyEligibility != BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) return true;
+        if ((bundle.bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK) == BOUNTY_ELIGIBILITY_OPEN) return true;
         return qualifiedBundleRoundSetClaimants[bundleId][roundSetIndex][firstCommitKey];
     }
 

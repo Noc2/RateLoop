@@ -21,7 +21,7 @@ import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { MockRaterIdentityRegistry } from "./mocks/MockRaterIdentityRegistry.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract MockAdvisoryLaunchDistributionPool {
     uint16 public maxUnverifiedCreditsPerRound;
@@ -384,8 +384,18 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function _installRaterRegistry() internal returns (RaterRegistry raterRegistry) {
-        raterRegistry =
-            new RaterRegistry(owner, owner, address(new MockWorldIDRouter()), bytes32("rate-loop"), 1, 365 days);
+        raterRegistry = new RaterRegistry(
+            owner,
+            owner,
+            address(new MockWorldIDVerifier()),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
         vm.prank(owner);
         ProtocolConfig(protocolConfigAddress).setRaterRegistry(address(raterRegistry));
     }

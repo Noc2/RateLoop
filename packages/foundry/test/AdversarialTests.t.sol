@@ -14,7 +14,7 @@ import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RewardMath } from "../contracts/libraries/RewardMath.sol";
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 /// @title AdversarialTests
 /// @notice Pre-deployment adversarial tests covering reward exhaustion, state transition
@@ -149,7 +149,16 @@ contract AdversarialTests is VotingTestBase {
 
     function _deployRaterRegistry() internal returns (RaterRegistry identityRegistry) {
         identityRegistry = new RaterRegistry(
-            owner, owner, address(new MockWorldIDRouter()), keccak256("rateloop-human-v1"), 12_345, 365 days
+            owner,
+            owner,
+            address(new MockWorldIDVerifier()),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
         );
     }
 

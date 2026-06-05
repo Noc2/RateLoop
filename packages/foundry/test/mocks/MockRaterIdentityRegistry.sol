@@ -13,6 +13,9 @@ contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
     mapping(bytes32 => address) public humanNullifierOwner;
     mapping(address => address) public delegateTo;
     mapping(address => address) public delegateOf;
+    mapping(address => bool) public credentialStatusOverrideSet;
+    mapping(address => uint8) public activeCredentialMaskOverride;
+    mapping(address => uint8) public freshCredentialMaskOverride;
 
     uint256 public nextCredentialId = 1;
 
@@ -30,6 +33,18 @@ contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
 
     function revokeHumanCredential(address holder) external {
         _revoke(holder);
+    }
+
+    function setCredentialStatusMasks(address holder, uint8 activeMask, uint8 freshMask) external {
+        credentialStatusOverrideSet[holder] = true;
+        activeCredentialMaskOverride[holder] = activeMask;
+        freshCredentialMaskOverride[holder] = freshMask;
+    }
+
+    function clearCredentialStatusMasks(address holder) external {
+        delete credentialStatusOverrideSet[holder];
+        delete activeCredentialMaskOverride[holder];
+        delete freshCredentialMaskOverride[holder];
     }
 
     function resetNullifier(uint256 nullifier) external {
@@ -98,6 +113,25 @@ contract MockRaterIdentityRegistry is IRaterIdentityRegistry {
     function hasActiveHumanCredential(address holder) external view returns (bool) {
         address resolvedHolder = delegateOf[holder] == address(0) ? holder : delegateOf[holder];
         return holders[resolvedHolder];
+    }
+
+    function hasActiveCredentialKind(address holder, uint8 kind) external view returns (bool) {
+        (uint8 activeMask,) = credentialStatusBits(holder);
+        return (activeMask & uint8(1 << kind)) != 0;
+    }
+
+    function hasRecentCredentialRecheck(address holder, uint8 kind) external view returns (bool) {
+        (, uint8 freshMask) = credentialStatusBits(holder);
+        return (freshMask & uint8(1 << kind)) != 0;
+    }
+
+    function credentialStatusBits(address holder) public view returns (uint8 activeMask, uint8 freshMask) {
+        address resolvedHolder = delegateOf[holder] == address(0) ? holder : delegateOf[holder];
+        if (credentialStatusOverrideSet[resolvedHolder]) {
+            return (activeCredentialMaskOverride[resolvedHolder], freshCredentialMaskOverride[resolvedHolder]);
+        }
+        if (holders[resolvedHolder]) activeMask = uint8(1 << 3);
+        freshMask = 0;
     }
 
     function resolveRater(address actor) external view returns (ResolvedRater memory resolved) {

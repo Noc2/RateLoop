@@ -15,4 +15,5 @@ interface IRaterIdentityRegistry {
     function resolveRater(address actor) external view returns (ResolvedRater memory);
     function addressIdentityKey(address account) external pure returns (bytes32);
     function hasActiveHumanCredential(address rater) external view returns (bool);
+    function credentialStatusBits(address rater) external view returns (uint8 activeMask, uint8 freshMask);
 }

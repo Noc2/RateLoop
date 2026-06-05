@@ -23,7 +23,7 @@ import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { IProfileRegistry } from "../contracts/interfaces/IProfileRegistry.sol";
 import { IRoundVotingEngine } from "../contracts/interfaces/IRoundVotingEngine.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 /// @title Minimal mock for RoundVotingEngine interface (used by FrontendRegistry)
 contract MockVotingEngineForUpgrade is IRoundVotingEngine {
@@ -96,7 +96,7 @@ contract UpgradeTest is Test {
 
     LoopReputation public lrepToken;
     MockVotingEngineForUpgrade public mockVotingEngine;
-    MockWorldIDRouter public worldIdRouter;
+    MockWorldIDVerifier public worldIdRouter;
 
     // Roles
     address public admin = address(1);
@@ -110,7 +110,7 @@ contract UpgradeTest is Test {
         // Deploy token
         lrepToken = new LoopReputation(admin, governance);
         mockVotingEngine = new MockVotingEngineForUpgrade();
-        worldIdRouter = new MockWorldIDRouter();
+        worldIdRouter = new MockWorldIDVerifier();
 
         // --- ContentRegistry ---
         ContentRegistry crImpl = new ContentRegistry();
@@ -175,13 +175,35 @@ contract UpgradeTest is Test {
         frontendRegistryAdmin = _proxyAdmin(address(frProxy));
 
         // --- RaterRegistry ---
-        RaterRegistry rrImpl =
-            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        RaterRegistry rrImpl = new RaterRegistry(
+            admin,
+            governance,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
         TransparentUpgradeableProxy rrProxy = new TransparentUpgradeableProxy(
             address(rrImpl),
             governance,
             abi.encodeCall(
-                RaterRegistry.initialize, (admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days)
+                RaterRegistry.initialize,
+                (
+                    admin,
+                    governance,
+                    address(worldIdRouter),
+                    42,
+                    uint256(keccak256("rateloop-human-credential-v4")),
+                    uint256(keccak256("rateloop-human-presence-v1")),
+                    365 days,
+                    15 minutes,
+                    7,
+                    0
+                )
             )
         );
         raterRegistry = RaterRegistry(address(rrProxy));
@@ -510,15 +532,35 @@ contract UpgradeTest is Test {
     // =========================================================================
 
     function test_RaterRegistry_GovernanceCanUpgrade() public {
-        RaterRegistry newImpl =
-            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        RaterRegistry newImpl = new RaterRegistry(
+            admin,
+            governance,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
         vm.prank(governance);
         raterRegistryAdmin.upgradeAndCall(_proxy(address(raterRegistry)), address(newImpl), "");
     }
 
     function test_RaterRegistry_UnauthorizedCannotUpgrade() public {
-        RaterRegistry newImpl =
-            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        RaterRegistry newImpl = new RaterRegistry(
+            admin,
+            governance,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
         vm.prank(attacker);
         vm.expectRevert();
         raterRegistryAdmin.upgradeAndCall(_proxy(address(raterRegistry)), address(newImpl), "");
@@ -527,7 +569,18 @@ contract UpgradeTest is Test {
     function test_RaterRegistry_CannotReinitialize() public {
         vm.prank(admin);
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        raterRegistry.initialize(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        raterRegistry.initialize(
+            admin,
+            governance,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
     }
 
     function test_RaterRegistry_StatePreservedAfterUpgrade() public {
@@ -537,19 +590,35 @@ contract UpgradeTest is Test {
         assertEq(raterRegistryAdmin.owner(), governance);
         assertTrue(raterRegistry.hasRole(raterRegistry.DEFAULT_ADMIN_ROLE(), governance));
         assertTrue(raterRegistry.hasActiveHumanCredential(address(10)));
-        assertEq(address(raterRegistry.worldIdRouter()), address(worldIdRouter));
-        assertEq(raterRegistry.worldIdScope(), bytes32("rate-loop"));
+        assertEq(address(raterRegistry.worldIdV4Verifier()), address(worldIdRouter));
+        assertEq(
+            raterRegistry.worldIdV4CredentialScope(),
+            keccak256(abi.encode("world-id-v4", uint64(42), uint256(keccak256("rateloop-human-credential-v4"))))
+        );
 
-        RaterRegistry newImpl =
-            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        RaterRegistry newImpl = new RaterRegistry(
+            admin,
+            governance,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
         vm.prank(governance);
         raterRegistryAdmin.upgradeAndCall(_proxy(address(raterRegistry)), address(newImpl), "");
 
         assertEq(raterRegistryAdmin.owner(), governance);
         assertTrue(raterRegistry.hasRole(raterRegistry.DEFAULT_ADMIN_ROLE(), governance));
         assertTrue(raterRegistry.hasActiveHumanCredential(address(10)));
-        assertEq(address(raterRegistry.worldIdRouter()), address(worldIdRouter));
-        assertEq(raterRegistry.worldIdScope(), bytes32("rate-loop"));
+        assertEq(address(raterRegistry.worldIdV4Verifier()), address(worldIdRouter));
+        assertEq(
+            raterRegistry.worldIdV4CredentialScope(),
+            keccak256(abi.encode("world-id-v4", uint64(42), uint256(keccak256("rateloop-human-credential-v4"))))
+        );
     }
 
     // =========================================================================
@@ -744,10 +813,31 @@ contract UpgradeTest is Test {
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         feedbackImpl.initialize(admin, governance, address(votingEngine));
 
-        RaterRegistry raterImpl =
-            new RaterRegistry(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        RaterRegistry raterImpl = new RaterRegistry(
+            admin,
+            governance,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        raterImpl.initialize(admin, governance, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        raterImpl.initialize(
+            admin,
+            governance,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
     }
 
     function _proxy(address proxy) internal pure returns (ITransparentUpgradeableProxy) {

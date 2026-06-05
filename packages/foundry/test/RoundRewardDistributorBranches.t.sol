@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
-import {stdStorage, StdStorage} from "forge-std/Test.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ContentRegistry} from "../contracts/ContentRegistry.sol";
-import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
-import {LoopReputation} from "../contracts/LoopReputation.sol";
-import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
-import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
-import {RaterRegistry} from "../contracts/RaterRegistry.sol";
-import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
-import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import {RoundLib} from "../contracts/libraries/RoundLib.sol";
-import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
-import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
-import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
-import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
+import { stdStorage, StdStorage } from "forge-std/Test.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
+import { LoopReputation } from "../contracts/LoopReputation.sol";
+import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
+import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import { RoundLib } from "../contracts/libraries/RoundLib.sol";
+import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
+import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
+import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract MockRevertingLaunchDistributionPool {
     error LaunchCreditRejected();
@@ -112,7 +112,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     RoundVotingEngine public votingEngine;
     RoundRewardDistributor public rewardDistributor;
     RaterRegistry public raterRegistry;
-    MockWorldIDRouter public worldIdRouter;
+    MockWorldIDVerifier public worldIdRouter;
     LaunchDistributionPool public launchPool;
 
     address public owner = address(1);
@@ -189,8 +189,19 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         // 4 params: epochDuration, maxDuration, minVoters, maxVoters
         _setTlockRoundConfig(config, EPOCH_DURATION, 7 days, 3, 100);
 
-        worldIdRouter = new MockWorldIDRouter();
-        raterRegistry = new RaterRegistry(owner, owner, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
+        worldIdRouter = new MockWorldIDVerifier();
+        raterRegistry = new RaterRegistry(
+            owner,
+            owner,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
         launchPool = new LaunchDistributionPool(address(lrepToken), address(raterRegistry), owner);
         raterRegistry.grantRole(raterRegistry.LAUNCH_CONSUMER_ROLE(), address(launchPool));
         launchPool.setAuthorizedCaller(address(rewardDistributor), true);
@@ -289,7 +300,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             if (!c.revealed && c.stakeAmount > 0) {
                 (bool isUp, bytes32 salt, bool exists) = _testRevealPayload(keys[i]);
                 if (exists) {
-                    try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) {} catch {}
+                    try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { } catch { }
                 }
             }
         }
@@ -307,11 +318,11 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         if (r2.thresholdReachedAt > 0) {
             uint256 seedBlock = block.number + 1;
             vm.roll(seedBlock);
-            try votingEngine.settleRound(contentId, roundId) {} catch {}
+            try votingEngine.settleRound(contentId, roundId) { } catch { }
             RoundLib.Round memory r3 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
             if (r3.state == RoundLib.RoundState.Open) {
                 vm.roll(seedBlock + 1);
-                try votingEngine.settleRound(contentId, roundId) {} catch {}
+                try votingEngine.settleRound(contentId, roundId) { } catch { }
             }
         }
     }
@@ -365,9 +376,9 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     }
 
     function _verifyHumanFresh(address account, bytes32 nullifier) internal {
-        uint256[8] memory proof;
+        uint256[5] memory proof;
         vm.prank(account);
-        raterRegistry.attestHumanCredentialWithProof(1, uint256(nullifier), proof);
+        raterRegistry.attestHumanCredentialWithV4Proof(uint256(nullifier), 1, uint64(block.timestamp + 365 days), proof);
     }
 
     function _seedRateLoopHuman(address account, bytes32 anchorId) internal {
@@ -439,7 +450,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         vm.stopPrank();
         uint256 contentId = 1;
 
-        (bytes32 observerCommitKey, bytes32 observerSalt) = _commitPrediction(address(observer), contentId, 8_000, STAKE);
+        (bytes32 observerCommitKey, bytes32 observerSalt) =
+            _commitPrediction(address(observer), contentId, 8_000, STAKE);
         (bytes32 voter2CommitKey, bytes32 voter2Salt) = _commitPrediction(voter2, contentId, 8_000, STAKE);
         (bytes32 voter3CommitKey, bytes32 voter3Salt) = _commitPrediction(voter3, contentId, 2_000, STAKE);
 
@@ -553,8 +565,18 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         assertEq(votingEngine.roundRaterRegistrySnapshot(contentId, roundId), address(raterRegistry));
 
-        RaterRegistry replacementRegistry =
-            new RaterRegistry(owner, owner, address(worldIdRouter), bytes32("replacement-rate-loop"), 2, 365 days);
+        RaterRegistry replacementRegistry = new RaterRegistry(
+            owner,
+            owner,
+            address(worldIdRouter),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
+        );
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
         vm.prank(owner);
         config.setRaterRegistry(address(replacementRegistry));
@@ -567,7 +589,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         assertEq(launchPool.raterDistinctAnchorRoundCount(voter1), 1);
         assertEq(
             launchPool.verifiedAnchorDistinctRaterCount(
-                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, anchorId)
+                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, anchorId)
             ),
             1
         );
@@ -606,7 +628,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
 
-        bytes32 worldIdAnchor = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, sharedAnchor);
+        bytes32 worldIdAnchor = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, sharedAnchor);
         bytes32 seededAnchor = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, sharedAnchor);
         assertEq(launchPool.qualifyingRatingCount(voter1), 1);
         assertEq(launchPool.raterDistinctVerifiedAnchorCount(voter1), 2);
@@ -743,7 +765,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
 
         bytes32[] memory anchorIds = new bytes32[](1);
-        anchorIds[0] = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("anchor-voter-2"));
+        anchorIds[0] = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, bytes32("anchor-voter-2"));
         uint256 maxCredits = launchPool.MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND();
         for (uint256 i = 0; i < maxCredits; i++) {
             vm.prank(address(rewardDistributor));
@@ -794,7 +816,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         bytes32 voter1CommitKey =
             keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
-        bytes32 anchorId = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, anchorNullifier);
+        bytes32 anchorId = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, anchorNullifier);
         bytes32[] memory anchorIds = new bytes32[](1);
         anchorIds[0] = anchorId;
 

@@ -14,6 +14,7 @@ import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol"
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
 import { RatingMath } from "./libraries/RatingMath.sol";
+import { QuestionRewardPoolEscrowEligibilityLib } from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
 
@@ -1403,7 +1404,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             require(feedbackWindow <= type(uint32).max, "Bad feedback window");
             require(feedbackWindow <= rewardTerms.bountyWindowSeconds, "Feedback after bounty");
         }
-        require(rewardTerms.bountyEligibility <= 1, "Invalid eligibility");
+        require(
+            QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(rewardTerms.bountyEligibility), "Invalid eligibility"
+        );
     }
 
     function _hashRewardTerms(SubmissionRewardTerms memory rewardTerms) internal pure returns (bytes32) {

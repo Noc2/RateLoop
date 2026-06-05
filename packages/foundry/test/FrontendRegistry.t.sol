@@ -63,8 +63,7 @@ contract MockVotingEngine is IRoundVotingEngine {
 }
 
 contract MockRewardDistributor {
-    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
-        keccak256("rateloop.round-reward-distributor.v1");
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
     address public immutable votingEngine;
 
     constructor(address votingEngine_) {

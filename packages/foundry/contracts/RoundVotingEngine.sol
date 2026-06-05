@@ -1,29 +1,29 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {RatingLib} from "./libraries/RatingLib.sol";
-import {RoundSettlementSideEffectsLib} from "./libraries/RoundSettlementSideEffectsLib.sol";
-import {RoundSettlementDistributionLib} from "./libraries/RoundSettlementDistributionLib.sol";
-import {RoundCleanupLib} from "./libraries/RoundCleanupLib.sol";
-import {RoundCreationLib} from "./libraries/RoundCreationLib.sol";
-import {RoundRevealLib} from "./libraries/RoundRevealLib.sol";
-import {VotePreflightLib} from "./libraries/VotePreflightLib.sol";
-import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
-import {ICategoryRegistry} from "./interfaces/ICategoryRegistry.sol";
-import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
-import {IRoundVotingEngine} from "./interfaces/IRoundVotingEngine.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { RatingLib } from "./libraries/RatingLib.sol";
+import { RoundSettlementSideEffectsLib } from "./libraries/RoundSettlementSideEffectsLib.sol";
+import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistributionLib.sol";
+import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
+import { RoundCreationLib } from "./libraries/RoundCreationLib.sol";
+import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
+import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
+import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 
 /// @title RoundVotingEngine
 /// @notice Per-content round-based parimutuel voting with keeper-assisted/self-reveal and epoch-weighted rewards.
@@ -456,6 +456,8 @@ contract RoundVotingEngine is
         IRaterIdentityRegistry roundRaterRegistry = _getRoundRaterRegistry(contentId, roundId);
         IRaterIdentityRegistry.ResolvedRater memory resolved =
             VotePreflightLib.validateVoterAndContent(roundRaterRegistry, registry, voter, contentId);
+        (uint8 credentialMask, uint8 freshCredentialMask) =
+            _credentialStatusBits(roundRaterRegistry, resolved.holder, resolved.hasActiveHumanCredential);
         VotePreflightLib.validateNoAdvisoryConflict(
             _getRoundAdvisoryVoteRecorder(contentId, roundId),
             contentId,
@@ -509,7 +511,9 @@ contract RoundVotingEngine is
             epochIdx,
             commitHash,
             resolved.identityKey,
-            resolved.holder
+            resolved.holder,
+            credentialMask,
+            freshCredentialMask
         );
         _recordCommitAccounting(
             round, contentId, roundId, voter, resolved.holder, resolved.identityKey, stakeAmount64, stakeAmount
@@ -558,8 +562,8 @@ contract RoundVotingEngine is
         // stake safeTransferFrom in _commitVote fails closed. (Kept inline
         // rather than in a library to avoid embedding another library-address
         // push in RoundVotingEngine's EIP-170-constrained bytecode.)
-        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) {}
-            catch {}
+        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) { }
+            catch { }
     }
 
     function _computeCommitEpoch(RoundLib.Round storage round, RoundLib.RoundConfig memory roundCfg)
@@ -607,7 +611,9 @@ contract RoundVotingEngine is
         uint8 epochIdx,
         bytes32 commitHash,
         bytes32 identityKey,
-        address identityHolder
+        address identityHolder,
+        uint8 credentialMask,
+        uint8 freshCredentialMask
     ) internal {
         _writeCommitStruct(
             contentId,
@@ -625,6 +631,8 @@ contract RoundVotingEngine is
         _recordCommitIndexes(
             contentId, roundId, commitKey, epochEnd, voter, commitHash, identityKey, identityHolder, targetRound
         );
+        commitCredentialMask[contentId][roundId][commitKey] = credentialMask;
+        commitFreshCredentialMask[contentId][roundId][commitKey] = freshCredentialMask;
     }
 
     function _writeCommitStruct(
@@ -728,6 +736,21 @@ contract RoundVotingEngine is
             stakeAmount64,
             stakeAmount
         );
+    }
+
+    function _credentialStatusBits(
+        IRaterIdentityRegistry identityRegistry,
+        address holder,
+        bool hasActiveHumanCredential
+    ) private view returns (uint8 credentialMask, uint8 freshCredentialMask) {
+        if (holder != address(0) && address(identityRegistry) != address(0)) {
+            try identityRegistry.credentialStatusBits(holder) returns (uint8 activeMask, uint8 freshMask) {
+                return (activeMask, freshMask);
+            } catch { }
+        }
+        if (hasActiveHumanCredential) {
+            credentialMask = uint8(1 << 3);
+        }
     }
 
     /// @dev Get or create the active round for a content item.
@@ -1595,6 +1618,10 @@ contract RoundVotingEngine is
     ///         in `accountedLrepBalance` so it isn't classified as recoverable surplus.
     uint256 internal _pendingTreasuryForfeitLrep;
 
+    // Commit-time credential snapshots for bounty qualification.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) public commitCredentialMask;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) public commitFreshCredentialMask;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[20] private __gap;
+    uint256[18] private __gap;
 }

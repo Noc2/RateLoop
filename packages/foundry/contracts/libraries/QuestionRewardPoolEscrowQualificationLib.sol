@@ -639,6 +639,14 @@ library QuestionRewardPoolEscrowQualificationLib {
         (bytes32 identityKey, address holder) = QuestionRewardPoolEscrowVoterLib.commitIdentity(
             ctx.votingEngine, ctx.protocolConfig, ctx.contentId, ctx.roundId, commitKey, voter
         );
+        if (!QuestionRewardPoolEscrowEligibilityLib.isCommitEligibleForBounty(
+                ctx.bountyEligibility,
+                ctx.votingEngine.commitCredentialMask(ctx.contentId, ctx.roundId, commitKey),
+                ctx.votingEngine.commitFreshCredentialMask(ctx.contentId, ctx.roundId, commitKey)
+            )) {
+            return false;
+        }
+
         return !_isExcludedRater(
             identityKey,
             holder,
@@ -647,9 +655,6 @@ library QuestionRewardPoolEscrowQualificationLib {
             ctx.funderIdentityKey,
             ctx.submitterIdentity,
             ctx.submitterIdentityKey
-        )
-            && QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-            ctx.protocolConfig, ctx.bountyEligibility, holder
         );
     }
 

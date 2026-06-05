@@ -13,7 +13,7 @@ import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MockVotingEngineForFrontendGas {
@@ -435,7 +435,16 @@ contract IdentityTransactionGasEstimatesTest is Test {
     function setUp() public {
         vm.startPrank(admin);
         raterRegistry = new RaterRegistry(
-            admin, admin, address(new MockWorldIDRouter()), keccak256("rateloop-human-v1"), 12_345, 365 days
+            admin,
+            admin,
+            address(new MockWorldIDVerifier()),
+            42,
+            uint256(keccak256("rateloop-human-credential-v4")),
+            uint256(keccak256("rateloop-human-presence-v1")),
+            365 days,
+            15 minutes,
+            7,
+            0
         );
         vm.stopPrank();
     }

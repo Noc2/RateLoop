@@ -37,8 +37,8 @@ import {
     AuthorizedRewardPoolParams,
     CreateRewardPoolParams,
     CreateSubmissionBundleParams,
-    BOUNTY_ELIGIBILITY_OPEN,
-    BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+    BOUNTY_ELIGIBILITY_KIND_MASK,
+    BOUNTY_ELIGIBILITY_OPEN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
 
@@ -1451,7 +1451,7 @@ contract QuestionRewardPoolEscrow is
         uint256 roundId,
         bytes32 commitKey
     ) internal view returns (bool) {
-        if (rewardPool.bountyEligibility != BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) return true;
+        if ((rewardPool.bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK) == BOUNTY_ELIGIBILITY_OPEN) return true;
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
         return qualifiedQuestionRewardClaimants[rewardPoolId][roundId][snapshot.clusterSnapshotDigest][commitKey];
     }

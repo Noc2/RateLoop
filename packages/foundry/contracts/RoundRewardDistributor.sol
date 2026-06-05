@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {RoundVotingEngine} from "./RoundVotingEngine.sol";
-import {ContentRegistry} from "./ContentRegistry.sol";
-import {ProtocolConfig} from "./ProtocolConfig.sol";
-import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
-import {ILaunchDistributionPool} from "./interfaces/ILaunchDistributionPool.sol";
-import {FrontendFeeDustLib} from "./libraries/FrontendFeeDustLib.sol";
-import {LaunchRaterRewardLib} from "./libraries/LaunchRaterRewardLib.sol";
-import {RoundLib} from "./libraries/RoundLib.sol";
-import {RewardMath} from "./libraries/RewardMath.sol";
+import { RoundVotingEngine } from "./RoundVotingEngine.sol";
+import { ContentRegistry } from "./ContentRegistry.sol";
+import { ProtocolConfig } from "./ProtocolConfig.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { FrontendFeeDustLib } from "./libraries/FrontendFeeDustLib.sol";
+import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
+import { RoundLib } from "./libraries/RoundLib.sol";
+import { RewardMath } from "./libraries/RewardMath.sol";
 
 /// @title RoundRewardDistributor
 /// @notice Pull-based reward claiming for settled rounds.
@@ -298,7 +298,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             // glitch) has cleared. Without this the credit is permanently stranded because
             // rewardCommitClaimed flipped true in the caller.
             pendingLaunchCreditRetry[contentId][roundId][commitKey] =
-                PendingLaunchCredit({recipient: rewardRecipient, stakeAmount: stakeAmount.toUint96()});
+                PendingLaunchCredit({ recipient: rewardRecipient, stakeAmount: stakeAmount.toUint96() });
         }
     }
 
@@ -450,7 +450,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 requireNoPendingCleanup: requireNoPendingCleanup
             });
             success = true;
-        } catch {}
+        } catch { }
     }
 
     /// @notice L-Funds-B: permissionless retry for a launch-credit record that failed on the
