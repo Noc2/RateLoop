@@ -171,6 +171,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         allow_legacy_proofs: false,
         app_id: appId,
         environment: requestContext.environment,
+        ...(purpose === "presence" ? { require_user_presence: true } : {}),
         rp_context: requestContext.rpContext,
       }).constraints(CredentialRequest(option.identifier, { signal }));
       if (activeRequestRef.current !== requestId || abortController.signal.aborted) return;

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   RATING_TOOLTIP,
+  canStakeSelectorRequestWorldIdProof,
   getInitialPredictedUpPercent,
   getLaunchRewardEstimateLabel,
   getNextStakeSelectorAmount,
+  getStakeSelectorEligibilityAddress,
   normalizeStakeSelectorAmount,
   normalizeStakeSelectorPredictedUpPercent,
   normalizeStakeSelectorRating,
@@ -55,6 +57,18 @@ test("getNextStakeSelectorAmount preserves adjusted advisory stake on later capa
 test("getNextStakeSelectorAmount clamps adjusted stake to remaining capacity", () => {
   assert.equal(getNextStakeSelectorAmount(8, 5, true), 5);
   assert.equal(getNextStakeSelectorAmount(3, 5, true), 3);
+});
+
+test("getStakeSelectorEligibilityAddress uses the resolved holder after identity loading", () => {
+  assert.equal(getStakeSelectorEligibilityAddress("0xdelegate", "0xholder", true), "0xholder");
+  assert.equal(getStakeSelectorEligibilityAddress("0xholder", null, true), "0xholder");
+  assert.equal(getStakeSelectorEligibilityAddress("0xdelegate", "0xholder", false), undefined);
+});
+
+test("canStakeSelectorRequestWorldIdProof only allows the eligibility wallet to prove", () => {
+  assert.equal(canStakeSelectorRequestWorldIdProof("0xAbC", "0xabc"), true);
+  assert.equal(canStakeSelectorRequestWorldIdProof("0xdelegate", "0xholder"), false);
+  assert.equal(canStakeSelectorRequestWorldIdProof(undefined, "0xholder"), false);
 });
 
 test("getInitialPredictedUpPercent starts from the chosen binary signal", () => {

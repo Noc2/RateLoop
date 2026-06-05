@@ -106,6 +106,22 @@ export function getNextStakeSelectorAmount(currentAmount: number, maxStake: numb
   return Math.min(currentAmount, maxStake);
 }
 
+export function getStakeSelectorEligibilityAddress(
+  address: string | undefined,
+  holder: string | null | undefined,
+  isIdentityResolved: boolean,
+) {
+  if (!address || !isIdentityResolved) return undefined;
+  return holder ?? address;
+}
+
+export function canStakeSelectorRequestWorldIdProof(
+  address: string | undefined,
+  eligibilityAddress: string | undefined,
+) {
+  return Boolean(address && eligibilityAddress && address.toLowerCase() === eligibilityAddress.toLowerCase());
+}
+
 export function getInitialPredictedUpPercent(initialIsUp?: boolean) {
   if (initialIsUp === true) return 60;
   if (initialIsUp === false) return 40;
@@ -143,8 +159,10 @@ export function StakeSelector({
   const [hasAdjustedPrediction, setHasAdjustedPrediction] = useState(false);
   const [hasAdjustedStake, setHasAdjustedStake] = useState(false);
   const { address } = useAccount();
-  const { identityKey } = useRaterRegistryIdentity(address);
+  const { holder, identityKey, isResolved: isIdentityResolved } = useRaterRegistryIdentity(address);
   const bountyRequirement = useMemo(() => getBountyEligibilityRequirement(bountyEligibility), [bountyEligibility]);
+  const bountyEligibilityAddress = getStakeSelectorEligibilityAddress(address, holder, isIdentityResolved);
+  const canRequestWorldIdProof = canStakeSelectorRequestWorldIdProof(address, bountyEligibilityAddress);
 
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
   const { roundId: currentRoundId, phase, isEpoch1, upPool, downPool } = roundSnapshot;
@@ -174,14 +192,14 @@ export function StakeSelector({
   const { data: hasRequiredCredential, refetch: refetchHasRequiredCredential } = useScaffoldReadContract({
     contractName: "RaterRegistry",
     functionName: "hasActiveCredentialKind",
-    args: [address, bountyRequirement?.kind ?? 0],
-    query: { enabled: Boolean(address && bountyRequirement) },
+    args: [bountyEligibilityAddress, bountyRequirement?.kind ?? 0],
+    query: { enabled: Boolean(bountyEligibilityAddress && bountyRequirement) },
   });
   const { data: hasRecentCredentialRecheck, refetch: refetchHasRecentCredentialRecheck } = useScaffoldReadContract({
     contractName: "RaterRegistry",
     functionName: "hasRecentCredentialRecheck",
-    args: [address, bountyRequirement?.kind ?? 0],
-    query: { enabled: Boolean(address && bountyRequirement?.requiresRecentRecheck) },
+    args: [bountyEligibilityAddress, bountyRequirement?.kind ?? 0],
+    query: { enabled: Boolean(bountyEligibilityAddress && bountyRequirement?.requiresRecentRecheck) },
   });
 
   const symbol = tokenSymbol ?? "LREP";
@@ -224,11 +242,19 @@ export function StakeSelector({
 
   useEffect(() => {
     if (!isOpen || !bountyRequirement) return;
+    if (!bountyEligibilityAddress) return;
     void refetchHasRequiredCredential();
     if (bountyRequirement.requiresRecentRecheck) {
       void refetchHasRecentCredentialRecheck();
     }
-  }, [bountyRequirement, isOpen, recheckRefreshKey, refetchHasRecentCredentialRecheck, refetchHasRequiredCredential]);
+  }, [
+    bountyEligibilityAddress,
+    bountyRequirement,
+    isOpen,
+    recheckRefreshKey,
+    refetchHasRecentCredentialRecheck,
+    refetchHasRequiredCredential,
+  ]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -243,7 +269,8 @@ export function StakeSelector({
   const cooldownActive = cooldownSecondsRemaining > 0;
   const isWorldIdEligibilityPending =
     Boolean(bountyRequirement) &&
-    (hasRequiredCredential === undefined ||
+    (!bountyEligibilityAddress ||
+      hasRequiredCredential === undefined ||
       (bountyRequirement?.requiresRecentRecheck === true &&
         hasRequiredCredential === true &&
         hasRecentCredentialRecheck === undefined));
@@ -262,13 +289,16 @@ export function StakeSelector({
       : null;
   const worldIdActionLabel =
     worldIdActionKind && worldIdActionPurpose
-      ? worldIdActionPurpose === "presence"
-        ? `Recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
-        : `Verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+      ? !canRequestWorldIdProof
+        ? worldIdActionPurpose === "presence"
+          ? `Holder must recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+          : `Holder must verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+        : worldIdActionPurpose === "presence"
+          ? `Recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+          : `Verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
       : null;
   const formDisabled = isConfirming || !roundAcceptsVotes;
-  const confirmDisabled =
-    formDisabled || cooldownActive || isWorldIdEligibilityPending || amount < 0 || (amount > 0 && amount > maxStake);
+  const confirmDisabled = formDisabled || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
   const roundUnavailableMessage = getRoundVoteUnavailableMessage(roundSnapshot);
   const roundNotAcceptingMessage =
     !roundAcceptsVotes && !confirmError && !isConfirming ? roundUnavailableMessage : null;
@@ -515,6 +545,38 @@ export function StakeSelector({
               </div>
             </div>
 
+            {(isWorldIdEligibilityPending || (worldIdActionKind && worldIdActionPurpose && worldIdActionLabel)) && (
+              <div className="mb-4 rounded-lg border border-base-content/10 bg-base-300/60 p-3 text-sm text-base-content/75">
+                {isWorldIdEligibilityPending ? (
+                  <div className="flex items-center gap-2">
+                    <span className="loading loading-spinner loading-xs" />
+                    <span>Checking bounty eligibility...</span>
+                  </div>
+                ) : worldIdActionKind && worldIdActionPurpose && worldIdActionLabel ? (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span>
+                      {canRequestWorldIdProof
+                        ? "Verify before voting to qualify for this bounty."
+                        : worldIdActionPurpose === "presence"
+                          ? "The delegated holder must recheck before this vote can qualify for the bounty."
+                          : "The delegated holder must verify before this vote can qualify for the bounty."}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canRequestWorldIdProof) return;
+                        onRequestWorldIdProof?.({ kind: worldIdActionKind, purpose: worldIdActionPurpose });
+                      }}
+                      className="btn btn-sm btn-outline shrink-0"
+                      disabled={isConfirming || !canRequestWorldIdProof || !onRequestWorldIdProof}
+                    >
+                      {worldIdActionLabel}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={onCancel}
@@ -523,39 +585,23 @@ export function StakeSelector({
               >
                 Cancel
               </button>
-              {worldIdActionKind && worldIdActionPurpose && worldIdActionLabel ? (
-                <GradientActionButton
-                  onClick={() => onRequestWorldIdProof?.({ kind: worldIdActionKind, purpose: worldIdActionPurpose })}
-                  className="flex-1"
-                  motion={getGradientActionMotion(false)}
-                  disabled={isConfirming || !onRequestWorldIdProof}
-                >
-                  {worldIdActionLabel}
-                </GradientActionButton>
-              ) : (
-                <GradientActionButton
-                  onClick={() => onConfirm(amount, isUp, normalizeStakeSelectorPredictedUpPercent(predictedUpPercent))}
-                  className="flex-1"
-                  motion={getGradientActionMotion(Boolean(isConfirming || isWorldIdEligibilityPending))}
-                  disabled={confirmDisabled}
-                >
-                  {isConfirming ? (
-                    <span className="flex items-center gap-2 text-base-content">
-                      <span className="loading loading-spinner loading-xs" />
-                      <span>Submitting...</span>
-                    </span>
-                  ) : isWorldIdEligibilityPending ? (
-                    <span className="flex items-center gap-2 text-base-content">
-                      <span className="loading loading-spinner loading-xs" />
-                      <span>Checking...</span>
-                    </span>
-                  ) : amount === 0 ? (
-                    "Submit"
-                  ) : (
-                    `Stake ${amount} ${symbol}`
-                  )}
-                </GradientActionButton>
-              )}
+              <GradientActionButton
+                onClick={() => onConfirm(amount, isUp, normalizeStakeSelectorPredictedUpPercent(predictedUpPercent))}
+                className="flex-1"
+                motion={getGradientActionMotion(Boolean(isConfirming))}
+                disabled={confirmDisabled}
+              >
+                {isConfirming ? (
+                  <span className="flex items-center gap-2 text-base-content">
+                    <span className="loading loading-spinner loading-xs" />
+                    <span>Submitting...</span>
+                  </span>
+                ) : amount === 0 ? (
+                  "Submit"
+                ) : (
+                  `Stake ${amount} ${symbol}`
+                )}
+              </GradientActionButton>
             </div>
 
             {(confirmError || roundNotAcceptingMessage) && !isConfirming && (
