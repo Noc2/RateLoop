@@ -1,6 +1,7 @@
 import { type Address, type Hex, encodeAbiParameters, keccak256, toBytes } from "viem";
 
 const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v6"));
+const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v4"));
 const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(toBytes("rateloop-question-bundle-item-v4"));
 const QUESTION_BUNDLE_DOMAIN = keccak256(toBytes("rateloop-question-bundle-v4"));
 const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v5"));
@@ -34,6 +35,18 @@ type QuestionSubmissionRevealCommitmentParams = {
   submitter: Address;
   tags: string;
   title: string;
+  videoUrl: string;
+};
+
+type QuestionSubmissionKeyParams = {
+  categoryId: bigint;
+  contextUrl: string;
+  detailsHash: Hex;
+  detailsUrl: string;
+  imageUrls: readonly string[];
+  tags: string;
+  title: string;
+  description: string;
   videoUrl: string;
 };
 
@@ -78,6 +91,33 @@ function buildSubmissionMediaHash(imageUrls: readonly string[], videoUrl: string
 
 function buildSubmissionDetailsHash(detailsUrl: string, detailsHash: Hex): Hex {
   return keccak256(encodeAbiParameters([{ type: "string" }, { type: "bytes32" }], [detailsUrl, detailsHash]));
+}
+
+export function buildQuestionSubmissionKey(params: QuestionSubmissionKeyParams): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+      ],
+      [
+        QUESTION_CONTEXT_DOMAIN,
+        params.categoryId,
+        buildSubmissionMediaHash(params.imageUrls, params.videoUrl),
+        buildSubmissionDetailsHash(params.detailsUrl, params.detailsHash),
+        params.contextUrl,
+        params.title,
+        params.description,
+        params.tags,
+      ],
+    ),
+  );
 }
 
 export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissionRevealCommitmentParams): Hex {

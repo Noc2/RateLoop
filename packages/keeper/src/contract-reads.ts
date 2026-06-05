@@ -1,6 +1,10 @@
 import type { PublicClient } from "viem";
 import { getAddress } from "viem";
-import { ContentRegistryAbi, ProtocolConfigAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import {
+  ContentRegistryAbi,
+  ProtocolConfigAbi,
+  RoundVotingEngineAbi,
+} from "@rateloop/contracts/abis";
 import { getRevertReason } from "./revert-utils.js";
 
 export const RoundState = {
@@ -41,11 +45,19 @@ export interface RoundData {
 }
 
 function toBigInt(value: unknown, fallback = 0n): bigint {
-  return typeof value === "bigint" ? value : typeof value === "number" ? BigInt(value) : fallback;
+  return typeof value === "bigint"
+    ? value
+    : typeof value === "number"
+      ? BigInt(value)
+      : fallback;
 }
 
 function toNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" ? value : typeof value === "bigint" ? Number(value) : fallback;
+  return typeof value === "number"
+    ? value
+    : typeof value === "bigint"
+      ? Number(value)
+      : fallback;
 }
 
 function parseRoundVotingConfig(rawConfig: unknown): RoundVotingConfig {
@@ -98,7 +110,7 @@ function parseRoundData(rawRound: unknown): RoundData {
     };
   }
 
-  if (Array.isArray(round) && round.length >= 12) {
+  if (Array.isArray(round) && round.length >= 14) {
     return {
       startTime: toBigInt(round[0]),
       state: toNumber(round[1]),
@@ -106,6 +118,17 @@ function parseRoundData(rawRound: unknown): RoundData {
       revealedCount: toBigInt(round[3]),
       settledAt: toBigInt(round[10]),
       thresholdReachedAt: toBigInt(round[11]),
+    };
+  }
+
+  if (Array.isArray(round) && round.length >= 7) {
+    return {
+      startTime: toBigInt(round[0]),
+      state: toNumber(round[1]),
+      voteCount: toBigInt(round[2]),
+      revealedCount: toBigInt(round[3]),
+      settledAt: toBigInt(round[6]),
+      thresholdReachedAt: toBigInt(round[5]),
     };
   }
 
@@ -119,8 +142,11 @@ export function parseCommitData(rawCommit: unknown): CommitData {
       voter: "0x0000000000000000000000000000000000000000",
       stakeAmount: toBigInt(commit.stakeAmount),
       ciphertextHash: commit.ciphertextHash as unknown as `0x${string}`,
-      targetRound: commit.targetRound != null ? toBigInt(commit.targetRound) : undefined,
-      drandChainHash: commit.drandChainHash as unknown as `0x${string}` | undefined,
+      targetRound:
+        commit.targetRound != null ? toBigInt(commit.targetRound) : undefined,
+      drandChainHash: commit.drandChainHash as unknown as
+        | `0x${string}`
+        | undefined,
       frontend: "0x0000000000000000000000000000000000000000",
       revealableAfter: toBigInt(commit.revealableAfter),
       revealed: Boolean(commit.revealed),
@@ -134,8 +160,11 @@ export function parseCommitData(rawCommit: unknown): CommitData {
       voter: commit.voter as `0x${string}`,
       stakeAmount: toBigInt(commit.stakeAmount),
       ciphertextHash: commit.ciphertextHash as unknown as `0x${string}`,
-      targetRound: commit.targetRound != null ? toBigInt(commit.targetRound) : undefined,
-      drandChainHash: commit.drandChainHash as unknown as `0x${string}` | undefined,
+      targetRound:
+        commit.targetRound != null ? toBigInt(commit.targetRound) : undefined,
+      drandChainHash: commit.drandChainHash as unknown as
+        | `0x${string}`
+        | undefined,
       frontend: commit.frontend as unknown as `0x${string}`,
       revealableAfter: toBigInt(commit.revealableAfter),
       revealed: Boolean(commit.revealed),
@@ -272,7 +301,7 @@ export async function readRound(
   const rawRound = await publicClient.readContract({
     address: engineAddr,
     abi: RoundVotingEngineAbi,
-    functionName: "rounds",
+    functionName: "roundCore",
     args: [contentId, roundId],
   });
 
@@ -294,7 +323,9 @@ export async function readRoundConfigForRound(
   const snapshot = parseRoundVotingConfig(rawSnapshot);
 
   if (snapshot.epochDuration === 0n) {
-    throw new Error(`Missing round config snapshot for content ${contentId} round ${roundId}`);
+    throw new Error(
+      `Missing round config snapshot for content ${contentId} round ${roundId}`,
+    );
   }
 
   return snapshot;
@@ -323,21 +354,62 @@ export async function readCurrentRoundIds(
   };
 }
 
+export interface RoundLifecycleState {
+  revealGracePeriod: bigint;
+  lastCommitRevealableAfter: bigint;
+  cleanupRemaining: bigint;
+  clusterPayoutReadyAt: bigint;
+}
+
+export async function readRoundLifecycleState(
+  publicClient: Pick<PublicClient, "readContract">,
+  engineAddr: `0x${string}`,
+  contentId: bigint,
+  roundId: bigint,
+): Promise<RoundLifecycleState> {
+  const rawLifecycle = await publicClient.readContract({
+    address: engineAddr,
+    abi: RoundVotingEngineAbi,
+    functionName: "roundLifecycleState",
+    args: [contentId, roundId],
+  });
+  const lifecycle = rawLifecycle as unknown as Record<string, unknown> &
+    unknown[];
+
+  if (Array.isArray(lifecycle) && lifecycle.length >= 4) {
+    return {
+      revealGracePeriod: toBigInt(lifecycle[0]),
+      lastCommitRevealableAfter: toBigInt(lifecycle[1]),
+      cleanupRemaining: toBigInt(lifecycle[2]),
+      clusterPayoutReadyAt: toBigInt(lifecycle[3]),
+    };
+  }
+
+  return {
+    revealGracePeriod: toBigInt(lifecycle?.revealGracePeriod),
+    lastCommitRevealableAfter: toBigInt(lifecycle?.lastRevealableAfter),
+    cleanupRemaining: toBigInt(lifecycle?.cleanupRemaining),
+    clusterPayoutReadyAt: toBigInt(lifecycle?.clusterPayoutReadyAt),
+  };
+}
+
 export async function readRoundRevealGracePeriod(
   publicClient: Pick<PublicClient, "readContract">,
   engineAddr: `0x${string}`,
   contentId: bigint,
   roundId: bigint,
 ): Promise<bigint> {
-  const snapshot = (await publicClient.readContract({
-    address: engineAddr,
-    abi: RoundVotingEngineAbi,
-    functionName: "roundRevealGracePeriodSnapshot",
-    args: [contentId, roundId],
-  })) as bigint;
+  const { revealGracePeriod: snapshot } = await readRoundLifecycleState(
+    publicClient,
+    engineAddr,
+    contentId,
+    roundId,
+  );
 
   if (snapshot === 0n) {
-    throw new Error(`Missing reveal grace period snapshot for content ${contentId} round ${roundId}`);
+    throw new Error(
+      `Missing reveal grace period snapshot for content ${contentId} round ${roundId}`,
+    );
   }
 
   return snapshot;
@@ -351,7 +423,8 @@ export async function readRoundCommitKeys(
   contentId: bigint,
   roundId: bigint,
 ): Promise<readonly `0x${string}`[]> {
-  const count = (await readRound(publicClient, engineAddr, contentId, roundId)).voteCount;
+  const count = (await readRound(publicClient, engineAddr, contentId, roundId))
+    .voteCount;
 
   if (count === 0n) {
     return [];
@@ -363,13 +436,15 @@ export async function readRoundCommitKeys(
   for (let offset = 0; offset < total; offset += RPC_BATCH_SIZE) {
     const batchSize = Math.min(RPC_BATCH_SIZE, total - offset);
     const batch = await Promise.all(
-      Array.from({ length: batchSize }, (_, i) =>
-        publicClient.readContract({
-          address: engineAddr,
-          abi: RoundVotingEngineAbi,
-          functionName: "getRoundCommitKey",
-          args: [contentId, roundId, BigInt(offset + i)],
-        }) as Promise<`0x${string}`>,
+      Array.from(
+        { length: batchSize },
+        (_, i) =>
+          publicClient.readContract({
+            address: engineAddr,
+            abi: RoundVotingEngineAbi,
+            functionName: "getRoundCommitKey",
+            args: [contentId, roundId, BigInt(offset + i)],
+          }) as Promise<`0x${string}`>,
       ),
     );
     results.push(...batch);

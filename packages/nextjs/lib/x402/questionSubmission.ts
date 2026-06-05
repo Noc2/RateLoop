@@ -37,6 +37,7 @@ import {
 import { questionRoundConfigToAbi, serializeQuestionRoundConfig } from "~~/lib/questionRoundConfig";
 import {
   buildQuestionBundleSubmissionRevealCommitment,
+  buildQuestionSubmissionKey,
   buildQuestionSubmissionRevealCommitment,
 } from "~~/lib/questionSubmissionCommitment";
 import {
@@ -120,6 +121,12 @@ type SubmittedQuestionDetails = {
   contentId: bigint;
   detailsHash: Hex;
   detailsUrl: string;
+};
+
+type SubmittedBundleContentLink = {
+  bundleId: bigint;
+  bundleIndex: bigint;
+  contentId: bigint;
 };
 
 type SubmittedRoundConfig = ReturnType<typeof serializeQuestionRoundConfig>;
@@ -992,26 +999,18 @@ async function preflightX402QuestionSubmissionWithClient(params: {
   const seenSubmissionKeys = new Set<Hex>();
 
   for (const [index, question] of params.payload.questions.entries()) {
-    const [resolvedCategoryId, submissionKey] = (await params.publicClient.readContract({
-      address: params.config.contentRegistryAddress,
-      abi: ContentRegistryAbi,
-      functionName: "previewQuestionSubmissionKey",
-      args: [
-        question.contextUrl,
-        question.imageUrls,
-        question.videoUrl,
-        question.title,
-        question.description,
-        question.tags,
-        question.categoryId,
-        questionDetailsTuple(question),
-      ],
-    })) as readonly [bigint, Hex];
-    if (resolvedCategoryId !== question.categoryId) {
-      throw new X402QuestionConflictError(
-        `Question ${index + 1} category ${question.categoryId.toString()} resolves to ${resolvedCategoryId.toString()}.`,
-      );
-    }
+    const resolvedCategoryId = question.categoryId;
+    const submissionKey = buildQuestionSubmissionKey({
+      categoryId: resolvedCategoryId,
+      contextUrl: question.contextUrl,
+      detailsHash: question.detailsHash,
+      detailsUrl: question.detailsUrl,
+      imageUrls: question.imageUrls,
+      title: question.title,
+      description: question.description,
+      tags: question.tags,
+      videoUrl: question.videoUrl,
+    });
 
     const submissionKeyUsed = (await params.publicClient.readContract({
       address: params.config.contentRegistryAddress,
@@ -1580,6 +1579,7 @@ function readSubmissionResult(
   contentRegistryAddress: Address,
 ): {
   bundleId: bigint | null;
+  bundleContentLinks: SubmittedBundleContentLink[];
   contentIds: bigint[];
   rewardPoolId: bigint | null;
   rewardAttachments: SubmittedRewardAttachment[];
@@ -1590,6 +1590,7 @@ function readSubmissionResult(
 } {
   const expectedEmitter = normalizedAddress(contentRegistryAddress);
   let bundleId: bigint | null = null;
+  const bundleContentLinks: SubmittedBundleContentLink[] = [];
   const contentIds: bigint[] = [];
   let rewardPoolId: bigint | null = null;
   const rewardAttachments: SubmittedRewardAttachment[] = [];
@@ -1605,27 +1606,6 @@ function readSubmissionResult(
         data: log.data,
         topics: log.topics,
       }) as { eventName: string; args: Record<string, unknown> };
-
-      if (decoded.eventName === "QuestionContentAnchored" && typeof decoded.args.contentId === "bigint") {
-        const submittedContent = submittedContents.find(content => content.contentId === decoded.args.contentId);
-        if (
-          submittedContent &&
-          typeof decoded.args.mediaType === "number" &&
-          typeof decoded.args.mediaIndex === "bigint" &&
-          typeof decoded.args.url === "string" &&
-          isBytes32Hex(decoded.args.questionMetadataHash) &&
-          isBytes32Hex(decoded.args.resultSpecHash)
-        ) {
-          submittedContent.questionMetadataHash = decoded.args.questionMetadataHash.toLowerCase() as Hex;
-          submittedContent.resultSpecHash = decoded.args.resultSpecHash.toLowerCase() as Hex;
-          if (decoded.args.mediaType === 1) {
-            submittedContent.imageUrls[Number(decoded.args.mediaIndex)] = decoded.args.url;
-          } else if (decoded.args.mediaType === 2) {
-            submittedContent.videoUrl = decoded.args.url;
-          }
-        }
-        continue;
-      }
 
       if (log.address.toLowerCase() !== expectedEmitter) {
         continue;
@@ -1662,6 +1642,18 @@ function readSubmissionResult(
           contentId: decoded.args.contentId,
           detailsHash: decoded.args.detailsHash.toLowerCase() as Hex,
           detailsUrl: decoded.args.detailsUrl,
+        });
+      }
+      if (
+        decoded.eventName === "QuestionBundleContentLinked" &&
+        typeof decoded.args.bundleId === "bigint" &&
+        typeof decoded.args.contentId === "bigint" &&
+        typeof decoded.args.bundleIndex === "bigint"
+      ) {
+        bundleContentLinks.push({
+          bundleId: decoded.args.bundleId,
+          bundleIndex: decoded.args.bundleIndex,
+          contentId: decoded.args.contentId,
         });
       }
       if (decoded.eventName === "QuestionBundleSubmitted") {
@@ -1729,6 +1721,7 @@ function readSubmissionResult(
 
   return {
     bundleId,
+    bundleContentLinks,
     contentIds,
     rewardAttachments,
     rewardPoolId,
@@ -1811,7 +1804,40 @@ function sameBundleRewardTerms(
   );
 }
 
+function linkedBundleContentIds(params: {
+  bundleContentLinks: SubmittedBundleContentLink[];
+  bundleId: bigint;
+  expectedQuestionCount: number;
+}) {
+  const linkedByIndex = new Map<number, bigint>();
+  for (const link of params.bundleContentLinks) {
+    if (link.bundleId !== params.bundleId) continue;
+
+    const bundleIndex = Number(link.bundleIndex);
+    if (
+      !Number.isSafeInteger(bundleIndex) ||
+      bundleIndex < 0 ||
+      bundleIndex >= params.expectedQuestionCount ||
+      linkedByIndex.has(bundleIndex)
+    ) {
+      throw new X402QuestionConflictError("Confirmed bundle submission included invalid content linkage.");
+    }
+    linkedByIndex.set(bundleIndex, link.contentId);
+  }
+
+  const linkedContentIds: bigint[] = [];
+  for (let index = 0; index < params.expectedQuestionCount; index++) {
+    const contentId = linkedByIndex.get(index);
+    if (contentId === undefined) {
+      throw new X402QuestionConflictError("Confirmed bundle submission did not link the planned questions.");
+    }
+    linkedContentIds.push(contentId);
+  }
+  return linkedContentIds;
+}
+
 function matchConfirmedSubmissionPlan(params: {
+  bundleContentLinks: SubmittedBundleContentLink[];
   record: X402QuestionSubmissionRecord;
   rewardAttachments: SubmittedRewardAttachment[];
   roundConfigsByContentId: Map<string, SubmittedRoundConfig>;
@@ -1867,6 +1893,18 @@ function matchConfirmedSubmissionPlan(params: {
   );
   if (!bundleAttachment) {
     throw new X402QuestionConflictError("Confirmed bundle submission did not attach the planned bounty terms.");
+  }
+  if (bundleAttachment.bundleId === null) {
+    throw new X402QuestionConflictError("Confirmed bundle submission did not include a bundle id.");
+  }
+
+  const linkedContentIds = linkedBundleContentIds({
+    bundleContentLinks: params.bundleContentLinks,
+    bundleId: bundleAttachment.bundleId,
+    expectedQuestionCount: matchedContentIds.length,
+  });
+  if (!linkedContentIds.every((contentId, index) => contentId === matchedContentIds[index])) {
+    throw new X402QuestionConflictError("Confirmed bundle content linkage did not match the planned question order.");
   }
 
   return {
@@ -2761,6 +2799,7 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
   const config = dependencies.resolveX402QuestionConfig(record.chainId);
   const publicClient = createPublicQuestionClient(config);
   const walletAddress = record.payerAddress.toLowerCase();
+  const bundleContentLinks: SubmittedBundleContentLink[] = [];
   const rewardAttachments: SubmittedRewardAttachment[] = [];
   const roundConfigsByContentId = new Map<string, SubmittedRoundConfig>();
   const submittedContents: SubmittedQuestionContent[] = [];
@@ -2769,6 +2808,7 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
   for (const hash of params.transactionHashes) {
     const receipt = await dependencies.waitForSuccessfulReceipt(publicClient, hash);
     const result = readSubmissionResult(receipt, config.contentRegistryAddress);
+    bundleContentLinks.push(...result.bundleContentLinks);
     submittedContents.push(...result.submittedContents);
     submittedDetails.push(...result.submittedDetails);
     rewardAttachments.push(...result.rewardAttachments);
@@ -2784,6 +2824,7 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     throw new X402QuestionConflictError("Confirmed submission was not emitted for the planned wallet address.");
   }
   const { bundleId, contentIds, rewardPoolId } = matchConfirmedSubmissionPlan({
+    bundleContentLinks,
     record,
     rewardAttachments,
     roundConfigsByContentId,

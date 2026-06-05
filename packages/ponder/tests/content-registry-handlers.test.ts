@@ -13,6 +13,7 @@ type RegisteredHandler = (args: {
 
 const handlers = new Map<string, RegisteredHandler>();
 const REGISTRY_ADDRESS = "0x000000000000000000000000000000000000c0de";
+const VALIDATOR_ADDRESS = "0x000000000000000000000000000000000000beef";
 const SUBMITTER_ADDRESS = "0x0000000000000000000000000000000000000001";
 const CONTENT_REGISTRY_ABI = vi.hoisted(
   () =>
@@ -41,6 +42,22 @@ const CONTENT_REGISTRY_ABI = vi.hoisted(
           { name: "url", type: "string", indexed: false },
           { name: "questionMetadataHash", type: "bytes32", indexed: false },
           { name: "resultSpecHash", type: "bytes32", indexed: false },
+        ],
+      },
+      {
+        type: "function",
+        name: "submissionMediaValidator",
+        stateMutability: "view",
+        inputs: [],
+        outputs: [{ name: "", type: "address" }],
+      },
+      {
+        type: "event",
+        name: "QuestionBundleContentLinked",
+        inputs: [
+          { name: "bundleId", type: "uint256", indexed: true },
+          { name: "contentId", type: "uint256", indexed: true },
+          { name: "bundleIndex", type: "uint256", indexed: true },
         ],
       },
     ] as const,
@@ -74,8 +91,13 @@ vi.mock("@rateloop/contracts/protocol", () => ({
 }));
 
 function createDb(existingRound = { id: "1-2" }) {
-  const updateCalls: Array<{ table: string; key: Record<string, unknown>; values: Record<string, unknown> }> = [];
-  const insertCalls: Array<{ table: string; values: Record<string, unknown> }> = [];
+  const updateCalls: Array<{
+    table: string;
+    key: Record<string, unknown>;
+    values: Record<string, unknown>;
+  }> = [];
+  const insertCalls: Array<{ table: string; values: Record<string, unknown> }> =
+    [];
 
   return {
     db: {
@@ -134,6 +156,7 @@ function contentSubmittedLog(contentId: bigint, logIndex: number) {
 }
 
 function questionContentAnchoredLog(params: {
+  address?: string;
   contentId: bigint;
   logIndex: number;
   mediaIndex: bigint;
@@ -143,7 +166,7 @@ function questionContentAnchoredLog(params: {
   url: string;
 }) {
   return {
-    address: "0x000000000000000000000000000000000000bEEF",
+    address: params.address ?? VALIDATOR_ADDRESS,
     logIndex: params.logIndex,
     topics: encodeEventTopics({
       abi: CONTENT_REGISTRY_ABI,
@@ -250,7 +273,9 @@ describe("ContentRegistry ponder handlers", () => {
     const { db, updateCalls } = createDb({ id: 7n });
 
     const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("ContentRegistry:ContentRoundConfigSet");
+    const handler = registeredHandlers.get(
+      "ContentRegistry:ContentRoundConfigSet",
+    );
 
     expect(handler).toBeDefined();
 
@@ -286,24 +311,50 @@ describe("ContentRegistry ponder handlers", () => {
     );
   });
 
-  it("does not register deprecated bundle content link events", async () => {
+  it("registers explicit bundle content link events", async () => {
     const registeredHandlers = await loadHandlers();
 
-    expect(registeredHandlers.has("ContentRegistry:QuestionBundleContentLinked")).toBe(false);
+    expect(
+      registeredHandlers.has("ContentRegistry:QuestionBundleContentLinked"),
+    ).toBe(true);
   });
 
   it("indexes question content anchors from submission receipt logs", async () => {
     const { db, insertCalls, updateCalls } = createDb();
     const imageUrl =
       "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    const readContract = vi.fn(async () => ({
-      epochDuration: 600,
-      maxDuration: 7200,
-      minVoters: 5,
-      maxVoters: 50,
-    }));
+    const readContract = vi.fn(
+      async ({ functionName }: { functionName: string }) =>
+        functionName === "submissionMediaValidator"
+          ? VALIDATOR_ADDRESS
+          : {
+              epochDuration: 600,
+              maxDuration: 7200,
+              minVoters: 5,
+              maxVoters: 50,
+            },
+    );
     const getTransactionReceipt = vi.fn(async () => ({
-      logs: [contentSubmittedLog(7n, 10), questionContentAnchoredLog({ contentId: 7n, logIndex: 11, mediaIndex: 0n, mediaType: 1, url: imageUrl })],
+      logs: [
+        contentSubmittedLog(7n, 10),
+        questionContentAnchoredLog({
+          address: "0x000000000000000000000000000000000000f00d",
+          contentId: 7n,
+          logIndex: 11,
+          mediaIndex: 0n,
+          mediaType: 1,
+          questionMetadataHash: `0x${"f".repeat(64)}`,
+          resultSpecHash: `0x${"e".repeat(64)}`,
+          url: "https://evil.example/spoof.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        }),
+        questionContentAnchoredLog({
+          contentId: 7n,
+          logIndex: 12,
+          mediaIndex: 0n,
+          mediaType: 1,
+          url: imageUrl,
+        }),
+      ],
     }));
 
     const registeredHandlers = await loadHandlers();
@@ -372,19 +423,12 @@ describe("ContentRegistry ponder handlers", () => {
     );
   });
 
-  it("links bundle questions from same-transaction ContentSubmitted logs", async () => {
+  it("links bundle questions from explicit content link events", async () => {
     const { db, insertCalls, updateCalls } = createDb();
-    const getTransactionReceipt = vi.fn(async () => ({
-      logs: [
-        contentSubmittedLog(7n, 10),
-        contentSubmittedLog(8n, 11),
-        contentSubmittedLog(9n, 12),
-        contentSubmittedLog(10n, 14),
-      ],
-    }));
-
     const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("ContentRegistry:QuestionBundleSubmitted");
+    const handler = registeredHandlers.get(
+      "ContentRegistry:QuestionBundleContentLinked",
+    );
 
     expect(handler).toBeDefined();
 
@@ -392,44 +436,41 @@ describe("ContentRegistry ponder handlers", () => {
       event: {
         args: {
           bundleId: 3n,
-          questionCount: 3n,
+          contentId: 9n,
+          bundleIndex: 2n,
         },
         block: {
           number: 42n,
           timestamp: 999n,
         },
-        log: {
-          logIndex: 13,
+      },
+      context: {
+        db,
+      },
+    });
+    await handler!({
+      event: {
+        args: {
+          bundleId: 3n,
+          contentId: 7n,
+          bundleIndex: 0n,
         },
-        transaction: {
-          hash: `0x${"1".repeat(64)}`,
+        block: {
+          number: 42n,
+          timestamp: 999n,
         },
       },
       context: {
-        client: { getTransactionReceipt },
-        contracts: {
-          ContentRegistry: {
-            address: REGISTRY_ADDRESS,
-          },
-        },
         db,
       },
     });
 
-    expect(getTransactionReceipt).toHaveBeenCalledWith({
-      hash: `0x${"1".repeat(64)}`,
-    });
     expect(updateCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           key: { id: 7n },
           table: "content",
           values: expect.objectContaining({ bundleId: 3n, bundleIndex: 0 }),
-        }),
-        expect.objectContaining({
-          key: { id: 8n },
-          table: "content",
-          values: expect.objectContaining({ bundleId: 3n, bundleIndex: 1 }),
         }),
         expect.objectContaining({
           key: { id: 9n },
@@ -515,7 +556,9 @@ describe("ContentRegistry ponder handlers", () => {
     }));
 
     const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("ContentRegistry:RatingStateUpdated");
+    const handler = registeredHandlers.get(
+      "ContentRegistry:RatingStateUpdated",
+    );
 
     expect(handler).toBeDefined();
 
@@ -561,11 +604,19 @@ describe("ContentRegistry ponder handlers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           table: "content",
-          values: expect.objectContaining({ ratingDownEvidence: 111n, ratingLowSince: 777n, ratingUpEvidence: 345n }),
+          values: expect.objectContaining({
+            ratingDownEvidence: 111n,
+            ratingLowSince: 777n,
+            ratingUpEvidence: 345n,
+          }),
         }),
         expect.objectContaining({
           table: "round",
-          values: expect.objectContaining({ downEvidence: 111n, lowSince: 777n, upEvidence: 345n }),
+          values: expect.objectContaining({
+            downEvidence: 111n,
+            lowSince: 777n,
+            upEvidence: 345n,
+          }),
         }),
       ]),
     );
@@ -574,7 +625,11 @@ describe("ContentRegistry ponder handlers", () => {
       expect.arrayContaining([
         expect.objectContaining({
           table: "ratingChange",
-          values: expect.objectContaining({ downEvidence: 111n, lowSince: 777n, upEvidence: 345n }),
+          values: expect.objectContaining({
+            downEvidence: 111n,
+            lowSince: 777n,
+            upEvidence: 345n,
+          }),
         }),
       ]),
     );

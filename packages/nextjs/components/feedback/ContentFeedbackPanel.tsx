@@ -45,7 +45,13 @@ function formatFeedbackDate(value: string) {
 }
 
 function hasNonZeroCommit(value: unknown) {
+  if (Array.isArray(value)) return value.some(hasNonZeroCommit);
   return typeof value === "string" && value !== zeroHash;
+}
+
+function readCommitHash(value: unknown): `0x${string}` | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return hasNonZeroCommit(candidate) ? (candidate as `0x${string}`) : null;
 }
 
 function hasHexFeedbackHash(item: ContentFeedbackItem) {
@@ -166,9 +172,9 @@ export function ContentFeedbackPanel({
   const itemOpenRoundId = item?.openRound?.roundId ?? 0n;
   const feedbackOpenRoundId = feedback.openRoundId ? BigInt(feedback.openRoundId) : 0n;
   const openRoundId = itemOpenRoundId > 0n ? itemOpenRoundId : feedbackOpenRoundId;
-  const { data: myCommitHash } = useScaffoldReadContract({
+  const { data: myCommitState } = useScaffoldReadContract({
     contractName: "RoundVotingEngine" as any,
-    functionName: "voterCommitHash" as any,
+    functionName: "voterCommitKey" as any,
     args: [item?.id ?? 0n, openRoundId, address] as any,
     watch: true,
     query: { enabled: Boolean(item && address && openRoundId > 0n) },
@@ -181,7 +187,7 @@ export function ContentFeedbackPanel({
     query: { enabled: Boolean(item && address && openRoundId > 0n) },
   } as any);
   const hasCurrentRoundVote =
-    hasOptimisticCurrentRoundVote || hasNonZeroCommit(myCommitHash) || hasNonZeroCommit(myAdvisoryCommitKey);
+    hasOptimisticCurrentRoundVote || hasNonZeroCommit(myCommitState) || hasNonZeroCommit(myAdvisoryCommitKey);
   const isFeedbackOpen = openRoundId > 0n;
   const hasCurrentRoundFeedback = useMemo(
     () => items.some(feedbackItem => feedbackItem.isOwn && isFeedbackForRound(feedbackItem, openRoundId)),
@@ -250,7 +256,7 @@ export function ContentFeedbackPanel({
       feedbackType,
       body,
       sourceUrl: sourceUrl.trim() || undefined,
-      commitHash: hasNonZeroCommit(myCommitHash) ? (myCommitHash as `0x${string}`) : null,
+      commitHash: readCommitHash(myCommitState),
     });
 
     if (!result.ok) {

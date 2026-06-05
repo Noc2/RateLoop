@@ -1,2400 +1,2348 @@
 export const ContentRegistryAbi = [
   {
-    "type": "constructor",
-    "inputs": [],
-    "stateMutability": "nonpayable"
+    type: "constructor",
+    inputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "CONFIG_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "CONFIG_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "DEFAULT_ADMIN_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "DEFAULT_ADMIN_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "PAUSER_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "PAUSER_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "TREASURY_ADMIN_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "TREASURY_ADMIN_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "TREASURY_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "TREASURY_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "X402_GATEWAY_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "X402_GATEWAY_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "bonusPool",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "bonusPool",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "cancelContent",
-    "inputs": [
+    type: "function",
+    name: "cancelContent",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "cancelReservedSubmission",
-    "inputs": [
+    type: "function",
+    name: "cancelReservedSubmission",
+    inputs: [
       {
-        "name": "revealCommitment",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "revealCommitment",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "categoryRegistry",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "categoryRegistry",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "contract ICategoryRegistry"
-      }
+        name: "",
+        type: "address",
+        internalType: "contract ICategoryRegistry",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "contentSubmitterIdentityKey",
-    "inputs": [
+    type: "function",
+    name: "contentSubmitterIdentityKey",
+    inputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "contents",
-    "inputs": [
+    type: "function",
+    name: "contents",
+    inputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "id",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "id",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "contentHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "contentHash",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "submitter",
-        "type": "address",
-        "internalType": "address"
+        name: "submitter",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "createdAt",
-        "type": "uint48",
-        "internalType": "uint48"
+        name: "createdAt",
+        type: "uint48",
+        internalType: "uint48",
       },
       {
-        "name": "lastActivityAt",
-        "type": "uint48",
-        "internalType": "uint48"
+        name: "lastActivityAt",
+        type: "uint48",
+        internalType: "uint48",
       },
       {
-        "name": "status",
-        "type": "uint8",
-        "internalType": "enum ContentRegistry.ContentStatus"
+        name: "status",
+        type: "uint8",
+        internalType: "enum ContentRegistry.ContentStatus",
       },
       {
-        "name": "dormantCount",
-        "type": "uint8",
-        "internalType": "uint8"
+        name: "dormantCount",
+        type: "uint8",
+        internalType: "uint8",
       },
       {
-        "name": "reviver",
-        "type": "address",
-        "internalType": "address"
+        name: "reviver",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "rating",
-        "type": "uint8",
-        "internalType": "uint8"
+        name: "rating",
+        type: "uint8",
+        internalType: "uint8",
       },
       {
-        "name": "categoryId",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "categoryId",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "dormantKeyReleasableAt",
-    "inputs": [
+    type: "function",
+    name: "dormantKeyReleasableAt",
+    inputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getContentRoundConfig",
-    "inputs": [
+    type: "function",
+    name: "getContentRoundConfig",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "cfg",
-        "type": "tuple",
-        "internalType": "struct RoundLib.RoundConfig",
-        "components": [
+        name: "cfg",
+        type: "tuple",
+        internalType: "struct RoundLib.RoundConfig",
+        components: [
           {
-            "name": "epochDuration",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "epochDuration",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "maxDuration",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "maxDuration",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "minVoters",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "minVoters",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "maxVoters",
-            "type": "uint16",
-            "internalType": "uint16"
-          }
-        ]
-      }
+            name: "maxVoters",
+            type: "uint16",
+            internalType: "uint16",
+          },
+        ],
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getRating",
-    "inputs": [
+    type: "function",
+    name: "getRating",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
+        name: "",
+        type: "uint16",
+        internalType: "uint16",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getRatingState",
-    "inputs": [
+    type: "function",
+    name: "getRatingState",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "state",
-        "type": "tuple",
-        "internalType": "struct RatingLib.RatingState",
-        "components": [
+        name: "state",
+        type: "tuple",
+        internalType: "struct RatingLib.RatingState",
+        components: [
           {
-            "name": "ratingLogitX18",
-            "type": "int128",
-            "internalType": "int128"
+            name: "ratingLogitX18",
+            type: "int128",
+            internalType: "int128",
           },
           {
-            "name": "confidenceMass",
-            "type": "uint128",
-            "internalType": "uint128"
+            name: "confidenceMass",
+            type: "uint128",
+            internalType: "uint128",
           },
           {
-            "name": "effectiveEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
+            name: "effectiveEvidence",
+            type: "uint128",
+            internalType: "uint128",
           },
           {
-            "name": "upEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
+            name: "upEvidence",
+            type: "uint128",
+            internalType: "uint128",
           },
           {
-            "name": "downEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
+            name: "downEvidence",
+            type: "uint128",
+            internalType: "uint128",
           },
           {
-            "name": "settledRounds",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "settledRounds",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "ratingBps",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "ratingBps",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "conservativeRatingBps",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "conservativeRatingBps",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "lastUpdatedAt",
-            "type": "uint48",
-            "internalType": "uint48"
+            name: "lastUpdatedAt",
+            type: "uint48",
+            internalType: "uint48",
           },
           {
-            "name": "lowSince",
-            "type": "uint48",
-            "internalType": "uint48"
-          }
-        ]
-      }
+            name: "lowSince",
+            type: "uint48",
+            internalType: "uint48",
+          },
+        ],
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getRoleAdmin",
-    "inputs": [
+    type: "function",
+    name: "getRoleAdmin",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getSlashConfigForContent",
-    "inputs": [
+    type: "function",
+    name: "getSlashConfigForContent",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "slashConfig",
-        "type": "tuple",
-        "internalType": "struct RatingLib.SlashConfig",
-        "components": [
+        name: "slashConfig",
+        type: "tuple",
+        internalType: "struct RatingLib.SlashConfig",
+        components: [
           {
-            "name": "slashThresholdBps",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "slashThresholdBps",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "minSlashSettledRounds",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "minSlashSettledRounds",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "minSlashLowDuration",
-            "type": "uint48",
-            "internalType": "uint48"
+            name: "minSlashLowDuration",
+            type: "uint48",
+            internalType: "uint48",
           },
           {
-            "name": "minSlashEvidence",
-            "type": "uint256",
-            "internalType": "uint256"
-          }
-        ]
-      }
+            name: "minSlashEvidence",
+            type: "uint256",
+            internalType: "uint256",
+          },
+        ],
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getSubmitterIdentity",
-    "inputs": [
+    type: "function",
+    name: "getSubmitterIdentity",
+    inputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "grantRole",
-    "inputs": [
+    type: "function",
+    name: "grantRole",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "hasRole",
-    "inputs": [
+    type: "function",
+    name: "hasRole",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "initializeWithTreasury",
-    "inputs": [
+    type: "function",
+    name: "initializeWithTreasury",
+    inputs: [
       {
-        "name": "_admin",
-        "type": "address",
-        "internalType": "address"
+        name: "_admin",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "_governance",
-        "type": "address",
-        "internalType": "address"
+        name: "_governance",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "_treasuryAuthority",
-        "type": "address",
-        "internalType": "address"
+        name: "_treasuryAuthority",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "_lrepToken",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "_lrepToken",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "isContentActive",
-    "inputs": [
+    type: "function",
+    name: "isContentActive",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "isDormancyEligible",
-    "inputs": [
+    type: "function",
+    name: "lrepToken",
+    inputs: [],
+    outputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "address",
+        internalType: "contract IERC20",
+      },
     ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "lrepToken",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "markDormant",
+    inputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IERC20"
-      }
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "view"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "markDormant",
-    "inputs": [
+    type: "function",
+    name: "nextContentId",
+    inputs: [],
+    outputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "nextContentId",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "pause",
+    inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "paused",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "pause",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "paused",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "protocolConfig",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "address",
+        internalType: "contract ProtocolConfig",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "previewQuestionSubmissionKey",
-    "inputs": [
+    type: "function",
+    name: "questionRewardPoolEscrow",
+    inputs: [],
+    outputs: [
       {
-        "name": "contextUrl",
-        "type": "string",
-        "internalType": "string"
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "recordMeaningfulActivity",
+    inputs: [
+      {
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "releaseDormantSubmissionKey",
+    inputs: [
+      {
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "renounceRole",
+    inputs: [
+      {
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "imageUrls",
-        "type": "string[]",
-        "internalType": "string[]"
+        name: "callerConfirmation",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "reserveSubmission",
+    inputs: [
+      {
+        name: "revealCommitment",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "reviveContent",
+    inputs: [
+      {
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "revokeRole",
+    inputs: [
+      {
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "videoUrl",
-        "type": "string",
-        "internalType": "string"
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "revokeVotingEngine",
+    inputs: [
+      {
+        name: "engine",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setBonusPool",
+    inputs: [
+      {
+        name: "_bonusPool",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setCategoryRegistry",
+    inputs: [
+      {
+        name: "_categoryRegistry",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setProtocolConfig",
+    inputs: [
+      {
+        name: "_protocolConfig",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setQuestionRewardPoolEscrow",
+    inputs: [
+      {
+        name: "_questionRewardPoolEscrow",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setTreasury",
+    inputs: [
+      {
+        name: "_treasury",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setVotingEngine",
+    inputs: [
+      {
+        name: "_votingEngine",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "submissionKeyUsed",
+    inputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "submissionMediaValidator",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "contract SubmissionMediaValidator",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "submitQuestion",
+    inputs: [
+      {
+        name: "contextUrl",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "title",
-        "type": "string",
-        "internalType": "string"
+        name: "imageUrls",
+        type: "string[]",
+        internalType: "string[]",
       },
       {
-        "name": "description",
-        "type": "string",
-        "internalType": "string"
+        name: "videoUrl",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "tags",
-        "type": "string",
-        "internalType": "string"
+        name: "title",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "categoryId",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "description",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "details",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.SubmissionDetails",
-        "components": [
+        name: "tags",
+        type: "string",
+        internalType: "string",
+      },
+      {
+        name: "categoryId",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "details",
+        type: "tuple",
+        internalType: "struct ContentRegistry.SubmissionDetails",
+        components: [
           {
-            "name": "detailsUrl",
-            "type": "string",
-            "internalType": "string"
+            name: "detailsUrl",
+            type: "string",
+            internalType: "string",
           },
           {
-            "name": "detailsHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
-      }
-    ],
-    "outputs": [
-      {
-        "name": "resolvedCategoryId",
-        "type": "uint256",
-        "internalType": "uint256"
+            name: "detailsHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
       },
       {
-        "name": "submissionKey",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
-    "name": "protocolConfig",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract ProtocolConfig"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "questionRewardPoolEscrow",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "recordMeaningfulActivity",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "releaseDormantSubmissionKey",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "renounceRole",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "salt",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "callerConfirmation",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "reserveSubmission",
-    "inputs": [
-      {
-        "name": "revealCommitment",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "reviveContent",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "revokeRole",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "revokeVotingEngine",
-    "inputs": [
-      {
-        "name": "engine",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setBonusPool",
-    "inputs": [
-      {
-        "name": "_bonusPool",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setCategoryRegistry",
-    "inputs": [
-      {
-        "name": "_categoryRegistry",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setProtocolConfig",
-    "inputs": [
-      {
-        "name": "_protocolConfig",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setQuestionRewardPoolEscrow",
-    "inputs": [
-      {
-        "name": "_questionRewardPoolEscrow",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setTreasury",
-    "inputs": [
-      {
-        "name": "_treasury",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setVotingEngine",
-    "inputs": [
-      {
-        "name": "_votingEngine",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "submissionKeyUsed",
-    "inputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "submitQuestion",
-    "inputs": [
-      {
-        "name": "contextUrl",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "imageUrls",
-        "type": "string[]",
-        "internalType": "string[]"
-      },
-      {
-        "name": "videoUrl",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "title",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "description",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "tags",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "categoryId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "details",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.SubmissionDetails",
-        "components": [
+        name: "spec",
+        type: "tuple",
+        internalType: "struct ContentRegistry.QuestionSpecCommitment",
+        components: [
           {
-            "name": "detailsUrl",
-            "type": "string",
-            "internalType": "string"
+            name: "questionMetadataHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "detailsHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
-      },
-      {
-        "name": "salt",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "spec",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.QuestionSpecCommitment",
-        "components": [
-          {
-            "name": "questionMetadataHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "resultSpecHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
-          {
-            "name": "resultSpecHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
-      }
+        ],
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "nonpayable"
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "submitQuestionBundleWithRewardAndRoundConfig",
-    "inputs": [
+    type: "function",
+    name: "submitQuestionBundleWithRewardAndRoundConfig",
+    inputs: [
       {
-        "name": "questions",
-        "type": "tuple[]",
-        "internalType": "struct ContentRegistry.BundleQuestionInput[]",
-        "components": [
+        name: "questions",
+        type: "tuple[]",
+        internalType: "struct ContentRegistry.BundleQuestionInput[]",
+        components: [
           {
-            "name": "contextUrl",
-            "type": "string",
-            "internalType": "string"
+            name: "contextUrl",
+            type: "string",
+            internalType: "string",
           },
           {
-            "name": "imageUrls",
-            "type": "string[]",
-            "internalType": "string[]"
+            name: "imageUrls",
+            type: "string[]",
+            internalType: "string[]",
           },
           {
-            "name": "videoUrl",
-            "type": "string",
-            "internalType": "string"
+            name: "videoUrl",
+            type: "string",
+            internalType: "string",
           },
           {
-            "name": "title",
-            "type": "string",
-            "internalType": "string"
+            name: "title",
+            type: "string",
+            internalType: "string",
           },
           {
-            "name": "description",
-            "type": "string",
-            "internalType": "string"
+            name: "description",
+            type: "string",
+            internalType: "string",
           },
           {
-            "name": "tags",
-            "type": "string",
-            "internalType": "string"
+            name: "tags",
+            type: "string",
+            internalType: "string",
           },
           {
-            "name": "categoryId",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "categoryId",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "details",
-            "type": "tuple",
-            "internalType": "struct ContentRegistry.SubmissionDetails",
-            "components": [
+            name: "details",
+            type: "tuple",
+            internalType: "struct ContentRegistry.SubmissionDetails",
+            components: [
               {
-                "name": "detailsUrl",
-                "type": "string",
-                "internalType": "string"
+                name: "detailsUrl",
+                type: "string",
+                internalType: "string",
               },
               {
-                "name": "detailsHash",
-                "type": "bytes32",
-                "internalType": "bytes32"
-              }
-            ]
+                name: "detailsHash",
+                type: "bytes32",
+                internalType: "bytes32",
+              },
+            ],
           },
           {
-            "name": "salt",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "salt",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "spec",
-            "type": "tuple",
-            "internalType": "struct ContentRegistry.QuestionSpecCommitment",
-            "components": [
+            name: "spec",
+            type: "tuple",
+            internalType: "struct ContentRegistry.QuestionSpecCommitment",
+            components: [
               {
-                "name": "questionMetadataHash",
-                "type": "bytes32",
-                "internalType": "bytes32"
+                name: "questionMetadataHash",
+                type: "bytes32",
+                internalType: "bytes32",
               },
               {
-                "name": "resultSpecHash",
-                "type": "bytes32",
-                "internalType": "bytes32"
-              }
-            ]
-          }
-        ]
+                name: "resultSpecHash",
+                type: "bytes32",
+                internalType: "bytes32",
+              },
+            ],
+          },
+        ],
       },
       {
-        "name": "rewardTerms",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.SubmissionRewardTerms",
-        "components": [
+        name: "rewardTerms",
+        type: "tuple",
+        internalType: "struct ContentRegistry.SubmissionRewardTerms",
+        components: [
           {
-            "name": "asset",
-            "type": "uint8",
-            "internalType": "uint8"
+            name: "asset",
+            type: "uint8",
+            internalType: "uint8",
           },
           {
-            "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "amount",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "requiredVoters",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "requiredVoters",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "requiredSettledRounds",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "bountyStartBy",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "bountyWindowSeconds",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "feedbackWindowSeconds",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "bountyEligibility",
-            "type": "uint8",
-            "internalType": "uint8"
-          }
-        ]
+            name: "bountyEligibility",
+            type: "uint8",
+            internalType: "uint8",
+          },
+        ],
       },
       {
-        "name": "roundConfig",
-        "type": "tuple",
-        "internalType": "struct RoundLib.RoundConfig",
-        "components": [
+        name: "roundConfig",
+        type: "tuple",
+        internalType: "struct RoundLib.RoundConfig",
+        components: [
           {
-            "name": "epochDuration",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "epochDuration",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "maxDuration",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "maxDuration",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "minVoters",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "minVoters",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "maxVoters",
-            "type": "uint16",
-            "internalType": "uint16"
-          }
-        ]
-      }
+            name: "maxVoters",
+            type: "uint16",
+            internalType: "uint16",
+          },
+        ],
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "bundleId",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "bundleId",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "contentIds",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      }
+        name: "contentIds",
+        type: "uint256[]",
+        internalType: "uint256[]",
+      },
     ],
-    "stateMutability": "nonpayable"
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "submitQuestionFromX402Gateway",
-    "inputs": [
+    type: "function",
+    name: "submitQuestionFromX402Gateway",
+    inputs: [
       {
-        "name": "contextUrl",
-        "type": "string",
-        "internalType": "string"
+        name: "contextUrl",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "imageUrls",
-        "type": "string[]",
-        "internalType": "string[]"
+        name: "imageUrls",
+        type: "string[]",
+        internalType: "string[]",
       },
       {
-        "name": "videoUrl",
-        "type": "string",
-        "internalType": "string"
+        name: "videoUrl",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "title",
-        "type": "string",
-        "internalType": "string"
+        name: "title",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "description",
-        "type": "string",
-        "internalType": "string"
+        name: "description",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "tags",
-        "type": "string",
-        "internalType": "string"
+        name: "tags",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "categoryId",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "categoryId",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "details",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.SubmissionDetails",
-        "components": [
+        name: "details",
+        type: "tuple",
+        internalType: "struct ContentRegistry.SubmissionDetails",
+        components: [
           {
-            "name": "detailsUrl",
-            "type": "string",
-            "internalType": "string"
+            name: "detailsUrl",
+            type: "string",
+            internalType: "string",
           },
           {
-            "name": "detailsHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
+            name: "detailsHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
       },
       {
-        "name": "salt",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "salt",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "rewardTerms",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.SubmissionRewardTerms",
-        "components": [
+        name: "rewardTerms",
+        type: "tuple",
+        internalType: "struct ContentRegistry.SubmissionRewardTerms",
+        components: [
           {
-            "name": "asset",
-            "type": "uint8",
-            "internalType": "uint8"
+            name: "asset",
+            type: "uint8",
+            internalType: "uint8",
           },
           {
-            "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "amount",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "requiredVoters",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "requiredVoters",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "requiredSettledRounds",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "bountyStartBy",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "bountyWindowSeconds",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "feedbackWindowSeconds",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "bountyEligibility",
-            "type": "uint8",
-            "internalType": "uint8"
-          }
-        ]
+            name: "bountyEligibility",
+            type: "uint8",
+            internalType: "uint8",
+          },
+        ],
       },
       {
-        "name": "roundConfig",
-        "type": "tuple",
-        "internalType": "struct RoundLib.RoundConfig",
-        "components": [
+        name: "roundConfig",
+        type: "tuple",
+        internalType: "struct RoundLib.RoundConfig",
+        components: [
           {
-            "name": "epochDuration",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "epochDuration",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "maxDuration",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "maxDuration",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "minVoters",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "minVoters",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "maxVoters",
-            "type": "uint16",
-            "internalType": "uint16"
-          }
-        ]
+            name: "maxVoters",
+            type: "uint16",
+            internalType: "uint16",
+          },
+        ],
       },
       {
-        "name": "spec",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.QuestionSpecCommitment",
-        "components": [
+        name: "spec",
+        type: "tuple",
+        internalType: "struct ContentRegistry.QuestionSpecCommitment",
+        components: [
           {
-            "name": "questionMetadataHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "questionMetadataHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "resultSpecHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
+            name: "resultSpecHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
       },
       {
-        "name": "submitter",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "submitter",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "nonpayable"
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "submitQuestionWithRewardAndRoundConfig",
-    "inputs": [
+    type: "function",
+    name: "submitQuestionWithRewardAndRoundConfig",
+    inputs: [
       {
-        "name": "contextUrl",
-        "type": "string",
-        "internalType": "string"
+        name: "contextUrl",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "imageUrls",
-        "type": "string[]",
-        "internalType": "string[]"
+        name: "imageUrls",
+        type: "string[]",
+        internalType: "string[]",
       },
       {
-        "name": "videoUrl",
-        "type": "string",
-        "internalType": "string"
+        name: "videoUrl",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "title",
-        "type": "string",
-        "internalType": "string"
+        name: "title",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "description",
-        "type": "string",
-        "internalType": "string"
+        name: "description",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "tags",
-        "type": "string",
-        "internalType": "string"
+        name: "tags",
+        type: "string",
+        internalType: "string",
       },
       {
-        "name": "categoryId",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "categoryId",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "details",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.SubmissionDetails",
-        "components": [
+        name: "details",
+        type: "tuple",
+        internalType: "struct ContentRegistry.SubmissionDetails",
+        components: [
           {
-            "name": "detailsUrl",
-            "type": "string",
-            "internalType": "string"
+            name: "detailsUrl",
+            type: "string",
+            internalType: "string",
           },
           {
-            "name": "detailsHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
+            name: "detailsHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
       },
       {
-        "name": "salt",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "salt",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "rewardTerms",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.SubmissionRewardTerms",
-        "components": [
+        name: "rewardTerms",
+        type: "tuple",
+        internalType: "struct ContentRegistry.SubmissionRewardTerms",
+        components: [
           {
-            "name": "asset",
-            "type": "uint8",
-            "internalType": "uint8"
+            name: "asset",
+            type: "uint8",
+            internalType: "uint8",
           },
           {
-            "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "amount",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "requiredVoters",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "requiredVoters",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "requiredSettledRounds",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "requiredSettledRounds",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "bountyStartBy",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "bountyStartBy",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "bountyWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "bountyWindowSeconds",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "feedbackWindowSeconds",
-            "type": "uint256",
-            "internalType": "uint256"
+            name: "feedbackWindowSeconds",
+            type: "uint256",
+            internalType: "uint256",
           },
           {
-            "name": "bountyEligibility",
-            "type": "uint8",
-            "internalType": "uint8"
-          }
-        ]
+            name: "bountyEligibility",
+            type: "uint8",
+            internalType: "uint8",
+          },
+        ],
       },
       {
-        "name": "roundConfig",
-        "type": "tuple",
-        "internalType": "struct RoundLib.RoundConfig",
-        "components": [
+        name: "roundConfig",
+        type: "tuple",
+        internalType: "struct RoundLib.RoundConfig",
+        components: [
           {
-            "name": "epochDuration",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "epochDuration",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "maxDuration",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "maxDuration",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "minVoters",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "minVoters",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "maxVoters",
-            "type": "uint16",
-            "internalType": "uint16"
-          }
-        ]
+            name: "maxVoters",
+            type: "uint16",
+            internalType: "uint16",
+          },
+        ],
       },
       {
-        "name": "spec",
-        "type": "tuple",
-        "internalType": "struct ContentRegistry.QuestionSpecCommitment",
-        "components": [
+        name: "spec",
+        type: "tuple",
+        internalType: "struct ContentRegistry.QuestionSpecCommitment",
+        components: [
           {
-            "name": "questionMetadataHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "questionMetadataHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "resultSpecHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
-      }
+            name: "resultSpecHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "nonpayable"
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "supportsInterface",
-    "inputs": [
+    type: "function",
+    name: "supportsInterface",
+    inputs: [
       {
-        "name": "interfaceId",
-        "type": "bytes4",
-        "internalType": "bytes4"
-      }
+        name: "interfaceId",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "treasury",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "treasury",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "unpause",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    type: "function",
+    name: "unpause",
+    inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "updateActivity",
-    "inputs": [
+    type: "function",
+    name: "updateActivity",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "updateRatingState",
-    "inputs": [
+    type: "function",
+    name: "updateRatingState",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "contentId",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "roundId",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "roundId",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "referenceRatingBps",
-        "type": "uint16",
-        "internalType": "uint16"
+        name: "referenceRatingBps",
+        type: "uint16",
+        internalType: "uint16",
       },
       {
-        "name": "nextState",
-        "type": "tuple",
-        "internalType": "struct RatingLib.RatingState",
-        "components": [
+        name: "nextState",
+        type: "tuple",
+        internalType: "struct RatingLib.RatingState",
+        components: [
           {
-            "name": "ratingLogitX18",
-            "type": "int128",
-            "internalType": "int128"
+            name: "ratingLogitX18",
+            type: "int128",
+            internalType: "int128",
           },
           {
-            "name": "confidenceMass",
-            "type": "uint128",
-            "internalType": "uint128"
+            name: "confidenceMass",
+            type: "uint128",
+            internalType: "uint128",
           },
           {
-            "name": "effectiveEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
+            name: "effectiveEvidence",
+            type: "uint128",
+            internalType: "uint128",
           },
           {
-            "name": "upEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
+            name: "upEvidence",
+            type: "uint128",
+            internalType: "uint128",
           },
           {
-            "name": "downEvidence",
-            "type": "uint128",
-            "internalType": "uint128"
+            name: "downEvidence",
+            type: "uint128",
+            internalType: "uint128",
           },
           {
-            "name": "settledRounds",
-            "type": "uint32",
-            "internalType": "uint32"
+            name: "settledRounds",
+            type: "uint32",
+            internalType: "uint32",
           },
           {
-            "name": "ratingBps",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "ratingBps",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "conservativeRatingBps",
-            "type": "uint16",
-            "internalType": "uint16"
+            name: "conservativeRatingBps",
+            type: "uint16",
+            internalType: "uint16",
           },
           {
-            "name": "lastUpdatedAt",
-            "type": "uint48",
-            "internalType": "uint48"
+            name: "lastUpdatedAt",
+            type: "uint48",
+            internalType: "uint48",
           },
           {
-            "name": "lowSince",
-            "type": "uint48",
-            "internalType": "uint48"
-          }
-        ]
-      }
+            name: "lowSince",
+            type: "uint48",
+            internalType: "uint48",
+          },
+        ],
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "votingEngine",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "votingEngine",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "event",
-    "name": "ContentCancelled",
-    "inputs": [
+    type: "event",
+    name: "ContentCancelled",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "ContentDetailsSubmitted",
-    "inputs": [
+    type: "event",
+    name: "ContentDetailsSubmitted",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "detailsUrl",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
+        name: "detailsUrl",
+        type: "string",
+        indexed: false,
+        internalType: "string",
       },
       {
-        "name": "detailsHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      }
+        name: "detailsHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "ContentDormant",
-    "inputs": [
+    type: "event",
+    name: "ContentDormant",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "ContentRevived",
-    "inputs": [
+    type: "event",
+    name: "ContentRevived",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "reviver",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "reviver",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "ContentRoundConfigSet",
-    "inputs": [
+    type: "event",
+    name: "ContentRoundConfigSet",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "epochDuration",
-        "type": "uint32",
-        "indexed": false,
-        "internalType": "uint32"
+        name: "epochDuration",
+        type: "uint32",
+        indexed: false,
+        internalType: "uint32",
       },
       {
-        "name": "maxDuration",
-        "type": "uint32",
-        "indexed": false,
-        "internalType": "uint32"
+        name: "maxDuration",
+        type: "uint32",
+        indexed: false,
+        internalType: "uint32",
       },
       {
-        "name": "minVoters",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
+        name: "minVoters",
+        type: "uint16",
+        indexed: false,
+        internalType: "uint16",
       },
       {
-        "name": "maxVoters",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
-      }
+        name: "maxVoters",
+        type: "uint16",
+        indexed: false,
+        internalType: "uint16",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "ContentSubmitted",
-    "inputs": [
+    type: "event",
+    name: "ContentSubmitted",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "submitter",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "submitter",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "contentHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
+        name: "contentHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
       },
       {
-        "name": "url",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
+        name: "url",
+        type: "string",
+        indexed: false,
+        internalType: "string",
       },
       {
-        "name": "title",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
+        name: "title",
+        type: "string",
+        indexed: false,
+        internalType: "string",
       },
       {
-        "name": "description",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
+        name: "description",
+        type: "string",
+        indexed: false,
+        internalType: "string",
       },
       {
-        "name": "tags",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
+        name: "tags",
+        type: "string",
+        indexed: false,
+        internalType: "string",
       },
       {
-        "name": "categoryId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
+        name: "categoryId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "DormantSubmissionKeyReleased",
-    "inputs": [
+    type: "event",
+    name: "DormantSubmissionKeyReleased",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "submissionKey",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
+        name: "submissionKey",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "Initialized",
-    "inputs": [
+    type: "event",
+    name: "Initialized",
+    inputs: [
       {
-        "name": "version",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      }
+        name: "version",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "Paused",
-    "inputs": [
+    type: "event",
+    name: "Paused",
+    inputs: [
       {
-        "name": "account",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
+        name: "account",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "QuestionBundleSubmitted",
-    "inputs": [
+    type: "event",
+    name: "QuestionBundleContentLinked",
+    inputs: [
       {
-        "name": "bundleId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "bundleId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "submitter",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "questionCount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        name: "bundleIndex",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
-      {
-        "name": "rewardAsset",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "requiredCompleters",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "bountyStartBy",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "bountyWindowSeconds",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "feedbackWindowSeconds",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "bountyEligibility",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "uint8"
-      },
-      {
-        "name": "bountyEligibilityDataHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "bundleHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "rewardPoolId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "QuestionContentAnchored",
-    "inputs": [
+    type: "event",
+    name: "QuestionBundleSubmitted",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "bundleId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "mediaType",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
+        name: "submitter",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "mediaIndex",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        name: "questionCount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
       },
       {
-        "name": "url",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
+        name: "rewardAsset",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
       },
       {
-        "name": "questionMetadataHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
+        name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
       },
       {
-        "name": "resultSpecHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      }
+        name: "requiredCompleters",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "bountyStartBy",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "bountyWindowSeconds",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "feedbackWindowSeconds",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "bountyEligibility",
+        type: "uint8",
+        indexed: false,
+        internalType: "uint8",
+      },
+      {
+        name: "bountyEligibilityDataHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
+      {
+        name: "bundleHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
+      {
+        name: "rewardPoolId",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "QuestionRewardPoolEscrowUpdated",
-    "inputs": [
+    type: "event",
+    name: "QuestionContentAnchored",
+    inputs: [
       {
-        "name": "rewardPoolEscrow",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
+      },
+      {
+        name: "mediaType",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
+      },
+      {
+        name: "mediaIndex",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "url",
+        type: "string",
+        indexed: false,
+        internalType: "string",
+      },
+      {
+        name: "questionMetadataHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
+      {
+        name: "resultSpecHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "RatingStateUpdated",
-    "inputs": [
+    type: "event",
+    name: "QuestionRewardPoolEscrowUpdated",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "rewardPoolEscrow",
+        type: "address",
+        indexed: false,
+        internalType: "address",
       },
-      {
-        "name": "roundId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "referenceRatingBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
-      },
-      {
-        "name": "oldRatingBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
-      },
-      {
-        "name": "newRatingBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
-      },
-      {
-        "name": "conservativeRatingBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
-      },
-      {
-        "name": "upEvidence",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "downEvidence",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "confidenceMass",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "effectiveEvidence",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "settledRounds",
-        "type": "uint32",
-        "indexed": false,
-        "internalType": "uint32"
-      }
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "RatingUpdated",
-    "inputs": [
+    type: "event",
+    name: "RatingStateUpdated",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "oldRating",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        name: "roundId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "newRating",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
+        name: "referenceRatingBps",
+        type: "uint16",
+        indexed: false,
+        internalType: "uint16",
+      },
+      {
+        name: "oldRatingBps",
+        type: "uint16",
+        indexed: false,
+        internalType: "uint16",
+      },
+      {
+        name: "newRatingBps",
+        type: "uint16",
+        indexed: false,
+        internalType: "uint16",
+      },
+      {
+        name: "conservativeRatingBps",
+        type: "uint16",
+        indexed: false,
+        internalType: "uint16",
+      },
+      {
+        name: "upEvidence",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "downEvidence",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "confidenceMass",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "effectiveEvidence",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "settledRounds",
+        type: "uint32",
+        indexed: false,
+        internalType: "uint32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "RoleAdminChanged",
-    "inputs": [
+    type: "event",
+    name: "RatingUpdated",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "previousAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "oldRating",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
       },
       {
-        "name": "newAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
+        name: "newRating",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "RoleGranted",
-    "inputs": [
+    type: "event",
+    name: "RoleAdminChanged",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "previousAdminRole",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "sender",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "newAdminRole",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "RoleRevoked",
-    "inputs": [
+    type: "event",
+    name: "RoleGranted",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "account",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "sender",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "SubmissionReservationCancelled",
-    "inputs": [
+    type: "event",
+    name: "RoleRevoked",
+    inputs: [
       {
-        "name": "submitter",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "role",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "revealCommitment",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
+        name: "account",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "SubmissionReserved",
-    "inputs": [
+    type: "event",
+    name: "SubmissionReservationCancelled",
+    inputs: [
       {
-        "name": "submitter",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "submitter",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "revealCommitment",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "revealCommitment",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
-      {
-        "name": "expiresAt",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "SubmissionRewardPoolAttached",
-    "inputs": [
+    type: "event",
+    name: "SubmissionReserved",
+    inputs: [
       {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "submitter",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "submitter",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "revealCommitment",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "rewardAsset",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
+        name: "expiresAt",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
       },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "requiredVoters",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "requiredSettledRounds",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "bountyStartBy",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "bountyWindowSeconds",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "feedbackWindowSeconds",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "bountyEligibility",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "uint8"
-      },
-      {
-        "name": "bountyEligibilityDataHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "rewardPoolId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "Unpaused",
-    "inputs": [
+    type: "event",
+    name: "SubmissionRewardPoolAttached",
+    inputs: [
       {
-        "name": "account",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "VotingEngineRevoked",
-    "inputs": [
-      {
-        "name": "engine",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "AccessControlBadConfirmation",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AccessControlUnauthorizedAccount",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
+        name: "contentId",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "neededRole",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ActiveRoundOnPreviousEngine",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "EnforcedPause",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ExpectedPause",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidInitialization",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NotInitializing",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "OnlyVotingEngine",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ReentrancyGuardReentrantCall",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "SafeCastOverflowedUintDowncast",
-    "inputs": [
-      {
-        "name": "bits",
-        "type": "uint8",
-        "internalType": "uint8"
+        name: "submitter",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "value",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
+        name: "rewardAsset",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "requiredVoters",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "requiredSettledRounds",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "bountyStartBy",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "bountyWindowSeconds",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "feedbackWindowSeconds",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "bountyEligibility",
+        type: "uint8",
+        indexed: false,
+        internalType: "uint8",
+      },
+      {
+        name: "bountyEligibilityDataHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
+      {
+        name: "rewardPoolId",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
   },
   {
-    "type": "error",
-    "name": "SafeERC20FailedOperation",
-    "inputs": [
+    type: "event",
+    name: "Unpaused",
+    inputs: [
       {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  }
+        name: "account",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "VotingEngineRevoked",
+    inputs: [
+      {
+        name: "engine",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "error",
+    name: "AccessControlBadConfirmation",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "AccessControlUnauthorizedAccount",
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "neededRole",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "ActiveRoundOnPreviousEngine",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "EnforcedPause",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ExpectedPause",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidInitialization",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotInitializing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "OnlyVotingEngine",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ReentrancyGuardReentrantCall",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "SafeCastOverflowedUintDowncast",
+    inputs: [
+      {
+        name: "bits",
+        type: "uint8",
+        internalType: "uint8",
+      },
+      {
+        name: "value",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "SafeERC20FailedOperation",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+  },
 ] as const;

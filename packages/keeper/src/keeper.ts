@@ -16,7 +16,13 @@
  * Vote ciphertext is tlock-encrypted to a future drand round. After the epoch
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
  */
-import { keccak256, type PublicClient, type WalletClient, type Chain, type Account } from "viem";
+import {
+  keccak256,
+  type PublicClient,
+  type WalletClient,
+  type Chain,
+  type Account,
+} from "viem";
 import {
   HttpCachingChain,
   HttpChainClient,
@@ -45,7 +51,7 @@ import {
   readRound,
   readRoundCommitKeys,
   readRoundConfigForRound,
-  readRoundRevealGracePeriod,
+  readRoundLifecycleState,
 } from "./contract-reads.js";
 import { config } from "./config.js";
 import type { Logger } from "./logger.js";
@@ -103,7 +109,10 @@ function normalizeDrandChainHash(
   return normalized.slice(2);
 }
 
-function cachedTlockClient(cacheKey: string, create: () => ChainClient): ChainClient {
+function cachedTlockClient(
+  cacheKey: string,
+  create: () => ChainClient,
+): ChainClient {
   let client = tlockClientCache.get(cacheKey);
   if (!client) {
     client = create();
@@ -132,13 +141,17 @@ function resolveTlockClientForDrandChain(
 ): ChainClient {
   const normalized = normalizeDrandChainHash(drandChainHash);
   if (!normalized || normalized === MAINNET_QUICKNET_CHAIN_HASH) {
-    return cachedTlockClient(MAINNET_QUICKNET_CHAIN_HASH, () => mainnetClient());
+    return cachedTlockClient(MAINNET_QUICKNET_CHAIN_HASH, () =>
+      mainnetClient(),
+    );
   }
   if (normalized === QUICKNET_T_CHAIN.chainHash) {
     return cachedTlockClient(QUICKNET_T_CHAIN.chainHash, createQuicknetTClient);
   }
   if (normalized === TLOCK_JS_TESTNET_CHAIN_HASH) {
-    return cachedTlockClient(TLOCK_JS_TESTNET_CHAIN_HASH, () => testnetClient());
+    return cachedTlockClient(TLOCK_JS_TESTNET_CHAIN_HASH, () =>
+      testnetClient(),
+    );
   }
 
   throw new Error(
@@ -190,7 +203,9 @@ let lastBlockObservedAtMs: number | null = null;
 // worst-case drift to roughly one minute total.
 const MAX_BLOCK_TIME_CACHE_AGE_S = 30;
 
-async function resolveOnChainNowSeconds(publicClient: PublicClient): Promise<bigint> {
+async function resolveOnChainNowSeconds(
+  publicClient: PublicClient,
+): Promise<bigint> {
   try {
     const block = await publicClient.getBlock({ blockTag: "latest" });
     lastBlockTimestampS = block.timestamp;
@@ -199,11 +214,18 @@ async function resolveOnChainNowSeconds(publicClient: PublicClient): Promise<big
   } catch (rpcError) {
     if (lastBlockTimestampS === null || lastBlockObservedAtMs === null) {
       // No cache to extrapolate from — fail loud rather than guessing with a wall clock.
-      throw new Error("RPC block fetch failed and no cached block timestamp is available");
+      throw new Error(
+        "RPC block fetch failed and no cached block timestamp is available",
+      );
     }
-    const elapsedS = Math.max(0, Math.floor((Date.now() - lastBlockObservedAtMs) / 1000));
+    const elapsedS = Math.max(
+      0,
+      Math.floor((Date.now() - lastBlockObservedAtMs) / 1000),
+    );
     if (elapsedS > MAX_BLOCK_TIME_CACHE_AGE_S) {
-      throw new Error(`RPC block fetch failed and cached block timestamp is stale (${elapsedS}s old)`);
+      throw new Error(
+        `RPC block fetch failed and cached block timestamp is stale (${elapsedS}s old)`,
+      );
     }
     console.warn(
       `[Keeper] RPC block fetch failed; extrapolating cached block.timestamp by ${elapsedS}s ` +
@@ -472,11 +494,14 @@ async function fetchIndexedCiphertextsForRound(params: {
   logger: Logger;
 }): Promise<IndexedCiphertextMap | null> {
   if (!config.ponderBaseUrl) {
-    params.logger.warn("PONDER_BASE_URL is not configured; cannot fetch indexed vote ciphertexts", {
-      kind: params.kind,
-      contentId: Number(params.contentId),
-      roundId: Number(params.roundId),
-    });
+    params.logger.warn(
+      "PONDER_BASE_URL is not configured; cannot fetch indexed vote ciphertexts",
+      {
+        kind: params.kind,
+        contentId: Number(params.contentId),
+        roundId: Number(params.roundId),
+      },
+    );
     return null;
   }
 
@@ -488,12 +513,17 @@ async function fetchIndexedCiphertextsForRound(params: {
       url.searchParams.set("contentId", params.contentId.toString());
       url.searchParams.set("roundId", params.roundId.toString());
       url.searchParams.set("limit", String(INDEXED_CIPHERTEXT_PAGE_SIZE));
-      url.searchParams.set("offset", String(page * INDEXED_CIPHERTEXT_PAGE_SIZE));
+      url.searchParams.set(
+        "offset",
+        String(page * INDEXED_CIPHERTEXT_PAGE_SIZE),
+      );
 
       // H-4 (2026-05-22 audit): previously fetched without any timeout, so a slow Ponder
       // response could stall the whole reveal loop. 5s is well above Ponder's normal
       // p99; anything beyond is unhealthy and the keeper retries on the next tick.
-      const response = await fetch(url, { signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS) });
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
+      });
       if (!response.ok) {
         params.logger.warn("Failed to fetch indexed vote ciphertext", {
           kind: params.kind,
@@ -503,14 +533,17 @@ async function fetchIndexedCiphertextsForRound(params: {
         return null;
       }
 
-      const body = (await response.json()) as { items?: IndexedCiphertextRecord[] };
+      const body = (await response.json()) as {
+        items?: IndexedCiphertextRecord[];
+      };
       const items = body.items ?? [];
       for (const item of items) {
         if (item.commitKey) {
           indexedCiphertexts.set(indexedCiphertextKey(item.commitKey), item);
         }
       }
-      if (items.length < INDEXED_CIPHERTEXT_PAGE_SIZE) return indexedCiphertexts;
+      if (items.length < INDEXED_CIPHERTEXT_PAGE_SIZE)
+        return indexedCiphertexts;
     }
     return indexedCiphertexts;
   } catch (err: unknown) {
@@ -529,25 +562,36 @@ function getIndexedCiphertext(params: {
   expectedCiphertextHash: `0x${string}`;
   logger: Logger;
 }): `0x${string}` | null {
-  const record = params.indexedCiphertexts.get(indexedCiphertextKey(params.commitKey));
+  const record = params.indexedCiphertexts.get(
+    indexedCiphertextKey(params.commitKey),
+  );
   if (!record?.ciphertext || !record.ciphertextHash) {
     return null;
   }
-  if (record.ciphertextHash.toLowerCase() !== params.expectedCiphertextHash.toLowerCase()) {
-    params.logger.error("Indexed ciphertext hash does not match on-chain commit hash", {
-      kind: params.kind,
-      commitKey: params.commitKey,
-      indexedCiphertextHash: record.ciphertextHash,
-      expectedCiphertextHash: params.expectedCiphertextHash,
-    });
+  if (
+    record.ciphertextHash.toLowerCase() !==
+    params.expectedCiphertextHash.toLowerCase()
+  ) {
+    params.logger.error(
+      "Indexed ciphertext hash does not match on-chain commit hash",
+      {
+        kind: params.kind,
+        commitKey: params.commitKey,
+        indexedCiphertextHash: record.ciphertextHash,
+        expectedCiphertextHash: params.expectedCiphertextHash,
+      },
+    );
     return null;
   }
   if (keccak256(record.ciphertext) !== params.expectedCiphertextHash) {
-    params.logger.error("Indexed ciphertext bytes do not hash to on-chain ciphertext hash", {
-      kind: params.kind,
-      commitKey: params.commitKey,
-      expectedCiphertextHash: params.expectedCiphertextHash,
-    });
+    params.logger.error(
+      "Indexed ciphertext bytes do not hash to on-chain ciphertext hash",
+      {
+        kind: params.kind,
+        commitKey: params.commitKey,
+        expectedCiphertextHash: params.expectedCiphertextHash,
+      },
+    );
     return null;
   }
   return record.ciphertext;
@@ -577,7 +621,9 @@ export async function resolveRounds(
   try {
     now = await resolveOnChainNowSeconds(publicClient);
   } catch (err) {
-    logger.error(`[Keeper] Cannot resolve current block time: ${err instanceof Error ? err.message : String(err)}`);
+    logger.error(
+      `[Keeper] Cannot resolve current block time: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return emptyResult();
   }
 
@@ -613,6 +659,19 @@ export async function resolveRounds(
         activeRoundId = 0n;
         latestRoundId = 0n;
       }
+
+      let activeRoundBlocksDormancy: boolean | undefined;
+      const readActiveRoundBlocksDormancy = async () => {
+        if (activeRoundBlocksDormancy === undefined) {
+          activeRoundBlocksDormancy = (await publicClient.readContract({
+            address: engineAddr,
+            abi: RoundVotingEngineAbi,
+            functionName: "isDormancyBlocked",
+            args: [contentId],
+          })) as boolean;
+        }
+        return activeRoundBlocksDormancy;
+      };
 
       if (activeRoundId > 0n) {
         // --- 1. REVEAL LOOP: Decrypt and reveal unrevealed commits ---
@@ -660,19 +719,6 @@ export async function resolveRounds(
         // --- 2. SETTLE: If threshold reached (enough RBTS votes revealed) ---
         const rbtsRevealQuorum =
           roundConfig.minVoters > 3n ? roundConfig.minVoters : 3n;
-        let activeRoundBlocksDormancy: boolean | undefined;
-        const readActiveRoundBlocksDormancy = async () => {
-          if (activeRoundBlocksDormancy === undefined) {
-            activeRoundBlocksDormancy = (await publicClient.readContract({
-              address: engineAddr,
-              abi: RoundVotingEngineAbi,
-              functionName: "isDormancyBlocked",
-              args: [contentId],
-            })) as boolean;
-          }
-          return activeRoundBlocksDormancy;
-        };
-
         if (
           round.state === RoundState.Open &&
           round.revealedCount >= rbtsRevealQuorum
@@ -692,16 +738,17 @@ export async function resolveRounds(
             });
             result.roundsSettled++;
             enqueueRoundForCleanup(contentId, activeRoundId);
-            result.advisoryLaunchCreditsClaimed += await _claimAdvisoryLaunchCredits(
-              publicClient,
-              walletClient,
-              chain,
-              account,
-              logger,
-              advisoryAddr,
-              contentId,
-              activeRoundId,
-            );
+            result.advisoryLaunchCreditsClaimed +=
+              await _claimAdvisoryLaunchCredits(
+                publicClient,
+                walletClient,
+                chain,
+                account,
+                logger,
+                advisoryAddr,
+                contentId,
+                activeRoundId,
+              );
 
             // Drive bundle qualification (no-op for non-bundled content). Settlement only
             // records the round into the bundle slot; qualification — which iterates voters
@@ -738,22 +785,18 @@ export async function resolveRounds(
           round.revealedCount < rbtsRevealQuorum
         ) {
           try {
-            const [lastCommitRevealableAfter, revealGracePeriod, blocksDormancy] =
-              await Promise.all([
-                publicClient.readContract({
-                  address: engineAddr,
-                  abi: RoundVotingEngineAbi,
-                  functionName: "lastCommitRevealableAfter",
-                  args: [contentId, activeRoundId],
-                }) as Promise<bigint>,
-                readRoundRevealGracePeriod(
-                  publicClient,
-                  engineAddr,
-                  contentId,
-                  activeRoundId,
-                ),
-                readActiveRoundBlocksDormancy(),
-              ]);
+            const [roundLifecycle, blocksDormancy] = await Promise.all([
+              readRoundLifecycleState(
+                publicClient,
+                engineAddr,
+                contentId,
+                activeRoundId,
+              ),
+              readActiveRoundBlocksDormancy(),
+            ]);
+            const lastCommitRevealableAfter =
+              roundLifecycle.lastCommitRevealableAfter;
+            const revealGracePeriod = roundLifecycle.revealGracePeriod;
 
             const revealFailedEligibleAt =
               lastCommitRevealableAfter >
@@ -849,26 +892,40 @@ export async function resolveRounds(
       }
 
       if (latestRoundId > 0n) {
-        result.advisoryLaunchCreditsClaimed += await _claimAdvisoryLaunchCredits(
-          publicClient,
-          walletClient,
-          chain,
-          account,
-          logger,
-          advisoryAddr,
-          contentId,
-          latestRoundId,
-        );
+        result.advisoryLaunchCreditsClaimed +=
+          await _claimAdvisoryLaunchCredits(
+            publicClient,
+            walletClient,
+            chain,
+            account,
+            logger,
+            advisoryAddr,
+            contentId,
+            latestRoundId,
+          );
       }
 
       // --- 6. Dormancy sweep ---
       try {
-        const dormancyEligible = (await publicClient.readContract({
+        const rawContent = await publicClient.readContract({
           address: registryAddr,
           abi: ContentRegistryAbi,
-          functionName: "isDormancyEligible",
+          functionName: "contents",
           args: [contentId],
-        })) as boolean;
+        });
+        const contentTuple = rawContent as unknown as Record<string, unknown> &
+          readonly unknown[];
+        const status = Number(contentTuple.status ?? contentTuple[5] ?? -1);
+        const lastActivityAt = BigInt(
+          String(contentTuple.lastActivityAt ?? contentTuple[4] ?? 0),
+        );
+        const blocksDormancy =
+          activeRoundId > 0n ? await readActiveRoundBlocksDormancy() : false;
+        const dormancyEligible =
+          status === 0 &&
+          !blocksDormancy &&
+          lastActivityAt > 0n &&
+          now > lastActivityAt + config.dormancyPeriod;
 
         if (dormancyEligible) {
           await writeContractAndConfirm(publicClient, walletClient, {
@@ -1036,7 +1093,10 @@ async function _revealCommits(
         salt: `0x${string}`;
       } | null;
       try {
-        decrypted = await decryptTlockVoteCiphertext(ciphertext, commit.drandChainHash);
+        decrypted = await decryptTlockVoteCiphertext(
+          ciphertext,
+          commit.drandChainHash,
+        );
       } catch (err: unknown) {
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
@@ -1155,13 +1215,15 @@ async function readRoundAdvisoryCommitKeys(
   for (let offset = 0; offset < total; offset += batchSize) {
     const size = Math.min(batchSize, total - offset);
     const batch = await Promise.all(
-      Array.from({ length: size }, (_, i) =>
-        publicClient.readContract({
-          address: advisoryAddr,
-          abi: AdvisoryVoteRecorderAbi,
-          functionName: "getRoundAdvisoryCommitKey",
-          args: [contentId, roundId, BigInt(offset + i)],
-        }) as Promise<`0x${string}`>,
+      Array.from(
+        { length: size },
+        (_, i) =>
+          publicClient.readContract({
+            address: advisoryAddr,
+            abi: AdvisoryVoteRecorderAbi,
+            functionName: "getRoundAdvisoryCommitKey",
+            args: [contentId, roundId, BigInt(offset + i)],
+          }) as Promise<`0x${string}`>,
       ),
     );
     results.push(...batch);
@@ -1183,7 +1245,12 @@ async function _revealAdvisoryCommits(
   let revealed = 0;
   let commitKeys: readonly `0x${string}`[];
   try {
-    commitKeys = await readRoundAdvisoryCommitKeys(publicClient, advisoryAddr, contentId, roundId);
+    commitKeys = await readRoundAdvisoryCommitKeys(
+      publicClient,
+      advisoryAddr,
+      contentId,
+      roundId,
+    );
   } catch {
     return 0;
   }
@@ -1244,7 +1311,10 @@ async function _revealAdvisoryCommits(
         salt: `0x${string}`;
       } | null;
       try {
-        decrypted = await decryptTlockVoteCiphertext(ciphertext, commit.drandChainHash);
+        decrypted = await decryptTlockVoteCiphertext(
+          ciphertext,
+          commit.drandChainHash,
+        );
       } catch (err: unknown) {
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
@@ -1261,7 +1331,10 @@ async function _revealAdvisoryCommits(
 
         const count = trackDecryptFailure(commitKey);
         incrementCounter("keeper_decrypt_failures_total");
-        const logFn = count >= MAX_DECRYPT_RETRIES ? logger.error.bind(logger) : logger.warn.bind(logger);
+        const logFn =
+          count >= MAX_DECRYPT_RETRIES
+            ? logger.error.bind(logger)
+            : logger.warn.bind(logger);
         logFn("advisory tlock decryption failed", {
           contentId: contentId.toString(),
           roundId: roundId.toString(),
@@ -1276,7 +1349,10 @@ async function _revealAdvisoryCommits(
       if (!decrypted) {
         const count = trackDecryptFailure(commitKey);
         incrementCounter("keeper_decrypt_failures_total");
-        const logFn = count >= MAX_DECRYPT_RETRIES ? logger.error.bind(logger) : logger.warn.bind(logger);
+        const logFn =
+          count >= MAX_DECRYPT_RETRIES
+            ? logger.error.bind(logger)
+            : logger.warn.bind(logger);
         logFn("Failed to decode advisory tlock ciphertext", {
           contentId: contentId.toString(),
           roundId: roundId.toString(),
@@ -1295,7 +1371,12 @@ async function _revealAdvisoryCommits(
           address: advisoryAddr,
           abi: AdvisoryVoteRecorderAbi,
           functionName: "revealAdvisoryVote",
-          args: [commitKey, decrypted.isUp, decrypted.predictedUpBps, decrypted.salt],
+          args: [
+            commitKey,
+            decrypted.isUp,
+            decrypted.predictedUpBps,
+            decrypted.salt,
+          ],
         });
         logger.info("Revealed advisory vote", {
           contentId: contentId.toString(),
@@ -1340,7 +1421,12 @@ async function _claimAdvisoryLaunchCredits(
   let claimed = 0;
   let commitKeys: readonly `0x${string}`[];
   try {
-    commitKeys = await readRoundAdvisoryCommitKeys(publicClient, advisoryAddr, contentId, roundId);
+    commitKeys = await readRoundAdvisoryCommitKeys(
+      publicClient,
+      advisoryAddr,
+      contentId,
+      roundId,
+    );
   } catch {
     return 0;
   }

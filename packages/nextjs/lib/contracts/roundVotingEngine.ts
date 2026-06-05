@@ -222,6 +222,25 @@ export function parseRound(rawRoundData: unknown): RoundData | undefined {
     };
   }
 
+  if (Array.isArray(round) && round.length >= 7) {
+    return {
+      startTime: toBigInt(round[0]),
+      state: toNumber(round[1]),
+      voteCount: toBigInt(round[2]),
+      revealedCount: toBigInt(round[3]),
+      totalStake: toBigInt(round[4]),
+      upPool: 0n,
+      downPool: 0n,
+      upCount: 0n,
+      downCount: 0n,
+      upWins: false,
+      settledAt: toBigInt(round[6]),
+      thresholdReachedAt: toBigInt(round[5]),
+      weightedUpPool: 0n,
+      weightedDownPool: 0n,
+    };
+  }
+
   if (round.startTime != null) {
     return {
       startTime: toBigInt(round.startTime),

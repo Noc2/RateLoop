@@ -250,15 +250,15 @@ export function useRaterIdentityStake(contentId?: bigint, roundId?: bigint, iden
   const shouldReadStake = Boolean(contentId !== undefined && roundId !== undefined && identityKey);
   const { data: currentStake } = useScaffoldReadContract({
     contractName: "RoundVotingEngine",
-    functionName: "identityRoundStake",
-    args: [contentId, roundId, identityKey ?? zeroHash],
+    functionName: "identityCommitState",
+    args: [contentId, roundId, identityKey ?? zeroHash, zeroAddress],
     query: {
       enabled: shouldReadStake,
     },
   });
 
   const MAX_STAKE = 10_000_000n; // 10 LREP in 6-decimal micro-units.
-  const usedStake = typeof currentStake === "bigint" ? currentStake : 0n;
+  const usedStake = Array.isArray(currentStake) && typeof currentStake[2] === "bigint" ? currentStake[2] : 0n;
   const remainingCapacity = usedStake >= MAX_STAKE ? 0n : MAX_STAKE - usedStake;
 
   return {

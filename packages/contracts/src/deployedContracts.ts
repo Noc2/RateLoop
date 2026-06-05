@@ -5114,25 +5114,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "isDormancyEligible",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "lrepToken",
           inputs: [],
           outputs: [
@@ -5189,77 +5170,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "previewQuestionSubmissionKey",
-          inputs: [
-            {
-              name: "contextUrl",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "imageUrls",
-              type: "string[]",
-              internalType: "string[]",
-            },
-            {
-              name: "videoUrl",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "title",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "description",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "tags",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "categoryId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "details",
-              type: "tuple",
-              internalType: "struct ContentRegistry.SubmissionDetails",
-              components: [
-                {
-                  name: "detailsUrl",
-                  type: "string",
-                  internalType: "string",
-                },
-                {
-                  name: "detailsHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-              ],
-            },
-          ],
-          outputs: [
-            {
-              name: "resolvedCategoryId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "submissionKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "pure",
         },
         {
           type: "function",
@@ -5481,6 +5391,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "submissionMediaValidator",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract SubmissionMediaValidator",
             },
           ],
           stateMutability: "view",
@@ -6430,6 +6353,31 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "QuestionBundleContentLinked",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "bundleIndex",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "QuestionBundleSubmitted",
           inputs: [
             {
@@ -7018,19 +6966,59 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "activeRoundId",
+          name: "advisoryRoundContext",
           inputs: [
             {
               name: "contentId",
               type: "uint256",
               internalType: "uint256",
             },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "targetRound",
+              type: "uint64",
+              internalType: "uint64",
+            },
           ],
           outputs: [
             {
-              name: "",
+              name: "referenceRatingBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "targetRevealableAt",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "drandChainHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "drandGenesisTime",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "drandPeriod",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "rbtsScoringClosed",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "advisoryVoteRecorder",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -7102,35 +7090,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "commitCommittedAt",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint48",
-              internalType: "uint48",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "commitCore",
           inputs: [
             {
@@ -7190,210 +7149,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "commitCredentialMask",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitFreshCredentialMask",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitIdentityHolder",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitIdentityKey",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitPredictedUpBps",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitRbtsRewardWeight",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitRbtsScoreBps",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitRbtsScoringWeight",
+          name: "commitIdentityState",
           inputs: [
             {
               name: "contentId",
@@ -7413,38 +7169,34 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitRbtsStakeReturned",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
+              name: "identityKey",
               type: "bytes32",
               internalType: "bytes32",
             },
-          ],
-          outputs: [
             {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
+              name: "holder",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "committedAt",
+              type: "uint48",
+              internalType: "uint48",
+            },
+            {
+              name: "credentialMask",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "freshCredentialMask",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "frontendEligible",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -7597,29 +7349,44 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "frontendEligibleAtCommit",
+          name: "frontendFeeState",
           inputs: [
             {
-              name: "",
+              name: "contentId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "frontend",
+              type: "address",
+              internalType: "address",
             },
           ],
           outputs: [
             {
-              name: "",
-              type: "bool",
-              internalType: "bool",
+              name: "totalFrontendPool",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "frontendStake",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "totalEligibleStake",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "totalFrontendClaimants",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -7735,68 +7502,15 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "holderCommitKey",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "identityCommitKey",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "identityLastVoteTimestamp",
+          name: "identityCommitState",
           inputs: [
             {
               name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
             },
@@ -7805,39 +7519,25 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bytes32",
               internalType: "bytes32",
             },
+            {
+              name: "holder",
+              type: "address",
+              internalType: "address",
+            },
           ],
           outputs: [
             {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "identityRoundStake",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
+              name: "identityKeyCommitKey",
               type: "bytes32",
               internalType: "bytes32",
             },
-          ],
-          outputs: [
             {
-              name: "",
+              name: "holderKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "identityStake",
               type: "uint256",
               internalType: "uint256",
             },
@@ -7893,30 +7593,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "lastCommitRevealableAfter",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "openRound",
           inputs: [
             {
@@ -7950,49 +7626,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "pendingBundleObserverReplay",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "prepareAdvisoryRound",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundContext",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "previewCommitReferenceRatingBps",
+          name: "previewCommitContext",
           inputs: [
             {
               name: "contentId",
@@ -8002,28 +7636,14 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "",
+              name: "openRoundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "referenceRatingBps",
               type: "uint16",
               internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "previewCommitRoundId",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -8065,6 +7685,99 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "contract ProtocolConfig",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rbtsCommitState",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "predictedUpBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "scoreBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "scoringWeight",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "rewardWeight",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "stakeReturned",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rbtsRoundState",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "scored",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "scoreSeed",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "rewardWeight",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "rewardClaimants",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "voterPool",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -8233,30 +7946,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundClusterPayoutReadyAt",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint48",
-              internalType: "uint48",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "roundConfigSnapshot",
           inputs: [
             {
@@ -8350,88 +8039,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundDrandConfig",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "chainHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "genesisTime",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "period",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundEligibleFrontendCount",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundFrontendPool",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "roundFrontendRegistrySnapshot",
           inputs: [
             {
@@ -8456,29 +8063,39 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundPerFrontendStake",
+          name: "roundLifecycleState",
           inputs: [
             {
-              name: "",
+              name: "contentId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
             },
           ],
           outputs: [
             {
-              name: "",
+              name: "revealGracePeriod",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "lastRevealableAfter",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "cleanupRemaining",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "clusterPayoutReadyAt",
+              type: "uint48",
+              internalType: "uint48",
             },
           ],
           stateMutability: "view",
@@ -8503,335 +8120,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsRewardClaimants",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsRewardWeight",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsScoreSeed",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsScored",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsScoringClosed",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundReferenceRatingBpsForRound",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRevealGracePeriodSnapshot",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundStakeWithEligibleFrontend",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundUnrevealedCleanupRemaining",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundVoterPool",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "rounds",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "startTime",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "state",
-              type: "uint8",
-              internalType: "enum RoundLib.RoundState",
-            },
-            {
-              name: "voteCount",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "revealedCount",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "totalStake",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "upPool",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "downPool",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "upCount",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "downCount",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "upWins",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "settledAt",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "thresholdReachedAt",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "weightedUpPool",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "weightedDownPool",
-              type: "uint64",
-              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -8875,35 +8163,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "targetRoundRevealableTimestamp",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "targetRound",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "transferReward",
           inputs: [
             {
@@ -8929,36 +8188,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "voterCommitHash",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "voterLastVoteTimestamp",
+          name: "voteCooldownTimestamps",
           inputs: [
             {
               name: "contentId",
@@ -8970,12 +8200,66 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "identityHolder",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
           ],
           outputs: [
             {
-              name: "",
+              name: "voterLastVote",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "identityHolderLastVote",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "identityLastVote",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "voterCommitKey",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "commitHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -9675,11 +8959,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "ActiveRoundStillOpen",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "AlreadyClaimed",
           inputs: [],
         },
@@ -9892,11 +9171,10 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {
-        activeRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         currentRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         hasCommits: "contracts/interfaces/IRoundVotingEngine.sol",
         isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
-        rounds: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         DEFAULT_ADMIN_ROLE:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
@@ -23652,6 +22930,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "revokeWorldCredential",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "revokedHumanNullifierByProvider",
           inputs: [
             {
@@ -32469,25 +31765,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "isDormancyEligible",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "lrepToken",
           inputs: [],
           outputs: [
@@ -32544,77 +31821,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "previewQuestionSubmissionKey",
-          inputs: [
-            {
-              name: "contextUrl",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "imageUrls",
-              type: "string[]",
-              internalType: "string[]",
-            },
-            {
-              name: "videoUrl",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "title",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "description",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "tags",
-              type: "string",
-              internalType: "string",
-            },
-            {
-              name: "categoryId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "details",
-              type: "tuple",
-              internalType: "struct ContentRegistry.SubmissionDetails",
-              components: [
-                {
-                  name: "detailsUrl",
-                  type: "string",
-                  internalType: "string",
-                },
-                {
-                  name: "detailsHash",
-                  type: "bytes32",
-                  internalType: "bytes32",
-                },
-              ],
-            },
-          ],
-          outputs: [
-            {
-              name: "resolvedCategoryId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "submissionKey",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "pure",
         },
         {
           type: "function",
@@ -32836,6 +32042,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bool",
               internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "submissionMediaValidator",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract SubmissionMediaValidator",
             },
           ],
           stateMutability: "view",
@@ -33785,6 +33004,31 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "QuestionBundleContentLinked",
+          inputs: [
+            {
+              name: "bundleId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "bundleIndex",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "QuestionBundleSubmitted",
           inputs: [
             {
@@ -34373,19 +33617,59 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "activeRoundId",
+          name: "advisoryRoundContext",
           inputs: [
             {
               name: "contentId",
               type: "uint256",
               internalType: "uint256",
             },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "targetRound",
+              type: "uint64",
+              internalType: "uint64",
+            },
           ],
           outputs: [
             {
-              name: "",
+              name: "referenceRatingBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "targetRevealableAt",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "drandChainHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "drandGenesisTime",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "drandPeriod",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "rbtsScoringClosed",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "advisoryVoteRecorder",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -34457,35 +33741,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "commitCommittedAt",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint48",
-              internalType: "uint48",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "commitCore",
           inputs: [
             {
@@ -34545,210 +33800,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "commitCredentialMask",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitFreshCredentialMask",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitIdentityHolder",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitIdentityKey",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitPredictedUpBps",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitRbtsRewardWeight",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitRbtsScoreBps",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitRbtsScoringWeight",
+          name: "commitIdentityState",
           inputs: [
             {
               name: "contentId",
@@ -34768,38 +33820,34 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "commitRbtsStakeReturned",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
+              name: "identityKey",
               type: "bytes32",
               internalType: "bytes32",
             },
-          ],
-          outputs: [
             {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
+              name: "holder",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "committedAt",
+              type: "uint48",
+              internalType: "uint48",
+            },
+            {
+              name: "credentialMask",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "freshCredentialMask",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "frontendEligible",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -34952,29 +34000,44 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "frontendEligibleAtCommit",
+          name: "frontendFeeState",
           inputs: [
             {
-              name: "",
+              name: "contentId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
+              name: "frontend",
+              type: "address",
+              internalType: "address",
             },
           ],
           outputs: [
             {
-              name: "",
-              type: "bool",
-              internalType: "bool",
+              name: "totalFrontendPool",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "frontendStake",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "totalEligibleStake",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "totalFrontendClaimants",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -35090,68 +34153,15 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "holderCommitKey",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "identityCommitKey",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "identityLastVoteTimestamp",
+          name: "identityCommitState",
           inputs: [
             {
               name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
             },
@@ -35160,39 +34170,25 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bytes32",
               internalType: "bytes32",
             },
+            {
+              name: "holder",
+              type: "address",
+              internalType: "address",
+            },
           ],
           outputs: [
             {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "identityRoundStake",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
+              name: "identityKeyCommitKey",
               type: "bytes32",
               internalType: "bytes32",
             },
-          ],
-          outputs: [
             {
-              name: "",
+              name: "holderKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "identityStake",
               type: "uint256",
               internalType: "uint256",
             },
@@ -35248,30 +34244,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "lastCommitRevealableAfter",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "openRound",
           inputs: [
             {
@@ -35305,49 +34277,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "pendingBundleObserverReplay",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "prepareAdvisoryRound",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundContext",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "previewCommitReferenceRatingBps",
+          name: "previewCommitContext",
           inputs: [
             {
               name: "contentId",
@@ -35357,28 +34287,14 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [
             {
-              name: "",
+              name: "openRoundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "referenceRatingBps",
               type: "uint16",
               internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "previewCommitRoundId",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -35420,6 +34336,99 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "contract ProtocolConfig",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rbtsCommitState",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "predictedUpBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "scoreBps",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "scoringWeight",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "rewardWeight",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "stakeReturned",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rbtsRoundState",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "scored",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "scoreSeed",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "rewardWeight",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "rewardClaimants",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "voterPool",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -35588,30 +34597,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundClusterPayoutReadyAt",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint48",
-              internalType: "uint48",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "roundConfigSnapshot",
           inputs: [
             {
@@ -35705,88 +34690,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundDrandConfig",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "chainHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "genesisTime",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "period",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundEligibleFrontendCount",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundFrontendPool",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "roundFrontendRegistrySnapshot",
           inputs: [
             {
@@ -35811,29 +34714,39 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "roundPerFrontendStake",
+          name: "roundLifecycleState",
           inputs: [
             {
-              name: "",
+              name: "contentId",
               type: "uint256",
               internalType: "uint256",
             },
             {
-              name: "",
+              name: "roundId",
               type: "uint256",
               internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
             },
           ],
           outputs: [
             {
-              name: "",
+              name: "revealGracePeriod",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "lastRevealableAfter",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "cleanupRemaining",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "clusterPayoutReadyAt",
+              type: "uint48",
+              internalType: "uint48",
             },
           ],
           stateMutability: "view",
@@ -35858,335 +34771,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "address",
               internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsRewardClaimants",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsRewardWeight",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsScoreSeed",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsScored",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRbtsScoringClosed",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundReferenceRatingBpsForRound",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint16",
-              internalType: "uint16",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundRevealGracePeriodSnapshot",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundStakeWithEligibleFrontend",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundUnrevealedCleanupRemaining",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "roundVoterPool",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "rounds",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "startTime",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "state",
-              type: "uint8",
-              internalType: "enum RoundLib.RoundState",
-            },
-            {
-              name: "voteCount",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "revealedCount",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "totalStake",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "upPool",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "downPool",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "upCount",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "downCount",
-              type: "uint16",
-              internalType: "uint16",
-            },
-            {
-              name: "upWins",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "settledAt",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "thresholdReachedAt",
-              type: "uint48",
-              internalType: "uint48",
-            },
-            {
-              name: "weightedUpPool",
-              type: "uint64",
-              internalType: "uint64",
-            },
-            {
-              name: "weightedDownPool",
-              type: "uint64",
-              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -36230,35 +34814,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "targetRoundRevealableTimestamp",
-          inputs: [
-            {
-              name: "contentId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "roundId",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "targetRound",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "transferReward",
           inputs: [
             {
@@ -36284,36 +34839,7 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "voterCommitHash",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "voterLastVoteTimestamp",
+          name: "voteCooldownTimestamps",
           inputs: [
             {
               name: "contentId",
@@ -36325,12 +34851,66 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "identityHolder",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
           ],
           outputs: [
             {
-              name: "",
+              name: "voterLastVote",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "identityHolderLastVote",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "identityLastVote",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "voterCommitKey",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "commitHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "commitKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -37030,11 +35610,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
-          name: "ActiveRoundStillOpen",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "AlreadyClaimed",
           inputs: [],
         },
@@ -37247,11 +35822,10 @@ const deployedContracts: GenericContractsDeclaration = {
         },
       ],
       inheritedFunctions: {
-        activeRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         currentRoundId: "contracts/interfaces/IRoundVotingEngine.sol",
         hasCommits: "contracts/interfaces/IRoundVotingEngine.sol",
         isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
-        rounds: "contracts/interfaces/IRoundVotingEngine.sol",
+        roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
         DEFAULT_ADMIN_ROLE:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
@@ -49931,6 +48505,24 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "account",
               type: "address",
               internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "revokeWorldCredential",
+          inputs: [
+            {
+              name: "rater",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "kind",
+              type: "uint8",
+              internalType: "uint8",
             },
           ],
           outputs: [],

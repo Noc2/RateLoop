@@ -29,6 +29,7 @@ import { extendFeedbackBonusAwardDeadlinesForTerminalRound } from "./feedback-bo
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
 const RBTS_NEGATIVE_SPREAD_FORFEIT_BPS = 15_000n;
+const HUMAN_CREDENTIAL_MASK = 1 << 3;
 const ZERO_SCORE_SEED = `0x${"00".repeat(32)}` as `0x${string}`;
 const ZERO_BYTES32 = `0x${"00".repeat(32)}` as `0x${string}`;
 
@@ -53,7 +54,10 @@ function normalizeBytes32(value: unknown): `0x${string}` | null {
 
 function addressIdentityKey(account: `0x${string}`) {
   return keccak256(
-    encodePacked(["string", "address"], ["rateloop.address-identity-v1", account]),
+    encodePacked(
+      ["string", "address"],
+      ["rateloop.address-identity-v1", account],
+    ),
   );
 }
 
@@ -67,7 +71,7 @@ function nonZeroIdentityKey(
     : addressIdentityKey(fallbackVoter);
 }
 
-async function resolveVoteIdentityAtCommit(params: {
+async function resolveCommitIdentityAtCommit(params: {
   context: any;
   contentId: bigint;
   roundId: bigint;
@@ -83,24 +87,32 @@ async function resolveVoteIdentityAtCommit(params: {
       identityKey: addressIdentityKey(rawVoter),
       identityHolder: rawVoter,
       identityVoter: rawVoter,
+      credentialMask: 0,
+      freshCredentialMask: 0,
+      hasHumanCredential: false,
     };
   }
 
   try {
-    const [identityKey, holder] = await Promise.all([
-      params.context.client.readContract({
-        abi: RoundVotingEngineAbi,
-        address: engineAddress,
-        functionName: "commitIdentityKey",
-        args: [params.contentId, params.roundId, params.commitKey],
-      }),
-      params.context.client.readContract({
-        abi: RoundVotingEngineAbi,
-        address: engineAddress,
-        functionName: "commitIdentityHolder",
-        args: [params.contentId, params.roundId, params.commitKey],
-      }),
-    ]);
+    const state = (await params.context.client.readContract({
+      abi: RoundVotingEngineAbi,
+      address: engineAddress,
+      functionName: "commitIdentityState",
+      args: [params.contentId, params.roundId, params.commitKey],
+    })) as
+      | readonly [unknown, unknown, unknown, unknown, unknown, unknown]
+      | {
+          identityKey?: unknown;
+          holder?: unknown;
+          credentialMask?: unknown;
+          freshCredentialMask?: unknown;
+        };
+    const identityKey = Array.isArray(state) ? state[0] : state.identityKey;
+    const holder = Array.isArray(state) ? state[1] : state.holder;
+    const credentialMask =
+      Number(Array.isArray(state) ? state[3] : state.credentialMask) || 0;
+    const freshCredentialMask =
+      Number(Array.isArray(state) ? state[4] : state.freshCredentialMask) || 0;
     const holderAddress = normalizeAddress(String(holder));
     const identityHolder =
       holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter;
@@ -108,51 +120,19 @@ async function resolveVoteIdentityAtCommit(params: {
       identityKey: nonZeroIdentityKey(identityKey, rawVoter),
       identityHolder,
       identityVoter: identityHolder,
+      credentialMask,
+      freshCredentialMask,
+      hasHumanCredential: (credentialMask & HUMAN_CREDENTIAL_MASK) !== 0,
     };
   } catch {
     return {
       identityKey: addressIdentityKey(rawVoter),
       identityHolder: rawVoter,
       identityVoter: rawVoter,
+      credentialMask: 0,
+      freshCredentialMask: 0,
+      hasHumanCredential: false,
     };
-  }
-}
-
-async function resolveCommitCredentialMasks(params: {
-  context: any;
-  contentId: bigint;
-  roundId: bigint;
-  commitKey: `0x${string}`;
-}) {
-  const engineAddress = firstContractAddress(
-    params.context.contracts?.RoundVotingEngine?.address,
-  );
-  if (!params.context.client?.readContract || !engineAddress) {
-    return { credentialMask: 0, freshCredentialMask: 0 };
-  }
-
-  try {
-    const [credentialMask, freshCredentialMask] = await Promise.all([
-      params.context.client.readContract({
-        abi: RoundVotingEngineAbi as any,
-        address: engineAddress,
-        functionName: "commitCredentialMask",
-        args: [params.contentId, params.roundId, params.commitKey],
-      }),
-      params.context.client.readContract({
-        abi: RoundVotingEngineAbi as any,
-        address: engineAddress,
-        functionName: "commitFreshCredentialMask",
-        args: [params.contentId, params.roundId, params.commitKey],
-      }),
-    ]);
-
-    return {
-      credentialMask: Number(credentialMask),
-      freshCredentialMask: Number(freshCredentialMask),
-    };
-  } catch {
-    return { credentialMask: 0, freshCredentialMask: 0 };
   }
 }
 
@@ -232,6 +212,7 @@ async function resolveRoundVoteabilityStateAtCommit(params: {
   roundId: bigint;
   targetRound: bigint;
   epochEnd: bigint;
+  commitHasHumanCredential?: boolean;
   indexedRound?: {
     hasHumanVerifiedCommit?: boolean | null;
     revealGracePeriod?: bigint | number | string | null;
@@ -255,41 +236,38 @@ async function resolveRoundVoteabilityStateAtCommit(params: {
   }
 
   try {
-    const [hasHumanVerifiedCommit, targetRoundRevealableAt, revealGracePeriod] =
-      await Promise.all([
-        indexedHasHumanVerifiedCommit
-          ? true
-          : params.context.client.readContract({
-              abi: RoundVotingEngineAbi,
-              address: engineAddress,
-              functionName: "roundHasHumanVerifiedCommit",
-              args: [params.contentId, params.roundId],
-            }),
+    const [advisoryRoundContext, lifecycleState] = await Promise.all([
+      params.context.client.readContract({
+        abi: RoundVotingEngineAbi,
+        address: engineAddress,
+        functionName: "advisoryRoundContext",
+        args: [params.contentId, params.roundId, params.targetRound],
+      }),
+      indexedRevealGracePeriod ??
         params.context.client.readContract({
           abi: RoundVotingEngineAbi,
           address: engineAddress,
-          functionName: "targetRoundRevealableTimestamp",
-          args: [params.contentId, params.roundId, params.targetRound],
+          functionName: "roundLifecycleState",
+          args: [params.contentId, params.roundId],
         }),
-        indexedRevealGracePeriod ??
-          params.context.client.readContract({
-            abi: RoundVotingEngineAbi,
-            address: engineAddress,
-            functionName: "roundRevealGracePeriodSnapshot",
-            args: [params.contentId, params.roundId],
-          }),
-      ]);
+    ]);
+    const targetRoundRevealableAt = Array.isArray(advisoryRoundContext)
+      ? advisoryRoundContext[1]
+      : params.epochEnd;
     const revealableAt =
       typeof targetRoundRevealableAt === "bigint"
         ? targetRoundRevealableAt
         : BigInt(String(targetRoundRevealableAt));
+    const rawGrace = Array.isArray(lifecycleState)
+      ? lifecycleState[0]
+      : (indexedRevealGracePeriod ?? lifecycleState);
     const grace =
-      typeof revealGracePeriod === "bigint"
-        ? revealGracePeriod
-        : BigInt(String(revealGracePeriod));
+      typeof rawGrace === "bigint" ? rawGrace : BigInt(String(rawGrace));
 
     return {
-      hasHumanVerifiedCommit: Boolean(hasHumanVerifiedCommit),
+      hasHumanVerifiedCommit:
+        indexedHasHumanVerifiedCommit ||
+        params.commitHasHumanCredential === true,
       lastCommitRevealableAfter:
         revealableAt > params.epochEnd ? revealableAt : params.epochEnd,
       revealGracePeriod: grace > 0n ? grace : null,
@@ -395,12 +373,13 @@ async function resolveRbtsScoringWeights(params: {
   await Promise.all(
     params.roundVotes.map(async (roundVote) => {
       try {
-        const weight = await params.context.client.readContract({
+        const state = await params.context.client.readContract({
           abi: RoundVotingEngineAbi,
           address: engineAddress,
-          functionName: "commitRbtsScoringWeight",
+          functionName: "rbtsCommitState",
           args: [params.contentId, params.roundId, roundVote.commitKey],
         });
+        const weight = Array.isArray(state) ? state[2] : 0n;
         weights.set(roundVote.id, BigInt(String(weight)));
       } catch {
         weights.set(roundVote.id, 0n);
@@ -653,21 +632,20 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   const rawVoter = normalizeAddress(voter) ?? voter;
   const voteKey = `${contentId}-${roundId}-${rawVoter}`;
   const commitKey = rbtsCommitKey(rawVoter, commitHash);
-  const { identityKey, identityHolder, identityVoter } =
-    await resolveVoteIdentityAtCommit({
-      context,
-      contentId,
-      roundId,
-      voter: rawVoter,
-      commitKey,
-    });
-  const { credentialMask, freshCredentialMask } =
-    await resolveCommitCredentialMasks({
-      context,
-      contentId,
-      roundId,
-      commitKey,
-    });
+  const {
+    identityKey,
+    identityHolder,
+    identityVoter,
+    credentialMask,
+    freshCredentialMask,
+    hasHumanCredential,
+  } = await resolveCommitIdentityAtCommit({
+    context,
+    contentId,
+    roundId,
+    voter: rawVoter,
+    commitKey,
+  });
   const referenceRatingBps = Number(roundReferenceRatingBps);
 
   // Upsert round record — VoteCommitted is the first event for a new round
@@ -693,6 +671,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     roundId,
     targetRound,
     epochEnd,
+    commitHasHumanCredential: hasHumanCredential,
     indexedRound: existingRound,
   });
 
@@ -1011,7 +990,10 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
       const ownWeight = scoringWeights.get(roundVote.id) ?? 0n;
       const stake = roundVote.stake ?? 0n;
 
-      const drawKey = nonZeroIdentityKey(roundVote.identityKey, roundVote.voter);
+      const drawKey = nonZeroIdentityKey(
+        roundVote.identityKey,
+        roundVote.voter,
+      );
       const referenceIndex = rbtsOtherIndex({
         scoreSeed,
         commitKey: drawKey,

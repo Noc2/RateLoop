@@ -109,6 +109,7 @@ import {
 } from "~~/lib/questionRoundConfig";
 import {
   buildQuestionBundleSubmissionRevealCommitment,
+  buildQuestionSubmissionKey,
   buildQuestionSubmissionRevealCommitment,
 } from "~~/lib/questionSubmissionCommitment";
 import {
@@ -2173,29 +2174,18 @@ export function ContentSubmissionSection() {
       if (isBundleSubmission) {
         await assertQuestionBundleSubmissionSelector(publicClient, registryAddress);
       }
-      const getQuestionSubmissionKey = async (question: (typeof bundleQuestions)[number]) => {
-        if (!publicClient) {
-          throw new Error("Could not connect to the current network.");
-        }
-
-        const [, submissionKey] = (await publicClient.readContract({
-          address: registryAddress,
-          abi: registryInfo.abi,
-          functionName: "previewQuestionSubmissionKey",
-          args: [
-            question.contextUrl,
-            question.imageUrls,
-            question.videoUrl,
-            question.title,
-            question.description,
-            question.tags,
-            question.categoryId,
-            { detailsUrl: question.detailsUrl, detailsHash: question.detailsHash },
-          ],
-        } as any)) as readonly [bigint, `0x${string}`];
-
-        return submissionKey;
-      };
+      const getQuestionSubmissionKey = (question: (typeof bundleQuestions)[number]) =>
+        buildQuestionSubmissionKey({
+          categoryId: question.categoryId,
+          contextUrl: question.contextUrl,
+          detailsHash: question.detailsHash,
+          detailsUrl: question.detailsUrl,
+          imageUrls: question.imageUrls,
+          title: question.title,
+          description: question.description,
+          tags: question.tags,
+          videoUrl: question.videoUrl,
+        });
       const revealCommitment = isBundleSubmission
         ? buildQuestionBundleSubmissionRevealCommitment({
             questions: bundleQuestions,
@@ -2228,7 +2218,7 @@ export function ContentSubmissionSection() {
             bountyEligibility: selectedBountyEligibility.mode,
             roundConfig: selectedRoundConfig,
             salt: primaryQuestion.salt,
-            submissionKey: await getQuestionSubmissionKey(primaryQuestion),
+            submissionKey: getQuestionSubmissionKey(primaryQuestion),
             submitter: submitterAddress,
             tags: primaryQuestion.tags,
             title: primaryQuestion.title,

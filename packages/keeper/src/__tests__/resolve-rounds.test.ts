@@ -45,7 +45,12 @@ const {
     this.options = options;
   }),
   httpChainClient: vi.fn(function (
-    this: { kind?: string; chain?: unknown; options?: unknown; httpOptions?: unknown },
+    this: {
+      kind?: string;
+      chain?: unknown;
+      options?: unknown;
+      httpOptions?: unknown;
+    },
     chain: unknown,
     options: unknown,
     httpOptions: unknown,
@@ -200,12 +205,14 @@ function makeCommit(overrides: Partial<CommitData> = {}): CommitData {
   const targetRound = overrides.targetRound ?? 123n;
   const drandChainHash =
     overrides.drandChainHash ?? MAINNET_QUICKNET_DRAND_CHAIN_HASH;
-  const ciphertext = overrides.ciphertext ?? makeTlockCiphertext({
-    isUp: true,
-    salt,
-    targetRound,
-    drandChainHash,
-  });
+  const ciphertext =
+    overrides.ciphertext ??
+    makeTlockCiphertext({
+      isUp: true,
+      salt,
+      targetRound,
+      drandChainHash,
+    });
   return {
     voter: VOTER,
     stakeAmount: 100n,
@@ -222,22 +229,15 @@ function makeCommit(overrides: Partial<CommitData> = {}): CommitData {
   };
 }
 
-function toRoundTuple(round: RoundData) {
+function toRoundCoreTuple(round: RoundData) {
   return [
     round.startTime,
     round.state,
     round.voteCount,
     round.revealedCount,
-    0n,
-    0n,
-    0n,
-    0n,
-    0n,
-    false,
-    round.settledAt,
+    round.voteCount,
     round.thresholdReachedAt,
-    0n,
-    0n,
+    round.settledAt,
   ] as const;
 }
 
@@ -349,25 +349,32 @@ function makeHarness(options: {
             return currentRoundId;
           case "nextRoundId":
             return latestRoundId;
-          case "rounds":
-            return tupleResults ? toRoundTuple(round) : round;
+          case "roundCore":
+            return tupleResults ? toRoundCoreTuple(round) : round;
           case "roundConfigSnapshot":
             return tupleResults ? toRoundConfigTuple(roundConfig) : roundConfig;
-          case "roundRevealGracePeriodSnapshot":
-            return options.revealGracePeriod ?? 3600n;
-          case "isDormancyBlocked":
-            return options.roundHasHumanVerifiedCommit ?? true;
-          case "revealGracePeriod":
-            return options.revealGracePeriod ?? 3600n;
-          case "lastCommitRevealableAfter":
-            return (
+          case "roundLifecycleState": {
+            const revealGracePeriod = options.revealGracePeriod ?? 3600n;
+            const lastRevealableAfter =
               options.lastCommitRevealableAfter ??
               Object.values(commits).reduce((max, commit) => {
                 return commit.revealableAfter > max
                   ? commit.revealableAfter
                   : max;
-              }, 0n)
-            );
+              }, 0n);
+            return tupleResults
+              ? ([revealGracePeriod, lastRevealableAfter, 0n, 0n] as const)
+              : {
+                  revealGracePeriod,
+                  lastRevealableAfter,
+                  cleanupRemaining: 0n,
+                  clusterPayoutReadyAt: 0n,
+                };
+          }
+          case "isDormancyBlocked":
+            return options.roundHasHumanVerifiedCommit ?? true;
+          case "revealGracePeriod":
+            return options.revealGracePeriod ?? 3600n;
           case "getRoundCommitKey":
             return commitKeys[Number(args[2])] ?? zeroHash;
           case "commitRevealData":
@@ -383,6 +390,36 @@ function makeHarness(options: {
               options.questionRewardPoolEscrow ??
               "0x0000000000000000000000000000000000000000"
             );
+          case "contents": {
+            const lastActivityAt = dormancyEligible
+              ? now - mockConfig.dormancyPeriod - 1n
+              : now;
+            return tupleResults
+              ? ([
+                  args[0] ?? 1n,
+                  zeroHash,
+                  ACCOUNT,
+                  1n,
+                  lastActivityAt,
+                  0,
+                  0,
+                  "0x0000000000000000000000000000000000000000",
+                  50,
+                  1n,
+                ] as const)
+              : {
+                  id: args[0] ?? 1n,
+                  contentHash: zeroHash,
+                  submitter: ACCOUNT,
+                  createdAt: 1n,
+                  lastActivityAt,
+                  status: 0,
+                  dormantCount: 0,
+                  reviver: "0x0000000000000000000000000000000000000000",
+                  rating: 50,
+                  categoryId: 1n,
+                };
+          }
           case "roundAdvisoryCommitCount":
             return BigInt(advisoryCommitKeys.length);
           case "getRoundAdvisoryCommitKey":
@@ -401,8 +438,6 @@ function makeHarness(options: {
                 true,
               ]
             );
-          case "isDormancyEligible":
-            return dormancyEligible;
           default:
             throw new Error(`Unexpected readContract(${functionName})`);
         }
@@ -712,7 +747,9 @@ describe("resolveRounds", () => {
     expect(result.votesRevealed).toBe(1);
     expect(commits[COMMIT_KEY_1].revealed).toBe(true);
     expect(
-      fetchMock.mock.calls.map(([input]) => new URL(input.toString()).searchParams.get("offset")),
+      fetchMock.mock.calls.map(([input]) =>
+        new URL(input.toString()).searchParams.get("offset"),
+      ),
     ).toEqual(["0", "200"]);
     expect(walletClient.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "revealVoteByCommitKey" }),

@@ -3,6 +3,7 @@ import {
   commitVoteDirect,
   evmIncreaseTime,
   getActiveRoundId,
+  readRoundVoterPool,
   readUint256,
   revealVoteDirect,
   setTestConfig,
@@ -143,7 +144,7 @@ test.describe("Unanimous settlement without reserve subsidy", () => {
   test("voter pool remains bounded after unanimous RBTS settlement", async () => {
     test.skip(!contentId || roundId === 0n, "No content or round from previous test");
 
-    const voterPoolAfterSettlement = await readUint256("roundVoterPool", VOTING_ENGINE, [BigInt(contentId!), roundId]);
+    const voterPoolAfterSettlement = await readRoundVoterPool(VOTING_ENGINE, BigInt(contentId!), roundId);
     expect(voterPoolAfterSettlement).toBeGreaterThanOrEqual(0n);
     expect(voterPoolAfterSettlement).toBeLessThanOrEqual(STAKE * 3n);
   });

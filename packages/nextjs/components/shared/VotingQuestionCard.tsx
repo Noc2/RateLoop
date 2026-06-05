@@ -480,19 +480,20 @@ export function VotingQuestionCard({
   const [showFundFeedbackBonusModal, setShowFundFeedbackBonusModal] = useState(false);
   const detailsId = `voting-card-details-${contentId.toString()}`;
 
-  // Check if user has committed to this round (direction hidden until reveal)
-  // voterCommitHash(contentId, roundId, voter) returns bytes32 (0 = no commit)
-  const { data: myCommitHash } = useScaffoldReadContract({
+  // Check if user has committed to this round (direction hidden until reveal).
+  const { data: myCommitState } = useScaffoldReadContract({
     contractName: "RoundVotingEngine" as any,
-    functionName: "voterCommitHash" as any,
+    functionName: "voterCommitKey" as any,
     args: [contentId, roundId, address] as any,
     watch: true,
     query: { enabled: roundId > 0n && !!address },
   } as any);
 
-  const hasMyVote =
-    myCommitHash != null &&
-    (myCommitHash as unknown as string) !== "0x0000000000000000000000000000000000000000000000000000000000000000";
+  const myCommitStateTuple = Array.isArray(myCommitState) ? myCommitState : [];
+  const hasMyVote = myCommitStateTuple.some(
+    value =>
+      typeof value === "string" && value !== "0x0000000000000000000000000000000000000000000000000000000000000000",
+  );
   const usesDockStatusText = isDockVariant;
   const commitAvailabilityStatus = roundSnapshot.commitAvailability?.status;
   const isRoundFullStatus = isRoundFull || commitAvailabilityStatus === COMMIT_AVAILABILITY_STATUS.RoundFull;

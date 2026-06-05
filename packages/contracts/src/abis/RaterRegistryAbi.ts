@@ -1,2687 +1,2705 @@
 export const RaterRegistryAbi = [
   {
-    "type": "constructor",
-    "inputs": [
+    type: "constructor",
+    inputs: [
       {
-        "name": "admin",
-        "type": "address",
-        "internalType": "address"
+        name: "admin",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "governance",
-        "type": "address",
-        "internalType": "address"
+        name: "governance",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "_worldIdV4Verifier",
-        "type": "address",
-        "internalType": "address"
+        name: "_worldIdV4Verifier",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "_worldIdV4RpId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4RpId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4Action",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "_worldIdV4Action",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "_worldIdV4PresenceAction",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "_worldIdV4PresenceAction",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "_worldIdV4CredentialTtl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4CredentialTtl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4PresenceTtl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4PresenceTtl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4IssuerSchemaId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4IssuerSchemaId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4CredentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "_worldIdV4CredentialGenesisIssuedAtMin",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "nonpayable"
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "ADMIN_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "ADMIN_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "DEFAULT_ADMIN_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "DEFAULT_ADMIN_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "DEFAULT_PRESENCE_TTL",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "DEFAULT_PRESENCE_TTL",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "LAUNCH_CONSUMER_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "LAUNCH_CONSUMER_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "SEEDED_HUMAN_SCOPE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "SEEDED_HUMAN_SCOPE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "SEEDER_ROLE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "SEEDER_ROLE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "WORLD_CREDENTIAL_PASSPORT",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "WORLD_CREDENTIAL_PASSPORT",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "WORLD_CREDENTIAL_PROOF_OF_HUMAN",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "WORLD_CREDENTIAL_PROOF_OF_HUMAN",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "WORLD_CREDENTIAL_SELFIE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "WORLD_CREDENTIAL_SELFIE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "WORLD_ISSUER_SCHEMA_PASSPORT",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "WORLD_ISSUER_SCHEMA_PASSPORT",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "WORLD_ISSUER_SCHEMA_PROOF_OF_HUMAN",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "WORLD_ISSUER_SCHEMA_SELFIE",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "WORLD_ISSUER_SCHEMA_SELFIE",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "acceptDelegate",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    type: "function",
+    name: "acceptDelegate",
+    inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "addressIdentityKey",
-    "inputs": [
+    type: "function",
+    name: "addressIdentityKey",
+    inputs: [
       {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "pure"
+    stateMutability: "pure",
   },
   {
-    "type": "function",
-    "name": "attestHumanCredentialWithV4Proof",
-    "inputs": [
+    type: "function",
+    name: "attestHumanCredentialWithV4Proof",
+    inputs: [
       {
-        "name": "nullifier",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "nullifier",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "nonce",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "nonce",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "expiresAtMin",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "expiresAtMin",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "proof",
-        "type": "uint256[5]",
-        "internalType": "uint256[5]"
-      }
+        name: "proof",
+        type: "uint256[5]",
+        internalType: "uint256[5]",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "attestHumanPresenceWithV4Proof",
-    "inputs": [
+    type: "function",
+    name: "attestHumanPresenceWithV4Proof",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
       },
       {
-        "name": "nullifier",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "nullifier",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "nonce",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "nonce",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "expiresAtMin",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "expiresAtMin",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "proof",
-        "type": "uint256[5]",
-        "internalType": "uint256[5]"
-      }
+        name: "proof",
+        type: "uint256[5]",
+        internalType: "uint256[5]",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "attestWorldCredentialWithV4Proof",
-    "inputs": [
+    type: "function",
+    name: "attestWorldCredentialWithV4Proof",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
       },
       {
-        "name": "nullifier",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "nullifier",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "nonce",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "nonce",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "expiresAtMin",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "expiresAtMin",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "proof",
-        "type": "uint256[5]",
-        "internalType": "uint256[5]"
-      }
+        name: "proof",
+        type: "uint256[5]",
+        internalType: "uint256[5]",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "clearRevokedHumanNullifier",
-    "inputs": [
+    type: "function",
+    name: "clearRevokedHumanNullifier",
+    inputs: [
       {
-        "name": "provider",
-        "type": "uint8",
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+        name: "provider",
+        type: "uint8",
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "nullifierHash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "credentialIdentityKey",
-    "inputs": [
+    type: "function",
+    name: "credentialIdentityKey",
+    inputs: [
       {
-        "name": "provider",
-        "type": "uint8",
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+        name: "provider",
+        type: "uint8",
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "nullifierHash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "pure"
+    stateMutability: "pure",
   },
   {
-    "type": "function",
-    "name": "credentialKindBit",
-    "inputs": [
+    type: "function",
+    name: "credentialKindBit",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "stateMutability": "pure"
+    stateMutability: "pure",
   },
   {
-    "type": "function",
-    "name": "credentialScope",
-    "inputs": [
+    type: "function",
+    name: "credentialScope",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "rater",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "credentialStatusBits",
-    "inputs": [
+    type: "function",
+    name: "credentialStatusBits",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "rater",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "activeMask",
-        "type": "uint8",
-        "internalType": "uint8"
+        name: "activeMask",
+        type: "uint8",
+        internalType: "uint8",
       },
       {
-        "name": "freshMask",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "freshMask",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "delegateOf",
-    "inputs": [
+    type: "function",
+    name: "delegateOf",
+    inputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "delegateTo",
-    "inputs": [
+    type: "function",
+    name: "delegateTo",
+    inputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "followProfile",
-    "inputs": [
+    type: "function",
+    name: "followProfile",
+    inputs: [
       {
-        "name": "target",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "target",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "followerCount",
-    "inputs": [
+    type: "function",
+    name: "followerCount",
+    inputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "followingCount",
-    "inputs": [
+    type: "function",
+    name: "followingCount",
+    inputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "freezeWorldCredentialV4Config",
-    "inputs": [
+    type: "function",
+    name: "freezeWorldCredentialV4Config",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "freezeWorldIdV4PresenceConfig",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    type: "function",
+    name: "freezeWorldIdV4PresenceConfig",
+    inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "freezeWorldIdV4VerifierConfig",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    type: "function",
+    name: "freezeWorldIdV4VerifierConfig",
+    inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "freezeWorldPresenceV4Config",
-    "inputs": [
+    type: "function",
+    name: "freezeWorldPresenceV4Config",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "getHumanCredential",
-    "inputs": [
+    type: "function",
+    name: "getHumanCredential",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "rater",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct RaterRegistry.HumanCredential",
-        "components": [
+        name: "",
+        type: "tuple",
+        internalType: "struct RaterRegistry.HumanCredential",
+        components: [
           {
-            "name": "verified",
-            "type": "bool",
-            "internalType": "bool"
+            name: "verified",
+            type: "bool",
+            internalType: "bool",
           },
           {
-            "name": "revoked",
-            "type": "bool",
-            "internalType": "bool"
+            name: "revoked",
+            type: "bool",
+            internalType: "bool",
           },
           {
-            "name": "provider",
-            "type": "uint8",
-            "internalType": "enum RaterRegistry.HumanCredentialProvider"
+            name: "provider",
+            type: "uint8",
+            internalType: "enum RaterRegistry.HumanCredentialProvider",
           },
           {
-            "name": "nullifierHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "nullifierHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "scope",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "scope",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "verifiedAt",
-            "type": "uint64",
-            "internalType": "uint64"
+            name: "verifiedAt",
+            type: "uint64",
+            internalType: "uint64",
           },
           {
-            "name": "expiresAt",
-            "type": "uint64",
-            "internalType": "uint64"
+            name: "expiresAt",
+            type: "uint64",
+            internalType: "uint64",
           },
           {
-            "name": "evidenceHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
-      }
+            name: "evidenceHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getHumanPresence",
-    "inputs": [
+    type: "function",
+    name: "getHumanPresence",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct RaterRegistry.HumanPresence",
-        "components": [
+        name: "",
+        type: "tuple",
+        internalType: "struct RaterRegistry.HumanPresence",
+        components: [
           {
-            "name": "verified",
-            "type": "bool",
-            "internalType": "bool"
+            name: "verified",
+            type: "bool",
+            internalType: "bool",
           },
           {
-            "name": "kind",
-            "type": "uint8",
-            "internalType": "uint8"
+            name: "kind",
+            type: "uint8",
+            internalType: "uint8",
           },
           {
-            "name": "lastRecheckedAt",
-            "type": "uint64",
-            "internalType": "uint64"
+            name: "lastRecheckedAt",
+            type: "uint64",
+            internalType: "uint64",
           },
           {
-            "name": "freshUntil",
-            "type": "uint64",
-            "internalType": "uint64"
+            name: "freshUntil",
+            type: "uint64",
+            internalType: "uint64",
           },
           {
-            "name": "evidenceHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
-      }
+            name: "evidenceHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getProfile",
-    "inputs": [
+    type: "function",
+    name: "getProfile",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "rater",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct RaterRegistry.RaterProfile",
-        "components": [
+        name: "",
+        type: "tuple",
+        internalType: "struct RaterRegistry.RaterProfile",
+        components: [
           {
-            "name": "raterType",
-            "type": "uint8",
-            "internalType": "enum RaterRegistry.RaterType"
+            name: "raterType",
+            type: "uint8",
+            internalType: "enum RaterRegistry.RaterType",
           },
           {
-            "name": "metadataHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "metadataHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "updatedAt",
-            "type": "uint64",
-            "internalType": "uint64"
-          }
-        ]
-      }
+            name: "updatedAt",
+            type: "uint64",
+            internalType: "uint64",
+          },
+        ],
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getRoleAdmin",
-    "inputs": [
+    type: "function",
+    name: "getRoleAdmin",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "getWorldCredential",
-    "inputs": [
+    type: "function",
+    name: "getWorldCredential",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct RaterRegistry.WorldCredential",
-        "components": [
+        name: "",
+        type: "tuple",
+        internalType: "struct RaterRegistry.WorldCredential",
+        components: [
           {
-            "name": "verified",
-            "type": "bool",
-            "internalType": "bool"
+            name: "verified",
+            type: "bool",
+            internalType: "bool",
           },
           {
-            "name": "revoked",
-            "type": "bool",
-            "internalType": "bool"
+            name: "revoked",
+            type: "bool",
+            internalType: "bool",
           },
           {
-            "name": "kind",
-            "type": "uint8",
-            "internalType": "uint8"
+            name: "kind",
+            type: "uint8",
+            internalType: "uint8",
           },
           {
-            "name": "nullifierHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "nullifierHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "scope",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "scope",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "verifiedAt",
-            "type": "uint64",
-            "internalType": "uint64"
+            name: "verifiedAt",
+            type: "uint64",
+            internalType: "uint64",
           },
           {
-            "name": "expiresAt",
-            "type": "uint64",
-            "internalType": "uint64"
+            name: "expiresAt",
+            type: "uint64",
+            internalType: "uint64",
           },
           {
-            "name": "evidenceHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
-          }
-        ]
-      }
+            name: "evidenceHash",
+            type: "bytes32",
+            internalType: "bytes32",
+          },
+        ],
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "grantRole",
-    "inputs": [
+    type: "function",
+    name: "grantRole",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "hasActiveCredentialKind",
-    "inputs": [
+    type: "function",
+    name: "hasActiveCredentialKind",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "hasActiveHumanCredential",
-    "inputs": [
+    type: "function",
+    name: "hasActiveHumanCredential",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "rater",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "hasRecentCredentialRecheck",
-    "inputs": [
+    type: "function",
+    name: "hasRecentCredentialRecheck",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "hasRole",
-    "inputs": [
+    type: "function",
+    name: "hasRole",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "hashToField",
-    "inputs": [
+    type: "function",
+    name: "hashToField",
+    inputs: [
       {
-        "name": "value",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
+        name: "value",
+        type: "bytes",
+        internalType: "bytes",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "pure"
+    stateMutability: "pure",
   },
   {
-    "type": "function",
-    "name": "humanNullifierOwnerByProvider",
-    "inputs": [
+    type: "function",
+    name: "humanNullifierOwnerByProvider",
+    inputs: [
       {
-        "name": "provider",
-        "type": "uint8",
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+        name: "provider",
+        type: "uint8",
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "nullifierHash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "initialize",
-    "inputs": [
+    type: "function",
+    name: "initialize",
+    inputs: [
       {
-        "name": "admin",
-        "type": "address",
-        "internalType": "address"
+        name: "admin",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "governance",
-        "type": "address",
-        "internalType": "address"
+        name: "governance",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "_worldIdV4Verifier",
-        "type": "address",
-        "internalType": "address"
+        name: "_worldIdV4Verifier",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "_worldIdV4RpId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4RpId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4Action",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "_worldIdV4Action",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "_worldIdV4PresenceAction",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "_worldIdV4PresenceAction",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "_worldIdV4CredentialTtl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4CredentialTtl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4PresenceTtl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4PresenceTtl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4IssuerSchemaId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4IssuerSchemaId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4CredentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "_worldIdV4CredentialGenesisIssuedAtMin",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "isFollowing",
-    "inputs": [
+    type: "function",
+    name: "isFollowing",
+    inputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
+        name: "",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "launchHumanIdentityKey",
-    "inputs": [
+    type: "function",
+    name: "launchHumanIdentityKey",
+    inputs: [
       {
-        "name": "provider",
-        "type": "uint8",
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+        name: "provider",
+        type: "uint8",
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "nullifierHash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "pure"
+    stateMutability: "pure",
   },
   {
-    "type": "function",
-    "name": "maxSeededCredentialTtl",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "maxSeededCredentialTtl",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "pendingDelegateOf",
-    "inputs": [
+    type: "function",
+    name: "pendingDelegateOf",
+    inputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "pendingDelegateTo",
-    "inputs": [
+    type: "function",
+    name: "pendingDelegateTo",
+    inputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "removeDelegate",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    type: "function",
+    name: "removeDelegate",
+    inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "renounceRole",
-    "inputs": [
+    type: "function",
+    name: "renounceRole",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "callerConfirmation",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "callerConfirmation",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "resolveRater",
-    "inputs": [
+    type: "function",
+    name: "resolveRater",
+    inputs: [
       {
-        "name": "actor",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "actor",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "resolved",
-        "type": "tuple",
-        "internalType": "struct IRaterIdentityRegistry.ResolvedRater",
-        "components": [
+        name: "resolved",
+        type: "tuple",
+        internalType: "struct IRaterIdentityRegistry.ResolvedRater",
+        components: [
           {
-            "name": "holder",
-            "type": "address",
-            "internalType": "address"
+            name: "holder",
+            type: "address",
+            internalType: "address",
           },
           {
-            "name": "identityKey",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "identityKey",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "humanNullifier",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            name: "humanNullifier",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
-            "name": "hasActiveHumanCredential",
-            "type": "bool",
-            "internalType": "bool"
+            name: "hasActiveHumanCredential",
+            type: "bool",
+            internalType: "bool",
           },
           {
-            "name": "delegated",
-            "type": "bool",
-            "internalType": "bool"
-          }
-        ]
-      }
+            name: "delegated",
+            type: "bool",
+            internalType: "bool",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "revokeHumanCredential",
+    inputs: [
+      {
+        name: "rater",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "stateMutability": "view"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "revokeHumanCredential",
-    "inputs": [
+    type: "function",
+    name: "revokeRole",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "role",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "revokeRole",
-    "inputs": [
+    type: "function",
+    name: "revokeWorldCredential",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "rater",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "revokedHumanNullifierByProvider",
-    "inputs": [
+    type: "function",
+    name: "revokedHumanNullifierByProvider",
+    inputs: [
       {
-        "name": "provider",
-        "type": "uint8",
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+        name: "provider",
+        type: "uint8",
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "nullifierHash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "rotateCanonicalIdentityKey",
-    "inputs": [
+    type: "function",
+    name: "rotateCanonicalIdentityKey",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "rater",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "seedHumanCredential",
-    "inputs": [
+    type: "function",
+    name: "seedHumanCredential",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "expiresAt",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "expiresAt",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "anchorId",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        name: "anchorId",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
-        "name": "evidenceHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "evidenceHash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "setDelegate",
-    "inputs": [
+    type: "function",
+    name: "setDelegate",
+    inputs: [
       {
-        "name": "delegate",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "delegate",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "setMaxSeededCredentialTtl",
-    "inputs": [
+    type: "function",
+    name: "setMaxSeededCredentialTtl",
+    inputs: [
       {
-        "name": "cap",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "cap",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "setProfile",
-    "inputs": [
+    type: "function",
+    name: "setProfile",
+    inputs: [
       {
-        "name": "raterType",
-        "type": "uint8",
-        "internalType": "enum RaterRegistry.RaterType"
+        name: "raterType",
+        type: "uint8",
+        internalType: "enum RaterRegistry.RaterType",
       },
       {
-        "name": "metadataHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "metadataHash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "setWorldCredentialV4Config",
-    "inputs": [
+    type: "function",
+    name: "setWorldCredentialV4Config",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
       },
       {
-        "name": "verifier",
-        "type": "address",
-        "internalType": "address"
+        name: "verifier",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "rpId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "rpId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "action",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "action",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "credentialTtl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "credentialTtl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "issuerSchemaId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "issuerSchemaId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "credentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "credentialGenesisIssuedAtMin",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "enabled",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "enabled",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "setWorldIdV4PresenceConfig",
-    "inputs": [
+    type: "function",
+    name: "setWorldIdV4PresenceConfig",
+    inputs: [
       {
-        "name": "_worldIdV4Verifier",
-        "type": "address",
-        "internalType": "address"
+        name: "_worldIdV4Verifier",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "_worldIdV4RpId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4RpId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4PresenceAction",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "_worldIdV4PresenceAction",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "_worldIdV4PresenceTtl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4PresenceTtl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4IssuerSchemaId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4IssuerSchemaId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4CredentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "_worldIdV4CredentialGenesisIssuedAtMin",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "setWorldIdV4VerifierConfig",
-    "inputs": [
+    type: "function",
+    name: "setWorldIdV4VerifierConfig",
+    inputs: [
       {
-        "name": "_worldIdV4Verifier",
-        "type": "address",
-        "internalType": "address"
+        name: "_worldIdV4Verifier",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "_worldIdV4RpId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4RpId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4Action",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "_worldIdV4Action",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "_worldIdV4CredentialTtl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4CredentialTtl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4IssuerSchemaId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "_worldIdV4IssuerSchemaId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "_worldIdV4CredentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "_worldIdV4CredentialGenesisIssuedAtMin",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "setWorldPresenceV4Config",
-    "inputs": [
+    type: "function",
+    name: "setWorldPresenceV4Config",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
       },
       {
-        "name": "verifier",
-        "type": "address",
-        "internalType": "address"
+        name: "verifier",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "rpId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "rpId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "action",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "action",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "presenceTtl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "presenceTtl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "issuerSchemaId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "issuerSchemaId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "credentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "credentialGenesisIssuedAtMin",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "enabled",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "enabled",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "supportsInterface",
-    "inputs": [
+    type: "function",
+    name: "supportsInterface",
+    inputs: [
       {
-        "name": "interfaceId",
-        "type": "bytes4",
-        "internalType": "bytes4"
-      }
+        name: "interfaceId",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "unfollowProfile",
-    "inputs": [
+    type: "function",
+    name: "unfollowProfile",
+    inputs: [
       {
-        "name": "target",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "target",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
-    "type": "function",
-    "name": "worldCredentialSignalHash",
-    "inputs": [
+    type: "function",
+    name: "worldCredentialSignalHash",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "pure"
+    stateMutability: "pure",
   },
   {
-    "type": "function",
-    "name": "worldCredentialV4Config",
-    "inputs": [
+    type: "function",
+    name: "worldCredentialV4Config",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "verifier",
-        "type": "address",
-        "internalType": "address"
+        name: "verifier",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "rpId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "rpId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "action",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "action",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "ttl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "ttl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "issuerSchemaId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "issuerSchemaId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "credentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "credentialGenesisIssuedAtMin",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "enabled",
-        "type": "bool",
-        "internalType": "bool"
+        name: "enabled",
+        type: "bool",
+        internalType: "bool",
       },
       {
-        "name": "frozen",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "frozen",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdSignalHash",
-    "inputs": [
+    type: "function",
+    name: "worldIdSignalHash",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
+        name: "rater",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "pure"
+    stateMutability: "pure",
   },
   {
-    "type": "function",
-    "name": "worldIdV4Action",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4Action",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4CredentialGenesisIssuedAtMin",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4CredentialGenesisIssuedAtMin",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4CredentialScope",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4CredentialScope",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4CredentialTtl",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4CredentialTtl",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4IssuerSchemaId",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4IssuerSchemaId",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4PresenceAction",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4PresenceAction",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4PresenceConfigFrozen",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4PresenceConfigFrozen",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4PresenceTtl",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4PresenceTtl",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4RpId",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4RpId",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4Verifier",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4Verifier",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IWorldIDVerifier"
-      }
+        name: "",
+        type: "address",
+        internalType: "contract IWorldIDVerifier",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldIdV4VerifierConfigFrozen",
-    "inputs": [],
-    "outputs": [
+    type: "function",
+    name: "worldIdV4VerifierConfigFrozen",
+    inputs: [],
+    outputs: [
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "function",
-    "name": "worldPresenceSignalHash",
-    "inputs": [
+    type: "function",
+    name: "worldPresenceSignalHash",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    "stateMutability": "pure"
+    stateMutability: "pure",
   },
   {
-    "type": "function",
-    "name": "worldPresenceV4Config",
-    "inputs": [
+    type: "function",
+    name: "worldPresenceV4Config",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
+        name: "kind",
+        type: "uint8",
+        internalType: "uint8",
+      },
     ],
-    "outputs": [
+    outputs: [
       {
-        "name": "verifier",
-        "type": "address",
-        "internalType": "address"
+        name: "verifier",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "rpId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "rpId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "action",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "action",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "ttl",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "ttl",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "issuerSchemaId",
-        "type": "uint64",
-        "internalType": "uint64"
+        name: "issuerSchemaId",
+        type: "uint64",
+        internalType: "uint64",
       },
       {
-        "name": "credentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "internalType": "uint256"
+        name: "credentialGenesisIssuedAtMin",
+        type: "uint256",
+        internalType: "uint256",
       },
       {
-        "name": "enabled",
-        "type": "bool",
-        "internalType": "bool"
+        name: "enabled",
+        type: "bool",
+        internalType: "bool",
       },
       {
-        "name": "frozen",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        name: "frozen",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
   },
   {
-    "type": "event",
-    "name": "CanonicalHumanIdentityKeyCleared",
-    "inputs": [
+    type: "event",
+    name: "CanonicalHumanIdentityKeyCleared",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "previousKey",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
+        name: "previousKey",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "CanonicalHumanIdentityKeyRotated",
-    "inputs": [
+    type: "event",
+    name: "CanonicalHumanIdentityKeyRotated",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "previousKey",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "previousKey",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "newKey",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "newKey",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "provider",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
-      }
+        name: "provider",
+        type: "uint8",
+        indexed: false,
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "DelegateRemoved",
-    "inputs": [
+    type: "event",
+    name: "DelegateRemoved",
+    inputs: [
       {
-        "name": "holder",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "holder",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "previousDelegate",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "previousDelegate",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "DelegateRequested",
-    "inputs": [
+    type: "event",
+    name: "DelegateRequested",
+    inputs: [
       {
-        "name": "holder",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "holder",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "delegate",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "delegate",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "DelegateSet",
-    "inputs": [
+    type: "event",
+    name: "DelegateSet",
+    inputs: [
       {
-        "name": "holder",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "holder",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "delegate",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "delegate",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "HumanCredentialRevoked",
-    "inputs": [
+    type: "event",
+    name: "HumanCredentialRevoked",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "nullifierHash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "provider",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
-      }
+        name: "provider",
+        type: "uint8",
+        indexed: true,
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "HumanCredentialVerified",
-    "inputs": [
+    type: "event",
+    name: "HumanCredentialVerified",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "nullifierHash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "scope",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "scope",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "provider",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+        name: "provider",
+        type: "uint8",
+        indexed: false,
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
       },
       {
-        "name": "verifiedAt",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "verifiedAt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "expiresAt",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "expiresAt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "evidenceHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      }
+        name: "evidenceHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "HumanNullifierRevocationCleared",
-    "inputs": [
+    type: "event",
+    name: "HumanNullifierRevocationCleared",
+    inputs: [
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "nullifierHash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "provider",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+        name: "provider",
+        type: "uint8",
+        indexed: true,
+        internalType: "enum RaterRegistry.HumanCredentialProvider",
       },
       {
-        "name": "prevOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "prevOwner",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "HumanPresenceVerified",
-    "inputs": [
+    type: "event",
+    name: "HumanPresenceVerified",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "kind",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "nullifierHash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "lastRecheckedAt",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "lastRecheckedAt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "freshUntil",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "freshUntil",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "evidenceHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      }
+        name: "evidenceHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "Initialized",
-    "inputs": [
+    type: "event",
+    name: "Initialized",
+    inputs: [
       {
-        "name": "version",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      }
+        name: "version",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "MaxSeededCredentialTtlUpdated",
-    "inputs": [
+    type: "event",
+    name: "MaxSeededCredentialTtlUpdated",
+    inputs: [
       {
-        "name": "previousCap",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "previousCap",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "newCap",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      }
+        name: "newCap",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "PendingDelegateRemoved",
-    "inputs": [
+    type: "event",
+    name: "PendingDelegateRemoved",
+    inputs: [
       {
-        "name": "holder",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "holder",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "previousPendingDelegate",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "previousPendingDelegate",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "ProfileFollowed",
-    "inputs": [
+    type: "event",
+    name: "ProfileFollowed",
+    inputs: [
       {
-        "name": "follower",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "follower",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "target",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "target",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "followedAt",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      }
+        name: "followedAt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "ProfileUnfollowed",
-    "inputs": [
+    type: "event",
+    name: "ProfileUnfollowed",
+    inputs: [
       {
-        "name": "follower",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "follower",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "target",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "target",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "unfollowedAt",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      }
+        name: "unfollowedAt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "RaterProfileUpdated",
-    "inputs": [
+    type: "event",
+    name: "RaterProfileUpdated",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "raterType",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "enum RaterRegistry.RaterType"
+        name: "raterType",
+        type: "uint8",
+        indexed: true,
+        internalType: "enum RaterRegistry.RaterType",
       },
       {
-        "name": "metadataHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "metadataHash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "updatedAt",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      }
+        name: "updatedAt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "RoleAdminChanged",
-    "inputs": [
+    type: "event",
+    name: "RoleAdminChanged",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "previousAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "previousAdminRole",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "newAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
+        name: "newAdminRole",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "RoleGranted",
-    "inputs": [
+    type: "event",
+    name: "RoleGranted",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "account",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "sender",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "RoleRevoked",
-    "inputs": [
+    type: "event",
+    name: "RoleRevoked",
+    inputs: [
       {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "role",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "account",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "sender",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "sender",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "WorldCredentialRevoked",
-    "inputs": [
+    type: "event",
+    name: "WorldCredentialRevoked",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "kind",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
+        name: "nullifierHash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "WorldCredentialV4ConfigLocked",
-    "inputs": [
+    type: "event",
+    name: "WorldCredentialV4ConfigLocked",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
       },
       {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "account",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "WorldCredentialV4ConfigUpdated",
-    "inputs": [
+    type: "event",
+    name: "WorldCredentialV4ConfigUpdated",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
       },
       {
-        "name": "verifier",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "verifier",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "rpId",
-        "type": "uint64",
-        "indexed": true,
-        "internalType": "uint64"
+        name: "rpId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
       },
       {
-        "name": "action",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        name: "action",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
       },
       {
-        "name": "credentialTtl",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "credentialTtl",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "issuerSchemaId",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "issuerSchemaId",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "credentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        name: "credentialGenesisIssuedAtMin",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
       },
       {
-        "name": "enabled",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      }
+        name: "enabled",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "WorldCredentialVerified",
-    "inputs": [
+    type: "event",
+    name: "WorldCredentialVerified",
+    inputs: [
       {
-        "name": "rater",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "rater",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "kind",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
       },
       {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
+        name: "nullifierHash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
       },
       {
-        "name": "scope",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
+        name: "scope",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
       },
       {
-        "name": "verifiedAt",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "verifiedAt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "expiresAt",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "expiresAt",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "evidenceHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      }
+        name: "evidenceHash",
+        type: "bytes32",
+        indexed: false,
+        internalType: "bytes32",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "WorldIdV4VerifierConfigLocked",
-    "inputs": [
+    type: "event",
+    name: "WorldIdV4VerifierConfigLocked",
+    inputs: [
       {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "account",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "WorldIdV4VerifierConfigUpdated",
-    "inputs": [
+    type: "event",
+    name: "WorldIdV4VerifierConfigUpdated",
+    inputs: [
       {
-        "name": "verifier",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "verifier",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "rpId",
-        "type": "uint64",
-        "indexed": true,
-        "internalType": "uint64"
+        name: "rpId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
       },
       {
-        "name": "action",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
+        name: "action",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
       },
       {
-        "name": "credentialTtl",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "credentialTtl",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "issuerSchemaId",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "issuerSchemaId",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "credentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
+        name: "credentialGenesisIssuedAtMin",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "WorldPresenceV4ConfigLocked",
-    "inputs": [
+    type: "event",
+    name: "WorldPresenceV4ConfigLocked",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
       },
       {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
+        name: "account",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "event",
-    "name": "WorldPresenceV4ConfigUpdated",
-    "inputs": [
+    type: "event",
+    name: "WorldPresenceV4ConfigUpdated",
+    inputs: [
       {
-        "name": "kind",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "uint8"
+        name: "kind",
+        type: "uint8",
+        indexed: true,
+        internalType: "uint8",
       },
       {
-        "name": "verifier",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        name: "verifier",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
       {
-        "name": "rpId",
-        "type": "uint64",
-        "indexed": true,
-        "internalType": "uint64"
+        name: "rpId",
+        type: "uint64",
+        indexed: true,
+        internalType: "uint64",
       },
       {
-        "name": "action",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        name: "action",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
       },
       {
-        "name": "presenceTtl",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "presenceTtl",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "issuerSchemaId",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
+        name: "issuerSchemaId",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
       },
       {
-        "name": "credentialGenesisIssuedAtMin",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
+        name: "credentialGenesisIssuedAtMin",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
       },
       {
-        "name": "enabled",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      }
+        name: "enabled",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
     ],
-    "anonymous": false
+    anonymous: false,
   },
   {
-    "type": "error",
-    "name": "AccessControlBadConfirmation",
-    "inputs": []
+    type: "error",
+    name: "AccessControlBadConfirmation",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "AccessControlUnauthorizedAccount",
-    "inputs": [
+    type: "error",
+    name: "AccessControlUnauthorizedAccount",
+    inputs: [
       {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
+        name: "account",
+        type: "address",
+        internalType: "address",
       },
       {
-        "name": "neededRole",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
+        name: "neededRole",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
   },
   {
-    "type": "error",
-    "name": "ActiveHumanCredentialRequiresHumanProfile",
-    "inputs": []
+    type: "error",
+    name: "ActiveHumanCredentialRequiresHumanProfile",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "CallerIsDelegate",
-    "inputs": []
+    type: "error",
+    name: "CallerIsDelegate",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "CannotDelegateSelf",
-    "inputs": []
+    type: "error",
+    name: "CannotDelegateSelf",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "DelegateAlreadyAssigned",
-    "inputs": []
+    type: "error",
+    name: "DelegateAlreadyAssigned",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "DelegateIsHolder",
-    "inputs": []
+    type: "error",
+    name: "DelegateIsHolder",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "InvalidAddress",
-    "inputs": []
+    type: "error",
+    name: "InvalidAddress",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "InvalidCredential",
-    "inputs": []
+    type: "error",
+    name: "InvalidCredential",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "InvalidInitialization",
-    "inputs": []
+    type: "error",
+    name: "InvalidInitialization",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "NoDelegateSet",
-    "inputs": []
+    type: "error",
+    name: "NoDelegateSet",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "NoPendingDelegate",
-    "inputs": []
+    type: "error",
+    name: "NoPendingDelegate",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "NotInitializing",
-    "inputs": []
+    type: "error",
+    name: "NotInitializing",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "NullifierAlreadyAssigned",
-    "inputs": []
+    type: "error",
+    name: "NullifierAlreadyAssigned",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "UnsupportedCredentialKind",
-    "inputs": []
+    type: "error",
+    name: "UnsupportedCredentialKind",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "WorldCredentialConfigFrozen",
-    "inputs": []
+    type: "error",
+    name: "WorldCredentialConfigFrozen",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "WorldIdV4PresenceConfigFrozen",
-    "inputs": []
+    type: "error",
+    name: "WorldIdV4PresenceConfigFrozen",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "WorldIdV4VerifierConfigFrozen",
-    "inputs": []
+    type: "error",
+    name: "WorldIdV4VerifierConfigFrozen",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "WorldIdV4VerifierNotConfigured",
-    "inputs": []
+    type: "error",
+    name: "WorldIdV4VerifierNotConfigured",
+    inputs: [],
   },
   {
-    "type": "error",
-    "name": "WorldPresenceConfigFrozen",
-    "inputs": []
-  }
+    type: "error",
+    name: "WorldPresenceConfigFrozen",
+    inputs: [],
+  },
 ] as const;

@@ -27,23 +27,19 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
     readContract: async (args: Record<string, unknown>) => {
       readCalls.push(args);
 
-      if (args.functionName === "previewCommitReferenceRatingBps") {
-        return 5_000;
-      }
-
-      if (args.functionName === "previewCommitRoundId") {
-        return 2n;
+      if (args.functionName === "previewCommitContext") {
+        return [2n, 5_000] as const;
       }
 
       if (args.functionName === "roundConfigSnapshot") {
         return [100, 3_600, 3, 1_000];
       }
 
-      if (args.functionName === "roundDrandConfig") {
-        return TEST_DRAND_CONFIG;
+      if (args.functionName === "advisoryRoundContext") {
+        return [5_000, 0n, ...TEST_DRAND_CONFIG, false, "0x0000000000000000000000000000000000000000"] as const;
       }
 
-      return [900n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n];
+      return [900n, 0, 0n, 0n, 0n, 0n, 0n];
     },
   };
 
@@ -58,7 +54,7 @@ test("resolveRoundVoteRuntime anchors tlock timing to the pending block timestam
     blockCalls.map(call => call.blockTag),
     ["latest", "pending"],
   );
-  assert.equal(readCalls.length, 5);
+  assert.equal(readCalls.length, 4);
   for (const call of readCalls) {
     assert.equal(call.blockTag, "pending");
   }
@@ -89,25 +85,19 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
     readContract: async (args: Record<string, unknown>) => {
       readCalls.push(args);
 
-      if (args.functionName === "previewCommitReferenceRatingBps") {
-        return 5_000;
-      }
-
-      if (args.functionName === "previewCommitRoundId") {
-        return 3n;
+      if (args.functionName === "previewCommitContext") {
+        return [3n, 5_000] as const;
       }
 
       if (args.functionName === "roundConfigSnapshot") {
         return [100, 3_600, 3, 1_000];
       }
 
-      if (args.functionName === "roundDrandConfig") {
-        return TEST_DRAND_CONFIG;
+      if (args.functionName === "advisoryRoundContext") {
+        return [5_000, 0n, ...TEST_DRAND_CONFIG, false, "0x0000000000000000000000000000000000000000"] as const;
       }
 
-      return args.blockTag === "pending"
-        ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n]
-        : [0n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n];
+      return args.blockTag === "pending" ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n] : [0n, 0, 0n, 0n, 0n, 0n, 0n];
     },
   };
 
@@ -118,7 +108,7 @@ test("resolveRoundVoteRuntime keeps new-round targets fresh when latest is stale
     fallbackEpochDuration: 1200,
   });
 
-  assert.equal(readCalls.length, 5);
+  assert.equal(readCalls.length, 4);
   for (const call of readCalls) {
     assert.equal(call.blockTag, "pending");
   }
@@ -145,12 +135,8 @@ test("resolveRoundVoteRuntime uses current open round when preview points at an 
     readContract: async (args: Record<string, unknown>) => {
       readCalls.push(args);
 
-      if (args.functionName === "previewCommitReferenceRatingBps") {
-        return 5_000;
-      }
-
-      if (args.functionName === "previewCommitRoundId") {
-        return 3n;
+      if (args.functionName === "previewCommitContext") {
+        return [3n, 5_000] as const;
       }
 
       if (args.functionName === "currentRoundId") {
@@ -161,14 +147,12 @@ test("resolveRoundVoteRuntime uses current open round when preview points at an 
         return [100, 3_600, 3, 1_000];
       }
 
-      if (args.functionName === "roundDrandConfig") {
-        return TEST_DRAND_CONFIG;
+      if (args.functionName === "advisoryRoundContext") {
+        return [5_000, 0n, ...TEST_DRAND_CONFIG, false, "0x0000000000000000000000000000000000000000"] as const;
       }
 
       const contractArgs = args.args as unknown[] | undefined;
-      return contractArgs?.[1] === 2n
-        ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n]
-        : [0n, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n];
+      return contractArgs?.[1] === 2n ? [4_000n, 0, 0n, 0n, 0n, 0n, 0n] : [0n, 0, 0n, 0n, 0n, 0n, 0n];
     },
   };
 
@@ -203,23 +187,19 @@ test("resolveRoundVoteRuntime derives a contract-window target for open rounds",
             timestamp: roundStartTime + 180n,
           },
     readContract: async (args: Record<string, unknown>) => {
-      if (args.functionName === "previewCommitReferenceRatingBps") {
-        return 5_000;
-      }
-
-      if (args.functionName === "previewCommitRoundId") {
-        return 2n;
+      if (args.functionName === "previewCommitContext") {
+        return [2n, 5_000] as const;
       }
 
       if (args.functionName === "roundConfigSnapshot") {
         return [3_600, 3_600, 3, 200];
       }
 
-      if (args.functionName === "roundDrandConfig") {
-        return TEST_DRAND_CONFIG;
+      if (args.functionName === "advisoryRoundContext") {
+        return [5_000, 0n, ...TEST_DRAND_CONFIG, false, "0x0000000000000000000000000000000000000000"] as const;
       }
 
-      return [roundStartTime, 0, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, 0n];
+      return [roundStartTime, 0, 0n, 0n, 0n, 0n, 0n];
     },
   };
 
@@ -242,19 +222,15 @@ test("resolveRoundVoteRuntime rejects non-votable preview states", async () => {
       timestamp: 1_000n,
     }),
     readContract: async (args: Record<string, unknown>) => {
-      if (args.functionName === "previewCommitReferenceRatingBps") {
-        return 5_000;
-      }
-
-      if (args.functionName === "previewCommitRoundId") {
-        return 1n;
+      if (args.functionName === "previewCommitContext") {
+        return [1n, 5_000] as const;
       }
 
       if (args.functionName === "roundConfigSnapshot") {
         return [100, 3_600, 3, 1_000];
       }
 
-      return [900n, 0, 3n, 3n, 0n, 0n, 0n, 0n, 0n, false, 0n, 950n, 0n, 0n];
+      return [900n, 0, 3n, 3n, 0n, 950n, 0n];
     },
   };
 

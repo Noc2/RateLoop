@@ -42,23 +42,22 @@ const SETTLE_ROUND_ABI = [
     stateMutability: "nonpayable",
   },
 ] as const;
-const ROUND_STATE_ABI = [
+const ROUND_CORE_ABI = [
   {
-    name: "rounds",
+    name: "roundCore",
     type: "function",
     inputs: [
       { name: "contentId", type: "uint256" },
       { name: "roundId", type: "uint256" },
     ],
     outputs: [
-      {
-        name: "",
-        type: "tuple",
-        components: [
-          { name: "startTime", type: "uint256" },
-          { name: "state", type: "uint8" },
-        ],
-      },
+      { name: "startTime", type: "uint48" },
+      { name: "state", type: "uint8" },
+      { name: "voteCount", type: "uint16" },
+      { name: "revealedCount", type: "uint16" },
+      { name: "totalStake", type: "uint64" },
+      { name: "thresholdReachedAt", type: "uint48" },
+      { name: "settledAt", type: "uint48" },
     ],
     stateMutability: "view",
   },
@@ -276,68 +275,39 @@ async function buildSubmissionReservation(
   rewardTerms: SubmissionRewardTerms,
   roundConfig: SubmissionRoundConfig = DEFAULT_SUBMISSION_ROUND_CONFIG,
 ): Promise<{ revealCommitment: `0x${string}`; salt: `0x${string}` } | null> {
-  const { decodeFunctionResult, encodeFunctionData, keccak256, stringToHex } = await import("viem");
+  const { encodeAbiParameters, keccak256, stringToHex, toBytes } = await import("viem");
 
-  const previewAbi = [
-    {
-      name: "previewQuestionSubmissionKey",
-      type: "function",
-      inputs: [
-        { name: "contextUrl", type: "string" },
-        { name: "imageUrls", type: "string[]" },
-        { name: "videoUrl", type: "string" },
-        { name: "title", type: "string" },
-        { name: "description", type: "string" },
-        { name: "tags", type: "string" },
-        { name: "categoryId", type: "uint256" },
-        {
-          name: "details",
-          type: "tuple",
-          components: [
-            { name: "detailsUrl", type: "string" },
-            { name: "detailsHash", type: "bytes32" },
-          ],
-        },
+  const detailsHash = `0x${"0".repeat(64)}` as const;
+  const submissionKey = keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
       ],
-      outputs: [
-        { name: "resolvedCategoryId", type: "uint256" },
-        { name: "submissionKey", type: "bytes32" },
+      [
+        keccak256(toBytes("rateloop-question-context-v4")),
+        categoryId,
+        keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [media.imageUrls, media.videoUrl])),
+        keccak256(encodeAbiParameters([{ type: "string" }, { type: "bytes32" }], ["", detailsHash])),
+        url,
+        title,
+        description,
+        tags,
       ],
-      stateMutability: "view",
-    },
-  ] as const;
-  const previewData = encodeFunctionData({
-    abi: previewAbi,
-    functionName: "previewQuestionSubmissionKey",
-    args: [
-      url,
-      media.imageUrls,
-      media.videoUrl,
-      title,
-      description,
-      tags,
-      categoryId,
-      { detailsUrl: "", detailsHash: `0x${"0".repeat(64)}` },
-    ],
-  });
-
-  const previewResult = await rpcRequest<`0x${string}`>("eth_call", [
-    { to: contractAddress, data: previewData },
-    "latest",
-  ]);
-  if (!previewResult) return null;
-
-  const [, submissionKey] = decodeFunctionResult({
-    abi: previewAbi,
-    functionName: "previewQuestionSubmissionKey",
-    data: previewResult,
-  }) as readonly [bigint, `0x${string}`];
+    ),
+  );
 
   const salt = keccak256(stringToHex(`${fromAddress}:${categoryId}:${JSON.stringify(media)}:${title}:${Date.now()}`));
   const revealCommitment = buildQuestionSubmissionRevealCommitment({
     categoryId,
     description,
-    detailsHash: `0x${"0".repeat(64)}`,
+    detailsHash,
     detailsUrl: "",
     imageUrls: media.imageUrls,
     questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,
@@ -528,70 +498,41 @@ async function resolveTlockCommitRuntime(
   return { targetRound };
 }
 
-async function readRoundReferenceRatingBps(
+async function readPreviewCommitContext(
   contractAddress: string,
   contentId: bigint,
   blockTag: `0x${string}`,
-): Promise<number> {
+): Promise<{ roundId: bigint; referenceRatingBps: number }> {
   const { decodeFunctionResult, encodeFunctionData } = await import("viem");
   const abi = [
     {
-      name: "previewCommitReferenceRatingBps",
+      name: "previewCommitContext",
       type: "function",
       inputs: [{ name: "contentId", type: "uint256" }],
-      outputs: [{ name: "", type: "uint16" }],
+      outputs: [
+        { name: "openRoundId", type: "uint256" },
+        { name: "referenceRatingBps", type: "uint16" },
+      ],
       stateMutability: "view",
     },
   ] as const;
 
   const data = encodeFunctionData({
     abi,
-    functionName: "previewCommitReferenceRatingBps",
+    functionName: "previewCommitContext",
     args: [contentId],
   });
   const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, blockTag]);
   if (!result) {
-    throw new Error("Failed to read previewCommitReferenceRatingBps from Anvil");
+    throw new Error("Failed to read previewCommitContext from Anvil");
   }
 
-  return decodeFunctionResult({
+  const [roundId, referenceRatingBps] = decodeFunctionResult({
     abi,
-    functionName: "previewCommitReferenceRatingBps",
+    functionName: "previewCommitContext",
     data: result,
-  }) as number;
-}
-
-async function readPreviewCommitRoundId(
-  contractAddress: string,
-  contentId: bigint,
-  blockTag: `0x${string}`,
-): Promise<bigint> {
-  const { decodeFunctionResult, encodeFunctionData } = await import("viem");
-  const abi = [
-    {
-      name: "previewCommitRoundId",
-      type: "function",
-      inputs: [{ name: "contentId", type: "uint256" }],
-      outputs: [{ name: "", type: "uint256" }],
-      stateMutability: "view",
-    },
-  ] as const;
-
-  const data = encodeFunctionData({
-    abi,
-    functionName: "previewCommitRoundId",
-    args: [contentId],
-  });
-  const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, blockTag]);
-  if (!result) {
-    throw new Error("Failed to read previewCommitRoundId from Anvil");
-  }
-
-  return decodeFunctionResult({
-    abi,
-    functionName: "previewCommitRoundId",
-    data: result,
-  }) as bigint;
+  }) as readonly [bigint, number];
+  return { roundId, referenceRatingBps };
 }
 
 async function readCurrentRoundId(
@@ -635,39 +576,27 @@ async function readRoundAtBlock(
   const { decodeFunctionResult, encodeFunctionData } = await import("viem");
   const abi = [
     {
-      name: "rounds",
+      name: "roundCore",
       type: "function",
       inputs: [
         { name: "contentId", type: "uint256" },
         { name: "roundId", type: "uint256" },
       ],
       outputs: [
-        {
-          type: "tuple",
-          components: [
-            { name: "startTime", type: "uint256" },
-            { name: "state", type: "uint8" },
-            { name: "voteCount", type: "uint256" },
-            { name: "revealedCount", type: "uint256" },
-            { name: "totalStake", type: "uint256" },
-            { name: "upPool", type: "uint256" },
-            { name: "downPool", type: "uint256" },
-            { name: "upCount", type: "uint256" },
-            { name: "downCount", type: "uint256" },
-            { name: "upWins", type: "bool" },
-            { name: "settledAt", type: "uint256" },
-            { name: "thresholdReachedAt", type: "uint256" },
-            { name: "weightedUpPool", type: "uint256" },
-            { name: "weightedDownPool", type: "uint256" },
-          ],
-        },
+        { name: "startTime", type: "uint48" },
+        { name: "state", type: "uint8" },
+        { name: "voteCount", type: "uint16" },
+        { name: "revealedCount", type: "uint16" },
+        { name: "totalStake", type: "uint64" },
+        { name: "thresholdReachedAt", type: "uint48" },
+        { name: "settledAt", type: "uint48" },
       ],
       stateMutability: "view",
     },
   ] as const;
   const data = encodeFunctionData({
     abi,
-    functionName: "rounds",
+    functionName: "roundCore",
     args: [contentId, roundId],
   });
   const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, blockTag]);
@@ -677,7 +606,7 @@ async function readRoundAtBlock(
 
   return decodeFunctionResult({
     abi,
-    functionName: "rounds",
+    functionName: "roundCore",
     data: result,
   });
 }
@@ -687,7 +616,7 @@ async function isDirectCommitRoundOpen(
   contentId: bigint,
   blockTag: `0x${string}`,
 ): Promise<boolean> {
-  const roundId = await readPreviewCommitRoundId(contractAddress, contentId, blockTag);
+  const { roundId } = await readPreviewCommitContext(contractAddress, contentId, blockTag);
   if (roundId === 0n) {
     return false;
   }
@@ -1614,8 +1543,7 @@ export async function commitVoteDirect(
     attempt: async attemptIndex => {
       const salt = await buildVoteCommitSalt(fromAddress, contentIdBigInt, attemptIndex);
       const latestBlock = await readLatestBlockSnapshot();
-      const roundId = await readPreviewCommitRoundId(contractAddress, contentIdBigInt, latestBlock.blockTag);
-      const roundReferenceRatingBps = await readRoundReferenceRatingBps(
+      const { roundId, referenceRatingBps: roundReferenceRatingBps } = await readPreviewCommitContext(
         contractAddress,
         contentIdBigInt,
         latestBlock.blockTag,
@@ -1744,8 +1672,8 @@ async function readRoundStateLatest(
 ): Promise<number | null> {
   const { encodeFunctionData } = await import("viem");
   const data = encodeFunctionData({
-    abi: ROUND_STATE_ABI,
-    functionName: "rounds",
+    abi: ROUND_CORE_ABI,
+    functionName: "roundCore",
     args: [contentId, roundId],
   });
   const result = await rpcRequest<`0x${string}`>("eth_call", [{ to: contractAddress, data }, "latest"]);
@@ -1947,6 +1875,47 @@ export async function readUint256(functionName: string, contractAddress: string,
   return decodeFunctionResult({ abi, functionName, data: json.result }) as bigint;
 }
 
+export async function readRoundVoterPool(contractAddress: string, contentId: bigint, roundId: bigint): Promise<bigint> {
+  const { encodeFunctionData, decodeFunctionResult } = await import("viem");
+  const abi = [
+    {
+      name: "rbtsRoundState",
+      type: "function",
+      inputs: [
+        { name: "contentId", type: "uint256" },
+        { name: "roundId", type: "uint256" },
+      ],
+      outputs: [
+        { name: "scored", type: "bool" },
+        { name: "scoreSeed", type: "bytes32" },
+        { name: "rewardWeight", type: "uint256" },
+        { name: "rewardClaimants", type: "uint256" },
+        { name: "voterPool", type: "uint256" },
+      ],
+      stateMutability: "view",
+    },
+  ] as const;
+  const data = encodeFunctionData({ abi, functionName: "rbtsRoundState", args: [contentId, roundId] });
+  const res = await fetch(ANVIL_RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "eth_call",
+      params: [{ to: contractAddress, data }, "latest"],
+      id: Date.now(),
+    }),
+  });
+  const json = await res.json();
+  if (json.error || !json.result) return 0n;
+  const [, , , , voterPool] = decodeFunctionResult({
+    abi,
+    functionName: "rbtsRoundState",
+    data: json.result,
+  }) as readonly [boolean, `0x${string}`, bigint, bigint, bigint];
+  return voterPool;
+}
+
 /**
  * Read a public bool view function from a contract.
  */
@@ -2054,26 +2023,25 @@ export async function getActiveRoundId(contentId: number | bigint, contractAddre
   const data = encodeFunctionData({
     abi: [
       {
-        name: "rounds",
+        name: "roundCore",
         type: "function",
         inputs: [
           { name: "contentId", type: "uint256" },
           { name: "roundId", type: "uint256" },
         ],
         outputs: [
-          {
-            name: "startTime",
-            type: "uint256",
-          },
-          {
-            name: "state",
-            type: "uint8",
-          },
+          { name: "startTime", type: "uint48" },
+          { name: "state", type: "uint8" },
+          { name: "voteCount", type: "uint16" },
+          { name: "revealedCount", type: "uint16" },
+          { name: "totalStake", type: "uint64" },
+          { name: "thresholdReachedAt", type: "uint48" },
+          { name: "settledAt", type: "uint48" },
         ],
         stateMutability: "view",
       },
     ],
-    functionName: "rounds",
+    functionName: "roundCore",
     args: [BigInt(contentId), currentRoundId],
   });
 

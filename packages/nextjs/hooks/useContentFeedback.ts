@@ -108,12 +108,13 @@ export function useContentFeedback(contentId: bigint | string | number | null | 
       if (!commitHash || commitHash === zeroHash) {
         const votingEngineAddress = getConfiguredRoundVotingEngineAddress(targetNetwork.id);
         if (!votingEngineAddress || !publicClient) return null;
-        commitHash = (await publicClient.readContract({
+        const commitState = (await publicClient.readContract({
           address: votingEngineAddress,
           abi: RoundVotingEngineAbi,
-          functionName: "voterCommitHash",
+          functionName: "voterCommitKey",
           args: [BigInt(normalizedContentId), BigInt(roundId), address as `0x${string}`],
-        })) as `0x${string}`;
+        })) as readonly [`0x${string}`, `0x${string}`];
+        commitHash = commitState[0];
       }
 
       if (!commitHash || commitHash === zeroHash) return null;

@@ -168,26 +168,8 @@ async function readFrontendFeeBatch(
       {
         address: context.votingEngine.address,
         abi: context.votingEngine.abi,
-        functionName: "roundFrontendPool" as const,
-        args: [contentId, roundId],
-      },
-      {
-        address: context.votingEngine.address,
-        abi: context.votingEngine.abi,
-        functionName: "roundPerFrontendStake" as const,
+        functionName: "frontendFeeState" as const,
         args: [contentId, roundId, frontend],
-      },
-      {
-        address: context.votingEngine.address,
-        abi: context.votingEngine.abi,
-        functionName: "roundStakeWithEligibleFrontend" as const,
-        args: [contentId, roundId],
-      },
-      {
-        address: context.votingEngine.address,
-        abi: context.votingEngine.abi,
-        functionName: "roundEligibleFrontendCount" as const,
-        args: [contentId, roundId],
       },
       {
         address: context.rewardDistributor.address,
@@ -216,31 +198,22 @@ async function readFrontendFeeBatch(
     });
 
     return rounds.map((_, index) => {
-      const totalFrontendPoolResult = results[index * 5];
-      const frontendStakeResult = results[index * 5 + 1];
-      const totalEligibleStakeResult = results[index * 5 + 2];
-      const totalFrontendClaimantsResult = results[index * 5 + 3];
-      const previewResult = results[index * 5 + 4];
+      const frontendStateResult = results[index * 2];
+      const previewResult = results[index * 2 + 1];
+      const frontendStateTuple =
+        frontendStateResult?.status === "success" && Array.isArray(frontendStateResult.result)
+          ? frontendStateResult.result
+          : null;
       const previewTuple =
         previewResult?.status === "success" && Array.isArray(previewResult.result) ? previewResult.result : null;
 
       return {
-        totalFrontendPool:
-          totalFrontendPoolResult?.status === "success" && typeof totalFrontendPoolResult.result === "bigint"
-            ? totalFrontendPoolResult.result
-            : 0n,
-        frontendStake:
-          frontendStakeResult?.status === "success" && typeof frontendStakeResult.result === "bigint"
-            ? frontendStakeResult.result
-            : 0n,
+        totalFrontendPool: frontendStateTuple && typeof frontendStateTuple[0] === "bigint" ? frontendStateTuple[0] : 0n,
+        frontendStake: frontendStateTuple && typeof frontendStateTuple[1] === "bigint" ? frontendStateTuple[1] : 0n,
         totalEligibleStake:
-          totalEligibleStakeResult?.status === "success" && typeof totalEligibleStakeResult.result === "bigint"
-            ? totalEligibleStakeResult.result
-            : 0n,
+          frontendStateTuple && typeof frontendStateTuple[2] === "bigint" ? frontendStateTuple[2] : 0n,
         totalFrontendClaimants:
-          totalFrontendClaimantsResult?.status === "success" && typeof totalFrontendClaimantsResult.result === "bigint"
-            ? totalFrontendClaimantsResult.result
-            : 0n,
+          frontendStateTuple && typeof frontendStateTuple[3] === "bigint" ? frontendStateTuple[3] : 0n,
         claimableFee: previewTuple && typeof previewTuple[0] === "bigint" ? previewTuple[0] : 0n,
         disposition: previewTuple ? normalizeFrontendFeeDisposition(previewTuple[1]) : 2n,
         operator:
@@ -256,40 +229,22 @@ async function readFrontendFeeBatch(
       const roundId = BigInt(item.roundId);
 
       try {
-        const [totalFrontendPool, frontendStake, totalEligibleStake, totalFrontendClaimants, previewFrontendFee] =
-          await Promise.all([
-            context.publicClient.readContract({
-              address: context.votingEngine.address,
-              abi: context.votingEngine.abi,
-              functionName: "roundFrontendPool",
-              args: [contentId, roundId],
-            }) as Promise<bigint>,
-            context.publicClient.readContract({
-              address: context.votingEngine.address,
-              abi: context.votingEngine.abi,
-              functionName: "roundPerFrontendStake",
-              args: [contentId, roundId, frontend],
-            }) as Promise<bigint>,
-            context.publicClient.readContract({
-              address: context.votingEngine.address,
-              abi: context.votingEngine.abi,
-              functionName: "roundStakeWithEligibleFrontend",
-              args: [contentId, roundId],
-            }) as Promise<bigint>,
-            context.publicClient.readContract({
-              address: context.votingEngine.address,
-              abi: context.votingEngine.abi,
-              functionName: "roundEligibleFrontendCount",
-              args: [contentId, roundId],
-            }) as Promise<bigint>,
-            context.publicClient.readContract({
-              address: context.rewardDistributor.address,
-              abi: context.rewardDistributor.abi,
-              functionName: "previewFrontendFee",
-              args: [contentId, roundId, frontend],
-            }) as Promise<[bigint, bigint | number, Address, boolean]>,
-          ]);
+        const [frontendFeeState, previewFrontendFee] = await Promise.all([
+          context.publicClient.readContract({
+            address: context.votingEngine.address,
+            abi: context.votingEngine.abi,
+            functionName: "frontendFeeState",
+            args: [contentId, roundId, frontend],
+          }) as Promise<[bigint, bigint, bigint, bigint]>,
+          context.publicClient.readContract({
+            address: context.rewardDistributor.address,
+            abi: context.rewardDistributor.abi,
+            functionName: "previewFrontendFee",
+            args: [contentId, roundId, frontend],
+          }) as Promise<[bigint, bigint | number, Address, boolean]>,
+        ]);
 
+        const [totalFrontendPool, frontendStake, totalEligibleStake, totalFrontendClaimants] = frontendFeeState;
         const [claimableFee, disposition, operator, alreadyClaimed] = previewFrontendFee;
 
         rows.push({

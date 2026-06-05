@@ -166,7 +166,8 @@ function createDb({
         select: vi.fn(() => ({
           from: vi.fn((table: string) => ({
             where: vi.fn(() => {
-              const rows = table === "feedbackBonusPool" ? feedbackBonusPools : roundVotes;
+              const rows =
+                table === "feedbackBonusPool" ? feedbackBonusPools : roundVotes;
               return {
                 orderBy: vi.fn(async () => rows),
                 then: (
@@ -465,14 +466,33 @@ describe("RoundVotingEngine ponder handlers", () => {
     const commitKey = rbtsCommitKey(voter, commitHash);
     const ciphertext = "0x1234" as `0x${string}`;
     const ciphertextHash = keccak256(ciphertext);
-    const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
-      if (functionName === "commitIdentityKey") return `0x${"00".repeat(32)}`;
-      if (functionName === "commitIdentityHolder") return "0x0000000000000000000000000000000000000000";
-      if (functionName === "roundHasHumanVerifiedCommit") return true;
-      if (functionName === "targetRoundRevealableTimestamp") return 2_000n;
-      if (functionName === "roundRevealGracePeriodSnapshot") return 3_600n;
-      return null;
-    });
+    const readContract = vi.fn(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "commitIdentityState") {
+          return [
+            `0x${"00".repeat(32)}`,
+            "0x0000000000000000000000000000000000000000",
+            0n,
+            0x08,
+            0x08,
+            false,
+          ];
+        }
+        if (functionName === "advisoryRoundContext") {
+          return [
+            0,
+            2_000n,
+            `0x${"00".repeat(32)}`,
+            0n,
+            0n,
+            false,
+            "0x0000000000000000000000000000000000000000",
+          ];
+        }
+        if (functionName === "roundLifecycleState") return [3_600n, 0n, 0n, 0n];
+        return null;
+      },
+    );
     const { db, insertCalls, updateCalls } = createDb({
       existingRound: {
         id: "7-2",
@@ -517,7 +537,9 @@ describe("RoundVotingEngine ponder handlers", () => {
         db,
         client: { readContract },
         contracts: {
-          RoundVotingEngine: { address: "0x0000000000000000000000000000000000000666" },
+          RoundVotingEngine: {
+            address: "0x0000000000000000000000000000000000000666",
+          },
         },
       },
     });
@@ -537,14 +559,8 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
     expect(readContract).toHaveBeenCalledWith(
       expect.objectContaining({
-        functionName: "commitIdentityKey",
+        functionName: "commitIdentityState",
         args: [7n, 2n, commitKey],
-      }),
-    );
-    expect(readContract).toHaveBeenCalledWith(
-      expect.objectContaining({
-        functionName: "roundHasHumanVerifiedCommit",
-        args: [7n, 2n],
       }),
     );
     expect(updateCalls).toContainEqual({
@@ -565,12 +581,32 @@ describe("RoundVotingEngine ponder handlers", () => {
     const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
     const ciphertext = "0x1234" as `0x${string}`;
     const ciphertextHash = keccak256(ciphertext);
-    const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
-      if (functionName === "commitIdentityKey") return `0x${"00".repeat(32)}`;
-      if (functionName === "commitIdentityHolder") return "0x0000000000000000000000000000000000000000";
-      if (functionName === "targetRoundRevealableTimestamp") return 2_000n;
-      return null;
-    });
+    const readContract = vi.fn(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "commitIdentityState") {
+          return [
+            `0x${"00".repeat(32)}`,
+            "0x0000000000000000000000000000000000000000",
+            0n,
+            0,
+            0,
+            false,
+          ];
+        }
+        if (functionName === "advisoryRoundContext") {
+          return [
+            0,
+            2_000n,
+            `0x${"00".repeat(32)}`,
+            0n,
+            0n,
+            false,
+            "0x0000000000000000000000000000000000000000",
+          ];
+        }
+        return null;
+      },
+    );
     const { db, updateCalls } = createDb({
       existingRound: {
         id: "7-2",
@@ -617,16 +653,15 @@ describe("RoundVotingEngine ponder handlers", () => {
         db,
         client: { readContract },
         contracts: {
-          RoundVotingEngine: { address: "0x0000000000000000000000000000000000000666" },
+          RoundVotingEngine: {
+            address: "0x0000000000000000000000000000000000000666",
+          },
         },
       },
     });
 
     expect(readContract).not.toHaveBeenCalledWith(
-      expect.objectContaining({ functionName: "roundHasHumanVerifiedCommit" }),
-    );
-    expect(readContract).not.toHaveBeenCalledWith(
-      expect.objectContaining({ functionName: "roundRevealGracePeriodSnapshot" }),
+      expect.objectContaining({ functionName: "roundLifecycleState" }),
     );
     expect(updateCalls).toContainEqual({
       table: "round",
@@ -647,11 +682,13 @@ describe("RoundVotingEngine ponder handlers", () => {
     const commitKey = rbtsCommitKey(delegate, commitHash);
     const ciphertext = "0xabcd" as `0x${string}`;
     const ciphertextHash = keccak256(ciphertext);
-    const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
-      if (functionName === "commitIdentityKey") return identityKey;
-      if (functionName === "commitIdentityHolder") return holder;
-      return null;
-    });
+    const readContract = vi.fn(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "commitIdentityState")
+          return [identityKey, holder, 0n, 0, 0, false];
+        return null;
+      },
+    );
     const { db, insertCalls } = createDb({
       existingRound: {
         id: "7-2",
@@ -695,7 +732,9 @@ describe("RoundVotingEngine ponder handlers", () => {
         db,
         client: { readContract },
         contracts: {
-          RoundVotingEngine: { address: "0x0000000000000000000000000000000000000666" },
+          RoundVotingEngine: {
+            address: "0x0000000000000000000000000000000000000666",
+          },
         },
       },
     });
@@ -712,7 +751,7 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
     expect(readContract).toHaveBeenCalledWith(
       expect.objectContaining({
-        functionName: "commitIdentityKey",
+        functionName: "commitIdentityState",
         args: [7n, 2n, commitKey],
       }),
     );
@@ -1039,9 +1078,7 @@ describe("RoundVotingEngine ponder handlers", () => {
       return update!.values;
     });
     expect(economicUpdates.map((update) => update.rbtsScoreBps)).toEqual([
-      1800,
-      8750,
-      6750,
+      1800, 8750, 6750,
     ]);
     const meanScoreBps =
       economicUpdates.reduce(
@@ -1092,12 +1129,26 @@ describe("RoundVotingEngine ponder handlers", () => {
       [commitKey3, 25n],
       [commitKey4, 0n],
     ]);
-    const readContract = vi.fn(async ({ functionName, args }: { functionName: string; args: unknown[] }) => {
-      if (functionName === "commitRbtsScoringWeight") {
-        return scoringWeights.get(args[2] as `0x${string}`) ?? 0n;
-      }
-      return null;
-    });
+    const readContract = vi.fn(
+      async ({
+        functionName,
+        args,
+      }: {
+        functionName: string;
+        args: unknown[];
+      }) => {
+        if (functionName === "rbtsCommitState") {
+          return [
+            0,
+            0,
+            scoringWeights.get(args[2] as `0x${string}`) ?? 0n,
+            0n,
+            0n,
+          ];
+        }
+        return null;
+      },
+    );
     const { db, updateCalls } = createDb({
       existingRound: {
         id: "7-2",
@@ -1177,14 +1228,16 @@ describe("RoundVotingEngine ponder handlers", () => {
         db,
         client: { readContract },
         contracts: {
-          RoundVotingEngine: { address: "0x0000000000000000000000000000000000000666" },
+          RoundVotingEngine: {
+            address: "0x0000000000000000000000000000000000000666",
+          },
         },
       },
     });
 
     expect(readContract).toHaveBeenCalledWith(
       expect.objectContaining({
-        functionName: "commitRbtsScoringWeight",
+        functionName: "rbtsCommitState",
         args: [7n, 2n, commitKey4],
       }),
     );

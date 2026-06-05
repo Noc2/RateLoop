@@ -14,7 +14,7 @@ import { useClaimableQuestionRewards } from "~~/hooks/useClaimableQuestionReward
 import { useRecentUserVotes } from "~~/hooks/useRecentUserVotes";
 import type { PonderVoteItem } from "~~/services/ponder/client";
 
-const RBTS_REWARD_STATE_FIELDS = 4;
+const RBTS_REWARD_STATE_FIELDS = 3;
 
 function safeBigInt(val: unknown): bigint {
   try {
@@ -27,6 +27,16 @@ function safeBigInt(val: unknown): bigint {
 function safeBigIntResult(results: readonly unknown[] | undefined, index: number): bigint | null {
   const result = results?.[index] as { status?: string; result?: unknown } | undefined;
   return result?.status === "success" ? safeBigInt(result.result) : null;
+}
+
+function safeTupleBigIntResult(
+  results: readonly unknown[] | undefined,
+  index: number,
+  tupleIndex: number,
+): bigint | null {
+  const result = results?.[index] as { status?: string; result?: unknown } | undefined;
+  if (result?.status !== "success" || !Array.isArray(result.result)) return null;
+  return safeBigInt(result.result[tupleIndex]);
 }
 
 function isRbtsRewardRound(vote: PonderVoteItem) {
@@ -134,12 +144,6 @@ export function useAllClaimableRewards() {
       }))
       .flatMap(({ contentId, roundId }) => [
         {
-          address: engineInfo.address,
-          abi: engineInfo.abi,
-          functionName: "roundVoterPool" as const,
-          args: [contentId, roundId],
-        },
-        {
           address: distributorInfo.address,
           abi: distributorInfo.abi,
           functionName: "roundVoterRewardClaimedCount" as const,
@@ -154,7 +158,7 @@ export function useAllClaimableRewards() {
         {
           address: engineInfo.address,
           abi: engineInfo.abi,
-          functionName: "roundRbtsRewardClaimants" as const,
+          functionName: "rbtsRoundState" as const,
           args: [contentId, roundId],
         },
       ]);
@@ -190,12 +194,13 @@ export function useAllClaimableRewards() {
         const stateIndex = i * RBTS_REWARD_STATE_FIELDS;
         const scoreWeight = rbtsRewardWeight(v);
         const stakeReturned = safeBigInt(v.rbtsStakeReturned);
-        const totalScoreWeight = safeBigInt(v.roundRbtsRewardWeight);
-        const voterPool = safeBigIntResult(rbtsRewardStateResults, stateIndex) ?? 0n;
-        const voterRewardClaimedCount = safeBigIntResult(rbtsRewardStateResults, stateIndex + 1) ?? 0n;
-        const voterRewardClaimedAmount = safeBigIntResult(rbtsRewardStateResults, stateIndex + 2) ?? 0n;
+        const voterRewardClaimedCount = safeBigIntResult(rbtsRewardStateResults, stateIndex) ?? 0n;
+        const voterRewardClaimedAmount = safeBigIntResult(rbtsRewardStateResults, stateIndex + 1) ?? 0n;
+        const voterPool = safeTupleBigIntResult(rbtsRewardStateResults, stateIndex + 2, 4) ?? 0n;
+        const totalScoreWeight =
+          safeTupleBigIntResult(rbtsRewardStateResults, stateIndex + 2, 2) ?? safeBigInt(v.roundRbtsRewardWeight);
         const totalRewardClaimants =
-          safeBigIntResult(rbtsRewardStateResults, stateIndex + 3) ?? safeBigInt(v.roundRbtsRewardClaimants);
+          safeTupleBigIntResult(rbtsRewardStateResults, stateIndex + 2, 3) ?? safeBigInt(v.roundRbtsRewardClaimants);
         let reward = stakeReturned;
 
         reward += calculateLastClaimAwarePoolShare({

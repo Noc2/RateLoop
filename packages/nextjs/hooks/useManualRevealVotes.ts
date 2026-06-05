@@ -200,16 +200,17 @@ async function readDirectCommitReference(params: {
   voter: Address;
 }): Promise<CommitReference | null> {
   try {
-    const commitHash = await params.publicClient.readContract({
+    const commitState = (await params.publicClient.readContract({
       address: params.engineAddress,
       abi: RoundVotingEngineAbi,
-      functionName: "voterCommitHash",
+      functionName: "voterCommitKey",
       args: [params.contentId, params.roundId, params.voter],
-    });
+    })) as readonly [`0x${string}`, `0x${string}`];
+    const [commitHash, commitKey] = commitState;
     if (!isNonZeroBytes32(commitHash)) return null;
     return {
       commitHash,
-      commitKey: buildCommitKey(params.voter, commitHash),
+      commitKey: isNonZeroBytes32(commitKey) ? commitKey : buildCommitKey(params.voter, commitHash),
     };
   } catch {
     return null;
@@ -249,12 +250,13 @@ async function readIdentityCommitReference(params: {
   if (!isNonZeroBytes32(identityKey)) return null;
 
   try {
-    const commitKey = await params.publicClient.readContract({
+    const identityCommitState = (await params.publicClient.readContract({
       address: params.engineAddress,
       abi: RoundVotingEngineAbi,
-      functionName: "identityCommitKey",
-      args: [params.contentId, params.roundId, identityKey],
-    });
+      functionName: "identityCommitState",
+      args: [params.contentId, params.roundId, identityKey, params.voter],
+    })) as readonly [`0x${string}`, `0x${string}`, bigint];
+    const commitKey = identityCommitState[0];
     if (isNonZeroBytes32(commitKey)) {
       return { commitHash: params.indexedCommitHash, commitKey };
     }

@@ -395,7 +395,7 @@ async function resolveOnchainOpenRoundId(contentId: string, chainId?: number): P
     const round = await context.publicClient.readContract({
       address: context.votingEngine.address,
       abi: context.votingEngine.abi,
-      functionName: "rounds",
+      functionName: "roundCore",
       args: [contentIdBigInt, roundId],
     });
 
@@ -519,7 +519,7 @@ async function hasOnchainFeedbackEligibleVote(params: FeedbackVoteEligibilityPar
       context.publicClient.readContract({
         address: context.votingEngine.address,
         abi: context.votingEngine.abi,
-        functionName: "voterCommitHash",
+        functionName: "voterCommitKey",
         args: [contentId, roundId, params.address],
       }),
     );
@@ -542,7 +542,9 @@ async function hasOnchainFeedbackEligibleVote(params: FeedbackVoteEligibilityPar
 
   try {
     const results = await Promise.all(checks);
-    return results.some(isNonZeroBytes32);
+    return results.some(result =>
+      Array.isArray(result) ? isNonZeroBytes32(result[1]) || isNonZeroBytes32(result[0]) : isNonZeroBytes32(result),
+    );
   } catch (error) {
     console.warn("[content-feedback] Unable to verify vote eligibility on-chain.", {
       address: params.address,

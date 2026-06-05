@@ -22,10 +22,13 @@ import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 const roundCommitPreviewAbi = [
   {
     type: "function",
-    name: "previewCommitRoundId",
+    name: "previewCommitContext",
     stateMutability: "view",
     inputs: [{ name: "contentId", type: "uint256" }],
-    outputs: [{ name: "", type: "uint256" }],
+    outputs: [
+      { name: "openRoundId", type: "uint256" },
+      { name: "referenceRatingBps", type: "uint16" },
+    ],
   },
 ] as const;
 
@@ -92,7 +95,12 @@ const {
     this.options = options;
   }),
   httpChainClient: vi.fn(function (
-    this: { kind?: string; chain?: unknown; options?: unknown; httpOptions?: unknown },
+    this: {
+      kind?: string;
+      chain?: unknown;
+      options?: unknown;
+      httpOptions?: unknown;
+    },
     chain: unknown,
     options: unknown,
     httpOptions: unknown,
@@ -310,7 +318,8 @@ describe("resolveRounds integration", () => {
       if (integrationReady) {
         mockConfig.contracts.votingEngine = CONTRACTS.roundVotingEngine;
         mockConfig.contracts.contentRegistry = CONTRACTS.contentRegistry;
-        mockConfig.contracts.advisoryVoteRecorder = CONTRACTS.advisoryVoteRecorder;
+        mockConfig.contracts.advisoryVoteRecorder =
+          CONTRACTS.advisoryVoteRecorder;
         integrationIssue = "";
       } else {
         integrationIssue = `readiness failed: chainId=${chainId}, engine=${engineCode}, registry=${registryCode}`;
@@ -396,20 +405,10 @@ describe("resolveRounds integration", () => {
     const submissionTags = "keeper,integration";
     const submissionCategoryId = 1n;
     const submissionSalt = `0x${"44".repeat(32)}` as `0x${string}`;
-    const [, submissionKey] = (await publicClient.readContract({
-      address: CONTRACTS.contentRegistry,
-      abi: ContentRegistryAbi,
-      functionName: "previewQuestionSubmissionKey",
-      args: [
-        submissionContextUrl,
-        [submissionImageUrl],
-        "",
-        submissionTitle,
-        submissionDescription,
-        submissionTags,
-        submissionCategoryId,
-      ],
-    })) as readonly [bigint, `0x${string}`];
+    const submissionDetails = {
+      detailsUrl: "",
+      detailsHash: `0x${"00".repeat(32)}` as `0x${string}`,
+    };
     const submissionMediaHash = keccak256(
       encodeAbiParameters(
         [{ type: "string[]" }, { type: "string" }],
@@ -422,6 +421,36 @@ describe("resolveRounds integration", () => {
         [submissionTitle, submissionDescription, submissionTags],
       ),
     );
+    const submissionDetailsHash = keccak256(
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "bytes32" }],
+        [submissionDetails.detailsUrl, submissionDetails.detailsHash],
+      ),
+    );
+    const submissionKey = keccak256(
+      encodeAbiParameters(
+        [
+          { type: "bytes32" },
+          { type: "uint256" },
+          { type: "bytes32" },
+          { type: "bytes32" },
+          { type: "string" },
+          { type: "string" },
+          { type: "string" },
+          { type: "string" },
+        ],
+        [
+          keccak256(stringToHex("rateloop-question-context-v4")),
+          submissionCategoryId,
+          submissionMediaHash,
+          submissionDetailsHash,
+          submissionContextUrl,
+          submissionTitle,
+          submissionDescription,
+          submissionTags,
+        ],
+      ),
+    );
     const rewardTermsHash = keccak256(
       encodeAbiParameters(
         [
@@ -431,8 +460,10 @@ describe("resolveRounds integration", () => {
           { type: "uint256" },
           { type: "uint256" },
           { type: "uint256" },
+          { type: "uint256" },
+          { type: "uint8" },
         ],
-        [0, DEFAULT_SUBMISSION_REWARD_AMOUNT, 3n, 1n, 0n, 0n],
+        [0, DEFAULT_SUBMISSION_REWARD_AMOUNT, 3n, 1n, 0n, 0n, 0n, 0],
       ),
     );
     const roundConfigHash = keccak256(
@@ -449,7 +480,8 @@ describe("resolveRounds integration", () => {
     const revealCommitment = keccak256(
       encodeAbiParameters(
         [
-          { type: "string" },
+          { type: "bytes32" },
+          { type: "bytes32" },
           { type: "bytes32" },
           { type: "bytes32" },
           { type: "bytes32" },
@@ -462,10 +494,11 @@ describe("resolveRounds integration", () => {
           { type: "bytes32" },
         ],
         [
-          "rateloop-question-reveal-v3",
+          keccak256(stringToHex("rateloop-question-reveal-v6")),
           submissionKey,
           submissionMediaHash,
           submissionTextHash,
+          submissionDetailsHash,
           submissionCategoryId,
           submissionSalt,
           ACCOUNTS.submitter.address,
@@ -507,6 +540,7 @@ describe("resolveRounds integration", () => {
             submissionDescription,
             submissionTags,
             submissionCategoryId,
+            submissionDetails,
             submissionSalt,
             {
               questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,
@@ -526,20 +560,14 @@ describe("resolveRounds integration", () => {
     const contentId = nextContentId;
     expect(contentId).toBeGreaterThan(0n);
 
-    const roundReferenceRatingBps = Number(
-      await publicClient.readContract({
+    const [roundId, roundReferenceRatingBps] = (await publicClient.readContract(
+      {
         address: CONTRACTS.roundVotingEngine,
-        abi: RoundVotingEngineAbi,
-        functionName: "previewCommitReferenceRatingBps",
+        abi: roundCommitPreviewAbi,
+        functionName: "previewCommitContext",
         args: [contentId],
-      }),
-    );
-    const roundId = (await publicClient.readContract({
-      address: CONTRACTS.roundVotingEngine,
-      abi: roundCommitPreviewAbi,
-      functionName: "previewCommitRoundId",
-      args: [contentId],
-    })) as bigint;
+      },
+    )) as readonly [bigint, number];
     const voters = [
       {
         client: voter1Client,
@@ -663,7 +691,7 @@ describe("resolveRounds integration", () => {
     const round = (await publicClient.readContract({
       address: CONTRACTS.roundVotingEngine,
       abi: RoundVotingEngineAbi,
-      functionName: "rounds",
+      functionName: "roundCore",
       args: [contentId, roundId],
     })) as unknown as {
       state?: number;
@@ -677,10 +705,10 @@ describe("resolveRounds integration", () => {
       (round.revealedCount ?? roundTuple[3] ?? 0) as bigint | number | string,
     );
     const settledAt = BigInt(
-      (round.settledAt ?? roundTuple[10] ?? 0) as bigint | number | string,
+      (round.settledAt ?? roundTuple[6] ?? 0) as bigint | number | string,
     );
     const thresholdReachedAt = BigInt(
-      (round.thresholdReachedAt ?? roundTuple[11] ?? 0) as
+      (round.thresholdReachedAt ?? roundTuple[5] ?? 0) as
         | bigint
         | number
         | string,

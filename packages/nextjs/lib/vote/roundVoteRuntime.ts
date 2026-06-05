@@ -6,17 +6,13 @@ import { type Hex, type PublicClient, zeroHash } from "viem";
 const roundCommitPreviewAbi = [
   {
     type: "function",
-    name: "previewCommitRoundId",
+    name: "previewCommitContext",
     stateMutability: "view",
     inputs: [{ name: "contentId", type: "uint256" }],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    type: "function",
-    name: "previewCommitReferenceRatingBps",
-    stateMutability: "view",
-    inputs: [{ name: "contentId", type: "uint256" }],
-    outputs: [{ name: "", type: "uint16" }],
+    outputs: [
+      { name: "openRoundId", type: "uint256" },
+      { name: "referenceRatingBps", type: "uint16" },
+    ],
   },
 ] as const;
 
@@ -116,13 +112,13 @@ async function readRoundDrandRuntime(params: {
   block: PreviewBlock;
 }): Promise<RoundDrandRuntime> {
   if (params.roundId > 0n) {
-    const [chainHash, genesisTime, period] = (await params.publicClient.readContract({
+    const [, , chainHash, genesisTime, period] = (await params.publicClient.readContract({
       address: params.votingEngineAddress,
       abi: RoundVotingEngineAbi,
-      functionName: "roundDrandConfig",
-      args: [params.contentId, params.roundId],
+      functionName: "advisoryRoundContext",
+      args: [params.contentId, params.roundId, 0n],
       ...params.block,
-    })) as readonly [Hex, bigint, bigint];
+    })) as readonly [number, bigint, Hex, bigint, bigint, boolean, `0x${string}`];
 
     const snapshot = {
       drandChainHash: chainHash.toLowerCase() as `0x${string}`,
@@ -172,22 +168,13 @@ export async function resolveRoundVoteRuntime(params: {
   const runtimeTimestampSeconds = Math.max(Number(latestBlock.timestamp), pendingTimestampSeconds);
   const previewBlock = canReadPendingBlock ? { blockTag: "pending" as const } : { blockNumber: snapshotBlockNumber };
 
-  const [roundId, roundReferenceRatingBps] = await Promise.all([
-    params.publicClient.readContract({
-      address: params.votingEngineAddress,
-      abi: roundCommitPreviewAbi,
-      functionName: "previewCommitRoundId",
-      args: [params.contentId],
-      ...previewBlock,
-    }),
-    params.publicClient.readContract({
-      address: params.votingEngineAddress,
-      abi: roundCommitPreviewAbi,
-      functionName: "previewCommitReferenceRatingBps",
-      args: [params.contentId],
-      ...previewBlock,
-    }),
-  ]);
+  const [roundId, roundReferenceRatingBps] = (await params.publicClient.readContract({
+    address: params.votingEngineAddress,
+    abi: roundCommitPreviewAbi,
+    functionName: "previewCommitContext",
+    args: [params.contentId],
+    ...previewBlock,
+  })) as readonly [bigint, number];
 
   let roundStartTimeSeconds: number | null = null;
   let baseTotalStake = 0n;
@@ -200,7 +187,7 @@ export async function resolveRoundVoteRuntime(params: {
       params.publicClient.readContract({
         address: params.votingEngineAddress,
         abi: RoundVotingEngineAbi,
-        functionName: "rounds",
+        functionName: "roundCore",
         args: [params.contentId, roundId],
         ...previewBlock,
       }),
@@ -238,7 +225,7 @@ export async function resolveRoundVoteRuntime(params: {
           params.publicClient.readContract({
             address: params.votingEngineAddress,
             abi: RoundVotingEngineAbi,
-            functionName: "rounds",
+            functionName: "roundCore",
             args: [params.contentId, currentRoundId],
             ...previewBlock,
           }),

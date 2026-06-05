@@ -367,6 +367,63 @@ function buildQuestionBundleSubmittedLog(params: {
   };
 }
 
+function buildQuestionBundleContentLinkedLog(params: {
+  address: Address;
+  bundleId: bigint;
+  bundleIndex: bigint;
+  contentId: bigint;
+}) {
+  return {
+    address: params.address,
+    data: "0x",
+    topics: encodeEventTopics({
+      abi: ContentRegistryAbi,
+      eventName: "QuestionBundleContentLinked",
+      args: {
+        bundleId: params.bundleId,
+        bundleIndex: params.bundleIndex,
+        contentId: params.contentId,
+      },
+    }).filter((topic): topic is Hex => !!topic),
+  };
+}
+
+function buildQuestionContentAnchoredLog(params: {
+  address: Address;
+  contentId: bigint;
+  mediaIndex?: bigint;
+  mediaType?: number;
+  questionMetadataHash?: Hex;
+  resultSpecHash?: Hex;
+  url?: string;
+}) {
+  return {
+    address: params.address,
+    data: encodeAbiParameters(
+      [
+        { name: "mediaIndex", type: "uint256" },
+        { name: "url", type: "string" },
+        { name: "questionMetadataHash", type: "bytes32" },
+        { name: "resultSpecHash", type: "bytes32" },
+      ],
+      [
+        params.mediaIndex ?? 0n,
+        params.url ?? "https://evil.example/spoof.webp",
+        params.questionMetadataHash ?? (`0x${"f".repeat(64)}` as const),
+        params.resultSpecHash ?? (`0x${"e".repeat(64)}` as const),
+      ],
+    ),
+    topics: encodeEventTopics({
+      abi: ContentRegistryAbi,
+      eventName: "QuestionContentAnchored",
+      args: {
+        contentId: params.contentId,
+        mediaType: params.mediaType ?? 1,
+      },
+    }).filter((topic): topic is Hex => !!topic),
+  };
+}
+
 function buildSubmittedQuestionLogs(params: {
   address: Address;
   contentHash: Hex;
@@ -538,6 +595,10 @@ test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission log
           contentId: 999n,
           submitter: walletAddress,
         }),
+        buildQuestionContentAnchoredLog({
+          address: "0x0000000000000000000000000000000000000999",
+          contentId: 123n,
+        }),
         ...buildSubmittedQuestionLogs({
           address: TEST_CONFIG.contentRegistryAddress,
           contentHash: expectedContentHash,
@@ -617,6 +678,18 @@ test("confirmAgentWalletQuestionSubmissionRequest accepts multi-round bundle com
           contentId: 124n,
           payload,
         }),
+        buildQuestionBundleContentLinkedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          bundleId: 55n,
+          bundleIndex: 1n,
+          contentId: 124n,
+        }),
+        buildQuestionBundleContentLinkedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          bundleId: 55n,
+          bundleIndex: 0n,
+          contentId: 123n,
+        }),
         buildQuestionBundleSubmittedLog({
           address: TEST_CONFIG.contentRegistryAddress,
           bundleId: 55n,
@@ -638,6 +711,91 @@ test("confirmAgentWalletQuestionSubmissionRequest accepts multi-round bundle com
   assert.equal(body.contentId, "123");
   assert.deepEqual(body.contentIds, ["123", "124"]);
   assert.equal(body.rewardPoolId, "88");
+});
+
+test("confirmAgentWalletQuestionSubmissionRequest rejects swapped bundle content links", async () => {
+  const payload = buildPayload("wallet-confirm-swapped-bundle-links");
+  const [firstQuestion] = payload.questions;
+  assert.ok(firstQuestion);
+  payload.questions = [
+    firstQuestion,
+    {
+      ...firstQuestion,
+      contextUrl: "https://example.com/swapped-second",
+      title: "Second bundled question",
+    },
+  ];
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"9".repeat(64)}` as const;
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const [firstContentHash, secondContentHash] = getExpectedContentHashes(record);
+  assert.ok(firstContentHash);
+  assert.ok(secondContentHash);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        buildContentSubmittedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: firstContentHash,
+          contentId: 123n,
+          submitter: walletAddress,
+        }),
+        buildContentRoundConfigSetLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentId: 123n,
+          payload,
+        }),
+        buildContentSubmittedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: secondContentHash,
+          contentId: 124n,
+          submitter: walletAddress,
+        }),
+        buildContentRoundConfigSetLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentId: 124n,
+          payload,
+        }),
+        buildQuestionBundleContentLinkedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          bundleId: 55n,
+          bundleIndex: 0n,
+          contentId: 124n,
+        }),
+        buildQuestionBundleContentLinkedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          bundleId: 55n,
+          bundleIndex: 1n,
+          contentId: 123n,
+        }),
+        buildQuestionBundleSubmittedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          bundleId: 55n,
+          payload,
+          rewardPoolId: 88n,
+          submitter: walletAddress,
+        }),
+      ]),
+  });
+
+  await assert.rejects(
+    () =>
+      confirmAgentWalletQuestionSubmissionRequest({
+        operationKey: record.operationKey,
+        transactionHashes: [transactionHash],
+      }),
+    /Confirmed bundle content linkage did not match the planned question order/,
+  );
 });
 
 test("confirmAgentWalletQuestionSubmissionRequest attaches approved question details rows", async () => {

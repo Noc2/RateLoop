@@ -44,7 +44,7 @@ export function useRoundSnapshot(
 
   const { data: rawRoundData, isLoading: isRoundLoading } = useScaffoldReadContract({
     contractName: "RoundVotingEngine" as any,
-    functionName: "rounds" as any,
+    functionName: "roundCore" as any,
     args: [contentId, currentRoundId] as any,
     watch: true,
     query: {
@@ -64,9 +64,9 @@ export function useRoundSnapshot(
     },
   } as any);
 
-  const { data: rawPreviewRoundId, isLoading: isPreviewRoundIdLoading } = useScaffoldReadContract({
+  const { data: rawPreviewCommitContext, isLoading: isPreviewRoundIdLoading } = useScaffoldReadContract({
     contractName: "RoundVotingEngine" as any,
-    functionName: "previewCommitRoundId" as any,
+    functionName: "previewCommitContext" as any,
     args: [contentId] as any,
     watch: true,
     query: {
@@ -75,7 +75,10 @@ export function useRoundSnapshot(
     },
   } as any);
 
-  const previewRoundId = (rawPreviewRoundId as unknown as bigint | undefined) ?? 0n;
+  const previewRoundId =
+    (Array.isArray(rawPreviewCommitContext)
+      ? (rawPreviewCommitContext[0] as bigint | undefined)
+      : ((rawPreviewCommitContext as { openRoundId?: bigint } | undefined)?.openRoundId ?? undefined)) ?? 0n;
   const parsedRound = parseRound(rawRoundData);
   const mergedRound = mergeRoundDataWithFallback({
     roundId: currentRoundId,
