@@ -179,11 +179,18 @@ function setDefaultTestOverrides(
   });
 }
 
-function getExpectedContentHash(record: { paymentReceipt: string | null }): Hex {
+function getExpectedContentHashes(record: { paymentReceipt: string | null }): Hex[] {
   const receipt = JSON.parse(record.paymentReceipt ?? "{}") as { expectedContentHashes?: string[] };
-  const [contentHash] = receipt.expectedContentHashes ?? [];
-  assert.match(contentHash ?? "", /^0x[a-fA-F0-9]{64}$/);
-  return contentHash as Hex;
+  const contentHashes = receipt.expectedContentHashes ?? [];
+  assert.ok(contentHashes.length > 0);
+  for (const contentHash of contentHashes) {
+    assert.match(contentHash, /^0x[a-fA-F0-9]{64}$/);
+  }
+  return contentHashes as Hex[];
+}
+
+function getExpectedContentHash(record: { paymentReceipt: string | null }): Hex {
+  return getExpectedContentHashes(record)[0] as Hex;
 }
 
 function buildContentSubmittedLog(params: {
@@ -306,6 +313,53 @@ function buildSubmissionRewardPoolAttachedLog(params: {
       eventName: "SubmissionRewardPoolAttached",
       args: {
         contentId: params.contentId,
+        rewardAsset: 1,
+        submitter: params.submitter,
+      },
+    }).filter((topic): topic is Hex => !!topic),
+  };
+}
+
+function buildQuestionBundleSubmittedLog(params: {
+  address: Address;
+  bundleId: bigint;
+  payload: X402QuestionPayload;
+  rewardPoolId?: bigint;
+  submitter: Address;
+}) {
+  return {
+    address: params.address,
+    data: encodeAbiParameters(
+      [
+        { name: "questionCount", type: "uint256" },
+        { name: "amount", type: "uint256" },
+        { name: "requiredCompleters", type: "uint256" },
+        { name: "bountyStartBy", type: "uint256" },
+        { name: "bountyWindowSeconds", type: "uint256" },
+        { name: "feedbackWindowSeconds", type: "uint256" },
+        { name: "bountyEligibility", type: "uint8" },
+        { name: "bountyEligibilityDataHash", type: "bytes32" },
+        { name: "bundleHash", type: "bytes32" },
+        { name: "rewardPoolId", type: "uint256" },
+      ],
+      [
+        BigInt(params.payload.questions.length),
+        params.payload.bounty.amount,
+        params.payload.bounty.requiredVoters * params.payload.bounty.requiredSettledRounds,
+        params.payload.bounty.bountyStartBy,
+        params.payload.bounty.bountyWindowSeconds,
+        params.payload.bounty.feedbackWindowSeconds,
+        params.payload.bounty.bountyEligibility,
+        EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
+        `0x${"b".repeat(64)}`,
+        params.rewardPoolId ?? 77n,
+      ],
+    ),
+    topics: encodeEventTopics({
+      abi: ContentRegistryAbi,
+      eventName: "QuestionBundleSubmitted",
+      args: {
+        bundleId: params.bundleId,
         rewardAsset: 1,
         submitter: params.submitter,
       },
@@ -504,6 +558,86 @@ test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission log
   assert.equal(body.status, "submitted");
   assert.equal(body.contentId, "123");
   assert.deepEqual(body.contentIds, ["123"]);
+});
+
+test("confirmAgentWalletQuestionSubmissionRequest accepts multi-round bundle completer events", async () => {
+  const payload = buildPayload("wallet-confirm-multi-round-bundle");
+  const [firstQuestion] = payload.questions;
+  assert.ok(firstQuestion);
+  payload.bounty = {
+    ...payload.bounty,
+    requiredSettledRounds: 2n,
+  };
+  payload.questions = [
+    firstQuestion,
+    {
+      ...firstQuestion,
+      contextUrl: "https://example.com/second",
+      title: "Second bundled question",
+    },
+  ];
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"e".repeat(64)}` as const;
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const [firstContentHash, secondContentHash] = getExpectedContentHashes(record);
+  assert.ok(firstContentHash);
+  assert.ok(secondContentHash);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        buildContentSubmittedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: firstContentHash,
+          contentId: 123n,
+          submitter: walletAddress,
+        }),
+        buildContentRoundConfigSetLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentId: 123n,
+          payload,
+        }),
+        buildContentSubmittedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: secondContentHash,
+          contentId: 124n,
+          submitter: walletAddress,
+        }),
+        buildContentRoundConfigSetLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentId: 124n,
+          payload,
+        }),
+        buildQuestionBundleSubmittedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          bundleId: 55n,
+          payload,
+          rewardPoolId: 88n,
+          submitter: walletAddress,
+        }),
+      ]),
+  });
+
+  const confirmed = await confirmAgentWalletQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [transactionHash],
+  });
+  const body = confirmed.body as { bundleId: string; contentId: string; contentIds: string[]; rewardPoolId: string };
+
+  assert.equal(confirmed.status, 200);
+  assert.equal(body.bundleId, "55");
+  assert.equal(body.contentId, "123");
+  assert.deepEqual(body.contentIds, ["123", "124"]);
+  assert.equal(body.rewardPoolId, "88");
 });
 
 test("confirmAgentWalletQuestionSubmissionRequest attaches approved question details rows", async () => {
