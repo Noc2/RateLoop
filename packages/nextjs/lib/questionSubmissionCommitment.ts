@@ -1,4 +1,9 @@
-import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
+import { type Address, type Hex, encodeAbiParameters, keccak256, toBytes } from "viem";
+
+const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v6"));
+const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(toBytes("rateloop-question-bundle-item-v4"));
+const QUESTION_BUNDLE_DOMAIN = keccak256(toBytes("rateloop-question-bundle-v4"));
+const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v5"));
 
 type QuestionSubmissionRoundConfig = {
   epochDuration: bigint | number;
@@ -121,7 +126,7 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "string" },
+        { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
@@ -135,7 +140,7 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-reveal-v5",
+        QUESTION_REVEAL_DOMAIN,
         params.submissionKey,
         mediaHash,
         textHash,
@@ -157,7 +162,7 @@ function buildQuestionBundleHash(questions: readonly QuestionBundleSubmissionIte
     keccak256(
       encodeAbiParameters(
         [
-          { type: "string" },
+          { type: "bytes32" },
           { type: "bytes32" },
           { type: "bytes32" },
           { type: "bytes32" },
@@ -168,7 +173,7 @@ function buildQuestionBundleHash(questions: readonly QuestionBundleSubmissionIte
           { type: "bytes32" },
         ],
         [
-          "rateloop-question-bundle-item-v3",
+          QUESTION_BUNDLE_ITEM_DOMAIN,
           keccak256(
             encodeAbiParameters(
               [{ type: "string" }, { type: "string" }, { type: "string" }, { type: "string" }],
@@ -188,7 +193,7 @@ function buildQuestionBundleHash(questions: readonly QuestionBundleSubmissionIte
   );
 
   return keccak256(
-    encodeAbiParameters([{ type: "string" }, { type: "bytes32[]" }], ["rateloop-question-bundle-v3", questionHashes]),
+    encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32[]" }], [QUESTION_BUNDLE_DOMAIN, questionHashes]),
   );
 }
 
@@ -196,7 +201,7 @@ function buildQuestionBundleRevealCommitment(params: QuestionBundleRevealCommitm
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "string" },
+        { type: "bytes32" },
         { type: "bytes32" },
         { type: "address" },
         { type: "uint8" },
@@ -213,7 +218,7 @@ function buildQuestionBundleRevealCommitment(params: QuestionBundleRevealCommitm
         { type: "uint16" },
       ],
       [
-        "rateloop-question-bundle-reveal-v4",
+        QUESTION_BUNDLE_REVEAL_DOMAIN,
         params.bundleHash,
         params.submitter,
         params.rewardAsset,

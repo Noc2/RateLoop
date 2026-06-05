@@ -1710,31 +1710,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "event",
-    "name": "ContentMediaSubmitted",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "imageUrls",
-        "type": "string[]",
-        "indexed": false,
-        "internalType": "string[]"
-      },
-      {
-        "name": "videoUrl",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "ContentRevived",
     "inputs": [
       {
@@ -1891,31 +1866,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "event",
-    "name": "QuestionBundleContentLinked",
-    "inputs": [
-      {
-        "name": "bundleId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "bundleIndex",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "QuestionBundleSubmitted",
     "inputs": [
       {
@@ -2008,31 +1958,6 @@ export const ContentRegistryAbi = [
         "type": "address",
         "indexed": false,
         "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "QuestionSpecAnchored",
-    "inputs": [
-      {
-        "name": "contentId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "questionMetadataHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "resultSpecHash",
-        "type": "bytes32",
-        "indexed": false,
-        "internalType": "bytes32"
       }
     ],
     "anonymous": false

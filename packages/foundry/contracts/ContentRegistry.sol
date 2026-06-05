@@ -83,6 +83,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint256 internal constant MIN_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_SUBMISSION_REWARD_SETTLED_ROUNDS = 16;
     uint256 internal constant MAX_QUESTION_BUNDLE_COUNT = 10;
+    bytes32 internal constant QUESTION_CONTEXT_DOMAIN = keccak256("rateloop-question-context-v4");
+    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v6");
+    bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v4");
+    bytes32 internal constant QUESTION_BUNDLE_DOMAIN = keccak256("rateloop-question-bundle-v4");
+    bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v5");
 
     // Rating safety thresholds
     uint256 internal constant SLASH_RATING_THRESHOLD = 25; // Rating below this triggers slash
@@ -242,8 +247,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string tags,
         uint256 indexed categoryId
     );
-    event QuestionSpecAnchored(uint256 indexed contentId, bytes32 questionMetadataHash, bytes32 resultSpecHash);
-    event ContentMediaSubmitted(uint256 indexed contentId, string[] imageUrls, string videoUrl);
     event ContentDetailsSubmitted(uint256 indexed contentId, string detailsUrl, bytes32 detailsHash);
     event ContentCancelled(uint256 indexed contentId);
     event SubmissionReserved(address indexed submitter, bytes32 indexed revealCommitment, uint256 expiresAt);
@@ -278,7 +281,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bytes32 bundleHash,
         uint256 rewardPoolId
     );
-    event QuestionBundleContentLinked(uint256 indexed bundleId, uint256 indexed contentId, uint256 indexed bundleIndex);
     event ContentDormant(uint256 indexed contentId);
     event DormantSubmissionKeyReleased(uint256 indexed contentId, bytes32 indexed submissionKey);
     event ContentRevived(uint256 indexed contentId, address indexed reviver);
@@ -609,12 +611,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 metadataList[i].tags,
                 resolvedCategoryIds[i]
             );
-            emit QuestionSpecAnchored(
-                contentId, questions[i].spec.questionMetadataHash, questions[i].spec.resultSpecHash
-            );
-            emit ContentMediaSubmitted(contentId, questions[i].imageUrls, questions[i].videoUrl);
             _emitContentDetailsSubmitted(contentId, questions[i].details);
-            emit QuestionBundleContentLinked(bundleId, contentId, i);
         }
 
         uint256 rewardPoolId = IQuestionRewardPoolEscrow(questionRewardPoolEscrow)
@@ -891,12 +888,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "rateloop-question-context-v3",
+                QUESTION_CONTEXT_DOMAIN,
                 metadata.url,
                 imageUrls,
                 videoUrl,
-                details.detailsUrl,
-                details.detailsHash,
+                _submissionDetailsHash(details),
                 metadata.title,
                 metadata.description,
                 metadata.tags,
@@ -912,12 +908,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(spec.resultSpecHash != bytes32(0), "Bad spec");
     }
 
-    function _hasSubmissionDetails(SubmissionDetails memory details) internal pure returns (bool) {
-        return bytes(details.detailsUrl).length != 0;
-    }
-
     function _validateSubmissionDetails(SubmissionDetails memory details) internal view {
-        if (_hasSubmissionDetails(details)) {
+        if (bytes(details.detailsUrl).length != 0) {
             require(details.detailsHash != bytes32(0), "Details hash required");
             SUBMISSION_MEDIA_VALIDATOR.validateContextUrl(details.detailsUrl);
         } else {
@@ -943,11 +935,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "rateloop-question-context-v3",
+                QUESTION_CONTEXT_DOMAIN,
                 resolvedCategoryId,
                 mediaHash,
-                details.detailsUrl,
-                details.detailsHash,
+                _submissionDetailsHash(details),
                 metadata.url,
                 metadata.title,
                 metadata.description,
@@ -1054,8 +1045,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             metadata.tags,
             resolvedCategoryId
         );
-        emit QuestionSpecAnchored(contentId, spec.questionMetadataHash, spec.resultSpecHash);
-        emit ContentMediaSubmitted(contentId, imageUrls, videoUrl);
         _emitContentDetailsSubmitted(contentId, details);
         emit SubmissionRewardPoolAttached(
             contentId,
@@ -1074,7 +1063,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _emitContentDetailsSubmitted(uint256 contentId, SubmissionDetails memory details) internal {
-        if (_hasSubmissionDetails(details)) {
+        if (bytes(details.detailsUrl).length != 0) {
             emit ContentDetailsSubmitted(contentId, details.detailsUrl, details.detailsHash);
         }
     }
@@ -1302,7 +1291,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "rateloop-question-reveal-v5",
+                QUESTION_REVEAL_DOMAIN,
                 submissionKey,
                 mediaHash,
                 keccak256(abi.encode(title, description, tags)),
@@ -1332,7 +1321,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         for (uint256 i = 0; i < metadataList.length; i++) {
             questionHashes[i] = keccak256(
                 abi.encode(
-                    "rateloop-question-bundle-item-v3",
+                    QUESTION_BUNDLE_ITEM_DOMAIN,
                     keccak256(
                         abi.encode(
                             metadataList[i].url,
@@ -1351,7 +1340,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 )
             );
         }
-        return keccak256(abi.encode("rateloop-question-bundle-v3", questionHashes));
+        return keccak256(abi.encode(QUESTION_BUNDLE_DOMAIN, questionHashes));
     }
 
     function _computeBundleRevealCommitment(
@@ -1362,7 +1351,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "rateloop-question-bundle-reveal-v4",
+                QUESTION_BUNDLE_REVEAL_DOMAIN,
                 bundleHash,
                 submitter,
                 rewardTerms.asset,
@@ -1460,14 +1449,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         );
     }
 
-    function _resolveSubmitterIdentity(address submitter) internal view returns (address) {
-        if (submitter == address(0)) return address(0);
-        IRaterIdentityRegistry identityRegistry = _raterRegistry();
-        if (address(identityRegistry) == address(0)) return submitter;
-        IRaterIdentityRegistry.ResolvedRater memory resolved = identityRegistry.resolveRater(submitter);
-        return resolved.holder == address(0) ? submitter : resolved.holder;
-    }
-
     function _isSubmitterIdentity(uint256 contentId, address account) private view returns (bool) {
         Content storage content = contents[contentId];
         address submitterIdentity = getSubmitterIdentity[contentId];
@@ -1542,13 +1523,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     function _addressIdentityKey(address account) internal pure returns (bytes32) {
         if (account == address(0)) return bytes32(0);
         return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
-    }
-
-    function _hasOpenRound(uint256 contentId) internal view returns (bool) {
-        address trackedEngine = contentRoundTrackingEngine[contentId];
-        if (trackedEngine != address(0) && _engineHasOpenRound(trackedEngine, contentId)) return true;
-        address currentEngine = votingEngine;
-        return currentEngine != trackedEngine && _engineHasOpenRound(currentEngine, contentId);
     }
 
     function _hasDormancyBlockingRound(uint256 contentId) internal view returns (bool) {

@@ -20,6 +20,7 @@ import {
   isAddress,
   keccak256,
   parseSignature,
+  toBytes,
 } from "viem";
 import { getImageAttachmentSubmissionValidationError } from "~~/lib/attachments/imageAttachments";
 import { attachQuestionDetailsToContent } from "~~/lib/attachments/questionDetails";
@@ -53,6 +54,7 @@ const RESERVED_SUBMISSION_WAIT_MS = 1_100;
 const TX_RECEIPT_TIMEOUT_MS = 180_000;
 const FEEDBACK_BONUS_ASSET_LREP = 0;
 const FEEDBACK_BONUS_ASSET_USDC = 1;
+const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v4"));
 type FeedbackBonusAsset = "LREP" | "USDC";
 
 function questionDetailsTuple(question: Pick<X402QuestionPayload["questions"][number], "detailsHash" | "detailsUrl">) {
@@ -60,6 +62,10 @@ function questionDetailsTuple(question: Pick<X402QuestionPayload["questions"][nu
     detailsUrl: question.detailsUrl,
     detailsHash: question.detailsHash,
   };
+}
+
+function buildSubmissionDetailsHash(detailsUrl: string, detailsHash: Hex): Hex {
+  return keccak256(encodeAbiParameters([{ type: "string" }, { type: "bytes32" }], [detailsUrl, detailsHash]));
 }
 
 export type X402QuestionSubmissionStatus = "awaiting_wallet_signature" | "submitted" | "failed";
@@ -287,10 +293,9 @@ function buildQuestionContentHash(question: X402QuestionPayload["questions"][num
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "string" },
+        { type: "bytes32" },
         { type: "string" },
         { type: "string[]" },
-        { type: "string" },
         { type: "string" },
         { type: "bytes32" },
         { type: "string" },
@@ -301,12 +306,11 @@ function buildQuestionContentHash(question: X402QuestionPayload["questions"][num
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-context-v3",
+        QUESTION_CONTEXT_DOMAIN,
         question.contextUrl,
         question.imageUrls,
         question.videoUrl,
-        question.detailsUrl,
-        question.detailsHash,
+        buildSubmissionDetailsHash(question.detailsUrl, question.detailsHash),
         question.title,
         question.description,
         question.tags,

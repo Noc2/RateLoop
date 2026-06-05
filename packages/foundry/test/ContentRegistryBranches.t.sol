@@ -399,13 +399,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             );
             questionHashes[i] = keccak256(
                 abi.encode(
-                    "rateloop-question-bundle-item-v3",
+                    QUESTION_BUNDLE_ITEM_DOMAIN,
                     keccak256(
                         abi.encode(
-                            questions[i].contextUrl,
-                            questions[i].title,
-                            questions[i].description,
-                            questions[i].tags
+                            questions[i].contextUrl, questions[i].title, questions[i].description, questions[i].tags
                         )
                     ),
                     keccak256(abi.encode(questions[i].imageUrls, questions[i].videoUrl)),
@@ -419,10 +416,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             );
         }
 
-        bytes32 bundleHash = keccak256(abi.encode("rateloop-question-bundle-v3", questionHashes));
+        bytes32 bundleHash = keccak256(abi.encode(QUESTION_BUNDLE_DOMAIN, questionHashes));
         return keccak256(
             abi.encode(
-                "rateloop-question-bundle-reveal-v4",
+                QUESTION_BUNDLE_REVEAL_DOMAIN,
                 bundleHash,
                 submitterAddress,
                 rewardTerms.asset,
@@ -581,16 +578,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectEmit(true, false, false, true, address(registry));
         emit ContentDetailsSubmitted(1, details.detailsUrl, details.detailsHash);
         uint256 id = registry.submitQuestion(
-            contextUrl,
-            imageUrls,
-            "",
-            "Question?",
-            "Context",
-            "Products",
-            1,
-            details,
-            salt,
-            _defaultQuestionSpec()
+            contextUrl, imageUrls, "", "Question?", "Context", "Products", 1, details, salt, _defaultQuestionSpec()
         );
         vm.stopPrank();
 
@@ -632,8 +620,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Products",
             1,
             ContentRegistry.SubmissionDetails({
-                detailsUrl: "https://example.com/details/question-details.json",
-                detailsHash: bytes32(0)
+                detailsUrl: "https://example.com/details/question-details.json", detailsHash: bytes32(0)
             })
         );
     }

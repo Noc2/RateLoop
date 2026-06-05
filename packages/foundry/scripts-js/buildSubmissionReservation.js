@@ -4,6 +4,7 @@ import {
   http,
   keccak256,
   parseAbi,
+  toBytes,
 } from "viem";
 
 const args = process.argv.slice(2);
@@ -33,6 +34,7 @@ const DEFAULT_QUESTION_METADATA_HASH =
 const DEFAULT_RESULT_SPEC_HASH =
   "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
+const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v6"));
 const DEFAULT_ROUND_CONFIG = {
   epochDuration: 20 * 60,
   maxDuration: 20 * 60,
@@ -422,7 +424,7 @@ const roundConfigHash = keccak256(
 const revealCommitment = keccak256(
   encodeAbiParameters(
     [
-      { type: "string" },
+      { type: "bytes32" },
       { type: "bytes32" },
       { type: "bytes32" },
       { type: "bytes32" },
@@ -436,7 +438,7 @@ const revealCommitment = keccak256(
       { type: "bytes32" },
     ],
     [
-      "rateloop-question-reveal-v5",
+      QUESTION_REVEAL_DOMAIN,
       submissionKey,
       mediaHash,
       textHash,

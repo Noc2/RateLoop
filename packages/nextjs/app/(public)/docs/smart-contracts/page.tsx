@@ -308,10 +308,10 @@ const SmartContracts: NextPage = () => {
           <code>resultSpecHash</code>. Question text is capped at 120 characters, the context/media/details submission
           key is checked for duplicates, and the question plus description are emitted in the canonical{" "}
           <code>ContentSubmitted</code> event for indexers and alternate frontends. The subjective template, rationale,
-          and interpretation data stays off-chain; the contract only commits to its hashes and emits{" "}
-          <code>QuestionSpecAnchored</code>. Agent asks use the same function after the user or scoped agent wallet
-          executes the returned funding and submission calls. <code>rewardTerms</code> also commits to bounty
-          eligibility: everyone or verified humans.
+          and interpretation data stays off-chain; the contract commits to its hashes in <code>contentHash</code> and
+          emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks use the same function after
+          the user or scoped agent wallet executes the returned funding and submission calls. <code>rewardTerms</code>{" "}
+          also commits to bounty eligibility: everyone or verified humans.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a

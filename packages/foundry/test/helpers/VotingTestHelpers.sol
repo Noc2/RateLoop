@@ -43,6 +43,10 @@ abstract contract ContentSubmissionTestBase {
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_EXPIRES_AT = DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY;
     bytes32 internal constant DEFAULT_QUESTION_METADATA_HASH = keccak256("rateloop.generic.question.metadata.v1");
     bytes32 internal constant DEFAULT_RESULT_SPEC_HASH = keccak256("rateloop.generic.result.spec.v1");
+    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v6");
+    bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v4");
+    bytes32 internal constant QUESTION_BUNDLE_DOMAIN = keccak256("rateloop-question-bundle-v4");
+    bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v5");
 
     struct NoMediaQuestionText {
         string url;
@@ -323,7 +327,7 @@ abstract contract ContentSubmissionTestBase {
     ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "rateloop-question-reveal-v5",
+                QUESTION_REVEAL_DOMAIN,
                 submissionKey,
                 mediaHash,
                 keccak256(abi.encode(title, description, tags)),
