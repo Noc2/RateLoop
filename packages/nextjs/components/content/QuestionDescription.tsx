@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { buildRateContentHref } from "~~/constants/routes";
+import { MAX_QUESTION_DETAILS_TEXT_BYTES } from "~~/lib/attachments/questionDetails.shared";
 import { parseQuestionReferences } from "~~/lib/questionReferences";
 
 export type QuestionReferenceContentSummary = {
@@ -19,6 +20,8 @@ type QuestionDescriptionProps = {
   className?: string;
 };
 
+const DETAILS_FETCH_TIMEOUT_MS = 10_000;
+
 function getReferenceLabel(
   contentId: string,
   customLabel: string | undefined,
@@ -32,6 +35,48 @@ async function sha256Hex(value: string) {
   return `0x${Array.from(new Uint8Array(digest))
     .map(byte => byte.toString(16).padStart(2, "0"))
     .join("")}`;
+}
+
+export async function readQuestionDetailsResponseText(response: Response) {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength) {
+    const parsedContentLength = Number(contentLength);
+    if (Number.isSafeInteger(parsedContentLength) && parsedContentLength > MAX_QUESTION_DETAILS_TEXT_BYTES) {
+      throw new Error("Details are too large.");
+    }
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("Details response cannot be read safely.");
+  }
+
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let receivedBytes = 0;
+  let text = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > MAX_QUESTION_DETAILS_TEXT_BYTES) {
+        throw new Error("Details are too large.");
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    if (error instanceof TypeError) {
+      throw new Error("Details are not valid UTF-8.");
+    }
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+
+  return text;
 }
 
 export function QuestionDescription({
@@ -57,10 +102,12 @@ export function QuestionDescription({
 
     setIsLoadingDetails(true);
     setDetailsError(null);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DETAILS_FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(detailsUrl);
+      const response = await fetch(detailsUrl, { signal: controller.signal });
       if (!response.ok) throw new Error("Details are not available.");
-      const text = await response.text();
+      const text = await readQuestionDetailsResponseText(response);
       if (detailsHash) {
         const fetchedHash = await sha256Hex(text);
         if (fetchedHash.toLowerCase() !== detailsHash.toLowerCase()) {
@@ -69,8 +116,15 @@ export function QuestionDescription({
       }
       setDetailsText(text);
     } catch (error) {
-      setDetailsError(error instanceof Error ? error.message : "Could not load details.");
+      setDetailsError(
+        error instanceof DOMException && error.name === "AbortError"
+          ? "Details request timed out."
+          : error instanceof Error
+            ? error.message
+            : "Could not load details.",
+      );
     } finally {
+      clearTimeout(timeout);
       setIsLoadingDetails(false);
     }
   };
