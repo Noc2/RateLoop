@@ -3,10 +3,12 @@ pragma solidity ^0.8.34;
 
 import { Test } from "forge-std/Test.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
+import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import { DeployRateLoop } from "../script/Deploy.s.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
 import { LoopReputation } from "../contracts/LoopReputation.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
+import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
 
@@ -52,6 +54,30 @@ contract DeployRateLoopHarness is DeployRateLoop {
     function fundLaunchDistributionPool(LoopReputation lrepToken, LaunchDistributionPool launchPool) external {
         _fundLaunchDistributionPool(lrepToken, launchPool);
     }
+
+    function assertGovernanceBootstrapReady(
+        LoopReputation lrepToken,
+        RateLoopGovernor governor,
+        address[] memory bootstrapAccounts
+    ) external view {
+        _assertGovernanceBootstrapReady(lrepToken, governor, bootstrapAccounts);
+    }
+
+    function currentGovernanceQuorumRequirement(LoopReputation lrepToken, RateLoopGovernor governor)
+        external
+        view
+        returns (uint256)
+    {
+        return _currentGovernanceQuorumRequirement(lrepToken, governor);
+    }
+
+    function resolveGovernanceBootstrapAllocations(bool isLocalDev)
+        external
+        view
+        returns (address[] memory accounts, uint256[] memory amounts, uint256 totalAmount)
+    {
+        return _resolveGovernanceBootstrapAllocations(isLocalDev);
+    }
 }
 
 contract RevertingDecimalsToken {
@@ -61,6 +87,9 @@ contract RevertingDecimalsToken {
 }
 
 contract DeployRateLoopAllocationsTest is Test {
+    address private constant MOCK_TREASURY = address(0x1004);
+    address private constant MOCK_LAUNCH_DISTRIBUTION = address(0x1001);
+
     function test_LaunchAllocations_MintFullLrepSupplyAtLaunch() public {
         DeployRateLoop deployScript = new DeployRateLoop();
         LoopReputation lrepToken = new LoopReputation(address(this), address(this));
@@ -293,5 +322,93 @@ contract DeployRateLoopAllocationsTest is Test {
         assertFalse(timelock.hasRole(proposerRole, address(0)));
         assertFalse(timelock.hasRole(cancellerRole, address(0)));
         assertFalse(timelock.hasRole(defaultAdminRole, address(deployScript)));
+    }
+
+    function test_GovernanceBootstrapInvariantRejectsAllExcludedSupply() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        LoopReputation lrepToken = new LoopReputation(address(this), address(this));
+        lrepToken.mint(MOCK_TREASURY, deployScript.TREASURY_AMOUNT());
+        lrepToken.mint(MOCK_LAUNCH_DISTRIBUTION, deployScript.LAUNCH_DISTRIBUTION_AMOUNT());
+        RateLoopGovernor governor = _deployGovernor(lrepToken, _excludedGovernanceHolders());
+        address[] memory bootstrapAccounts = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployRateLoop.GovernanceBootstrapInsufficient.selector, 0, 100_000e6, 1_000e6)
+        );
+        deployScript.assertGovernanceBootstrapReady(lrepToken, governor, bootstrapAccounts);
+    }
+
+    function test_GovernanceBootstrapInvariantAcceptsNonExcludedDelegatedQuorum() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        LoopReputation lrepToken = new LoopReputation(address(this), address(this));
+        address voterA = address(0xA11CE);
+        address voterB = address(0xB0B);
+        lrepToken.mint(MOCK_TREASURY, deployScript.TREASURY_AMOUNT() - 100_000e6);
+        lrepToken.mint(voterA, 60_000e6);
+        lrepToken.mint(voterB, 40_000e6);
+        lrepToken.mint(MOCK_LAUNCH_DISTRIBUTION, deployScript.LAUNCH_DISTRIBUTION_AMOUNT());
+        RateLoopGovernor governor = _deployGovernor(lrepToken, _excludedGovernanceHolders());
+        address[] memory bootstrapAccounts = new address[](2);
+        bootstrapAccounts[0] = voterA;
+        bootstrapAccounts[1] = voterB;
+
+        deployScript.assertGovernanceBootstrapReady(lrepToken, governor, bootstrapAccounts);
+        assertEq(
+            deployScript.currentGovernanceQuorumRequirement(lrepToken, governor),
+            governor.MINIMUM_QUORUM(),
+            "minimum quorum should bind at 100K circulating LREP"
+        );
+    }
+
+    function test_GovernanceBootstrapInvariantRejectsExcludedBootstrapAccount() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        LoopReputation lrepToken = new LoopReputation(address(this), address(this));
+        lrepToken.mint(MOCK_TREASURY, deployScript.TREASURY_AMOUNT());
+        lrepToken.mint(MOCK_LAUNCH_DISTRIBUTION, deployScript.LAUNCH_DISTRIBUTION_AMOUNT());
+        RateLoopGovernor governor = _deployGovernor(lrepToken, _excludedGovernanceHolders());
+        address[] memory bootstrapAccounts = new address[](1);
+        bootstrapAccounts[0] = MOCK_TREASURY;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployRateLoop.GovernanceBootstrapAccountExcluded.selector, MOCK_TREASURY)
+        );
+        deployScript.assertGovernanceBootstrapReady(lrepToken, governor, bootstrapAccounts);
+    }
+
+    function test_GovernanceBootstrapInvariantUsesDynamicQuorumAboveFloor() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        LoopReputation lrepToken = new LoopReputation(address(this), address(this));
+        address voterA = address(0xA11CE);
+        address voterB = address(0xB0B);
+        lrepToken.mint(MOCK_TREASURY, deployScript.TREASURY_AMOUNT() - 3_000_000e6);
+        lrepToken.mint(voterA, 2_000_000e6);
+        lrepToken.mint(voterB, 1_000_000e6);
+        lrepToken.mint(MOCK_LAUNCH_DISTRIBUTION, deployScript.LAUNCH_DISTRIBUTION_AMOUNT());
+        RateLoopGovernor governor = _deployGovernor(lrepToken, _excludedGovernanceHolders());
+        address[] memory bootstrapAccounts = new address[](2);
+        bootstrapAccounts[0] = voterA;
+        bootstrapAccounts[1] = voterB;
+
+        assertEq(deployScript.currentGovernanceQuorumRequirement(lrepToken, governor), 120_000e6);
+        deployScript.assertGovernanceBootstrapReady(lrepToken, governor, bootstrapAccounts);
+    }
+
+    function _deployGovernor(LoopReputation lrepToken, address[] memory excludedHolders)
+        private
+        returns (RateLoopGovernor governor)
+    {
+        DeployRateLoop deployScript = new DeployRateLoop();
+        address[] memory proposers = new address[](0);
+        address[] memory executors = new address[](1);
+        executors[0] = address(0);
+        TimelockController timelock =
+            new TimelockController(deployScript.TIMELOCK_MIN_DELAY(), proposers, executors, address(this));
+        governor = new RateLoopGovernor(IVotes(address(lrepToken)), timelock, excludedHolders);
+    }
+
+    function _excludedGovernanceHolders() private pure returns (address[] memory holders) {
+        holders = new address[](2);
+        holders[0] = MOCK_LAUNCH_DISTRIBUTION;
+        holders[1] = MOCK_TREASURY;
     }
 }
