@@ -53,7 +53,8 @@ RateLoop does not treat raw token balance as enough to earn or control outcomes.
 weighting, verified-human launch anchors, correlation epoch snapshots, governance locks, proposal/quorum floors, and hard
 minimums for submission bounties are the main mitigations.
 
-See [docs/implementation-plan.md](docs/implementation-plan.md) for the implementation history and design sequence.
+Live protocol and product documentation is maintained in the Next.js docs routes, with deployment/testing runbooks under
+[docs/testing](docs/testing).
 
 ## Architecture
 
