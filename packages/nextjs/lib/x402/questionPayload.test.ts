@@ -6,7 +6,8 @@ import {
   parseX402QuestionRequest,
 } from "~~/lib/x402/questionPayload";
 
-const UPLOADED_IMAGE_URL = "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp";
+const UPLOADED_IMAGE_URL =
+  "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_questiondetails01";
 const DETAILS_HASH = `0x${"8".repeat(64)}`;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
@@ -174,7 +175,9 @@ test("parseX402QuestionRequest rejects uploaded image paths on untrusted origins
         ...VALID_REQUEST,
         question: {
           ...VALID_REQUEST.question,
-          imageUrls: ["https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp"],
+          imageUrls: [
+            "https://evil.example/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          ],
         },
       }),
     /rateloop_upload_image/,

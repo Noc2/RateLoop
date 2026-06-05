@@ -9,7 +9,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 test("isUploadedImageUrl requires a trusted RateLoop image origin", () => {
-  const approvedPath = "/api/attachments/images/att_abcdefghijklmnop.webp";
+  const approvedPath =
+    "/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
   assert.equal(isUploadedImageUrl(`https://www.rateloop.ai${approvedPath}`), true);
   assert.equal(isUploadedImageUrl(`https://rateloop.ai${approvedPath}`), true);
@@ -18,7 +19,8 @@ test("isUploadedImageUrl requires a trusted RateLoop image origin", () => {
 });
 
 test("isContractSubmissionImageUrl rejects local development attachment URLs", () => {
-  const approvedPath = "/api/attachments/images/att_abcdefghijklmnop.webp";
+  const approvedPath =
+    "/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
   assert.equal(isUploadedImageUrl(`http://localhost:3000${approvedPath}`), true);
   assert.equal(isContractSubmissionImageUrl(`http://localhost:3000${approvedPath}`), false);

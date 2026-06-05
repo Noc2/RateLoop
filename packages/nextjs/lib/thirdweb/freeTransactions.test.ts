@@ -71,7 +71,8 @@ const arbitraryTokenContract = {
   abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
 };
 const APPROVED_IMAGE_ID = "att_sponsoredimage01";
-const APPROVED_IMAGE_URL = `https://www.rateloop.ai/api/attachments/images/${APPROVED_IMAGE_ID}.webp`;
+const APPROVED_IMAGE_SHA256 = "a".repeat(64);
+const APPROVED_IMAGE_URL = `https://www.rateloop.ai/api/attachments/images/${APPROVED_IMAGE_ID}.webp#sha256=0x${APPROVED_IMAGE_SHA256}`;
 const submitQuestionWithRewardAndRoundConfigAbi = [
   {
     type: "function",
@@ -316,6 +317,7 @@ async function insertApprovedImageAttachment(params: { id?: string; ownerWalletA
     ownerWalletAddress: params.ownerWalletAddress ?? WALLET,
     originalFilename: "mockup.png",
     mimeType: "image/webp",
+    sha256: APPROVED_IMAGE_SHA256,
     sizeBytes: 1024,
     status: "approved",
     moderationStatus: "approved",
@@ -741,7 +743,9 @@ test("validates sponsored ContentRegistry uploaded image ownership and origin", 
     buildRequest([
       submitQuestionWithRewardCall({
         contextUrl: "",
-        imageUrls: [`https://evil.example/api/attachments/images/${APPROVED_IMAGE_ID}.webp`],
+        imageUrls: [
+          `https://evil.example/api/attachments/images/${APPROVED_IMAGE_ID}.webp#sha256=0x${APPROVED_IMAGE_SHA256}`,
+        ],
       }),
     ]) as never,
   );

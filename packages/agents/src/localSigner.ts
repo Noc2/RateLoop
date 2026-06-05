@@ -88,6 +88,7 @@ const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const IMAGE_ATTACHMENT_PATH_PATTERN =
   /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
+const IMAGE_ATTACHMENT_HASH_PATTERN = /^#sha256=0x[a-fA-F0-9]{64}$/;
 const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = new Set([
   "https://www.rateloop.ai",
   "https://rateloop.ai",
@@ -1041,7 +1042,9 @@ function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
   if (
     parsed.username ||
     parsed.password ||
-    !IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname)
+    parsed.search ||
+    !IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname) ||
+    !IMAGE_ATTACHMENT_HASH_PATTERN.test(parsed.hash)
   ) {
     throw new Error(
       "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
@@ -1082,6 +1085,7 @@ function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
       "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.",
     );
   }
+  parsed.hash = parsed.hash.toLowerCase();
   return parsed.toString();
 }
 

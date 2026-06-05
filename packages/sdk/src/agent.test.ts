@@ -168,7 +168,7 @@ test("image upload SDK helpers call the MCP image tools", async () => {
           : {
               attachmentId: "att_sdkuploadimage01",
               imageUrl:
-                "https://rateloop.example/api/attachments/images/att_sdkuploadimage01.webp",
+                `https://rateloop.example/api/attachments/images/att_sdkuploadimage01.webp#sha256=0x${"a".repeat(64)}`,
               moderationStatus: "approved",
               nextAction: "Use imageUrl in question.imageUrls.",
               status: "approved",
@@ -220,7 +220,10 @@ test("image upload SDK helpers call the MCP image tools", async () => {
   assert.equal(calls[2].arguments.attachmentId, "att_sdkuploadimage01");
   assert.equal(prepared.nextTool, "rateloop_upload_image");
   assert.equal(uploaded.status, "approved");
-  assert.equal(status.imageUrl, "https://rateloop.example/api/attachments/images/att_sdkuploadimage01.webp");
+  assert.equal(
+    status.imageUrl,
+    `https://rateloop.example/api/attachments/images/att_sdkuploadimage01.webp#sha256=0x${"a".repeat(64)}`,
+  );
 });
 
 test("rating SDK helpers call the MCP rating tools", async () => {

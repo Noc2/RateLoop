@@ -307,8 +307,10 @@ function handoffUrl(params: { handoffId: string; origin: string; token: string }
   return url.toString();
 }
 
-function assetImageUrl(origin: string, attachmentId: string) {
-  return new URL(`/api/attachments/images/${attachmentId}.webp`, origin).toString();
+function assetImageUrl(origin: string, attachmentId: string, sha256: string) {
+  const url = new URL(`/api/attachments/images/${attachmentId}.webp`, origin);
+  url.hash = `sha256=0x${sha256.toLowerCase()}`;
+  return url.toString();
 }
 
 function readDataUrl(value: string) {
@@ -428,7 +430,7 @@ export function buildAgentAskHandoffValidationImageUrls(params: {
   assets: AgentAskHandoffAssetRecord[];
   origin: string;
 }) {
-  return params.assets.map(asset => asset.imageUrl ?? assetImageUrl(params.origin, asset.attachmentId));
+  return params.assets.map(asset => asset.imageUrl ?? assetImageUrl(params.origin, asset.attachmentId, asset.sha256));
 }
 
 export function normalizeAgentAskHandoffRequestBody(params: {
@@ -578,7 +580,7 @@ export async function createAgentAskHandoff(params: {
     attachmentId: createImageAttachmentId(),
     id: randomAssetId(),
   }));
-  const validationImageUrls = assets.map(asset => assetImageUrl(params.origin, asset.attachmentId));
+  const validationImageUrls = assets.map(asset => assetImageUrl(params.origin, asset.attachmentId, asset.sha256));
   const normalized = normalizeAgentAskHandoffRequestBody({ requestBody, validationImageUrls });
 
   await assertAgentAskHandoffDraftSchemaReady();

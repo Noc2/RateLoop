@@ -109,7 +109,11 @@ type StoredQuestionRewardTerms = {
 type SubmittedQuestionContent = {
   contentHash: Hex;
   contentId: bigint;
+  imageUrls: string[];
+  questionMetadataHash: Hex | null;
+  resultSpecHash: Hex | null;
   submitter: Address;
+  videoUrl: string;
 };
 
 type SubmittedQuestionDetails = {
@@ -1595,16 +1599,37 @@ function readSubmissionResult(
   const submitters = new Set<Address>();
 
   for (const log of receipt.logs) {
-    if (log.address.toLowerCase() !== expectedEmitter) {
-      continue;
-    }
-
     try {
       const decoded = decodeEventLog({
         abi: ContentRegistryAbi,
         data: log.data,
         topics: log.topics,
       }) as { eventName: string; args: Record<string, unknown> };
+
+      if (decoded.eventName === "QuestionContentAnchored" && typeof decoded.args.contentId === "bigint") {
+        const submittedContent = submittedContents.find(content => content.contentId === decoded.args.contentId);
+        if (
+          submittedContent &&
+          typeof decoded.args.mediaType === "number" &&
+          typeof decoded.args.mediaIndex === "bigint" &&
+          typeof decoded.args.url === "string" &&
+          isBytes32Hex(decoded.args.questionMetadataHash) &&
+          isBytes32Hex(decoded.args.resultSpecHash)
+        ) {
+          submittedContent.questionMetadataHash = decoded.args.questionMetadataHash.toLowerCase() as Hex;
+          submittedContent.resultSpecHash = decoded.args.resultSpecHash.toLowerCase() as Hex;
+          if (decoded.args.mediaType === 1) {
+            submittedContent.imageUrls[Number(decoded.args.mediaIndex)] = decoded.args.url;
+          } else if (decoded.args.mediaType === 2) {
+            submittedContent.videoUrl = decoded.args.url;
+          }
+        }
+        continue;
+      }
+
+      if (log.address.toLowerCase() !== expectedEmitter) {
+        continue;
+      }
 
       if (decoded.eventName === "ContentSubmitted" && typeof decoded.args.contentId === "bigint") {
         contentIds.push(decoded.args.contentId);
@@ -1616,7 +1641,11 @@ function readSubmissionResult(
           submittedContents.push({
             contentHash: decoded.args.contentHash.toLowerCase() as Hex,
             contentId: decoded.args.contentId,
+            imageUrls: [],
+            questionMetadataHash: null,
+            resultSpecHash: null,
             submitter: decoded.args.submitter,
+            videoUrl: "",
           });
         }
       }

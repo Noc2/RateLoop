@@ -22,7 +22,7 @@
     "title": "Is this generated product mockup clear enough to continue?",
     "description": "Review the uploaded mockup image. Vote up if the concept is understandable, credible, and worth iterating. Vote down if the image is confusing, generic, or missing essential context. In feedback, mention the biggest change that would improve the next version.",
     "imageUrls": [
-      "https://www.rateloop.ai/api/attachments/images/att_replaceWithApprovedUpload.webp"
+      "https://www.rateloop.ai/api/attachments/images/att_replaceWithApprovedUpload.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     ],
     "categoryId": "5",
     "tags": ["agent", "mockup", "design-feedback"]

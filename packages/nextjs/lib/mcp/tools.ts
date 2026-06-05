@@ -938,7 +938,9 @@ function imageUploadStatusBody(params: {
     error: params.attachment.error,
     height: params.attachment.height,
     imageUrl:
-      params.attachment.status === "approved" ? getAttachmentImageUrl(params.requestUrl, params.attachmentId) : null,
+      params.attachment.status === "approved"
+        ? getAttachmentImageUrl(params.requestUrl, params.attachmentId, params.attachment.sha256)
+        : null,
     moderationStatus: params.attachment.moderationStatus,
     nextAction:
       params.attachment.status === "approved"

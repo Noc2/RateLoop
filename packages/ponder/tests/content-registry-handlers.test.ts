@@ -31,6 +31,18 @@ const CONTENT_REGISTRY_ABI = vi.hoisted(
           { name: "categoryId", type: "uint256", indexed: false },
         ],
       },
+      {
+        type: "event",
+        name: "QuestionContentAnchored",
+        inputs: [
+          { name: "contentId", type: "uint256", indexed: true },
+          { name: "mediaType", type: "uint8", indexed: true },
+          { name: "mediaIndex", type: "uint256", indexed: false },
+          { name: "url", type: "string", indexed: false },
+          { name: "questionMetadataHash", type: "bytes32", indexed: false },
+          { name: "resultSpecHash", type: "bytes32", indexed: false },
+        ],
+      },
     ] as const,
 );
 
@@ -116,6 +128,43 @@ function contentSubmittedLog(contentId: bigint, logIndex: number) {
         "Context",
         "tag",
         1n,
+      ],
+    ),
+  };
+}
+
+function questionContentAnchoredLog(params: {
+  contentId: bigint;
+  logIndex: number;
+  mediaIndex: bigint;
+  mediaType: number;
+  questionMetadataHash?: `0x${string}`;
+  resultSpecHash?: `0x${string}`;
+  url: string;
+}) {
+  return {
+    address: "0x000000000000000000000000000000000000bEEF",
+    logIndex: params.logIndex,
+    topics: encodeEventTopics({
+      abi: CONTENT_REGISTRY_ABI,
+      eventName: "QuestionContentAnchored",
+      args: {
+        contentId: params.contentId,
+        mediaType: params.mediaType,
+      },
+    }),
+    data: encodeAbiParameters(
+      [
+        { type: "uint256" },
+        { type: "string" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+      ],
+      [
+        params.mediaIndex,
+        params.url,
+        params.questionMetadataHash ?? `0x${"2".repeat(64)}`,
+        params.resultSpecHash ?? `0x${"3".repeat(64)}`,
       ],
     ),
   };
@@ -237,12 +286,90 @@ describe("ContentRegistry ponder handlers", () => {
     );
   });
 
-  it("does not register ContentRegistry events removed from the current ABI", async () => {
+  it("does not register deprecated bundle content link events", async () => {
     const registeredHandlers = await loadHandlers();
 
-    expect(registeredHandlers.has("ContentRegistry:QuestionSpecAnchored")).toBe(false);
-    expect(registeredHandlers.has("ContentRegistry:ContentMediaSubmitted")).toBe(false);
     expect(registeredHandlers.has("ContentRegistry:QuestionBundleContentLinked")).toBe(false);
+  });
+
+  it("indexes question content anchors from submission receipt logs", async () => {
+    const { db, insertCalls, updateCalls } = createDb();
+    const imageUrl =
+      "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const readContract = vi.fn(async () => ({
+      epochDuration: 600,
+      maxDuration: 7200,
+      minVoters: 5,
+      maxVoters: 50,
+    }));
+    const getTransactionReceipt = vi.fn(async () => ({
+      logs: [contentSubmittedLog(7n, 10), questionContentAnchoredLog({ contentId: 7n, logIndex: 11, mediaIndex: 0n, mediaType: 1, url: imageUrl })],
+    }));
+
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("ContentRegistry:ContentSubmitted");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          submitter: "0x0000000000000000000000000000000000000001",
+          contentHash: "0xabc",
+          url: "https://example.com/question",
+          title: "Question?",
+          description: "Context",
+          tags: "tag",
+          categoryId: 1n,
+        },
+        block: {
+          number: 42n,
+          timestamp: 999n,
+        },
+        log: {
+          logIndex: 10,
+        },
+        transaction: {
+          hash: `0x${"1".repeat(64)}`,
+        },
+      },
+      context: {
+        client: { getTransactionReceipt, readContract },
+        contracts: {
+          ContentRegistry: {
+            address: REGISTRY_ADDRESS,
+          },
+        },
+        db,
+      },
+    });
+
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: { id: 7n },
+          table: "content",
+          values: expect.objectContaining({
+            questionMetadataHash: `0x${"2".repeat(64)}`,
+            resultSpecHash: `0x${"3".repeat(64)}`,
+          }),
+        }),
+      ]),
+    );
+    expect(insertCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "contentMedia",
+          values: expect.objectContaining({
+            contentId: 7n,
+            mediaIndex: 0,
+            mediaType: "image",
+            url: imageUrl,
+          }),
+        }),
+      ]),
+    );
   });
 
   it("links bundle questions from same-transaction ContentSubmitted logs", async () => {

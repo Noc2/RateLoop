@@ -5,7 +5,10 @@ import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import "server-only";
 import sharp from "sharp";
-import { parseAttachmentIdFromUploadedImageUrl } from "~~/lib/attachments/imageAttachmentUrls";
+import {
+  parseAttachmentIdFromUploadedImageUrl,
+  parseUploadedImageAttachmentUrlDigest,
+} from "~~/lib/attachments/imageAttachmentUrls";
 import { MAX_SUBMISSION_IMAGE_URLS } from "~~/lib/contentMedia";
 import { db, dbPool } from "~~/lib/db";
 import { type QuestionImageAttachment, questionImageAttachments } from "~~/lib/db/schema";
@@ -356,8 +359,11 @@ function resolveLocalImageAttachmentPathname(pathname: string) {
   return resolved;
 }
 
-export function getAttachmentImageUrl(requestUrl: string, attachmentId: string) {
-  return new URL(getAttachmentImagePath(attachmentId), getConfiguredAttachmentBaseUrl() ?? requestUrl).toString();
+export function getAttachmentImageUrl(requestUrl: string, attachmentId: string, sha256?: string | null) {
+  const url = new URL(getAttachmentImagePath(attachmentId), getConfiguredAttachmentBaseUrl() ?? requestUrl);
+  const digest = sha256?.trim().toLowerCase();
+  if (digest) url.hash = `sha256=0x${digest}`;
+  return url.toString();
 }
 
 export function getImageAttachmentUploadMode(env: ImageAttachmentUploadModeEnv = process.env): "blob" | "local" {
@@ -571,6 +577,7 @@ async function processImageAttachmentBuffer(params: {
       .rotate()
       .webp({ quality: NORMALIZED_IMAGE_QUALITY })
       .toBuffer({ resolveWithObject: true });
+    const normalizedSha256 = createHash("sha256").update(normalized.data).digest("hex");
     const normalizedBlob = await params.saveNormalizedImage(normalized.data);
     const moderation = await moderateImage(normalized.data);
     const status: ImageAttachmentStatus = moderation.status === "approved" ? "approved" : "blocked";
@@ -585,7 +592,7 @@ async function processImageAttachmentBuffer(params: {
         sizeBytes: normalized.data.length,
         width: normalized.info.width,
         height: normalized.info.height,
-        sha256: actualSha256,
+        sha256: normalizedSha256,
         status,
         moderationStatus: moderation.status,
         moderationProvider: moderation.provider,
@@ -843,7 +850,9 @@ function imageAttachmentUploadResult(params: {
     error: params.attachment.error,
     height: params.attachment.height,
     imageUrl:
-      params.attachment.status === "approved" ? getAttachmentImageUrl(params.requestUrl, params.attachmentId) : null,
+      params.attachment.status === "approved"
+        ? getAttachmentImageUrl(params.requestUrl, params.attachmentId, params.attachment.sha256)
+        : null,
     moderationStatus: params.attachment.moderationStatus,
     nextAction:
       params.attachment.status === "approved"
@@ -938,19 +947,29 @@ export async function getImageAttachmentSubmissionValidationError(params: {
     return `imageUrls supports at most ${MAX_SUBMISSION_IMAGE_URLS} images.`;
   }
 
-  const parsedAttachmentIds = params.imageUrls.map(parseAttachmentIdFromImageUrl);
-  if (parsedAttachmentIds.some(id => !id)) {
+  const parsedImages = params.imageUrls.map(url => parseUploadedImageAttachmentUrlDigest(url));
+  if (parsedImages.some(parsed => !parsed)) {
     return "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.";
   }
-  const attachmentIds = [...new Set(parsedAttachmentIds as string[])];
+  const attachmentDigestsById = new Map<string, string>();
+  for (const parsed of parsedImages as Array<{ attachmentId: string; sha256: string }>) {
+    const existing = attachmentDigestsById.get(parsed.attachmentId);
+    if (existing && existing !== parsed.sha256) {
+      return "Uploaded imageUrls must match the approved attachment digest.";
+    }
+    attachmentDigestsById.set(parsed.attachmentId, parsed.sha256);
+  }
 
   const ownerWalletAddress = params.ownerWalletAddress?.trim().toLowerCase() || null;
   const agentId = params.agentId?.trim() || null;
 
-  for (const attachmentId of attachmentIds) {
+  for (const [attachmentId, urlSha256] of attachmentDigestsById) {
     const attachment = await getImageAttachment(attachmentId);
     if (!attachment || attachment.status !== "approved") {
       return "imageUrls must come from RateLoop uploads. Upload bytes with rateloop_upload_image first.";
+    }
+    if (!attachment.sha256 || attachment.sha256.trim().toLowerCase() !== urlSha256) {
+      return "Uploaded imageUrls must match the approved attachment digest.";
     }
 
     const ownedByAgent = agentId !== null && attachment.agentId === agentId;

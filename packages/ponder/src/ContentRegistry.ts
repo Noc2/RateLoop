@@ -5,6 +5,7 @@ import { ponder } from "ponder:registry";
 import {
   category,
   content,
+  contentMedia,
   globalStats,
   profile,
   questionBundleQuestion,
@@ -90,6 +91,101 @@ async function resolveBundleContentIdsFromReceipt(
   return contentIds.slice(-questionCount);
 }
 
+function mediaRowId(contentId: bigint, mediaIndex: number) {
+  return `${contentId.toString()}-${mediaIndex}`;
+}
+
+function mediaUrlParts(url: string) {
+  const canonical = getCanonicalUrlParts(url);
+  return {
+    canonicalUrl: canonical?.canonicalUrl ?? url.trim(),
+    urlHost: canonical?.urlHost ?? "",
+  };
+}
+
+async function resolveQuestionContentAnchorsFromReceipt(
+  context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
+  event: Parameters<Parameters<typeof ponder.on>[1]>[0]["event"],
+  contentId: bigint,
+) {
+  const txHash = event.transaction?.hash;
+  if (!txHash) return [];
+
+  const receipt = await context.client.getTransactionReceipt({ hash: txHash });
+  const anchors: Array<{
+    mediaIndex: number;
+    mediaType: number;
+    questionMetadataHash: `0x${string}`;
+    resultSpecHash: `0x${string}`;
+    url: string;
+  }> = [];
+
+  for (const log of receipt.logs) {
+    try {
+      const decoded = decodeEventLog({
+        abi: ContentRegistryAbi,
+        data: log.data,
+        topics: log.topics,
+      });
+
+      if (
+        decoded.eventName === "QuestionContentAnchored" &&
+        decoded.args.contentId === contentId
+      ) {
+        anchors.push({
+          mediaIndex: Number(decoded.args.mediaIndex),
+          mediaType: Number(decoded.args.mediaType),
+          questionMetadataHash: decoded.args.questionMetadataHash,
+          resultSpecHash: decoded.args.resultSpecHash,
+          url: decoded.args.url,
+        });
+      }
+    } catch {
+      // Ignore unrelated logs in the same transaction.
+    }
+  }
+
+  return anchors.sort((a, b) => a.mediaIndex - b.mediaIndex);
+}
+
+async function upsertContentAnchors(
+  context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
+  contentId: bigint,
+  anchors: Awaited<ReturnType<typeof resolveQuestionContentAnchorsFromReceipt>>,
+) {
+  const firstAnchor = anchors[0];
+  if (!firstAnchor) return;
+
+  await context.db.update(content, { id: contentId }).set({
+    questionMetadataHash: firstAnchor.questionMetadataHash,
+    resultSpecHash: firstAnchor.resultSpecHash,
+  });
+
+  for (const anchor of anchors) {
+    if (anchor.mediaType !== 1 && anchor.mediaType !== 2) continue;
+    if (!anchor.url) continue;
+    const urlParts = mediaUrlParts(anchor.url);
+
+    await context.db
+      .insert(contentMedia)
+      .values({
+        id: mediaRowId(contentId, anchor.mediaIndex),
+        contentId,
+        mediaIndex: anchor.mediaIndex,
+        mediaType: anchor.mediaType === 1 ? "image" : "video",
+        url: anchor.url,
+        canonicalUrl: urlParts.canonicalUrl,
+        urlHost: urlParts.urlHost,
+      })
+      .onConflictDoUpdate(() => ({
+        mediaType: anchor.mediaType === 1 ? "image" : "video",
+        url: anchor.url,
+        canonicalUrl: urlParts.canonicalUrl,
+        urlHost: urlParts.urlHost,
+      }));
+  }
+}
+
 ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
   const {
     contentId,
@@ -140,6 +236,9 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
       roundMaxVoters: Number(roundConfig.maxVoters),
     })
     .onConflictDoNothing();
+
+  const anchors = await resolveQuestionContentAnchorsFromReceipt(context, event, contentId);
+  await upsertContentAnchors(context, contentId, anchors);
 
   // Increment category content count (skip if category not yet indexed)
   const existingCategory = await context.db.find(category, { id: categoryId });

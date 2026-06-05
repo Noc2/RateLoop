@@ -16,7 +16,7 @@ const QUESTION_BUNDLE_DOMAIN = keccak256(toBytes("rateloop-question-bundle-v4"))
 const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v5"));
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const UPLOADED_IMAGE_URL_PATTERN =
-  /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
+  /^https:\/\/[^\s?#]+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp#sha256=0x[a-fA-F0-9]{64}$/;
 const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0;
 

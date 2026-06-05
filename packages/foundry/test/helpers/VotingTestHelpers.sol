@@ -545,7 +545,7 @@ abstract contract ContentSubmissionTestBase {
         return string.concat(
             "https://www.rateloop.ai/api/attachments/images/att_",
             Strings.toHexString(uint256(keccak256(bytes(seed)))),
-            ".webp"
+            ".webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         );
     }
 }

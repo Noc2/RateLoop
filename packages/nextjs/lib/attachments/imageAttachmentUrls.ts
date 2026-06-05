@@ -1,4 +1,5 @@
 const IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
+const IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN = /^#sha256=0x([a-fA-F0-9]{64})$/;
 
 const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = ["https://www.rateloop.ai", "https://rateloop.ai"] as const;
 
@@ -10,6 +11,7 @@ type UploadedImageAttachmentUrlOptions = {
 type UploadedImageAttachmentUrl = {
   attachmentId: string;
   origin: string;
+  sha256: string;
   url: string;
 };
 
@@ -77,6 +79,9 @@ function parseUploadedImageAttachmentUrl(
 
     const match = parsed.pathname.match(IMAGE_ATTACHMENT_PATH_PATTERN);
     if (!match) return null;
+    if (parsed.search) return null;
+    const digestMatch = parsed.hash.match(IMAGE_ATTACHMENT_SHA256_FRAGMENT_PATTERN);
+    if (!digestMatch) return null;
 
     const allowedOrigins = getAllowedOrigins(options);
     const localhostAllowed = shouldAllowLocalhostOrigins(options);
@@ -84,9 +89,13 @@ function parseUploadedImageAttachmentUrl(
     const isAllowedProtocol = parsed.protocol === "https:" || (localhostAllowed && parsed.protocol === "http:");
     if (!isAllowedOrigin || !isAllowedProtocol) return null;
 
+    const sha256 = digestMatch[1].toLowerCase();
+    parsed.hash = `sha256=0x${sha256}`;
+
     return {
       attachmentId: match[1],
       origin: parsed.origin,
+      sha256,
       url: parsed.toString(),
     };
   } catch {
@@ -106,4 +115,12 @@ export function parseAttachmentIdFromUploadedImageUrl(
   options: UploadedImageAttachmentUrlOptions = {},
 ): string | null {
   return parseUploadedImageAttachmentUrl(value, options)?.attachmentId ?? null;
+}
+
+export function parseUploadedImageAttachmentUrlDigest(
+  value: string,
+  options: UploadedImageAttachmentUrlOptions = {},
+): { attachmentId: string; sha256: string } | null {
+  const parsed = parseUploadedImageAttachmentUrl(value, options);
+  return parsed ? { attachmentId: parsed.attachmentId, sha256: parsed.sha256 } : null;
 }

@@ -8,6 +8,7 @@ const FEATURE_ACCEPTANCE_REQUIRED_INPUTS = ["expectedBehavior", "testSteps", "ac
 const AGENT_TRACE_REVIEW_TEMPLATE_ID = "agent_trace_review";
 const AGENT_TRACE_REVIEW_REQUIRED_INPUTS = ["traceId", "taskGoal", "reviewFocus"] as const;
 const UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp$/;
+const UPLOADED_IMAGE_ATTACHMENT_HASH_PATTERN = /^#sha256=0x[a-fA-F0-9]{64}$/;
 const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const SURVEY_STYLE_PATTERN =
   /\b(multiple[-\s]?choice|answer options?|choose one|choose from|select one|select from|price range|pricing range)\b/i;
@@ -74,7 +75,13 @@ function tagCount(tags: unknown): number {
 function looksLikeUploadedImageUrl(value: unknown): boolean {
   if (typeof value !== "string" || !looksLikeHttpsUrl(value)) return false;
   const parsed = new URL(value);
-  return !parsed.username && !parsed.password && UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname);
+  return (
+    !parsed.username &&
+    !parsed.password &&
+    !parsed.search &&
+    UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN.test(parsed.pathname) &&
+    UPLOADED_IMAGE_ATTACHMENT_HASH_PATTERN.test(parsed.hash)
+  );
 }
 
 function hasInvalidUploadedImageUrlList(value: unknown): boolean {

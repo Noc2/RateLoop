@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { lintAgentAskRequest, summarizeLintFindings } from "../questions/lint.js";
 
-const UPLOADED_IMAGE_URL = "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp";
+const UPLOADED_IMAGE_URL =
+  "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp#sha256=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop";
 const DETAILS_HASH = `0x${"4".repeat(64)}`;
 

@@ -413,7 +413,10 @@ test("public MCP image upload uses a wallet-signed upload challenge", async () =
 
   assert.equal(prepared.signatureRequired, true);
   assert.equal(body.status, "approved");
-  assert.equal(body.imageUrl, `https://www.rateloop.ai/api/attachments/images/${attachmentId}.webp`);
+  assert.match(
+    body.imageUrl,
+    new RegExp(`^https://www\\.rateloop\\.ai/api/attachments/images/${attachmentId}\\.webp#sha256=0x[a-f0-9]{64}$`),
+  );
 });
 
 test("public MCP image upload rejects unsigned image bytes", async () => {

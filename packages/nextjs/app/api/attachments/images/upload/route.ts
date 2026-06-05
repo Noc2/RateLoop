@@ -228,7 +228,10 @@ async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
     const attachment = await getImageAttachment(normalized.attachmentId);
     return NextResponse.json({
       attachmentId: normalized.attachmentId,
-      imageUrl: attachment?.status === "approved" ? getAttachmentImageUrl(request.url, normalized.attachmentId) : null,
+      imageUrl:
+        attachment?.status === "approved"
+          ? getAttachmentImageUrl(request.url, normalized.attachmentId, attachment.sha256)
+          : null,
       status: attachment?.status ?? "processing",
     });
   } catch (error) {

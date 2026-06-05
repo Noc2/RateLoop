@@ -21,7 +21,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     attachmentId,
     error: attachment.error,
     height: attachment.height,
-    imageUrl: attachment.status === "approved" ? getAttachmentImageUrl(request.url, attachmentId) : null,
+    imageUrl:
+      attachment.status === "approved" ? getAttachmentImageUrl(request.url, attachmentId, attachment.sha256) : null,
     moderationStatus: attachment.moderationStatus,
     status: attachment.status,
     width: attachment.width,

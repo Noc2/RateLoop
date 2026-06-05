@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
+import { Vm } from "forge-std/Vm.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
@@ -48,6 +49,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     uint256 public constant STAKE = 5e6;
 
     event ContentDetailsSubmitted(uint256 indexed contentId, string detailsUrl, bytes32 detailsHash);
+    bytes32 internal constant QUESTION_CONTENT_ANCHORED_TOPIC =
+        keccak256("QuestionContentAnchored(uint256,uint8,uint256,string,bytes32,bytes32)");
 
     struct QuestionReservation {
         string contextUrl;
@@ -609,9 +612,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertNotEq(emptyDetailsKey, detailsKey);
     }
 
-    function test_PreviewQuestionSubmissionKey_RejectsDetailsUrlWithoutHash() public {
+    function test_SubmitQuestion_RejectsDetailsUrlWithoutHash() public {
         vm.expectRevert("Details hash required");
-        registry.previewQuestionSubmissionKey(
+        registry.submitQuestion(
             "https://example.com/context",
             _emptyImageUrls(),
             "",
@@ -621,13 +624,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             1,
             ContentRegistry.SubmissionDetails({
                 detailsUrl: "https://example.com/details/question-details.json", detailsHash: bytes32(0)
-            })
+            }),
+            keccak256("details-url-without-hash"),
+            _defaultQuestionSpec()
         );
     }
 
-    function test_PreviewQuestionSubmissionKey_RejectsDetailsHashWithoutUrl() public {
+    function test_SubmitQuestion_RejectsDetailsHashWithoutUrl() public {
         vm.expectRevert("Details URL required");
-        registry.previewQuestionSubmissionKey(
+        registry.submitQuestion(
             "https://example.com/context",
             _emptyImageUrls(),
             "",
@@ -635,7 +640,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Context",
             "Products",
             1,
-            ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: keccak256(bytes("long-form details")) })
+            ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: keccak256(bytes("long-form details")) }),
+            keccak256("details-hash-without-url"),
+            _defaultQuestionSpec()
         );
     }
 
@@ -799,7 +806,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         for (uint256 i = 0; i < urls.length; i++) {
             vm.expectRevert("Invalid media URL");
-            registry.previewQuestionSubmissionKey(
+            registry.submitQuestion(
                 "https://example.com/context",
                 _emptyImageUrls(),
                 urls[i],
@@ -807,7 +814,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 "Context",
                 "Video",
                 1,
-                _emptySubmissionDetails()
+                _emptySubmissionDetails(),
+                bytes32(i + 1),
+                _defaultQuestionSpec()
             );
         }
     }
@@ -861,10 +870,72 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertTrue(registry.submissionKeyUsed(submissionKey));
     }
 
+    function test_SubmitQuestion_EmitsQuestionContentAnchors() public {
+        string[] memory imageUrls = new string[](2);
+        imageUrls[0] = _uploadedImageUrl("anchor-image-a");
+        imageUrls[1] = _uploadedImageUrl("anchor-image-b");
+        ContentRegistry.QuestionSpecCommitment memory spec = _defaultQuestionSpec();
+        bytes32 salt = keccak256("anchored-question");
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        _reserveQuestionSubmissionWithRewardTerms(
+            "https://example.com/context",
+            imageUrls,
+            "",
+            "Which product image works better?",
+            "Compare the two images for usefulness.",
+            "Products,Images",
+            1,
+            salt,
+            submitter,
+            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            _defaultSubmissionRewardAmount(registry),
+            DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+            DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
+        );
+        vm.warp(block.timestamp + 1);
+        vm.recordLogs();
+        uint256 id = registry.submitQuestion(
+            "https://example.com/context",
+            imageUrls,
+            "",
+            "Which product image works better?",
+            "Compare the two images for usefulness.",
+            "Products,Images",
+            1,
+            _emptySubmissionDetails(),
+            salt,
+            spec
+        );
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        vm.stopPrank();
+
+        uint256 anchors;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (
+                logs[i].topics.length == 3 && logs[i].topics[0] == QUESTION_CONTENT_ANCHORED_TOPIC
+                    && logs[i].topics[1] == bytes32(id) && logs[i].topics[2] == bytes32(uint256(1))
+            ) {
+                (uint256 mediaIndex, string memory url, bytes32 questionMetadataHash, bytes32 resultSpecHash) =
+                    abi.decode(logs[i].data, (uint256, string, bytes32, bytes32));
+                assertEq(mediaIndex, anchors);
+                assertEq(url, imageUrls[anchors]);
+                assertEq(questionMetadataHash, spec.questionMetadataHash);
+                assertEq(resultSpecHash, spec.resultSpecHash);
+                anchors++;
+            }
+        }
+        assertEq(anchors, 2);
+    }
+
     function test_SubmitQuestion_AllowsRateloopAiUploadedImages() public view {
         registry.previewQuestionSubmissionKey(
             "https://example.com/context",
-            _singleImageUrls("https://www.rateloop.ai/api/attachments/images/att_0123456789abcdef.webp"),
+            _singleImageUrls(
+                "https://www.rateloop.ai/api/attachments/images/att_0123456789abcdef.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            ),
             "",
             "Question?",
             "Context",
@@ -874,7 +945,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         registry.previewQuestionSubmissionKey(
             "https://example.com/context",
-            _singleImageUrls("https://rateloop.ai/api/attachments/images/att_0123456789abcdef.webp"),
+            _singleImageUrls(
+                "https://rateloop.ai/api/attachments/images/att_0123456789abcdef.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            ),
             "",
             "Question?",
             "Context",
@@ -1762,7 +1835,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         imageUrls[0] = _uploadedImageUrl("mixed-video-image");
 
         vm.expectRevert("Choose images or video");
-        registry.previewQuestionSubmissionKey(
+        registry.submitQuestion(
             "https://example.com/context",
             imageUrls,
             "https://www.youtube.com/watch?v=jNQXAC9IVRw",
@@ -1770,7 +1843,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Context",
             "Media",
             5,
-            _emptySubmissionDetails()
+            _emptySubmissionDetails(),
+            keccak256("mixed-images-video"),
+            _defaultQuestionSpec()
         );
     }
 
@@ -1781,8 +1856,17 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         }
 
         vm.expectRevert("Too many images");
-        registry.previewQuestionSubmissionKey(
-            "https://example.com/context", imageUrls, "", "Question?", "Context", "Media", 5, _emptySubmissionDetails()
+        registry.submitQuestion(
+            "https://example.com/context",
+            imageUrls,
+            "",
+            "Question?",
+            "Context",
+            "Media",
+            5,
+            _emptySubmissionDetails(),
+            keccak256("too-many-images"),
+            _defaultQuestionSpec()
         );
     }
 
@@ -2101,13 +2185,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_SubmitContent_UploadedImageFromUnapprovedHost_Reverts() public {
+    function test_SubmitContent_UploadedImageWithoutDigest_Reverts() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         vm.expectRevert("Invalid media URL");
         registry.submitQuestion(
             "https://example.com/context",
-            _singleImageUrls("https://evil.example/api/attachments/images/att_0123456789abcdef.webp"),
+            _singleImageUrls("https://www.rateloop.ai/api/attachments/images/att_0123456789abcdef.webp"),
             "",
             "goal",
             "goal",
@@ -2320,7 +2404,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         string memory longVideoUrl = _validLengthUrl(2049, bytes("https://youtu.be/"), bytes("a"));
 
         vm.expectRevert("Invalid URL");
-        registry.previewQuestionSubmissionKey(
+        registry.submitQuestion(
             "https://example.com/context",
             _emptyImageUrls(),
             longVideoUrl,
@@ -2328,7 +2412,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Context.",
             "tags",
             1,
-            _emptySubmissionDetails()
+            _emptySubmissionDetails(),
+            keccak256("video-url-too-long"),
+            _defaultQuestionSpec()
         );
     }
 

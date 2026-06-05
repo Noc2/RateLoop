@@ -247,11 +247,18 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string tags,
         uint256 indexed categoryId
     );
+    event QuestionContentAnchored(
+        uint256 indexed contentId,
+        uint8 indexed mediaType,
+        uint256 mediaIndex,
+        string url,
+        bytes32 questionMetadataHash,
+        bytes32 resultSpecHash
+    );
     event ContentDetailsSubmitted(uint256 indexed contentId, string detailsUrl, bytes32 detailsHash);
     event ContentCancelled(uint256 indexed contentId);
     event SubmissionReserved(address indexed submitter, bytes32 indexed revealCommitment, uint256 expiresAt);
     event SubmissionReservationCancelled(address indexed submitter, bytes32 indexed revealCommitment);
-    event SubmissionReservationExpired(address indexed submitter, bytes32 indexed revealCommitment);
     event SubmissionRewardPoolAttached(
         uint256 indexed contentId,
         address indexed submitter,
@@ -480,18 +487,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         emit SubmissionReservationCancelled(msg.sender, revealCommitment);
     }
 
-    function clearExpiredReservedSubmission(bytes32 revealCommitment) external nonReentrant whenNotPaused {
-        // Caller sweeps their own expired reservation. Because keys are scoped by submitter,
-        // other users cannot accidentally interfere with each other's expirations.
-        bytes32 key = _reservationKey(revealCommitment, msg.sender);
-        PendingSubmission memory pending = pendingSubmissions[key];
-        require(pending.submitter != address(0), "Reservation not found");
-        require(block.timestamp > pending.expiresAt, "Reservation active");
-        delete pendingSubmissions[key];
-
-        emit SubmissionReservationExpired(pending.submitter, revealCommitment);
-    }
-
     function submitQuestionWithRewardAndRoundConfig(
         string memory contextUrl,
         string[] memory imageUrls,
@@ -611,6 +606,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 metadataList[i].tags,
                 resolvedCategoryIds[i]
             );
+            _emitContentMediaSubmitted(contentId, questions[i].imageUrls, questions[i].videoUrl, questions[i].spec);
             _emitContentDetailsSubmitted(contentId, questions[i].details);
         }
 
@@ -1045,6 +1041,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             metadata.tags,
             resolvedCategoryId
         );
+        _emitContentMediaSubmitted(contentId, imageUrls, videoUrl, spec);
         _emitContentDetailsSubmitted(contentId, details);
         emit SubmissionRewardPoolAttached(
             contentId,
@@ -1066,6 +1063,17 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         if (bytes(details.detailsUrl).length != 0) {
             emit ContentDetailsSubmitted(contentId, details.detailsUrl, details.detailsHash);
         }
+    }
+
+    function _emitContentMediaSubmitted(
+        uint256 contentId,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        QuestionSpecCommitment memory spec
+    ) internal {
+        SUBMISSION_MEDIA_VALIDATOR.emitQuestionContentAnchored(
+            contentId, imageUrls, videoUrl, spec.questionMetadataHash, spec.resultSpecHash
+        );
     }
 
     /// @notice Mark content as dormant if it hasn't reached milestone 0 within DORMANCY_PERIOD.
@@ -1254,7 +1262,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         return !_hasDormancyBlockingRound(contentId);
     }
 
-    /// @notice Preview the resolved category and question-level submission key for a future multi-media reveal.
+    /// @notice Preview the question-level submission key for a future multi-media reveal.
+    /// @dev Preview is deterministic only; reveal performs full validation.
     function previewQuestionSubmissionKey(
         string calldata contextUrl,
         string[] calldata imageUrls,
@@ -1264,15 +1273,15 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string calldata tags,
         uint256 categoryId,
         SubmissionDetails calldata details
-    ) external view returns (uint256 resolvedCategoryId, bytes32 submissionKey) {
-        _validateSubmissionDetails(details);
-        SubmissionMetadata memory metadata = _validatedContextSubmissionMetadata(
-            contextUrl, imageUrls, videoUrl, title, description, tags, categoryId
-        );
-        resolvedCategoryId = _resolveQuestionSubmissionCategory(metadata);
-        submissionKey = _deriveQuestionMediaSubmissionKey(
-            metadata, _submissionMediaHash(imageUrls, videoUrl), details, resolvedCategoryId
-        );
+    ) external pure returns (uint256 resolvedCategoryId, bytes32 submissionKey) {
+        SubmissionMetadata memory metadata;
+        metadata.url = contextUrl;
+        metadata.title = title;
+        metadata.description = description;
+        metadata.tags = tags;
+        resolvedCategoryId = categoryId;
+        submissionKey =
+            _deriveQuestionMediaSubmissionKey(metadata, _submissionMediaHash(imageUrls, videoUrl), details, categoryId);
     }
 
     function _computeRevealCommitment(

@@ -4713,19 +4713,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "clearExpiredReservedSubmission",
-          inputs: [
-            {
-              name: "revealCommitment",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "contentSubmitterIdentityKey",
           inputs: [
             {
@@ -5272,7 +5259,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bytes32",
             },
           ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -6528,6 +6515,49 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "QuestionContentAnchored",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "mediaType",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "mediaIndex",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "url",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+            {
+              name: "questionMetadataHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "resultSpecHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "QuestionRewardPoolEscrowUpdated",
           inputs: [
             {
@@ -6715,25 +6745,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "event",
           name: "SubmissionReservationCancelled",
-          inputs: [
-            {
-              name: "submitter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "revealCommitment",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "SubmissionReservationExpired",
           inputs: [
             {
               name: "submitter",
@@ -31295,19 +31306,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "clearExpiredReservedSubmission",
-          inputs: [
-            {
-              name: "revealCommitment",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "contentSubmitterIdentityKey",
           inputs: [
             {
@@ -31854,7 +31852,7 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "bytes32",
             },
           ],
-          stateMutability: "view",
+          stateMutability: "pure",
         },
         {
           type: "function",
@@ -33110,6 +33108,49 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "QuestionContentAnchored",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "mediaType",
+              type: "uint8",
+              indexed: true,
+              internalType: "uint8",
+            },
+            {
+              name: "mediaIndex",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "url",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+            {
+              name: "questionMetadataHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "resultSpecHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "QuestionRewardPoolEscrowUpdated",
           inputs: [
             {
@@ -33297,25 +33338,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "event",
           name: "SubmissionReservationCancelled",
-          inputs: [
-            {
-              name: "submitter",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "revealCommitment",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "SubmissionReservationExpired",
           inputs: [
             {
               name: "submitter",
