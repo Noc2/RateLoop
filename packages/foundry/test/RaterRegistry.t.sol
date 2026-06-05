@@ -712,20 +712,61 @@ contract RaterRegistryTest is Test {
         registry.setWorldIdV4LaunchNullifierAlias(bytes32(0), legacyNullifier);
     }
 
-    function test_WorldIdV4LaunchNullifierAliasRejectsAlreadySeenV4Nullifier() public {
+    function test_WorldIdV4LaunchNullifierAliasAllowsPostAttestationBeforeLaunchUse() public {
         MockWorldIDVerifier verifier = new MockWorldIDVerifier();
         uint256[5] memory proof;
         bytes32 v4Nullifier = keccak256("v4-human");
+        bytes32 legacyNullifier = keccak256("legacy-human");
 
         _configureV4Verifier(verifier);
         vm.prank(rater);
         registry.attestHumanCredentialWithV4Proof(uint256(v4Nullifier), 1, uint64(block.timestamp + 1 hours), proof);
+
+        assertFalse(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
+
+        vm.prank(governance);
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, legacyNullifier);
+
+        assertEq(registry.worldIdV4LaunchNullifierAlias(v4Nullifier), legacyNullifier);
+    }
+
+    function test_WorldIdV4LaunchNullifierAliasRejectsConsumedV4Nullifier() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[5] memory proof;
+        bytes32 v4Nullifier = keccak256("v4-human");
+        address launchConsumer = address(0xBEEF);
+
+        _configureV4Verifier(verifier);
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(uint256(v4Nullifier), 1, uint64(block.timestamp + 1 hours), proof);
+
+        bytes32 launchConsumerRole = registry.LAUNCH_CONSUMER_ROLE();
+        vm.prank(governance);
+        registry.grantRole(launchConsumerRole, launchConsumer);
+        vm.prank(launchConsumer);
+        registry.consumeWorldIdV4LaunchNullifier(v4Nullifier);
 
         assertTrue(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
 
         vm.prank(governance);
         vm.expectRevert(RaterRegistry.InvalidCredential.selector);
         registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, keccak256("legacy-human"));
+    }
+
+    function test_WorldIdV4LaunchRewardAnchorUsesUnaliasedV4Identity() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        LaunchRaterRewardLibHarness launchHarness = new LaunchRaterRewardLibHarness();
+        uint256[5] memory v4Proof;
+        bytes32 v4Nullifier = keccak256("v4-human");
+
+        _configureV4Verifier(verifier);
+        vm.prank(otherRater);
+        registry.attestHumanCredentialWithV4Proof(uint256(v4Nullifier), 1, uint64(block.timestamp + 1 hours), v4Proof);
+
+        assertEq(
+            launchHarness.launchRewardAnchorId(registry, otherRater, uint48(block.timestamp), 0),
+            registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, v4Nullifier)
+        );
     }
 
     function test_WorldIdV4LaunchRewardAnchorUsesExplicitAlias() public {

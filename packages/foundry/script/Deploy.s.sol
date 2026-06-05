@@ -228,9 +228,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             )
         );
         RaterRegistry raterRegistry = RaterRegistry(address(raterRegistryProxy));
-        if (!isLocalDev) {
-            _renounceRaterRegistryDeployerRoles(raterRegistry, deployer);
-        }
         TransparentUpgradeableProxy questionRewardPoolEscrowProxy = new TransparentUpgradeableProxy(
             address(questionRewardPoolEscrowImpl),
             governance,
@@ -322,6 +319,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
+        raterRegistry.grantRole(raterRegistry.LAUNCH_CONSUMER_ROLE(), address(launchDistributionPool));
+        if (!isLocalDev) {
+            _renounceRaterRegistryDeployerRoles(raterRegistry, deployer);
+        }
         ClusterPayoutOracle clusterPayoutOracle =
             new ClusterPayoutOracle(deployer, address(frontendRegistry), usdcTokenAddress);
         // M-Oracle-1 (PR #20): the launch-credit consumer pin on the oracle MUST be set BEFORE

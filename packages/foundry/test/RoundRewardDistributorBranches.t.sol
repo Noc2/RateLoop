@@ -192,6 +192,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         worldIdRouter = new MockWorldIDRouter();
         raterRegistry = new RaterRegistry(owner, owner, address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
         launchPool = new LaunchDistributionPool(address(lrepToken), address(raterRegistry), owner);
+        raterRegistry.grantRole(raterRegistry.LAUNCH_CONSUMER_ROLE(), address(launchPool));
         launchPool.setAuthorizedCaller(address(rewardDistributor), true);
         lrepToken.mint(owner, launchPool.TOTAL_POOL_AMOUNT());
         lrepToken.approve(address(launchPool), launchPool.TOTAL_POOL_AMOUNT());

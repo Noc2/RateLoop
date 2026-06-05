@@ -102,6 +102,7 @@ contract LaunchDistributionPoolTest is Test {
         registry =
             new RaterRegistry(address(this), address(this), address(worldIdRouter), bytes32("rate-loop"), 1, 365 days);
         pool = new LaunchDistributionPool(address(lrep), address(registry), address(this));
+        registry.grantRole(registry.LAUNCH_CONSUMER_ROLE(), address(pool));
         pool.setAuthorizedCaller(address(this), true);
 
         lrep.mint(address(this), pool.TOTAL_POOL_AMOUNT());
@@ -1618,6 +1619,42 @@ contract LaunchDistributionPoolTest is Test {
         registry.attestHumanCredentialWithProof(1, uint256(bytes32("bob-legacy-human")), legacyProof);
     }
 
+    function test_WorldIdV4FullCapAssignmentConsumesUnaliasedLaunchNullifier() public {
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+        policy.unverifiedEarnedRaterCapBps = 2_500;
+        pool.setLaunchRewardPolicy(policy);
+        bytes32 v4Nullifier = bytes32("alice-v4-human");
+
+        _configureWorldIdV4();
+        _verifyV4(alice, v4Nullifier);
+
+        assertEq(_recordFiveEligibleCredits(alice), FIRST_COHORT_FULL_SLOT);
+
+        assertTrue(pool.raterFullLaunchCapUnlocked(alice));
+        assertTrue(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, bytes32("legacy-human"));
+    }
+
+    function test_WorldIdV4UnlockFullEarnedRaterCapConsumesUnaliasedLaunchNullifier() public {
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+        policy.unverifiedEarnedRaterCapBps = 2_500;
+        pool.setLaunchRewardPolicy(policy);
+        bytes32 v4Nullifier = bytes32("alice-v4-human");
+
+        _recordFiveEligibleCredits(alice);
+        assertEq(pool.raterLaunchCap(alice), FIRST_COHORT_UNVERIFIED_CAP);
+
+        _configureWorldIdV4();
+        _verifyV4(alice, v4Nullifier);
+        uint256 catchUp = pool.unlockFullEarnedRaterCap(alice);
+
+        assertEq(catchUp, FIRST_COHORT_FULL_SLOT - FIRST_COHORT_UNVERIFIED_SLOT);
+        assertTrue(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, bytes32("legacy-human"));
+    }
+
     function test_LegacyAndV4SharedNullifierCannotUnlockFullEarnedCapTwice() public {
         ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
         policy.unverifiedEarnedRaterCapBps = 2_500;
@@ -1666,6 +1703,7 @@ contract LaunchDistributionPoolTest is Test {
         assertFalse(pool.raterFullLaunchCapUnlocked(bob));
         vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
         pool.unlockFullEarnedRaterCap(bob);
+        assertFalse(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
     }
 
     function test_UnlockFullEarnedRaterCapRequiresActiveCredential() public {
@@ -2363,6 +2401,20 @@ contract LaunchDistributionPoolTest is Test {
         registry.attestHumanCredentialWithProof(1, uint256(bytes32("bob-legacy-human")), legacyProof);
     }
 
+    function test_WorldIdV4VerifiedBonusConsumesUnaliasedLaunchNullifier() public {
+        bytes32 v4Nullifier = bytes32("alice-v4-human");
+
+        _configureWorldIdV4();
+        _verifyV4(alice, v4Nullifier);
+
+        vm.prank(alice);
+        pool.claimVerifiedBonus(address(0));
+
+        assertTrue(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, bytes32("legacy-human"));
+    }
+
     function test_LegacyAndV4SharedNullifierCannotClaimVerifiedBonusTwice() public {
         _verify(alice, bytes32("shared-human"));
 
@@ -2394,6 +2446,7 @@ contract LaunchDistributionPoolTest is Test {
         vm.prank(bob);
         vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
         pool.claimVerifiedBonus(address(0));
+        assertFalse(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
     }
 
     function _recordLaunchReward(address rater, uint256 roundId, bytes32 anchorId) internal returns (uint256) {
