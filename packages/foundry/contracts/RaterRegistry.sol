@@ -109,7 +109,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceNullifier;
     mapping(uint8 => WorldIdV4Config) private _worldCredentialConfigs;
     mapping(uint8 => WorldIdV4Config) private _worldPresenceConfigs;
-    mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceProof;
     mapping(address => mapping(address => bool)) public isFollowing;
     mapping(address => uint256) public followingCount;
     mapping(address => uint256) public followerCount;
@@ -134,6 +133,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     uint256 public worldIdV4PresenceAction;
     uint64 public worldIdV4PresenceTtl;
     bool public worldIdV4PresenceConfigFrozen;
+    mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceProof;
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
     uint256[30] private __gap;
