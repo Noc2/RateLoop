@@ -218,8 +218,12 @@ const SmartContracts: NextPage = () => {
       <h3>Key Functions</h3>
       <ul>
         <li>
-          <code>attestHumanCredentialWithProof(root, nullifierHash, proof)</code> &mdash; Verify a World ID proof and
-          attach an active human credential to the submitting wallet.
+          <code>attestHumanCredentialWithV4Proof(nullifier, nonce, expiresAtMin, proof)</code> &mdash; Verify a World ID
+          v4 Proof of Human credential and attach it to the submitting wallet.
+        </li>
+        <li>
+          <code>attestHumanPresenceWithV4Proof(kind, nullifier, nonce, expiresAtMin, proof)</code> &mdash; Record a
+          short-lived credential recheck for bounties that require fresh presence before voting.
         </li>
         <li>
           <code>seedHumanCredential(rater, expiresAt, anchorId, evidenceHash)</code> &mdash; Seed an approved human
@@ -311,7 +315,8 @@ const SmartContracts: NextPage = () => {
           and interpretation data stays off-chain; the contract commits to its hashes in <code>contentHash</code> and
           emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks use the same function after
           the user or scoped agent wallet executes the returned funding and submission calls. <code>rewardTerms</code>{" "}
-          also commits to bounty eligibility: everyone or verified humans.
+          also commits to bounty eligibility: everyone, Selfie Check, Passport, Proof of Human, or one of those
+          credential scopes with a recent-recheck requirement.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a

@@ -13,9 +13,9 @@ not required to rate, reveal, claim ordinary settled-round rewards, or build
 reputation through protocol participation.
 
 World ID is an optional human credential. A connected wallet submits its own
-World ID proof directly to `RaterRegistry.attestHumanCredentialWithProof`, and
-the contract verifies the proof through the World ID Router before recording a
-credential. There is no trusted server issuer in the normal path.
+World ID v4 proof directly to `RaterRegistry`, and the contract verifies the
+proof through the World ID v4 verifier before recording a credential. There is
+no trusted server issuer in the normal path.
 
 `RaterRegistry.seedHumanCredential` remains available to governance-controlled
 seeders for local development, tests, or explicit credential repair. Seeded
@@ -31,11 +31,19 @@ mechanism.
 ## Question Bounty Eligibility Scopes
 
 Every question remains answerable by everyone. Bounty eligibility is a payout
-scope, not an answering permission. The submitter can choose one of two bounty
-scopes when funding a question or bundle:
+scope, not an answering permission. The submitter can choose one of four bounty
+credential scopes when funding a question or bundle:
 
 - `0` everyone.
-- `1` verified humans.
+- `1` Selfie Check / fresh liveness.
+- `2` Passport / NFC document.
+- `3` Proof of Human.
+
+Any non-open scope can also set the `0x80` recent-recheck flag. A recent recheck
+means the voter completed a World ID v4 request with `require_user_presence`
+shortly before committing the bounty-eligible vote. RateLoop's default freshness
+window is 15 minutes, which gives enough time to complete the wallet transaction
+without turning the recheck into a long-lived delegation token.
 
 The selected scope is committed into the submission reveal hash, stored in
 `QuestionRewardPoolEscrow`, emitted in reward-pool and bundle events, indexed by
@@ -206,6 +214,9 @@ status route. It returns:
 - `participationLane`: `verified_human` or `open`.
 - `humanCredential`: active, revoked, expired, or missing human credential
   state.
+- `worldCredentials`: Selfie Check, Passport, and Proof of Human credential
+  status plus recent user-presence recheck status, active credential mask, and
+  fresh recheck mask.
 - `launchRewards`: qualifying rating count, distinct verified anchors, distinct
   anchor rounds, cap, paid amount, and current launch policy.
 - `participationPolicy`: explicit booleans showing that human verification and
@@ -225,11 +236,17 @@ Removed live indexer concepts:
 
 `RaterRegistry` owns human credentials:
 
-- `attestHumanCredentialWithProof`
+- `attestHumanCredentialWithV4Proof`
+- `attestWorldCredentialWithV4Proof`
+- `attestHumanPresenceWithV4Proof`
 - `seedHumanCredential`
 - `revokeHumanCredential`
 - `getHumanCredential`
+- `getWorldCredential`
+- `getHumanPresence`
 - `hasActiveHumanCredential`
+- `hasActiveCredentialKind`
+- `hasRecentCredentialRecheck`
 - `humanNullifierOwner`
 
 `RoundVotingEngine` does not snapshot rater weight multipliers, model

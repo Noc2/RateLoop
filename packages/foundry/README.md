@@ -35,15 +35,18 @@ auto-verification flow. Verify those contracts manually with
 
 Create a `.env` file (see `.env.example`):
 
-| Variable                           | Description                                                               |
-| ---------------------------------- | ------------------------------------------------------------------------- |
-| `ALCHEMY_API_KEY`                  | Optional RPC provider key for testnet/mainnet deploys                     |
-| `WORLDCHAIN_RPC_URL`               | Optional World Chain mainnet RPC override for live deploys                |
-| `WORLDCHAIN_SEPOLIA_RPC_URL`       | Optional World Chain Sepolia RPC override for live deploys                |
-| `NEXT_PUBLIC_WORLD_ID_APP_ID`      | World ID app ID required for live `RaterRegistry` deploys                 |
-| `NEXT_PUBLIC_WORLD_ID_ACTION`      | World ID action ID; defaults to `rateloop-human-credential-v1`            |
-| `WORLD_ID_EXTERNAL_NULLIFIER_HASH` | Optional deploy-script override for the action-derived external nullifier |
-| `ETHERSCAN_API_KEY`                | Optional explorer API key for Etherscan-compatible networks               |
+| Variable                                              | Description                                                            |
+| ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| `ALCHEMY_API_KEY`                                     | Optional RPC provider key for testnet/mainnet deploys                  |
+| `WORLDCHAIN_RPC_URL`                                  | Optional World Chain mainnet RPC override for live deploys             |
+| `WORLDCHAIN_SEPOLIA_RPC_URL`                          | Optional World Chain Sepolia RPC override for live deploys             |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`                         | World ID app ID required for live `RaterRegistry` deploys              |
+| `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`              | World ID v4 credential action; defaults to `rateloop-human-credential-v1` |
+| `NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION`                | World ID v4 fresh-presence/recheck action; defaults to `rateloop-human-presence-v1` |
+| `WORLD_ID_V4_RP_ID`                                   | Numeric World ID relying-party ID from the Developer Portal            |
+| `WORLD_ID_V4_ISSUER_SCHEMA_ID`                        | World ID v4 issuer schema ID accepted by the deployment                |
+| `WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN`        | Optional v4 credential genesis issuance lower bound; defaults to `0`   |
+| `ETHERSCAN_API_KEY`                                   | Optional explorer API key for Etherscan-compatible networks            |
 
 Localhost deploys use the standard Anvil private key directly, so `yarn deploy` does not need a keystore password
 when deploying to `localhost`.
@@ -61,7 +64,7 @@ contracts/
 ├── CategoryRegistry.sol         # Content category management
 ├── ProfileRegistry.sol          # User reputation & metadata
 ├── FrontendRegistry.sol         # Frontend operator fee tracking
-├── RaterRegistry.sol            # Rater profiles, delegation, and human identity resolution
+├── RaterRegistry.sol            # Rater profiles, delegation, World ID v4 credentials, and fresh user-presence rechecks
 ├── LoopReputation.sol           # LREP token (governance and reputation)
 ├── LaunchDistributionPool.sol   # Anchor-gated earned rater rewards with verified full-cap unlocks, plus verification, referral, and legacy rewards
 ├── ClusterPayoutOracle.sol      # Governance-managed challengeable roots proposed by bonded frontend operators
