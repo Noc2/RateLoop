@@ -92,19 +92,6 @@ function getSnippetKindLabel(kind: AgentInstallSnippetKind) {
   }
 }
 
-function getSnippetPreview(kind: AgentInstallSnippetKind) {
-  switch (kind) {
-    case "prompt":
-      return "Single-use prompt";
-    case "mcp":
-      return "MCP configuration";
-    case "rule":
-      return "Persistent agent rule";
-    case "skill":
-      return "Skill URL";
-  }
-}
-
 function getPopupSnippetText(text: string) {
   return text
     .replaceAll(` ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`, "")
@@ -282,9 +269,6 @@ export function SupportedAgentsSection() {
                                     />
                                   </span>
                                 </div>
-                                <p className="mt-2 font-mono text-xs uppercase tracking-widest text-base-content/42">
-                                  {getSnippetPreview(snippet.kind)}
-                                </p>
                               </div>
                               <button
                                 type="button"
