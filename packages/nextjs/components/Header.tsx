@@ -54,6 +54,14 @@ const headerChromeSurfaceClassName = "bg-base-200";
 const headerChromeBorderClassName = "border-[color:var(--rateloop-shell-border-strong)]";
 const desktopSidebarSurfaceClassName = "border-r bg-black";
 
+const isModifiedNavigationEvent = (event: React.MouseEvent<HTMLElement>) =>
+  event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+
+const closeContainingDetailsMenu = (event: React.MouseEvent<HTMLElement>) => {
+  const menu = event.currentTarget.closest("details");
+  window.setTimeout(() => menu?.removeAttribute("open"), 0);
+};
+
 const HeaderNavLink = ({ className, compact = false, href, icon: Icon, isActive, label }: HeaderNavLinkProps) => {
   const navTone = isActive ? "text-base-content" : "text-base-content/75 group-hover:text-base-content";
 
@@ -62,7 +70,7 @@ const HeaderNavLink = ({ className, compact = false, href, icon: Icon, isActive,
       href={href}
       prefetch={false}
       onClick={event => {
-        const isModifiedEvent = event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+        const isModifiedEvent = isModifiedNavigationEvent(event);
         if (
           shouldSuppressShellNavClick({
             currentHref: window.location.href,
@@ -76,8 +84,7 @@ const HeaderNavLink = ({ className, compact = false, href, icon: Icon, isActive,
         }
 
         if (compact && !isModifiedEvent) {
-          const menu = event.currentTarget.closest("details");
-          window.setTimeout(() => menu?.removeAttribute("open"), 0);
+          closeContainingDetailsMenu(event);
         }
       }}
       className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl ${
@@ -121,6 +128,11 @@ export const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "
                         <Link
                           href={sectionHref}
                           prefetch={false}
+                          onClick={event => {
+                            if (compact && !isModifiedNavigationEvent(event)) {
+                              closeContainingDetailsMenu(event);
+                            }
+                          }}
                           className={`block w-full rounded-lg px-3 text-base font-semibold uppercase tracking-wider transition-colors ${isSectionActive ? "text-base-content/80" : "text-base-content/55 hover:text-base-content/80"}`}
                         >
                           {group.section}
@@ -134,6 +146,11 @@ export const HeaderMenuLinks = ({ variant = "mobile" }: { variant?: "mobile" | "
                               key={link.href}
                               href={link.href}
                               prefetch={false}
+                              onClick={event => {
+                                if (compact && !isModifiedNavigationEvent(event)) {
+                                  closeContainingDetailsMenu(event);
+                                }
+                              }}
                               className={`block w-full px-3 py-1.5 text-base rounded-lg transition-colors ${
                                 isLinkActive
                                   ? "bg-primary text-primary-content font-medium"
