@@ -8,6 +8,7 @@ import { useAccount } from "wagmi";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { CategoryFilter } from "~~/components/CategoryFilter";
 import { ContentFeedbackPanel } from "~~/components/feedback/ContentFeedbackPanel";
+import { WorldIdProofDialog } from "~~/components/settings/WorldIdProofDialog";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { StreakCounter } from "~~/components/shared/StreakCounter";
 import { VotingQuestionCard } from "~~/components/shared/VotingQuestionCard";
@@ -73,6 +74,7 @@ import { buildVoteContentPinKey, buildVoteContentPinKeyFromUrl, buildVoteLocatio
 import { mergeRequestedContentIntoFeed } from "~~/lib/vote/requestedContent";
 import { resolveStableSessionFeedOrder } from "~~/lib/vote/stableFeedOrder";
 import { type VoteView, getVoteViewGroups, isScopedVoteViewOption } from "~~/lib/vote/viewOptions";
+import type { WorldCredentialKind, WorldIdProofPurpose } from "~~/lib/world-id/credentials";
 import { buildRecommendationSignalContext, trackRecommendationSignal } from "~~/utils/recommendationTracker";
 import { notification } from "~~/utils/scaffold-eth";
 import { contracts } from "~~/utils/scaffold-eth/contract";
@@ -723,6 +725,7 @@ const HomeInner = () => {
     questionTitle: string;
     categoryId: bigint;
     currentRating: number | null;
+    bountyEligibility?: number | null;
     roundConfig?: ContentItem["roundConfig"] | null;
     openRound?: ContentItem["openRound"] | null;
   }>({
@@ -732,9 +735,15 @@ const HomeInner = () => {
     questionTitle: "",
     categoryId: 0n,
     currentRating: null,
+    bountyEligibility: null,
     roundConfig: null,
     openRound: null,
   });
+  const [worldIdProofRequest, setWorldIdProofRequest] = useState<{
+    kind: WorldCredentialKind;
+    purpose: WorldIdProofPurpose;
+  } | null>(null);
+  const [worldIdProofRefreshKey, setWorldIdProofRefreshKey] = useState(0);
   const { commitVote, isCommitting, error: voteError, clearError: clearVoteError } = useRoundVote();
   // Apply search, category filter, and the selected view before sorting
   const baseFilteredFeed = useMemo(() => {
@@ -1273,6 +1282,7 @@ const HomeInner = () => {
         questionTitle: item.question?.trim() || item.title,
         categoryId: item.categoryId,
         currentRating: getStakeModalCurrentRating(item),
+        bountyEligibility: item.rewardPoolSummary?.bountyEligibility ?? item.bundle?.bountyEligibility ?? null,
         roundConfig: item.roundConfig,
         openRound: item.openRound,
       });
@@ -2092,10 +2102,23 @@ const HomeInner = () => {
           openRound={stakeModal.openRound}
           roundConfig={stakeModal.roundConfig}
           cooldownSecondsRemaining={stakeModalCooldownSeconds}
+          bountyEligibility={stakeModal.bountyEligibility}
           isConfirming={isCommitting}
           confirmError={voteError}
+          recheckRefreshKey={worldIdProofRefreshKey}
           onConfirm={handleConfirmStake}
           onCancel={handleCancelStake}
+          onRequestWorldIdProof={setWorldIdProofRequest}
+        />
+      ) : null}
+      {worldIdProofRequest ? (
+        <WorldIdProofDialog
+          open
+          address={address}
+          kind={worldIdProofRequest.kind}
+          purpose={worldIdProofRequest.purpose}
+          onClose={() => setWorldIdProofRequest(null)}
+          onSuccess={() => setWorldIdProofRefreshKey(value => value + 1)}
         />
       ) : null}
     </AppPageShell>

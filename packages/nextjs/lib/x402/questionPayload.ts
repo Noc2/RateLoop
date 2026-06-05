@@ -7,6 +7,7 @@ import {
 } from "~~/lib/agent/questionSpecs";
 import { findAgentResultTemplate } from "~~/lib/agent/templates";
 import { normalizeUploadedImageAttachmentUrl } from "~~/lib/attachments/imageAttachmentUrls";
+import { isSupportedBountyEligibility } from "~~/lib/bountyEligibility";
 import { normalizeSubmissionContextUrl } from "~~/lib/contentMedia";
 import {
   getContentDescriptionValidationError,
@@ -390,8 +391,8 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   if (feedbackWindowSeconds > bountyWindowSeconds) {
     throw new X402QuestionInputError("bounty.feedbackWindowSeconds cannot exceed bounty.bountyWindowSeconds.");
   }
-  if (bountyEligibility > 1) {
-    throw new X402QuestionInputError("bounty.bountyEligibility must be 0 or 1.");
+  if (!isSupportedBountyEligibility(bountyEligibility)) {
+    throw new X402QuestionInputError("bounty.bountyEligibility must be 0, 1, 2, 3, 129, 130, or 131.");
   }
   assertSupportedX402BundleBounty({
     bountyStartBy,

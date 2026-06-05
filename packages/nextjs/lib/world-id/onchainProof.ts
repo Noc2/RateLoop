@@ -1,32 +1,17 @@
-import type { WorldIdProofMode } from "./config";
-import type { IDKitResult, ResponseItemV3, ResponseItemV4 } from "@worldcoin/idkit";
+import type { IDKitResult, ResponseItemV4 } from "@worldcoin/idkit";
 import { hashSignal } from "@worldcoin/idkit/hashing";
-import { type Hex, decodeAbiParameters, hexToBigInt, isHex } from "viem";
+import { type Hex, hexToBigInt, isHex } from "viem";
+import type { WorldIdCredentialIdentifier } from "~~/lib/world-id/credentials";
 
-type WorldIdProofTuple = [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
 type WorldIdV4ProofTuple = [bigint, bigint, bigint, bigint, bigint];
-type LegacyProofResponse = ResponseItemV3 & {
-  identifier: string;
-  proof: string;
-  merkle_root: string;
-  nullifier: string;
-  signal_hash: string;
-};
 
-type V4ProofResponse = ResponseItemV4 & {
+type V4ProofResponse = {
   identifier: string;
   proof: [string, string, string, string, string];
   nullifier: string;
   signal_hash: string;
-};
-
-export type WorldIdLegacyOnchainProof = {
-  protocolVersion: "3.0";
-  root: bigint;
-  nullifierHash: bigint;
-  proof: WorldIdProofTuple;
-  nullifier: string;
-  signalHash: string;
+  issuer_schema_id: number;
+  expires_at_min: number;
 };
 
 export type WorldIdV4OnchainProof = {
@@ -39,23 +24,6 @@ export type WorldIdV4OnchainProof = {
   issuerSchemaId: number;
   expiresAtMin: number;
 };
-
-export type WorldIdOnchainProof = WorldIdLegacyOnchainProof | WorldIdV4OnchainProof;
-
-function isLegacyResponse(response: unknown): response is LegacyProofResponse {
-  if (!response || typeof response !== "object") {
-    return false;
-  }
-
-  const candidate = response as Partial<ResponseItemV3>;
-  return (
-    typeof candidate.identifier === "string" &&
-    typeof candidate.proof === "string" &&
-    typeof candidate.merkle_root === "string" &&
-    typeof candidate.nullifier === "string" &&
-    typeof candidate.signal_hash === "string"
-  );
-}
 
 function isV4Response(response: unknown): response is V4ProofResponse {
   if (!response || typeof response !== "object") {
@@ -75,17 +43,16 @@ function isV4Response(response: unknown): response is V4ProofResponse {
   );
 }
 
-function requireHex(value: string, fieldName: string): Hex {
+function requireHex(value: unknown, fieldName: string): Hex {
+  if (typeof value !== "string") {
+    throw new Error(`World ID returned an invalid ${fieldName}.`);
+  }
+
   if (!isHex(value)) {
     throw new Error(`World ID returned an invalid ${fieldName}.`);
   }
 
   return value;
-}
-
-function decodeProof(proof: string): WorldIdProofTuple {
-  const decoded = decodeAbiParameters([{ type: "uint256[8]" }], requireHex(proof, "proof"))[0];
-  return [...decoded] as WorldIdProofTuple;
 }
 
 function decodeV4Proof(proof: V4ProofResponse["proof"]): WorldIdV4ProofTuple {
@@ -110,36 +77,13 @@ function assertSignalHash(signalHash: string, expectedSignal: string) {
   }
 }
 
-export function parseWorldIdLegacyProof(
-  result: IDKitResult,
-  options: { expectedAction: string; expectedSignal: string },
-): WorldIdLegacyOnchainProof {
-  if (result.protocol_version !== "3.0") {
-    throw new Error("RateLoop on-chain verification requires a World ID 3.0 legacy proof.");
-  }
-
-  assertExpectedAction(result, options.expectedAction);
-
-  const response = result.responses.find(isLegacyResponse);
-  if (!response) {
-    throw new Error("World ID did not return an on-chain proof.");
-  }
-
-  assertSignalHash(response.signal_hash, options.expectedSignal);
-
-  return {
-    protocolVersion: "3.0",
-    root: hexToBigInt(requireHex(response.merkle_root, "Merkle root")),
-    nullifierHash: hexToBigInt(requireHex(response.nullifier, "nullifier")),
-    proof: decodeProof(response.proof),
-    nullifier: response.nullifier,
-    signalHash: response.signal_hash,
-  };
-}
-
 export function parseWorldIdV4Proof(
   result: IDKitResult,
-  options: { expectedAction: string; expectedSignal: string },
+  options: {
+    expectedAction: string;
+    expectedCredential?: WorldIdCredentialIdentifier;
+    expectedSignal: string;
+  },
 ): WorldIdV4OnchainProof {
   if (result.protocol_version !== "4.0" || "session_id" in result) {
     throw new Error("RateLoop on-chain verification requires a World ID 4.0 uniqueness proof.");
@@ -147,9 +91,12 @@ export function parseWorldIdV4Proof(
 
   assertExpectedAction(result, options.expectedAction);
 
-  const response = result.responses.find(isV4Response);
+  const response = result.responses.find(
+    (candidate): candidate is V4ProofResponse =>
+      isV4Response(candidate) && (!options.expectedCredential || candidate.identifier === options.expectedCredential),
+  );
   if (!response) {
-    throw new Error("World ID did not return a v4 on-chain proof.");
+    throw new Error("World ID did not return the requested v4 on-chain proof.");
   }
 
   assertSignalHash(response.signal_hash, options.expectedSignal);
@@ -166,25 +113,4 @@ export function parseWorldIdV4Proof(
   };
 }
 
-export function parseWorldIdProof(
-  result: IDKitResult,
-  options: { expectedAction: string; expectedSignal: string; proofMode: WorldIdProofMode },
-): WorldIdOnchainProof {
-  if (result.protocol_version === "3.0") {
-    if (options.proofMode === "v4") {
-      throw new Error("World ID proof mode is v4-only, but World ID returned a legacy proof.");
-    }
-
-    return parseWorldIdLegacyProof(result, options);
-  }
-
-  if (result.protocol_version === "4.0") {
-    if (options.proofMode === "legacy") {
-      throw new Error("World ID legacy proof mode cannot submit a World ID 4.0 proof.");
-    }
-
-    return parseWorldIdV4Proof(result, options);
-  }
-
-  throw new Error("World ID returned an unsupported proof version.");
-}
+export const parseWorldIdProof = parseWorldIdV4Proof;

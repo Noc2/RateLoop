@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signRequest } from "@worldcoin/idkit/signing";
-import { getWorldIdServerConfig } from "~~/lib/world-id/config";
+import { type WorldIdActionPurpose, getWorldIdServerConfig } from "~~/lib/world-id/config";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const RP_CONTEXT_TTL_SECONDS = 5 * 60;
@@ -9,11 +9,17 @@ const RP_CONTEXT_TTL_SECONDS = 5 * 60;
 // signing oracle. 20/min/IP is well above any legitimate enrollment flow.
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
+async function readPurpose(request: NextRequest): Promise<WorldIdActionPurpose> {
+  const body = (await request.json().catch(() => ({}))) as { purpose?: string };
+  return body.purpose === "presence" ? "presence" : "credential";
+}
+
 export async function POST(request: NextRequest): Promise<Response> {
   const limited = await checkRateLimit(request, RATE_LIMIT);
   if (limited) return limited;
 
-  const config = getWorldIdServerConfig();
+  const purpose = await readPurpose(request);
+  const config = getWorldIdServerConfig(purpose);
 
   if (!config.rpId || !config.signingKey) {
     return NextResponse.json({ error: "World ID is not configured for this deployment." }, { status: 503 });
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({
       action: config.action,
       environment: config.environment,
-      proofMode: config.proofMode,
+      purpose,
       rpContext: {
         rp_id: config.rpId,
         nonce: signature.nonce,

@@ -33,6 +33,12 @@ import {
   normalizeQuestionDetailsText,
 } from "~~/lib/attachments/questionDetails.shared";
 import {
+  BOUNTY_ELIGIBILITY_BASE_OPTIONS,
+  BOUNTY_ELIGIBILITY_OPEN,
+  type BountyEligibilityBase,
+  buildBountyEligibility,
+} from "~~/lib/bountyEligibility";
+import {
   BOUNTY_WINDOW_PRESETS,
   type BountyWindowPreset,
   type BountyWindowUnit,
@@ -128,17 +134,7 @@ const MEDIA_URL_CONFIG = {
 };
 
 type SubmissionStep = "question" | "bounty" | "feedbackBonus";
-type BountyEligibilitySelection = "everyone" | "verified_humans";
 type FeedbackBonusSelection = "none" | "enabled";
-
-const BOUNTY_ELIGIBILITY_OPTIONS: Array<{
-  id: BountyEligibilitySelection;
-  label: string;
-  mode: number;
-}> = [
-  { id: "everyone", label: "Everyone", mode: 0 },
-  { id: "verified_humans", label: "Verified humans", mode: 1 },
-];
 
 const MAX_QUESTION_BUNDLE_COUNT = 10;
 const MAX_CONTENT_TAGS_LENGTH = 256;
@@ -495,7 +491,8 @@ export function ContentSubmissionSection() {
   const [rewardAmountTouched, setRewardAmountTouched] = useState(false);
   const [rewardRequiredVoters, setRewardRequiredVoters] = useState("3");
   const [rewardRequiredRounds, setRewardRequiredRounds] = useState("1");
-  const [bountyEligibility, setBountyEligibility] = useState<BountyEligibilitySelection>("everyone");
+  const [bountyEligibility, setBountyEligibility] = useState<BountyEligibilityBase>(BOUNTY_ELIGIBILITY_OPEN);
+  const [bountyRequiresRecentRecheck, setBountyRequiresRecentRecheck] = useState(false);
   const [bountyWindowPreset, setBountyWindowPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
   const [customBountyWindowAmount, setCustomBountyWindowAmount] = useState(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
   const [customBountyWindowUnit, setCustomBountyWindowUnit] = useState<BountyWindowUnit>(
@@ -1264,7 +1261,9 @@ export function ContentSubmissionSection() {
           : null;
   const rewardExpiryError = bountyStepAttempted ? rewardExpiryValidationError : null;
   const rewardStartByError = bountyStepAttempted ? rewardStartByValidationError : null;
-  const selectedBountyEligibility = BOUNTY_ELIGIBILITY_OPTIONS.find(option => option.id === bountyEligibility)!;
+  const selectedBountyEligibility = {
+    mode: buildBountyEligibility(bountyEligibility, bountyRequiresRecentRecheck),
+  };
   const selectedFeedbackBonusAmount = parseFeedbackBonusAmount(feedbackBonusAmount);
   const selectedFeedbackBonusAssetId =
     feedbackBonusAsset === "lrep" ? FEEDBACK_BONUS_ASSET_LREP : FEEDBACK_BONUS_ASSET_USDC;
@@ -2571,6 +2570,8 @@ export function ContentSubmissionSection() {
       setRewardAmountTouched(false);
       setRewardRequiredVoters("3");
       setRewardRequiredRounds("1");
+      setBountyEligibility(BOUNTY_ELIGIBILITY_OPEN);
+      setBountyRequiresRecentRecheck(false);
       setBountyWindowPreset(DEFAULT_BOUNTY_WINDOW_PRESET);
       setCustomBountyWindowAmount(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
       setCustomBountyWindowUnit(DEFAULT_CUSTOM_BOUNTY_WINDOW_UNIT);
@@ -2872,19 +2873,43 @@ export function ContentSubmissionSection() {
           Bounty eligibility
           <InfoTooltip text="Everyone can answer. This only selects which revealed answers can qualify for the bounty payout and the eligible result view." />
         </p>
-        <div className="grid grid-cols-2 gap-2 sm:max-w-md">
-          {BOUNTY_ELIGIBILITY_OPTIONS.map(option => (
+        <div className="grid grid-cols-2 gap-2">
+          {BOUNTY_ELIGIBILITY_BASE_OPTIONS.map(option => (
             <button
               key={option.id}
               type="button"
               aria-pressed={bountyEligibility === option.id}
-              onClick={() => setBountyEligibility(option.id)}
+              onClick={() => {
+                setBountyEligibility(option.id);
+                if (option.id === BOUNTY_ELIGIBILITY_OPEN) {
+                  setBountyRequiresRecentRecheck(false);
+                }
+              }}
               className={`btn btn-sm ${bountyEligibility === option.id ? "btn-primary" : "btn-outline"}`}
             >
               {option.label}
             </button>
           ))}
         </div>
+        <label
+          className={`mt-3 flex items-center justify-between gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm ${
+            bountyEligibility === BOUNTY_ELIGIBILITY_OPEN ? "opacity-55" : ""
+          }`}
+        >
+          <span className="min-w-0">
+            <span className="block font-medium text-base-content">Require recent recheck</span>
+            <span className="block text-base-content/55">
+              Voters must refresh this credential shortly before voting.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="toggle toggle-primary"
+            checked={bountyEligibility !== BOUNTY_ELIGIBILITY_OPEN && bountyRequiresRecentRecheck}
+            disabled={bountyEligibility === BOUNTY_ELIGIBILITY_OPEN}
+            onChange={event => setBountyRequiresRecentRecheck(event.target.checked)}
+          />
+        </label>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

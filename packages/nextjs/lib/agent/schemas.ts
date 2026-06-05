@@ -131,8 +131,9 @@ const agentBountyInputSchema = {
     },
     bountyEligibility: {
       default: 0,
-      description: "Bounty payout scope: 0 everyone, 1 verified humans. Everyone can still answer.",
-      enum: [0, 1, "0", "1"],
+      description:
+        "Bounty payout scope: 0 everyone, 1 Selfie Check, 2 Passport, 3 Proof of Human; add 128 to require a recent recheck. Everyone can still answer.",
+      enum: [0, 1, 2, 3, 129, 130, 131, "0", "1", "2", "3", "129", "130", "131"],
       type: ["integer", "string"],
     },
     requiredSettledRounds: {

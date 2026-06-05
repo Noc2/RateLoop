@@ -1,9 +1,5 @@
-import {
-  RATELOOP_E2E_WORLD_ID_MOCK_STORAGE_KEY,
-  buildE2EWorldIdLegacyResult,
-  readLocalE2EWorldIdMock,
-} from "./e2eMock";
-import { parseWorldIdLegacyProof } from "./onchainProof";
+import { RATELOOP_E2E_WORLD_ID_MOCK_STORAGE_KEY, buildE2EWorldIdV4Result, readLocalE2EWorldIdMock } from "./e2eMock";
+import { parseWorldIdV4Proof } from "./onchainProof";
 import { hashSignal } from "@worldcoin/idkit/hashing";
 import assert from "node:assert/strict";
 import { afterEach } from "node:test";
@@ -31,25 +27,25 @@ afterEach(() => {
   mutableGlobal.window = originalWindow;
 });
 
-test("buildE2EWorldIdLegacyResult produces a parser-compatible legacy proof", () => {
-  const result = buildE2EWorldIdLegacyResult({
+test("buildE2EWorldIdV4Result produces a parser-compatible v4 proof", () => {
+  const result = buildE2EWorldIdV4Result({
     action: "rateloop-test",
     signal: TEST_SIGNAL.toLowerCase(),
   });
 
-  const parsed = parseWorldIdLegacyProof(result, {
+  const parsed = parseWorldIdV4Proof(result, {
     expectedAction: "rateloop-test",
+    expectedCredential: "proof_of_human",
     expectedSignal: TEST_SIGNAL.toLowerCase(),
   });
 
   assert.equal(result.environment, "staging");
-  assert.equal(parsed.root, 42n);
   assert.equal(parsed.nullifierHash > 0n, true);
   assert.equal(parsed.signalHash, hashSignal(TEST_SIGNAL.toLowerCase()));
 });
 
 test("readLocalE2EWorldIdMock accepts localhost pages with the test wallet session", () => {
-  const result = buildE2EWorldIdLegacyResult({ action: "rateloop-test", signal: TEST_SIGNAL });
+  const result = buildE2EWorldIdV4Result({ action: "rateloop-test", signal: TEST_SIGNAL });
   installMockWindow({
     hostname: "localhost",
     mockValue: JSON.stringify({
@@ -73,7 +69,7 @@ test("readLocalE2EWorldIdMock ignores non-local pages", () => {
       appId: "app_rateloop_e2e_mock",
       connectorURI: "worldcoin://rateloop-e2e/request",
       environment: "staging",
-      result: buildE2EWorldIdLegacyResult({ action: "rateloop-test", signal: TEST_SIGNAL }),
+      result: buildE2EWorldIdV4Result({ action: "rateloop-test", signal: TEST_SIGNAL }),
       rpContext: { rp_id: "app_rateloop_e2e_mock" },
     }),
   });

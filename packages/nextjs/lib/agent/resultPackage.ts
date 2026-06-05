@@ -6,6 +6,7 @@ import {
   type AgentResultTemplate,
   getAgentResultTemplateBySpecHash,
 } from "~~/lib/agent/templates";
+import { getBountyEligibilityLabel } from "~~/lib/bountyEligibility";
 import type { ContentFeedbackItem } from "~~/lib/feedback/types";
 import type { PonderContentItem } from "~~/services/ponder/client";
 
@@ -214,17 +215,7 @@ function roundScore(value: number): number {
 }
 
 function bountyEligibilityLabel(mode: number | null | undefined) {
-  switch (mode) {
-    case 0:
-      return "Everyone";
-    case 1:
-      return "Verified humans";
-    case null:
-    case undefined:
-      return "Mixed bounty scopes";
-    default:
-      return "Unknown bounty scope";
-  }
+  return getBountyEligibilityLabel(mode);
 }
 
 export function resolveAgentBountyEligibilityScope(content: PonderContentItem) {

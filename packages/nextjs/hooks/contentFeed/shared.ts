@@ -93,6 +93,8 @@ export interface ContentItem {
     allocatedAmount: bigint;
     claimedAmount: bigint;
     refundedAmount: bigint;
+    bountyEligibility?: number | null;
+    bountyEligibilityDataHash?: string | null;
     bountyStartBy?: bigint;
     bountyOpensAt?: bigint;
     bountyClosesAt?: bigint;
@@ -125,6 +127,8 @@ export interface ContentItem {
     fundedAsset?: number | null;
     fundedCurrency?: RewardPoolCurrency;
     fundedDisplayCurrency?: RewardPoolDisplayCurrency;
+    bountyEligibility?: number | null;
+    bountyEligibilityDataHash?: string | null;
     hasActiveBounty?: boolean;
     nextBountyStartBy?: bigint | null;
     nextBountyClosesAt?: bigint | null;
@@ -379,6 +383,8 @@ export function mapContentItem(
       allocatedAmount?: string | number | bigint | null;
       claimedAmount?: string | number | bigint | null;
       refundedAmount?: string | number | bigint | null;
+      bountyEligibility?: string | number | bigint | null;
+      bountyEligibilityDataHash?: string | null;
       bountyStartBy?: string | number | bigint | null;
       bountyOpensAt?: string | number | bigint | null;
       bountyClosesAt?: string | number | bigint | null;
@@ -469,6 +475,8 @@ export function mapContentItem(
       fundedAsset?: number | string | bigint | null;
       fundedCurrency?: string | null;
       fundedDisplayCurrency?: string | null;
+      bountyEligibility?: string | number | bigint | null;
+      bountyEligibilityDataHash?: string | null;
       hasActiveBounty?: boolean | null;
       nextBountyStartBy?: string | number | bigint | null;
       nextBountyClosesAt?: string | number | bigint | null;
@@ -606,6 +614,11 @@ export function mapContentItem(
             allocatedAmount: BigInt(item.bundle.allocatedAmount ?? 0),
             claimedAmount: BigInt(item.bundle.claimedAmount ?? 0),
             refundedAmount: BigInt(item.bundle.refundedAmount ?? 0),
+            bountyEligibility:
+              item.bundle.bountyEligibility === undefined || item.bundle.bountyEligibility === null
+                ? null
+                : Number(item.bundle.bountyEligibility),
+            bountyEligibilityDataHash: item.bundle.bountyEligibilityDataHash ?? null,
             bountyStartBy: BigInt(item.bundle.bountyStartBy ?? 0),
             bountyOpensAt: BigInt(item.bundle.bountyOpensAt ?? 0),
             bountyClosesAt: BigInt(item.bundle.bountyClosesAt ?? 0),
@@ -647,6 +660,11 @@ export function mapContentItem(
               : Number(fundedRewardPoolAsset),
           fundedCurrency: fundedRewardPoolCurrency,
           fundedDisplayCurrency: fundedRewardPoolDisplayCurrency,
+          bountyEligibility:
+            item.rewardPoolSummary.bountyEligibility === undefined || item.rewardPoolSummary.bountyEligibility === null
+              ? null
+              : Number(item.rewardPoolSummary.bountyEligibility),
+          bountyEligibilityDataHash: item.rewardPoolSummary.bountyEligibilityDataHash ?? null,
           hasActiveBounty:
             item.rewardPoolSummary.hasActiveBounty ?? (item.rewardPoolSummary.activeRewardPoolCount ?? 0) > 0,
           nextBountyStartBy:

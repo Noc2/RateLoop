@@ -4,6 +4,7 @@ import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { PROFILE_SELF_REPORT_NOTICE } from "@rateloop/node-utils/profileSelfReport";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { BOUNTY_ELIGIBILITY_VERIFIED_HUMAN } from "~~/lib/bountyEligibility";
 import type { ContentFeedbackItem } from "~~/lib/feedback/types";
 import type { PonderContentItem } from "~~/services/ponder/client";
 
@@ -139,7 +140,7 @@ test("buildAgentResultPackage separates all answers from scoped bounty-eligible 
       rewardPoolSummary: {
         asset: 1,
         activeRewardPoolCount: 1,
-        bountyEligibility: 1,
+        bountyEligibility: BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
         bountyEligibilityDataHash: `0x${"0".repeat(64)}`,
         claimableAllocatedAmount: "0",
         currency: "USDC",
@@ -177,7 +178,7 @@ test("buildAgentResultPackage separates all answers from scoped bounty-eligible 
   });
 
   assert.equal(result.answerScopes.allAnswers.distribution.up.share, 0.6666);
-  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.label, "Verified humans");
+  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.label, "Proof of Human");
   assert.equal(result.answerScopes.bountyEligibleAnswers.distribution?.up.share, 0.5);
 });
 
@@ -193,7 +194,7 @@ test("buildAgentResultPackage uses bundle bounty scope when no single-question r
         allocatedAmount: "1000000",
         asset: 1,
         bountyClosesAt: "2000",
-        bountyEligibility: 1,
+        bountyEligibility: BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
         bountyEligibilityDataHash: `0x${"0".repeat(64)}`,
         bountyOpensAt: "1000",
         claimedAmount: "0",
@@ -231,8 +232,8 @@ test("buildAgentResultPackage uses bundle bounty scope when no single-question r
     publicUrl: null,
   });
 
-  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.label, "Verified humans");
-  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.mode, 1);
+  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.label, "Proof of Human");
+  assert.equal(result.answerScopes.bountyEligibleAnswers.policy.mode, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
   assert.equal(result.answerScopes.bountyEligibleAnswers.qualifiedRoundCount, 1);
   assert.equal(result.answerScopes.bountyEligibleAnswers.rewardPoolCount, 1);
   assert.equal(result.answerScopes.bountyEligibleAnswers.distribution?.up.share, 0.5);

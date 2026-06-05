@@ -11,6 +11,7 @@ import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useContentLabel } from "~~/hooks/useCategoryRegistry";
 import { useRaterIdentityStake, useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
+import { getBountyEligibilityRequirement } from "~~/lib/bountyEligibility";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import {
   type OpenRoundFallbackData,
@@ -19,6 +20,11 @@ import {
   isRoundAcceptingVotes,
 } from "~~/lib/contracts/roundVotingEngine";
 import { estimateVoteReturn, formatLrepAmount } from "~~/lib/vote/voteIncentives";
+import {
+  type WorldCredentialKind,
+  type WorldIdProofPurpose,
+  getWorldCredentialOption,
+} from "~~/lib/world-id/credentials";
 
 interface StakeSelectorProps {
   isOpen: boolean;
@@ -30,10 +36,13 @@ interface StakeSelectorProps {
   openRound?: OpenRoundFallbackData | null;
   roundConfig?: VotingConfig | null;
   cooldownSecondsRemaining?: number;
+  bountyEligibility?: number | null;
   isConfirming?: boolean;
   confirmError?: string | null;
+  recheckRefreshKey?: number;
   onConfirm: (stakeAmount: number, isUp: boolean, predictedUpPercent: number) => void;
   onCancel: () => void;
+  onRequestWorldIdProof?: (request: { kind: WorldCredentialKind; purpose: WorldIdProofPurpose }) => void;
 }
 
 const MIN_COUNTED_STAKE_AMOUNT = 1;
@@ -116,10 +125,13 @@ export function StakeSelector({
   openRound,
   roundConfig,
   cooldownSecondsRemaining = 0,
+  bountyEligibility = null,
   isConfirming = false,
   confirmError = null,
+  recheckRefreshKey = 0,
   onConfirm,
   onCancel,
+  onRequestWorldIdProof,
 }: StakeSelectorProps) {
   const dialogTitleId = useId();
   const stakeAmountInputId = useId();
@@ -132,6 +144,7 @@ export function StakeSelector({
   const [hasAdjustedStake, setHasAdjustedStake] = useState(false);
   const { address } = useAccount();
   const { identityKey } = useRaterRegistryIdentity(address);
+  const bountyRequirement = useMemo(() => getBountyEligibilityRequirement(bountyEligibility), [bountyEligibility]);
 
   const roundSnapshot = useRoundSnapshot(contentId, openRound ?? undefined, roundConfig ?? undefined);
   const { roundId: currentRoundId, phase, isEpoch1, upPool, downPool } = roundSnapshot;
@@ -157,6 +170,18 @@ export function StakeSelector({
   const { data: tokenSymbol } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "symbol",
+  });
+  const { data: hasRequiredCredential, refetch: refetchHasRequiredCredential } = useScaffoldReadContract({
+    contractName: "RaterRegistry",
+    functionName: "hasActiveCredentialKind",
+    args: [address, bountyRequirement?.kind ?? 0],
+    query: { enabled: Boolean(address && bountyRequirement) },
+  });
+  const { data: hasRecentCredentialRecheck, refetch: refetchHasRecentCredentialRecheck } = useScaffoldReadContract({
+    contractName: "RaterRegistry",
+    functionName: "hasRecentCredentialRecheck",
+    args: [address, bountyRequirement?.kind ?? 0],
+    query: { enabled: Boolean(address && bountyRequirement?.requiresRecentRecheck) },
   });
 
   const symbol = tokenSymbol ?? "LREP";
@@ -198,6 +223,14 @@ export function StakeSelector({
   }, [hasAdjustedStake, isOpen, maxStake]);
 
   useEffect(() => {
+    if (!isOpen || !bountyRequirement) return;
+    void refetchHasRequiredCredential();
+    if (bountyRequirement.requiresRecentRecheck) {
+      void refetchHasRecentCredentialRecheck();
+    }
+  }, [bountyRequirement, isOpen, recheckRefreshKey, refetchHasRecentCredentialRecheck, refetchHasRequiredCredential]);
+
+  useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isConfirming) onCancel();
@@ -208,8 +241,34 @@ export function StakeSelector({
 
   const isCapacityLimited = amount > 0 && maxByCapacity < maxByBalance;
   const cooldownActive = cooldownSecondsRemaining > 0;
+  const isWorldIdEligibilityPending =
+    Boolean(bountyRequirement) &&
+    (hasRequiredCredential === undefined ||
+      (bountyRequirement?.requiresRecentRecheck === true &&
+        hasRequiredCredential === true &&
+        hasRecentCredentialRecheck === undefined));
+  const missingCredentialKind = bountyRequirement && hasRequiredCredential === false ? bountyRequirement.kind : null;
+  const missingFreshRecheckKind =
+    bountyRequirement?.requiresRecentRecheck === true &&
+    hasRequiredCredential === true &&
+    hasRecentCredentialRecheck === false
+      ? bountyRequirement.kind
+      : null;
+  const worldIdActionKind = missingCredentialKind ?? missingFreshRecheckKind;
+  const worldIdActionPurpose: WorldIdProofPurpose | null = missingCredentialKind
+    ? "credential"
+    : missingFreshRecheckKind
+      ? "presence"
+      : null;
+  const worldIdActionLabel =
+    worldIdActionKind && worldIdActionPurpose
+      ? worldIdActionPurpose === "presence"
+        ? `Recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+        : `Verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+      : null;
   const formDisabled = isConfirming || !roundAcceptsVotes;
-  const confirmDisabled = formDisabled || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
+  const confirmDisabled =
+    formDisabled || cooldownActive || isWorldIdEligibilityPending || amount < 0 || (amount > 0 && amount > maxStake);
   const roundUnavailableMessage = getRoundVoteUnavailableMessage(roundSnapshot);
   const roundNotAcceptingMessage =
     !roundAcceptsVotes && !confirmError && !isConfirming ? roundUnavailableMessage : null;
@@ -464,23 +523,39 @@ export function StakeSelector({
               >
                 Cancel
               </button>
-              <GradientActionButton
-                onClick={() => onConfirm(amount, isUp, normalizeStakeSelectorPredictedUpPercent(predictedUpPercent))}
-                className="flex-1"
-                motion={getGradientActionMotion(Boolean(isConfirming))}
-                disabled={confirmDisabled}
-              >
-                {isConfirming ? (
-                  <span className="flex items-center gap-2 text-base-content">
-                    <span className="loading loading-spinner loading-xs" />
-                    <span>Submitting...</span>
-                  </span>
-                ) : amount === 0 ? (
-                  "Submit"
-                ) : (
-                  `Stake ${amount} ${symbol}`
-                )}
-              </GradientActionButton>
+              {worldIdActionKind && worldIdActionPurpose && worldIdActionLabel ? (
+                <GradientActionButton
+                  onClick={() => onRequestWorldIdProof?.({ kind: worldIdActionKind, purpose: worldIdActionPurpose })}
+                  className="flex-1"
+                  motion={getGradientActionMotion(false)}
+                  disabled={isConfirming || !onRequestWorldIdProof}
+                >
+                  {worldIdActionLabel}
+                </GradientActionButton>
+              ) : (
+                <GradientActionButton
+                  onClick={() => onConfirm(amount, isUp, normalizeStakeSelectorPredictedUpPercent(predictedUpPercent))}
+                  className="flex-1"
+                  motion={getGradientActionMotion(Boolean(isConfirming || isWorldIdEligibilityPending))}
+                  disabled={confirmDisabled}
+                >
+                  {isConfirming ? (
+                    <span className="flex items-center gap-2 text-base-content">
+                      <span className="loading loading-spinner loading-xs" />
+                      <span>Submitting...</span>
+                    </span>
+                  ) : isWorldIdEligibilityPending ? (
+                    <span className="flex items-center gap-2 text-base-content">
+                      <span className="loading loading-spinner loading-xs" />
+                      <span>Checking...</span>
+                    </span>
+                  ) : amount === 0 ? (
+                    "Submit"
+                  ) : (
+                    `Stake ${amount} ${symbol}`
+                  )}
+                </GradientActionButton>
+              )}
             </div>
 
             {(confirmError || roundNotAcceptingMessage) && !isConfirming && (

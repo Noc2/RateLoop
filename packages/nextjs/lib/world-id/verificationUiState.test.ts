@@ -20,7 +20,7 @@ test("formats World ID error codes for display", () => {
 test("formats already-used World ID attestation reverts for display", () => {
   assert.equal(
     getWorldIdCredentialAttestationErrorMessage(
-      'The contract function "attestHumanCredentialWithProof" reverted. Error: NullifierAlreadyAssigned()',
+      'The contract function "attestHumanCredentialWithV4Proof" reverted. Error: NullifierAlreadyAssigned()',
     ),
     WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
   );
