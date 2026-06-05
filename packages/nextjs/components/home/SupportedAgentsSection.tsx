@@ -2,13 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  CheckCircleIcon,
-  ClipboardDocumentIcon,
-  ExclamationTriangleIcon,
-  WrenchScrewdriverIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
+import { CheckCircleIcon, ClipboardDocumentIcon, WrenchScrewdriverIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import {
   type AgentInstallSnippet,
   type AgentInstallSnippetKind,
@@ -110,6 +104,14 @@ function getSnippetPreview(kind: AgentInstallSnippetKind) {
   }
 }
 
+function getPopupSnippetText(text: string) {
+  return text
+    .replaceAll(` ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`, "")
+    .replaceAll(RATELOOP_CONTRACT_DEPLOYMENT_NOTE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function SupportedAgentsSection() {
   const [activeAgentName, setActiveAgentName] = useState<string | null>(null);
   const [copiedSnippetKey, setCopiedSnippetKey] = useState<string | null>(null);
@@ -149,7 +151,7 @@ export function SupportedAgentsSection() {
   };
 
   const handleSnippetCopy = async (agentName: string, snippet: AgentInstallSnippet, snippetIndex: number) => {
-    const copied = await copyTextToClipboard(snippet.text);
+    const copied = await copyTextToClipboard(getPopupSnippetText(snippet.text));
     if (!copied) {
       console.error("Failed to copy RateLoop agent setup snippet.");
       notification.error(`Could not copy ${snippet.label} for ${agentName}.`, {
@@ -259,18 +261,13 @@ export function SupportedAgentsSection() {
                           </span>
                         ))}
                       </div>
-                      <div className="mt-6 rounded-lg border border-warning/35 bg-warning/10 p-4 text-left text-sm leading-6 text-base-content/72">
-                        <div className="flex items-start gap-3">
-                          <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-                          <p>{RATELOOP_CONTRACT_DEPLOYMENT_NOTE}</p>
-                        </div>
-                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 gap-3">
                       {activeAgent.snippets.map((snippet, snippetIndex) => {
                         const snippetKey = `${activeAgent.name}-${snippetIndex}`;
                         const isCopied = copiedSnippetKey === snippetKey;
+                        const snippetText = getPopupSnippetText(snippet.text);
                         return (
                           <article
                             key={`${activeAgent.name}-${snippet.label}`}
@@ -308,7 +305,7 @@ export function SupportedAgentsSection() {
                               aria-label={`${snippet.label} snippet`}
                               className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-base-content/10 bg-base-300/60 p-3 font-mono text-xs leading-5 text-base-content/78 focus:outline-none focus:ring-2 focus:ring-primary/45"
                             >
-                              {snippet.text}
+                              {snippetText}
                             </pre>
                           </article>
                         );
