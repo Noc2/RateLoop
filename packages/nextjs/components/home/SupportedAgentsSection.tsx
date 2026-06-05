@@ -111,12 +111,11 @@ function getSnippetPreview(kind: AgentInstallSnippetKind) {
 }
 
 export function SupportedAgentsSection() {
-  const [selectedAgentName, setSelectedAgentName] = useState(RATELOOP_AGENT_INSTALL_TARGETS[0]?.name ?? "");
+  const [activeAgentName, setActiveAgentName] = useState<string | null>(null);
   const [copiedSnippetKey, setCopiedSnippetKey] = useState<string | null>(null);
-  const [activeSnippetIndex, setActiveSnippetIndex] = useState<number | null>(null);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const selectedAgent =
-    RATELOOP_AGENT_INSTALL_TARGETS.find(agent => agent.name === selectedAgentName) ?? RATELOOP_AGENT_INSTALL_TARGETS[0];
+  const activeAgent =
+    activeAgentName === null ? null : RATELOOP_AGENT_INSTALL_TARGETS.find(agent => agent.name === activeAgentName);
 
   useEffect(() => {
     return () => {
@@ -127,15 +126,15 @@ export function SupportedAgentsSection() {
   }, []);
 
   useEffect(() => {
-    if (activeSnippetIndex === null) return;
+    if (!activeAgent) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setActiveSnippetIndex(null);
+      if (event.key === "Escape") setActiveAgentName(null);
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeSnippetIndex]);
+  }, [activeAgent]);
 
   const markSnippetCopied = (snippetKey: string) => {
     setCopiedSnippetKey(snippetKey);
@@ -149,57 +148,38 @@ export function SupportedAgentsSection() {
     }, 1600);
   };
 
-  const handleSnippetCopy = async (snippet: AgentInstallSnippet, snippetIndex: number) => {
-    if (!selectedAgent) return;
+  const handleSnippetCopy = async (agentName: string, snippet: AgentInstallSnippet, snippetIndex: number) => {
     const copied = await copyTextToClipboard(snippet.text);
     if (!copied) {
       console.error("Failed to copy RateLoop agent setup snippet.");
-      notification.error(`Could not copy ${snippet.label} for ${selectedAgent.name}.`, {
+      notification.error(`Could not copy ${snippet.label} for ${agentName}.`, {
         id: "rateloop-agent-install-copy",
       });
       return;
     }
 
-    markSnippetCopied(`${selectedAgent.name}-${snippetIndex}`);
-    notification.success(`Copied ${snippet.label} for ${selectedAgent.name}.`, {
+    markSnippetCopied(`${agentName}-${snippetIndex}`);
+    notification.success(`Copied ${snippet.label} for ${agentName}.`, {
       duration: 2400,
       id: "rateloop-agent-install-copy",
     });
   };
 
-  if (!selectedAgent) return null;
-
-  const selectedActiveSnippet = activeSnippetIndex === null ? null : selectedAgent.snippets[activeSnippetIndex];
-  const activeSnippetDetails =
-    selectedActiveSnippet && activeSnippetIndex !== null
-      ? { index: activeSnippetIndex, snippet: selectedActiveSnippet }
-      : null;
-  const activeSnippetCopyKey = activeSnippetDetails ? `${selectedAgent.name}-${activeSnippetDetails.index}` : null;
-
   return (
-    <section className="relative z-20 mt-14 w-full sm:mt-16 lg:mt-32 xl:mt-40">
-      <div className="mx-auto max-w-3xl text-center">
-        <span className="font-mono text-xs uppercase tracking-widest text-base-content/50">Agent setup</span>
-        <h2 className="mt-3 text-[2rem] font-bold leading-tight text-base-content sm:text-[2.75rem]">
-          Install RateLoop once
-        </h2>
-        <p className="mt-4 text-base leading-7 text-base-content/68 sm:text-lg">
-          Give your agent a durable rule plus MCP access so it knows when public open-rater judgment is worth asking
-          for.
-        </p>
+    <section className="relative z-20 mt-14 w-full sm:mt-16 lg:mt-20 xl:mt-24">
+      <div className="text-center">
+        <p className="text-base leading-7 text-base-content/70 sm:text-lg">Use RateLoop with your favorite AI agent</p>
       </div>
 
       <div className="mx-auto mt-7 flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:gap-2.5 sm:px-0 lg:gap-3">
         {RATELOOP_AGENT_INSTALL_TARGETS.map(agent => {
-          const isSelected = selectedAgent.name === agent.name;
+          const isSelected = activeAgent?.name === agent.name;
           return (
             <button
               key={agent.name}
               type="button"
-              onClick={() => {
-                setSelectedAgentName(agent.name);
-                setActiveSnippetIndex(null);
-              }}
+              onClick={() => setActiveAgentName(agent.name)}
+              aria-haspopup="dialog"
               aria-label={agent.ariaLabel}
               className={`
                 flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 transition-colors
@@ -219,122 +199,39 @@ export function SupportedAgentsSection() {
           );
         })}
       </div>
-
-      <div className="mx-auto mt-7 grid max-w-5xl grid-cols-1 gap-5 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-        <div className="border-l-2 border-[#03CEA4] py-2 pl-6">
-          <div className="flex items-center gap-2 text-sm font-semibold text-base-content/72">
-            <WrenchScrewdriverIcon className="h-4 w-4" />
-            <span>{selectedAgent.name} setup</span>
-          </div>
-          <p className="mt-4 text-base leading-7 text-base-content/64">
-            Recommended path: install MCP, add a standing rule, then add the RateLoop skill when your agent supports
-            skills.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {selectedAgent.recommended.map(kind => (
-              <span
-                key={`${selectedAgent.name}-${kind}`}
-                className="rounded-md border border-base-content/10 bg-base-content/[0.06] px-3 py-1.5 text-xs font-semibold text-base-content/72"
-              >
-                {getSnippetKindLabel(kind)}
-              </span>
-            ))}
-          </div>
-          <div className="mt-6 rounded-lg border border-warning/35 bg-warning/10 p-4 text-left text-sm leading-6 text-base-content/72">
-            <div className="flex items-start gap-3">
-              <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-              <p>{RATELOOP_CONTRACT_DEPLOYMENT_NOTE}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3">
-          {selectedAgent.snippets.map((snippet, snippetIndex) => {
-            const snippetKey = `${selectedAgent.name}-${snippetIndex}`;
-            const isCopied = copiedSnippetKey === snippetKey;
-            return (
-              <article
-                key={`${selectedAgent.name}-${snippet.label}`}
-                className="rounded-lg border border-base-content/10 bg-base-content/[0.04] p-4 text-left"
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-base-content/[0.08] px-2.5 py-1 text-xs font-semibold text-base-content/70">
-                        {getSnippetKindLabel(snippet.kind)}
-                      </span>
-                      <h3 className="text-base font-bold text-base-content">{snippet.label}</h3>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-base-content/62">{snippet.description}</p>
-                    <p className="mt-2 font-mono text-xs uppercase tracking-widest text-base-content/42">
-                      {getSnippetPreview(snippet.kind)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm min-h-9 rounded-md border-base-content/10 bg-base-content/[0.06] text-base-content hover:border-base-content/20 hover:bg-base-content/[0.1]"
-                      onClick={() => setActiveSnippetIndex(snippetIndex)}
-                      aria-haspopup="dialog"
-                      aria-label={`View ${snippet.label} for ${selectedAgent.name}`}
-                    >
-                      View
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm min-h-9 rounded-md border-base-content/10 bg-base-content/[0.06] text-base-content hover:border-base-content/20 hover:bg-base-content/[0.1]"
-                      onClick={() => void handleSnippetCopy(snippet, snippetIndex)}
-                      aria-label={`Copy ${snippet.label} for ${selectedAgent.name}`}
-                    >
-                      {isCopied ? (
-                        <CheckCircleIcon className="h-4 w-4 text-success" />
-                      ) : (
-                        <ClipboardDocumentIcon className="h-4 w-4" />
-                      )}
-                      <span>{isCopied ? "Copied" : "Copy"}</span>
-                    </button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </div>
-      {activeSnippetDetails && typeof document !== "undefined"
+      {activeAgent && typeof document !== "undefined"
         ? createPortal(
             <div
               className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center"
               role="dialog"
               aria-modal="true"
-              aria-label={`${activeSnippetDetails.snippet.label} for ${selectedAgent.name}`}
+              aria-label={`${activeAgent.name} setup`}
             >
               <button
                 type="button"
                 className="absolute inset-0 cursor-default bg-black/55 backdrop-blur-sm"
-                aria-label="Close agent setup snippet"
-                onClick={() => setActiveSnippetIndex(null)}
+                aria-label="Close agent setup"
+                onClick={() => setActiveAgentName(null)}
               />
-              <div className="relative z-10 flex max-h-[calc(100svh-1rem)] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-base-content/10 bg-base-200 shadow-2xl sm:max-h-[min(90svh,46rem)] sm:rounded-2xl">
+              <div className="relative z-10 flex max-h-[calc(100svh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-base-content/10 bg-base-200 shadow-2xl sm:max-h-[min(92svh,54rem)] sm:rounded-2xl">
                 <div className="flex min-w-0 items-start gap-3 border-b border-base-content/10 px-4 py-4 pr-14 sm:px-6">
                   <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-base-content/[0.08]">
-                    <AgentIcon name={selectedAgent.name} />
+                    <AgentIcon name={activeAgent.name} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">
-                      {selectedAgent.name} setup
-                    </p>
+                    <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Agent setup</p>
                     <h2 className="mt-1 text-lg font-semibold leading-tight text-base-content sm:text-xl">
-                      {activeSnippetDetails.snippet.label}
+                      {activeAgent.name} setup
                     </h2>
                     <p className="mt-1 text-sm leading-6 text-base-content/62">
-                      {activeSnippetDetails.snippet.description}
+                      Install MCP, add a standing rule, then add the RateLoop skill when your agent supports skills.
                     </p>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setActiveSnippetIndex(null)}
+                  onClick={() => setActiveAgentName(null)}
                   className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 text-base-content/70 hover:text-base-content"
                   aria-label="Close"
                 >
@@ -342,36 +239,82 @@ export function SupportedAgentsSection() {
                 </button>
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
-                  <pre
-                    tabIndex={0}
-                    aria-label={`${activeSnippetDetails.snippet.label} snippet`}
-                    className="max-h-[52svh] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-base-content/10 bg-base-300/60 p-3 font-mono text-xs leading-5 text-base-content/78 focus:outline-none focus:ring-2 focus:ring-primary/45 sm:text-sm sm:leading-6"
-                  >
-                    {activeSnippetDetails.snippet.text}
-                  </pre>
-                </div>
+                  <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+                    <div className="border-l-2 border-[#03CEA4] py-2 pl-6">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-base-content/72">
+                        <WrenchScrewdriverIcon className="h-4 w-4" />
+                        <span>{activeAgent.name} setup</span>
+                      </div>
+                      <p className="mt-4 text-base leading-7 text-base-content/64">
+                        Recommended path: install MCP, add a standing rule, then add the RateLoop skill when your agent
+                        supports skills.
+                      </p>
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        {activeAgent.recommended.map(kind => (
+                          <span
+                            key={`${activeAgent.name}-${kind}`}
+                            className="rounded-md border border-base-content/10 bg-base-content/[0.06] px-3 py-1.5 text-xs font-semibold text-base-content/72"
+                          >
+                            {getSnippetKindLabel(kind)}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="mt-6 rounded-lg border border-warning/35 bg-warning/10 p-4 text-left text-sm leading-6 text-base-content/72">
+                        <div className="flex items-start gap-3">
+                          <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+                          <p>{RATELOOP_CONTRACT_DEPLOYMENT_NOTE}</p>
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="flex flex-col-reverse gap-2 border-t border-base-content/10 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm min-h-10 rounded-md border-base-content/15 text-base-content hover:border-base-content/25"
-                    onClick={() => setActiveSnippetIndex(null)}
-                  >
-                    Close
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm min-h-10 rounded-md bg-base-content text-base-100 hover:bg-base-content/88"
-                    onClick={() => void handleSnippetCopy(activeSnippetDetails.snippet, activeSnippetDetails.index)}
-                    aria-label={`Copy ${activeSnippetDetails.snippet.label} for ${selectedAgent.name}`}
-                  >
-                    {copiedSnippetKey === activeSnippetCopyKey ? (
-                      <CheckCircleIcon className="h-4 w-4 text-success" />
-                    ) : (
-                      <ClipboardDocumentIcon className="h-4 w-4" />
-                    )}
-                    <span>{copiedSnippetKey === activeSnippetCopyKey ? "Copied" : "Copy"}</span>
-                  </button>
+                    <div className="grid grid-cols-1 gap-3">
+                      {activeAgent.snippets.map((snippet, snippetIndex) => {
+                        const snippetKey = `${activeAgent.name}-${snippetIndex}`;
+                        const isCopied = copiedSnippetKey === snippetKey;
+                        return (
+                          <article
+                            key={`${activeAgent.name}-${snippet.label}`}
+                            className="rounded-lg border border-base-content/10 bg-base-content/[0.04] p-4 text-left"
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded-md bg-base-content/[0.08] px-2.5 py-1 text-xs font-semibold text-base-content/70">
+                                    {getSnippetKindLabel(snippet.kind)}
+                                  </span>
+                                  <h3 className="text-base font-bold text-base-content">{snippet.label}</h3>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-base-content/62">{snippet.description}</p>
+                                <p className="mt-2 font-mono text-xs uppercase tracking-widest text-base-content/42">
+                                  {getSnippetPreview(snippet.kind)}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-sm min-h-9 shrink-0 rounded-md border-base-content/10 bg-base-content/[0.06] text-base-content hover:border-base-content/20 hover:bg-base-content/[0.1]"
+                                onClick={() => void handleSnippetCopy(activeAgent.name, snippet, snippetIndex)}
+                                aria-label={`Copy ${snippet.label} for ${activeAgent.name}`}
+                              >
+                                {isCopied ? (
+                                  <CheckCircleIcon className="h-4 w-4 text-success" />
+                                ) : (
+                                  <ClipboardDocumentIcon className="h-4 w-4" />
+                                )}
+                                <span>{isCopied ? "Copied" : "Copy"}</span>
+                              </button>
+                            </div>
+                            <pre
+                              tabIndex={0}
+                              aria-label={`${snippet.label} snippet`}
+                              className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-base-content/10 bg-base-300/60 p-3 font-mono text-xs leading-5 text-base-content/78 focus:outline-none focus:ring-2 focus:ring-primary/45"
+                            >
+                              {snippet.text}
+                            </pre>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>,
