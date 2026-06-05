@@ -1,10 +1,10 @@
 import { ContentRegistryAbi } from "@rateloop/contracts/abis";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { decodeEventLog } from "viem";
 import { ponder } from "ponder:registry";
 import {
   category,
   content,
-  contentMedia,
   globalStats,
   profile,
   questionBundleQuestion,
@@ -17,23 +17,27 @@ function displayRatingFromBps(ratingBps: number) {
   return Math.min(100, Math.max(0, Math.round(ratingBps / 100)));
 }
 
+function contentRegistryAddress(
+  context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
+) {
+  const address = Array.isArray(context.contracts.ContentRegistry.address)
+    ? context.contracts.ContentRegistry.address[0]
+    : context.contracts.ContentRegistry.address;
+
+  if (!address) {
+    throw new Error("Missing ContentRegistry address in Ponder context");
+  }
+
+  return address;
+}
+
 async function readRatingStateAtEventBlock(
   context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
   contentId: bigint,
 ) {
-  const contentRegistryAddress = Array.isArray(
-    context.contracts.ContentRegistry.address,
-  )
-    ? context.contracts.ContentRegistry.address[0]
-    : context.contracts.ContentRegistry.address;
-
-  if (!contentRegistryAddress) {
-    throw new Error("Missing ContentRegistry address in Ponder context");
-  }
-
   return context.client.readContract({
     abi: ContentRegistryAbi,
-    address: contentRegistryAddress,
+    address: contentRegistryAddress(context),
     functionName: "getRatingState",
     args: [contentId],
   });
@@ -43,53 +47,47 @@ async function readContentRoundConfigAtEventBlock(
   context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
   contentId: bigint,
 ) {
-  const contentRegistryAddress = Array.isArray(
-    context.contracts.ContentRegistry.address,
-  )
-    ? context.contracts.ContentRegistry.address[0]
-    : context.contracts.ContentRegistry.address;
-
-  if (!contentRegistryAddress) {
-    throw new Error("Missing ContentRegistry address in Ponder context");
-  }
-
   return context.client.readContract({
     abi: ContentRegistryAbi,
-    address: contentRegistryAddress,
+    address: contentRegistryAddress(context),
     functionName: "getContentRoundConfig",
     args: [contentId],
   });
 }
 
-function mediaRowId(contentId: bigint, mediaIndex: number) {
-  return `${contentId.toString()}-${mediaIndex}`;
-}
-
-async function upsertContentMedia(
+async function resolveBundleContentIdsFromReceipt(
   context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
-  contentId: bigint,
-  mediaIndex: number,
-  mediaType: "image" | "video",
-  url: string,
+  event: Parameters<Parameters<typeof ponder.on>[1]>[0]["event"],
+  questionCount: number,
 ) {
-  const canonicalUrl = getCanonicalUrlParts(url);
-  await context.db
-    .insert(contentMedia)
-    .values({
-      id: mediaRowId(contentId, mediaIndex),
-      contentId,
-      mediaIndex,
-      mediaType,
-      url,
-      canonicalUrl: canonicalUrl?.canonicalUrl ?? url.trim(),
-      urlHost: canonicalUrl?.urlHost ?? "",
-    })
-    .onConflictDoUpdate(() => ({
-      mediaType,
-      url,
-      canonicalUrl: canonicalUrl?.canonicalUrl ?? url.trim(),
-      urlHost: canonicalUrl?.urlHost ?? "",
-    }));
+  const txHash = event.transaction?.hash;
+  const bundleLogIndex = Number(event.log?.logIndex ?? Number.MAX_SAFE_INTEGER);
+  if (!txHash || !Number.isFinite(bundleLogIndex)) return [];
+
+  const registryAddress = contentRegistryAddress(context).toLowerCase();
+  const receipt = await context.client.getTransactionReceipt({ hash: txHash });
+  const contentIds: bigint[] = [];
+
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== registryAddress) continue;
+    if (Number(log.logIndex) >= bundleLogIndex) continue;
+
+    try {
+      const decoded = decodeEventLog({
+        abi: ContentRegistryAbi,
+        data: log.data,
+        topics: log.topics,
+      });
+
+      if (decoded.eventName === "ContentSubmitted") {
+        contentIds.push(decoded.args.contentId);
+      }
+    } catch {
+      // Ignore other ContentRegistry logs in the same transaction.
+    }
+  }
+
+  return contentIds.slice(-questionCount);
 }
 
 ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
@@ -197,37 +195,6 @@ ponder.on(
 );
 
 ponder.on(
-  "ContentRegistry:QuestionSpecAnchored",
-  async ({ event, context }) => {
-    const { contentId, questionMetadataHash, resultSpecHash } = event.args;
-    const existingContent = await context.db.find(content, { id: contentId });
-    if (!existingContent) return;
-
-    await context.db.update(content, { id: contentId }).set({
-      questionMetadataHash,
-      resultSpecHash,
-      lastActivityAt: event.block.timestamp,
-    });
-  },
-);
-
-ponder.on(
-  "ContentRegistry:ContentMediaSubmitted",
-  async ({ event, context }) => {
-    const { contentId, imageUrls, videoUrl } = event.args;
-    const trimmedVideoUrl = videoUrl.trim();
-    if (trimmedVideoUrl) {
-      await upsertContentMedia(context, contentId, 0, "video", trimmedVideoUrl);
-      return;
-    }
-
-    for (let i = 0; i < imageUrls.length; i++) {
-      await upsertContentMedia(context, contentId, i, "image", imageUrls[i]);
-    }
-  },
-);
-
-ponder.on(
   "ContentRegistry:ContentDetailsSubmitted",
   async ({ event, context }) => {
     const { contentId, detailsUrl, detailsHash } = event.args;
@@ -243,31 +210,54 @@ ponder.on(
 );
 
 ponder.on(
-  "ContentRegistry:QuestionBundleContentLinked",
+  "ContentRegistry:QuestionBundleSubmitted",
   async ({ event, context }) => {
-    const { bundleId, contentId, bundleIndex } = event.args;
-    const normalizedBundleIndex = Number(bundleIndex);
+    const { bundleId, questionCount } = event.args;
+    const normalizedQuestionCount = Number(questionCount);
+    if (
+      !Number.isInteger(normalizedQuestionCount) ||
+      normalizedQuestionCount <= 0
+    ) {
+      return;
+    }
 
-    await context.db.update(content, { id: contentId }).set({
-      bundleId,
-      bundleIndex: normalizedBundleIndex,
-      lastActivityAt: event.block.timestamp,
-    });
+    const contentIds = await resolveBundleContentIdsFromReceipt(
+      context,
+      event,
+      normalizedQuestionCount,
+    );
 
-    await context.db
-      .insert(questionBundleQuestion)
-      .values({
-        id: `${bundleId}-${bundleIndex}`,
+    if (contentIds.length !== normalizedQuestionCount) {
+      console.warn(
+        `Could not resolve all bundle content ids for bundle ${bundleId.toString()}`,
+      );
+      return;
+    }
+
+    for (let bundleIndex = 0; bundleIndex < contentIds.length; bundleIndex++) {
+      const contentId = contentIds[bundleIndex];
+
+      await context.db.update(content, { id: contentId }).set({
         bundleId,
-        contentId,
-        bundleIndex: normalizedBundleIndex,
-        updatedAt: event.block.timestamp,
-      })
-      .onConflictDoUpdate(() => ({
-        contentId,
-        bundleIndex: normalizedBundleIndex,
-        updatedAt: event.block.timestamp,
-      }));
+        bundleIndex,
+        lastActivityAt: event.block.timestamp,
+      });
+
+      await context.db
+        .insert(questionBundleQuestion)
+        .values({
+          id: `${bundleId}-${bundleIndex}`,
+          bundleId,
+          contentId,
+          bundleIndex,
+          updatedAt: event.block.timestamp,
+        })
+        .onConflictDoUpdate(() => ({
+          contentId,
+          bundleIndex,
+          updatedAt: event.block.timestamp,
+        }));
+    }
   },
 );
 

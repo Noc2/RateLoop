@@ -1,14 +1,38 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { encodeAbiParameters, encodeEventTopics } from "viem";
 
 type RegisteredHandler = (args: {
   event: {
     args: Record<string, unknown>;
     block: { number: bigint; timestamp: bigint };
+    log?: { logIndex: number };
+    transaction?: { hash: `0x${string}` };
   };
   context: Record<string, unknown>;
 }) => Promise<void>;
 
 const handlers = new Map<string, RegisteredHandler>();
+const REGISTRY_ADDRESS = "0x000000000000000000000000000000000000c0de";
+const SUBMITTER_ADDRESS = "0x0000000000000000000000000000000000000001";
+const CONTENT_REGISTRY_ABI = vi.hoisted(
+  () =>
+    [
+      {
+        type: "event",
+        name: "ContentSubmitted",
+        inputs: [
+          { name: "contentId", type: "uint256", indexed: true },
+          { name: "submitter", type: "address", indexed: true },
+          { name: "contentHash", type: "bytes32", indexed: false },
+          { name: "url", type: "string", indexed: false },
+          { name: "title", type: "string", indexed: false },
+          { name: "description", type: "string", indexed: false },
+          { name: "tags", type: "string", indexed: false },
+          { name: "categoryId", type: "uint256", indexed: false },
+        ],
+      },
+    ] as const,
+);
 
 vi.mock("ponder:registry", () => ({
   ponder: {
@@ -24,12 +48,13 @@ vi.mock("ponder:schema", () => ({
   contentMedia: "contentMedia",
   globalStats: "globalStats",
   profile: "profile",
+  questionBundleQuestion: "questionBundleQuestion",
   ratingChange: "ratingChange",
   round: "round",
 }));
 
 vi.mock("@rateloop/contracts/abis", () => ({
-  ContentRegistryAbi: [],
+  ContentRegistryAbi: CONTENT_REGISTRY_ABI,
 }));
 
 vi.mock("@rateloop/contracts/protocol", () => ({
@@ -60,6 +85,39 @@ function createDb(existingRound = { id: "1-2" }) {
     },
     insertCalls,
     updateCalls,
+  };
+}
+
+function contentSubmittedLog(contentId: bigint, logIndex: number) {
+  return {
+    address: REGISTRY_ADDRESS,
+    logIndex,
+    topics: encodeEventTopics({
+      abi: CONTENT_REGISTRY_ABI,
+      eventName: "ContentSubmitted",
+      args: {
+        contentId,
+        submitter: SUBMITTER_ADDRESS,
+      },
+    }),
+    data: encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+        { type: "uint256" },
+      ],
+      [
+        `0x${"a".repeat(64)}`,
+        `https://example.com/question-${contentId.toString()}`,
+        `Question ${contentId.toString()}?`,
+        "Context",
+        "tag",
+        1n,
+      ],
+    ),
   };
 }
 
@@ -119,8 +177,8 @@ describe("ContentRegistry ponder handlers", () => {
     });
 
     expect(readContract).toHaveBeenCalledWith({
-      abi: [],
-      address: "0x000000000000000000000000000000000000c0de",
+      abi: CONTENT_REGISTRY_ABI,
+      address: REGISTRY_ADDRESS,
       args: [7n],
       functionName: "getContentRoundConfig",
     });
@@ -179,49 +237,98 @@ describe("ContentRegistry ponder handlers", () => {
     );
   });
 
-  it("indexes content media rows from ContentMediaSubmitted events", async () => {
-    const { db, insertCalls } = createDb();
+  it("does not register ContentRegistry events removed from the current ABI", async () => {
+    const registeredHandlers = await loadHandlers();
+
+    expect(registeredHandlers.has("ContentRegistry:QuestionSpecAnchored")).toBe(false);
+    expect(registeredHandlers.has("ContentRegistry:ContentMediaSubmitted")).toBe(false);
+    expect(registeredHandlers.has("ContentRegistry:QuestionBundleContentLinked")).toBe(false);
+  });
+
+  it("links bundle questions from same-transaction ContentSubmitted logs", async () => {
+    const { db, insertCalls, updateCalls } = createDb();
+    const getTransactionReceipt = vi.fn(async () => ({
+      logs: [
+        contentSubmittedLog(7n, 10),
+        contentSubmittedLog(8n, 11),
+        contentSubmittedLog(9n, 12),
+        contentSubmittedLog(10n, 14),
+      ],
+    }));
 
     const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get("ContentRegistry:ContentMediaSubmitted");
+    const handler = registeredHandlers.get("ContentRegistry:QuestionBundleSubmitted");
 
     expect(handler).toBeDefined();
 
     await handler!({
       event: {
         args: {
-          contentId: 7n,
-          imageUrls: ["https://example.com/a.jpg", "https://example.com/b.webp"],
-          videoUrl: "",
+          bundleId: 3n,
+          questionCount: 3n,
         },
         block: {
           number: 42n,
           timestamp: 999n,
         },
+        log: {
+          logIndex: 13,
+        },
+        transaction: {
+          hash: `0x${"1".repeat(64)}`,
+        },
       },
-      context: { db },
+      context: {
+        client: { getTransactionReceipt },
+        contracts: {
+          ContentRegistry: {
+            address: REGISTRY_ADDRESS,
+          },
+        },
+        db,
+      },
     });
 
+    expect(getTransactionReceipt).toHaveBeenCalledWith({
+      hash: `0x${"1".repeat(64)}`,
+    });
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: { id: 7n },
+          table: "content",
+          values: expect.objectContaining({ bundleId: 3n, bundleIndex: 0 }),
+        }),
+        expect.objectContaining({
+          key: { id: 8n },
+          table: "content",
+          values: expect.objectContaining({ bundleId: 3n, bundleIndex: 1 }),
+        }),
+        expect.objectContaining({
+          key: { id: 9n },
+          table: "content",
+          values: expect.objectContaining({ bundleId: 3n, bundleIndex: 2 }),
+        }),
+      ]),
+    );
     expect(insertCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          table: "contentMedia",
+          table: "questionBundleQuestion",
           values: expect.objectContaining({
-            id: "7-0",
+            id: "3-0",
+            bundleId: 3n,
             contentId: 7n,
-            mediaIndex: 0,
-            mediaType: "image",
-            url: "https://example.com/a.jpg",
+            bundleIndex: 0,
           }),
         }),
         expect.objectContaining({
-          table: "contentMedia",
+          table: "questionBundleQuestion",
           values: expect.objectContaining({
-            id: "7-1",
-            contentId: 7n,
-            mediaIndex: 1,
-            mediaType: "image",
-            url: "https://example.com/b.webp",
+            id: "3-2",
+            bundleId: 3n,
+            contentId: 9n,
+            bundleIndex: 2,
           }),
         }),
       ]),
@@ -317,8 +424,8 @@ describe("ContentRegistry ponder handlers", () => {
     });
 
     expect(readContract).toHaveBeenCalledWith({
-      abi: [],
-      address: "0x000000000000000000000000000000000000c0de",
+      abi: CONTENT_REGISTRY_ABI,
+      address: REGISTRY_ADDRESS,
       args: [1n],
       functionName: "getRatingState",
     });
