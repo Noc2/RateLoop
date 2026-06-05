@@ -1035,7 +1035,7 @@ contract LaunchDistributionPoolTest is Test {
     }
 
     function test_CancelStalePendingLaunchCreditReleasesVerifiedAnchorFanout() public {
-        _configureLaunchOracle(1);
+        ClusterPayoutOracle oracle = _configureLaunchOracle(401, _launchEpochSourcesForRange(300, 401));
         bytes32 anchorId = bytes32("anchor-a");
         uint256 maxFanout = pool.MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR();
         bytes32 firstCommitKey = keccak256("pending-anchor-cancel-first");
@@ -1046,8 +1046,8 @@ contract LaunchDistributionPoolTest is Test {
             bytes32 commitKey = i == 0 ? firstCommitKey : keccak256(abi.encode("pending-anchor-cancel", i));
             pool.recordEarnedRaterRewardWithSourceReady(
                 rater,
-                300 + i,
                 1,
+                300 + i,
                 commitKey,
                 8_000,
                 3,
@@ -1061,8 +1061,8 @@ contract LaunchDistributionPoolTest is Test {
         bytes32 blockedCommitKey = keccak256("pending-anchor-blocked-before-cancel");
         pool.recordEarnedRaterRewardWithSourceReady(
             address(0xCAFE),
-            400,
             1,
+            400,
             blockedCommitKey,
             8_000,
             3,
@@ -1071,27 +1071,27 @@ contract LaunchDistributionPoolTest is Test {
             _singleAnchor(anchorId),
             uint64(block.timestamp)
         );
-        assertFalse(pool.earnedRewardCreditRecorded(400, 1, blockedCommitKey));
+        assertFalse(pool.earnedRewardCreditRecorded(1, 400, blockedCommitKey));
         assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), maxFanout);
 
         vm.prank(bob);
         vm.expectRevert(LaunchDistributionPool.PendingCreditNotStale.selector);
-        pool.cancelStalePendingEarnedRaterCredit(300, 1, firstCommitKey);
+        pool.cancelStalePendingEarnedRaterCredit(1, 300, firstCommitKey);
 
         vm.warp(block.timestamp + pool.STALE_PENDING_EARNED_RATER_CREDIT_DELAY());
         vm.prank(bob);
-        pool.cancelStalePendingEarnedRaterCredit(300, 1, firstCommitKey);
+        pool.cancelStalePendingEarnedRaterCredit(1, 300, firstCommitKey);
         assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, firstRater), 0);
         assertFalse(pool.verifiedAnchorRaterSeen(anchorId, firstRater));
         assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), maxFanout - 1);
-        assertTrue(pool.earnedRewardCreditRecorded(300, 1, firstCommitKey));
-        assertTrue(pool.raterRoundCreditRecorded(firstRater, 300, 1));
+        assertTrue(pool.earnedRewardCreditRecorded(1, 300, firstCommitKey));
+        assertTrue(pool.raterRoundCreditRecorded(firstRater, 1, 300));
 
         bytes32 replacementCommitKey = keccak256("pending-anchor-replacement-after-cancel");
         pool.recordEarnedRaterRewardWithSourceReady(
             address(0xCAFE),
-            401,
             1,
+            401,
             replacementCommitKey,
             8_000,
             3,
@@ -1100,15 +1100,15 @@ contract LaunchDistributionPoolTest is Test {
             _singleAnchor(anchorId),
             uint64(block.timestamp)
         );
-        assertTrue(pool.earnedRewardCreditRecorded(401, 1, replacementCommitKey));
+        assertTrue(pool.earnedRewardCreditRecorded(1, 401, replacementCommitKey));
         assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), maxFanout);
 
         IClusterPayoutOracle.PayoutWeight memory payout =
             _launchPayoutWeight(300, firstCommitKey, firstRater, 2_500, keccak256("cancelled"));
-        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
-        pool.finalizeEarnedRaterRewardCredit(300, 1, firstCommitKey, payout, new bytes32[](0));
-        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
-        pool.rescueStalePendingEarnedRaterCredit(300, 1, firstCommitKey, 0);
+        _proposeAndFinalizeLaunchPayoutSnapshot(oracle, 300, payout, keccak256("epoch-artifact"));
+        assertEq(pool.finalizeEarnedRaterRewardCredit(1, 300, firstCommitKey, payout, new bytes32[](0)), 0);
+        assertEq(pool.qualifyingCreditBps(firstRater), 2_500);
+        assertTrue(pool.earnedRewardCreditFinalized(1, 300, firstCommitKey));
     }
 
     function test_CancelStalePendingLaunchCreditRespectsSharedAnchorReservations() public {

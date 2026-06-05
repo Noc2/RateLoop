@@ -345,10 +345,7 @@ contract LaunchDistributionPool is
         if (readyAt == 0 || block.timestamp < uint256(readyAt) + STALE_PENDING_EARNED_RATER_CREDIT_DELAY) {
             revert PendingCreditNotStale();
         }
-
-        _clearPendingVerifiedAnchorReservations(contentId, roundId, commitKey, pending.rater);
-        delete pendingEarnedRaterCredits[contentId][roundId][commitKey];
-        delete pendingEarnedRaterCreditReadyAt[contentId][roundId][commitKey];
+        _releasePendingVerifiedAnchorReservations(contentId, roundId, commitKey, pending.rater);
         emit StalePendingEarnedRaterCreditCancelled(pending.rater, contentId, roundId, commitKey);
     }
 
@@ -1312,6 +1309,16 @@ contract LaunchDistributionPool is
         bytes32 commitKey,
         address rater
     ) internal {
+        _releasePendingVerifiedAnchorReservations(contentId, roundId, commitKey, rater);
+        delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
+    }
+
+    function _releasePendingVerifiedAnchorReservations(
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 commitKey,
+        address rater
+    ) internal {
         bytes32[] storage pendingAnchors = pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
         uint256 anchorCount = pendingAnchors.length;
         for (uint256 i = 0; i < anchorCount; i++) {
@@ -1334,7 +1341,6 @@ contract LaunchDistributionPool is
                 pendingVerifiedAnchorReservationCount[anchorId][rater] = pendingCount;
             }
         }
-        delete pendingEarnedRaterCreditAnchorIds[contentId][roundId][commitKey];
     }
 
     function _countDistinctAvailableAnchors(
