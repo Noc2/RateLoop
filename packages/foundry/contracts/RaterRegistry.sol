@@ -97,6 +97,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     uint256 public worldIdV4CredentialGenesisIssuedAtMin;
     bool public worldIdV4VerifierConfigFrozen;
     bool public legacyWorldIdAttestationDisabled;
+    bool public worldIdV4UnaliasedLaunchNullifiersAllowed;
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
     uint256[40] private __gap;
@@ -124,6 +125,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider, address indexed prevOwner
     );
     event WorldIdV4LaunchNullifierAliasSet(bytes32 indexed v4NullifierHash, bytes32 indexed legacyNullifierHash);
+    event WorldIdV4UnaliasedLaunchNullifiersAllowedSet(bool allowed);
     /// @notice M-Identity-2: emitted when SEEDER_ROLE explicitly re-binds a rater's canonical
     ///         identity key. Off-chain consumers MUST re-map any per-identity state keyed off
     ///         the old key (cooldowns, exclusions, profile ownership) when they observe this.
@@ -656,6 +658,11 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         emit WorldIdV4LaunchNullifierAliasSet(v4NullifierHash, legacyNullifierHash);
     }
 
+    function setWorldIdV4UnaliasedLaunchNullifiersAllowed(bool allowed) external onlyRole(SEEDER_ROLE) {
+        worldIdV4UnaliasedLaunchNullifiersAllowed = allowed;
+        emit WorldIdV4UnaliasedLaunchNullifiersAllowedSet(allowed);
+    }
+
     /// @notice Mark an unaliased World ID v4 nullifier as consumed by launch accounting.
     /// @dev Attestation alone must not freeze migration aliases. Launch consumers call this only
     ///      once an unaliased v4 identity actually claims a launch bonus or unlocks a full cap.
@@ -667,6 +674,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (v4NullifierHash == bytes32(0)) revert InvalidCredential();
         bytes32 legacyNullifierHash = worldIdV4LaunchNullifierAlias[v4NullifierHash];
         if (legacyNullifierHash != bytes32(0)) return _worldIdLaunchIdentityKey(legacyNullifierHash);
+        if (!worldIdV4UnaliasedLaunchNullifiersAllowed) revert InvalidCredential();
 
         launchIdentityKey = _worldIdLaunchIdentityKey(v4NullifierHash);
         worldIdV4LaunchNullifierSeen[v4NullifierHash] = true;

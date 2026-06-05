@@ -1608,6 +1608,7 @@ contract LaunchDistributionPoolTest is Test {
         policy.unverifiedEarnedRaterCapBps = 2_500;
         pool.setLaunchRewardPolicy(policy);
         _configureWorldIdV4();
+        registry.setWorldIdV4UnaliasedLaunchNullifiersAllowed(true);
 
         _verifyV4(alice, bytes32("alice-v4-human"));
         _recordFiveEligibleCredits(alice);
@@ -1626,6 +1627,7 @@ contract LaunchDistributionPoolTest is Test {
         bytes32 v4Nullifier = bytes32("alice-v4-human");
 
         _configureWorldIdV4();
+        registry.setWorldIdV4UnaliasedLaunchNullifiersAllowed(true);
         _verifyV4(alice, v4Nullifier);
 
         assertEq(_recordFiveEligibleCredits(alice), FIRST_COHORT_FULL_SLOT);
@@ -1646,6 +1648,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterLaunchCap(alice), FIRST_COHORT_UNVERIFIED_CAP);
 
         _configureWorldIdV4();
+        registry.setWorldIdV4UnaliasedLaunchNullifiersAllowed(true);
         _verifyV4(alice, v4Nullifier);
         uint256 catchUp = pool.unlockFullEarnedRaterCap(alice);
 
@@ -1667,6 +1670,42 @@ contract LaunchDistributionPoolTest is Test {
         _configureWorldIdV4();
         vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
         _verifyV4(bob, bytes32("shared-human"));
+    }
+
+    function test_WorldIdV4DifferentNullifierCannotUnlockFullCapWithoutAlias() public {
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+        policy.unverifiedEarnedRaterCapBps = 2_500;
+        pool.setLaunchRewardPolicy(policy);
+        bytes32 legacyNullifier = bytes32("legacy-human");
+        bytes32 v4Nullifier = bytes32("v4-human");
+
+        _verify(alice, legacyNullifier);
+        _recordFiveEligibleCredits(alice);
+        assertTrue(pool.raterFullLaunchCapUnlocked(alice));
+
+        for (uint256 i = 0; i < 5; i++) {
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
+            pool.recordEarnedRaterRewardWithSourceReady(
+                bob,
+                2,
+                i + 1,
+                _commitKey(100 + i),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(anchorId),
+                uint64(block.timestamp)
+            );
+        }
+
+        assertEq(pool.raterLaunchCap(bob), FIRST_COHORT_UNVERIFIED_CAP);
+        assertFalse(pool.raterFullLaunchCapUnlocked(bob));
+
+        _configureWorldIdV4();
+        _verifyV4(bob, v4Nullifier);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        pool.unlockFullEarnedRaterCap(bob);
     }
 
     function test_WorldIdV4LaunchAliasPreventsDifferentNullifierFullCapDoubleUse() public {
@@ -2390,6 +2429,7 @@ contract LaunchDistributionPoolTest is Test {
 
     function test_ConfiguredWorldIdV4ClosesLegacyBonusDoubleClaimPath() public {
         _configureWorldIdV4();
+        registry.setWorldIdV4UnaliasedLaunchNullifiersAllowed(true);
         _verifyV4(alice, bytes32("alice-v4-human"));
 
         vm.prank(alice);
@@ -2405,6 +2445,7 @@ contract LaunchDistributionPoolTest is Test {
         bytes32 v4Nullifier = bytes32("alice-v4-human");
 
         _configureWorldIdV4();
+        registry.setWorldIdV4UnaliasedLaunchNullifiersAllowed(true);
         _verifyV4(alice, v4Nullifier);
 
         vm.prank(alice);
@@ -2424,6 +2465,23 @@ contract LaunchDistributionPoolTest is Test {
         _configureWorldIdV4();
         vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
         _verifyV4(bob, bytes32("shared-human"));
+    }
+
+    function test_WorldIdV4DifferentNullifierCannotClaimVerifiedBonusWithoutAlias() public {
+        bytes32 legacyNullifier = bytes32("legacy-human");
+        bytes32 v4Nullifier = bytes32("v4-human");
+
+        _verify(alice, legacyNullifier);
+        vm.prank(alice);
+        pool.claimVerifiedBonus(address(0));
+
+        _configureWorldIdV4();
+        _verifyV4(bob, v4Nullifier);
+
+        vm.prank(bob);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        pool.claimVerifiedBonus(address(0));
+        assertFalse(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
     }
 
     function test_WorldIdV4LaunchAliasPreventsDifferentNullifierVerifiedBonusDoubleClaim() public {

@@ -22436,6 +22436,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "LAUNCH_CONSUMER_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "SEEDED_HUMAN_SCOPE",
           inputs: [],
           outputs: [
@@ -22566,6 +22579,25 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "consumeWorldIdV4LaunchNullifier",
+          inputs: [
+            {
+              name: "v4NullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "launchIdentityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
           stateMutability: "nonpayable",
         },
         {
@@ -23315,6 +23347,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setWorldIdV4UnaliasedLaunchNullifiersAllowed",
+          inputs: [
+            {
+              name: "allowed",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setWorldIdV4VerifierConfig",
           inputs: [
             {
@@ -23594,6 +23639,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint64",
               internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdV4UnaliasedLaunchNullifiersAllowed",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -24078,6 +24136,19 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bytes32",
               indexed: true,
               internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WorldIdV4UnaliasedLaunchNullifiersAllowedSet",
+          inputs: [
+            {
+              name: "allowed",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
             },
           ],
           anonymous: false,
@@ -48008,6 +48079,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "LAUNCH_CONSUMER_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "SEEDED_HUMAN_SCOPE",
           inputs: [],
           outputs: [
@@ -48138,6 +48222,25 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "consumeWorldIdV4LaunchNullifier",
+          inputs: [
+            {
+              name: "v4NullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "launchIdentityKey",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
           stateMutability: "nonpayable",
         },
         {
@@ -48887,6 +48990,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setWorldIdV4UnaliasedLaunchNullifiersAllowed",
+          inputs: [
+            {
+              name: "allowed",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setWorldIdV4VerifierConfig",
           inputs: [
             {
@@ -49166,6 +49282,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint64",
               internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdV4UnaliasedLaunchNullifiersAllowed",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -49650,6 +49779,19 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bytes32",
               indexed: true,
               internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "WorldIdV4UnaliasedLaunchNullifiersAllowedSet",
+          inputs: [
+            {
+              name: "allowed",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
             },
           ],
           anonymous: false,

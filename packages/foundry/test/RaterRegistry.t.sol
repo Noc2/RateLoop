@@ -743,6 +743,8 @@ contract RaterRegistryTest is Test {
         bytes32 launchConsumerRole = registry.LAUNCH_CONSUMER_ROLE();
         vm.prank(governance);
         registry.grantRole(launchConsumerRole, launchConsumer);
+        vm.prank(governance);
+        registry.setWorldIdV4UnaliasedLaunchNullifiersAllowed(true);
         vm.prank(launchConsumer);
         registry.consumeWorldIdV4LaunchNullifier(v4Nullifier);
 
@@ -751,6 +753,27 @@ contract RaterRegistryTest is Test {
         vm.prank(governance);
         vm.expectRevert(RaterRegistry.InvalidCredential.selector);
         registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, keccak256("legacy-human"));
+    }
+
+    function test_WorldIdV4UnaliasedLaunchNullifierConsumptionRequiresOptIn() public {
+        bytes32 v4Nullifier = keccak256("v4-human");
+        address launchConsumer = address(0xBEEF);
+
+        bytes32 launchConsumerRole = registry.LAUNCH_CONSUMER_ROLE();
+        vm.prank(governance);
+        registry.grantRole(launchConsumerRole, launchConsumer);
+
+        vm.prank(launchConsumer);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.consumeWorldIdV4LaunchNullifier(v4Nullifier);
+
+        vm.prank(governance);
+        registry.setWorldIdV4UnaliasedLaunchNullifiersAllowed(true);
+        vm.prank(launchConsumer);
+        bytes32 launchKey = registry.consumeWorldIdV4LaunchNullifier(v4Nullifier);
+
+        assertEq(launchKey, registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldId, v4Nullifier));
+        assertTrue(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
     }
 
     function test_WorldIdV4LaunchRewardAnchorUsesUnaliasedV4Identity() public {
