@@ -161,8 +161,6 @@ contract LaunchDistributionPool is
     event PoolWithdrawal(address indexed to, uint256 amount);
     event SurplusRecovered(address indexed to, uint256 amount);
     event GovernanceUpdated(address indexed governance);
-    event RaterRegistryUpdated(address indexed raterRegistry);
-    event ClusterPayoutOracleUpdated(address indexed clusterPayoutOracle);
     event RoundClusterReadyAtSourceUpdated(address indexed source);
     event AuthorizedCallerUpdated(address indexed caller, bool authorized);
     event LaunchRewardPolicyUpdated(LaunchRewardPolicy policy);
@@ -263,14 +261,12 @@ contract LaunchDistributionPool is
     function setRaterRegistry(address newRegistry) external onlyOwner {
         _validateRaterRegistry(newRegistry);
         raterRegistry = RaterRegistry(newRegistry);
-        emit RaterRegistryUpdated(newRegistry);
     }
 
     function setClusterPayoutOracle(address newOracle) external onlyOwner {
         if (address(roundClusterReadyAtSource) == address(0)) revert InvalidAddress();
         _validateClusterPayoutOracle(newOracle);
         clusterPayoutOracle = IClusterPayoutOracle(newOracle);
-        emit ClusterPayoutOracleUpdated(newOracle);
     }
 
     /// @notice M-Oracle-1: configure the authoritative round source-readiness oracle (the
@@ -437,7 +433,7 @@ contract LaunchDistributionPool is
         if (verifiedCredentialClaimed[credentialKey] || verifiedBonusClaimedByAccount[msg.sender]) {
             revert AlreadyClaimed();
         }
-        credentialKey = _consumeCredentialClaimKey(credential.provider, credential.nullifierHash);
+        credentialKey = _consumeCredentialClaimKey(credential.provider, credential.nullifierHash, credentialKey);
 
         uint256 baseBonus = currentVerifiedBonus();
         uint256 remaining = _remainingVerifiedReferralPool();
@@ -484,7 +480,7 @@ contract LaunchDistributionPool is
 
         address claimedBy = launchFullCapNullifierRater[credentialKey];
         if (claimedBy != address(0) && claimedBy != rater) revert AlreadyClaimed();
-        credentialKey = _consumeCredentialClaimKey(provider, nullifierHash);
+        credentialKey = _consumeCredentialClaimKey(provider, nullifierHash, credentialKey);
 
         uint256 previousCap = raterLaunchCap[rater];
         uint256 fullCap = raterFullLaunchCap[rater];
@@ -1048,7 +1044,7 @@ contract LaunchDistributionPool is
         if (nullifierHash != bytes32(0)) {
             address claimedBy = launchFullCapNullifierRater[credentialKey];
             if (claimedBy == address(0) || claimedBy == rater) {
-                credentialKey = _consumeCredentialClaimKey(provider, nullifierHash);
+                credentialKey = _consumeCredentialClaimKey(provider, nullifierHash, credentialKey);
                 fullCapUnlocked = true;
                 raterFullLaunchCapUnlocked[rater] = true;
                 raterLaunchCapNullifier[rater] = nullifierHash;
@@ -1380,14 +1376,15 @@ contract LaunchDistributionPool is
         }
     }
 
-    function _consumeCredentialClaimKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
-        internal
-        returns (bytes32)
-    {
+    function _consumeCredentialClaimKey(
+        RaterRegistry.HumanCredentialProvider provider,
+        bytes32 nullifierHash,
+        bytes32 credentialKey
+    ) internal returns (bytes32) {
         if (provider == RaterRegistry.HumanCredentialProvider.WorldIdV4) {
             return raterRegistry.consumeWorldIdV4LaunchNullifier(nullifierHash);
         }
-        return _credentialClaimKey(provider, nullifierHash);
+        return credentialKey;
     }
 
     function _credentialClaimKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)

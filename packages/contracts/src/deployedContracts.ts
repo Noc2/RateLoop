@@ -27201,19 +27201,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "ClusterPayoutOracleUpdated",
-          inputs: [
-            {
-              name: "clusterPayoutOracle",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "EarnedRaterRewardCreditFinalized",
           inputs: [
             {
@@ -27752,19 +27739,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RaterRegistryUpdated",
-          inputs: [
-            {
-              name: "raterRegistry",
-              type: "address",
-              indexed: true,
-              internalType: "address",
             },
           ],
           anonymous: false,
@@ -52799,19 +52773,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "ClusterPayoutOracleUpdated",
-          inputs: [
-            {
-              name: "clusterPayoutOracle",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "EarnedRaterRewardCreditFinalized",
           inputs: [
             {
@@ -53350,19 +53311,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RaterRegistryUpdated",
-          inputs: [
-            {
-              name: "raterRegistry",
-              type: "address",
-              indexed: true,
-              internalType: "address",
             },
           ],
           anonymous: false,
