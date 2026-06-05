@@ -12,20 +12,28 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 import { deployInitializedProtocolConfig } from "./helpers/VotingTestHelpers.sol";
 
 contract MockRewardDistributorForConfig {
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
+        keccak256("rateloop.round-reward-distributor.v1");
     address public votingEngine;
+    address public registry;
+    address public lrepToken;
     bool public claimAccountingStarted;
 
     constructor(address votingEngine_) {
         votingEngine = votingEngine_;
+        if (votingEngine_.code.length != 0) {
+            try MockVotingEngineForConfig(votingEngine_).registry() returns (address registry_) {
+                registry = registry_;
+            } catch { }
+            try MockVotingEngineForConfig(votingEngine_).lrepToken() returns (address lrepToken_) {
+                lrepToken = lrepToken_;
+            } catch { }
+        }
     }
 }
 
-contract MockRewardDistributorWithClaimStateForConfig {
-    address public votingEngine;
-    bool public claimAccountingStarted;
-
-    constructor(address votingEngine_, bool claimAccountingStarted_) {
-        votingEngine = votingEngine_;
+contract MockRewardDistributorWithClaimStateForConfig is MockRewardDistributorForConfig {
+    constructor(address votingEngine_, bool claimAccountingStarted_) MockRewardDistributorForConfig(votingEngine_) {
         claimAccountingStarted = claimAccountingStarted_;
     }
 
@@ -37,16 +45,44 @@ contract MockRewardDistributorWithClaimStateForConfig {
 contract MockRewardDistributorWithoutEngineForConfig { }
 
 contract MockRewardDistributorWithoutClaimStateForConfig {
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
+        keccak256("rateloop.round-reward-distributor.v1");
     address public votingEngine;
+    address public registry;
+    address public lrepToken;
 
     constructor(address votingEngine_) {
         votingEngine = votingEngine_;
+        if (votingEngine_.code.length != 0) {
+            try MockVotingEngineForConfig(votingEngine_).registry() returns (address registry_) {
+                registry = registry_;
+            } catch { }
+            try MockVotingEngineForConfig(votingEngine_).lrepToken() returns (address lrepToken_) {
+                lrepToken = lrepToken_;
+            } catch { }
+        }
     }
 }
 
 contract MockRewardDistributorRevertingEngineForConfig {
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
+        keccak256("rateloop.round-reward-distributor.v1");
+    bool public claimAccountingStarted;
+
     function votingEngine() external pure returns (address) {
         revert("mock engine revert");
+    }
+}
+
+contract MockVotingEngineForConfig {
+    address public protocolConfig;
+    address public registry;
+    address public lrepToken;
+
+    constructor(address protocolConfig_, address registry_, address lrepToken_) {
+        protocolConfig = protocolConfig_;
+        registry = registry_;
+        lrepToken = lrepToken_;
     }
 }
 
@@ -185,6 +221,7 @@ contract MockBrokenAdvisoryVoteRecorderForConfig {
 
 contract ProtocolConfigBranchesTest is Test {
     bytes32 internal constant QUICKNET_CHAIN_HASH = 0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
+    address internal constant MOCK_LREP = address(0xA11CE);
 
     event DrandConfigUpdated(bytes32 drandChainHash, uint64 genesisTime, uint64 period);
     event RewardDistributorUpdated(address rewardDistributor);
@@ -222,6 +259,10 @@ contract ProtocolConfigBranchesTest is Test {
         uint256 minVoterCap,
         uint256 maxVoterCap
     );
+
+    function _newRewardEngine(ProtocolConfig config) internal returns (address) {
+        return address(new MockVotingEngineForConfig(address(config), address(this), MOCK_LREP));
+    }
 
     function test_DefaultDrandConfig_UsesQuicknetValues() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
@@ -527,7 +568,7 @@ contract ProtocolConfigBranchesTest is Test {
     function test_SetRewardDistributor_RejectsReplacementForSameEngine() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        address engine = address(0xE641);
+        address engine = _newRewardEngine(config);
         address firstDistributor = address(new MockRewardDistributorForConfig(engine));
         address replacementDistributor = address(new MockRewardDistributorForConfig(engine));
 
@@ -571,9 +612,22 @@ contract ProtocolConfigBranchesTest is Test {
         assertEq(config.rewardDistributor(), address(0));
     }
 
+    function test_SetRewardDistributor_RejectsEngineForDifferentProtocolConfig() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+        ProtocolConfig otherConfig = deployInitializedProtocolConfig(address(0xBEEF));
+        address engine = address(new MockVotingEngineForConfig(address(otherConfig), address(this), MOCK_LREP));
+        address distributor = address(new MockRewardDistributorForConfig(engine));
+
+        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
+        config.setRewardDistributor(distributor);
+
+        assertFalse(config.isRewardDistributor(distributor));
+        assertEq(config.rewardDistributor(), address(0));
+    }
+
     function test_SetRewardDistributor_RejectsMissingOrStartedClaimAccounting() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address engine = address(0xE641);
+        address engine = _newRewardEngine(config);
         address missingClaimStateDistributor = address(new MockRewardDistributorWithoutClaimStateForConfig(engine));
         address claimStartedDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, true));
 
@@ -605,8 +659,8 @@ contract ProtocolConfigBranchesTest is Test {
     function test_SetRewardDistributor_KeepsPreviousEngineAuthorized() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        address firstEngine = address(0xE641);
-        address replacementEngine = address(0xE642);
+        address firstEngine = _newRewardEngine(config);
+        address replacementEngine = _newRewardEngine(config);
         address firstDistributor = address(new MockRewardDistributorForConfig(firstEngine));
         address replacementDistributor = address(new MockRewardDistributorForConfig(replacementEngine));
 
@@ -622,7 +676,7 @@ contract ProtocolConfigBranchesTest is Test {
 
     function test_RevokeRewardDistributor_RemovesAuthorization() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
-        address distributor = address(new MockRewardDistributorForConfig(address(0xE641)));
+        address distributor = address(new MockRewardDistributorForConfig(_newRewardEngine(config)));
         config.setRewardDistributor(distributor);
 
         vm.expectEmit(false, false, false, true);
@@ -634,7 +688,7 @@ contract ProtocolConfigBranchesTest is Test {
     function test_RevokeRewardDistributor_KeepsSameEngineReplacementBlocked() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        address engine = address(0xE641);
+        address engine = _newRewardEngine(config);
         address firstDistributor = address(new MockRewardDistributorForConfig(engine));
         address replacementDistributor = address(new MockRewardDistributorForConfig(engine));
 
@@ -657,7 +711,7 @@ contract ProtocolConfigBranchesTest is Test {
     function test_ReplaceRevokedRewardDistributor_AllowsDefaultAdminBeforeClaims() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        address engine = address(0xE641);
+        address engine = _newRewardEngine(config);
         address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
         address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
 
@@ -682,7 +736,7 @@ contract ProtocolConfigBranchesTest is Test {
     function test_ReplaceRevokedRewardDistributor_RequiresConfiguredPayoutIntegrations() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        address engine = address(0xE641);
+        address engine = _newRewardEngine(config);
         address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
         address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
         MockFrontendRegistryForConfig frontend = new MockFrontendRegistryForConfig();
@@ -710,7 +764,7 @@ contract ProtocolConfigBranchesTest is Test {
     function test_ReplaceRevokedRewardDistributor_RejectsActiveOrClaimStartedDistributor() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        address engine = address(0xE641);
+        address engine = _newRewardEngine(config);
         MockRewardDistributorWithClaimStateForConfig firstDistributorContract =
             new MockRewardDistributorWithClaimStateForConfig(engine, false);
         address firstDistributor = address(firstDistributorContract);
@@ -734,10 +788,10 @@ contract ProtocolConfigBranchesTest is Test {
     function test_ReplaceRevokedRewardDistributor_RejectsWrongEngineOrMissingClaimStateAbi() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
-        address engine = address(0xE641);
+        address engine = _newRewardEngine(config);
         address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
         address differentEngineDistributor =
-            address(new MockRewardDistributorWithClaimStateForConfig(address(0xE642), false));
+            address(new MockRewardDistributorWithClaimStateForConfig(_newRewardEngine(config), false));
         address missingClaimStateDistributor = address(new MockRewardDistributorWithoutClaimStateForConfig(engine));
 
         config.setRewardDistributor(firstDistributor);
@@ -755,7 +809,7 @@ contract ProtocolConfigBranchesTest is Test {
         address governance = address(0xB0B);
         ProtocolConfig config = deployInitializedProtocolConfig(deployAdmin, governance);
 
-        address engine = address(0xE641);
+        address engine = _newRewardEngine(config);
         address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
         address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
 

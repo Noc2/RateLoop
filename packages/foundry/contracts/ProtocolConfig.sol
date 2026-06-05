@@ -14,6 +14,12 @@ import { RaterRegistry } from "./RaterRegistry.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
 
+interface IRewardDistributorVotingEngineShape {
+    function protocolConfig() external view returns (address);
+    function registry() external view returns (address);
+    function lrepToken() external view returns (address);
+}
+
 /// @title ProtocolConfig
 /// @notice Governance-controlled configuration and address book for RoundVotingEngine.
 /// @dev Upgradeable behind a transparent proxy, so storage layout must remain stable across future upgrades.
@@ -28,6 +34,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint16 internal constant MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP = 100;
     uint16 internal constant MAX_CREATOR_ROUND_VOTERS = 200;
     uint8 internal constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
+    bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
+        keccak256("rateloop.round-reward-distributor.v1");
 
     /// @notice drand `quicknet` (mainnet) chain hash. Used by the legacy `initialize` / `initializeWithTreasury`
     ///         paths for back-compat with existing tests and mainnet (chainId 480) deployments.
@@ -456,6 +464,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (value == address(0)) revert InvalidAddress();
         address engine = _readRewardDistributorVotingEngine(value);
         if (_readRewardDistributorClaimAccountingStarted(value)) revert InvalidConfig();
+        _validateRewardDistributorShape(value, engine);
         address previousForEngine = rewardDistributorForVotingEngine[engine];
         if (previousForEngine != address(0) && previousForEngine != value) revert InvalidConfig();
         rewardDistributorVotingEngine[value] = engine;
@@ -487,7 +496,49 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         }
     }
 
+    function _validateRewardDistributorShape(address value, address engine) internal view {
+        try IRoundRewardDistributor(value).RATELOOP_REWARD_DISTRIBUTOR_MARKER() returns (bytes32 marker) {
+            if (marker != RATELOOP_REWARD_DISTRIBUTOR_MARKER) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+
+        if (engine.code.length == 0) revert InvalidConfig();
+        address engineRegistry;
+        address engineLrepToken;
+        try IRewardDistributorVotingEngineShape(engine).protocolConfig() returns (address engineConfig) {
+            if (engineConfig != address(this)) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+        try IRewardDistributorVotingEngineShape(engine).registry() returns (address registry_) {
+            if (registry_ == address(0)) revert InvalidConfig();
+            engineRegistry = registry_;
+        } catch {
+            revert InvalidConfig();
+        }
+        try IRewardDistributorVotingEngineShape(engine).lrepToken() returns (address lrepToken_) {
+            if (lrepToken_ == address(0)) revert InvalidConfig();
+            engineLrepToken = lrepToken_;
+        } catch {
+            revert InvalidConfig();
+        }
+
+        try IRoundRewardDistributor(value).registry() returns (address distributorRegistry) {
+            if (distributorRegistry != engineRegistry) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+        try IRoundRewardDistributor(value).lrepToken() returns (address distributorLrepToken) {
+            if (distributorLrepToken != engineLrepToken) revert InvalidConfig();
+        } catch {
+            revert InvalidConfig();
+        }
+    }
+
     function _validateRewardDistributorReplacementIntegrations(address value, address engine) internal view {
+        _validateRewardDistributorShape(value, engine);
+
         address frontendRegistry_ = frontendRegistry;
         if (frontendRegistry_ != address(0)) {
             try IFrontendRegistry(frontendRegistry_).feeCreditorForEngine(engine) returns (address creditor) {

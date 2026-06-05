@@ -28,6 +28,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
+        keccak256("rateloop.round-reward-distributor.v1");
+
     // --- Custom Errors ---
     error RoundNotSettled();
     error AlreadyClaimed();

@@ -17,14 +17,34 @@ import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MockVotingEngineForFrontendGas {
+    address public immutable protocolConfig;
+
+    constructor(address protocolConfig_) {
+        protocolConfig = protocolConfig_;
+    }
+
     function transferReward(address, uint256) external { }
 }
 
 contract MockRewardDistributorForFrontendGas {
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
+        keccak256("rateloop.round-reward-distributor.v1");
     address public immutable votingEngine;
 
     constructor(address votingEngine_) {
         votingEngine = votingEngine_;
+    }
+}
+
+contract MockFeeCreditorProtocolConfigForFrontendGas {
+    mapping(address => mapping(address => bool)) public rewardDistributorForEngine;
+
+    function setRewardDistributorForEngine(address distributor, address engine, bool authorized) external {
+        rewardDistributorForEngine[distributor][engine] = authorized;
+    }
+
+    function isRewardDistributorForEngine(address distributor, address engine) external view returns (bool) {
+        return rewardDistributorForEngine[distributor][engine];
     }
 }
 
@@ -323,6 +343,7 @@ contract FrontendTransactionGasEstimatesTest is Test {
     LoopReputation public lrepToken;
     MockVotingEngineForFrontendGas public votingEngine;
     MockRewardDistributorForFrontendGas public rewardDistributor;
+    MockFeeCreditorProtocolConfigForFrontendGas public protocolConfig;
 
     address public admin = address(1);
     address public frontend = address(3);
@@ -335,9 +356,11 @@ contract FrontendTransactionGasEstimatesTest is Test {
         lrepToken = new LoopReputation(admin, admin);
         lrepToken.grantRole(lrepToken.MINTER_ROLE(), admin);
 
-        votingEngine = new MockVotingEngineForFrontendGas();
+        protocolConfig = new MockFeeCreditorProtocolConfigForFrontendGas();
+        votingEngine = new MockVotingEngineForFrontendGas(address(protocolConfig));
         rewardDistributor = new MockRewardDistributorForFrontendGas(address(votingEngine));
         feeCreditor = address(rewardDistributor);
+        protocolConfig.setRewardDistributorForEngine(feeCreditor, address(votingEngine), true);
 
         FrontendRegistry impl = new FrontendRegistry();
         registry = FrontendRegistry(

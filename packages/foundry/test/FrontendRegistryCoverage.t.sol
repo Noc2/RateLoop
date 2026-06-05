@@ -15,9 +15,11 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 
 contract MockVotingEngine_FR is IRoundVotingEngine {
     LoopReputation public immutable lrepToken;
+    address public immutable protocolConfig;
 
-    constructor(LoopReputation lrepToken_) {
+    constructor(LoopReputation lrepToken_, address protocolConfig_) {
         lrepToken = lrepToken_;
+        protocolConfig = protocolConfig_;
     }
 
     function hasCommits(uint256) external pure override returns (bool) {
@@ -64,10 +66,24 @@ contract MockVotingEngine_FR is IRoundVotingEngine {
 }
 
 contract MockRewardDistributor_FR {
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
+        keccak256("rateloop.round-reward-distributor.v1");
     address public immutable votingEngine;
 
     constructor(address votingEngine_) {
         votingEngine = votingEngine_;
+    }
+}
+
+contract MockFeeCreditorProtocolConfig_FR {
+    mapping(address => mapping(address => bool)) public rewardDistributorForEngine;
+
+    function setRewardDistributorForEngine(address distributor, address engine, bool authorized) external {
+        rewardDistributorForEngine[distributor][engine] = authorized;
+    }
+
+    function isRewardDistributorForEngine(address distributor, address engine) external view returns (bool) {
+        return rewardDistributorForEngine[distributor][engine];
     }
 }
 
@@ -83,6 +99,7 @@ contract FrontendRegistryCoverageTest is Test {
     LoopReputation public lrepToken;
     MockVotingEngine_FR public votingEngine;
     MockRewardDistributor_FR public rewardDistributor;
+    MockFeeCreditorProtocolConfig_FR public protocolConfig;
 
     address public admin = address(1);
     address public governance = address(10);
@@ -101,9 +118,11 @@ contract FrontendRegistryCoverageTest is Test {
         lrepToken = new LoopReputation(admin, admin);
         lrepToken.grantRole(lrepToken.MINTER_ROLE(), admin);
 
-        votingEngine = new MockVotingEngine_FR(lrepToken);
+        protocolConfig = new MockFeeCreditorProtocolConfig_FR();
+        votingEngine = new MockVotingEngine_FR(lrepToken, address(protocolConfig));
         rewardDistributor = new MockRewardDistributor_FR(address(votingEngine));
         feeCreditor = address(rewardDistributor);
+        protocolConfig.setRewardDistributorForEngine(feeCreditor, address(votingEngine), true);
 
         FrontendRegistry impl = new FrontendRegistry();
         registry = FrontendRegistry(
@@ -708,6 +727,7 @@ contract FrontendRegistryCoverageTest is Test {
         vm.stopPrank();
 
         MockRewardDistributor_FR newCreditor = new MockRewardDistributor_FR(address(votingEngine));
+        protocolConfig.setRewardDistributorForEngine(address(newCreditor), address(votingEngine), true);
         vm.prank(governance);
         splitRoleRegistry.addFeeCreditor(address(newCreditor));
         // Rotation revokes the prior creditor's role so a stale distributor can no longer

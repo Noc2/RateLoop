@@ -12,9 +12,11 @@ import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 /// @title Mock RoundVotingEngine for testing FrontendRegistry
 contract MockVotingEngine is IRoundVotingEngine {
     LoopReputation public immutable lrepToken;
+    address public immutable protocolConfig;
 
-    constructor(LoopReputation lrepToken_) {
+    constructor(LoopReputation lrepToken_, address protocolConfig_) {
         lrepToken = lrepToken_;
+        protocolConfig = protocolConfig_;
     }
 
     function hasCommits(uint256) external pure override returns (bool) {
@@ -61,10 +63,32 @@ contract MockVotingEngine is IRoundVotingEngine {
 }
 
 contract MockRewardDistributor {
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
+        keccak256("rateloop.round-reward-distributor.v1");
     address public immutable votingEngine;
 
     constructor(address votingEngine_) {
         votingEngine = votingEngine_;
+    }
+}
+
+contract MockUnmarkedRewardDistributor {
+    address public immutable votingEngine;
+
+    constructor(address votingEngine_) {
+        votingEngine = votingEngine_;
+    }
+}
+
+contract MockFeeCreditorProtocolConfig {
+    mapping(address => mapping(address => bool)) public rewardDistributorForEngine;
+
+    function setRewardDistributorForEngine(address distributor, address engine, bool authorized) external {
+        rewardDistributorForEngine[distributor][engine] = authorized;
+    }
+
+    function isRewardDistributorForEngine(address distributor, address engine) external view returns (bool) {
+        return rewardDistributorForEngine[distributor][engine];
     }
 }
 
@@ -80,6 +104,7 @@ contract FrontendRegistryTest is Test {
     LoopReputation public lrepToken;
     MockVotingEngine public votingEngine;
     MockRewardDistributor public rewardDistributor;
+    MockFeeCreditorProtocolConfig public protocolConfig;
 
     address public admin = address(1);
     address public frontend1 = address(3);
@@ -99,9 +124,11 @@ contract FrontendRegistryTest is Test {
         lrepToken.grantRole(lrepToken.MINTER_ROLE(), admin);
 
         // Deploy mock voting engine
-        votingEngine = new MockVotingEngine(lrepToken);
+        protocolConfig = new MockFeeCreditorProtocolConfig();
+        votingEngine = new MockVotingEngine(lrepToken, address(protocolConfig));
         rewardDistributor = new MockRewardDistributor(address(votingEngine));
         feeCreditor = address(rewardDistributor);
+        protocolConfig.setRewardDistributorForEngine(feeCreditor, address(votingEngine), true);
 
         // Deploy registry behind an ERC1967 proxy for upgradeable storage behavior
         FrontendRegistry impl = new FrontendRegistry();
@@ -889,7 +916,7 @@ contract FrontendRegistryTest is Test {
     // --- Admin Functions Tests ---
 
     function test_SetVotingEngine() public {
-        address newVotingEngine = address(new MockVotingEngine(lrepToken));
+        address newVotingEngine = address(new MockVotingEngine(lrepToken, address(protocolConfig)));
 
         vm.prank(admin);
         registry.removeFeeCreditor(feeCreditor);
@@ -903,7 +930,7 @@ contract FrontendRegistryTest is Test {
     }
 
     function test_SetVotingEngine_PreservesHistoricalFeeCreditor() public {
-        address newVotingEngine = address(new MockVotingEngine(lrepToken));
+        address newVotingEngine = address(new MockVotingEngine(lrepToken, address(protocolConfig)));
 
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
@@ -980,6 +1007,7 @@ contract FrontendRegistryTest is Test {
 
     function test_AddAndRemoveFeeCreditor() public {
         address newCreditor = address(new MockRewardDistributor(address(votingEngine)));
+        protocolConfig.setRewardDistributorForEngine(newCreditor, address(votingEngine), true);
 
         vm.startPrank(admin);
         registry.addFeeCreditor(newCreditor);
@@ -1015,6 +1043,22 @@ contract FrontendRegistryTest is Test {
         vm.prank(admin);
         vm.expectRevert("Invalid fee creditor");
         registry.addFeeCreditor(address(100));
+    }
+
+    function test_AddFeeCreditor_RejectsUnmarkedDistributor() public {
+        address unmarkedCreditor = address(new MockUnmarkedRewardDistributor(address(votingEngine)));
+
+        vm.prank(admin);
+        vm.expectRevert("Invalid fee creditor");
+        registry.addFeeCreditor(unmarkedCreditor);
+    }
+
+    function test_AddFeeCreditor_RejectsUnconfiguredDistributor() public {
+        address unconfiguredCreditor = address(new MockRewardDistributor(address(votingEngine)));
+
+        vm.prank(admin);
+        vm.expectRevert("Invalid fee creditor");
+        registry.addFeeCreditor(unconfiguredCreditor);
     }
 
     function _completeDeregister(address frontend) internal {
