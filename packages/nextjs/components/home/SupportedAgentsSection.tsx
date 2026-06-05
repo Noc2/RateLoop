@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircleIcon, ClipboardDocumentIcon, WrenchScrewdriverIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import {
   type AgentInstallSnippet,
   type AgentInstallSnippetKind,
@@ -272,9 +273,15 @@ export function SupportedAgentsSection() {
                                   <span className="rounded-md bg-base-content/[0.08] px-2.5 py-1 text-xs font-semibold text-base-content/70">
                                     {getSnippetKindLabel(snippet.kind)}
                                   </span>
-                                  <h3 className="text-base font-bold text-base-content">{snippet.label}</h3>
+                                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                                    <h3 className="text-base font-bold text-base-content">{snippet.label}</h3>
+                                    <InfoTooltip
+                                      text={snippet.description}
+                                      position="top"
+                                      className="[&>svg]:text-base-content/45 [&>svg]:hover:text-base-content/65"
+                                    />
+                                  </span>
                                 </div>
-                                <p className="mt-2 text-sm leading-6 text-base-content/62">{snippet.description}</p>
                                 <p className="mt-2 font-mono text-xs uppercase tracking-widest text-base-content/42">
                                   {getSnippetPreview(snippet.kind)}
                                 </p>
