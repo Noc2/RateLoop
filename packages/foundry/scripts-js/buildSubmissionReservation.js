@@ -34,8 +34,12 @@ const DEFAULT_QUESTION_METADATA_HASH =
 const DEFAULT_RESULT_SPEC_HASH =
   "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
-const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v4"));
-const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v6"));
+const QUESTION_CONTEXT_DOMAIN = keccak256(
+  toBytes("rateloop-question-context-v4")
+);
+const QUESTION_REVEAL_DOMAIN = keccak256(
+  toBytes("rateloop-question-reveal-v6")
+);
 const DEFAULT_ROUND_CONFIG = {
   epochDuration: 20 * 60,
   maxDuration: 20 * 60,

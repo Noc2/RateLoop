@@ -11,9 +11,15 @@ const DEFAULT_QUESTION_METADATA_HASH =
 const DEFAULT_RESULT_SPEC_HASH =
   "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
-const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(toBytes("rateloop-question-bundle-item-v4"));
-const QUESTION_BUNDLE_DOMAIN = keccak256(toBytes("rateloop-question-bundle-v4"));
-const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v5"));
+const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(
+  toBytes("rateloop-question-bundle-item-v4")
+);
+const QUESTION_BUNDLE_DOMAIN = keccak256(
+  toBytes("rateloop-question-bundle-v4")
+);
+const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(
+  toBytes("rateloop-question-bundle-reveal-v5")
+);
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const UPLOADED_IMAGE_URL_PATTERN =
   /^https:\/\/[^\s?#]+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp#sha256=0x[a-fA-F0-9]{64}$/;
@@ -270,8 +276,18 @@ function buildQuestionBundleHash(questions) {
           QUESTION_BUNDLE_ITEM_DOMAIN,
           keccak256(
             encodeAbiParameters(
-              [{ type: "string" }, { type: "string" }, { type: "string" }, { type: "string" }],
-              [question.contextUrl, question.title, question.description, question.tags]
+              [
+                { type: "string" },
+                { type: "string" },
+                { type: "string" },
+                { type: "string" },
+              ],
+              [
+                question.contextUrl,
+                question.title,
+                question.description,
+                question.tags,
+              ]
             )
           ),
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
