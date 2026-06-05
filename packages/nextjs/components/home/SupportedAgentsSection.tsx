@@ -166,12 +166,12 @@ export function SupportedAgentsSection() {
   };
 
   return (
-    <section className="relative z-20 mt-14 w-full sm:mt-16 lg:mt-20 xl:mt-24">
-      <div className="text-center">
+    <section className="relative z-20 mt-10 w-full sm:mt-12 lg:mt-32 xl:mt-40">
+      <div className="mb-4 text-center sm:mb-5">
         <p className="text-base leading-7 text-base-content/70 sm:text-lg">Use RateLoop with your favorite AI agent</p>
       </div>
 
-      <div className="mx-auto mt-7 flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:gap-2.5 sm:px-0 lg:gap-3">
+      <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 px-4 pb-1 sm:flex-nowrap sm:gap-2.5 sm:px-0 lg:gap-3">
         {RATELOOP_AGENT_INSTALL_TARGETS.map(agent => {
           const isSelected = activeAgent?.name === agent.name;
           return (
