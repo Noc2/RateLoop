@@ -685,8 +685,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         lrepToken.approve(rewardEscrow, rewardAmount);
 
-        (, bytes32 submissionKey) =
-            registry.previewQuestionSubmissionKey(url, imageUrls, videoUrl, title, description, tags, categoryId);
+        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+            url, imageUrls, videoUrl, title, description, tags, categoryId, _emptySubmissionDetails()
+        );
         bytes32 salt = _contentSubmissionSalt(url, submitter);
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
@@ -712,6 +713,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             roundConfig,
@@ -1194,7 +1196,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
                 block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, settlementPrevrandao
             )
         );
-        assertNotEq(engine.roundRbtsScoreSeed(contentId, roundId), fallbackScoreSeed, "score seed must not use fallback");
+        assertNotEq(
+            engine.roundRbtsScoreSeed(contentId, roundId), fallbackScoreSeed, "score seed must not use fallback"
+        );
         assertNotEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "refreshed seed has sampler seed");
     }
 

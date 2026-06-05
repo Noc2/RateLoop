@@ -921,7 +921,14 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 200
         });
         (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
-            "https://example.com/context", imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID
+            "https://example.com/context",
+            imageUrls,
+            "",
+            QUESTION,
+            DESCRIPTION,
+            TAGS,
+            CATEGORY_ID,
+            _emptySubmissionDetails()
         );
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
@@ -953,6 +960,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             DESCRIPTION,
             TAGS,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             roundConfig,
@@ -4117,8 +4125,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         raterIdentityRegistry.setDelegate(agentWallet);
         usdc.mint(agentWallet, REWARD_POOL_AMOUNT);
 
-        (, bytes32 submissionKey) =
-            registry.previewQuestionSubmissionKey(contextUrl, imageUrls, "", title, description, tags, CATEGORY_ID);
+        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+            contextUrl, imageUrls, "", title, description, tags, CATEGORY_ID, _emptySubmissionDetails()
+        );
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
             _submissionMediaHash(imageUrls, ""),
@@ -4149,6 +4158,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             description,
             tags,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             roundConfig,
@@ -4198,6 +4208,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.description,
             question.tags,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             question.salt,
             question.rewardTerms,
             question.roundConfig,
@@ -4235,6 +4246,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.description,
             question.tags,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             question.salt,
             question.rewardTerms,
             question.roundConfig,
@@ -4271,6 +4283,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.description,
             question.tags,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             question.salt,
             question.rewardTerms,
             question.roundConfig,
@@ -4333,6 +4346,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.description,
             question.tags,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             question.salt,
             question.rewardTerms,
             question.roundConfig,
@@ -4378,6 +4392,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.description,
             question.tags,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             question.salt,
             question.rewardTerms,
             question.roundConfig,
@@ -4450,6 +4465,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.description,
             question.tags,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             question.salt,
             question.rewardTerms,
             question.roundConfig,
@@ -4485,6 +4501,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.description,
             question.tags,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             question.salt,
             question.rewardTerms,
             question.roundConfig,
@@ -4528,6 +4545,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.description,
             question.tags,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             question.salt,
             question.rewardTerms,
             question.roundConfig,
@@ -4757,7 +4775,16 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
         vm.warp(block.timestamp + 1);
         contentId = registry.submitQuestion(
-            contextUrl, imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, salt, _defaultQuestionSpec()
+            contextUrl,
+            imageUrls,
+            "",
+            QUESTION,
+            DESCRIPTION,
+            TAGS,
+            CATEGORY_ID,
+            _emptySubmissionDetails(),
+            salt,
+            _defaultQuestionSpec()
         );
         vm.stopPrank();
     }
@@ -4782,8 +4809,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             abi.encode(contextUrl, mediaUrl, QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, submitter, block.timestamp)
         );
 
-        (, bytes32 submissionKey) =
-            registry.previewQuestionSubmissionKey(contextUrl, imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID);
+        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+            contextUrl, imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
+        );
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
@@ -4819,6 +4847,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             DESCRIPTION,
             TAGS,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             salt,
             _defaultSubmissionRewardTerms(registry),
             roundConfig,
@@ -4947,7 +4976,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.title,
             question.description,
             question.tags,
-            CATEGORY_ID
+            CATEGORY_ID,
+            _emptySubmissionDetails()
         );
         revealCommitment = _questionRevealCommitment(
             submissionKey,
@@ -4991,6 +5021,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 metadata,
                 question.imageUrls,
                 "",
+            _emptySubmissionDetails(),
                 question.salt,
                 question.rewardTerms,
                 question.roundConfig,
@@ -5032,8 +5063,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         activeTlockContentRegistry = registry;
 
         usdc.mint(agentWallet, rewardTerms.amount);
-        (, bytes32 submissionKey) =
-            registry.previewQuestionSubmissionKey(contextUrl, imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID);
+        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+            contextUrl, imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
+        );
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
             _submissionMediaHash(imageUrls, ""),
@@ -5059,6 +5091,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             DESCRIPTION,
             TAGS,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             roundConfig,

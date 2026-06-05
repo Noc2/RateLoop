@@ -72,6 +72,23 @@ export const X402QuestionSubmitterAbi = [
         "internalType": "string"
       },
       {
+        "name": "details",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionDetails",
+        "components": [
+          {
+            "name": "detailsUrl",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "detailsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
         "name": "salt",
         "type": "bytes32",
         "internalType": "bytes32"
@@ -322,6 +339,23 @@ export const X402QuestionSubmitterAbi = [
         "name": "categoryId",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "details",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionDetails",
+        "components": [
+          {
+            "name": "detailsUrl",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "detailsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
       },
       {
         "name": "salt",

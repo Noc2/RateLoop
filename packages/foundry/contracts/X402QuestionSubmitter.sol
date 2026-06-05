@@ -14,7 +14,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
     uint8 internal constant REWARD_ASSET_USDC = 1;
-    bytes32 internal constant X402_QUESTION_PAYMENT_DOMAIN = keccak256("rateloop-x402-question-payment-v2");
+    bytes32 internal constant X402_QUESTION_PAYMENT_DOMAIN = keccak256("rateloop-x402-question-payment-v3");
 
     ContentRegistry public immutable registry;
     IERC20 public immutable usdcToken;
@@ -58,6 +58,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         string memory description,
         string memory tags,
         uint256 categoryId,
+        ContentRegistry.SubmissionDetails memory details,
         bytes32 salt,
         ContentRegistry.SubmissionRewardTerms memory rewardTerms,
         RoundLib.RoundConfig memory roundConfig,
@@ -76,6 +77,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
                     }),
                     imageUrls,
                     videoUrl,
+                    details,
                     salt,
                     rewardTerms,
                     roundConfig,
@@ -117,6 +119,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             description,
             tags,
             categoryId,
+            details,
             salt,
             rewardTerms,
             roundConfig,
@@ -133,6 +136,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         ContentRegistry.SubmissionMetadata memory metadata,
         string[] memory imageUrls,
         string memory videoUrl,
+        ContentRegistry.SubmissionDetails memory details,
         bytes32 salt,
         ContentRegistry.SubmissionRewardTerms memory rewardTerms,
         RoundLib.RoundConfig memory roundConfig,
@@ -155,7 +159,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
                 value,
                 validAfter,
                 validBefore,
-                _hashSubmissionPayload(metadata, imageUrls, videoUrl, salt),
+                _hashSubmissionPayload(metadata, imageUrls, videoUrl, details, salt),
                 _hashRewardTerms(rewardTerms),
                 _hashRoundConfig(roundConfig),
                 spec.questionMetadataHash,
@@ -168,6 +172,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         ContentRegistry.SubmissionMetadata memory metadata,
         string[] memory imageUrls,
         string memory videoUrl,
+        ContentRegistry.SubmissionDetails memory details,
         bytes32 salt
     ) private pure returns (bytes32) {
         return keccak256(
@@ -175,6 +180,8 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
                 keccak256(bytes(metadata.url)),
                 _hashStringArray(imageUrls),
                 keccak256(bytes(videoUrl)),
+                keccak256(bytes(details.detailsUrl)),
+                details.detailsHash,
                 keccak256(bytes(metadata.title)),
                 keccak256(bytes(metadata.description)),
                 keccak256(bytes(metadata.tags)),

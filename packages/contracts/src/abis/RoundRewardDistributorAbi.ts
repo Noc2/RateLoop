@@ -19,6 +19,19 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "function",
+    "name": "RATELOOP_REWARD_DISTRIBUTOR_MARKER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "STALE_REWARD_FINALIZATION_DELAY",
     "inputs": [],
     "outputs": [

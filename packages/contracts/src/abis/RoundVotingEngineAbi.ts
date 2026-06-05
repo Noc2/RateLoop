@@ -1153,6 +1153,29 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "rewardDistributorConfigShape",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "registry_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "lrepToken_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "protocolConfig_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "roundClusterPayoutReadyAt",
     "inputs": [
       {

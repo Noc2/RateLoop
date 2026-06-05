@@ -59,7 +59,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         string memory imageUrl = _submissionImageUrl("gas-submit");
         string[] memory imageUrls = _singleImageUrls(imageUrl);
         (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
-            "https://example.com/context", imageUrls, "", "test goal", "test goal", "test", 1
+            "https://example.com/context", imageUrls, "", "test goal", "test goal", "test", 1, _emptySubmissionDetails()
         );
         bytes32 salt = keccak256(
             abi.encode(imageUrl, "test goal", "test goal", "test", uint256(1), submitter, block.timestamp, block.number)
@@ -76,7 +76,7 @@ contract GasBudgetTest is RoundIntegrationTest {
             submitter,
             address(registry),
             abi.encodeWithSignature(
-                "submitQuestion(string,string[],string,string,string,string,uint256,bytes32,(bytes32,bytes32))",
+                "submitQuestion(string,string[],string,string,string,string,uint256,(string,bytes32),bytes32,(bytes32,bytes32))",
                 "https://example.com/context",
                 imageUrls,
                 "",
@@ -84,6 +84,7 @@ contract GasBudgetTest is RoundIntegrationTest {
                 "test goal",
                 "test",
                 1,
+                _emptySubmissionDetails(),
                 salt,
                 _defaultQuestionSpec()
             )

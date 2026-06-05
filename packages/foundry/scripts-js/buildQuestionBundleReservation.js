@@ -9,6 +9,7 @@ const DEFAULT_QUESTION_METADATA_HASH =
   "0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd";
 const DEFAULT_RESULT_SPEC_HASH =
   "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const UPLOADED_IMAGE_URL_PATTERN =
   /^https:\/\/\S+\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp(?:[?#]\S*)?$/;
@@ -16,7 +17,7 @@ const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0;
 
 const abi = parseAbi([
-  "function submitQuestionBundleWithRewardAndRoundConfig((string contextUrl,string[] imageUrls,string videoUrl,string title,string description,string tags,uint256 categoryId,bytes32 salt,(bytes32 questionMetadataHash,bytes32 resultSpecHash) spec)[] questions,(uint8 asset,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility) rewardTerms,(uint32 epochDuration,uint32 maxDuration,uint16 minVoters,uint16 maxVoters) roundConfig)",
+  "function submitQuestionBundleWithRewardAndRoundConfig((string contextUrl,string[] imageUrls,string videoUrl,string title,string description,string tags,uint256 categoryId,(string detailsUrl,bytes32 detailsHash) details,bytes32 salt,(bytes32 questionMetadataHash,bytes32 resultSpecHash) spec)[] questions,(uint8 asset,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility) rewardTerms,(uint32 epochDuration,uint32 maxDuration,uint16 minVoters,uint16 maxVoters) roundConfig)",
 ]);
 
 function fail(message) {
@@ -174,6 +175,7 @@ function parseQuestionArgs(questionArgs) {
       description,
       tags,
       categoryId: BigInt(categoryId),
+      details: { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH },
       salt,
     });
   }
@@ -236,17 +238,24 @@ function buildSubmissionMediaHash(imageUrls, videoUrl) {
   );
 }
 
+function buildSubmissionDetailsHash(details) {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "bytes32" }],
+      [details.detailsUrl, details.detailsHash]
+    )
+  );
+}
+
 function buildQuestionBundleHash(questions) {
   const questionHashes = questions.map((question, index) =>
     keccak256(
       encodeAbiParameters(
         [
           { type: "string" },
-          { type: "string" },
           { type: "bytes32" },
-          { type: "string" },
-          { type: "string" },
-          { type: "string" },
+          { type: "bytes32" },
+          { type: "bytes32" },
           { type: "uint256" },
           { type: "bytes32" },
           { type: "uint256" },
@@ -254,12 +263,15 @@ function buildQuestionBundleHash(questions) {
           { type: "bytes32" },
         ],
         [
-          "rateloop-question-bundle-item-v2",
-          question.contextUrl,
+          "rateloop-question-bundle-item-v3",
+          keccak256(
+            encodeAbiParameters(
+              [{ type: "string" }, { type: "string" }, { type: "string" }, { type: "string" }],
+              [question.contextUrl, question.title, question.description, question.tags]
+            )
+          ),
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
-          question.title,
-          question.description,
-          question.tags,
+          buildSubmissionDetailsHash(question.details),
           question.categoryId,
           question.salt,
           BigInt(index),
@@ -273,7 +285,7 @@ function buildQuestionBundleHash(questions) {
   return keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "bytes32[]" }],
-      ["rateloop-question-bundle-v2", questionHashes]
+      ["rateloop-question-bundle-v3", questionHashes]
     )
   );
 }

@@ -33,6 +33,7 @@ CONTENT_ONE_ROUND_MAX_VOTERS="3"
 SUBMISSION_BUNDLE_ROUND_MAX_VOTERS="100"
 DEFAULT_QUESTION_METADATA_HASH="0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd"
 DEFAULT_RESULT_SPEC_HASH="0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f"
+EMPTY_DETAILS_HASH="0x0000000000000000000000000000000000000000000000000000000000000000"
 VOTE_STAKE="5000000" # 5 LREP for votes
 # Local estimation can run against latest while Anvil mines the scheduled next timestamp.
 VOTE_COMMIT_GAS_LIMIT="6000000"
@@ -526,8 +527,8 @@ for ((i = 0; i < TOTAL_ITEMS; i++)); do
 
   # 3. Reveal the submission with the same deterministic salt used for the reservation
   echo "  Submitting question: $TITLE ($MEDIA_KIND, bounty: $BOUNTY_AMOUNT, round: ${ROUND_EPOCH_DURATION}s/${ROUND_MIN_VOTERS} voters, context: $CONTEXT_URL, category: $CATEGORY_SLUG -> $CATEGORY_ID)"
-  cast send "$REGISTRY" "submitQuestionWithRewardAndRoundConfig(string,string[],string,string,string,string,uint256,bytes32,(uint8,uint256,uint256,uint256,uint256,uint256,uint256,uint8),(uint32,uint32,uint16,uint16),(bytes32,bytes32))" \
-    "$CONTEXT_URL" "$IMAGE_URLS_ARG" "$VIDEO_URL_ARG" "$TITLE" "$DESCRIPTION" "$TAG" "$CATEGORY_ID" "0x$SALT" \
+  cast send "$REGISTRY" "submitQuestionWithRewardAndRoundConfig(string,string[],string,string,string,string,uint256,(string,bytes32),bytes32,(uint8,uint256,uint256,uint256,uint256,uint256,uint256,uint8),(uint32,uint32,uint16,uint16),(bytes32,bytes32))" \
+    "$CONTEXT_URL" "$IMAGE_URLS_ARG" "$VIDEO_URL_ARG" "$TITLE" "$DESCRIPTION" "$TAG" "$CATEGORY_ID" "(\"\",$EMPTY_DETAILS_HASH)" "0x$SALT" \
     "(0,$BOUNTY_AMOUNT,$SUBMISSION_BOUNTY_REQUIRED_VOTERS,$SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS,$SUBMISSION_BOUNTY_START_BY,$SUBMISSION_BOUNTY_WINDOW_SECONDS,$SUBMISSION_BOUNTY_FEEDBACK_WINDOW_SECONDS,$SUBMISSION_BOUNTY_ELIGIBILITY)" \
     "($ROUND_EPOCH_DURATION,$ROUND_MAX_DURATION,$ROUND_MIN_VOTERS,$ROUND_MAX_VOTERS)" \
     "($DEFAULT_QUESTION_METADATA_HASH,$DEFAULT_RESULT_SPEC_HASH)" \

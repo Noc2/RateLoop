@@ -664,6 +664,23 @@ export const ContentRegistryAbi = [
         "name": "categoryId",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "details",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionDetails",
+        "components": [
+          {
+            "name": "detailsUrl",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "detailsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
       }
     ],
     "outputs": [
@@ -944,6 +961,23 @@ export const ContentRegistryAbi = [
         "internalType": "uint256"
       },
       {
+        "name": "details",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionDetails",
+        "components": [
+          {
+            "name": "detailsUrl",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "detailsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
         "name": "salt",
         "type": "bytes32",
         "internalType": "bytes32"
@@ -1018,6 +1052,23 @@ export const ContentRegistryAbi = [
             "name": "categoryId",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "details",
+            "type": "tuple",
+            "internalType": "struct ContentRegistry.SubmissionDetails",
+            "components": [
+              {
+                "name": "detailsUrl",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "detailsHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ]
           },
           {
             "name": "salt",
@@ -1172,6 +1223,23 @@ export const ContentRegistryAbi = [
         "internalType": "uint256"
       },
       {
+        "name": "details",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionDetails",
+        "components": [
+          {
+            "name": "detailsUrl",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "detailsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
         "name": "salt",
         "type": "bytes32",
         "internalType": "bytes32"
@@ -1320,6 +1388,23 @@ export const ContentRegistryAbi = [
         "name": "categoryId",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "details",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionDetails",
+        "components": [
+          {
+            "name": "detailsUrl",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "detailsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
       },
       {
         "name": "salt",
@@ -1581,6 +1666,31 @@ export const ContentRegistryAbi = [
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ContentDetailsSubmitted",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "detailsUrl",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "detailsHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
       }
     ],
     "anonymous": false

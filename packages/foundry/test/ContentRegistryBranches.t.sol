@@ -47,6 +47,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     uint256 public constant T0 = 1000;
     uint256 public constant STAKE = 5e6;
 
+    event ContentDetailsSubmitted(uint256 indexed contentId, string detailsUrl, bytes32 detailsHash);
+
     struct QuestionReservation {
         string contextUrl;
         string[] imageUrls;
@@ -344,6 +346,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("dormant-bundle-a"),
             spec: _defaultQuestionSpec()
         });
@@ -355,6 +358,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("dormant-bundle-b"),
             spec: _defaultQuestionSpec()
         });
@@ -390,16 +394,22 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 questions[i].title,
                 questions[i].description,
                 questions[i].tags,
-                questions[i].categoryId
+                questions[i].categoryId,
+                questions[i].details
             );
             questionHashes[i] = keccak256(
                 abi.encode(
-                    "rateloop-question-bundle-item-v2",
-                    questions[i].contextUrl,
+                    "rateloop-question-bundle-item-v3",
+                    keccak256(
+                        abi.encode(
+                            questions[i].contextUrl,
+                            questions[i].title,
+                            questions[i].description,
+                            questions[i].tags
+                        )
+                    ),
                     keccak256(abi.encode(questions[i].imageUrls, questions[i].videoUrl)),
-                    questions[i].title,
-                    questions[i].description,
-                    questions[i].tags,
+                    keccak256(abi.encode(questions[i].details.detailsUrl, questions[i].details.detailsHash)),
                     resolvedCategoryId,
                     questions[i].salt,
                     i,
@@ -409,7 +419,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             );
         }
 
-        bytes32 bundleHash = keccak256(abi.encode("rateloop-question-bundle-v2", questionHashes));
+        bytes32 bundleHash = keccak256(abi.encode("rateloop-question-bundle-v3", questionHashes));
         return keccak256(
             abi.encode(
                 "rateloop-question-bundle-reveal-v4",
@@ -442,7 +452,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             reservation.title,
             reservation.description,
             reservation.tags,
-            reservation.categoryId
+            reservation.categoryId,
+            _emptySubmissionDetails()
         );
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
@@ -526,11 +537,119 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         vm.warp(block.timestamp + 1);
         uint256 id = registry.submitQuestion(
-            contextUrl, imageUrls, "", "Question?", "Context", "Products", 1, salt, _defaultQuestionSpec()
+            contextUrl,
+            imageUrls,
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1,
+            _emptySubmissionDetails(),
+            salt,
+            _defaultQuestionSpec()
         );
         vm.stopPrank();
 
         assertEq(id, 1);
+    }
+
+    function test_SubmitQuestion_AllowsDetailsUrlAndEmitsHash() public {
+        string memory contextUrl = "https://example.com/context";
+        string[] memory imageUrls = _emptyImageUrls();
+        bytes32 salt = keccak256("question-details");
+        ContentRegistry.SubmissionDetails memory details = ContentRegistry.SubmissionDetails({
+            detailsUrl: "https://example.com/details/question-details.json",
+            detailsHash: keccak256(bytes("long-form details"))
+        });
+
+        MediaQuestionReservation memory reservation;
+        reservation.registry = registry;
+        reservation.contextUrl = contextUrl;
+        reservation.imageUrls = imageUrls;
+        reservation.videoUrl = "";
+        reservation.title = "Question?";
+        reservation.description = "Context";
+        reservation.tags = "Products";
+        reservation.categoryId = 1;
+        reservation.details = details;
+        reservation.salt = salt;
+        reservation.submitter = submitter;
+
+        vm.startPrank(submitter);
+        bytes32 submissionKey = _reserveQuestionMediaSubmission(reservation);
+        vm.warp(block.timestamp + 1);
+        vm.expectEmit(true, false, false, true, address(registry));
+        emit ContentDetailsSubmitted(1, details.detailsUrl, details.detailsHash);
+        uint256 id = registry.submitQuestion(
+            contextUrl,
+            imageUrls,
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1,
+            details,
+            salt,
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+
+        assertEq(id, 1);
+        assertTrue(registry.submissionKeyUsed(submissionKey));
+    }
+
+    function test_PreviewQuestionSubmissionKey_IncludesDetails() public view {
+        string memory contextUrl = "https://example.com/context";
+        string[] memory imageUrls = _emptyImageUrls();
+        (, bytes32 emptyDetailsKey) = registry.previewQuestionSubmissionKey(
+            contextUrl, imageUrls, "", "Question?", "Context", "Products", 1, _emptySubmissionDetails()
+        );
+        (, bytes32 detailsKey) = registry.previewQuestionSubmissionKey(
+            contextUrl,
+            imageUrls,
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1,
+            ContentRegistry.SubmissionDetails({
+                detailsUrl: "https://example.com/details/question-details.json",
+                detailsHash: keccak256(bytes("long-form details"))
+            })
+        );
+
+        assertNotEq(emptyDetailsKey, detailsKey);
+    }
+
+    function test_PreviewQuestionSubmissionKey_RejectsDetailsUrlWithoutHash() public {
+        vm.expectRevert("Details hash required");
+        registry.previewQuestionSubmissionKey(
+            "https://example.com/context",
+            _emptyImageUrls(),
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1,
+            ContentRegistry.SubmissionDetails({
+                detailsUrl: "https://example.com/details/question-details.json",
+                detailsHash: bytes32(0)
+            })
+        );
+    }
+
+    function test_PreviewQuestionSubmissionKey_RejectsDetailsHashWithoutUrl() public {
+        vm.expectRevert("Details URL required");
+        registry.previewQuestionSubmissionKey(
+            "https://example.com/context",
+            _emptyImageUrls(),
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1,
+            ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: keccak256(bytes("long-form details")) })
+        );
     }
 
     function test_SubmitQuestion_DefaultRewardCoversMaxTurnout() public {
@@ -557,7 +676,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         vm.warp(block.timestamp + 1);
         registry.submitQuestion(
-            contextUrl, imageUrls, "", "Question?", "Context", "Products", 1, salt, _defaultQuestionSpec()
+            contextUrl,
+            imageUrls,
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1,
+            _emptySubmissionDetails(),
+            salt,
+            _defaultQuestionSpec()
         );
         vm.stopPrank();
 
@@ -577,6 +705,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Context",
             "Products",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -591,7 +720,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://cdn.example.com/review/image.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
         registry.previewQuestionSubmissionKey(
-            "https://example.com/context", imageUrls, "", "Question?", "Context", "Products", 1
+            "https://example.com/context",
+            imageUrls,
+            "",
+            "Question?",
+            "Context",
+            "Products",
+            1,
+            _emptySubmissionDetails()
         );
     }
 
@@ -611,7 +747,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         vm.warp(block.timestamp + 1);
         uint256 id = registry.submitQuestion(
-            "", imageUrls, url, title, description, tags, categoryId, salt, _defaultQuestionSpec()
+            "",
+            imageUrls,
+            url,
+            title,
+            description,
+            tags,
+            categoryId,
+            _emptySubmissionDetails(),
+            salt,
+            _defaultQuestionSpec()
         );
         vm.stopPrank();
 
@@ -628,7 +773,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Question?",
             "Context",
             "Video",
-            1
+            1,
+            _emptySubmissionDetails()
         );
         registry.previewQuestionSubmissionKey(
             "https://example.com/context",
@@ -637,7 +783,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Question?",
             "Context",
             "Video",
-            1
+            1,
+            _emptySubmissionDetails()
         );
         registry.previewQuestionSubmissionKey(
             "https://example.com/context",
@@ -646,7 +793,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Question?",
             "Context",
             "Video",
-            1
+            1,
+            _emptySubmissionDetails()
         );
     }
 
@@ -665,7 +813,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         for (uint256 i = 0; i < urls.length; i++) {
             vm.expectRevert("Invalid media URL");
             registry.previewQuestionSubmissionKey(
-                "https://example.com/context", _emptyImageUrls(), urls[i], "Question?", "Context", "Video", 1
+                "https://example.com/context",
+                _emptyImageUrls(),
+                urls[i],
+                "Question?",
+                "Context",
+                "Video",
+                1,
+                _emptySubmissionDetails()
             );
         }
     }
@@ -707,6 +862,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             _defaultQuestionSpec()
         );
@@ -726,7 +882,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Question?",
             "Context",
             "Products",
-            1
+            1,
+            _emptySubmissionDetails()
         );
         registry.previewQuestionSubmissionKey(
             "https://example.com/context",
@@ -735,7 +892,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Question?",
             "Context",
             "Products",
-            1
+            1,
+            _emptySubmissionDetails()
         );
     }
 
@@ -775,6 +933,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             _defaultQuestionSpec()
         );
@@ -811,7 +970,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.warp(block.timestamp + 1);
         vm.expectRevert("Reservation not found");
         registry.submitQuestion(
-            contextUrl, changedImageUrls, "", title, description, tags, categoryId, salt, _defaultQuestionSpec()
+            contextUrl,
+            changedImageUrls,
+            "",
+            title,
+            description,
+            tags,
+            categoryId,
+            _emptySubmissionDetails(),
+            salt,
+            _defaultQuestionSpec()
         );
         vm.stopPrank();
     }
@@ -863,6 +1031,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             _defaultContentRoundConfig(),
@@ -935,6 +1104,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             _defaultContentRoundConfig(),
@@ -985,6 +1155,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             roundConfig,
@@ -1044,6 +1215,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             roundConfig,
@@ -1100,6 +1272,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             alteredConfig,
@@ -1114,6 +1287,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             rewardTerms,
             reservedConfig,
@@ -1139,6 +1313,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Context voters should consider",
             "Products",
             1,
+            _emptySubmissionDetails(),
             keccak256("too-few-voters"),
             _submissionRewardTerms(
                 DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
@@ -1167,6 +1342,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Context voters should consider",
             "Products",
             1,
+            _emptySubmissionDetails(),
             keccak256("too-few-rounds"),
             _submissionRewardTerms(
                 DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
@@ -1195,6 +1371,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Context voters should consider",
             "Products",
             1,
+            _emptySubmissionDetails(),
             keccak256("reward-too-small"),
             _submissionRewardTerms(
                 DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
@@ -1223,6 +1400,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Context voters should consider",
             "Products",
             1,
+            _emptySubmissionDetails(),
             keccak256("expired-bounty"),
             _submissionRewardTerms(
                 DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
@@ -1247,6 +1425,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("single-bundle"),
             spec: _defaultQuestionSpec()
         });
@@ -1274,6 +1453,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-cap-a"),
             spec: _defaultQuestionSpec()
         });
@@ -1285,6 +1465,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-cap-b"),
             spec: _defaultQuestionSpec()
         });
@@ -1314,6 +1495,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-completers-a"),
             spec: _defaultQuestionSpec()
         });
@@ -1325,6 +1507,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-completers-b"),
             spec: _defaultQuestionSpec()
         });
@@ -1354,6 +1537,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-rounds-a"),
             spec: _defaultQuestionSpec()
         });
@@ -1365,6 +1549,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-rounds-b"),
             spec: _defaultQuestionSpec()
         });
@@ -1392,6 +1577,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-media-variant-a"),
             spec: _defaultQuestionSpec()
         });
@@ -1403,6 +1589,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-media-variant-b"),
             spec: _defaultQuestionSpec()
         });
@@ -1421,7 +1608,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             questions[0].title,
             questions[0].description,
             questions[0].tags,
-            questions[0].categoryId
+            questions[0].categoryId,
+            _emptySubmissionDetails()
         );
         (, bytes32 secondSubmissionKey) = registry.previewQuestionSubmissionKey(
             questions[1].contextUrl,
@@ -1430,7 +1618,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             questions[1].title,
             questions[1].description,
             questions[1].tags,
-            questions[1].categoryId
+            questions[1].categoryId,
+            _emptySubmissionDetails()
         );
 
         vm.startPrank(submitter);
@@ -1456,6 +1645,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-media-duplicate-a"),
             spec: _defaultQuestionSpec()
         });
@@ -1467,6 +1657,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-media-duplicate-b"),
             spec: _defaultQuestionSpec()
         });
@@ -1497,6 +1688,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-expiry-a"),
             spec: _defaultQuestionSpec()
         });
@@ -1508,6 +1700,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
+            details: _emptySubmissionDetails(),
             salt: keccak256("bundle-expiry-b"),
             spec: _defaultQuestionSpec()
         });
@@ -1562,6 +1755,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             _submissionRewardTerms(
                 DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
@@ -1588,7 +1782,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Question?",
             "Context",
             "Media",
-            5
+            5,
+            _emptySubmissionDetails()
         );
     }
 
@@ -1600,7 +1795,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.expectRevert("Too many images");
         registry.previewQuestionSubmissionKey(
-            "https://example.com/context", imageUrls, "", "Question?", "Context", "Media", 5
+            "https://example.com/context", imageUrls, "", "Question?", "Context", "Media", 5, _emptySubmissionDetails()
         );
     }
 
@@ -1688,7 +1883,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         });
         bytes32 salt = _contentSubmissionSalt(question.url, submitter);
         (, bytes32 submissionKey) = reg2.previewQuestionSubmissionKey(
-            question.url, _emptyImageUrls(), "", question.title, question.description, question.tags, 1
+            question.url,
+            _emptyImageUrls(),
+            "",
+            question.title,
+            question.description,
+            question.tags,
+            1,
+            _emptySubmissionDetails()
         );
         bytes32 revealCommitment = _defaultQuestionRevealCommitment(
             reg2,
@@ -1726,6 +1928,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1744,6 +1947,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1762,6 +1966,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1780,6 +1985,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1798,6 +2004,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1816,6 +2023,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1834,6 +2042,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1847,6 +2056,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1865,6 +2075,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1883,6 +2094,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1895,6 +2107,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1913,6 +2126,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1931,6 +2145,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1953,6 +2168,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             99,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -1991,7 +2207,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.warp(block.timestamp + 1);
         vm.expectRevert();
         registry.submitQuestion(
-            "https://example.com/context", imageUrls, "", title, description, tags, 1, salt, _defaultQuestionSpec()
+            "https://example.com/context",
+            imageUrls,
+            "",
+            title,
+            description,
+            tags,
+            1,
+            _emptySubmissionDetails(),
+            salt,
+            _defaultQuestionSpec()
         );
         vm.stopPrank();
     }
@@ -2037,6 +2262,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             description,
             tags,
             oversizedCategoryId,
+            _emptySubmissionDetails(),
             salt,
             _defaultQuestionSpec()
         );
@@ -2068,6 +2294,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -2078,13 +2305,27 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         string memory maxUrl = _validLengthUrl(2048, bytes("https://"), bytes(".example.com/context"));
 
         registry.previewQuestionSubmissionKey(
-            maxUrl, _singleImageUrls(_uploadedImageUrl("max-length-context")), "", "Question?", "Context.", "tags", 1
+            maxUrl,
+            _singleImageUrls(_uploadedImageUrl("max-length-context")),
+            "",
+            "Question?",
+            "Context.",
+            "tags",
+            1,
+            _emptySubmissionDetails()
         );
     }
 
     function test_SubmitQuestion_AllowsPercentEncodedPath() public view {
         registry.previewQuestionSubmissionKey(
-            "https://example.com/a%20b", _emptyImageUrls(), "", "Question?", "Context.", "tags", 1
+            "https://example.com/a%20b",
+            _emptyImageUrls(),
+            "",
+            "Question?",
+            "Context.",
+            "tags",
+            1,
+            _emptySubmissionDetails()
         );
     }
 
@@ -2093,7 +2334,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.expectRevert("Invalid URL");
         registry.previewQuestionSubmissionKey(
-            "https://example.com/context", _emptyImageUrls(), longVideoUrl, "Question?", "Context.", "tags", 1
+            "https://example.com/context",
+            _emptyImageUrls(),
+            longVideoUrl,
+            "Question?",
+            "Context.",
+            "tags",
+            1,
+            _emptySubmissionDetails()
         );
     }
 
@@ -2135,6 +2383,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             string(longGoal),
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -2158,6 +2407,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             string(longTags),
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -2177,6 +2427,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             keccak256("dup1-salt"),
             _defaultQuestionSpec()
         );
@@ -2197,12 +2448,30 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         vm.warp(block.timestamp + 1);
         registry.submitQuestion(
-            url, imageUrls, "", title, description, tags, 1, keccak256("media-duplicate-a"), _defaultQuestionSpec()
+            url,
+            imageUrls,
+            "",
+            title,
+            description,
+            tags,
+            1,
+            _emptySubmissionDetails(),
+            keccak256("media-duplicate-a"),
+            _defaultQuestionSpec()
         );
 
         vm.expectRevert("Question already submitted");
         registry.submitQuestion(
-            url, imageUrls, "", title, description, tags, 1, keccak256("media-duplicate-b"), _defaultQuestionSpec()
+            url,
+            imageUrls,
+            "",
+            title,
+            description,
+            tags,
+            1,
+            _emptySubmissionDetails(),
+            keccak256("media-duplicate-b"),
+            _defaultQuestionSpec()
         );
         vm.stopPrank();
     }
@@ -2222,7 +2491,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         vm.warp(block.timestamp + 1);
         uint256 firstContentId = registry.submitQuestion(
-            url, firstImageUrls, "", title, description, tags, 1, keccak256("media-variant-a"), _defaultQuestionSpec()
+            url,
+            firstImageUrls,
+            "",
+            title,
+            description,
+            tags,
+            1,
+            _emptySubmissionDetails(),
+            keccak256("media-variant-a"),
+            _defaultQuestionSpec()
         );
 
         bytes32 secondSubmissionKey = _reserveQuestionMediaSubmission(
@@ -2230,7 +2508,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         vm.warp(block.timestamp + 1);
         uint256 secondContentId = registry.submitQuestion(
-            url, secondImageUrls, "", title, description, tags, 1, keccak256("media-variant-b"), _defaultQuestionSpec()
+            url,
+            secondImageUrls,
+            "",
+            title,
+            description,
+            tags,
+            1,
+            _emptySubmissionDetails(),
+            keccak256("media-variant-b"),
+            _defaultQuestionSpec()
         );
         vm.stopPrank();
 
@@ -2244,7 +2531,16 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         lrepToken.approve(address(registry), 10e6);
         vm.expectRevert("Context or media required");
         registry.submitQuestion(
-            "", _emptyImageUrls(), "", "goal", "goal", "tags", 1, bytes32(0), _defaultQuestionSpec()
+            "",
+            _emptyImageUrls(),
+            "",
+            "goal",
+            "goal",
+            "tags",
+            1,
+            _emptySubmissionDetails(),
+            bytes32(0),
+            _defaultQuestionSpec()
         );
         vm.stopPrank();
     }
@@ -2256,8 +2552,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         _reserveQuestionMediaSubmission(registry, "", imageUrls, "", "goal", "goal", "tags", 1, salt, submitter);
         vm.warp(block.timestamp + 1);
-        uint256 contentId =
-            registry.submitQuestion("", imageUrls, "", "goal", "goal", "tags", 1, salt, _defaultQuestionSpec());
+        uint256 contentId = registry.submitQuestion(
+            "", imageUrls, "", "goal", "goal", "tags", 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
+        );
         vm.stopPrank();
 
         assertEq(contentId, 1);
@@ -2278,6 +2575,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "",
             "tags",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -2296,6 +2594,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );
@@ -3098,8 +3397,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("No submission key");
         registry.releaseDormantSubmissionKey(1);
 
-        (, bytes32 submissionKey) =
-            registry.previewQuestionSubmissionKey(url, _emptyImageUrls(), "", title, description, tags, 1);
+        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+            url, _emptyImageUrls(), "", title, description, tags, 1, _emptySubmissionDetails()
+        );
         assertTrue(registry.submissionKeyUsed(submissionKey), "active resubmission keeps canonical key reserved");
     }
 
@@ -3130,6 +3430,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "goal",
             "tags",
             1,
+            _emptySubmissionDetails(),
             keccak256("revive-conflict-salt"),
             _defaultQuestionSpec()
         );
@@ -3297,6 +3598,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "Context.",
             "tag",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );

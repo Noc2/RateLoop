@@ -60,8 +60,13 @@ abstract contract ContentSubmissionTestBase {
         string description;
         string tags;
         uint256 categoryId;
+        ContentRegistry.SubmissionDetails details;
         bytes32 salt;
         address submitter;
+    }
+
+    function _emptySubmissionDetails() internal pure returns (ContentRegistry.SubmissionDetails memory) {
+        return ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: bytes32(0) });
     }
 
     function _submitContentWithReservation(
@@ -137,6 +142,7 @@ abstract contract ContentSubmissionTestBase {
             question.description,
             question.tags,
             categoryId,
+            _emptySubmissionDetails(),
             salt,
             _defaultQuestionSpec()
         );
@@ -163,6 +169,7 @@ abstract contract ContentSubmissionTestBase {
         reservation.description = description;
         reservation.tags = tags;
         reservation.categoryId = categoryId;
+        reservation.details = _emptySubmissionDetails();
         reservation.salt = salt;
         reservation.submitter = submitter;
         return _reserveQuestionMediaSubmission(reservation);
@@ -191,7 +198,8 @@ abstract contract ContentSubmissionTestBase {
                 reservation.title,
                 reservation.description,
                 reservation.tags,
-                reservation.categoryId
+                reservation.categoryId,
+                reservation.details
             );
         uint256 rewardAmount = _defaultSubmissionRewardAmount(reservation.registry);
         bytes32 revealCommitment = _questionReservationRevealCommitment(reservation, submissionKey, rewardAmount);
@@ -221,6 +229,7 @@ abstract contract ContentSubmissionTestBase {
             reservation.title,
             reservation.description,
             reservation.tags,
+            reservation.details,
             reservation.categoryId,
             reservation.salt,
             reservation.submitter,
@@ -259,6 +268,7 @@ abstract contract ContentSubmissionTestBase {
             title,
             description,
             tags,
+            _emptySubmissionDetails(),
             categoryId,
             salt,
             submitter,
@@ -281,12 +291,43 @@ abstract contract ContentSubmissionTestBase {
         RoundLib.RoundConfig memory roundConfig,
         ContentRegistry.QuestionSpecCommitment memory spec
     ) internal pure returns (bytes32) {
+        return _questionRevealCommitment(
+            submissionKey,
+            mediaHash,
+            title,
+            description,
+            tags,
+            _emptySubmissionDetails(),
+            categoryId,
+            salt,
+            submitter,
+            rewardTerms,
+            roundConfig,
+            spec
+        );
+    }
+
+    function _questionRevealCommitment(
+        bytes32 submissionKey,
+        bytes32 mediaHash,
+        string memory title,
+        string memory description,
+        string memory tags,
+        ContentRegistry.SubmissionDetails memory details,
+        uint256 categoryId,
+        bytes32 salt,
+        address submitter,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec
+    ) internal pure returns (bytes32) {
         return keccak256(
             abi.encode(
-                "rateloop-question-reveal-v4",
+                "rateloop-question-reveal-v5",
                 submissionKey,
                 mediaHash,
                 keccak256(abi.encode(title, description, tags)),
+                keccak256(abi.encode(details.detailsUrl, details.detailsHash)),
                 categoryId,
                 salt,
                 submitter,
@@ -320,6 +361,7 @@ abstract contract ContentSubmissionTestBase {
             title,
             description,
             tags,
+            _emptySubmissionDetails(),
             categoryId,
             salt,
             submitter,
@@ -367,7 +409,16 @@ abstract contract ContentSubmissionTestBase {
         );
         HEVM.warp(block.timestamp + 1);
         contentId = registry.submitQuestion(
-            imageUrl, imageUrls, "", title, description, tags, categoryId, salt, _defaultQuestionSpec()
+            imageUrl,
+            imageUrls,
+            "",
+            title,
+            description,
+            tags,
+            categoryId,
+            _emptySubmissionDetails(),
+            salt,
+            _defaultQuestionSpec()
         );
     }
 

@@ -625,6 +625,30 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "launchHumanIdentityKey",
+    "inputs": [
+      {
+        "name": "provider",
+        "type": "uint8",
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "legacyWorldIdAttestationDisabled",
     "inputs": [],
     "outputs": [
@@ -900,6 +924,24 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "setWorldIdV4LaunchNullifierAlias",
+    "inputs": [
+      {
+        "name": "v4NullifierHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "legacyNullifierHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setWorldIdV4VerifierConfig",
     "inputs": [
       {
@@ -1128,6 +1170,44 @@ export const RaterRegistryAbi = [
         "name": "",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4LaunchNullifierAlias",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "worldIdV4LaunchNullifierSeen",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -1606,6 +1686,25 @@ export const RaterRegistryAbi = [
         "type": "address",
         "indexed": true,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "WorldIdV4LaunchNullifierAliasSet",
+    "inputs": [
+      {
+        "name": "v4NullifierHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "legacyNullifierHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
       }
     ],
     "anonymous": false

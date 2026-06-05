@@ -308,6 +308,7 @@ contract AuditGapTests is VotingTestBase {
             "goal",
             "tag",
             1,
+            _emptySubmissionDetails(),
             bytes32(0),
             _defaultQuestionSpec()
         );

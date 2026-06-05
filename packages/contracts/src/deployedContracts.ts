@@ -5242,6 +5242,23 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               internalType: "uint256",
             },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
           ],
           outputs: [
             {
@@ -5521,6 +5538,23 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
             {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
               name: "salt",
               type: "bytes32",
               internalType: "bytes32",
@@ -5595,6 +5629,23 @@ const deployedContracts: GenericContractsDeclaration = {
                   name: "categoryId",
                   type: "uint256",
                   internalType: "uint256",
+                },
+                {
+                  name: "details",
+                  type: "tuple",
+                  internalType: "struct ContentRegistry.SubmissionDetails",
+                  components: [
+                    {
+                      name: "detailsUrl",
+                      type: "string",
+                      internalType: "string",
+                    },
+                    {
+                      name: "detailsHash",
+                      type: "bytes32",
+                      internalType: "bytes32",
+                    },
+                  ],
                 },
                 {
                   name: "salt",
@@ -5749,6 +5800,23 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
             {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
               name: "salt",
               type: "bytes32",
               internalType: "bytes32",
@@ -5897,6 +5965,23 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "categoryId",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
             },
             {
               name: "salt",
@@ -6158,6 +6243,31 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: true,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ContentDetailsSubmitted",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "detailsUrl",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+            {
+              name: "detailsHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
             },
           ],
           anonymous: false,
@@ -8106,6 +8216,29 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rewardDistributorConfigShape",
+          inputs: [],
+          outputs: [
+            {
+              name: "registry_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "lrepToken_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "protocolConfig_",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundClusterPayoutReadyAt",
           inputs: [
             {
@@ -9801,6 +9934,19 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "DEFAULT_ADMIN_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "RATELOOP_REWARD_DISTRIBUTOR_MARKER",
           inputs: [],
           outputs: [
             {
@@ -11566,6 +11712,25 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "feeCreditorForEngine",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "feeCreditorVotingEngine",
           inputs: [
             {
               name: "",
@@ -22908,6 +23073,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "launchHumanIdentityKey",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "legacyWorldIdAttestationDisabled",
           inputs: [],
           outputs: [
@@ -23183,6 +23372,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setWorldIdV4LaunchNullifierAlias",
+          inputs: [
+            {
+              name: "v4NullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "legacyNullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setWorldIdV4VerifierConfig",
           inputs: [
             {
@@ -23411,6 +23618,44 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint64",
               internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdV4LaunchNullifierAlias",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdV4LaunchNullifierSeen",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -23895,6 +24140,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "WorldIdV4LaunchNullifierAliasSet",
+          inputs: [
+            {
+              name: "v4NullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "legacyNullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "WorldIdV4VerifierConfigLocked",
           inputs: [
             {
@@ -24193,6 +24457,23 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "string",
             },
             {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
               name: "salt",
               type: "bytes32",
               internalType: "bytes32",
@@ -24443,6 +24724,23 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "categoryId",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
             },
             {
               name: "salt",
@@ -31556,6 +31854,23 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               internalType: "uint256",
             },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
           ],
           outputs: [
             {
@@ -31835,6 +32150,23 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
             {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
               name: "salt",
               type: "bytes32",
               internalType: "bytes32",
@@ -31909,6 +32241,23 @@ const deployedContracts: GenericContractsDeclaration = {
                   name: "categoryId",
                   type: "uint256",
                   internalType: "uint256",
+                },
+                {
+                  name: "details",
+                  type: "tuple",
+                  internalType: "struct ContentRegistry.SubmissionDetails",
+                  components: [
+                    {
+                      name: "detailsUrl",
+                      type: "string",
+                      internalType: "string",
+                    },
+                    {
+                      name: "detailsHash",
+                      type: "bytes32",
+                      internalType: "bytes32",
+                    },
+                  ],
                 },
                 {
                   name: "salt",
@@ -32063,6 +32412,23 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
             {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
               name: "salt",
               type: "bytes32",
               internalType: "bytes32",
@@ -32211,6 +32577,23 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "categoryId",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
             },
             {
               name: "salt",
@@ -32472,6 +32855,31 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: true,
               internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ContentDetailsSubmitted",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "detailsUrl",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+            {
+              name: "detailsHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
             },
           ],
           anonymous: false,
@@ -34420,6 +34828,29 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rewardDistributorConfigShape",
+          inputs: [],
+          outputs: [
+            {
+              name: "registry_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "lrepToken_",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "protocolConfig_",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundClusterPayoutReadyAt",
           inputs: [
             {
@@ -36115,6 +36546,19 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "DEFAULT_ADMIN_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "RATELOOP_REWARD_DISTRIBUTOR_MARKER",
           inputs: [],
           outputs: [
             {
@@ -37880,6 +38324,25 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "feeCreditorForEngine",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "feeCreditorVotingEngine",
           inputs: [
             {
               name: "",
@@ -48283,6 +48746,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "launchHumanIdentityKey",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "legacyWorldIdAttestationDisabled",
           inputs: [],
           outputs: [
@@ -48558,6 +49045,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setWorldIdV4LaunchNullifierAlias",
+          inputs: [
+            {
+              name: "v4NullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "legacyNullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setWorldIdV4VerifierConfig",
           inputs: [
             {
@@ -48786,6 +49291,44 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint64",
               internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdV4LaunchNullifierAlias",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "worldIdV4LaunchNullifierSeen",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
             },
           ],
           stateMutability: "view",
@@ -49270,6 +49813,25 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "WorldIdV4LaunchNullifierAliasSet",
+          inputs: [
+            {
+              name: "v4NullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "legacyNullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "WorldIdV4VerifierConfigLocked",
           inputs: [
             {
@@ -49568,6 +50130,23 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "string",
             },
             {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
               name: "salt",
               type: "bytes32",
               internalType: "bytes32",
@@ -49818,6 +50397,23 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "categoryId",
               type: "uint256",
               internalType: "uint256",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
             },
             {
               name: "salt",

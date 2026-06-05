@@ -32,6 +32,7 @@ const DEFAULT_QUESTION_METADATA_HASH =
   "0xed39b36e9ce5c1bfc657909c2f687347be2de998bc871eb8d33df17fdfa0d8cd";
 const DEFAULT_RESULT_SPEC_HASH =
   "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
 const DEFAULT_ROUND_CONFIG = {
   epochDuration: 20 * 60,
   maxDuration: 20 * 60,
@@ -345,7 +346,7 @@ assertSupportedContextUrl(contextUrl, {
 const [, submissionKey] = await publicClient.readContract({
   address: registry,
   abi: parseAbi([
-    "function previewQuestionSubmissionKey(string contextUrl, string[] imageUrls, string videoUrl, string title, string description, string tags, uint256 categoryId) view returns (uint256 resolvedCategoryId, bytes32 submissionKey)",
+    "function previewQuestionSubmissionKey(string contextUrl, string[] imageUrls, string videoUrl, string title, string description, string tags, uint256 categoryId, (string detailsUrl, bytes32 detailsHash) details) view returns (uint256 resolvedCategoryId, bytes32 submissionKey)",
   ]),
   functionName: "previewQuestionSubmissionKey",
   args: [
@@ -356,6 +357,7 @@ const [, submissionKey] = await publicClient.readContract({
     description,
     tags,
     BigInt(categoryId),
+    { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH },
   ],
 });
 
@@ -369,6 +371,12 @@ const textHash = keccak256(
   encodeAbiParameters(
     [{ type: "string" }, { type: "string" }, { type: "string" }],
     [title, description, tags]
+  )
+);
+const detailsHash = keccak256(
+  encodeAbiParameters(
+    [{ type: "string" }, { type: "bytes32" }],
+    ["", EMPTY_DETAILS_HASH]
   )
 );
 const rewardTermsHash = keccak256(
@@ -418,6 +426,7 @@ const revealCommitment = keccak256(
       { type: "bytes32" },
       { type: "bytes32" },
       { type: "bytes32" },
+      { type: "bytes32" },
       { type: "uint256" },
       { type: "bytes32" },
       { type: "address" },
@@ -427,10 +436,11 @@ const revealCommitment = keccak256(
       { type: "bytes32" },
     ],
     [
-      "rateloop-question-reveal-v4",
+      "rateloop-question-reveal-v5",
       submissionKey,
       mediaHash,
       textHash,
+      detailsHash,
       BigInt(categoryId),
       salt,
       submitter,

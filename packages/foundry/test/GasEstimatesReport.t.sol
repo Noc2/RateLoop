@@ -27,8 +27,7 @@ contract MockVotingEngineForFrontendGas {
 }
 
 contract MockRewardDistributorForFrontendGas {
-    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
-        keccak256("rateloop.round-reward-distributor.v1");
+    bytes32 public constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
     address public immutable votingEngine;
 
     constructor(address votingEngine_) {
@@ -160,7 +159,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         string memory imageUrl = _submissionImageUrl("gas-report");
         string[] memory imageUrls = _singleImageUrls(imageUrl);
         (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
-            "https://example.com/context", imageUrls, "", "test goal", "test goal", "test", 1
+            "https://example.com/context", imageUrls, "", "test goal", "test goal", "test", 1, _emptySubmissionDetails()
         );
         bytes32 salt = keccak256(
             abi.encode(imageUrl, "test goal", "test goal", "test", uint256(1), submitter, block.timestamp, block.number)
@@ -174,7 +173,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         );
         vm.warp(block.timestamp + 1);
         bytes memory revealCallData = abi.encodeWithSignature(
-            "submitQuestion(string,string[],string,string,string,string,uint256,bytes32,(bytes32,bytes32))",
+            "submitQuestion(string,string[],string,string,string,string,uint256,(string,bytes32),bytes32,(bytes32,bytes32))",
             "https://example.com/context",
             imageUrls,
             "",
@@ -182,6 +181,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
             "test goal",
             "test",
             1,
+            _emptySubmissionDetails(),
             salt,
             _defaultQuestionSpec()
         );

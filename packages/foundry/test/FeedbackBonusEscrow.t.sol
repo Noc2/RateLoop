@@ -1232,6 +1232,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
             DESCRIPTION,
             TAGS,
             CATEGORY_ID,
+            _emptySubmissionDetails(),
             salt,
             _defaultQuestionSpec()
         );
