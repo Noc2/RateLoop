@@ -31,24 +31,11 @@ import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
 contract DeployRateLoop is ScaffoldETHDeploy {
     error UnsupportedWorldChain(uint256 chainId);
-    error GovernanceBootstrapAllocationMismatch(uint256 accountCount, uint256 amountCount);
-    error GovernanceBootstrapAccountInvalid(address account);
-    error GovernanceBootstrapAccountDuplicate(address account);
-    error GovernanceBootstrapAccountExcluded(address account);
-    error GovernanceBootstrapAmountInvalid(address account);
-    error GovernanceBootstrapExceedsTreasury(uint256 totalBootstrapAmount, uint256 treasuryAmount);
-    error GovernanceBootstrapInsufficient(
-        uint256 delegatedPower, uint256 requiredQuorum, uint256 requiredProposalThreshold
-    );
-    error GovernanceBootstrapNoProposer(uint256 largestTransferableBalance, uint256 requiredProposalThreshold);
-
     uint256 public constant TIMELOCK_MIN_DELAY = 2 days;
 
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
     uint256 public constant TREASURY_AMOUNT = 25_000_000 * 1e6;
     uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - TREASURY_AMOUNT;
-    uint256 internal constant GOVERNANCE_BOOTSTRAP_MINIMUM_QUORUM = 100_000 * 1e6;
-    uint256 internal constant GOVERNANCE_BOOTSTRAP_PROPOSAL_THRESHOLD = 1_000 * 1e6;
     bytes32 public constant LEGACY_CONTRIBUTOR_ROOT =
         0xcaa28d15e6c6c1bb47d347a413cb808e40c38a7e43171ce9a131983a92b97d18;
     uint256 public constant LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL = 9_000_000 * 1e6;
@@ -118,11 +105,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
         LoopReputation lrepToken = new LoopReputation(deployer, governance);
         console.log("LoopReputation deployed at:", address(lrepToken));
-        (
-            address[] memory governanceBootstrapAccounts,
-            uint256[] memory governanceBootstrapAmounts,
-            uint256 governanceBootstrapTotal
-        ) = _resolveGovernanceBootstrapAllocations(isLocalDev);
 
         ContentRegistry registryImpl = new ContentRegistry();
         RoundVotingEngine votingEngineImpl = new RoundVotingEngine();
@@ -343,9 +325,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
         protocolConfig.setConfig(20 minutes, 20 minutes, 3, 100);
 
-        lrepToken.mint(governance, TREASURY_AMOUNT - governanceBootstrapTotal);
-        _fundGovernanceBootstrap(lrepToken, governanceBootstrapAccounts, governanceBootstrapAmounts);
-        console.log("Minted LREP treasury/bootstrap allocation");
+        lrepToken.mint(governance, TREASURY_AMOUNT);
+        console.log("Minted LREP treasury allocation");
 
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
@@ -417,7 +398,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         _fundLaunchDistributionPool(lrepToken, launchDistributionPool);
         _activateLegacyContributorRoot(launchDistributionPool);
         if (!isLocalDev) {
-            _assertGovernanceBootstrapReady(lrepToken, governor, governanceBootstrapAccounts);
             launchDistributionPool.transferOwnership(governance);
             TimelockController tc = TimelockController(payable(governance));
             tc.renounceRole(tc.DEFAULT_ADMIN_ROLE(), deployer);
@@ -507,101 +487,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     {
         lrepToken.mint(address(launchDistributionPool), LAUNCH_DISTRIBUTION_AMOUNT);
         launchDistributionPool.accountPrefundedPoolDeposit(LAUNCH_DISTRIBUTION_AMOUNT);
-    }
-
-    function _resolveGovernanceBootstrapAllocations(bool isLocalDev)
-        internal
-        view
-        returns (address[] memory accounts, uint256[] memory amounts, uint256 totalAmount)
-    {
-        address[] memory emptyAccounts = new address[](0);
-        uint256[] memory emptyAmounts = new uint256[](0);
-        accounts = isLocalDev ? emptyAccounts : vm.envOr("RATELOOP_GOVERNANCE_BOOTSTRAP_ACCOUNTS", ",", emptyAccounts);
-        amounts = isLocalDev ? emptyAmounts : vm.envOr("RATELOOP_GOVERNANCE_BOOTSTRAP_AMOUNTS", ",", emptyAmounts);
-        if (accounts.length != amounts.length) {
-            revert GovernanceBootstrapAllocationMismatch(accounts.length, amounts.length);
-        }
-
-        uint256 largestAmount;
-        for (uint256 i = 0; i < accounts.length; i++) {
-            address account = accounts[i];
-            uint256 amount = amounts[i];
-            if (account == address(0)) revert GovernanceBootstrapAccountInvalid(account);
-            if (amount == 0) revert GovernanceBootstrapAmountInvalid(account);
-            for (uint256 j = 0; j < i; j++) {
-                if (accounts[j] == account) revert GovernanceBootstrapAccountDuplicate(account);
-            }
-            totalAmount += amount;
-            if (amount > largestAmount) largestAmount = amount;
-        }
-        if (totalAmount > TREASURY_AMOUNT) {
-            revert GovernanceBootstrapExceedsTreasury(totalAmount, TREASURY_AMOUNT);
-        }
-        if (!isLocalDev && totalAmount < GOVERNANCE_BOOTSTRAP_MINIMUM_QUORUM) {
-            revert GovernanceBootstrapInsufficient(
-                totalAmount, GOVERNANCE_BOOTSTRAP_MINIMUM_QUORUM, GOVERNANCE_BOOTSTRAP_PROPOSAL_THRESHOLD
-            );
-        }
-        if (!isLocalDev && largestAmount < GOVERNANCE_BOOTSTRAP_PROPOSAL_THRESHOLD) {
-            revert GovernanceBootstrapNoProposer(largestAmount, GOVERNANCE_BOOTSTRAP_PROPOSAL_THRESHOLD);
-        }
-    }
-
-    function _fundGovernanceBootstrap(LoopReputation lrepToken, address[] memory accounts, uint256[] memory amounts)
-        internal
-    {
-        for (uint256 i = 0; i < accounts.length; i++) {
-            lrepToken.mint(accounts[i], amounts[i]);
-        }
-    }
-
-    function _assertGovernanceBootstrapReady(
-        LoopReputation lrepToken,
-        RateLoopGovernor governor,
-        address[] memory bootstrapAccounts
-    ) internal view {
-        uint256 delegatedPower;
-        uint256 largestTransferableBalance;
-        uint256 accountCount = bootstrapAccounts.length;
-        for (uint256 i = 0; i < accountCount; i++) {
-            address account = bootstrapAccounts[i];
-            if (governor.isExcludedHolder(account)) revert GovernanceBootstrapAccountExcluded(account);
-            if (lrepToken.delegates(account) != account) revert GovernanceBootstrapAccountInvalid(account);
-
-            uint256 votes = lrepToken.getVotes(account);
-            delegatedPower += votes;
-            uint256 transferable = lrepToken.getTransferableBalance(account);
-            if (transferable > largestTransferableBalance) {
-                largestTransferableBalance = transferable;
-            }
-        }
-
-        uint256 requiredQuorum = _currentGovernanceQuorumRequirement(lrepToken, governor);
-        uint256 requiredProposalThreshold = governor.proposalThreshold();
-        if (delegatedPower < requiredQuorum) {
-            revert GovernanceBootstrapInsufficient(delegatedPower, requiredQuorum, requiredProposalThreshold);
-        }
-        if (largestTransferableBalance < requiredProposalThreshold) {
-            revert GovernanceBootstrapNoProposer(largestTransferableBalance, requiredProposalThreshold);
-        }
-    }
-
-    function _currentGovernanceQuorumRequirement(LoopReputation lrepToken, RateLoopGovernor governor)
-        internal
-        view
-        returns (uint256)
-    {
-        address[] memory excludedHolders = governor.getExcludedHolders();
-        uint256 excludedVotes;
-        for (uint256 i = 0; i < excludedHolders.length; i++) {
-            excludedVotes += lrepToken.getVotes(excludedHolders[i]);
-        }
-
-        uint256 currentSupply = lrepToken.totalSupply();
-        uint256 circulating = currentSupply > excludedVotes ? currentSupply - excludedVotes : 0;
-        uint256 dynamicQuorum = (circulating * governor.quorumNumerator()) / governor.quorumDenominator();
-        uint256 minimumQuorum = governor.MINIMUM_QUORUM();
-        return dynamicQuorum > minimumQuorum ? dynamicQuorum : minimumQuorum;
     }
 
     function _proxyAdmin(address proxy) internal view returns (address) {
