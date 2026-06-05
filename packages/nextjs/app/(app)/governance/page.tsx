@@ -9,6 +9,7 @@ import { WalletRestoreLoading } from "~~/components/shared/WalletRestoreLoading"
 import { useWalletRestore } from "~~/contexts/WalletRestoreContext";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
+import { getGovernanceReputationGateState } from "~~/lib/governance/reputationGate";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
 
 type GovernanceTab = "profile" | "leaderboard" | "governance";
@@ -23,6 +24,17 @@ function GovernanceSectionLoading() {
         <span>Loading...</span>
       </div>
     </div>
+  );
+}
+
+function GovernancePageLoading({ message }: { message: string }) {
+  return (
+    <AppPageShell contentClassName="space-y-6">
+      <div className="flex min-h-[40vh] flex-col items-center justify-center px-4 text-center">
+        <span className="loading loading-spinner loading-lg text-primary" />
+        <p className="mt-4 text-sm text-base-content/60">{message}</p>
+      </div>
+    </AppPageShell>
   );
 }
 
@@ -103,15 +115,23 @@ function GovernancePageInner() {
   }, []);
 
   // Check LREP balance
-  const { data: lrepBalance, isLoading: lrepBalanceLoading } = useScaffoldReadContract({
+  const {
+    data: lrepBalance,
+    isError: lrepBalanceError,
+    refetch: refetchLrepBalance,
+  } = useScaffoldReadContract({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "balanceOf",
     args: [address],
     query: { enabled: !!address },
   });
 
-  const hasResolvedBalance = !!address && !lrepBalanceLoading && lrepBalance !== undefined;
-  const hasZeroLrep = hasResolvedBalance && lrepBalance === 0n;
+  const hasResolvedBalance = !!address && lrepBalance !== undefined;
+  const lrepGateState = getGovernanceReputationGateState({
+    hasAddress: Boolean(address),
+    lrepBalance,
+    lrepBalanceError,
+  });
   const addressKey = address?.toLowerCase() ?? null;
   const shouldWaitForEntryRouting = Boolean(address) && !hashInitialized;
 
@@ -165,28 +185,30 @@ function GovernancePageInner() {
   }
 
   if (shouldWaitForEntryRouting) {
+    return <GovernancePageLoading message="Loading governance..." />;
+  }
+
+  if (lrepGateState === "loading") {
+    return <GovernancePageLoading message="Loading LREP status..." />;
+  }
+
+  if (lrepGateState === "error") {
     return (
       <AppPageShell contentClassName="space-y-6">
-        <div className="flex min-h-[40vh] flex-col items-center justify-center px-4 text-center">
-          <span className="loading loading-spinner loading-lg text-primary" />
-          <p className="mt-4 text-sm text-base-content/60">Loading governance...</p>
+        <div className="surface-card mx-auto flex min-h-[40vh] max-w-xl flex-col items-center justify-center rounded-3xl px-6 py-10 text-center">
+          <h1 className="text-2xl font-semibold text-base-content">LREP status unavailable</h1>
+          <p className="mt-3 text-sm leading-6 text-base-content/60">
+            We could not confirm this wallet&apos;s LREP balance. Retry before opening the reputation profile.
+          </p>
+          <button type="button" className="btn btn-primary mt-6" onClick={() => void refetchLrepBalance()}>
+            Retry
+          </button>
         </div>
       </AppPageShell>
     );
   }
 
-  if (lrepBalanceLoading) {
-    return (
-      <AppPageShell contentClassName="space-y-6">
-        <div className="flex min-h-[40vh] flex-col items-center justify-center px-4 text-center">
-          <span className="loading loading-spinner loading-lg text-primary" />
-          <p className="mt-4 text-sm text-base-content/60">Loading LREP status...</p>
-        </div>
-      </AppPageShell>
-    );
-  }
-
-  if (hasZeroLrep && address) {
+  if (lrepGateState === "zero-lrep" && address) {
     return (
       <AppPageShell contentClassName="space-y-6">
         <GetLrepOnboarding address={address as `0x${string}`} />
