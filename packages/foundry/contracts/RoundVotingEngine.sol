@@ -92,7 +92,6 @@ contract RoundVotingEngine is
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
-    uint8 internal constant MAX_RBTS_SEED_REFRESHES = 2;
     address internal constant DISABLED_ADVISORY_VOTE_RECORDER = address(1);
 
     // --- State ---
@@ -934,9 +933,8 @@ contract RoundVotingEngine is
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
             return;
         }
-        if (RoundRevealLib.refreshExpiredRbtsSeed(
-                roundRbtsSeedEntropy, _roundRbtsSeedRefreshCount, contentId, roundId, MAX_RBTS_SEED_REFRESHES
-            )) {
+        if (RoundRevealLib.refreshExpiredRbtsSeed(roundRbtsSeedEntropy, _roundRbtsSeedRefreshCount, contentId, roundId))
+        {
             return;
         }
 
@@ -1285,9 +1283,7 @@ contract RoundVotingEngine is
         internal
         returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed)
     {
-        bytes32 settlementEntropy = RoundRevealLib.finalizeRbtsSeed(
-            roundRbtsSeedEntropy, _roundRbtsSeedRefreshCount, contentId, roundId, MAX_RBTS_SEED_REFRESHES
-        );
+        bytes32 settlementEntropy = RoundRevealLib.finalizeRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
         RoundRevealLib.ScoreRbtsResult memory result = RoundRevealLib.scoreRbtsRewards(
             roundCommitHashes[contentId][roundId],
             commits[contentId][roundId],
@@ -1682,7 +1678,8 @@ contract RoundVotingEngine is
     /// @custom:oz-renamed-from roundDeferredCleanupBounty
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) internal roundClusterPayoutReadyAt;
 
-    /// @dev Counts expired delayed-seed refreshes before deterministic fallback entropy is used.
+    /// @dev Counts expired delayed-seed refreshes for observability; settlement keeps refreshing
+    ///      permissionlessly until a live blockhash can seed RBTS scoring.
     mapping(uint256 contentId => mapping(uint256 roundId => uint8)) internal _roundRbtsSeedRefreshCount;
 
     /// @notice L-Cleanup-1: accumulated LREP that `processUnrevealedVotes` tried to send to

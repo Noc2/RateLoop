@@ -1097,7 +1097,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, ck4), 0, "ck4 stake returned");
     }
 
-    function test_RbtsExpiredSeedFinalizesWithFallbackAfterRefreshCap() public {
+    function test_RbtsExpiredSeedKeepsRefreshingAfterRefreshCap() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1128,11 +1128,15 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         nextExpiredSeedBlock += 257;
         vm.roll(nextExpiredSeedBlock);
         engine.settleRound(contentId, roundId);
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "third expired seed refresh waits");
+
+        vm.roll(block.number + 1);
+        engine.settleRound(contentId, roundId);
 
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "fallback entropy scores rewards");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "fallback produces score seed");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "post-cap refreshed seed scores rewards");
+        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "post-cap refresh produces score seed");
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, ck1), 0, "ck1 stake returned");
         assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, ck4), 0, "ck4 stake returned");
     }
