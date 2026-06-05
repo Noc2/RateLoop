@@ -5,12 +5,7 @@ import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
 import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
-import {
-    RewardPool,
-    RoundSnapshot,
-    BOUNTY_ELIGIBILITY_KIND_MASK,
-    BOUNTY_ELIGIBILITY_OPEN
-} from "./QuestionRewardPoolEscrowTypes.sol";
+import { RewardPool, RoundSnapshot, BOUNTY_ELIGIBILITY_OPEN } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
@@ -206,14 +201,14 @@ library QuestionRewardPoolEscrowClaimLib {
                     rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, rewardRecipient
                 )
         ) return 0;
-        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) = QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(
-            votingEngine, rewardPool, params.roundId
-        );
+        (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
+            QuestionRewardPoolEscrowWindowLib.previewRewardPoolWindowForRound(votingEngine, rewardPool, params.roundId);
         if (!windowActive) return 0;
         (bool revealed, address frontend) = QuestionRewardPoolEscrowVoterLib.timelyRevealedCommitFrontend(
             votingEngine, rewardPool.contentId, params.roundId, commitKey, bountyOpensAt, bountyClosesAt
         );
-        if (!revealed || votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, params.roundId) > 0) {
+        (,, uint256 cleanupRemaining,) = votingEngine.roundLifecycleState(rewardPool.contentId, params.roundId);
+        if (!revealed || cleanupRemaining > 0) {
             return 0;
         }
 
@@ -369,15 +364,10 @@ library QuestionRewardPoolEscrowClaimLib {
 
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
         if (!_isQuestionBountyEligibleForClaim(
-                rewardPool,
-                qualifiedQuestionRewardClaimants,
-                rewardPoolId,
-                roundId,
-                commitKey,
-                votingEngine,
-                snapshot
+                rewardPool, qualifiedQuestionRewardClaimants, rewardPoolId, roundId, commitKey, votingEngine, snapshot
             )) return 0;
-        if (votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) > 0) return 0;
+        (,, uint256 cleanupRemaining,) = votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
+        if (cleanupRemaining > 0) return 0;
         uint256 claimWeight = _roundClaimWeight(votingEngine, rewardPool.contentId, roundId, commitKey);
         if (claimWeight == 0) return 0;
         if (!snapshot.qualified) {
@@ -445,14 +435,14 @@ library QuestionRewardPoolEscrowClaimLib {
         RoundVotingEngine votingEngine,
         RoundSnapshot storage snapshot
     ) private view returns (bool) {
-        if ((rewardPool.bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK) == BOUNTY_ELIGIBILITY_OPEN) {
+        if (rewardPool.bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) {
             return true;
         }
         if (!snapshot.qualified) {
+            (,,, uint8 credentialMask, uint8 freshCredentialMask,) =
+                votingEngine.commitIdentityState(rewardPool.contentId, roundId, commitKey);
             return QuestionRewardPoolEscrowEligibilityLib.isCommitEligibleForBounty(
-                rewardPool.bountyEligibility,
-                votingEngine.commitCredentialMask(rewardPool.contentId, roundId, commitKey),
-                votingEngine.commitFreshCredentialMask(rewardPool.contentId, roundId, commitKey)
+                rewardPool.bountyEligibility, credentialMask, freshCredentialMask
             );
         }
         return qualifiedQuestionRewardClaimants[rewardPoolId][roundId][snapshot.clusterSnapshotDigest][commitKey];
@@ -682,10 +672,12 @@ library QuestionRewardPoolEscrowClaimLib {
         uint256 grossAmount,
         uint256 reservedFrontendFee
     ) private view returns (uint256 voterReward, uint256 frontendFee, address frontendRecipient) {
-        if (
-            reservedFrontendFee == 0 || frontend == address(0)
-                || !votingEngine.frontendEligibleAtCommit(contentId, roundId, commitKey)
-        ) {
+        if (reservedFrontendFee == 0 || frontend == address(0)) {
+            return (grossAmount, 0, address(0));
+        }
+
+        (,,,,, bool frontendEligible) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
+        if (!frontendEligible) {
             return (grossAmount, 0, address(0));
         }
 
@@ -749,6 +741,6 @@ library QuestionRewardPoolEscrowClaimLib {
         view
         returns (uint48 settledAt)
     {
-        (,,,,,,,,,, settledAt,,,) = votingEngine.rounds(contentId, roundId);
+        (,,,,,, settledAt) = votingEngine.roundCore(contentId, roundId);
     }
 }

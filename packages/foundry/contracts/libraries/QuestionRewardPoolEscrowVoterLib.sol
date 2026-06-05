@@ -28,7 +28,7 @@ library QuestionRewardPoolEscrowVoterLib {
         // iteration loops, and materializing the full ciphertext on every read is expensive.
         (address voter,, address commitFrontend, uint48 commitRevealedAt, bool commitRevealed,,) =
             votingEngine.commitCore(contentId, roundId, commitKey);
-        uint48 committedAt = votingEngine.commitCommittedAt(contentId, roundId, commitKey);
+        (,, uint48 committedAt,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
         return (
             voter != address(0) && commitRevealed
                 && committedWithinBountyWindow(opensAt, closesAt, committedAt, commitRevealedAt),
@@ -72,8 +72,7 @@ library QuestionRewardPoolEscrowVoterLib {
         bytes32 commitKey,
         address voter
     ) internal view returns (bytes32 identityKey, address holder) {
-        identityKey = votingEngine.commitIdentityKey(contentId, roundId, commitKey);
-        holder = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
+        (identityKey, holder,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
 
         if (identityKey == bytes32(0) || holder == address(0)) {
             IRaterIdentityRegistry.ResolvedRater memory resolved =
@@ -103,9 +102,9 @@ library QuestionRewardPoolEscrowVoterLib {
         rewardRecipient = resolved.holder == address(0) ? account : resolved.holder;
 
         if (identityKey != bytes32(0)) {
-            commitKey = votingEngine.identityCommitKey(contentId, roundId, identityKey);
+            (commitKey,,) = votingEngine.identityCommitState(contentId, roundId, identityKey, rewardRecipient);
             if (commitKey != bytes32(0)) {
-                address resolvedCommitHolder = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
+                (, address resolvedCommitHolder,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
                 if (resolvedCommitHolder != address(0)) {
                     rewardRecipient = resolvedCommitHolder;
                 }
@@ -113,13 +112,13 @@ library QuestionRewardPoolEscrowVoterLib {
             }
         }
         address holder = rewardRecipient;
-        commitKey = votingEngine.holderCommitKey(contentId, roundId, holder);
+        (, commitKey,) = votingEngine.identityCommitState(contentId, roundId, identityKey, holder);
         if (commitKey != bytes32(0)) {
-            bytes32 holderCommitIdentityKey = votingEngine.commitIdentityKey(contentId, roundId, commitKey);
+            (bytes32 holderCommitIdentityKey, address holderCommitHolder,,,,) =
+                votingEngine.commitIdentityState(contentId, roundId, commitKey);
             if (holderCommitIdentityKey != bytes32(0)) {
                 identityKey = holderCommitIdentityKey;
             }
-            address holderCommitHolder = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
             if (holderCommitHolder != address(0)) {
                 rewardRecipient = holderCommitHolder;
             }
@@ -127,14 +126,13 @@ library QuestionRewardPoolEscrowVoterLib {
         }
 
         if (holder != account) {
-            bytes32 holderCommitHash = votingEngine.voterCommitHash(contentId, roundId, holder);
-            if (holderCommitHash != bytes32(0)) {
-                commitKey = keccak256(abi.encodePacked(holder, holderCommitHash));
-                bytes32 holderDirectIdentityKey = votingEngine.commitIdentityKey(contentId, roundId, commitKey);
+            (, commitKey) = votingEngine.voterCommitKey(contentId, roundId, holder);
+            if (commitKey != bytes32(0)) {
+                (bytes32 holderDirectIdentityKey, address holderDirectCommitHolder,,,,) =
+                    votingEngine.commitIdentityState(contentId, roundId, commitKey);
                 if (holderDirectIdentityKey != bytes32(0)) {
                     identityKey = holderDirectIdentityKey;
                 }
-                address holderDirectCommitHolder = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
                 if (holderDirectCommitHolder != address(0)) {
                     rewardRecipient = holderDirectCommitHolder;
                 }
@@ -142,17 +140,16 @@ library QuestionRewardPoolEscrowVoterLib {
             }
         }
 
-        bytes32 directCommitHash = votingEngine.voterCommitHash(contentId, roundId, account);
-        if (directCommitHash == bytes32(0)) {
+        (, commitKey) = votingEngine.voterCommitKey(contentId, roundId, account);
+        if (commitKey == bytes32(0)) {
             return (identityKey, bytes32(0), rewardRecipient);
         }
 
-        commitKey = keccak256(abi.encodePacked(account, directCommitHash));
-        bytes32 commitIdentityKey = votingEngine.commitIdentityKey(contentId, roundId, commitKey);
+        (bytes32 commitIdentityKey, address commitHolder,,,,) =
+            votingEngine.commitIdentityState(contentId, roundId, commitKey);
         if (commitIdentityKey != bytes32(0)) {
             identityKey = commitIdentityKey;
         }
-        address commitHolder = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
         if (commitHolder != address(0)) {
             rewardRecipient = commitHolder;
         }
@@ -164,7 +161,7 @@ library QuestionRewardPoolEscrowVoterLib {
         uint256 roundId,
         bytes32 commitKey
     ) internal view returns (address voter) {
-        voter = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
+        (, voter,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
         if (voter != address(0)) {
             return voter;
         }

@@ -19,7 +19,6 @@ import {
     BundleQuestion,
     BundleRoundSetSnapshot,
     CreateSubmissionBundleParams,
-    BOUNTY_ELIGIBILITY_KIND_MASK,
     BOUNTY_ELIGIBILITY_OPEN
 } from "./QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
@@ -284,7 +283,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 contentId,
         uint256 roundId
     ) external {
-        (, RoundLib.RoundState state,,,,,,,,, uint48 settledAt,,,) = votingEngine.rounds(contentId, roundId);
+        (, RoundLib.RoundState state,,,,, uint48 settledAt) = votingEngine.roundCore(contentId, roundId);
         require(_isTerminalRound(state, settledAt), "Round not terminal");
         _recordBundleQuestionTerminal(
             bundleRewards,
@@ -772,8 +771,8 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
         while (cursor <= currentRoundId) {
             if (processedRounds >= maxRounds) return (processedRounds, false);
-            (uint48 startTime, RoundLib.RoundState state,,,,,,,,, uint48 settledAt,,,) =
-                votingEngine.rounds(contentId, cursor);
+            (uint48 startTime, RoundLib.RoundState state,,,,, uint48 settledAt) =
+                votingEngine.roundCore(contentId, cursor);
             if (startTime == 0) {
                 bundleQuestionTerminalSyncCursor[bundleId][bundleIndex] = ++cursor;
                 processedRounds++;
@@ -948,7 +947,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
         uint256 firstContentId = questions[0].contentId;
         uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        (,, uint16 commitCount,,,,,,,,,,,) = votingEngine.rounds(firstContentId, firstRoundId);
+        (,, uint16 commitCount,,,,) = votingEngine.roundCore(firstContentId, firstRoundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = votingEngine.getRoundCommitKey(firstContentId, firstRoundId, i);
             if (_isEligibleBundleRoundSetCompleter(
@@ -993,7 +992,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
         uint256 firstContentId = questions[0].contentId;
         uint256 firstRoundId = bundleRoundIds[bundleId][0][roundSetIndex];
-        (,, uint16 commitCount,,,,,,,,,,,) = votingEngine.rounds(firstContentId, firstRoundId);
+        (,, uint16 commitCount,,,,) = votingEngine.roundCore(firstContentId, firstRoundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = votingEngine.getRoundCommitKey(firstContentId, firstRoundId, i);
             if (_isEligibleBundleRoundSetCompleter(
@@ -1022,7 +1021,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         uint256 roundSetIndex,
         bytes32 firstCommitKey
     ) private view returns (bool) {
-        if ((bundle.bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK) == BOUNTY_ELIGIBILITY_OPEN) return true;
+        if (bundle.bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) return true;
         return qualifiedBundleRoundSetClaimants[bundleId][roundSetIndex][firstCommitKey];
     }
 
@@ -1311,7 +1310,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     {
         cursor = votingEngine.currentRoundId(contentId);
         if (cursor == 0) return 1;
-        (uint48 startTime, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(contentId, cursor);
+        (uint48 startTime, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(contentId, cursor);
         if (startTime == 0 || state != RoundLib.RoundState.Open) return cursor + 1;
     }
 

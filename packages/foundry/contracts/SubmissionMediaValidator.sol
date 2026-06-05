@@ -2,12 +2,18 @@
 pragma solidity ^0.8.34;
 
 /// @title SubmissionMediaValidator
-/// @notice Stateless helper for RateLoop question media validation.
+/// @notice Helper for RateLoop question media validation and canonical anchor emission.
 /// @dev Kept outside ContentRegistry to avoid bloating the upgradeable registry runtime.
 contract SubmissionMediaValidator {
     uint256 public constant MAX_IMAGE_URLS = 4;
     uint256 public constant MAX_URL_LENGTH = 2048;
     uint256 internal constant YOUTUBE_VIDEO_ID_LENGTH = 11;
+
+    error EmitterAlreadyInitialized();
+    error InvalidEmitter();
+    error UnauthorizedEmitter();
+
+    address public authorizedEmitter;
 
     event QuestionContentAnchored(
         uint256 indexed contentId,
@@ -17,6 +23,12 @@ contract SubmissionMediaValidator {
         bytes32 questionMetadataHash,
         bytes32 resultSpecHash
     );
+
+    function initializeEmitter(address emitter) external {
+        if (authorizedEmitter != address(0)) revert EmitterAlreadyInitialized();
+        if (emitter == address(0) || msg.sender != emitter) revert InvalidEmitter();
+        authorizedEmitter = emitter;
+    }
 
     function validateSingleMediaUrl(string calldata url) external pure {
         require(_isValidSubmissionUrl(url), "Invalid URL");
@@ -46,6 +58,7 @@ contract SubmissionMediaValidator {
         bytes32 questionMetadataHash,
         bytes32 resultSpecHash
     ) external {
+        if (msg.sender != authorizedEmitter) revert UnauthorizedEmitter();
         if (bytes(videoUrl).length != 0) {
             emit QuestionContentAnchored(contentId, 2, 0, videoUrl, questionMetadataHash, resultSpecHash);
             return;
@@ -272,5 +285,4 @@ contract SubmissionMediaValidator {
         return (char >= 0x30 && char <= 0x39) || (char >= 0x41 && char <= 0x5A) || (char >= 0x61 && char <= 0x7A)
             || char == "_" || char == "-";
     }
-
 }

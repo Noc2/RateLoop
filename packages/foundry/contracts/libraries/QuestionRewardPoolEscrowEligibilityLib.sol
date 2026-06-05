@@ -14,8 +14,8 @@ import {
 library QuestionRewardPoolEscrowEligibilityLib {
     function isValidPolicy(uint8 bountyEligibility) internal pure returns (bool) {
         uint8 kind = bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK;
-        return kind == BOUNTY_ELIGIBILITY_OPEN
-            || (kind >= BOUNTY_ELIGIBILITY_SELFIE && kind <= BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+        if (kind == BOUNTY_ELIGIBILITY_OPEN) return bountyEligibility == BOUNTY_ELIGIBILITY_OPEN;
+        return kind >= BOUNTY_ELIGIBILITY_SELFIE && kind <= BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
     }
 
     function isAccountEligibleForBounty(ProtocolConfig protocolConfig, uint8 bountyEligibility, address account)
@@ -24,10 +24,10 @@ library QuestionRewardPoolEscrowEligibilityLib {
         returns (bool)
     {
         if (bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) return true;
+        if (!isValidPolicy(bountyEligibility)) return false;
         if (account == address(0)) return false;
 
         uint8 kind = bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK;
-        if (kind == BOUNTY_ELIGIBILITY_OPEN) return true;
         if (!_hasActiveCredentialKind(protocolConfig, account, kind)) return false;
         if ((bountyEligibility & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) != 0) {
             return _hasRecentCredentialRecheck(protocolConfig, account, kind);
@@ -40,8 +40,9 @@ library QuestionRewardPoolEscrowEligibilityLib {
         pure
         returns (bool)
     {
+        if (bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) return true;
+        if (!isValidPolicy(bountyEligibility)) return false;
         uint8 kind = bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK;
-        if (kind == BOUNTY_ELIGIBILITY_OPEN) return true;
         uint8 requiredBit = uint8(1 << kind);
         if ((credentialMask & requiredBit) == 0) return false;
         if ((bountyEligibility & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) != 0) {

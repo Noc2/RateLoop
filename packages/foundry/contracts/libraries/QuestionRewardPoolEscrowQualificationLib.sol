@@ -78,8 +78,8 @@ library QuestionRewardPoolEscrowQualificationLib {
             uint48 settledAt
         )
     {
-        (, RoundLib.RoundState state,,,,,,,,, uint48 roundSettledAt,,,) =
-            ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
+        (, RoundLib.RoundState state,,,,, uint48 roundSettledAt) =
+            ctx.votingEngine.roundCore(ctx.contentId, ctx.roundId);
         if (state != RoundLib.RoundState.Settled || roundSettledAt == 0) return (false, false, 0, 0, 0, 0);
         settledAt = roundSettledAt;
 
@@ -99,7 +99,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint64 bountyOpensAt,
         uint64 bountyClosesAt
     ) external view {
-        (uint48 startedAt, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(contentId, nextRoundToEvaluate);
+        (uint48 startedAt, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(contentId, nextRoundToEvaluate);
         if (state == RoundLib.RoundState.Open) {
             // An Open cursor round is the latest round (rounds are sequential), so it cannot strand a
             // later qualifiable round. It is safe to refund unallocated funds when it has no live bounty
@@ -214,7 +214,8 @@ library QuestionRewardPoolEscrowQualificationLib {
         );
         require(roundSettled, "Round not settled");
         require(canQualify, "Too few eligible voters");
-        require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
+        (,, uint256 cleanupRemaining,) = votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
+        require(cleanupRemaining == 0, "Cleanup pending");
 
         allocation = _previewRoundAllocation(rewardPool, false, 0);
         require(allocation > 0 && allocation <= rewardPool.unallocatedAmount, "No allocation");
@@ -311,7 +312,8 @@ library QuestionRewardPoolEscrowQualificationLib {
             )
         );
         require(roundSettled, "Round not settled");
-        require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
+        (,, uint256 cleanupRemaining,) = votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
+        require(cleanupRemaining == 0, "Cleanup pending");
 
         IClusterPayoutOracle.RoundPayoutSnapshot memory payoutSnapshot = _finalizedQuestionPayoutSnapshot(
             rewardPoolClusterPayoutOracle, votingEngine, rewardPoolId, rewardPool.contentId, roundId, payoutDomain
@@ -460,7 +462,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint8 rewardAssetUsdc,
         uint8 payoutDomain
     ) private view returns (bool roundFinished, bool canQualify, uint256 eligibleVoters) {
-        (, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(rewardPool.contentId, roundId);
+        (, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(rewardPool.contentId, roundId);
         if (state == RoundLib.RoundState.Open) return (false, false, 0);
         if (state != RoundLib.RoundState.Settled) return (true, false, 0);
         (bool windowActive, uint64 bountyOpensAt, uint64 bountyClosesAt) =
@@ -596,7 +598,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         view
         returns (uint256 rawEligibleVoters, uint256 effectiveParticipantUnits, uint256 totalClaimWeight)
     {
-        (,, uint16 commitCount,,,,,,,,,,,) = ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
+        (,, uint16 commitCount,,,,) = ctx.votingEngine.roundCore(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
             if (_isEligibleRevealedCommit(ctx, commitKey)) {
@@ -621,7 +623,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 rewardPoolId,
         bytes32 snapshotDigest
     ) private {
-        (,, uint16 commitCount,,,,,,,,,,,) = ctx.votingEngine.rounds(ctx.contentId, ctx.roundId);
+        (,, uint16 commitCount,,,,) = ctx.votingEngine.roundCore(ctx.contentId, ctx.roundId);
         for (uint256 i = 0; i < commitCount;) {
             bytes32 commitKey = ctx.votingEngine.getRoundCommitKey(ctx.contentId, ctx.roundId, i);
             if (_isEligibleRevealedCommit(ctx, commitKey)) {
@@ -639,10 +641,10 @@ library QuestionRewardPoolEscrowQualificationLib {
         (bytes32 identityKey, address holder) = QuestionRewardPoolEscrowVoterLib.commitIdentity(
             ctx.votingEngine, ctx.protocolConfig, ctx.contentId, ctx.roundId, commitKey, voter
         );
+        (,,, uint8 credentialMask, uint8 freshCredentialMask,) =
+            ctx.votingEngine.commitIdentityState(ctx.contentId, ctx.roundId, commitKey);
         if (!QuestionRewardPoolEscrowEligibilityLib.isCommitEligibleForBounty(
-                ctx.bountyEligibility,
-                ctx.votingEngine.commitCredentialMask(ctx.contentId, ctx.roundId, commitKey),
-                ctx.votingEngine.commitFreshCredentialMask(ctx.contentId, ctx.roundId, commitKey)
+                ctx.bountyEligibility, credentialMask, freshCredentialMask
             )) {
             return false;
         }
@@ -667,7 +669,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         bool revealed;
         (voter,,, revealedAt, revealed,,) = ctx.votingEngine.commitCore(ctx.contentId, ctx.roundId, commitKey);
         if (voter == address(0) || !revealed) return (voter, false);
-        uint48 committedAt = ctx.votingEngine.commitCommittedAt(ctx.contentId, ctx.roundId, commitKey);
+        (,, uint48 committedAt,,,) = ctx.votingEngine.commitIdentityState(ctx.contentId, ctx.roundId, commitKey);
         bountyEligibleTiming = QuestionRewardPoolEscrowVoterLib.committedWithinBountyWindow(
             ctx.bountyOpensAt, ctx.bountyClosesAt, committedAt, revealedAt
         );
@@ -777,7 +779,7 @@ library QuestionRewardPoolEscrowQualificationLib {
             oracle.roundPayoutSnapshotConsumerFor(payoutDomain, rewardPoolId, contentId, roundId) == address(this),
             "Cluster consumer mismatch"
         );
-        uint64 readyAt = votingEngine.roundClusterPayoutReadyAt(contentId, roundId);
+        (,,, uint48 readyAt) = votingEngine.roundLifecycleState(contentId, roundId);
         require(readyAt != 0, "Cluster source pending");
         require(
             oracle.roundPayoutSnapshotProposedAt(payoutDomain, rewardPoolId, contentId, roundId) >= readyAt,
@@ -808,7 +810,7 @@ library QuestionRewardPoolEscrowQualificationLib {
         uint256 roundId,
         uint8 payoutDomain
     ) private view returns (bool) {
-        uint64 readyAt = votingEngine.roundClusterPayoutReadyAt(rewardPool.contentId, roundId);
+        (,,, uint48 readyAt) = votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
         if (readyAt == 0) return false;
         try IClusterPayoutOracle(clusterPayoutOracle)
             .roundPayoutSnapshotProposedAt(payoutDomain, rewardPool.id, rewardPool.contentId, roundId) returns (

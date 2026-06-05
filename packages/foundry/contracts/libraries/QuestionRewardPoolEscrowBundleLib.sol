@@ -40,10 +40,8 @@ library QuestionRewardPoolEscrowBundleLib {
         for (uint256 roundSetIndex = 0; roundSetIndex < completedRoundSets;) {
             for (uint256 i = 0; i < questions.length;) {
                 uint256 roundId = bundleRoundIds[bundleId][i][roundSetIndex];
-                require(
-                    votingEngine.roundUnrevealedCleanupRemaining(questions[i].contentId, roundId) == 0,
-                    "Cleanup pending"
-                );
+                (,, uint256 cleanupRemaining,) = votingEngine.roundLifecycleState(questions[i].contentId, roundId);
+                require(cleanupRemaining == 0, "Cleanup pending");
                 unchecked {
                     ++i;
                 }
@@ -127,8 +125,9 @@ library QuestionRewardPoolEscrowBundleLib {
                 votingEngine, protocolConfig, bountyOpensAt, contentId, roundId, account, bountyClosesAt
             );
             if (commitKey == bytes32(0)) return (false, bytes32(0));
-            if (requireCleanupComplete_ && votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) > 0) {
-                return (false, bytes32(0));
+            if (requireCleanupComplete_) {
+                (,, uint256 cleanupRemaining,) = votingEngine.roundLifecycleState(contentId, roundId);
+                if (cleanupRemaining > 0) return (false, bytes32(0));
             }
             if (i == 0) {
                 firstCompleterKey = completerKey;
@@ -200,10 +199,9 @@ library QuestionRewardPoolEscrowBundleLib {
             } else if (questionFrontend != frontend) {
                 frontend = address(0);
             }
-            if (
-                questionFrontend != address(0)
-                    && !votingEngine.frontendEligibleAtCommit(question.contentId, roundId, commitKey)
-            ) {
+            (,,,,, bool questionFrontendEligible) =
+                votingEngine.commitIdentityState(question.contentId, roundId, commitKey);
+            if (questionFrontend != address(0) && !questionFrontendEligible) {
                 frontend = address(0);
             }
             if (

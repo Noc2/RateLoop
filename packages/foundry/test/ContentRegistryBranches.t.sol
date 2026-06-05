@@ -5,6 +5,7 @@ import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
 import { Vm } from "forge-std/Vm.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
+import { SubmissionMediaValidator } from "../contracts/SubmissionMediaValidator.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
@@ -51,6 +52,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     event ContentDetailsSubmitted(uint256 indexed contentId, string detailsUrl, bytes32 detailsHash);
     bytes32 internal constant QUESTION_CONTENT_ANCHORED_TOPIC =
         keccak256("QuestionContentAnchored(uint256,uint8,uint256,string,bytes32,bytes32)");
+    bytes32 internal constant QUESTION_BUNDLE_CONTENT_LINKED_TOPIC =
+        keccak256("QuestionBundleContentLinked(uint256,uint256,uint256)");
 
     struct QuestionReservation {
         string contextUrl;
@@ -212,7 +215,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     ) internal returns (bytes32 commitKey, bytes32 salt) {
         salt = keccak256(abi.encodePacked(voter, block.timestamp));
         _openRoundForTest(engine, contentId, voter);
-        uint256 roundId = engine.previewCommitRoundId(contentId);
+        uint256 roundId = _previewCommitRoundId(engine, contentId);
         uint16 referenceRatingBps = _currentRatingReferenceBps(contentId);
         bytes memory ciphertext = _testCiphertext(isUp, salt, contentId);
         bytes32 commitHash = _commitHash(
@@ -390,16 +393,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     ) internal view returns (bytes32) {
         bytes32[] memory questionHashes = new bytes32[](questions.length);
         for (uint256 i = 0; i < questions.length; i++) {
-            (uint256 resolvedCategoryId,) = registry.previewQuestionSubmissionKey(
-                questions[i].contextUrl,
-                questions[i].imageUrls,
-                questions[i].videoUrl,
-                questions[i].title,
-                questions[i].description,
-                questions[i].tags,
-                questions[i].categoryId,
-                questions[i].details
-            );
+            uint256 resolvedCategoryId = questions[i].categoryId;
             questionHashes[i] = keccak256(
                 abi.encode(
                     QUESTION_BUNDLE_ITEM_DOMAIN,
@@ -445,7 +439,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         internal
         returns (bytes32 submissionKey)
     {
-        (, submissionKey) = registry.previewQuestionSubmissionKey(
+        submissionKey = _questionSubmissionKey(
             reservation.contextUrl,
             reservation.imageUrls,
             reservation.videoUrl,
@@ -589,13 +583,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertTrue(registry.submissionKeyUsed(submissionKey));
     }
 
-    function test_PreviewQuestionSubmissionKey_IncludesDetails() public view {
+    function test_QuestionSubmissionKey_IncludesDetails() public pure {
         string memory contextUrl = "https://example.com/context";
         string[] memory imageUrls = _emptyImageUrls();
-        (, bytes32 emptyDetailsKey) = registry.previewQuestionSubmissionKey(
+        bytes32 emptyDetailsKey = _questionSubmissionKey(
             contextUrl, imageUrls, "", "Question?", "Context", "Products", 1, _emptySubmissionDetails()
         );
-        (, bytes32 detailsKey) = registry.previewQuestionSubmissionKey(
+        bytes32 detailsKey = _questionSubmissionKey(
             contextUrl,
             imageUrls,
             "",
@@ -713,7 +707,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         imageUrls[2] =
             "https://cdn.example.com/review/image.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-        registry.previewQuestionSubmissionKey(
+        _questionSubmissionKey(
             "https://example.com/context",
             imageUrls,
             "",
@@ -760,7 +754,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SubmitQuestion_AllowsSupportedYouTubeVideoShapes() public view {
-        registry.previewQuestionSubmissionKey(
+        _questionSubmissionKey(
             "https://example.com/context",
             _emptyImageUrls(),
             "https://youtu.be/jNQXAC9IVRw?t=1",
@@ -770,7 +764,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             1,
             _emptySubmissionDetails()
         );
-        registry.previewQuestionSubmissionKey(
+        _questionSubmissionKey(
             "https://example.com/context",
             _emptyImageUrls(),
             "https://www.youtube.com/embed/jNQXAC9IVRw",
@@ -780,7 +774,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             1,
             _emptySubmissionDetails()
         );
-        registry.previewQuestionSubmissionKey(
+        _questionSubmissionKey(
             "https://example.com/context",
             _emptyImageUrls(),
             "https://youtube.com/watch?feature=share&v=jNQXAC9IVRw",
@@ -913,11 +907,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         uint256 anchors;
+        address validator = address(registry.submissionMediaValidator());
+        assertEq(SubmissionMediaValidator(validator).authorizedEmitter(), address(registry));
         for (uint256 i = 0; i < logs.length; i++) {
             if (
                 logs[i].topics.length == 3 && logs[i].topics[0] == QUESTION_CONTENT_ANCHORED_TOPIC
                     && logs[i].topics[1] == bytes32(id) && logs[i].topics[2] == bytes32(uint256(1))
             ) {
+                assertEq(logs[i].emitter, validator);
                 (uint256 mediaIndex, string memory url, bytes32 questionMetadataHash, bytes32 resultSpecHash) =
                     abi.decode(logs[i].data, (uint256, string, bytes32, bytes32));
                 assertEq(mediaIndex, anchors);
@@ -928,10 +925,15 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             }
         }
         assertEq(anchors, 2);
+
+        vm.prank(submitter);
+        vm.expectRevert(SubmissionMediaValidator.UnauthorizedEmitter.selector);
+        SubmissionMediaValidator(validator)
+            .emitQuestionContentAnchored(id, imageUrls, "", spec.questionMetadataHash, spec.resultSpecHash);
     }
 
     function test_SubmitQuestion_AllowsRateloopAiUploadedImages() public view {
-        registry.previewQuestionSubmissionKey(
+        _questionSubmissionKey(
             "https://example.com/context",
             _singleImageUrls(
                 "https://www.rateloop.ai/api/attachments/images/att_0123456789abcdef.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -943,7 +945,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             1,
             _emptySubmissionDetails()
         );
-        registry.previewQuestionSubmissionKey(
+        _questionSubmissionKey(
             "https://example.com/context",
             _singleImageUrls(
                 "https://rateloop.ai/api/attachments/images/att_0123456789abcdef.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -1503,6 +1505,25 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function test_SubmitQuestionBundleWithReward_EmitsContentLinkEvents() public {
+        vm.recordLogs();
+        uint256[] memory contentIds = _submitReservedQuestionBundleForDormancyTest();
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        uint256 matchedLinks;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] != QUESTION_BUNDLE_CONTENT_LINKED_TOPIC) continue;
+
+            assertLt(matchedLinks, contentIds.length);
+            assertEq(uint256(logs[i].topics[1]), 1);
+            assertEq(uint256(logs[i].topics[2]), contentIds[matchedLinks]);
+            assertEq(uint256(logs[i].topics[3]), matchedLinks);
+            matchedLinks++;
+        }
+
+        assertEq(matchedLinks, contentIds.length);
+    }
+
     function test_SubmitQuestionBundleWithReward_RejectsHighRoundVoterCap() public {
         ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
         questions[0] = ContentRegistry.BundleQuestionInput({
@@ -1661,7 +1682,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             block.timestamp + 30 days
         );
         RoundLib.RoundConfig memory roundConfig = _bundleContentRoundConfig();
-        (, bytes32 firstSubmissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 firstSubmissionKey = _questionSubmissionKey(
             questions[0].contextUrl,
             questions[0].imageUrls,
             questions[0].videoUrl,
@@ -1671,7 +1692,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             questions[0].categoryId,
             _emptySubmissionDetails()
         );
-        (, bytes32 secondSubmissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 secondSubmissionKey = _questionSubmissionKey(
             questions[1].contextUrl,
             questions[1].imageUrls,
             questions[1].videoUrl,
@@ -1953,7 +1974,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             url: "https://example.com/no-config", title: "goal", description: "goal", tags: "tags"
         });
         bytes32 salt = _contentSubmissionSalt(question.url, submitter);
-        (, bytes32 submissionKey) = reg2.previewQuestionSubmissionKey(
+        bytes32 submissionKey = _questionSubmissionKey(
             question.url,
             _emptyImageUrls(),
             "",
@@ -2375,7 +2396,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     function test_SubmitQuestion_AllowsMaxLengthContextUrl() public view {
         string memory maxUrl = _validLengthUrl(2048, bytes("https://"), bytes(".example.com/context"));
 
-        registry.previewQuestionSubmissionKey(
+        _questionSubmissionKey(
             maxUrl,
             _singleImageUrls(_uploadedImageUrl("max-length-context")),
             "",
@@ -2388,7 +2409,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     }
 
     function test_SubmitQuestion_AllowsPercentEncodedPath() public view {
-        registry.previewQuestionSubmissionKey(
+        _questionSubmissionKey(
             "https://example.com/a%20b",
             _emptyImageUrls(),
             "",
@@ -2824,7 +2845,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         assertGt(registry.getRating(1), ratingBefore, "tracked old engine settlement updates rating");
         vm.warp(block.timestamp + 30 days);
-        assertFalse(registry.isDormancyEligible(1), "settlement refreshes dormancy anchor");
+        vm.expectRevert("Dormancy period not elapsed");
+        registry.markDormant(1);
     }
 
     function test_SetVotingEngine_ReplacementCannotCommitWhileTrackedOldRoundOpen() public {
@@ -2854,7 +2876,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(voter2);
         lrepToken.approve(address(replacementEngine), STAKE);
-        uint256 roundContext = _roundContext(replacementEngine.previewCommitRoundId(1), referenceRatingBps);
+        uint256 roundContext = _roundContext(_previewCommitRoundId(replacementEngine, 1), referenceRatingBps);
         vm.expectRevert(ContentRegistry.ActiveRoundOnPreviousEngine.selector);
         replacementEngine.commitVote(
             1,
@@ -2908,7 +2930,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
 
         vm.warp(T0 + 30 days + 30 minutes);
-        assertTrue(registry.isDormancyEligible(1), "stale settlement must not refresh dormancy anchor");
+        registry.markDormant(1);
+        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
     }
 
     function test_SetVotingEngine_OldEngineRecordMeaningfulActivity_RevertsOnFreshContent_AfterRotation() public {
@@ -3240,22 +3264,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
     }
 
-    function test_IsDormancyEligible_SubQuorumRound_AllVotesRevealed_ReturnsTrue() public {
-        vm.startPrank(submitter);
-        lrepToken.approve(address(registry), 10e6);
-        _submitContentWithReservation(registry, "https://example.com/open-round-eligible", "goal", "goal", "tags", 0);
-        vm.stopPrank();
-
-        (bytes32 commitKey, bytes32 salt) = _commit(voter1, 1, true);
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, 1);
-
-        _warpPastTlockRevealTime(block.timestamp + 1 hours);
-        votingEngine.revealVoteByCommitKey(1, roundId, commitKey, true, 5_000, salt);
-
-        vm.warp(T0 + 31 days);
-        assertTrue(registry.isDormancyEligible(1), "sub-quorum refundable rounds should not block dormancy");
-    }
-
     function test_MarkDormant_AfterEngineRotationWithSubQuorumHistoricalVotes_AllowsDormant() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
@@ -3300,7 +3308,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         votingEngine.cancelExpiredRound(1, roundId);
 
         vm.warp(T0 + 31 days);
-        assertTrue(registry.isDormancyEligible(1), "terminal old round should not pin dormancy");
         registry.markDormant(1);
 
         (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
@@ -3334,7 +3341,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _commitWithStakeToEngine(replacementEngine, voter4, 1, false, STAKE);
 
         vm.warp(T0 + 31 days);
-        assertFalse(registry.isDormancyEligible(1), "current replacement quorum round should block dormancy");
         vm.expectRevert("Content has active round");
         registry.markDormant(1);
     }
@@ -3380,7 +3386,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
     }
 
-    function test_IsDormancyEligible_ZeroStakeOpenRound_ReturnsTrue() public {
+    function test_MarkDormant_ZeroStakeOpenRound_EligibilityPathAllowsDormant() public {
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 10e6);
         _submitContentWithReservation(
@@ -3392,7 +3398,9 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.prank(voter1);
         votingEngine.openRound(1);
 
-        assertTrue(registry.isDormancyEligible(1), "empty open round should not block dormancy eligibility");
+        registry.markDormant(1);
+        (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(1);
+        assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
     }
 
     function test_CommitVote_DormancyEligibleContent_CanStartNewRoundAfterCancellation() public {
@@ -3410,7 +3418,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         bytes32 salt = keccak256(abi.encodePacked(voter2, block.timestamp));
         _openRoundForTest(votingEngine, 1, voter2);
-        uint256 nextRoundId = votingEngine.previewCommitRoundId(1);
+        uint256 nextRoundId = _previewCommitRoundId(votingEngine, 1);
         uint64 targetRound = _tlockCommitTargetRound(votingEngine, 1);
         bytes32 drandChainHash = _tlockDrandChainHash();
         bytes memory ciphertext = _testCiphertext(true, salt, 1, targetRound, drandChainHash);
@@ -3470,7 +3478,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("No submission key");
         registry.releaseDormantSubmissionKey(1);
 
-        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 submissionKey = _questionSubmissionKey(
             url, _emptyImageUrls(), "", title, description, tags, 1, _emptySubmissionDetails()
         );
         assertTrue(registry.submissionKeyUsed(submissionKey), "active resubmission keeps canonical key reserved");

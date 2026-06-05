@@ -14,7 +14,7 @@ import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol"
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { RatingLib } from "./libraries/RatingLib.sol";
 import { RatingMath } from "./libraries/RatingMath.sol";
-import { QuestionRewardPoolEscrowEligibilityLib } from "./libraries/QuestionRewardPoolEscrowEligibilityLib.sol";
+import { ContentRegistryRewardLib } from "./libraries/ContentRegistryRewardLib.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { SubmissionMediaValidator } from "./SubmissionMediaValidator.sol";
 
@@ -232,7 +232,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Slash policy frozen at content creation so governance cannot retroactively rewrite stake terms.
     mapping(uint256 => RatingLib.SlashConfig) internal contentSlashConfigSnapshot;
 
-    SubmissionMediaValidator internal immutable SUBMISSION_MEDIA_VALIDATOR;
+    SubmissionMediaValidator public immutable submissionMediaValidator;
 
     /// @dev Reserved storage gap for future upgrades
     uint256[42] private __gap;
@@ -289,6 +289,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bytes32 bundleHash,
         uint256 rewardPoolId
     );
+    event QuestionBundleContentLinked(uint256 indexed bundleId, uint256 indexed contentId, uint256 indexed bundleIndex);
     event ContentDormant(uint256 indexed contentId);
     event DormantSubmissionKeyReleased(uint256 indexed contentId, bytes32 indexed submissionKey);
     event ContentRevived(uint256 indexed contentId, address indexed reviver);
@@ -314,7 +315,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @custom:oz-upgrades-unsafe-allow constructor state-variable-immutable
     constructor() {
-        SUBMISSION_MEDIA_VALIDATOR = new SubmissionMediaValidator();
+        submissionMediaValidator = new SubmissionMediaValidator();
         _disableInitializers();
     }
 
@@ -333,6 +334,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(_governance != address(0), "Invalid governance");
         require(_treasuryAuthority != address(0), "Bad treasury");
         require(_lrepToken != address(0), "Invalid LREP token");
+        submissionMediaValidator.initializeEmitter(address(this));
 
         // Governance gets all permanent roles
         _grantRole(DEFAULT_ADMIN_ROLE, _governance);
@@ -596,6 +598,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 bundleId
             );
             contentIds[i] = contentId;
+            emit QuestionBundleContentLinked(bundleId, contentId, i);
 
             emit ContentSubmitted(
                 contentId,
@@ -760,9 +763,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ) internal view returns (SubmissionMetadata memory metadata) {
         bool hasContextUrl = bytes(contextUrl).length != 0;
         if (hasContextUrl) {
-            SUBMISSION_MEDIA_VALIDATOR.validateContextUrl(contextUrl);
+            submissionMediaValidator.validateContextUrl(contextUrl);
         }
-        SUBMISSION_MEDIA_VALIDATOR.validateOptionalMediaSet(imageUrls, videoUrl);
+        submissionMediaValidator.validateOptionalMediaSet(imageUrls, videoUrl);
         require(hasContextUrl || imageUrls.length > 0 || bytes(videoUrl).length != 0, "Context or media required");
         metadata = SubmissionMetadata({
             url: contextUrl, title: title, description: description, tags: tags, categoryId: categoryId
@@ -908,7 +911,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     function _validateSubmissionDetails(SubmissionDetails memory details) internal view {
         if (bytes(details.detailsUrl).length != 0) {
             require(details.detailsHash != bytes32(0), "Details hash required");
-            SUBMISSION_MEDIA_VALIDATOR.validateContextUrl(details.detailsUrl);
+            submissionMediaValidator.validateContextUrl(details.detailsUrl);
         } else {
             require(details.detailsHash == bytes32(0), "Details URL required");
         }
@@ -1072,7 +1075,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string memory videoUrl,
         QuestionSpecCommitment memory spec
     ) internal {
-        SUBMISSION_MEDIA_VALIDATOR.emitQuestionContentAnchored(
+        submissionMediaValidator.emitQuestionContentAnchored(
             contentId, imageUrls, videoUrl, spec.questionMetadataHash, spec.resultSpecHash
         );
     }
@@ -1256,35 +1259,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         return c.id != 0 && c.status == ContentStatus.Active;
     }
 
-    function isDormancyEligible(uint256 contentId) external view returns (bool) {
-        Content storage c = contents[contentId];
-        if (c.id == 0 || c.status != ContentStatus.Active) return false;
-        if (block.timestamp <= dormancyAnchorAt[contentId] + DORMANCY_PERIOD) return false;
-        return !_hasDormancyBlockingRound(contentId);
-    }
-
-    /// @notice Preview the question-level submission key for a future multi-media reveal.
-    /// @dev Preview is deterministic only; reveal performs full validation.
-    function previewQuestionSubmissionKey(
-        string calldata contextUrl,
-        string[] calldata imageUrls,
-        string calldata videoUrl,
-        string calldata title,
-        string calldata description,
-        string calldata tags,
-        uint256 categoryId,
-        SubmissionDetails calldata details
-    ) external pure returns (uint256 resolvedCategoryId, bytes32 submissionKey) {
-        SubmissionMetadata memory metadata;
-        metadata.url = contextUrl;
-        metadata.title = title;
-        metadata.description = description;
-        metadata.tags = tags;
-        resolvedCategoryId = categoryId;
-        submissionKey =
-            _deriveQuestionMediaSubmissionKey(metadata, _submissionMediaHash(imageUrls, videoUrl), details, categoryId);
-    }
-
     function _computeRevealCommitment(
         bytes32 submissionKey,
         bytes32 mediaHash,
@@ -1381,31 +1355,17 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function _validateSubmissionReward(SubmissionRewardTerms memory rewardTerms) internal view {
-        require(
-            rewardTerms.asset == SUBMISSION_REWARD_ASSET_LREP || rewardTerms.asset == SUBMISSION_REWARD_ASSET_USDC,
-            "Invalid reward asset"
-        );
-        require(rewardTerms.amount >= _minimumSubmissionReward(rewardTerms.asset), "Reward below minimum");
-        require(rewardTerms.requiredVoters >= MIN_SUBMISSION_REWARD_REQUIRED_VOTERS, "Too few voters");
-        require(rewardTerms.requiredSettledRounds >= MIN_SUBMISSION_REWARD_SETTLED_ROUNDS, "Too few rounds");
-        require(rewardTerms.requiredSettledRounds <= MAX_SUBMISSION_REWARD_SETTLED_ROUNDS, "Too many rounds");
-        require(
-            rewardTerms.amount >= rewardTerms.requiredSettledRounds * rewardTerms.requiredVoters, "Reward too small"
-        );
-        if (rewardTerms.bountyWindowSeconds == 0) {
-            require(rewardTerms.bountyStartBy == 0, "Bad start-by");
-            require(rewardTerms.feedbackWindowSeconds == 0, "Bad feedback window");
-        } else {
-            require(rewardTerms.bountyStartBy > block.timestamp, "Bad start-by");
-            require(rewardTerms.bountyWindowSeconds <= type(uint32).max, "Bad bounty window");
-            uint256 feedbackWindow = rewardTerms.feedbackWindowSeconds == 0
-                ? rewardTerms.bountyWindowSeconds
-                : rewardTerms.feedbackWindowSeconds;
-            require(feedbackWindow <= type(uint32).max, "Bad feedback window");
-            require(feedbackWindow <= rewardTerms.bountyWindowSeconds, "Feedback after bounty");
-        }
-        require(
-            QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(rewardTerms.bountyEligibility), "Invalid eligibility"
+        ContentRegistryRewardLib.validateSubmissionReward(
+            rewardTerms.asset,
+            rewardTerms.amount,
+            rewardTerms.requiredVoters,
+            rewardTerms.requiredSettledRounds,
+            rewardTerms.bountyStartBy,
+            rewardTerms.bountyWindowSeconds,
+            rewardTerms.feedbackWindowSeconds,
+            rewardTerms.bountyEligibility,
+            _minimumSubmissionReward(rewardTerms.asset),
+            block.timestamp
         );
     }
 
@@ -1556,8 +1516,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 activeRoundId = IRoundVotingEngine(engine).currentRoundId(contentId);
         if (activeRoundId == 0) return false;
 
-        (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,,,,,,,,,) =
-            IRoundVotingEngine(engine).rounds(contentId, activeRoundId);
+        (, RoundLib.RoundState roundState, uint16 voteCount,, uint64 totalStake,,) =
+            IRoundVotingEngine(engine).roundCore(contentId, activeRoundId);
         return roundState == RoundLib.RoundState.Open && voteCount != 0 && totalStake != 0;
     }
 

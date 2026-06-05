@@ -37,7 +37,6 @@ import {
     AuthorizedRewardPoolParams,
     CreateRewardPoolParams,
     CreateSubmissionBundleParams,
-    BOUNTY_ELIGIBILITY_KIND_MASK,
     BOUNTY_ELIGIBILITY_OPEN
 } from "./libraries/QuestionRewardPoolEscrowTypes.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./libraries/QuestionRewardPoolEscrowVoterLib.sol";
@@ -726,7 +725,8 @@ contract QuestionRewardPoolEscrow is
     ) internal returns (uint256 rewardAmount) {
         RewardPool storage rewardPool = _getExistingRewardPool(rewardPoolId);
         require(!rewardPool.refunded, "Bounty refunded");
-        require(votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) == 0, "Cleanup pending");
+        (,, uint256 cleanupRemaining,) = votingEngine.roundLifecycleState(rewardPool.contentId, roundId);
+        require(cleanupRemaining == 0, "Cleanup pending");
         _qualifyRoundIfNeeded(rewardPoolId, rewardPool, roundId);
 
         (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) =
@@ -1206,7 +1206,8 @@ contract QuestionRewardPoolEscrow is
         // completion is a low-impact concern and is anyway gated by the frontend operator's
         // global LREP bond at FrontendRegistry.
         if (roundId < rewardPool.startRoundId) return 0;
-        return votingEngine.roundClusterPayoutReadyAt(contentId, roundId);
+        (,,, uint48 readyAt) = votingEngine.roundLifecycleState(contentId, roundId);
+        return readyAt;
     }
 
     function _snapshotHasPaidClaim(RoundSnapshot storage snapshot) private view returns (bool) {
@@ -1451,7 +1452,7 @@ contract QuestionRewardPoolEscrow is
         uint256 roundId,
         bytes32 commitKey
     ) internal view returns (bool) {
-        if ((rewardPool.bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK) == BOUNTY_ELIGIBILITY_OPEN) return true;
+        if (rewardPool.bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) return true;
         RoundSnapshot storage snapshot = roundSnapshots[rewardPoolId][roundId];
         return qualifiedQuestionRewardClaimants[rewardPoolId][roundId][snapshot.clusterSnapshotDigest][commitKey];
     }

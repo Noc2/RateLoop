@@ -1045,6 +1045,27 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         emit HumanCredentialRevoked(rater, nullifierHash, provider);
     }
 
+    function revokeWorldCredential(address rater, uint8 kind) external onlyRole(SEEDER_ROLE) {
+        if (rater == address(0)) revert InvalidAddress();
+        if (!_isSupportedWorldCredentialKind(kind) || kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) {
+            revert UnsupportedCredentialKind();
+        }
+        WorldCredential storage credential = _worldCredentials[rater][kind];
+        if (!credential.verified || credential.revoked) revert InvalidCredential();
+
+        credential.revoked = true;
+        bytes32 nullifierHash = credential.nullifierHash;
+        if (nullifierHash != bytes32(0)) {
+            if (_worldCredentialNullifierOwner[kind][nullifierHash] == rater) {
+                delete _worldCredentialNullifierOwner[kind][nullifierHash];
+            }
+            _revokedWorldCredentialNullifier[kind][nullifierHash] = true;
+        }
+        delete _humanPresence[rater][kind];
+
+        emit WorldCredentialRevoked(rater, kind, nullifierHash);
+    }
+
     function clearRevokedHumanNullifier(HumanCredentialProvider provider, bytes32 nullifierHash)
         external
         onlyRole(SEEDER_ROLE)
@@ -1273,6 +1294,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     }
 
     function hasActiveCredentialKind(address rater, uint8 kind) public view returns (bool) {
+        if (!_isSupportedWorldCredentialKind(kind)) return false;
         if (kind == WORLD_CREDENTIAL_PROOF_OF_HUMAN) return hasActiveHumanCredential(rater);
         WorldCredential storage credential = _worldCredentials[rater][kind];
         return credential.verified && !credential.revoked && credential.expiresAt > block.timestamp
@@ -1280,9 +1302,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     }
 
     function hasRecentCredentialRecheck(address rater, uint8 kind) public view returns (bool) {
+        if (!hasActiveCredentialKind(rater, kind)) return false;
         HumanPresence storage presence = _humanPresence[rater][kind];
-        return
-            presence.verified && presence.freshUntil >= block.timestamp && presence.lastRecheckedAt <= block.timestamp;
+        return presence.verified && presence.kind == kind && presence.freshUntil >= block.timestamp
+            && presence.lastRecheckedAt <= block.timestamp;
     }
 
     function credentialStatusBits(address rater) external view returns (uint8 activeMask, uint8 freshMask) {

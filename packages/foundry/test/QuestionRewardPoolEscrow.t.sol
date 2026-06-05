@@ -453,6 +453,52 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
     }
 
+    function testRewardPoolRejectsRecentRecheckFlagWithoutCredentialKind() public {
+        uint256 contentId = _submitQuestion("recent-open-policy");
+
+        vm.prank(funder);
+        usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
+
+        vm.expectRevert("Invalid eligibility");
+        vm.prank(address(registry));
+        rewardPoolEscrow.createSubmissionRewardPoolFromRegistry(
+            contentId,
+            funder,
+            address(0),
+            REWARD_ASSET_USDC,
+            REWARD_POOL_AMOUNT,
+            3,
+            1,
+            block.timestamp + 30 days,
+            30 days,
+            0,
+            BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG
+        );
+    }
+
+    function testSubmissionBundleRejectsRecentRecheckFlagWithoutCredentialKind() public {
+        uint256[] memory contentIds = _submitBundleQuestions();
+
+        vm.prank(funder);
+        usdc.approve(address(rewardPoolEscrow), REWARD_POOL_AMOUNT);
+
+        vm.expectRevert("Invalid eligibility");
+        vm.prank(address(registry));
+        rewardPoolEscrow.createSubmissionBundleFromRegistry(
+            1,
+            contentIds,
+            funder,
+            REWARD_ASSET_USDC,
+            REWARD_POOL_AMOUNT,
+            3,
+            1,
+            block.timestamp + 30 days,
+            30 days,
+            30 days,
+            BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG
+        );
+    }
+
     function testHighValueRewardPoolRequiresHigherParticipantFloor() public {
         uint256 contentId = _submitQuestion("");
         uint256 highValueAmount = HIGH_VALUE_REWARD_POOL_THRESHOLD;
@@ -644,8 +690,11 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 })
             );
             assertLe(
-                votingEngine.commitCommittedAt(
-                    contentId, RoundEngineReadHelpers.activeRoundId(votingEngine, contentId), commitKeys[i]
+                _commitCommittedAt(
+                    votingEngine,
+                    contentId,
+                    RoundEngineReadHelpers.activeRoundId(votingEngine, contentId),
+                    commitKeys[i]
                 ),
                 bountyClosesAt,
                 "commit must land inside synced bounty window"
@@ -653,7 +702,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
-        uint256 revealableAt = votingEngine.lastCommitRevealableAfter(contentId, roundId);
+        uint256 revealableAt = _lastCommitRevealableAfter(votingEngine, contentId, roundId);
         assertGt(revealableAt, bountyClosesAt, "blind epoch reveal must be after synced bounty close");
         _warpPastTlockRevealTime(revealableAt);
 
@@ -735,7 +784,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
         }
         // Sanity: thresholdReachedAt is still 0 (only 3 revealed, minVoters=5).
-        (,,,,,,,,,,, uint48 thresholdReachedMid,,) = votingEngine.rounds(contentId, roundId);
+        (,,,,, uint48 thresholdReachedMid,) = votingEngine.roundCore(contentId, roundId);
         assertEq(thresholdReachedMid, 0, "threshold should not be hit at 3 reveals when minVoters=5");
 
         // Warp past bountyClosesAt; reveal D and E after close.
@@ -744,7 +793,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[4], directions[4], 5_000, salts[4]);
 
         // thresholdReachedAt now equals E's revealedAt — past bountyClosesAt.
-        (,,,,,,,,,,, uint48 thresholdReachedAfter,,) = votingEngine.rounds(contentId, roundId);
+        (,,,,, uint48 thresholdReachedAfter,) = votingEngine.roundCore(contentId, roundId);
         assertGt(thresholdReachedAfter, bountyClosesAt, "thresholdReachedAt must be past bountyClose");
 
         // Settle the round (revealedCount=5 >= minVoters=5).
@@ -972,7 +1021,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 200
         });
-        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 submissionKey = _questionSubmissionKey(
             "https://example.com/context",
             imageUrls,
             "",
@@ -2483,7 +2532,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
         bytes32 firstCommitKey = votingEngine.getRoundCommitKey(contentId, roundId, 0);
-        uint48 firstStakedAt = votingEngine.commitCommittedAt(contentId, roundId, firstCommitKey);
+        uint48 firstStakedAt = _commitCommittedAt(votingEngine, contentId, roundId, firstCommitKey);
         assertGt(firstStakedAt, openedAt + bountyWindowSeconds);
         assertLe(firstStakedAt, bountyStartBy);
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
@@ -2645,7 +2694,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
-        assertEq(votingEngine.commitRbtsRewardWeight(contentId, roundId, lateCommitKeys[1]), 0);
+        assertEq(_commitRbtsRewardWeight(votingEngine, contentId, roundId, lateCommitKeys[1]), 0);
         assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
 
         vm.prank(voter4);
@@ -2689,9 +2738,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         bytes32 lateCommitKey = _commitTestVoteTargetingRevealableAfter(
             voter4, contentId, true, round.startTime + EPOCH_DURATION, lateSalt
         );
-        assertGt(votingEngine.commitCommittedAt(contentId, roundId, lateCommitKey), bountyClosesAt);
+        assertGt(_commitCommittedAt(votingEngine, contentId, roundId, lateCommitKey), bountyClosesAt);
 
-        _warpPastTlockRevealTime(votingEngine.lastCommitRevealableAfter(contentId, roundId));
+        _warpPastTlockRevealTime(_lastCommitRevealableAfter(votingEngine, contentId, roundId));
         for (uint256 i = 0; i < timelyVoters.length; i++) {
             votingEngine.revealVoteByCommitKey(
                 contentId, roundId, timelyCommitKeys[i], timelyDirections[i], 5_000, timelySalts[i]
@@ -2759,14 +2808,14 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
                 voter4, contentIds[contentIndex], true, round.startTime + EPOCH_DURATION, lateSalts[contentIndex]
             );
             assertGt(
-                votingEngine.commitCommittedAt(
-                    contentIds[contentIndex], roundIds[contentIndex], lateCommitKeys[contentIndex]
+                _commitCommittedAt(
+                    votingEngine, contentIds[contentIndex], roundIds[contentIndex], lateCommitKeys[contentIndex]
                 ),
                 bountyClosesAt
             );
         }
 
-        _warpPastTlockRevealTime(votingEngine.lastCommitRevealableAfter(contentIds[1], roundIds[1]));
+        _warpPastTlockRevealTime(_lastCommitRevealableAfter(votingEngine, contentIds[1], roundIds[1]));
         for (uint256 contentIndex = 0; contentIndex < contentIds.length; contentIndex++) {
             for (uint256 voterIndex = 0; voterIndex < timelyVoters.length; voterIndex++) {
                 votingEngine.revealVoteByCommitKey(
@@ -2990,7 +3039,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
-        assertEq(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
+        assertEq(_roundClusterPayoutReadyAt(votingEngine, contentId, roundId), 0);
 
         // M-Oracle-1: the layer-1 oracle gate now also rejects pre-source proposals via
         // `roundPayoutSnapshotSourceReadyAt`. Bypass that gate for this test by mocking the
@@ -3007,7 +3056,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 30_000, 10_000);
         vm.clearMockedCalls();
         votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
-        assertGt(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
+        assertGt(_roundClusterPayoutReadyAt(votingEngine, contentId, roundId), 0);
 
         vm.expectRevert("Cluster source stale");
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
@@ -3023,7 +3072,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
-        assertEq(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
+        assertEq(_roundClusterPayoutReadyAt(votingEngine, contentId, roundId), 0);
 
         // M-Oracle-1: bypass the new layer-1 gate so the layer-2 defense at qualify time can be
         // verified independently. See sibling test for rationale.
@@ -3050,7 +3099,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         uint256 roundId = _settleRoundWithOneUnrevealed(contentId);
         votingEngine.processUnrevealedVotes(contentId, roundId, 0, 0);
-        assertGt(votingEngine.roundClusterPayoutReadyAt(contentId, roundId), 0);
+        assertGt(_roundClusterPayoutReadyAt(votingEngine, contentId, roundId), 0);
 
         _finalizeClusterPayoutSnapshot(oracle, rewardPoolId, contentId, roundId, 3, 30_000, 10_000);
 
@@ -4177,7 +4226,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         raterIdentityRegistry.setDelegate(agentWallet);
         usdc.mint(agentWallet, REWARD_POOL_AMOUNT);
 
-        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 submissionKey = _questionSubmissionKey(
             contextUrl, imageUrls, "", title, description, tags, CATEGORY_ID, _emptySubmissionDetails()
         );
         bytes32 revealCommitment = _questionRevealCommitment(
@@ -4861,7 +4910,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             abi.encode(contextUrl, mediaUrl, QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, submitter, block.timestamp)
         );
 
-        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 submissionKey = _questionSubmissionKey(
             contextUrl, imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
         );
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
@@ -5021,7 +5070,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         internal
         returns (bytes32 revealCommitment)
     {
-        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 submissionKey = _questionSubmissionKey(
             question.contextUrl,
             question.imageUrls,
             "",
@@ -5115,7 +5164,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         activeTlockContentRegistry = registry;
 
         usdc.mint(agentWallet, rewardTerms.amount);
-        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 submissionKey = _questionSubmissionKey(
             contextUrl, imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
         );
         bytes32 revealCommitment = _questionRevealCommitment(
@@ -5346,8 +5395,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             contentId: contentId,
             roundId: roundId,
             commitKey: commitKey,
-            identityKey: votingEngine.commitIdentityKey(contentId, roundId, commitKey),
-            account: votingEngine.commitIdentityHolder(contentId, roundId, commitKey),
+            identityKey: _commitIdentityKey(votingEngine, contentId, roundId, commitKey),
+            account: _commitIdentityHolder(votingEngine, contentId, roundId, commitKey),
             baseWeight: baseWeight,
             independenceBps: 10_000,
             effectiveWeight: baseWeight,
@@ -5720,7 +5769,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         vm.warp(round.startTime + 7 days + protocolConfig.revealGracePeriod() + 1);
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
-        assertEq(votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
+        assertEq(_roundUnrevealedCleanupRemaining(votingEngine, contentId, roundId), 1);
     }
 
     function _revealThresholdWithOneUnrevealed(uint256 contentId) internal returns (uint256 roundId) {
@@ -5841,6 +5890,19 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function _mockSettledRound(uint256 contentId, uint256 roundId, uint16 revealedCount) internal {
         vm.mockCall(
             address(votingEngine),
+            abi.encodeWithSignature("roundCore(uint256,uint256)", contentId, roundId),
+            abi.encode(
+                uint48(block.timestamp),
+                RoundLib.RoundState.Settled,
+                revealedCount,
+                revealedCount,
+                uint64(uint256(revealedCount) * STAKE),
+                uint48(block.timestamp),
+                uint48(block.timestamp)
+            )
+        );
+        vm.mockCall(
+            address(votingEngine),
             abi.encodeWithSignature("rounds(uint256,uint256)", contentId, roundId),
             abi.encode(
                 uint48(block.timestamp),
@@ -5877,18 +5939,15 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
         vm.mockCall(
             address(votingEngine),
-            abi.encodeWithSignature("identityCommitKey(uint256,uint256,bytes32)", contentId, roundId, identityKey),
-            abi.encode(commitKey)
+            abi.encodeWithSignature(
+                "identityCommitState(uint256,uint256,bytes32,address)", contentId, roundId, identityKey, voter
+            ),
+            abi.encode(commitKey, bytes32(0), uint256(0))
         );
         vm.mockCall(
             address(votingEngine),
-            abi.encodeWithSignature("commitIdentityKey(uint256,uint256,bytes32)", contentId, roundId, commitKey),
-            abi.encode(identityKey)
-        );
-        vm.mockCall(
-            address(votingEngine),
-            abi.encodeWithSignature("commitIdentityHolder(uint256,uint256,bytes32)", contentId, roundId, commitKey),
-            abi.encode(voter)
+            abi.encodeWithSignature("commitIdentityState(uint256,uint256,bytes32)", contentId, roundId, commitKey),
+            abi.encode(identityKey, voter, uint48(block.timestamp), uint8(0), uint8(0), false)
         );
         vm.mockCall(
             address(votingEngine),
@@ -6044,9 +6103,9 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.expectRevert("Grace");
         rewardPoolEscrow.refundQuestionBundleReward(bundleId);
 
-        uint256 firstSettlementReadyAt = votingEngine.lastCommitRevealableAfter(contentIds[0], firstRoundId)
+        uint256 firstSettlementReadyAt = _lastCommitRevealableAfter(votingEngine, contentIds[0], firstRoundId)
             + protocolConfig.revealGracePeriod() + 1;
-        uint256 secondSettlementReadyAt = votingEngine.lastCommitRevealableAfter(contentIds[1], secondRoundId)
+        uint256 secondSettlementReadyAt = _lastCommitRevealableAfter(votingEngine, contentIds[1], secondRoundId)
             + protocolConfig.revealGracePeriod() + 1;
         vm.warp(firstSettlementReadyAt > secondSettlementReadyAt ? firstSettlementReadyAt : secondSettlementReadyAt);
 

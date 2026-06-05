@@ -836,6 +836,85 @@ contract RaterRegistryTest is Test {
         assertEq(freshMask, 0);
     }
 
+    function test_HumanPresenceStopsFreshAfterCredentialExpiresBeforePresenceTtl() public {
+        uint8 kind = registry.WORLD_CREDENTIAL_PROOF_OF_HUMAN();
+        uint256 presenceNullifier = uint256(keccak256("presence-nullifier"));
+        uint256 nonce = 12;
+        uint64 credentialExpiresAt = uint64(block.timestamp + 5 minutes);
+        uint64 expiresAtMin = uint64(block.timestamp + 1 hours);
+        uint256[5] memory proof;
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), 1, credentialExpiresAt, _emptyV4Proof());
+        worldIdRouter.setExpectedAction(WORLD_ID_V4_PRESENCE_ACTION);
+        worldIdRouter.setExpectedSignalHash(registry.worldPresenceSignalHash(rater, kind));
+        worldIdRouter.setExpectedNonce(nonce);
+
+        vm.prank(rater);
+        registry.attestHumanPresenceWithV4Proof(kind, presenceNullifier, nonce, expiresAtMin, proof);
+        assertTrue(registry.hasRecentCredentialRecheck(rater, kind));
+
+        vm.warp(uint256(credentialExpiresAt) + 1);
+
+        assertFalse(registry.hasActiveCredentialKind(rater, kind));
+        assertFalse(registry.hasRecentCredentialRecheck(rater, kind));
+        (uint8 activeMask, uint8 freshMask) = registry.credentialStatusBits(rater);
+        assertEq(activeMask, 0);
+        assertEq(freshMask, 0);
+    }
+
+    function test_RevokeWorldCredentialClearsActiveAndFreshPassportMasks() public {
+        uint8 kind = registry.WORLD_CREDENTIAL_PASSPORT();
+        uint256 credentialNullifier = uint256(keccak256("passport-nullifier"));
+        uint256 presenceNullifier = uint256(keccak256("passport-presence-nullifier"));
+        uint64 expiresAtMin = uint64(block.timestamp + 1 hours);
+        uint256[5] memory proof;
+
+        worldIdRouter.setExpectedAction(WORLD_ID_V4_ACTION);
+        worldIdRouter.setExpectedSignalHash(registry.worldCredentialSignalHash(rater, kind));
+        worldIdRouter.setExpectedNonce(11);
+        vm.prank(rater);
+        registry.attestWorldCredentialWithV4Proof(kind, credentialNullifier, 11, expiresAtMin, proof);
+
+        worldIdRouter.setExpectedAction(WORLD_ID_V4_PRESENCE_ACTION);
+        worldIdRouter.setExpectedSignalHash(registry.worldPresenceSignalHash(rater, kind));
+        worldIdRouter.setExpectedNonce(12);
+        vm.prank(rater);
+        registry.attestHumanPresenceWithV4Proof(kind, presenceNullifier, 12, expiresAtMin, proof);
+
+        (uint8 activeMask, uint8 freshMask) = registry.credentialStatusBits(rater);
+        assertEq(activeMask, registry.credentialKindBit(kind));
+        assertEq(freshMask, registry.credentialKindBit(kind));
+
+        vm.prank(admin);
+        registry.revokeWorldCredential(rater, kind);
+
+        RaterRegistry.WorldCredential memory credential = registry.getWorldCredential(rater, kind);
+        assertTrue(credential.revoked);
+        assertFalse(registry.hasActiveCredentialKind(rater, kind));
+        assertFalse(registry.hasRecentCredentialRecheck(rater, kind));
+        RaterRegistry.HumanPresence memory presence = registry.getHumanPresence(rater, kind);
+        assertFalse(presence.verified);
+        (activeMask, freshMask) = registry.credentialStatusBits(rater);
+        assertEq(activeMask, 0);
+        assertEq(freshMask, 0);
+
+        worldIdRouter.setExpectedAction(WORLD_ID_V4_ACTION);
+        worldIdRouter.setExpectedSignalHash(registry.worldCredentialSignalHash(rater, kind));
+        worldIdRouter.setExpectedNonce(13);
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.attestWorldCredentialWithV4Proof(kind, credentialNullifier, 13, expiresAtMin, proof);
+    }
+
+    function test_RevokeWorldCredentialRejectsProofOfHumanKind() public {
+        uint8 kind = registry.WORLD_CREDENTIAL_PROOF_OF_HUMAN();
+
+        vm.prank(admin);
+        vm.expectRevert(RaterRegistry.UnsupportedCredentialKind.selector);
+        registry.revokeWorldCredential(rater, kind);
+    }
+
     function test_AttestHumanPresenceWithV4ProofAllowsFreshNonceForSamePresenceNullifier() public {
         uint8 kind = registry.WORLD_CREDENTIAL_PROOF_OF_HUMAN();
         uint256 presenceNullifier = uint256(keccak256("presence-nullifier"));
