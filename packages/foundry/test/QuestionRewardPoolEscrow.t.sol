@@ -415,6 +415,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
 
         raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, 0);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
 
         RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
@@ -437,6 +439,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
 
         raterIdentityRegistry.setCredentialStatusMasks(voter4, humanBit, humanBit);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
+
         rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
 
         RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);

@@ -224,8 +224,7 @@ library QuestionRewardPoolEscrowClaimLib {
                 params.rewardPoolId,
                 params.roundId,
                 commitKey,
-                rewardRecipient,
-                protocolConfig,
+                votingEngine,
                 snapshot
             )) return 0;
         uint256 baseClaimWeight = _roundClaimWeight(votingEngine, rewardPool.contentId, params.roundId, commitKey);
@@ -375,8 +374,7 @@ library QuestionRewardPoolEscrowClaimLib {
                 rewardPoolId,
                 roundId,
                 commitKey,
-                rewardRecipient,
-                protocolConfig,
+                votingEngine,
                 snapshot
             )) return 0;
         if (votingEngine.roundUnrevealedCleanupRemaining(rewardPool.contentId, roundId) > 0) return 0;
@@ -444,16 +442,17 @@ library QuestionRewardPoolEscrowClaimLib {
         uint256 rewardPoolId,
         uint256 roundId,
         bytes32 commitKey,
-        address rewardRecipient,
-        ProtocolConfig protocolConfig,
+        RoundVotingEngine votingEngine,
         RoundSnapshot storage snapshot
     ) private view returns (bool) {
         if ((rewardPool.bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK) == BOUNTY_ELIGIBILITY_OPEN) {
             return true;
         }
         if (!snapshot.qualified) {
-            return QuestionRewardPoolEscrowEligibilityLib.isAccountEligibleForBounty(
-                protocolConfig, rewardPool.bountyEligibility, rewardRecipient
+            return QuestionRewardPoolEscrowEligibilityLib.isCommitEligibleForBounty(
+                rewardPool.bountyEligibility,
+                votingEngine.commitCredentialMask(rewardPool.contentId, roundId, commitKey),
+                votingEngine.commitFreshCredentialMask(rewardPool.contentId, roundId, commitKey)
             );
         }
         return qualifiedQuestionRewardClaimants[rewardPoolId][roundId][snapshot.clusterSnapshotDigest][commitKey];
