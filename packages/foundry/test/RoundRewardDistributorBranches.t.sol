@@ -41,6 +41,68 @@ contract MockRevertingLaunchDistributionPool {
     }
 }
 
+contract ClaimingBundleObserver {
+    uint16 public defaultFrontendFeeBps = 300;
+    uint256 public nextRewardPoolId = 1;
+    RoundVotingEngine public immutable votingEngine;
+    RoundRewardDistributor public immutable rewardDistributor;
+    bool public observedSettled;
+    bool public claimSucceeded;
+    uint256 public observedVoterPool;
+    uint256 public observedFrontendPool;
+    bytes public claimFailure;
+
+    constructor(RoundVotingEngine votingEngine_, RoundRewardDistributor rewardDistributor_) {
+        votingEngine = votingEngine_;
+        rewardDistributor = rewardDistributor_;
+    }
+
+    function createSubmissionRewardPoolFromRegistry(
+        uint256,
+        address,
+        address,
+        uint8,
+        uint256,
+        uint256,
+        uint256,
+        uint256,
+        uint256,
+        uint256,
+        uint8
+    ) external returns (uint256 rewardPoolId) {
+        rewardPoolId = nextRewardPoolId++;
+    }
+
+    function createSubmissionBundleFromRegistry(
+        uint256,
+        uint256[] calldata,
+        address,
+        uint8,
+        uint256,
+        uint256,
+        uint256,
+        uint256,
+        uint256,
+        uint256,
+        uint8
+    ) external returns (uint256 rewardPoolId) {
+        rewardPoolId = nextRewardPoolId++;
+    }
+
+    function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
+        observedSettled = settled;
+        observedVoterPool = votingEngine.roundVoterPool(contentId, roundId);
+        observedFrontendPool = votingEngine.roundFrontendPool(contentId, roundId);
+        if (!settled) return;
+
+        try rewardDistributor.claimReward(contentId, roundId) {
+            claimSucceeded = true;
+        } catch (bytes memory reason) {
+            claimFailure = reason;
+        }
+    }
+}
+
 /// @title RoundRewardDistributor branch coverage tests (tlock commit-reveal)
 contract RoundRewardDistributorBranchesTest is VotingTestBase {
     using stdStorage for StdStorage;
@@ -361,6 +423,38 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function _ageLaunchAnchorCredential() internal {
         vm.warp(block.timestamp + launchPool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS());
+    }
+
+    function test_SettleRound_BundleObserverSeesInitializedRewardPoolsBeforeClaim() public {
+        ClaimingBundleObserver observer = new ClaimingBundleObserver(votingEngine, rewardDistributor);
+        vm.prank(owner);
+        registry.setQuestionRewardPoolEscrow(address(observer));
+        vm.prank(owner);
+        lrepToken.mint(address(observer), 10_000e6);
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 10e6);
+        _submitContentWithReservation(registry, "https://example.com/observer", "goal", "goal", "tags", 0);
+        vm.stopPrank();
+        uint256 contentId = 1;
+
+        (bytes32 observerCommitKey, bytes32 observerSalt) = _commitPrediction(address(observer), contentId, 8_000, STAKE);
+        (bytes32 voter2CommitKey, bytes32 voter2Salt) = _commitPrediction(voter2, contentId, 8_000, STAKE);
+        (bytes32 voter3CommitKey, bytes32 voter3Salt) = _commitPrediction(voter3, contentId, 2_000, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, observerCommitKey, true, 8_000, observerSalt);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, voter2CommitKey, true, 8_000, voter2Salt);
+        votingEngine.revealVoteByCommitKey(contentId, roundId, voter3CommitKey, false, 2_000, voter3Salt);
+
+        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
+
+        assertTrue(observer.observedSettled(), "observer saw settled terminal");
+        assertGt(observer.observedVoterPool(), 0, "voter pool initialized before observer callback");
+        assertTrue(observer.claimSucceeded(), "observer claim succeeds after pools are initialized");
+        assertTrue(rewardDistributor.rewardClaimed(contentId, roundId, address(observer)), "observer claim recorded");
     }
 
     // =========================================================================
