@@ -5,10 +5,8 @@ import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline"
 
 const TESTNET_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:testnet-notice-dismissed";
 
-// MAINNET-1 (2026-05-21 testnet-readiness audit): the banner copy says "deployed on World
-// Chain Sepolia testnet only", which contradicts reality once mainnet (chainId 480) ships.
-// Gate the banner so it never renders on the mainnet target. Local dev (31337) and testnet
-// (4801) keep showing the notice.
+// MAINNET-1 (2026-05-21 testnet-readiness audit): keep the mutable-contract beta notice off
+// the mainnet target. Local dev (31337) and testnet (4801) keep showing the notice.
 const NON_MAINNET_TARGET_CHAIN_IDS = new Set<number>([31337, 4801]);
 
 export function TestnetNoticeBanner({ targetChainId }: { targetChainId: number }) {
@@ -42,16 +40,7 @@ export function TestnetNoticeBanner({ targetChainId }: { targetChainId: number }
       <div className="mx-auto flex max-w-6xl items-start gap-3 xl:max-w-none">
         <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-500" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-sm font-medium leading-5 text-base-content">
-          RateLoop smart contracts are deployed on World Chain Sepolia testnet only. RateLoop is not live yet and under
-          active development. Feel free to contribute:{" "}
-          <a
-            href="https://github.com/Noc2/RateLoop"
-            target="_blank"
-            rel="noreferrer"
-            className="font-semibold text-base-content underline decoration-base-content/40 underline-offset-4 transition-colors hover:text-white hover:decoration-white"
-          >
-            Noc2/RateLoop
-          </a>
+          RateLoop is in Beta right now, and the smart contracts might be redeployed.
         </p>
         <button
           type="button"
