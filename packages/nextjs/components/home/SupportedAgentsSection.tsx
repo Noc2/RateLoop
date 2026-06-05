@@ -225,9 +225,6 @@ export function SupportedAgentsSection() {
                     <h2 className="mt-1 text-lg font-semibold leading-tight text-base-content sm:text-xl">
                       {activeAgent.name} setup
                     </h2>
-                    <p className="mt-1 text-sm leading-6 text-base-content/62">
-                      Install MCP, add a standing rule, then add the RateLoop skill when your agent supports skills.
-                    </p>
                   </div>
                 </div>
 
@@ -247,10 +244,6 @@ export function SupportedAgentsSection() {
                         <WrenchScrewdriverIcon className="h-4 w-4" />
                         <span>{activeAgent.name} setup</span>
                       </div>
-                      <p className="mt-4 text-base leading-7 text-base-content/64">
-                        Recommended path: install MCP, add a standing rule, then add the RateLoop skill when your agent
-                        supports skills.
-                      </p>
                       <div className="mt-5 flex flex-wrap gap-2">
                         {activeAgent.recommended.map(kind => (
                           <span
