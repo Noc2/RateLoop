@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { stdStorage, StdStorage } from "forge-std/Test.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
-import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
-import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
+import {VotingTestBase} from "./helpers/VotingTestHelpers.sol";
+import {stdStorage, StdStorage} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import {RoundLib} from "../contracts/libraries/RoundLib.sol";
+import {RoundEngineReadHelpers} from "./helpers/RoundEngineReadHelpers.sol";
+import {TlockVoteLib} from "../contracts/libraries/TlockVoteLib.sol";
+import {MockCategoryRegistry} from "../contracts/mocks/MockCategoryRegistry.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
 
 contract MockRevertingLaunchDistributionPool {
     error LaunchCreditRejected();
@@ -225,7 +226,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             if (!c.revealed && c.stakeAmount > 0) {
                 (bool isUp, bytes32 salt, bool exists) = _testRevealPayload(keys[i]);
                 if (exists) {
-                    try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) { } catch { }
+                    try votingEngine.revealVoteByCommitKey(contentId, roundId, keys[i], isUp, 5_000, salt) {} catch {}
                 }
             }
         }
@@ -243,11 +244,11 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         if (r2.thresholdReachedAt > 0) {
             uint256 seedBlock = block.number + 1;
             vm.roll(seedBlock);
-            try votingEngine.settleRound(contentId, roundId) { } catch { }
+            try votingEngine.settleRound(contentId, roundId) {} catch {}
             RoundLib.Round memory r3 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
             if (r3.state == RoundLib.RoundState.Open) {
                 vm.roll(seedBlock + 1);
-                try votingEngine.settleRound(contentId, roundId) { } catch { }
+                try votingEngine.settleRound(contentId, roundId) {} catch {}
             }
         }
     }
@@ -330,10 +331,32 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function _credentialKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifier)
         internal
-        pure
+        view
         returns (bytes32)
     {
-        return keccak256(abi.encode(provider, nullifier));
+        return raterRegistry.launchHumanIdentityKey(provider, nullifier);
+    }
+
+    function _launchRewardPolicyWithAnchorFanout(uint16 maxDistinctRatersPerVerifiedAnchor)
+        internal
+        view
+        returns (ILaunchDistributionPool.LaunchRewardPolicy memory policy)
+    {
+        policy = ILaunchDistributionPool.LaunchRewardPolicy({
+            minQualifyingScoreBps: launchPool.MIN_QUALIFYING_SCORE_BPS(),
+            minVoters: launchPool.MIN_EARNED_REWARD_VOTERS(),
+            minVerifiedHumans: launchPool.MIN_EARNED_REWARD_VERIFIED_HUMANS(),
+            minDistinctVerifiedAnchors: launchPool.MIN_EARNED_REWARD_DISTINCT_VERIFIED_ANCHORS(),
+            minDistinctAnchorRounds: launchPool.MIN_EARNED_REWARD_DISTINCT_ANCHOR_ROUNDS(),
+            minLaunchCreditStake: launchPool.MIN_LAUNCH_CREDIT_STAKE(),
+            maxDistinctRatersPerVerifiedAnchor: maxDistinctRatersPerVerifiedAnchor,
+            maxUnverifiedCreditsPerRound: launchPool.MAX_UNVERIFIED_LAUNCH_CREDITS_PER_ROUND(),
+            unverifiedEarnedRaterCapBps: launchPool.DEFAULT_UNVERIFIED_EARNED_RATER_CAP_BPS(),
+            minAnchorCredentialAgeSeconds: launchPool.MIN_ANCHOR_CREDENTIAL_AGE_SECONDS(),
+            eligibilityRatingCount: launchPool.ELIGIBILITY_RATING_COUNT(),
+            rewardingRatingCount: launchPool.REWARDING_RATING_COUNT(),
+            requireNoPendingCleanup: true
+        });
     }
 
     function _ageLaunchAnchorCredential() internal {
@@ -664,6 +687,54 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
             rewardDistributor.pendingLaunchCreditRetry(contentId, roundId, voter1CommitKey);
         assertEq(pendingRecipient, address(0), "retry clears recipient");
         assertEq(pendingStake, 0, "retry clears stake");
+    }
+
+    function test_ClaimReward_StoresRetryWhenAnchorFanoutNoopCanClearLater() public {
+        bytes32 anchorNullifier = bytes32("fanout-anchor-voter-2");
+        _verifyHuman(voter2, anchorNullifier);
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _launchRewardPolicyWithAnchorFanout(1);
+        vm.prank(owner);
+        launchPool.setLaunchRewardPolicy(policy);
+
+        (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
+        bytes32 voter1CommitKey =
+            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+        bytes32 anchorId = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, anchorNullifier);
+        bytes32[] memory anchorIds = new bytes32[](1);
+        anchorIds[0] = anchorId;
+
+        vm.prank(address(rewardDistributor));
+        launchPool.recordEarnedRaterRewardWithSourceReady(
+            address(0x5000),
+            contentId + 100,
+            roundId,
+            keccak256("fanout-existing-credit"),
+            8_000,
+            3,
+            true,
+            STAKE,
+            anchorIds,
+            uint64(block.timestamp)
+        );
+        assertEq(launchPool.verifiedAnchorDistinctRaterCount(anchorId), 1);
+
+        vm.prank(voter1);
+        rewardDistributor.claimReward(contentId, roundId);
+
+        assertFalse(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
+        (address pendingRecipient, uint96 pendingStake) =
+            rewardDistributor.pendingLaunchCreditRetry(contentId, roundId, voter1CommitKey);
+        assertEq(pendingRecipient, voter1, "anchor fanout miss should remain retryable");
+        assertEq(pendingStake, STAKE, "retry captures stake");
+
+        policy.maxDistinctRatersPerVerifiedAnchor = 2;
+        vm.prank(owner);
+        launchPool.setLaunchRewardPolicy(policy);
+        rewardDistributor.retryLaunchRaterRewardCredit(contentId, roundId, voter1CommitKey);
+
+        assertTrue(launchPool.earnedRewardCreditRecorded(contentId, roundId, voter1CommitKey));
+        assertTrue(launchPool.raterRoundCreditRecorded(voter1, contentId, roundId));
+        assertEq(launchPool.verifiedAnchorDistinctRaterCount(anchorId), 2);
     }
 
     function test_ClaimReward_DoesNotRecordLaunchCreditWithoutIndependentVerifiedAnchor() public {

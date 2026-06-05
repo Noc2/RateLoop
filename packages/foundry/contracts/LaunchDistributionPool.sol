@@ -332,7 +332,6 @@ contract LaunchDistributionPool is
 
     function cancelStalePendingEarnedRaterCredit(uint256 contentId, uint256 roundId, bytes32 commitKey)
         external
-        onlyOwner
         nonReentrant
     {
         PendingEarnedRaterCredit memory pending = pendingEarnedRaterCredits[contentId][roundId][commitKey];

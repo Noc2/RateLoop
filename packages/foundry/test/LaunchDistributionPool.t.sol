@@ -1046,10 +1046,12 @@ contract LaunchDistributionPoolTest is Test {
         assertFalse(pool.earnedRewardCreditRecorded(400, 1, blockedCommitKey));
         assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), maxFanout);
 
+        vm.prank(bob);
         vm.expectRevert(LaunchDistributionPool.PendingCreditNotStale.selector);
         pool.cancelStalePendingEarnedRaterCredit(300, 1, firstCommitKey);
 
         vm.warp(block.timestamp + pool.STALE_PENDING_EARNED_RATER_CREDIT_DELAY());
+        vm.prank(bob);
         pool.cancelStalePendingEarnedRaterCredit(300, 1, firstCommitKey);
         assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, firstRater), 0);
         assertFalse(pool.verifiedAnchorRaterSeen(anchorId, firstRater));
