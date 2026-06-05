@@ -81,13 +81,13 @@ test("expects thirdweb batch calls for supported in-app wallets", () => {
   );
 });
 
-test("does not expect thirdweb batch calls for in-app wallets on World Chain Sepolia", () => {
+test("expects thirdweb batch calls for in-app wallets on World Chain Sepolia", () => {
   assert.equal(
     shouldExpectThirdwebBatchCalls({
       chainId: 4801,
       connectorId: "in-app-wallet",
     }),
-    false,
+    true,
   );
 });
 
@@ -390,7 +390,7 @@ test("does not await self-funded reconnect after in-app wallets fall back to dir
   assert.equal(
     shouldAwaitSelfFundedSubmitCalls({
       canUseFreeTransactions: false,
-      chainId: 4801,
+      chainId: 31337,
       connectorId: "in-app-wallet",
       executionMode: "direct_worldchain",
       freeTransactionAllowanceResolved: true,
