@@ -948,7 +948,6 @@ contract RoundVotingEngine is
         if (unrevealedPastEpochCount == 0) {
             roundClusterPayoutReadyAt[contentId][roundId] = round.settledAt;
         }
-        _notifyBundleRoundTerminal(contentId, roundId, true);
 
         uint256 treasuryPaid = RoundSettlementDistributionLib.distribute(
             lrepToken,
@@ -976,6 +975,7 @@ contract RoundVotingEngine is
             roundRatingUpEvidence[contentId][roundId],
             roundRatingDownEvidence[contentId][roundId]
         );
+        _notifyBundleRoundTerminal(contentId, roundId, true);
         emit RbtsRewardsScored(
             contentId,
             roundId,
