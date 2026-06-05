@@ -136,7 +136,20 @@ export function lintAgentQuestion(
   }
 
   if (description.length > 280) {
-    pushFinding(findings, "warning", `${path}.description`, "Keep descriptions concise enough for voters to scan quickly.");
+    pushFinding(findings, "warning", `${path}.description`, "Keep voter summaries concise enough to scan quickly.");
+  }
+  const detailsUrl = typeof question.detailsUrl === "string" ? question.detailsUrl.trim() : "";
+  const detailsHash = typeof question.detailsHash === "string" ? question.detailsHash.trim() : "";
+  if (detailsUrl && !detailsHash) {
+    pushFinding(findings, "error", `${path}.detailsHash`, "Details hash is required when detailsUrl is provided.");
+  } else if (!detailsUrl && detailsHash) {
+    pushFinding(findings, "error", `${path}.detailsUrl`, "Details URL is required when detailsHash is provided.");
+  }
+  if (detailsUrl && !looksLikeHttpsUrl(detailsUrl)) {
+    pushFinding(findings, "error", `${path}.detailsUrl`, "Details URL must be a public HTTPS URL.");
+  }
+  if (detailsHash && !/^0x[a-fA-F0-9]{64}$/.test(detailsHash)) {
+    pushFinding(findings, "error", `${path}.detailsHash`, "Details hash must be a 32-byte hex string.");
   }
   const hasContextUrl = typeof question.contextUrl === "string" && question.contextUrl.trim().length > 0;
   const hasImageUrls = Array.isArray(question.imageUrls) && question.imageUrls.length > 0;

@@ -49,6 +49,8 @@ const FEEDBACK_WINDOW_SECONDS = 1_200n;
 const X402_VALID_AFTER = "0";
 const X402_VALID_BEFORE = "9999999999";
 const TEST_SIGNATURE = `0x${"1".repeat(64)}${"3".repeat(64)}1b` as const;
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
+const EMPTY_DETAILS = { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH } as const;
 const X402_SIGN_OPTIONS: NonNullable<
   Parameters<typeof signX402AuthorizationRequest>[2]
 > = {
@@ -149,6 +151,8 @@ function canonicalPayload() {
         categoryId: "1",
         contextUrl: QUESTION_CONTEXT_URL,
         description: "",
+        detailsHash: EMPTY_DETAILS_HASH,
+        detailsUrl: "",
         imageUrls: [],
         questionMetadataHash: spec.questionMetadataHash,
         resultSpecHash: spec.resultSpecHash,
@@ -186,14 +190,25 @@ function expectedSubmissionKey() {
       [
         { type: "string" },
         { type: "uint256" },
+        { type: "bytes32" },
+        { type: "string" },
+        { type: "bytes32" },
         { type: "string" },
         { type: "string" },
         { type: "string" },
         { type: "string" },
       ],
       [
-        "rateloop-question-context-v1",
+        "rateloop-question-context-v3",
         1n,
+        keccak256(
+          encodeAbiParameters(
+            [{ type: "string[]" }, { type: "string" }],
+            [[], ""],
+          ),
+        ),
+        "",
+        EMPTY_DETAILS_HASH,
         QUESTION_CONTEXT_URL,
         QUESTION_TITLE,
         "",
@@ -261,12 +276,22 @@ function roundConfigHash() {
   );
 }
 
+function submissionDetailsHash() {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "bytes32" }],
+      ["", EMPTY_DETAILS_HASH],
+    ),
+  );
+}
+
 function expectedRevealCommitment() {
   const spec = questionSpec();
   return keccak256(
     encodeAbiParameters(
       [
         { type: "string" },
+        { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
@@ -279,7 +304,7 @@ function expectedRevealCommitment() {
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-reveal-v4",
+        "rateloop-question-reveal-v5",
         expectedSubmissionKey(),
         keccak256(
           encodeAbiParameters(
@@ -293,6 +318,7 @@ function expectedRevealCommitment() {
             [QUESTION_TITLE, "", QUESTION_TAG],
           ),
         ),
+        submissionDetailsHash(),
         1n,
         expectedSalt(),
         account.address,
@@ -322,6 +348,8 @@ function x402PaymentNonce(from = account.address) {
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
         { type: "uint256" },
         { type: "bytes32" },
       ],
@@ -329,6 +357,8 @@ function x402PaymentNonce(from = account.address) {
         keccak256(stringToHex(QUESTION_CONTEXT_URL)),
         x402StringArrayHash([]),
         keccak256(stringToHex("")),
+        keccak256(stringToHex("")),
+        EMPTY_DETAILS_HASH,
         keccak256(stringToHex(QUESTION_TITLE)),
         keccak256(stringToHex("")),
         keccak256(stringToHex(QUESTION_TAG)),
@@ -357,7 +387,7 @@ function x402PaymentNonce(from = account.address) {
         { type: "bytes32" },
       ],
       [
-        keccak256(stringToHex("rateloop-x402-question-payment-v2")),
+        keccak256(stringToHex("rateloop-x402-question-payment-v3")),
         480n,
         CONTENT_REGISTRY_ADDRESS,
         QUESTION_REWARD_ESCROW_ADDRESS,
@@ -396,6 +426,7 @@ function submitQuestionData(amount = BigInt(X402_AMOUNT)) {
       "",
       QUESTION_TAG,
       1n,
+      EMPTY_DETAILS,
       expectedSalt(),
       rewardTerms(amount),
       roundConfig(),
@@ -417,6 +448,7 @@ function submitX402QuestionData(amount = BigInt(X402_AMOUNT)) {
       "",
       QUESTION_TAG,
       1n,
+      EMPTY_DETAILS,
       expectedSalt(),
       rewardTerms(amount),
       roundConfig(),
@@ -755,6 +787,7 @@ describe("local signer", () => {
         "",
         QUESTION_TAG,
         1n,
+        EMPTY_DETAILS,
         expectedSalt(),
         rewardTerms(),
         roundConfig(),

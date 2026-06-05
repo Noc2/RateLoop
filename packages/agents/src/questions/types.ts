@@ -10,6 +10,8 @@ export type AgentQuestionExample = {
   description?: string;
   contextUrl?: string;
   categoryId: string | number | bigint;
+  detailsHash?: string;
+  detailsUrl?: string;
   tags: string[] | string;
   imageUrls?: string[];
   videoUrl?: string;

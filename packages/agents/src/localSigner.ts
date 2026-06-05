@@ -80,8 +80,9 @@ const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const X402_QUESTION_PAYMENT_DOMAIN = keccak256(
-  stringToHex("rateloop-x402-question-payment-v2"),
+  stringToHex("rateloop-x402-question-payment-v3"),
 );
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
@@ -106,6 +107,8 @@ const X402_QUESTION_TOP_LEVEL_FIELDS = new Set([
   "fundingMode",
   "walletAddress",
   "agentWalletAddress",
+  "detailsHash",
+  "detailsUrl",
   "mode",
   "webhookUrl",
   "webhookSecret",
@@ -269,6 +272,8 @@ type LocalQuestionItemPayload = {
   categoryId: bigint;
   contextUrl: string;
   description: string;
+  detailsHash: Hex;
+  detailsUrl: string;
   imageUrls: string[];
   questionMetadataHash: Hex;
   resultSpecHash: Hex;
@@ -297,6 +302,8 @@ type LocalQuestionSubmission = {
   categoryId: bigint;
   contextUrl: string;
   description: string;
+  detailsHash: Hex;
+  detailsUrl: string;
   imageUrls: string[];
   salt: Hex;
   spec: {
@@ -915,6 +922,11 @@ function readOptionalString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function readOptionalBytes32(value: unknown, fieldName: string): Hex {
+  if (value === undefined || value === null || value === "") return EMPTY_DETAILS_HASH;
+  return normalizeBytes32(value, fieldName);
+}
+
 function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
   const rawValue =
     typeof value === "bigint" ||
@@ -1362,6 +1374,20 @@ function normalizeLocalQuestion(
   const videoUrl = rawVideoUrl
     ? sanitizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`)
     : "";
+  const rawDetailsUrl = readOptionalString(value.detailsUrl);
+  const detailsHash = readOptionalBytes32(
+    value.detailsHash,
+    `${fieldPrefix}.detailsHash`,
+  );
+  const detailsUrl = rawDetailsUrl
+    ? sanitizeHttpsUrl(rawDetailsUrl, `${fieldPrefix}.detailsUrl`)
+    : "";
+  if (detailsUrl && detailsHash.toLowerCase() === EMPTY_DETAILS_HASH) {
+    throw new Error(`${fieldPrefix}.detailsHash is required when detailsUrl is provided.`);
+  }
+  if (!detailsUrl && detailsHash.toLowerCase() !== EMPTY_DETAILS_HASH) {
+    throw new Error(`${fieldPrefix}.detailsUrl is required when detailsHash is provided.`);
+  }
   if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {
     throw new Error(`${fieldPrefix}.videoUrl must be a supported YouTube URL.`);
   }
@@ -1413,12 +1439,14 @@ function normalizeLocalQuestion(
     voteSemantics: templateSelection.template.voteSemantics,
   });
 
-  return {
-    categoryId,
-    contextUrl,
-    description,
-    imageUrls,
-    questionMetadataHash: spec.questionMetadataHash,
+    return {
+      categoryId,
+      contextUrl,
+      description,
+      detailsHash,
+      detailsUrl,
+      imageUrls,
+      questionMetadataHash: spec.questionMetadataHash,
     resultSpecHash: spec.resultSpecHash,
     tags,
     tagList,
@@ -1530,6 +1558,8 @@ function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
       categoryId: question.categoryId.toString(),
       contextUrl: question.contextUrl,
       description: question.description,
+      detailsHash: question.detailsHash,
+      detailsUrl: question.detailsUrl,
       imageUrls: question.imageUrls,
       questionMetadataHash: question.questionMetadataHash,
       resultSpecHash: question.resultSpecHash,
@@ -1565,14 +1595,20 @@ function buildQuestionSubmissionKey(question: LocalQuestionItemPayload): Hex {
       [
         { type: "string" },
         { type: "uint256" },
+        { type: "bytes32" },
+        { type: "string" },
+        { type: "bytes32" },
         { type: "string" },
         { type: "string" },
         { type: "string" },
         { type: "string" },
       ],
       [
-        "rateloop-question-context-v1",
+        "rateloop-question-context-v3",
         question.categoryId,
+        buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
+        question.detailsUrl,
+        question.detailsHash,
         question.contextUrl,
         question.title,
         question.description,
@@ -1612,6 +1648,15 @@ function buildSubmissionMediaHash(
     encodeAbiParameters(
       [{ type: "string[]" }, { type: "string" }],
       [[...imageUrls], videoUrl],
+    ),
+  );
+}
+
+function buildSubmissionDetailsHash(detailsUrl: string, detailsHash: Hex): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "bytes32" }],
+      [detailsUrl, detailsHash],
     ),
   );
 }
@@ -1685,6 +1730,7 @@ function buildSingleQuestionRevealCommitment(params: {
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
+        { type: "bytes32" },
         { type: "uint256" },
         { type: "bytes32" },
         { type: "address" },
@@ -1694,13 +1740,17 @@ function buildSingleQuestionRevealCommitment(params: {
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-reveal-v4",
+        "rateloop-question-reveal-v5",
         params.question.submissionKey,
         buildSubmissionMediaHash(
           params.question.imageUrls,
           params.question.videoUrl,
         ),
         textHash,
+        buildSubmissionDetailsHash(
+          params.question.detailsUrl,
+          params.question.detailsHash,
+        ),
         params.question.categoryId,
         params.question.salt,
         params.submitter,
@@ -1721,11 +1771,9 @@ function buildQuestionBundleHash(
       encodeAbiParameters(
         [
           { type: "string" },
-          { type: "string" },
           { type: "bytes32" },
-          { type: "string" },
-          { type: "string" },
-          { type: "string" },
+          { type: "bytes32" },
+          { type: "bytes32" },
           { type: "uint256" },
           { type: "bytes32" },
           { type: "uint256" },
@@ -1733,12 +1781,15 @@ function buildQuestionBundleHash(
           { type: "bytes32" },
         ],
         [
-          "rateloop-question-bundle-item-v2",
-          question.contextUrl,
+          "rateloop-question-bundle-item-v3",
+          keccak256(
+            encodeAbiParameters(
+              [{ type: "string" }, { type: "string" }, { type: "string" }, { type: "string" }],
+              [question.contextUrl, question.title, question.description, question.tags],
+            ),
+          ),
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
-          question.title,
-          question.description,
-          question.tags,
+          buildSubmissionDetailsHash(question.detailsUrl, question.detailsHash),
           question.categoryId,
           question.salt,
           BigInt(index),
@@ -1751,7 +1802,7 @@ function buildQuestionBundleHash(
   return keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "bytes32[]" }],
-      ["rateloop-question-bundle-v2", questionHashes],
+      ["rateloop-question-bundle-v3", questionHashes],
     ),
   );
 }
@@ -1824,11 +1875,13 @@ function buildExpectedLocalSignerQuestionPlan(params: {
   } as const;
   const questions = payload.questions.map((question, index) => {
     const submissionKey = buildQuestionSubmissionKey(question);
-    return {
-      categoryId: question.categoryId,
-      contextUrl: question.contextUrl,
-      description: question.description,
-      imageUrls: question.imageUrls,
+      return {
+        categoryId: question.categoryId,
+        contextUrl: question.contextUrl,
+        description: question.description,
+        detailsHash: question.detailsHash,
+        detailsUrl: question.detailsUrl,
+        imageUrls: question.imageUrls,
       salt: buildDeterministicQuestionSalt({
         index,
         operationKey: operation.operationKey,
@@ -1903,6 +1956,8 @@ function buildX402QuestionPaymentNonce(params: {
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "bytes32" },
         { type: "uint256" },
         { type: "bytes32" },
       ],
@@ -1910,6 +1965,8 @@ function buildX402QuestionPaymentNonce(params: {
         keccak256(stringToHex(params.question.contextUrl)),
         buildX402StringArrayHash(params.question.imageUrls),
         keccak256(stringToHex(params.question.videoUrl)),
+        keccak256(stringToHex(params.question.detailsUrl)),
+        params.question.detailsHash,
         keccak256(stringToHex(params.question.title)),
         keccak256(stringToHex(params.question.description)),
         keccak256(stringToHex(params.question.tags)),
@@ -2210,6 +2267,23 @@ function assertQuestionSpec(
   );
 }
 
+function assertSubmissionDetails(
+  value: unknown,
+  expected: Pick<LocalQuestionSubmission, "detailsHash" | "detailsUrl">,
+  fieldName: string,
+) {
+  assertEqualString(
+    readStructField(value, "detailsUrl", 0, fieldName),
+    expected.detailsUrl,
+    `${fieldName}.detailsUrl`,
+  );
+  assertEqualBytes32(
+    readStructField(value, "detailsHash", 1, fieldName),
+    expected.detailsHash,
+    `${fieldName}.detailsHash`,
+  );
+}
+
 function assertQuestionSubmission(
   value: unknown,
   expected: LocalQuestionSubmission,
@@ -2250,13 +2324,18 @@ function assertQuestionSubmission(
     expected.categoryId,
     `${fieldName}.categoryId`,
   );
+  assertSubmissionDetails(
+    readStructField(value, "details", 7, fieldName),
+    expected,
+    `${fieldName}.details`,
+  );
   assertEqualBytes32(
-    readStructField(value, "salt", 7, fieldName),
+    readStructField(value, "salt", 8, fieldName),
     expected.salt,
     `${fieldName}.salt`,
   );
   assertQuestionSpec(
-    readStructField(value, "spec", 8, fieldName),
+    readStructField(value, "spec", 9, fieldName),
     expected.spec,
     `${fieldName}.spec`,
   );
@@ -2434,23 +2513,28 @@ function validateSubmitQuestionCall(params: {
     params.expectedPlan.primaryQuestion.categoryId,
     `transactionPlan.calls[${params.index}].categoryId`,
   );
-  assertEqualBytes32(
+  assertSubmissionDetails(
     args[7],
+    params.expectedPlan.primaryQuestion,
+    `transactionPlan.calls[${params.index}].details`,
+  );
+  assertEqualBytes32(
+    args[8],
     params.expectedPlan.primaryQuestion.salt,
     `transactionPlan.calls[${params.index}].salt`,
   );
   assertRewardTerms(
-    args[8],
+    args[9],
     params.expectedPlan.rewardTerms,
     `transactionPlan.calls[${params.index}].rewardTerms`,
   );
   assertRoundConfig(
-    args[9],
+    args[10],
     params.expectedPlan.roundConfig,
     `transactionPlan.calls[${params.index}].roundConfig`,
   );
   assertQuestionSpec(
-    args[10],
+    args[11],
     params.expectedPlan.primaryQuestion.spec,
     `transactionPlan.calls[${params.index}].spec`,
   );
@@ -2524,27 +2608,32 @@ function validateSubmitX402QuestionCall(params: {
     params.expectedPlan.primaryQuestion.categoryId,
     `transactionPlan.calls[${params.index}].categoryId`,
   );
-  assertEqualBytes32(
+  assertSubmissionDetails(
     args[7],
+    params.expectedPlan.primaryQuestion,
+    `transactionPlan.calls[${params.index}].details`,
+  );
+  assertEqualBytes32(
+    args[8],
     params.expectedPlan.primaryQuestion.salt,
     `transactionPlan.calls[${params.index}].salt`,
   );
   assertRewardTerms(
-    args[8],
+    args[9],
     params.expectedPlan.rewardTerms,
     `transactionPlan.calls[${params.index}].rewardTerms`,
   );
   assertRoundConfig(
-    args[9],
+    args[10],
     params.expectedPlan.roundConfig,
     `transactionPlan.calls[${params.index}].roundConfig`,
   );
   assertQuestionSpec(
-    args[10],
+    args[11],
     params.expectedPlan.primaryQuestion.spec,
     `transactionPlan.calls[${params.index}].spec`,
   );
-  const authorization = decoded.args?.[11];
+  const authorization = decoded.args?.[12];
   if (!authorization || typeof authorization !== "object") {
     throw new Error(
       `transactionPlan.calls[${params.index}].paymentAuthorization is required.`,
