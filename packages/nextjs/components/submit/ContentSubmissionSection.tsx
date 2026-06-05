@@ -1471,6 +1471,38 @@ export function ContentSubmissionSection() {
 
     return submittedContentIds;
   };
+  const extractReceiptTransactionHashes = (receipts: Array<{ transactionHash?: unknown }>) =>
+    receipts
+      .map(receipt => (typeof receipt.transactionHash === "string" ? receipt.transactionHash : ""))
+      .filter((hash): hash is `0x${string}` => /^0x[a-fA-F0-9]{64}$/.test(hash));
+
+  const attachQuestionDetailsAfterSubmission = async (params: {
+    contentIds: readonly bigint[];
+    questions: ReadonlyArray<{ detailsHash: `0x${string}`; detailsUrl: string }>;
+    transactionHashes: readonly `0x${string}`[];
+  }) => {
+    const details = params.questions
+      .map((question, index) => ({
+        contentId: params.contentIds[index]?.toString() ?? "",
+        detailsHash: question.detailsHash,
+        detailsUrl: question.detailsUrl,
+      }))
+      .filter(detail => detail.contentId && detail.detailsUrl);
+    if (details.length === 0 || params.transactionHashes.length === 0) return;
+
+    const response = await fetch("/api/attachments/details/attach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chainId: targetNetwork.id,
+        details,
+        transactionHashes: params.transactionHashes,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error("Could not attach question details to submitted content.");
+    }
+  };
 
   const handleTitleChange = (value: string) => {
     setTitle(value);
@@ -1984,6 +2016,7 @@ export function ContentSubmissionSection() {
     let cancelReservedSubmission: ((revealCommitment: `0x${string}`) => Promise<void>) | null = null;
     try {
       let submittedContentIds: bigint[] = [];
+      let submissionTransactionHashes: `0x${string}`[] = [];
       const publicClient = getPublicClient(wagmiConfig, { chainId: targetNetwork.id as any });
       const getFreshPendingNonce = async (minimumNonce?: number): Promise<number | undefined> => {
         if (!publicClient) return minimumNonce;
@@ -2327,7 +2360,9 @@ export function ContentSubmissionSection() {
           },
         );
 
-        submittedContentIds = extractSubmittedContentIds((callsResult.receipts ?? []).flatMap(receipt => receipt.logs));
+        const submissionReceipts = callsResult.receipts ?? [];
+        submittedContentIds = extractSubmittedContentIds(submissionReceipts.flatMap(receipt => receipt.logs));
+        submissionTransactionHashes = extractReceiptTransactionHashes(submissionReceipts);
       } else {
         const approveWrite = {
           address: verifiedRewardTokenAddress,
@@ -2387,6 +2422,7 @@ export function ContentSubmissionSection() {
         if (submitTxHash) {
           const submitReceipt = await waitForTransactionReceipt(wagmiConfig, { hash: submitTxHash });
           submittedContentIds = extractSubmittedContentIds(submitReceipt.logs);
+          submissionTransactionHashes = [submitTxHash];
         }
       }
 
@@ -2394,6 +2430,14 @@ export function ContentSubmissionSection() {
       let feedbackBonusFunded = false;
       let feedbackBonusFundingError: string | null = null;
       const primarySubmittedContentId = submittedContentIds[0] ?? null;
+
+      await attachQuestionDetailsAfterSubmission({
+        contentIds: submittedContentIds,
+        questions: bundleQuestions,
+        transactionHashes: submissionTransactionHashes,
+      }).catch(error => {
+        console.warn("Unable to attach question details to submitted content.", error);
+      });
 
       if (
         shouldFundFeedbackBonus &&

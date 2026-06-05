@@ -243,6 +243,31 @@ function buildContentRoundConfigSetLog(params: { address: Address; contentId: bi
   };
 }
 
+function buildContentDetailsSubmittedLog(params: {
+  address: Address;
+  contentId: bigint;
+  detailsHash: Hex;
+  detailsUrl: string;
+}) {
+  return {
+    address: params.address,
+    data: encodeAbiParameters(
+      [
+        { name: "detailsUrl", type: "string" },
+        { name: "detailsHash", type: "bytes32" },
+      ],
+      [params.detailsUrl, params.detailsHash],
+    ),
+    topics: encodeEventTopics({
+      abi: ContentRegistryAbi,
+      eventName: "ContentDetailsSubmitted",
+      args: {
+        contentId: params.contentId,
+      },
+    }).filter((topic): topic is Hex => !!topic),
+  };
+}
+
 function buildSubmissionRewardPoolAttachedLog(params: {
   address: Address;
   contentId: bigint;
@@ -358,6 +383,7 @@ before(() => {
 
 beforeEach(async () => {
   setDefaultTestOverrides();
+  await dbClient.execute("DELETE FROM question_details");
   await dbClient.execute("DELETE FROM question_image_attachments");
   await dbClient.execute("DELETE FROM x402_question_submissions");
 });
@@ -478,6 +504,96 @@ test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission log
   assert.equal(body.status, "submitted");
   assert.equal(body.contentId, "123");
   assert.deepEqual(body.contentIds, ["123"]);
+});
+
+test("confirmAgentWalletQuestionSubmissionRequest attaches approved question details rows", async () => {
+  const payload = buildPayload("wallet-confirm-details");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const transactionHash = `0x${"d".repeat(64)}` as const;
+  const detailsId = "det_x402attachdetail";
+  const detailsHash = `0x${"8".repeat(64)}` as const;
+  const detailsUrl = `https://www.rateloop.ai/api/attachments/details/${detailsId}`;
+  const [question] = payload.questions;
+  assert.ok(question);
+  payload.questions = [
+    {
+      ...question,
+      detailsHash,
+      detailsUrl,
+    },
+  ];
+  const now = new Date();
+  await dbClient.execute({
+    sql: `
+      INSERT INTO question_details (
+        id,
+        uploader_kind,
+        owner_wallet_address,
+        agent_id,
+        size_bytes,
+        sha256,
+        normalized_text,
+        status,
+        moderation_status,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      detailsId,
+      "agent",
+      walletAddress,
+      "agent-wallet",
+      18,
+      detailsHash.slice(2),
+      "Expanded details",
+      "approved",
+      "approved",
+      now,
+      now,
+    ],
+  });
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.ok(record);
+  const expectedContentHash = getExpectedContentHash(record);
+
+  setDefaultTestOverrides({
+    waitForSuccessfulReceipt: async (_publicClient, hash) =>
+      buildReceipt(hash, [
+        ...buildSubmittedQuestionLogs({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentHash: expectedContentHash,
+          contentId: 123n,
+          payload,
+          submitter: walletAddress,
+        }),
+        buildContentDetailsSubmittedLog({
+          address: TEST_CONFIG.contentRegistryAddress,
+          contentId: 123n,
+          detailsHash,
+          detailsUrl,
+        }),
+      ]),
+  });
+
+  await confirmAgentWalletQuestionSubmissionRequest({
+    operationKey: record.operationKey,
+    transactionHashes: [transactionHash],
+  });
+
+  const result = await dbClient.execute({
+    sql: "SELECT content_id FROM question_details WHERE id = ?",
+    args: [detailsId],
+  });
+  assert.equal(result.rows[0]?.content_id, "123");
 });
 
 test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the funded pool", async () => {

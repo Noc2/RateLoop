@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import "server-only";
 import {
   MAX_QUESTION_DETAILS_TEXT_BYTES,
@@ -8,6 +8,7 @@ import {
 } from "~~/lib/attachments/questionDetails.shared";
 import { db, dbPool } from "~~/lib/db";
 import { type QuestionDetails, questionDetails } from "~~/lib/db/schema";
+import { isValidWalletAddress, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
 
 const QUESTION_DETAILS_ROUTE_PREFIX = "/api/attachments/details";
 const DEFAULT_DETAILS_TEXT_PREVIEW_LENGTH = 600;
@@ -407,23 +408,32 @@ export async function attachQuestionDetailsToContent(params: {
   ownerWalletAddress?: string | null;
 }) {
   const detailsId = parseQuestionDetailsIdFromDetailsUrl(params.detailsUrl);
-  if (!detailsId) return;
+  if (!detailsId) return false;
+
+  const ownerWalletAddress =
+    params.ownerWalletAddress && isValidWalletAddress(params.ownerWalletAddress)
+      ? normalizeWalletAddress(params.ownerWalletAddress)
+      : null;
+  const identityPredicate =
+    params.agentId && ownerWalletAddress
+      ? or(eq(questionDetails.agentId, params.agentId), eq(questionDetails.ownerWalletAddress, ownerWalletAddress))
+      : params.agentId
+        ? eq(questionDetails.agentId, params.agentId)
+        : ownerWalletAddress
+          ? eq(questionDetails.ownerWalletAddress, ownerWalletAddress)
+          : null;
+  if (!identityPredicate) return false;
 
   const updatedAt = nowDate();
-  await db
+  const [updated] = await db
     .update(questionDetails)
     .set({
       contentId: params.contentId,
       updatedAt,
     })
-    .where(
-      and(
-        eq(questionDetails.id, detailsId),
-        params.agentId
-          ? eq(questionDetails.agentId, params.agentId)
-          : eq(questionDetails.ownerWalletAddress, params.ownerWalletAddress ?? ""),
-      ),
-    );
+    .where(and(eq(questionDetails.id, detailsId), eq(questionDetails.status, "approved"), identityPredicate))
+    .returning({ id: questionDetails.id });
+  return Boolean(updated);
 }
 
 export async function sweepOrphanedQuestionDetails(

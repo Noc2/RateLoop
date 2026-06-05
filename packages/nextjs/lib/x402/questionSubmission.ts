@@ -22,6 +22,7 @@ import {
   parseSignature,
 } from "viem";
 import { getImageAttachmentSubmissionValidationError } from "~~/lib/attachments/imageAttachments";
+import { attachQuestionDetailsToContent } from "~~/lib/attachments/questionDetails";
 import { dbClient } from "~~/lib/db";
 import {
   getPrimaryServerTargetNetwork,
@@ -103,6 +104,12 @@ type SubmittedQuestionContent = {
   contentHash: Hex;
   contentId: bigint;
   submitter: Address;
+};
+
+type SubmittedQuestionDetails = {
+  contentId: bigint;
+  detailsHash: Hex;
+  detailsUrl: string;
 };
 
 type SubmittedRoundConfig = ReturnType<typeof serializeQuestionRoundConfig>;
@@ -1570,6 +1577,7 @@ function readSubmissionResult(
   rewardAttachments: SubmittedRewardAttachment[];
   roundConfigsByContentId: Map<string, SubmittedRoundConfig>;
   submittedContents: SubmittedQuestionContent[];
+  submittedDetails: SubmittedQuestionDetails[];
   submitters: Address[];
 } {
   const expectedEmitter = normalizedAddress(contentRegistryAddress);
@@ -1579,6 +1587,7 @@ function readSubmissionResult(
   const rewardAttachments: SubmittedRewardAttachment[] = [];
   const roundConfigsByContentId = new Map<string, SubmittedRoundConfig>();
   const submittedContents: SubmittedQuestionContent[] = [];
+  const submittedDetails: SubmittedQuestionDetails[] = [];
   const submitters = new Set<Address>();
 
   for (const log of receipt.logs) {
@@ -1609,6 +1618,18 @@ function readSubmissionResult(
       }
       if (typeof decoded.args.submitter === "string" && isAddress(decoded.args.submitter)) {
         submitters.add(decoded.args.submitter);
+      }
+      if (
+        decoded.eventName === "ContentDetailsSubmitted" &&
+        typeof decoded.args.contentId === "bigint" &&
+        typeof decoded.args.detailsUrl === "string" &&
+        isBytes32Hex(decoded.args.detailsHash)
+      ) {
+        submittedDetails.push({
+          contentId: decoded.args.contentId,
+          detailsHash: decoded.args.detailsHash.toLowerCase() as Hex,
+          detailsUrl: decoded.args.detailsUrl,
+        });
       }
       if (decoded.eventName === "QuestionBundleSubmitted") {
         if (typeof decoded.args.bundleId === "bigint") {
@@ -1680,6 +1701,7 @@ function readSubmissionResult(
     rewardPoolId,
     roundConfigsByContentId,
     submittedContents,
+    submittedDetails,
     submitters: Array.from(submitters),
   };
 }
@@ -1819,6 +1841,25 @@ function matchConfirmedSubmissionPlan(params: {
     contentIds: matchedContentIds,
     rewardPoolId: bundleAttachment.rewardPoolId,
   };
+}
+
+async function attachSubmittedQuestionDetails(params: {
+  agentId?: string | null;
+  contentIds: readonly bigint[];
+  ownerWalletAddress: Address;
+  submittedDetails: readonly SubmittedQuestionDetails[];
+}) {
+  const allowedContentIds = new Set(params.contentIds.map(contentId => contentId.toString()));
+  for (const details of params.submittedDetails) {
+    const contentId = details.contentId.toString();
+    if (!allowedContentIds.has(contentId)) continue;
+    await attachQuestionDetailsToContent({
+      agentId: params.agentId,
+      contentId,
+      detailsUrl: details.detailsUrl,
+      ownerWalletAddress: params.ownerWalletAddress,
+    });
+  }
 }
 
 function x402QuestionSubmissionStatusBody(params: {
@@ -2690,11 +2731,13 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
   const rewardAttachments: SubmittedRewardAttachment[] = [];
   const roundConfigsByContentId = new Map<string, SubmittedRoundConfig>();
   const submittedContents: SubmittedQuestionContent[] = [];
+  const submittedDetails: SubmittedQuestionDetails[] = [];
 
   for (const hash of params.transactionHashes) {
     const receipt = await dependencies.waitForSuccessfulReceipt(publicClient, hash);
     const result = readSubmissionResult(receipt, config.contentRegistryAddress);
     submittedContents.push(...result.submittedContents);
+    submittedDetails.push(...result.submittedDetails);
     rewardAttachments.push(...result.rewardAttachments);
     for (const [contentId, roundConfig] of result.roundConfigsByContentId.entries()) {
       roundConfigsByContentId.set(contentId, roundConfig);
@@ -2713,6 +2756,13 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     roundConfigsByContentId,
     submittedContents,
     walletAddress: walletAddress as Lowercase<Address>,
+  });
+  const planReceipt = parseStoredSubmissionPlanReceipt(record.paymentReceipt);
+  await attachSubmittedQuestionDetails({
+    agentId: planReceipt?.agentId,
+    contentIds,
+    ownerWalletAddress: record.payerAddress as Address,
+    submittedDetails,
   });
 
   await updateSubmissionStatus({
