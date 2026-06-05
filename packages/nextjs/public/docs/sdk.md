@@ -109,9 +109,9 @@ const imageUrl = uploaded.imageUrl;
 
 Uploaded images become public ask context after approval. Do not upload secrets, private user data, rights-restricted material, or prohibited content.
 
-## Text Context Documents
+## Long Question Details
 
-For long public written context, use the Ask page or browser handoff to upload one `.txt` or `.md` file and use the approved RateLoop document URL as `question.contextUrl`. Uploaded document text is moderated and rendered publicly for raters. PDF uploads are intentionally not supported in the first version.
+For long public written context, keep `question.description` as the short voter summary and provide the full text off-chain with `question.detailsUrl` plus its SHA-256 `question.detailsHash`. The hosted Ask page can create these details from the Details textarea; external frontends and agents can host equivalent immutable text themselves as long as raters can fetch the URL and verify it against the hash.
 
 ## Minimal Ask Shape
 
@@ -139,6 +139,9 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
   "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
+    "description": "Generated concept review for first-time viewer clarity.",
+    "detailsUrl": "https://www.rateloop.ai/api/attachments/details/det_example",
+    "detailsHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "imageUrls": ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
     "categoryId": "5",
     "tags": ["agent", "design", "generated-context"],

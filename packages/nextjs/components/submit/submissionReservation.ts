@@ -17,6 +17,8 @@ type SubmissionDraft = {
   categoryId: bigint;
   contextUrl: string;
   description: string;
+  detailsHash: `0x${string}`;
+  detailsUrl: string;
   imageUrls: string[];
   questionMetadataHash: `0x${string}`;
   bountyStartBy: bigint;
@@ -40,6 +42,8 @@ type StoredSubmissionReservation = {
   chainId: number;
   contextUrl: string;
   description: string;
+  detailsHash: `0x${string}`;
+  detailsUrl: string;
   imageUrls: string[];
   questionMetadataHash: `0x${string}`;
   bountyStartBy: string;
@@ -110,6 +114,8 @@ export function deriveSubmissionReservationSalt(
         { type: "string[]" },
         { type: "string" },
         { type: "string" },
+        { type: "bytes32" },
+        { type: "string" },
         { type: "string" },
         { type: "uint256" },
         { type: "uint8" },
@@ -135,6 +141,8 @@ export function deriveSubmissionReservationSalt(
         draft.title,
         draft.imageUrls,
         draft.videoUrl,
+        draft.detailsUrl,
+        draft.detailsHash,
         draft.description,
         draft.tags,
         draft.categoryId,
@@ -165,6 +173,8 @@ export function buildSubmissionRevealCommitment(
   return buildQuestionSubmissionRevealCommitment({
     categoryId: draft.categoryId,
     description: draft.description,
+    detailsHash: draft.detailsHash,
+    detailsUrl: draft.detailsUrl,
     imageUrls: draft.imageUrls,
     questionMetadataHash: draft.questionMetadataHash,
     rewardAmount: draft.rewardAmount,
@@ -197,6 +207,8 @@ export function createStoredSubmissionReservation(
     chainId,
     contextUrl: draft.contextUrl,
     description: draft.description,
+    detailsHash: draft.detailsHash,
+    detailsUrl: draft.detailsUrl,
     imageUrls: draft.imageUrls,
     questionMetadataHash: draft.questionMetadataHash,
     rewardAmount: draft.rewardAmount.toString(),
@@ -230,6 +242,8 @@ export function submissionReservationMatchesDraft(
     reservation.categoryId === draft.categoryId.toString() &&
     reservation.contextUrl === draft.contextUrl &&
     reservation.description === draft.description &&
+    reservation.detailsHash === draft.detailsHash &&
+    reservation.detailsUrl === draft.detailsUrl &&
     reservation.rewardAmount === draft.rewardAmount.toString() &&
     reservation.rewardAsset === draft.rewardAsset &&
     reservation.bountyStartBy === draft.bountyStartBy.toString() &&

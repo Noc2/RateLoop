@@ -18,6 +18,8 @@ const DEFAULT_DRAFT = {
   categoryId: 1n,
   contextUrl: "https://example.com/demo",
   description: "first description",
+  detailsHash: "0x0000000000000000000000000000000000000000000000000000000000000000" as const,
+  detailsUrl: "",
   imageUrls: [UPLOADED_IMAGE_URL],
   questionMetadataHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const,
   bountyStartBy: 0n,

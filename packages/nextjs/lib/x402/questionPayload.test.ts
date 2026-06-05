@@ -7,6 +7,9 @@ import {
 } from "~~/lib/x402/questionPayload";
 
 const UPLOADED_IMAGE_URL = "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp";
+const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_questiondetails01";
+const DETAILS_HASH = `0x${"8".repeat(64)}`;
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
 
 const VALID_REQUEST = {
   bounty: {
@@ -44,7 +47,66 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.equal(payload.bounty.bountyEligibility, 0);
   assert.equal(payload.roundConfig.epochDuration, 1200n);
   assert.equal(payload.questions[0].tags, "Media,Video");
+  assert.equal(payload.questions[0].detailsHash, EMPTY_DETAILS_HASH);
+  assert.equal(payload.questions[0].detailsUrl, "");
   assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL]);
+});
+
+test("parseX402QuestionRequest accepts off-chain details URL and hash", () => {
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    question: {
+      ...VALID_REQUEST.question,
+      detailsHash: DETAILS_HASH,
+      detailsUrl: DETAILS_URL,
+    },
+  });
+
+  assert.equal(payload.questions[0].detailsHash, DETAILS_HASH);
+  assert.equal(payload.questions[0].detailsUrl, DETAILS_URL);
+  const operation = buildX402QuestionOperation(payload);
+  assert.equal(operation.canonicalPayload.questions[0].detailsHash, DETAILS_HASH);
+  assert.equal(operation.canonicalPayload.questions[0].detailsUrl, DETAILS_URL);
+});
+
+test("parseX402QuestionRequest requires details URL and hash together", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          detailsUrl: DETAILS_URL,
+        },
+      }),
+    /detailsHash is required/,
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          detailsHash: DETAILS_HASH,
+        },
+      }),
+    /detailsUrl is required/,
+  );
+});
+
+test("parseX402QuestionRequest rejects credentialed details URLs", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          detailsHash: DETAILS_HASH,
+          detailsUrl: "https://user:pass@example.com/details.txt",
+        },
+      }),
+    /must not include credentials/,
+  );
 });
 
 test("parseX402QuestionRequest accepts image-only question context", () => {

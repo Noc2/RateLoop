@@ -39,6 +39,8 @@ export interface RateLoopAgentQuestionItem {
   description?: string;
   contextUrl?: string;
   categoryId: string | number | bigint;
+  detailsHash?: `0x${string}` | string;
+  detailsUrl?: string;
   tags: string | string[];
   imageUrls?: string[];
   videoUrl?: string;

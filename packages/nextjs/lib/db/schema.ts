@@ -351,8 +351,8 @@ export const questionImageAttachments = pgTable(
 export type QuestionImageAttachment = typeof questionImageAttachments.$inferSelect;
 export type NewQuestionImageAttachment = typeof questionImageAttachments.$inferInsert;
 
-export const questionContextDocuments = pgTable(
-  "question_context_documents",
+export const questionDetails = pgTable(
+  "question_details",
   {
     id: text("id").primaryKey(),
     uploaderKind: text("uploader_kind").notNull(),
@@ -360,8 +360,6 @@ export const questionContextDocuments = pgTable(
     agentId: text("agent_id"),
     clientRequestId: text("client_request_id"),
     contentId: text("content_id"),
-    originalFilename: text("original_filename").notNull(),
-    mimeType: text("mime_type").notNull(),
     sizeBytes: integer("size_bytes").notNull().default(0),
     sha256: text("sha256").notNull(),
     normalizedText: text("normalized_text"),
@@ -374,23 +372,23 @@ export const questionContextDocuments = pgTable(
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
   },
   table => ({
-    ownerStatusCreatedIdx: index("question_context_documents_owner_status_created_idx").on(
+    ownerStatusCreatedIdx: index("question_details_owner_status_created_idx").on(
       table.ownerWalletAddress,
       table.status,
       table.createdAt,
     ),
-    agentStatusCreatedIdx: index("question_context_documents_agent_status_created_idx").on(
+    agentStatusCreatedIdx: index("question_details_agent_status_created_idx").on(
       table.agentId,
       table.status,
       table.createdAt,
     ),
-    clientRequestIdx: index("question_context_documents_client_request_idx").on(table.clientRequestId),
-    contentIdx: index("question_context_documents_content_idx").on(table.contentId),
+    clientRequestIdx: index("question_details_client_request_idx").on(table.clientRequestId),
+    contentIdx: index("question_details_content_idx").on(table.contentId),
   }),
 );
 
-export type QuestionContextDocument = typeof questionContextDocuments.$inferSelect;
-export type NewQuestionContextDocument = typeof questionContextDocuments.$inferInsert;
+export type QuestionDetails = typeof questionDetails.$inferSelect;
+export type NewQuestionDetails = typeof questionDetails.$inferInsert;
 
 export const imageUploadDailyQuotas = pgTable(
   "image_upload_daily_quotas",

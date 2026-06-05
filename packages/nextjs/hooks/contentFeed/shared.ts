@@ -62,6 +62,8 @@ export interface ContentItem {
   contentHash: string;
   questionMetadataHash?: string | null;
   resultSpecHash?: string | null;
+  detailsUrl?: string | null;
+  detailsHash?: string | null;
   status: ContentStatus;
   isOwnContent: boolean;
   categoryId: bigint;
@@ -347,6 +349,8 @@ export function mapContentItem(
     contentHash: string;
     questionMetadataHash?: string | null;
     resultSpecHash?: string | null;
+    detailsUrl?: string | null;
+    detailsHash?: string | null;
     status?: string | number | null;
     categoryId: string;
     rating: number;
@@ -569,6 +573,8 @@ export function mapContentItem(
     contentHash: item.contentHash,
     questionMetadataHash: item.questionMetadataHash ?? null,
     resultSpecHash: item.resultSpecHash ?? null,
+    detailsUrl: item.detailsUrl ?? null,
+    detailsHash: item.detailsHash ?? null,
     status: normalizeContentStatus(item.status),
     isOwnContent: ownSubmitterAddressSet.has(item.submitter.toLowerCase()),
     categoryId: BigInt(item.categoryId),

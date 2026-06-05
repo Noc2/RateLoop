@@ -64,7 +64,16 @@ const agentQuestionInputSchema = {
         "Optional HTTPS page URL voters should inspect. For images, upload bytes first and use imageUrls. Required when both imageUrls and videoUrl are empty.",
       type: "string",
     },
-    description: { description: "Optional question details shown to voters.", type: "string" },
+    description: { description: "Optional short Voter Summary shown before expandable details.", type: "string" },
+    detailsHash: {
+      ...bytes32Schema,
+      description: "SHA-256 hash of the full off-chain details text. Required when detailsUrl is provided.",
+    },
+    detailsUrl: {
+      description:
+        "Optional HTTPS URL for longer immutable question details. Provide detailsHash so front-ends can verify the fetched text.",
+      type: "string",
+    },
     imageUrls: {
       description:
         "Image URLs returned by rateloop_upload_image for public mockups, screenshots, or generated visuals. Required only when both contextUrl and videoUrl are empty.",

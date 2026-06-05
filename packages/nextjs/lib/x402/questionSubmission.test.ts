@@ -42,6 +42,8 @@ function buildPayload(clientRequestId: string): X402QuestionPayload {
         categoryId: 5n,
         contextUrl: "https://example.com/context",
         description: "Would you approve this action?",
+        detailsHash: `0x${"0".repeat(64)}` as const,
+        detailsUrl: "",
         imageUrls: [] as string[],
         questionMetadataHash: `0x${"2".repeat(64)}` as const,
         resultSpecHash: `0x${"3".repeat(64)}` as const,

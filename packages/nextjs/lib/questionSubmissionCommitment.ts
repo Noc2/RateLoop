@@ -10,6 +10,8 @@ type QuestionSubmissionRoundConfig = {
 type QuestionSubmissionRevealCommitmentParams = {
   categoryId: bigint;
   description: string;
+  detailsHash: Hex;
+  detailsUrl: string;
   imageUrls: readonly string[];
   questionMetadataHash: Hex;
   rewardAmount: bigint;
@@ -34,6 +36,8 @@ type QuestionBundleSubmissionItem = {
   categoryId: bigint;
   contextUrl: string;
   description: string;
+  detailsHash: Hex;
+  detailsUrl: string;
   imageUrls: readonly string[];
   salt: Hex;
   spec: {
@@ -65,6 +69,10 @@ type QuestionBundleSubmissionRevealCommitmentParams = Omit<QuestionBundleRevealC
 
 function buildSubmissionMediaHash(imageUrls: readonly string[], videoUrl: string): Hex {
   return keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [[...imageUrls], videoUrl]));
+}
+
+function buildSubmissionDetailsHash(detailsUrl: string, detailsHash: Hex): Hex {
+  return keccak256(encodeAbiParameters([{ type: "string" }, { type: "bytes32" }], [detailsUrl, detailsHash]));
 }
 
 export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissionRevealCommitmentParams): Hex {
@@ -117,6 +125,7 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
+        { type: "bytes32" },
         { type: "uint256" },
         { type: "bytes32" },
         { type: "address" },
@@ -126,10 +135,11 @@ export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissi
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-reveal-v4",
+        "rateloop-question-reveal-v5",
         params.submissionKey,
         mediaHash,
         textHash,
+        buildSubmissionDetailsHash(params.detailsUrl, params.detailsHash),
         params.categoryId,
         params.salt,
         params.submitter,
@@ -148,11 +158,9 @@ function buildQuestionBundleHash(questions: readonly QuestionBundleSubmissionIte
       encodeAbiParameters(
         [
           { type: "string" },
-          { type: "string" },
           { type: "bytes32" },
-          { type: "string" },
-          { type: "string" },
-          { type: "string" },
+          { type: "bytes32" },
+          { type: "bytes32" },
           { type: "uint256" },
           { type: "bytes32" },
           { type: "uint256" },
@@ -160,12 +168,15 @@ function buildQuestionBundleHash(questions: readonly QuestionBundleSubmissionIte
           { type: "bytes32" },
         ],
         [
-          "rateloop-question-bundle-item-v2",
-          question.contextUrl,
+          "rateloop-question-bundle-item-v3",
+          keccak256(
+            encodeAbiParameters(
+              [{ type: "string" }, { type: "string" }, { type: "string" }, { type: "string" }],
+              [question.contextUrl, question.title, question.description, question.tags],
+            ),
+          ),
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
-          question.title,
-          question.description,
-          question.tags,
+          buildSubmissionDetailsHash(question.detailsUrl, question.detailsHash),
           question.categoryId,
           question.salt,
           BigInt(index),
@@ -177,7 +188,7 @@ function buildQuestionBundleHash(questions: readonly QuestionBundleSubmissionIte
   );
 
   return keccak256(
-    encodeAbiParameters([{ type: "string" }, { type: "bytes32[]" }], ["rateloop-question-bundle-v2", questionHashes]),
+    encodeAbiParameters([{ type: "string" }, { type: "bytes32[]" }], ["rateloop-question-bundle-v3", questionHashes]),
   );
 }
 

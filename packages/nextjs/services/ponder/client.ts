@@ -297,6 +297,8 @@ export interface PonderContentItem {
   contentHash: string;
   questionMetadataHash?: string | null;
   resultSpecHash?: string | null;
+  detailsUrl?: string | null;
+  detailsHash?: string | null;
   url: string | null;
   media?: Array<{
     index?: number;

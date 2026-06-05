@@ -5,15 +5,14 @@ import dynamic from "next/dynamic";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery } from "@tanstack/react-query";
 import { decodeEventLog, encodeFunctionData, isAddress, toHex } from "viem";
-import { useAccount, useConfig, useReadContract } from "wagmi";
+import { useAccount, useConfig, useReadContract, useSignMessage } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
-import { ChevronDownIcon, DocumentTextIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { BountyFundingWarning } from "~~/components/shared/BountyFundingWarning";
 import { GasBalanceWarning, shouldShowGasWarningTransactionCostsLink } from "~~/components/shared/GasBalanceWarning";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
-import { ContextDocumentUploader, type UploadedContextDocument } from "~~/components/submit/ContextDocumentUploader";
 import { ImageAttachmentUploader } from "~~/components/submit/ImageAttachmentUploader";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { serializeTags } from "~~/constants/categories";
@@ -28,6 +27,11 @@ import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSu
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
+import {
+  MAX_QUESTION_DETAILS_TEXT_LENGTH,
+  getQuestionDetailsTextSizeBytes,
+  normalizeQuestionDetailsText,
+} from "~~/lib/attachments/questionDetails.shared";
 import {
   BOUNTY_WINDOW_PRESETS,
   type BountyWindowPreset,
@@ -112,13 +116,8 @@ import { sanitizeExternalUrl } from "~~/utils/externalUrl";
 import { notification } from "~~/utils/scaffold-eth";
 
 const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(m => m.ShareModal), { ssr: false });
-const ContextDocumentModal = dynamic(
-  () => import("~~/components/attachments/ContextDocumentModal").then(m => m.ContextDocumentModal),
-  { ssr: false },
-);
 
 type MediaMode = "images" | "video";
-type ContextSourceMode = "website" | "document";
 
 const MEDIA_URL_CONFIG = {
   contextPlaceholder: "Paste a source link, or add media context below",
@@ -162,13 +161,12 @@ const ROUND_RESPONSE_WINDOW_PRESETS = [
 
 type QuestionDraft = {
   mediaMode: MediaMode;
-  contextSourceMode: ContextSourceMode;
   contextUrl: string;
-  contextDocument: UploadedContextDocument | null;
   imageUrls: string[];
   videoUrl: string;
   title: string;
   description: string;
+  detailsText: string;
   selectedCategory: Category | null;
   selectedSubcategories: string[];
   customSubcategory: string;
@@ -183,6 +181,7 @@ type ValidatedQuestionDraft = {
   submittedVideoUrl: string;
   submittedTags: string;
   trimmedDescription: string;
+  trimmedDetailsText: string;
   trimmedTitle: string;
   selectedCategory: Category | null;
 };
@@ -192,13 +191,12 @@ type QuestionTaxonomySelection = Pick<QuestionDraft, "selectedCategory" | "selec
 function createEmptyQuestionDraft(): QuestionDraft {
   return {
     mediaMode: "images",
-    contextSourceMode: "website",
     contextUrl: "",
-    contextDocument: null,
     imageUrls: [""],
     videoUrl: "",
     title: "",
     description: "",
+    detailsText: "",
     selectedCategory: null,
     selectedSubcategories: [],
     customSubcategory: "",
@@ -213,8 +211,24 @@ function createQuestionDraftWithTaxonomy(source: QuestionTaxonomySelection): Que
   };
 }
 
-function formatContextDocumentSize(value: number) {
-  return value < 1024 ? `${value} B` : `${(value / 1024).toFixed(1)} KB`;
+const EMPTY_SUBMISSION_DETAILS = {
+  detailsUrl: "",
+  detailsHash: `0x${"0".repeat(64)}` as `0x${string}`,
+};
+
+function createQuestionDetailsId() {
+  const bytes = new Uint8Array(18);
+  window.crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `det_${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
+}
+
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map(byte => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function areSubcategorySelectionsEqual(left: readonly string[], right: readonly string[]): boolean {
@@ -455,12 +469,10 @@ export function ContentSubmissionSection() {
   const submitCallSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const { showWalletRpcOverloadNotification } = useWalletRpcRecovery();
   const { requireAcceptance } = useTermsAcceptance();
+  const { signMessageAsync } = useSignMessage();
 
   const [mediaMode, setMediaMode] = useState<MediaMode>("images");
-  const [contextSourceMode, setContextSourceMode] = useState<ContextSourceMode>("website");
   const [contextUrl, setContextUrl] = useState("");
-  const [contextDocument, setContextDocument] = useState<UploadedContextDocument | null>(null);
-  const [contextDocumentPreviewUrl, setContextDocumentPreviewUrl] = useState<string | null>(null);
   const [contextUrlError, setContextUrlError] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([""]);
   const [imageUrlErrors, setImageUrlErrors] = useState<(string | null)[]>([null]);
@@ -470,6 +482,8 @@ export function ContentSubmissionSection() {
   const [titleError, setTitleError] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
+  const [detailsText, setDetailsText] = useState("");
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
   const [customSubcategory, setCustomSubcategory] = useState("");
@@ -564,13 +578,12 @@ export function ContentSubmissionSection() {
 
   const getActiveQuestionDraft = (): QuestionDraft => ({
     mediaMode,
-    contextSourceMode,
     contextUrl,
-    contextDocument,
     imageUrls,
     videoUrl,
     title,
     description,
+    detailsText,
     selectedCategory,
     selectedSubcategories,
     customSubcategory,
@@ -584,9 +597,7 @@ export function ContentSubmissionSection() {
 
   const loadQuestionDraft = (draft: QuestionDraft) => {
     setMediaMode(draft.mediaMode);
-    setContextSourceMode(draft.contextSourceMode);
     setContextUrl(draft.contextUrl);
-    setContextDocument(draft.contextDocument);
     setContextUrlError(null);
     setImageUrls(draft.imageUrls.length > 0 ? draft.imageUrls : [""]);
     setImageUrlErrors((draft.imageUrls.length > 0 ? draft.imageUrls : [""]).map(() => null));
@@ -596,6 +607,8 @@ export function ContentSubmissionSection() {
     setTitleError(null);
     setDescription(draft.description);
     setDescriptionError(null);
+    setDetailsText(draft.detailsText);
+    setDetailsError(null);
     setSelectedCategory(draft.selectedCategory);
     setSelectedSubcategories(draft.selectedSubcategories);
     setCustomSubcategory(draft.customSubcategory);
@@ -675,46 +688,20 @@ export function ContentSubmissionSection() {
   };
 
   const handleContextUrlChange = (value: string) => {
-    setContextSourceMode("website");
-    setContextDocument(null);
     setContextUrl(value);
-    patchActiveQuestionDraft({ contextSourceMode: "website", contextUrl: value, contextDocument: null });
+    patchActiveQuestionDraft({ contextUrl: value });
     setContextUrlError(value.trim() ? getContextUrlValidationError(value) : null);
   };
 
-  const handleContextSourceModeChange = (mode: ContextSourceMode) => {
-    setContextSourceMode(mode);
-    setContextUrl(mode === "document" ? (contextDocument?.contextUrl ?? "") : "");
-    setContextUrlError(null);
-    if (mode === "website") {
-      setContextDocument(null);
-      patchActiveQuestionDraft({ contextSourceMode: mode, contextUrl: "", contextDocument: null });
-      return;
+  const handleDetailsTextChange = (value: string) => {
+    setDetailsText(value);
+    patchActiveQuestionDraft({ detailsText: value });
+    try {
+      if (value.trim()) normalizeQuestionDetailsText(value);
+      setDetailsError(null);
+    } catch (error) {
+      setDetailsError(error instanceof Error ? error.message : "Details are invalid.");
     }
-    patchActiveQuestionDraft({
-      contextSourceMode: mode,
-      contextUrl: contextDocument?.contextUrl ?? "",
-      contextDocument,
-    });
-  };
-
-  const handleUploadedContextDocument = (document: UploadedContextDocument) => {
-    setContextSourceMode("document");
-    setContextDocument(document);
-    setContextUrl(document.contextUrl);
-    setContextUrlError(getContextUrlValidationError(document.contextUrl));
-    patchActiveQuestionDraft({
-      contextSourceMode: "document",
-      contextUrl: document.contextUrl,
-      contextDocument: document,
-    });
-  };
-
-  const handleRemoveContextDocument = () => {
-    setContextDocument(null);
-    setContextUrl("");
-    setContextUrlError(null);
-    patchActiveQuestionDraft({ contextUrl: "", contextDocument: null });
   };
 
   const getMediaUrlValidationError = (
@@ -1500,11 +1487,17 @@ export function ContentSubmissionSection() {
   const validateQuestionSection = (draft = getActiveQuestionDraft(), applyErrors = true): ValidatedQuestionDraft => {
     const trimmedTitle = draft.title.trim();
     const trimmedDescription = draft.description.trim();
-    const trimmedContextUrl =
-      draft.contextSourceMode === "document"
-        ? (draft.contextDocument?.contextUrl.trim() ?? "")
-        : draft.contextUrl.trim();
+    const trimmedContextUrl = draft.contextUrl.trim();
     const submittedContextUrl = normalizeSubmissionContextUrl(trimmedContextUrl) ?? "";
+    let trimmedDetailsText = "";
+    let nextDetailsError: string | null = null;
+    if (draft.detailsText.trim()) {
+      try {
+        trimmedDetailsText = normalizeQuestionDetailsText(draft.detailsText);
+      } catch (error) {
+        nextDetailsError = error instanceof Error ? error.message : "Details are invalid.";
+      }
+    }
     const submittedImageUrls =
       draft.mediaMode === "images"
         ? draft.imageUrls
@@ -1518,12 +1511,7 @@ export function ContentSubmissionSection() {
       value.trim() ? getMediaUrlValidationError(value, "images") : null,
     );
     const nextVideoUrlError = getMediaUrlValidationError(draft.videoUrl, "video");
-    const nextContextUrlError =
-      draft.contextSourceMode === "document"
-        ? draft.contextDocument && trimmedContextUrl
-          ? getContextUrlValidationError(trimmedContextUrl)
-          : null
-        : getContextUrlValidationError(trimmedContextUrl);
+    const nextContextUrlError = getContextUrlValidationError(trimmedContextUrl);
     const nextTitleError = trimmedTitle ? getContentTitleValidationError(trimmedTitle) : null;
     const nextDescriptionError = trimmedDescription ? getContentDescriptionValidationError(trimmedDescription) : null;
     const blockedContentTags = findBlockedContentTags(draft.selectedSubcategories);
@@ -1538,14 +1526,13 @@ export function ContentSubmissionSection() {
         : Boolean(nextVideoUrlError) || Boolean(draft.videoUrl.trim() && !submittedVideoUrl);
     const hasContextOrMedia =
       Boolean(submittedContextUrl) || submittedImageUrls.length > 0 || Boolean(submittedVideoUrl);
-    const missingDocumentContext = draft.contextSourceMode === "document" && !draft.contextDocument?.contextUrl;
-
     if (applyErrors) {
       setImageUrlErrors(nextImageUrlErrors);
       setVideoUrlError(nextVideoUrlError);
       setContextUrlError(nextContextUrlError);
       setTitleError(nextTitleError);
       setDescriptionError(nextDescriptionError);
+      setDetailsError(nextDetailsError);
     }
 
     const questionFieldsComplete =
@@ -1555,10 +1542,10 @@ export function ContentSubmissionSection() {
       hasContextOrMedia;
     const hasQuestionErrors =
       !questionFieldsComplete ||
-      missingDocumentContext ||
       Boolean(nextContextUrlError) ||
       Boolean(nextTitleError) ||
       Boolean(nextDescriptionError) ||
+      Boolean(nextDetailsError) ||
       hasMediaError ||
       Boolean(tagsValidationError) ||
       blockedContentTags.length > 0;
@@ -1573,7 +1560,66 @@ export function ContentSubmissionSection() {
       submittedVideoUrl,
       submittedTags,
       trimmedDescription,
+      trimmedDetailsText,
       trimmedTitle,
+    };
+  };
+
+  const uploadQuestionDetailsForSubmission = async (
+    text: string,
+    submitterAddress: `0x${string}`,
+  ): Promise<typeof EMPTY_SUBMISSION_DETAILS> => {
+    if (!text.trim()) return EMPTY_SUBMISSION_DETAILS;
+
+    const normalizedText = normalizeQuestionDetailsText(text);
+    const detailsId = createQuestionDetailsId();
+    const sha256 = await sha256Hex(normalizedText);
+    const sizeBytes = getQuestionDetailsTextSizeBytes(normalizedText);
+    const challengeResponse = await fetch("/api/attachments/details/challenge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        address: submitterAddress,
+        detailsId,
+        sha256,
+        sizeBytes,
+      }),
+    });
+    const challenge = (await challengeResponse.json().catch(() => null)) as {
+      challengeId?: string;
+      message?: string;
+      error?: string;
+    } | null;
+    if (!challengeResponse.ok || !challenge?.challengeId || !challenge.message) {
+      throw new Error(challenge?.error || "Could not prepare details upload.");
+    }
+
+    const signature = await signMessageAsync({ message: challenge.message });
+    const uploadResponse = await fetch("/api/attachments/details/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        address: submitterAddress,
+        challengeId: challenge.challengeId,
+        detailsId,
+        sha256,
+        signature,
+        sizeBytes,
+        text: normalizedText,
+      }),
+    });
+    const upload = (await uploadResponse.json().catch(() => null)) as {
+      detailsHash?: `0x${string}` | null;
+      detailsUrl?: string | null;
+      error?: string;
+    } | null;
+    if (!uploadResponse.ok || !upload?.detailsUrl || !upload.detailsHash) {
+      throw new Error(upload?.error || "Could not upload details.");
+    }
+
+    return {
+      detailsUrl: upload.detailsUrl,
+      detailsHash: upload.detailsHash,
     };
   };
 
@@ -2026,10 +2072,17 @@ export function ContentSubmissionSection() {
       const feedbackWindowSeconds = bountyWindowSecondsValue;
       const feedbackBonusClosesAt = bountyStartBy + bountyWindowSecondsValue;
 
+      const submittedDetails = await Promise.all(
+        validatedQuestions.map(question =>
+          uploadQuestionDetailsForSubmission(question.trimmedDetailsText, submitterAddress),
+        ),
+      );
+
       const bundleQuestions = validatedQuestions.map((question, index) => {
         if (!question.selectedCategory) {
           throw new Error(`Question ${index + 1} is missing a category.`);
         }
+        const details = submittedDetails[index] ?? EMPTY_SUBMISSION_DETAILS;
 
         const spec = buildQuestionSpecHashes({
           bounty: {
@@ -2060,6 +2113,8 @@ export function ContentSubmissionSection() {
           description: question.trimmedDescription,
           tags: question.submittedTags,
           categoryId: question.selectedCategory.id,
+          detailsUrl: details.detailsUrl,
+          detailsHash: details.detailsHash,
           salt: createRandomHex32(),
           spec: {
             questionMetadataHash: spec.questionMetadataHash,
@@ -2103,6 +2158,7 @@ export function ContentSubmissionSection() {
             question.description,
             question.tags,
             question.categoryId,
+            { detailsUrl: question.detailsUrl, detailsHash: question.detailsHash },
           ],
         } as any)) as readonly [bigint, `0x${string}`];
 
@@ -2125,6 +2181,8 @@ export function ContentSubmissionSection() {
         : buildQuestionSubmissionRevealCommitment({
             categoryId: primaryQuestion.categoryId,
             description: primaryQuestion.description,
+            detailsHash: primaryQuestion.detailsHash,
+            detailsUrl: primaryQuestion.detailsUrl,
             imageUrls: primaryQuestion.imageUrls,
             questionMetadataHash: primaryQuestion.spec.questionMetadataHash,
             rewardAmount: selectedRewardAmount,
@@ -2251,6 +2309,7 @@ export function ContentSubmissionSection() {
                     primaryQuestion.description,
                     primaryQuestion.tags,
                     primaryQuestion.categoryId,
+                    { detailsUrl: primaryQuestion.detailsUrl, detailsHash: primaryQuestion.detailsHash },
                     primaryQuestion.salt,
                     rewardTerms,
                     roundConfigAbi,
@@ -2309,6 +2368,7 @@ export function ContentSubmissionSection() {
                 primaryQuestion.description,
                 primaryQuestion.tags,
                 primaryQuestion.categoryId,
+                { detailsUrl: primaryQuestion.detailsUrl, detailsHash: primaryQuestion.detailsHash },
                 primaryQuestion.salt,
                 rewardTerms,
                 roundConfigAbi,
@@ -2458,6 +2518,8 @@ export function ContentSubmissionSection() {
       setTitleError(null);
       setDescription("");
       setDescriptionError(null);
+      setDetailsText("");
+      setDetailsError(null);
       setSelectedCategory(null);
       setSelectedSubcategories([]);
       setCustomSubcategory("");
@@ -2537,14 +2599,6 @@ export function ContentSubmissionSection() {
   const contextOrMediaMissing =
     questionStepAttempted &&
     !normalizedContextUrl &&
-    normalizedImageUrls.length === 0 &&
-    !hasImageInput &&
-    !normalizedVideoUrl &&
-    !hasVideoInput;
-  const documentContextMissing =
-    contextSourceMode === "document" &&
-    questionStepAttempted &&
-    !contextDocument?.contextUrl &&
     normalizedImageUrls.length === 0 &&
     !hasImageInput &&
     !normalizedVideoUrl &&
@@ -3691,10 +3745,10 @@ export function ContentSubmissionSection() {
 
                 <div>
                   <label className="mb-2 block text-base font-medium">
-                    Description <span className="text-base-content/60">(optional)</span>
+                    Voter Summary <span className="text-base-content/60">(optional)</span>
                   </label>
                   <textarea
-                    placeholder="Add context voters should consider"
+                    placeholder="Add the short summary voters see first"
                     className={`textarea textarea-bordered h-24 w-full bg-base-100 ${
                       descriptionError ? "textarea-error" : ""
                     }`}
@@ -3711,108 +3765,51 @@ export function ContentSubmissionSection() {
                 </div>
 
                 <div>
+                  <label className="mb-2 block text-base font-medium">
+                    Details <span className="text-base-content/60">(optional)</span>
+                  </label>
+                  <textarea
+                    placeholder="Add longer context voters can expand before rating"
+                    className={`textarea textarea-bordered min-h-32 w-full bg-base-100 ${
+                      detailsError ? "textarea-error" : ""
+                    }`}
+                    value={detailsText}
+                    onChange={e => handleDetailsTextChange(e.target.value)}
+                    maxLength={MAX_QUESTION_DETAILS_TEXT_LENGTH}
+                  />
+                  {detailsError ? <p className="mt-1 text-base text-error">{detailsError}</p> : null}
+                  <div className="mt-1 text-right">
+                    <span className="text-base text-base-content/60">
+                      {detailsText.length}/{MAX_QUESTION_DETAILS_TEXT_LENGTH}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
                   <label
                     className={`mb-2 flex items-center gap-1.5 text-base font-medium ${
-                      contextOrMediaMissing || documentContextMissing || contextUrlError ? "text-error" : ""
+                      contextOrMediaMissing || contextUrlError ? "text-error" : ""
                     }`}
                   >
                     Context Source <span className="font-normal text-base-content/60">(optional with media)</span>
-                    <InfoTooltip text="Use either a public website or one uploaded TXT/Markdown document as the source voters should judge. If there is no context source, add uploaded images or a YouTube link below." />
+                    <InfoTooltip text="Use a public website as the source voters should judge. If there is no context source, add uploaded images or a YouTube link below." />
                   </label>
-                  <div className="mb-3 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      aria-pressed={contextSourceMode === "website"}
-                      onClick={() => handleContextSourceModeChange("website")}
-                      className={`btn btn-sm ${contextSourceMode === "website" ? "btn-primary" : "btn-outline"}`}
-                    >
-                      Website
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={contextSourceMode === "document"}
-                      onClick={() => handleContextSourceModeChange("document")}
-                      className={`btn btn-sm ${contextSourceMode === "document" ? "btn-primary" : "btn-outline"}`}
-                    >
-                      Document
-                    </button>
-                  </div>
-
-                  {contextSourceMode === "website" ? (
-                    <>
-                      <input
-                        type="url"
-                        placeholder={urlConfig.contextPlaceholder}
-                        className={`input input-bordered w-full bg-base-100 ${
-                          contextOrMediaMissing || contextUrlError ? "input-error" : ""
-                        }`}
-                        value={contextUrl}
-                        onChange={e => handleContextUrlChange(e.target.value)}
-                        onBlur={() => setContextUrlError(getContextUrlValidationError(contextUrl))}
-                        maxLength={MAX_SUBMISSION_URL_LENGTH}
-                      />
-                      {contextOrMediaMissing && !contextUrlError ? (
-                        <p className="mt-1 text-base text-error">
-                          Add a website, document, image, or YouTube video before submitting.
-                        </p>
-                      ) : null}
-                    </>
-                  ) : (
-                    <div className="space-y-2">
-                      <ContextDocumentUploader
-                        address={connectedAddress}
-                        disabled={Boolean(contextDocument)}
-                        onUploaded={handleUploadedContextDocument}
-                      />
-                      {contextDocument ? (
-                        <div
-                          className={`rounded-lg border bg-base-100 p-3 ${
-                            contextUrlError ? "border-error" : "border-base-300"
-                          }`}
-                        >
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-base-content">
-                                {contextDocument.filename}
-                              </p>
-                              <p className="mt-1 text-xs text-base-content/60">
-                                {formatContextDocumentSize(contextDocument.sizeBytes)} · RateLoop-hosted document
-                                context
-                              </p>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setContextDocumentPreviewUrl(contextDocument.contextUrl)}
-                                className="btn btn-outline btn-sm gap-2"
-                              >
-                                <DocumentTextIcon className="h-4 w-4" />
-                                Preview
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleRemoveContextDocument}
-                                className="btn btn-outline btn-square btn-sm"
-                                aria-label="Remove uploaded document"
-                              >
-                                <XMarkIcon className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </div>
-                          {contextDocument.preview ? (
-                            <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-base-content/68">
-                              {contextDocument.preview}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      {documentContextMissing ? (
-                        <p className="text-base text-error">
-                          Upload a TXT or Markdown document, or switch back to Website.
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
+                  <input
+                    type="url"
+                    placeholder={urlConfig.contextPlaceholder}
+                    className={`input input-bordered w-full bg-base-100 ${
+                      contextOrMediaMissing || contextUrlError ? "input-error" : ""
+                    }`}
+                    value={contextUrl}
+                    onChange={e => handleContextUrlChange(e.target.value)}
+                    onBlur={() => setContextUrlError(getContextUrlValidationError(contextUrl))}
+                    maxLength={MAX_SUBMISSION_URL_LENGTH}
+                  />
+                  {contextOrMediaMissing && !contextUrlError ? (
+                    <p className="mt-1 text-base text-error">
+                      Add a website, image, or YouTube video before submitting.
+                    </p>
+                  ) : null}
                   {contextUrlError ? <p className="mt-1 text-base text-error">{contextUrlError}</p> : null}
                 </div>
 
@@ -4177,12 +4174,6 @@ export function ContentSubmissionSection() {
           description={submittedContent.description}
           lastActivityAt={submittedContent.lastActivityAt}
           onClose={handleCloseShareModal}
-        />
-      ) : null}
-      {contextDocumentPreviewUrl ? (
-        <ContextDocumentModal
-          documentUrl={contextDocumentPreviewUrl}
-          onClose={() => setContextDocumentPreviewUrl(null)}
         />
       ) : null}
     </>

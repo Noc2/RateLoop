@@ -238,12 +238,12 @@ await votingEngine.write.commitVote([
         rights-restricted material, or prohibited content.
       </p>
 
-      <h2>Text Context Documents</h2>
+      <h2>Long Question Details</h2>
       <p>
-        For long public written context, use the Ask page or browser handoff to upload one <code>.txt</code> or{" "}
-        <code>.md</code> file and use the approved RateLoop document URL as <code>question.contextUrl</code>. Uploaded
-        document text is moderated and rendered publicly for raters. PDF uploads are intentionally not supported in the
-        first version.
+        For long public written context, keep <code>question.description</code> as the short voter summary and provide
+        the full text off-chain with <code>question.detailsUrl</code> plus its SHA-256 <code>question.detailsHash</code>
+        . The hosted Ask page can create these details from the Details textarea; external frontends and agents can host
+        equivalent immutable text themselves as long as raters can fetch the URL and verify it against the hash.
       </p>
 
       <h2>Frontend Attribution</h2>

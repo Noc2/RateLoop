@@ -47,6 +47,9 @@ const ENTRY_POINT = "0x1111111111111111111111111111111111111111" as const;
 const EXECUTOR = "0x2222222222222222222222222222222222222222" as const;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const SUCCESS_HASH = `0x${"1".repeat(64)}` as const;
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
+const DETAILS_HASH = `0x${"8".repeat(64)}` as const;
+const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_sponsoreddetails01";
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
 const USER_OPERATION_EVENT = parseAbiItem(
   "event UserOperationEvent(bytes32 indexed userOpHash, address indexed sender, address indexed paymaster, uint256 nonce, bool success, uint256 actualGasCost, uint256 actualGasUsed)",
@@ -81,6 +84,14 @@ const submitQuestionWithRewardAndRoundConfigAbi = [
       { name: "description", type: "string" },
       { name: "tags", type: "string" },
       { name: "categoryId", type: "uint256" },
+      {
+        name: "details",
+        type: "tuple",
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+      },
       { name: "salt", type: "bytes32" },
       {
         name: "rewardTerms",
@@ -242,6 +253,8 @@ function submitQuestionWithRewardCall(
   overrides: Partial<{
     contextUrl: string;
     description: string;
+    detailsHash: `0x${string}`;
+    detailsUrl: string;
     imageUrls: string[];
     tags: string;
     title: string;
@@ -251,6 +264,8 @@ function submitQuestionWithRewardCall(
   const question = {
     contextUrl: "https://example.com/product",
     description: "Vote based on the source material.",
+    detailsHash: EMPTY_DETAILS_HASH,
+    detailsUrl: "",
     imageUrls: [] as string[],
     tags: "Products,Value",
     title: "Is this product worth recommending?",
@@ -269,6 +284,10 @@ function submitQuestionWithRewardCall(
       question.description,
       question.tags,
       1n,
+      {
+        detailsHash: question.detailsHash,
+        detailsUrl: question.detailsUrl,
+      },
       `0x${"5".repeat(64)}`,
       {
         asset: 0,
@@ -669,6 +688,42 @@ test("validates sponsored ContentRegistry submit question text and tags", async 
   assert.equal(blockedTagsDecision.isAllowed, false);
   if (blockedTagsDecision.isAllowed) return;
   assert.equal(blockedTagsDecision.debugCode, "unsupported_operation");
+});
+
+test("validates sponsored ContentRegistry submit question details", async () => {
+  const allowedDetailsDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([submitQuestionWithRewardCall({ detailsHash: DETAILS_HASH, detailsUrl: DETAILS_URL })]) as never,
+  );
+  assert.equal(allowedDetailsDecision.isAllowed, true);
+
+  await dbModule.dbClient.execute("DELETE FROM free_transaction_reservations");
+  await dbModule.dbClient.execute("DELETE FROM free_transaction_quotas");
+
+  const missingHashDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([submitQuestionWithRewardCall({ detailsUrl: DETAILS_URL })]) as never,
+  );
+  assert.equal(missingHashDecision.isAllowed, false);
+  if (missingHashDecision.isAllowed) return;
+  assert.equal(missingHashDecision.debugCode, "unsupported_operation");
+
+  const missingUrlDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([submitQuestionWithRewardCall({ detailsHash: DETAILS_HASH })]) as never,
+  );
+  assert.equal(missingUrlDecision.isAllowed, false);
+  if (missingUrlDecision.isAllowed) return;
+  assert.equal(missingUrlDecision.debugCode, "unsupported_operation");
+
+  const credentialedUrlDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      submitQuestionWithRewardCall({
+        detailsHash: DETAILS_HASH,
+        detailsUrl: "https://user:pass@example.com/details",
+      }),
+    ]) as never,
+  );
+  assert.equal(credentialedUrlDecision.isAllowed, false);
+  if (credentialedUrlDecision.isAllowed) return;
+  assert.equal(credentialedUrlDecision.debugCode, "unsupported_operation");
 });
 
 test("validates sponsored ContentRegistry uploaded image ownership and origin", async () => {

@@ -21,10 +21,6 @@ import {
   keccak256,
   parseSignature,
 } from "viem";
-import {
-  attachContextDocumentToContent,
-  getContextDocumentSubmissionValidationError,
-} from "~~/lib/attachments/contextDocuments";
 import { getImageAttachmentSubmissionValidationError } from "~~/lib/attachments/imageAttachments";
 import { dbClient } from "~~/lib/db";
 import {
@@ -57,6 +53,13 @@ const TX_RECEIPT_TIMEOUT_MS = 180_000;
 const FEEDBACK_BONUS_ASSET_LREP = 0;
 const FEEDBACK_BONUS_ASSET_USDC = 1;
 type FeedbackBonusAsset = "LREP" | "USDC";
+
+function questionDetailsTuple(question: Pick<X402QuestionPayload["questions"][number], "detailsHash" | "detailsUrl">) {
+  return {
+    detailsUrl: question.detailsUrl,
+    detailsHash: question.detailsHash,
+  };
+}
 
 export type X402QuestionSubmissionStatus = "awaiting_wallet_signature" | "submitted" | "failed";
 
@@ -282,6 +285,8 @@ function buildQuestionContentHash(question: X402QuestionPayload["questions"][num
         { type: "string[]" },
         { type: "string" },
         { type: "string" },
+        { type: "bytes32" },
+        { type: "string" },
         { type: "string" },
         { type: "string" },
         { type: "uint256" },
@@ -289,10 +294,12 @@ function buildQuestionContentHash(question: X402QuestionPayload["questions"][num
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-context-v2",
+        "rateloop-question-context-v3",
         question.contextUrl,
         question.imageUrls,
         question.videoUrl,
+        question.detailsUrl,
+        question.detailsHash,
         question.title,
         question.description,
         question.tags,
@@ -306,10 +313,6 @@ function buildQuestionContentHash(question: X402QuestionPayload["questions"][num
 
 function getQuestionImageUrls(payload: X402QuestionPayload): string[] {
   return payload.questions.flatMap(question => question.imageUrls);
-}
-
-function getQuestionContextUrls(payload: X402QuestionPayload): string[] {
-  return payload.questions.map(question => question.contextUrl).filter(Boolean);
 }
 
 async function assertApprovedImageAttachmentsForSubmission(
@@ -326,28 +329,11 @@ async function assertApprovedImageAttachmentsForSubmission(
   }
 }
 
-async function assertApprovedContextDocumentsForSubmission(
-  payload: X402QuestionPayload,
-  identity: AttachmentSubmissionIdentity,
-) {
-  for (const contextUrl of [...new Set(getQuestionContextUrls(payload))]) {
-    const error = await getContextDocumentSubmissionValidationError({
-      agentId: identity.agentId,
-      contextUrl,
-      ownerWalletAddress: identity.ownerWalletAddress,
-    });
-    if (error) {
-      throw new X402QuestionInputError(error);
-    }
-  }
-}
-
 async function assertApprovedAttachmentsForSubmission(
   payload: X402QuestionPayload,
   identity: AttachmentSubmissionIdentity,
 ) {
   await assertApprovedImageAttachmentsForSubmission(payload, identity);
-  await assertApprovedContextDocumentsForSubmission(payload, identity);
 }
 
 function buildExpectedQuestionContentHashes(payload: X402QuestionPayload): Hex[] {
@@ -593,6 +579,14 @@ const X402QuestionSubmitterAbi = [
       },
       { name: "imageUrls", type: "string[]" },
       { name: "videoUrl", type: "string" },
+      {
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+        name: "details",
+        type: "tuple",
+      },
       { name: "salt", type: "bytes32" },
       {
         components: [
@@ -646,6 +640,14 @@ const X402QuestionSubmitterAbi = [
       { name: "description", type: "string" },
       { name: "tags", type: "string" },
       { name: "categoryId", type: "uint256" },
+      {
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+        name: "details",
+        type: "tuple",
+      },
       { name: "salt", type: "bytes32" },
       {
         components: [
@@ -987,6 +989,7 @@ async function preflightX402QuestionSubmissionWithClient(params: {
         question.description,
         question.tags,
         question.categoryId,
+        questionDetailsTuple(question),
       ],
     })) as readonly [bigint, Hex];
     if (resolvedCategoryId !== question.categoryId) {
@@ -1075,6 +1078,8 @@ function buildQuestionSubmissionCallContext(params: {
     categoryId: question.categoryId,
     contextUrl: question.contextUrl,
     description: question.description,
+    detailsHash: question.detailsHash,
+    detailsUrl: question.detailsUrl,
     imageUrls: question.imageUrls,
     salt: params.salts[index],
     spec: {
@@ -1120,6 +1125,8 @@ function buildQuestionSubmissionCallContext(params: {
     : buildQuestionSubmissionRevealCommitment({
         categoryId: primaryQuestion.categoryId,
         description: primaryQuestion.description,
+        detailsHash: primaryQuestion.detailsHash,
+        detailsUrl: primaryQuestion.detailsUrl,
         imageUrls: primaryQuestion.imageUrls,
         questionMetadataHash: primaryQuestion.spec.questionMetadataHash,
         rewardAmount: params.payload.bounty.amount,
@@ -1152,6 +1159,7 @@ function buildQuestionSubmissionCallContext(params: {
         primaryQuestion.description,
         primaryQuestion.tags,
         primaryQuestion.categoryId,
+        questionDetailsTuple(primaryQuestion),
         primaryQuestion.salt,
         rewardTerms,
         roundConfigAbi,
@@ -1433,6 +1441,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
       },
       question.imageUrls,
       question.videoUrl,
+      questionDetailsTuple(question),
       question.salt,
       context.rewardTerms,
       context.roundConfigAbi,
@@ -1499,6 +1508,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
                 question.description,
                 question.tags,
                 question.categoryId,
+                questionDetailsTuple(question),
                 question.salt,
                 context.rewardTerms,
                 context.roundConfigAbi,
@@ -1809,30 +1819,6 @@ function matchConfirmedSubmissionPlan(params: {
     contentIds: matchedContentIds,
     rewardPoolId: bundleAttachment.rewardPoolId,
   };
-}
-
-async function attachContextDocumentsToConfirmedSubmission(params: {
-  contentIds: bigint[];
-  record: X402QuestionSubmissionRecord;
-  walletAddress: string;
-}) {
-  const planReceipt = parseStoredSubmissionPlanReceipt(params.record.paymentReceipt);
-  const expectedContextUrls = planReceipt?.expectedContextUrls ?? [];
-  if (expectedContextUrls.length === 0) return;
-
-  await Promise.all(
-    expectedContextUrls.map((contextUrl, index) => {
-      const contentId = params.contentIds[index];
-      if (!contextUrl || contentId === undefined) return Promise.resolve();
-
-      return attachContextDocumentToContent({
-        agentId: planReceipt?.agentId ?? null,
-        contentId: contentId.toString(),
-        contextUrl,
-        ownerWalletAddress: params.walletAddress,
-      });
-    }),
-  );
 }
 
 function x402QuestionSubmissionStatusBody(params: {
@@ -2738,12 +2724,6 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     status: "submitted",
     transactionHashes: params.transactionHashes,
   });
-  await attachContextDocumentsToConfirmedSubmission({
-    contentIds,
-    record,
-    walletAddress,
-  });
-
   const updatedRecord = await getX402QuestionSubmissionByOperationKey(params.operationKey);
   return {
     body: normalizeSubmittedRecordBody(updatedRecord ?? record),

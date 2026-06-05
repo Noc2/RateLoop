@@ -228,6 +228,21 @@ ponder.on(
 );
 
 ponder.on(
+  "ContentRegistry:ContentDetailsSubmitted",
+  async ({ event, context }) => {
+    const { contentId, detailsUrl, detailsHash } = event.args;
+    const existingContent = await context.db.find(content, { id: contentId });
+    if (!existingContent) return;
+
+    await context.db.update(content, { id: contentId }).set({
+      detailsUrl,
+      detailsHash,
+      lastActivityAt: event.block.timestamp,
+    });
+  },
+);
+
+ponder.on(
   "ContentRegistry:QuestionBundleContentLinked",
   async ({ event, context }) => {
     const { bundleId, contentId, bundleIndex } = event.args;

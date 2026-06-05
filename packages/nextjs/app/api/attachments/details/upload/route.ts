@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createContextDocumentFromBuffer } from "~~/lib/attachments/contextDocuments";
+import { createQuestionDetailsFromText } from "~~/lib/attachments/questionDetails";
 import {
-  UPLOAD_CONTEXT_DOCUMENT_ACTION,
-  buildContextDocumentUploadChallengeMessage,
-  hashContextDocumentUploadChallengePayload,
-  normalizeContextDocumentUploadChallengeInput,
-} from "~~/lib/auth/contextDocumentUploadChallenge";
-import { getMaxContextDocumentUploadSizeBytes } from "~~/lib/auth/contextDocumentUploadChallenge.shared";
+  UPLOAD_QUESTION_DETAILS_ACTION,
+  buildQuestionDetailsUploadChallengeMessage,
+  hashQuestionDetailsUploadChallengePayload,
+  normalizeQuestionDetailsUploadChallengeInput,
+} from "~~/lib/auth/questionDetailsChallenge";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
+import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { MCP_SCOPES, authenticateMcpRequest } from "~~/lib/mcp/auth";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
@@ -15,51 +15,20 @@ type UploadClientPayload = Record<string, unknown> & {
   challengeId?: string;
   clientRequestId?: string;
   signature?: `0x${string}`;
+  text?: string;
 };
 
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
-const UPLOAD_METADATA_MAX_BYTES = 64 * 1024;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function parseClientPayload(value: string | null): UploadClientPayload {
-  if (!value) {
-    throw new Error("Upload metadata is required.");
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("Upload metadata must be an object.");
-    }
-    return parsed as UploadClientPayload;
-  } catch (error) {
-    if (error instanceof Error && error.message !== "Unexpected end of JSON input") {
-      throw error;
-    }
-    throw new Error("Upload metadata must be valid JSON.");
-  }
-}
 
 function getBearerToken(request: Request) {
   return request.headers.get("authorization")?.trim() ? request.headers.get("authorization") : null;
 }
 
-function uploadTooLargeResponse() {
-  return NextResponse.json({ error: "Upload is too large." }, { status: 413 });
-}
-
-function rejectOversizedUploadBody(request: NextRequest) {
-  const contentLength = request.headers.get("content-length");
-  if (!contentLength || !/^\d+$/.test(contentLength)) return null;
-
-  const maximumBodyBytes = getMaxContextDocumentUploadSizeBytes() + UPLOAD_METADATA_MAX_BYTES;
-  return Number(contentLength) > maximumBodyBytes ? uploadTooLargeResponse() : null;
-}
-
 async function authorizeUploadRequest(request: NextRequest, payload: UploadClientPayload) {
-  const normalized = normalizeContextDocumentUploadChallengeInput(payload);
+  const normalized = normalizeQuestionDetailsUploadChallengeInput(payload);
   if (!normalized.ok) {
     throw new Error(normalized.error);
   }
@@ -68,7 +37,7 @@ async function authorizeUploadRequest(request: NextRequest, payload: UploadClien
   if (bearerToken) {
     const agent = await authenticateMcpRequest(request, MCP_SCOPES.ask);
     if (agent.walletAddress && agent.walletAddress.toLowerCase() !== normalized.payload.normalizedAddress) {
-      throw new Error("Upload wallet does not match the authenticated agent wallet.");
+      throw new Error("Details wallet does not match the authenticated agent wallet.");
     }
 
     return {
@@ -82,18 +51,18 @@ async function authorizeUploadRequest(request: NextRequest, payload: UploadClien
   }
 
   if (!payload.challengeId || !payload.signature) {
-    throw new Error("Signed upload challenge is required.");
+    throw new Error("Signed details challenge is required.");
   }
 
-  const payloadHash = hashContextDocumentUploadChallengePayload(normalized.payload);
+  const payloadHash = hashQuestionDetailsUploadChallengePayload(normalized.payload);
   const challengeFailure = await verifySignedActionChallenge({
     challengeId: payload.challengeId,
-    action: UPLOAD_CONTEXT_DOCUMENT_ACTION,
+    action: UPLOAD_QUESTION_DETAILS_ACTION,
     walletAddress: normalized.payload.normalizedAddress,
     payloadHash,
     signature: payload.signature,
     buildMessage: ({ nonce, expiresAt }) =>
-      buildContextDocumentUploadChallengeMessage({
+      buildQuestionDetailsUploadChallengeMessage({
         payload: normalized.payload,
         payloadHash,
         nonce,
@@ -101,7 +70,7 @@ async function authorizeUploadRequest(request: NextRequest, payload: UploadClien
       }),
   });
   if (challengeFailure) {
-    throw new Error("Invalid signed upload challenge.");
+    throw new Error("Invalid signed details challenge.");
   }
 
   return {
@@ -136,43 +105,32 @@ export async function POST(request: NextRequest) {
     const limited = await checkRateLimit(request, RATE_LIMIT);
     if (limited) return limited;
 
-    const oversizedBody = rejectOversizedUploadBody(request);
-    if (oversizedBody) return oversizedBody;
-
-    const formData = await request.formData();
-    const clientPayload = formData.get("clientPayload");
-    const file = formData.get("document");
-
-    if (typeof clientPayload !== "string" || !(file instanceof File)) {
-      return NextResponse.json({ error: "Document upload metadata is invalid." }, { status: 400 });
+    const body = await parseJsonBody(request);
+    if (!isJsonObjectBody(body)) return jsonBodyErrorResponse(body);
+    const payload = body as UploadClientPayload;
+    if (typeof payload.text !== "string") {
+      return NextResponse.json({ error: "Details text is required." }, { status: 400 });
     }
 
-    const payload = parseClientPayload(clientPayload);
     const authorization = await authorizeUploadRequest(request, payload);
     const authorizedLimited = await checkAuthorizedUploadRateLimit(request, authorization);
     if (authorizedLimited) return authorizedLimited;
 
     const normalized = authorization.normalized.payload;
-    if (file.size !== normalized.sizeBytes) {
-      throw new Error("Uploaded document size does not match the signed metadata.");
-    }
-
-    const result = await createContextDocumentFromBuffer({
-      buffer: Buffer.from(await file.arrayBuffer()),
+    const result = await createQuestionDetailsFromText({
       clientRequestId: typeof payload.clientRequestId === "string" ? payload.clientRequestId : null,
-      documentId: normalized.documentId,
-      filename: normalized.filename,
-      mimeType: normalized.mimeType,
+      detailsId: normalized.detailsId,
       requestUrl: request.url,
       sha256: normalized.sha256,
       sizeBytes: normalized.sizeBytes,
+      text: payload.text,
       uploader: authorization.identity,
     });
 
     return NextResponse.json(result, { status: result.status === "approved" ? 200 : 400 });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Upload failed." },
+      { error: error instanceof Error ? error.message : "Details upload failed." },
       { status: error instanceof Error && error.message.includes("too large") ? 413 : 400 },
     );
   }

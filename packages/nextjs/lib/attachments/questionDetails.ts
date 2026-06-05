@@ -1,0 +1,480 @@
+import { createHash, randomBytes } from "crypto";
+import { and, eq } from "drizzle-orm";
+import "server-only";
+import {
+  MAX_QUESTION_DETAILS_TEXT_BYTES,
+  getQuestionDetailsTextSizeBytes,
+  normalizeQuestionDetailsText,
+} from "~~/lib/attachments/questionDetails.shared";
+import { db, dbPool } from "~~/lib/db";
+import { type QuestionDetails, questionDetails } from "~~/lib/db/schema";
+
+const QUESTION_DETAILS_ROUTE_PREFIX = "/api/attachments/details";
+const DEFAULT_DETAILS_TEXT_PREVIEW_LENGTH = 600;
+const OPENAI_MODERATION_MODEL = "omni-moderation-latest";
+const MODERATION_CHUNK_MAX_CHARS = 10_000;
+const OPENAI_MODERATION_MAX_ATTEMPTS = 2;
+const OPENAI_MODERATION_REQUEST_TIMEOUT_MS = 10_000;
+const DEFAULT_QUESTION_DETAILS_ORPHAN_SWEEP_LIMIT = 100;
+const DEFAULT_UNATTACHED_QUESTION_DETAILS_ORPHAN_TTL_MS = 24 * 60 * 60 * 1000;
+const QUESTION_DETAILS_ID_PATTERN = /^det_[A-Za-z0-9_-]{16,80}$/;
+const PRODUCTION_QUESTION_DETAILS_ORIGINS = ["https://rateloop.ai", "https://www.rateloop.ai"];
+const BLOCKED_MODERATION_CATEGORIES = new Set([
+  "sexual/minors",
+  "sexual",
+  "violence/graphic",
+  "self-harm/instructions",
+  "hate/threatening",
+  "harassment/threatening",
+  "illicit/violent",
+]);
+
+type QuestionDetailsStatus = "approved" | "blocked" | "failed" | "deleted";
+
+export type QuestionDetailsUploaderIdentity =
+  | {
+      kind: "wallet";
+      ownerWalletAddress: `0x${string}`;
+      agentId?: null;
+    }
+  | {
+      kind: "agent";
+      ownerWalletAddress: string | null;
+      agentId: string;
+    };
+
+export type CreateQuestionDetailsFromTextParams = {
+  clientRequestId?: string | null;
+  detailsId: string;
+  requestUrl: string;
+  sha256: string;
+  sizeBytes: number;
+  text: string;
+  uploader: QuestionDetailsUploaderIdentity;
+};
+
+type ModerationDecision = {
+  provider: string;
+  result: unknown;
+  status: "approved" | "blocked" | "review_required";
+};
+
+type OpenAiModerationResult = {
+  categories?: Record<string, boolean>;
+  flagged?: boolean;
+};
+
+type OpenAiModerationResponse = {
+  results?: OpenAiModerationResult[];
+};
+
+export type QuestionDetailsUploadResult = {
+  detailsHash: `0x${string}` | null;
+  detailsId: string;
+  detailsUrl: string | null;
+  error: string | null;
+  moderationStatus: string;
+  nextAction: string;
+  preview: string | null;
+  status: QuestionDetailsStatus;
+};
+
+function nowDate() {
+  return new Date();
+}
+
+export function createQuestionDetailsId() {
+  return `det_${randomBytes(18).toString("base64url")}`;
+}
+
+export function isQuestionDetailsId(value: string) {
+  return QUESTION_DETAILS_ID_PATTERN.test(value);
+}
+
+function getQuestionDetailsPath(detailsId: string) {
+  return `${QUESTION_DETAILS_ROUTE_PREFIX}/${detailsId}`;
+}
+
+function getConfiguredQuestionDetailsBaseUrl() {
+  const rawValue =
+    process.env.APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (process.env.VERCEL_URL?.trim() ? `https://${process.env.VERCEL_URL.trim()}` : "");
+  if (!rawValue) return null;
+
+  try {
+    const parsed = new URL(rawValue);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString().replace(/\/$/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
+export function getQuestionDetailsUrl(requestUrl: string, detailsId: string) {
+  return new URL(getQuestionDetailsPath(detailsId), getConfiguredQuestionDetailsBaseUrl() ?? requestUrl).toString();
+}
+
+function getAllowedQuestionDetailsOrigins() {
+  const origins = new Set(PRODUCTION_QUESTION_DETAILS_ORIGINS);
+  const rawValues = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL, process.env.VERCEL_URL];
+
+  for (const rawValue of rawValues) {
+    const trimmed = rawValue?.trim();
+    if (!trimmed) continue;
+
+    const value =
+      rawValue === process.env.VERCEL_URL && !/^https?:\/\//i.test(trimmed) ? `https://${trimmed}` : trimmed;
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        origins.add(parsed.origin);
+      }
+    } catch {
+      // Ignore malformed deployment URL config and fall back to production origins.
+    }
+  }
+
+  return origins;
+}
+
+function isLocalQuestionDetailsOrigin(parsed: URL) {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]")
+  );
+}
+
+function isAllowedQuestionDetailsOrigin(parsed: URL) {
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  return getAllowedQuestionDetailsOrigins().has(parsed.origin) || isLocalQuestionDetailsOrigin(parsed);
+}
+
+export function parseQuestionDetailsIdFromDetailsUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    if (!isAllowedQuestionDetailsOrigin(parsed)) return null;
+    const match = parsed.pathname.match(/^\/api\/attachments\/details\/(det_[A-Za-z0-9_-]{16,80})$/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getQuestionDetails(id: string): Promise<QuestionDetails | null> {
+  const [details] = await db.select().from(questionDetails).where(eq(questionDetails.id, id)).limit(1);
+  return details ?? null;
+}
+
+function assertSupportedDetailsInput(params: { normalizedText: string; sha256: string; sizeBytes: number }) {
+  const sizeBytes = getQuestionDetailsTextSizeBytes(params.normalizedText);
+  if (!Number.isSafeInteger(params.sizeBytes) || params.sizeBytes <= 0) {
+    throw new Error("Details size is invalid.");
+  }
+  if (params.sizeBytes > MAX_QUESTION_DETAILS_TEXT_BYTES || sizeBytes > MAX_QUESTION_DETAILS_TEXT_BYTES) {
+    throw new Error("Details are too large.");
+  }
+  if (sizeBytes !== params.sizeBytes) {
+    throw new Error("Details size does not match the signed metadata.");
+  }
+
+  const actualSha256 = createHash("sha256").update(params.normalizedText, "utf8").digest("hex");
+  if (actualSha256 !== params.sha256) {
+    throw new Error("Details hash does not match the signed metadata.");
+  }
+}
+
+function hasOpenAiModerationKey() {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
+
+function isDevelopmentModerationExplicitlyDisabled() {
+  return process.env.NODE_ENV !== "production" && process.env.RATELOOP_QUESTION_DETAILS_MODERATION_MODE === "disabled";
+}
+
+function isDevModerationSkipAllowed() {
+  return process.env.NODE_ENV !== "production" && !hasOpenAiModerationKey();
+}
+
+function textChunks(text: string) {
+  const chunks: string[] = [];
+  for (let index = 0; index < text.length; index += MODERATION_CHUNK_MAX_CHARS) {
+    chunks.push(text.slice(index, index + MODERATION_CHUNK_MAX_CHARS));
+  }
+  return chunks;
+}
+
+function isRetryableModerationStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+async function fetchOpenAiModerationChunk(params: {
+  apiKey: string;
+  chunk: string;
+}): Promise<{ ok: true; result: OpenAiModerationResult } | { ok: false; result: unknown }> {
+  let lastFetchError: unknown = null;
+
+  for (let attempt = 1; attempt <= OPENAI_MODERATION_MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch("https://api.openai.com/v1/moderations", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${params.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: AbortSignal.timeout(OPENAI_MODERATION_REQUEST_TIMEOUT_MS),
+        body: JSON.stringify({
+          model: OPENAI_MODERATION_MODEL,
+          input: params.chunk,
+        }),
+      });
+
+      const result = (await response.json().catch(() => null)) as OpenAiModerationResponse | null;
+      if (response.ok) {
+        return { ok: true, result: result?.results?.[0] ?? {} };
+      }
+
+      const retryable = isRetryableModerationStatus(response.status);
+      if (attempt < OPENAI_MODERATION_MAX_ATTEMPTS && retryable) continue;
+
+      return {
+        ok: false,
+        result: result ?? {
+          attempts: attempt,
+          error: `OpenAI moderation failed with ${response.status}`,
+          retryable,
+          status: response.status,
+        },
+      };
+    } catch (error) {
+      lastFetchError = error;
+      if (attempt < OPENAI_MODERATION_MAX_ATTEMPTS) continue;
+    }
+  }
+
+  return {
+    ok: false,
+    result: {
+      attempts: OPENAI_MODERATION_MAX_ATTEMPTS,
+      error: "OpenAI moderation request failed.",
+      lastError: lastFetchError instanceof Error ? lastFetchError.message : "Unknown error",
+      timeoutMs: OPENAI_MODERATION_REQUEST_TIMEOUT_MS,
+    },
+  };
+}
+
+async function moderateQuestionDetailsText(text: string): Promise<ModerationDecision> {
+  const chunks = textChunks(text);
+  if (isDevelopmentModerationExplicitlyDisabled()) {
+    return {
+      provider: "disabled",
+      status: "approved",
+      result: { chunkCount: chunks.length, skipped: true, reason: "explicitly_disabled" },
+    };
+  }
+  if (isDevModerationSkipAllowed()) {
+    return {
+      provider: "dev-skip",
+      status: "approved",
+      result: { chunkCount: chunks.length, skipped: true, reason: "missing_dev_key" },
+    };
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    return { provider: "openai", status: "review_required", result: { error: "OPENAI_API_KEY is not configured" } };
+  }
+
+  const results: OpenAiModerationResult[] = [];
+
+  for (const chunk of chunks) {
+    const moderation = await fetchOpenAiModerationChunk({ apiKey, chunk });
+    if (!moderation.ok) {
+      return {
+        provider: "openai",
+        status: "review_required",
+        result: moderation.result,
+      };
+    }
+
+    results.push(moderation.result);
+  }
+
+  const flagged = results.some(result => Boolean(result.flagged));
+  const blockedCategories = [
+    ...new Set(
+      results.flatMap(result =>
+        Object.entries(result.categories ?? {})
+          .filter(([category, flagged]) => flagged && BLOCKED_MODERATION_CATEGORIES.has(category))
+          .map(([category]) => category),
+      ),
+    ),
+  ];
+
+  return {
+    provider: "openai",
+    status: flagged || blockedCategories.length > 0 ? "blocked" : "approved",
+    result: {
+      blockedCategories,
+      chunkCount: chunks.length,
+      flagged,
+    },
+  };
+}
+
+function uploadResult(params: { details: QuestionDetails; requestUrl: string }): QuestionDetailsUploadResult {
+  const detailsHash = `0x${params.details.sha256}` as const;
+  return {
+    detailsHash: params.details.status === "approved" ? detailsHash : null,
+    detailsId: params.details.id,
+    detailsUrl:
+      params.details.status === "approved" ? getQuestionDetailsUrl(params.requestUrl, params.details.id) : null,
+    error: params.details.error,
+    moderationStatus: params.details.moderationStatus,
+    nextAction:
+      params.details.status === "approved"
+        ? "Use detailsUrl and detailsHash with the question submission."
+        : "Edit the details and try again before submitting.",
+    preview: params.details.normalizedText
+      ? params.details.normalizedText.slice(0, DEFAULT_DETAILS_TEXT_PREVIEW_LENGTH)
+      : null,
+    status: params.details.status as QuestionDetailsStatus,
+  };
+}
+
+export async function createQuestionDetailsFromText(params: CreateQuestionDetailsFromTextParams) {
+  if (!isQuestionDetailsId(params.detailsId)) {
+    throw new Error("Invalid details id.");
+  }
+
+  const createdAt = nowDate();
+  const baseValues = {
+    id: params.detailsId,
+    uploaderKind: params.uploader.kind,
+    ownerWalletAddress: params.uploader.ownerWalletAddress,
+    agentId: params.uploader.kind === "agent" ? params.uploader.agentId : null,
+    clientRequestId: params.clientRequestId ?? null,
+    sizeBytes: params.sizeBytes,
+    sha256: params.sha256,
+    createdAt,
+    updatedAt: createdAt,
+  };
+
+  let normalizedText: string | null = null;
+  let moderation: ModerationDecision | null = null;
+  let status: QuestionDetailsStatus = "failed";
+  let error: string | null = null;
+
+  try {
+    normalizedText = normalizeQuestionDetailsText(params.text);
+    assertSupportedDetailsInput({
+      normalizedText,
+      sha256: params.sha256,
+      sizeBytes: params.sizeBytes,
+    });
+    moderation = await moderateQuestionDetailsText(normalizedText);
+    status =
+      moderation.status === "approved" ? "approved" : moderation.status === "review_required" ? "failed" : "blocked";
+    error = moderation.status === "review_required" ? "Details require moderation review before publication." : null;
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : "Details processing failed.";
+  }
+
+  const [created] = await db
+    .insert(questionDetails)
+    .values({
+      ...baseValues,
+      normalizedText: status === "approved" ? normalizedText : null,
+      status,
+      moderationStatus: moderation?.status ?? "failed",
+      moderationProvider: moderation?.provider ?? null,
+      moderationResult: moderation ? JSON.stringify(moderation.result) : null,
+      error,
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (!created) {
+    throw new Error("Question details already exist.");
+  }
+
+  return uploadResult({ details: created, requestUrl: params.requestUrl });
+}
+
+export async function attachQuestionDetailsToContent(params: {
+  agentId?: string | null;
+  contentId: string;
+  detailsUrl: string;
+  ownerWalletAddress?: string | null;
+}) {
+  const detailsId = parseQuestionDetailsIdFromDetailsUrl(params.detailsUrl);
+  if (!detailsId) return;
+
+  const updatedAt = nowDate();
+  await db
+    .update(questionDetails)
+    .set({
+      contentId: params.contentId,
+      updatedAt,
+    })
+    .where(
+      and(
+        eq(questionDetails.id, detailsId),
+        params.agentId
+          ? eq(questionDetails.agentId, params.agentId)
+          : eq(questionDetails.ownerWalletAddress, params.ownerWalletAddress ?? ""),
+      ),
+    );
+}
+
+export async function sweepOrphanedQuestionDetails(
+  params: {
+    limit?: number;
+    now?: Date;
+    unattachedTtlMs?: number;
+  } = {},
+) {
+  const now = params.now ?? nowDate();
+  const limit = Math.max(1, Math.min(Math.floor(params.limit ?? DEFAULT_QUESTION_DETAILS_ORPHAN_SWEEP_LIMIT), 500));
+  const unattachedTtlMs = Math.max(1, params.unattachedTtlMs ?? DEFAULT_UNATTACHED_QUESTION_DETAILS_ORPHAN_TTL_MS);
+  const expiresBefore = new Date(now.getTime() - unattachedTtlMs);
+
+  const candidates = await dbPool.query<{
+    id: string;
+    status: QuestionDetailsStatus;
+  }>(
+    `
+      SELECT id, status
+      FROM question_details
+      WHERE content_id IS NULL
+        AND status IN ('blocked', 'failed')
+        AND created_at <= $1
+      ORDER BY created_at ASC
+      LIMIT $2
+    `,
+    [expiresBefore, limit],
+  );
+
+  let deleted = 0;
+  for (const candidate of candidates.rows) {
+    const claimed = await dbPool.query<{ id: string }>(
+      `
+        UPDATE question_details
+        SET status = 'deleted',
+            normalized_text = NULL,
+            updated_at = $2,
+            error = COALESCE(error, 'Expired unsubmitted question details.')
+        WHERE id = $1
+          AND status = $3
+          AND content_id IS NULL
+        RETURNING id
+      `,
+      [candidate.id, now, candidate.status],
+    );
+    if (claimed.rows[0]) deleted += 1;
+  }
+
+  return {
+    deleted,
+    scanned: candidates.rows.length,
+  };
+}

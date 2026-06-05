@@ -30,6 +30,7 @@ const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
 
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 
@@ -65,6 +66,8 @@ export type X402QuestionItemPayload = {
   videoUrl: string;
   title: string;
   description: string;
+  detailsHash: `0x${string}`;
+  detailsUrl: string;
   tags: string;
   tagList: string[];
   categoryId: bigint;
@@ -114,6 +117,17 @@ function readOptionalString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function readOptionalBytes32Hex(value: unknown, fieldName: string): `0x${string}` {
+  if (value === undefined || value === null || value === "") {
+    return EMPTY_DETAILS_HASH;
+  }
+  if (typeof value === "string" && /^0x[a-fA-F0-9]{64}$/.test(value)) {
+    return value as `0x${string}`;
+  }
+
+  throw new X402QuestionInputError(`${fieldName} must be a bytes32 hex string.`);
+}
+
 function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
   const rawValue =
     typeof value === "bigint" || typeof value === "number" || typeof value === "string" ? String(value).trim() : "";
@@ -138,6 +152,9 @@ function normalizeHttpsUrl(value: string, fieldName: string): string {
     if (parsed.protocol !== "https:") {
       throw new X402QuestionInputError(`${fieldName} must be an HTTPS URL.`);
     }
+    if (parsed.username || parsed.password) {
+      throw new X402QuestionInputError(`${fieldName} must not include credentials.`);
+    }
     return parsed.toString();
   } catch (error) {
     if (error instanceof X402QuestionInputError) throw error;
@@ -151,6 +168,30 @@ function normalizeQuestionContextUrl(value: string, fieldName: string): string {
     throw new X402QuestionInputError(`${fieldName} must be a public HTTPS page URL. Upload images through imageUrls.`);
   }
   return normalized;
+}
+
+function normalizeQuestionDetails(value: Record<string, unknown>, fieldPrefix: string) {
+  const detailsUrl = readOptionalString(value.detailsUrl);
+  const detailsHash = readOptionalBytes32Hex(value.detailsHash, `${fieldPrefix}.detailsHash`);
+
+  if (detailsUrl) {
+    if (detailsHash === EMPTY_DETAILS_HASH) {
+      throw new X402QuestionInputError(`${fieldPrefix}.detailsHash is required when detailsUrl is provided.`);
+    }
+    return {
+      detailsHash,
+      detailsUrl: normalizeHttpsUrl(detailsUrl, `${fieldPrefix}.detailsUrl`),
+    };
+  }
+
+  if (detailsHash !== EMPTY_DETAILS_HASH) {
+    throw new X402QuestionInputError(`${fieldPrefix}.detailsUrl is required when detailsHash is provided.`);
+  }
+
+  return {
+    detailsHash,
+    detailsUrl: "",
+  };
 }
 
 function isYouTubeVideoUrl(url: string): boolean {
@@ -447,6 +488,7 @@ function normalizeQuestion(
 
   const { tags, tagList } = normalizeTags(value.tags);
   const categoryId = parseNonNegativeInteger(value.categoryId, `${fieldPrefix}.categoryId`);
+  const details = normalizeQuestionDetails(value, fieldPrefix);
   const targetAudience = normalizeJsonObject(value.targetAudience, `${fieldPrefix}.targetAudience`);
   const templateSelection = normalizeTemplateSelection(value, fieldPrefix, defaults);
 
@@ -454,6 +496,8 @@ function normalizeQuestion(
     categoryId,
     contextUrl,
     description,
+    detailsHash: details.detailsHash,
+    detailsUrl: details.detailsUrl,
     imageUrls,
     tags,
     tagList,
@@ -586,6 +630,8 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
       categoryId: normalizedQuestion.categoryId,
       contextUrl: normalizedQuestion.contextUrl,
       description: normalizedQuestion.description,
+      detailsHash: normalizedQuestion.detailsHash,
+      detailsUrl: normalizedQuestion.detailsUrl,
       imageUrls: normalizedQuestion.imageUrls,
       questionMetadataHash: spec.questionMetadataHash,
       resultSpecHash: spec.resultSpecHash,
@@ -627,6 +673,8 @@ export function toCanonicalQuestionPayload(payload: X402QuestionPayload) {
       categoryId: question.categoryId.toString(),
       contextUrl: question.contextUrl,
       description: question.description,
+      detailsHash: question.detailsHash,
+      detailsUrl: question.detailsUrl,
       imageUrls: question.imageUrls,
       questionMetadataHash: question.questionMetadataHash,
       resultSpecHash: question.resultSpecHash,

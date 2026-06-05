@@ -18,7 +18,6 @@ import {
   toHex,
 } from "viem";
 import { parseTags } from "~~/constants/categories";
-import { getContextDocumentSubmissionValidationError } from "~~/lib/attachments/contextDocuments";
 import { getImageAttachmentSubmissionValidationError } from "~~/lib/attachments/imageAttachments";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
@@ -42,6 +41,7 @@ import {
 } from "~~/lib/moderation/submissionValidation";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
 import { isFreeTransactionStoreUnavailableError } from "~~/lib/thirdweb/freeTransactionStoreFallback";
+import { sanitizeExternalUrl } from "~~/utils/externalUrl";
 
 type DeployedContractsMap = Record<
   number,
@@ -134,6 +134,7 @@ const NO_RATER_IDENTITY_REASON = "Verify your ID to unlock free transactions.";
 const MAX_CONTENT_TAGS_LENGTH = 256;
 const FREE_TRANSACTION_RESERVATION_TTL_MS = 5 * 60_000;
 const FREE_TRANSACTION_IDEMPOTENCY_WINDOW_MS = 2 * 60_000;
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
 const USER_OPERATION_RECEIPT_EVENT_ABI = parseAbi([
   "event UserOperationEvent(bytes32 indexed userOpHash, address indexed sender, address indexed paymaster, uint256 nonce, bool success, uint256 actualGasCost, uint256 actualGasUsed)",
 ]);
@@ -166,6 +167,14 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
       { name: "description", type: "string" },
       { name: "tags", type: "string" },
       { name: "categoryId", type: "uint256" },
+      {
+        name: "details",
+        type: "tuple",
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+      },
       { name: "salt", type: "bytes32" },
     ],
     outputs: [{ name: "", type: "uint256" }],
@@ -182,6 +191,14 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
       { name: "description", type: "string" },
       { name: "tags", type: "string" },
       { name: "categoryId", type: "uint256" },
+      {
+        name: "details",
+        type: "tuple",
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+      },
       { name: "salt", type: "bytes32" },
       {
         name: "rewardTerms",
@@ -234,6 +251,14 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
           { name: "description", type: "string" },
           { name: "tags", type: "string" },
           { name: "categoryId", type: "uint256" },
+          {
+            name: "details",
+            type: "tuple",
+            components: [
+              { name: "detailsUrl", type: "string" },
+              { name: "detailsHash", type: "bytes32" },
+            ],
+          },
           { name: "salt", type: "bytes32" },
           {
             name: "spec",
@@ -707,6 +732,8 @@ function normalizeAddressArg(value: unknown): `0x${string}` | null {
 type SponsoredSubmissionQuestion = {
   contextUrl: string;
   description: string;
+  detailsHash: string;
+  detailsUrl: string;
   imageUrls: string[];
   tags: string;
   title: string;
@@ -727,6 +754,16 @@ function readStringArrayField(value: unknown) {
   return Array.isArray(value) && value.every(item => typeof item === "string") ? (value as string[]) : null;
 }
 
+function readSubmissionDetailsField(value: unknown): { detailsHash: string; detailsUrl: string } | null {
+  const detailsUrl = readStringField(getTupleField(value, "detailsUrl", 0));
+  const detailsHash = readStringField(getTupleField(value, "detailsHash", 1));
+  if (detailsUrl === null || detailsHash === null) {
+    return null;
+  }
+
+  return { detailsHash, detailsUrl };
+}
+
 function readSponsoredSubmissionQuestionFromArgs(args: readonly unknown[]): SponsoredSubmissionQuestion | null {
   const contextUrl = readStringField(args[0]);
   const imageUrls = readStringArrayField(args[1]);
@@ -734,6 +771,7 @@ function readSponsoredSubmissionQuestionFromArgs(args: readonly unknown[]): Spon
   const title = readStringField(args[3]);
   const description = readStringField(args[4]);
   const tags = readStringField(args[5]);
+  const details = readSubmissionDetailsField(args[7]);
 
   if (
     contextUrl === null ||
@@ -741,12 +779,22 @@ function readSponsoredSubmissionQuestionFromArgs(args: readonly unknown[]): Spon
     videoUrl === null ||
     title === null ||
     description === null ||
-    tags === null
+    tags === null ||
+    details === null
   ) {
     return null;
   }
 
-  return { contextUrl, description, imageUrls, tags, title, videoUrl };
+  return {
+    contextUrl,
+    description,
+    detailsHash: details.detailsHash,
+    detailsUrl: details.detailsUrl,
+    imageUrls,
+    tags,
+    title,
+    videoUrl,
+  };
 }
 
 function readSponsoredSubmissionQuestionFromTuple(value: unknown): SponsoredSubmissionQuestion | null {
@@ -756,6 +804,7 @@ function readSponsoredSubmissionQuestionFromTuple(value: unknown): SponsoredSubm
   const title = readStringField(getTupleField(value, "title", 3));
   const description = readStringField(getTupleField(value, "description", 4));
   const tags = readStringField(getTupleField(value, "tags", 5));
+  const details = readSubmissionDetailsField(getTupleField(value, "details", 7));
 
   if (
     contextUrl === null ||
@@ -763,17 +812,37 @@ function readSponsoredSubmissionQuestionFromTuple(value: unknown): SponsoredSubm
     videoUrl === null ||
     title === null ||
     description === null ||
-    tags === null
+    tags === null ||
+    details === null
   ) {
     return null;
   }
 
-  return { contextUrl, description, imageUrls, tags, title, videoUrl };
+  return {
+    contextUrl,
+    description,
+    detailsHash: details.detailsHash,
+    detailsUrl: details.detailsUrl,
+    imageUrls,
+    tags,
+    title,
+    videoUrl,
+  };
 }
 
 function hasCanonicalContextUrl(value: string) {
   if (!value) return true;
   return normalizeSubmissionContextUrl(value) === value;
+}
+
+function hasCanonicalDetails(detailsUrl: string, detailsHash: string) {
+  const hasDetailsUrl = Boolean(detailsUrl);
+  const hasDetailsHash = detailsHash !== EMPTY_DETAILS_HASH;
+
+  if (!/^0x[a-fA-F0-9]{64}$/.test(detailsHash)) return false;
+  if (hasDetailsUrl !== hasDetailsHash) return false;
+  if (!hasDetailsUrl) return true;
+  return detailsUrl.trim() === detailsUrl && sanitizeExternalUrl(detailsUrl) === detailsUrl;
 }
 
 function hasCanonicalVideoUrl(value: string) {
@@ -805,6 +874,7 @@ async function validateSponsoredSubmissionQuestion(
   if (question.contextUrl.trim() !== question.contextUrl || question.videoUrl.trim() !== question.videoUrl)
     return false;
   if (!hasCanonicalContextUrl(question.contextUrl) || !hasCanonicalVideoUrl(question.videoUrl)) return false;
+  if (!hasCanonicalDetails(question.detailsUrl, question.detailsHash)) return false;
   if (question.videoUrl && question.imageUrls.length > 0) return false;
   if (!question.contextUrl && question.imageUrls.length === 0 && !question.videoUrl) return false;
   if (!hasCanonicalUploadedImageUrls(question.imageUrls)) return false;
@@ -821,11 +891,7 @@ async function validateSponsoredSubmissionQuestion(
   });
   if (imageValidationError) return false;
 
-  const contextDocumentValidationError = await getContextDocumentSubmissionValidationError({
-    contextUrl: question.contextUrl,
-    ownerWalletAddress: walletAddress,
-  });
-  return contextDocumentValidationError === null;
+  return true;
 }
 
 async function validateSponsoredContentRegistryCall(

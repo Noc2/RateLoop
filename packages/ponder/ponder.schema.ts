@@ -12,6 +12,8 @@ export const content = onchainTable(
     contentHash: t.hex().notNull(),
     questionMetadataHash: t.hex(),
     resultSpecHash: t.hex(),
+    detailsUrl: t.text(),
+    detailsHash: t.hex(),
     url: t.text().notNull(),
     canonicalUrl: t.text().notNull(),
     urlHost: t.text().notNull(),

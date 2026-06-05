@@ -290,6 +290,14 @@ async function buildSubmissionReservation(
         { name: "description", type: "string" },
         { name: "tags", type: "string" },
         { name: "categoryId", type: "uint256" },
+        {
+          name: "details",
+          type: "tuple",
+          components: [
+            { name: "detailsUrl", type: "string" },
+            { name: "detailsHash", type: "bytes32" },
+          ],
+        },
       ],
       outputs: [
         { name: "resolvedCategoryId", type: "uint256" },
@@ -301,7 +309,16 @@ async function buildSubmissionReservation(
   const previewData = encodeFunctionData({
     abi: previewAbi,
     functionName: "previewQuestionSubmissionKey",
-    args: [url, media.imageUrls, media.videoUrl, title, description, tags, categoryId],
+    args: [
+      url,
+      media.imageUrls,
+      media.videoUrl,
+      title,
+      description,
+      tags,
+      categoryId,
+      { detailsUrl: "", detailsHash: `0x${"0".repeat(64)}` },
+    ],
   });
 
   const previewResult = await rpcRequest<`0x${string}`>("eth_call", [
@@ -320,6 +337,8 @@ async function buildSubmissionReservation(
   const revealCommitment = buildQuestionSubmissionRevealCommitment({
     categoryId,
     description,
+    detailsHash: `0x${"0".repeat(64)}`,
+    detailsUrl: "",
     imageUrls: media.imageUrls,
     questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,
     rewardAmount: rewardTerms.amount,
@@ -1718,7 +1737,11 @@ export async function revealVoteDirect(
   return sendTx(fromAddress, contractAddress, data);
 }
 
-async function readRoundStateLatest(contractAddress: string, contentId: bigint, roundId: bigint): Promise<number | null> {
+async function readRoundStateLatest(
+  contractAddress: string,
+  contentId: bigint,
+  roundId: bigint,
+): Promise<number | null> {
   const { encodeFunctionData } = await import("viem");
   const data = encodeFunctionData({
     abi: ROUND_STATE_ABI,
