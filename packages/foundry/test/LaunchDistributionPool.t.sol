@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test, stdStorage, StdStorage } from "forge-std/Test.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import { ILaunchDistributionPool } from "../contracts/interfaces/ILaunchDistributionPool.sol";
-import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+import {Test, stdStorage, StdStorage} from "forge-std/Test.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import {ILaunchDistributionPool} from "../contracts/interfaces/ILaunchDistributionPool.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 function _launchEpochSources(uint256 toRoundId)
     pure
@@ -1630,6 +1630,42 @@ contract LaunchDistributionPoolTest is Test {
         _verifyV4(bob, bytes32("shared-human"));
     }
 
+    function test_WorldIdV4LaunchAliasPreventsDifferentNullifierFullCapDoubleUse() public {
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+        policy.unverifiedEarnedRaterCapBps = 2_500;
+        pool.setLaunchRewardPolicy(policy);
+        bytes32 legacyNullifier = bytes32("legacy-human");
+        bytes32 v4Nullifier = bytes32("v4-human");
+
+        _verify(alice, legacyNullifier);
+        _recordFiveEligibleCredits(alice);
+        assertTrue(pool.raterFullLaunchCapUnlocked(alice));
+
+        _configureWorldIdV4();
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, legacyNullifier);
+        _verifyV4(bob, v4Nullifier);
+        for (uint256 i = 0; i < 5; i++) {
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
+            pool.recordEarnedRaterRewardWithSourceReady(
+                bob,
+                2,
+                i + 1,
+                _commitKey(100 + i),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(anchorId),
+                uint64(block.timestamp)
+            );
+        }
+
+        assertEq(pool.raterLaunchCap(bob), FIRST_COHORT_UNVERIFIED_CAP);
+        assertFalse(pool.raterFullLaunchCapUnlocked(bob));
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.unlockFullEarnedRaterCap(bob);
+    }
+
     function test_UnlockFullEarnedRaterCapRequiresActiveCredential() public {
         ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
         policy.unverifiedEarnedRaterCapBps = 2_500;
@@ -2334,6 +2370,28 @@ contract LaunchDistributionPoolTest is Test {
         _configureWorldIdV4();
         vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
         _verifyV4(bob, bytes32("shared-human"));
+    }
+
+    function test_WorldIdV4LaunchAliasPreventsDifferentNullifierVerifiedBonusDoubleClaim() public {
+        bytes32 legacyNullifier = bytes32("legacy-human");
+        bytes32 v4Nullifier = bytes32("v4-human");
+
+        _verify(alice, legacyNullifier);
+        vm.prank(alice);
+        pool.claimVerifiedBonus(address(0));
+
+        _configureWorldIdV4();
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, legacyNullifier);
+        _verifyV4(bob, v4Nullifier);
+
+        assertTrue(
+            pool.verifiedCredentialClaimed(
+                registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldId, legacyNullifier)
+            )
+        );
+        vm.prank(bob);
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.claimVerifiedBonus(address(0));
     }
 
     function _recordLaunchReward(address rater, uint256 roundId, bytes32 anchorId) internal returns (uint256) {

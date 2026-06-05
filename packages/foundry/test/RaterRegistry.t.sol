@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
-import { LaunchRaterRewardLib } from "../contracts/libraries/LaunchRaterRewardLib.sol";
-import { MockWorldIDRouter } from "../contracts/mocks/MockWorldIDRouter.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+import {Test} from "forge-std/Test.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {IRaterIdentityRegistry} from "../contracts/interfaces/IRaterIdentityRegistry.sol";
+import {LaunchRaterRewardLib} from "../contracts/libraries/LaunchRaterRewardLib.sol";
+import {MockWorldIDRouter} from "../contracts/mocks/MockWorldIDRouter.sol";
+import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract LaunchRaterRewardLibHarness {
     function launchRewardCredentialAnchorId(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
@@ -17,6 +17,15 @@ contract LaunchRaterRewardLibHarness {
         returns (bytes32)
     {
         return LaunchRaterRewardLib.launchRewardCredentialAnchorId(provider, nullifierHash);
+    }
+
+    function launchRewardAnchorId(
+        RaterRegistry raterRegistry,
+        address account,
+        uint48 rewardStart,
+        uint32 minCredentialAgeSeconds
+    ) external view returns (bytes32) {
+        return LaunchRaterRewardLib.launchRewardAnchorId(raterRegistry, account, rewardStart, minCredentialAgeSeconds);
     }
 }
 
@@ -659,11 +668,90 @@ contract RaterRegistryTest is Test {
         );
         assertTrue(
             launchHarness.launchRewardCredentialAnchorId(
-                RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
-            )
-            != launchHarness.launchRewardCredentialAnchorId(
-                RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
-            )
+                    RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH
+                )
+                != launchHarness.launchRewardCredentialAnchorId(
+                    RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
+                )
+        );
+    }
+
+    function test_WorldIdV4LaunchNullifierAliasMapsLaunchIdentityOnly() public {
+        bytes32 legacyNullifier = keccak256("legacy-human");
+        bytes32 v4Nullifier = keccak256("v4-human");
+        bytes32 legacyLaunchKey =
+            registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldId, legacyNullifier);
+
+        assertTrue(
+            registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, v4Nullifier)
+                != legacyLaunchKey
+        );
+
+        vm.prank(governance);
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, legacyNullifier);
+
+        assertEq(registry.worldIdV4LaunchNullifierAlias(v4Nullifier), legacyNullifier);
+        assertEq(
+            registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, v4Nullifier),
+            legacyLaunchKey
+        );
+        assertTrue(
+            registry.credentialIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, v4Nullifier)
+                != registry.credentialIdentityKey(RaterRegistry.HumanCredentialProvider.WorldId, legacyNullifier)
+        );
+
+        vm.prank(governance);
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, legacyNullifier);
+
+        vm.prank(governance);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, keccak256("different-legacy"));
+
+        vm.prank(governance);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.setWorldIdV4LaunchNullifierAlias(bytes32(0), legacyNullifier);
+    }
+
+    function test_WorldIdV4LaunchNullifierAliasRejectsAlreadySeenV4Nullifier() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        uint256[5] memory proof;
+        bytes32 v4Nullifier = keccak256("v4-human");
+
+        _configureV4Verifier(verifier);
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(uint256(v4Nullifier), 1, uint64(block.timestamp + 1 hours), proof);
+
+        assertTrue(registry.worldIdV4LaunchNullifierSeen(v4Nullifier));
+
+        vm.prank(governance);
+        vm.expectRevert(RaterRegistry.InvalidCredential.selector);
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, keccak256("legacy-human"));
+    }
+
+    function test_WorldIdV4LaunchRewardAnchorUsesExplicitAlias() public {
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        LaunchRaterRewardLibHarness launchHarness = new LaunchRaterRewardLibHarness();
+        uint256[8] memory legacyProof;
+        uint256[5] memory v4Proof;
+        bytes32 legacyNullifier = keccak256("legacy-human");
+        bytes32 v4Nullifier = keccak256("v4-human");
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithProof(1, uint256(legacyNullifier), legacyProof);
+
+        vm.prank(governance);
+        registry.setWorldIdV4LaunchNullifierAlias(v4Nullifier, legacyNullifier);
+
+        _configureV4Verifier(verifier);
+        vm.prank(otherRater);
+        registry.attestHumanCredentialWithV4Proof(uint256(v4Nullifier), 1, uint64(block.timestamp + 1 hours), v4Proof);
+
+        bytes32 legacyAnchor = launchHarness.launchRewardAnchorId(registry, rater, uint48(block.timestamp), 0);
+        bytes32 v4Anchor = launchHarness.launchRewardAnchorId(registry, otherRater, uint48(block.timestamp), 0);
+
+        assertEq(v4Anchor, legacyAnchor);
+        assertEq(
+            v4Anchor, registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldId, legacyNullifier)
         );
     }
 

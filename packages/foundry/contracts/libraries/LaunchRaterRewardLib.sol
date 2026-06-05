@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { ContentRegistry } from "../ContentRegistry.sol";
-import { ProtocolConfig } from "../ProtocolConfig.sol";
-import { RaterRegistry } from "../RaterRegistry.sol";
-import { RoundVotingEngine } from "../RoundVotingEngine.sol";
+import {ContentRegistry} from "../ContentRegistry.sol";
+import {ProtocolConfig} from "../ProtocolConfig.sol";
+import {RaterRegistry} from "../RaterRegistry.sol";
+import {RoundVotingEngine} from "../RoundVotingEngine.sol";
 
 /// @notice Linked helper for launch-distribution rater reward qualification.
 library LaunchRaterRewardLib {
@@ -79,7 +79,7 @@ library LaunchRaterRewardLib {
             ) {
                 return bytes32(0);
             }
-            return launchRewardCredentialAnchorId(credential.provider, credential.nullifierHash);
+            return raterRegistry.launchHumanIdentityKey(credential.provider, credential.nullifierHash);
         } catch {
             return bytes32(0);
         }

@@ -39,131 +39,143 @@
     {
       "slot": 6,
       "offset": 0,
+      "label": "worldIdV4LaunchNullifierAlias",
+      "type": "t_mapping(t_bytes32,t_bytes32)"
+    },
+    {
+      "slot": 7,
+      "offset": 0,
+      "label": "worldIdV4LaunchNullifierSeen",
+      "type": "t_mapping(t_bytes32,t_bool)"
+    },
+    {
+      "slot": 8,
+      "offset": 0,
       "label": "isFollowing",
       "type": "t_mapping(t_address,t_mapping(t_address,t_bool))"
     },
     {
-      "slot": 7,
+      "slot": 9,
       "offset": 0,
       "label": "followingCount",
       "type": "t_mapping(t_address,t_uint256)"
     },
     {
-      "slot": 8,
+      "slot": 10,
       "offset": 0,
       "label": "followerCount",
       "type": "t_mapping(t_address,t_uint256)"
     },
     {
-      "slot": 9,
+      "slot": 11,
       "offset": 0,
       "label": "delegateTo",
       "type": "t_mapping(t_address,t_address)"
     },
     {
-      "slot": 10,
+      "slot": 12,
       "offset": 0,
       "label": "delegateOf",
       "type": "t_mapping(t_address,t_address)"
     },
     {
-      "slot": 11,
+      "slot": 13,
       "offset": 0,
       "label": "pendingDelegateTo",
       "type": "t_mapping(t_address,t_address)"
     },
     {
-      "slot": 12,
+      "slot": 14,
       "offset": 0,
       "label": "pendingDelegateOf",
       "type": "t_mapping(t_address,t_address)"
     },
     {
-      "slot": 13,
+      "slot": 15,
       "offset": 0,
       "label": "worldIdRouter",
       "type": "t_contract(IWorldIDRouter)"
     },
     {
-      "slot": 14,
+      "slot": 16,
       "offset": 0,
       "label": "worldIdScope",
       "type": "t_bytes32"
     },
     {
-      "slot": 15,
+      "slot": 17,
       "offset": 0,
       "label": "worldIdExternalNullifierHash",
       "type": "t_uint256"
     },
     {
-      "slot": 16,
+      "slot": 18,
       "offset": 0,
       "label": "worldIdCredentialTtl",
       "type": "t_uint64"
     },
     {
-      "slot": 16,
+      "slot": 18,
       "offset": 8,
       "label": "worldIdVerifierConfigFrozen",
       "type": "t_bool"
     },
     {
-      "slot": 16,
+      "slot": 18,
       "offset": 9,
       "label": "maxSeededCredentialTtl",
       "type": "t_uint64"
     },
     {
-      "slot": 17,
+      "slot": 19,
       "offset": 0,
       "label": "worldIdV4Verifier",
       "type": "t_contract(IWorldIDVerifier)"
     },
     {
-      "slot": 17,
+      "slot": 19,
       "offset": 20,
       "label": "worldIdV4RpId",
       "type": "t_uint64"
     },
     {
-      "slot": 18,
+      "slot": 20,
       "offset": 0,
       "label": "worldIdV4Action",
       "type": "t_uint256"
     },
     {
-      "slot": 19,
+      "slot": 21,
       "offset": 0,
       "label": "worldIdV4CredentialTtl",
       "type": "t_uint64"
     },
     {
-      "slot": 19,
+      "slot": 21,
       "offset": 8,
       "label": "worldIdV4IssuerSchemaId",
       "type": "t_uint64"
     },
     {
-      "slot": 20,
+      "slot": 22,
       "offset": 0,
       "label": "worldIdV4CredentialGenesisIssuedAtMin",
       "type": "t_uint256"
     },
     {
-      "slot": 21,
+      "slot": 23,
       "offset": 0,
       "label": "worldIdV4VerifierConfigFrozen",
       "type": "t_bool"
     },
     {
-      "slot": 21,
+      "slot": 23,
       "offset": 1,
       "label": "legacyWorldIdAttestationDisabled",
       "type": "t_bool"
     },
     {
-      "slot": 22,
+      "slot": 24,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -179,8 +191,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[42]",
-      "numberOfBytes": "1344",
+      "label": "uint256[40]",
+      "numberOfBytes": "1280",
       "base": "t_uint256"
     },
     {
@@ -290,6 +302,14 @@
       "numberOfBytes": "32",
       "key": "t_bytes32",
       "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_bytes32)",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => bytes32)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_bytes32"
     },
     {
       "id": "t_mapping(t_enum(HumanCredentialProvider),t_mapping(t_bytes32,t_address))",

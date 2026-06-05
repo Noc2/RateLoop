@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { IWorldIDRouter } from "./interfaces/IWorldIDRouter.sol";
-import { IWorldIDVerifier } from "./interfaces/IWorldIDVerifier.sol";
-import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {IWorldIDRouter} from "./interfaces/IWorldIDRouter.sol";
+import {IWorldIDVerifier} from "./interfaces/IWorldIDVerifier.sol";
+import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 
 /// @title RaterRegistry
 /// @notice Optional rater metadata, human credentials, public follows, and delegation for RateLoop.
@@ -66,6 +66,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     ///      field of `HumanNullifierRevocationCleared` so off-chain alerts can fire on a single
     ///      log when a SEEDER recycles a previously-bound nullifier onto a new address.
     mapping(HumanCredentialProvider => mapping(bytes32 => address)) private _lastRevokedOwnerByProvider;
+    /// @notice Explicit v4 -> legacy launch identity aliases for World ID migrations that change nullifier bytes.
+    mapping(bytes32 => bytes32) public worldIdV4LaunchNullifierAlias;
+    mapping(bytes32 => bool) public worldIdV4LaunchNullifierSeen;
     mapping(address => mapping(address => bool)) public isFollowing;
     mapping(address => uint256) public followingCount;
     mapping(address => uint256) public followerCount;
@@ -95,7 +98,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     bool public legacyWorldIdAttestationDisabled;
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[42] private __gap;
+    uint256[40] private __gap;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -119,6 +122,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     event HumanNullifierRevocationCleared(
         bytes32 indexed nullifierHash, HumanCredentialProvider indexed provider, address indexed prevOwner
     );
+    event WorldIdV4LaunchNullifierAliasSet(bytes32 indexed v4NullifierHash, bytes32 indexed legacyNullifierHash);
     /// @notice M-Identity-2: emitted when SEEDER_ROLE explicitly re-binds a rater's canonical
     ///         identity key. Off-chain consumers MUST re-map any per-identity state keyed off
     ///         the old key (cooldowns, exclusions, profile ownership) when they observe this.
@@ -354,7 +358,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         }
 
         _profiles[msg.sender] =
-            RaterProfile({ raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp) });
+            RaterProfile({raterType: raterType, metadataHash: metadataHash, updatedAt: uint64(block.timestamp)});
 
         emit RaterProfileUpdated(msg.sender, raterType, metadataHash, uint64(block.timestamp));
     }
@@ -633,6 +637,21 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         emit HumanNullifierRevocationCleared(nullifierHash, provider, prevOwner);
     }
 
+    /// @notice Link a World ID v4 nullifier to the legacy World ID nullifier used for launch one-human accounting.
+    /// @dev The link is intentionally explicit: v3/v4 equivalence cannot be inferred on-chain when nullifier bytes
+    ///      change. Launch consumers use this key only for launch bonuses/caps/anchors, not for general identity.
+    function setWorldIdV4LaunchNullifierAlias(bytes32 v4NullifierHash, bytes32 legacyNullifierHash)
+        external
+        onlyRole(SEEDER_ROLE)
+    {
+        if (v4NullifierHash == bytes32(0) || legacyNullifierHash == bytes32(0)) revert InvalidCredential();
+        bytes32 currentAlias = worldIdV4LaunchNullifierAlias[v4NullifierHash];
+        if (currentAlias != bytes32(0) && currentAlias != legacyNullifierHash) revert InvalidCredential();
+        if (currentAlias == bytes32(0) && worldIdV4LaunchNullifierSeen[v4NullifierHash]) revert InvalidCredential();
+        worldIdV4LaunchNullifierAlias[v4NullifierHash] = legacyNullifierHash;
+        emit WorldIdV4LaunchNullifierAliasSet(v4NullifierHash, legacyNullifierHash);
+    }
+
     /// @notice M-Identity-2: explicit governance action to re-bind a rater's canonical identity
     ///         key. Replaces the prior silent override that fired on every `SeededHuman`
     ///         attestation. The rater must currently hold the credential whose nullifierHash
@@ -749,6 +768,25 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         return keccak256(abi.encode("rateloop.human-identity-v1", provider, nullifierHash));
     }
 
+    function launchHumanIdentityKey(HumanCredentialProvider provider, bytes32 nullifierHash)
+        public
+        view
+        returns (bytes32)
+    {
+        if (provider == HumanCredentialProvider.None || nullifierHash == bytes32(0)) return bytes32(0);
+        if (provider == HumanCredentialProvider.WorldIdV4) {
+            bytes32 legacyNullifierHash = worldIdV4LaunchNullifierAlias[nullifierHash];
+            if (legacyNullifierHash != bytes32(0)) {
+                nullifierHash = legacyNullifierHash;
+            }
+            provider = HumanCredentialProvider.WorldId;
+        }
+        if (provider == HumanCredentialProvider.WorldId) {
+            return keccak256(abi.encode("rateloop.launch-world-id-human-v1", nullifierHash));
+        }
+        return keccak256(abi.encode(provider, nullifierHash));
+    }
+
     function hasActiveHumanCredential(address rater) public view returns (bool) {
         HumanCredential storage credential = _humanCredentials[rater];
         return credential.verified && !_isCredentialRevoked(credential) && credential.expiresAt > block.timestamp;
@@ -857,6 +895,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         // downstream consumers can re-map.
         if (_canonicalHumanIdentityKey[rater] == bytes32(0)) {
             _canonicalHumanIdentityKey[rater] = credentialIdentityKey(provider, nullifierHash);
+        }
+        if (provider == HumanCredentialProvider.WorldIdV4) {
+            worldIdV4LaunchNullifierSeen[nullifierHash] = true;
         }
         _clearInboundDelegation(rater);
 
