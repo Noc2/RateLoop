@@ -79,6 +79,7 @@ const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
+const SUPPORTED_BOUNTY_ELIGIBILITY = new Set([0, 1, 2, 3, 129, 130, 131]);
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const X402_QUESTION_PAYMENT_DOMAIN = keccak256(
@@ -1288,8 +1289,10 @@ function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
       "bounty.feedbackWindowSeconds cannot exceed bounty.bountyWindowSeconds.",
     );
   }
-  if (bountyEligibility > 1) {
-    throw new Error("bounty.bountyEligibility must be 0 or 1.");
+  if (!SUPPORTED_BOUNTY_ELIGIBILITY.has(bountyEligibility)) {
+    throw new Error(
+      "bounty.bountyEligibility must be 0, 1, 2, 3, 129, 130, or 131.",
+    );
   }
 
   return {

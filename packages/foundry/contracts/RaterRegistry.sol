@@ -491,17 +491,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (verifier == address(0) || rpId == 0 || credentialAction == 0) return;
 
         _setCredentialV4Config(
-            WORLD_CREDENTIAL_SELFIE,
-            verifier,
-            rpId,
-            credentialAction,
-            credentialTtl,
-            WORLD_ISSUER_SCHEMA_SELFIE,
-            credentialGenesisIssuedAtMin,
-            true,
-            requireCode
-        );
-        _setCredentialV4Config(
             WORLD_CREDENTIAL_PASSPORT,
             verifier,
             rpId,
@@ -513,17 +502,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             requireCode
         );
         if (presenceAction == 0) return;
-        _setPresenceV4Config(
-            WORLD_CREDENTIAL_SELFIE,
-            verifier,
-            rpId,
-            presenceAction,
-            presenceTtl,
-            WORLD_ISSUER_SCHEMA_SELFIE,
-            credentialGenesisIssuedAtMin,
-            true,
-            requireCode
-        );
         _setPresenceV4Config(
             WORLD_CREDENTIAL_PASSPORT,
             verifier,

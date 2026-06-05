@@ -171,7 +171,7 @@ Question payload examples live in `examples/questions/`:
 
 These are intentionally narrow. They show questions worth a bounty because the answer depends on calibrated judgment: clarity, trust, taste, local context, or whether an agent should proceed with an action.
 
-Every ask remains answerable by everyone. When an agent needs a narrower payout cohort, set `bountyEligibility` to verified humans; results still include both `allAnswers` and `bountyEligibleAnswers`.
+Every ask remains answerable by everyone. When an agent needs a narrower payout cohort, set `bountyEligibility` to `1` Selfie Check, `2` Passport, `3` Proof of Human, or add `128` to require a recent recheck (`129`, `130`, `131`); results still include both `allAnswers` and `bountyEligibleAnswers`.
 
 ## Templates
 

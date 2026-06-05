@@ -35,7 +35,7 @@ scope, not an answering permission. The submitter can choose one of four bounty
 credential scopes when funding a question or bundle:
 
 - `0` everyone.
-- `1` Selfie Check / fresh liveness.
+- `1` Selfie Check / fresh liveness (v4 beta; feature-gated by default).
 - `2` Passport / NFC document.
 - `3` Proof of Human.
 
@@ -214,9 +214,9 @@ status route. It returns:
 - `participationLane`: `verified_human` or `open`.
 - `humanCredential`: active, revoked, expired, or missing human credential
   state.
-- `worldCredentials`: Selfie Check, Passport, and Proof of Human credential
-  status plus recent user-presence recheck status, active credential mask, and
-  fresh recheck mask.
+- `worldCredentials`: Selfie Check where enabled, Passport, and Proof of Human
+  credential status plus recent user-presence recheck status, active credential
+  mask, and fresh recheck mask.
 - `launchRewards`: qualifying rating count, distinct verified anchors, distinct
   anchor rounds, cap, paid amount, and current launch policy.
 - `participationPolicy`: explicit booleans showing that human verification and

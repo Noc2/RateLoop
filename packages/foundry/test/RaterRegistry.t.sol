@@ -743,6 +743,18 @@ contract RaterRegistryTest is Test {
         );
     }
 
+    function test_DefaultWorldIdV4ConfigLeavesSelfieDisabledUntilExplicitlyConfigured() public view {
+        uint8 selfieKind = registry.WORLD_CREDENTIAL_SELFIE();
+
+        (address credentialVerifier,,,,,, bool credentialEnabled,) = registry.worldCredentialV4Config(selfieKind);
+        (address presenceVerifier,,,,,, bool presenceEnabled,) = registry.worldPresenceV4Config(selfieKind);
+
+        assertEq(credentialVerifier, address(0));
+        assertFalse(credentialEnabled);
+        assertEq(presenceVerifier, address(0));
+        assertFalse(presenceEnabled);
+    }
+
     function test_AttestWorldCredentialWithV4ProofStoresPassportCredential() public {
         MockWorldIDVerifier passportVerifier = new MockWorldIDVerifier();
         uint8 passportKind = registry.WORLD_CREDENTIAL_PASSPORT();

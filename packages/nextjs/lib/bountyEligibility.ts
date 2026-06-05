@@ -1,5 +1,5 @@
 import {
-  WORLD_CREDENTIAL_OPTIONS,
+  WORLD_CREDENTIAL_BOUNTY_OPTIONS,
   WORLD_CREDENTIAL_PASSPORT,
   WORLD_CREDENTIAL_PROOF_OF_HUMAN,
   WORLD_CREDENTIAL_SELFIE,
@@ -23,7 +23,7 @@ export const BOUNTY_ELIGIBILITY_BASE_OPTIONS: Array<{
   mode: number;
 }> = [
   { id: BOUNTY_ELIGIBILITY_OPEN, label: "Everyone", mode: BOUNTY_ELIGIBILITY_OPEN },
-  ...WORLD_CREDENTIAL_OPTIONS.map(option => ({
+  ...WORLD_CREDENTIAL_BOUNTY_OPTIONS.map(option => ({
     id: option.id,
     label: option.label,
     mode: option.id,

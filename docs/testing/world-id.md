@@ -15,8 +15,8 @@ Developer Portal:
 - `WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN` when using a deployment-specific lower bound
 
 The frontend should request v4-only proofs with `allow_legacy_proofs=false`.
-For bounty rechecks, it should request the selected credential kind against the
-short-lived presence action and submit the result to
+For bounty rechecks, it should request the selected credential kind with
+`require_user_presence=true` against the short-lived presence action and submit the result to
 `RaterRegistry.attestHumanPresenceWithV4Proof`. The current freshness window is
 15 minutes.
 
@@ -25,14 +25,15 @@ short-lived presence action and submit the result to
 RateLoop bounty eligibility uses these encoded credential kinds:
 
 - `0`: everyone.
-- `1`: Selfie Check / fresh liveness.
+- `1`: Selfie Check / fresh liveness (v4 beta; hidden unless explicitly enabled).
 - `2`: Passport / NFC document.
 - `3`: Proof of Human.
 - `0x80`: optional recent-recheck flag ORed into any non-open kind.
 
 Proof of Human, Passport, and the v4 `face` credential lane map to these
-on-chain credential kinds. Keep Selfie Check operational status aligned with the
-current World Developer Portal availability for the deployed app.
+on-chain credential kinds. Selfie Check remains feature-gated by default; enable
+`NEXT_PUBLIC_WORLD_ID_ENABLE_V4_SELFIE=true` only after the deployed World app has
+confirmed v4 `face` support.
 
 ## Deterministic Local Lane
 
@@ -54,7 +55,7 @@ The contract slice covers:
 - storing a World ID v4 Proof of Human credential for `msg.sender`
 - storing Passport/Selfie credential-kind rows where configured
 - binding proof signals to the wallet address and credential kind
-- rejecting reused credential and presence nullifiers
+- rejecting reused credential nullifiers and exact presence proof replays
 - recording fresh presence rechecks with a 15-minute `freshUntil`
 - exposing commit-time credential and fresh-recheck masks for bounty qualification
 
@@ -104,6 +105,9 @@ WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN=0
 WORLD_ID_SIGNING_KEY=<staging request signing key>
 NEXT_PUBLIC_PONDER_URL=<reachable Ponder URL for this deployment>
 ```
+
+Add `NEXT_PUBLIC_WORLD_ID_ENABLE_V4_SELFIE=true` only for staging apps where v4
+Selfie Check has been confirmed.
 
 Optional RPC overrides:
 

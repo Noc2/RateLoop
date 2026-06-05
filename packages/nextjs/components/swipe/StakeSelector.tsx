@@ -24,6 +24,7 @@ import {
   type WorldCredentialKind,
   type WorldIdProofPurpose,
   getWorldCredentialOption,
+  isWorldCredentialEnabledForBountyUi,
 } from "~~/lib/world-id/credentials";
 
 interface StakeSelectorProps {
@@ -289,13 +290,15 @@ export function StakeSelector({
       : null;
   const worldIdActionLabel =
     worldIdActionKind && worldIdActionPurpose
-      ? !canRequestWorldIdProof
-        ? worldIdActionPurpose === "presence"
-          ? `Holder must recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
-          : `Holder must verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
-        : worldIdActionPurpose === "presence"
-          ? `Recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
-          : `Verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+      ? !isWorldCredentialEnabledForBountyUi(worldIdActionKind)
+        ? `${getWorldCredentialOption(worldIdActionKind).shortLabel} unavailable`
+        : !canRequestWorldIdProof
+          ? worldIdActionPurpose === "presence"
+            ? `Holder must recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+            : `Holder must verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+          : worldIdActionPurpose === "presence"
+            ? `Recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
+            : `Verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
       : null;
   const formDisabled = isConfirming || !roundAcceptsVotes;
   const confirmDisabled = formDisabled || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
@@ -556,7 +559,9 @@ export function StakeSelector({
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <span>
                       {canRequestWorldIdProof
-                        ? "Verify before voting to qualify for this bounty."
+                        ? isWorldCredentialEnabledForBountyUi(worldIdActionKind)
+                          ? "Verify before voting to qualify for this bounty."
+                          : `${getWorldCredentialOption(worldIdActionKind).shortLabel} v4 is not enabled for this deployment.`
                         : worldIdActionPurpose === "presence"
                           ? "The delegated holder must recheck before this vote can qualify for the bounty."
                           : "The delegated holder must verify before this vote can qualify for the bounty."}
@@ -565,10 +570,16 @@ export function StakeSelector({
                       type="button"
                       onClick={() => {
                         if (!canRequestWorldIdProof) return;
+                        if (!isWorldCredentialEnabledForBountyUi(worldIdActionKind)) return;
                         onRequestWorldIdProof?.({ kind: worldIdActionKind, purpose: worldIdActionPurpose });
                       }}
                       className="btn btn-sm btn-outline shrink-0"
-                      disabled={isConfirming || !canRequestWorldIdProof || !onRequestWorldIdProof}
+                      disabled={
+                        isConfirming ||
+                        !canRequestWorldIdProof ||
+                        !isWorldCredentialEnabledForBountyUi(worldIdActionKind) ||
+                        !onRequestWorldIdProof
+                      }
                     >
                       {worldIdActionLabel}
                     </button>
