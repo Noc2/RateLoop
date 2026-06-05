@@ -282,6 +282,25 @@ library RoundRevealLib {
         return block.number > seedBlock && Blockhash.blockHash(seedBlock) == bytes32(0);
     }
 
+    function refreshExpiredRbtsSeed(
+        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        uint256 contentId,
+        uint256 roundId
+    ) external returns (bool refreshed) {
+        bytes32 currentMarker = roundRbtsSeedEntropy[contentId][roundId];
+        uint256 seedWord = uint256(currentMarker);
+        if (seedWord < RBTS_SEED_BLOCK_FLAG) return false;
+
+        uint256 seedBlock = uint64(seedWord);
+        if (block.number <= seedBlock || Blockhash.blockHash(seedBlock) != bytes32(0)) return false;
+
+        bytes32 refreshedMarker =
+            bytes32((seedWord & ~uint256(type(uint64).max)) | uint256(block.number.toUint64()));
+        roundRbtsSeedEntropy[contentId][roundId] = refreshedMarker;
+        emit RbtsSeedCaptured(contentId, roundId, refreshedMarker);
+        return true;
+    }
+
     function finalizeRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         uint256 contentId,

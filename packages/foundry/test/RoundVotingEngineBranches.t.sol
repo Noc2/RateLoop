@@ -12,7 +12,6 @@ import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { RoundRevealLib } from "../contracts/libraries/RoundRevealLib.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
@@ -1046,7 +1045,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
     }
 
-    function test_RbtsExpiredSeedRevertsWithoutScoreRewards() public {
+    function test_RbtsExpiredSeedRefreshesAndSettlesAfterNextBlock() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1067,22 +1066,26 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 257);
 
-        vm.expectRevert(RoundRevealLib.RbtsSeedUnavailable.selector);
+        engine.settleRound(contentId, roundId);
+        vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
         engine.settleRound(contentId, roundId);
         RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(pendingRound.state), uint256(RoundLib.RoundState.Open));
-        assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "expired seed does not score rewards");
-        assertEq(engine.roundVoterPool(contentId, roundId), 0, "expired seed creates no reward pool");
-        assertEq(_roundRbtsForfeitedPool(engine, contentId, roundId), 0, "expired seed has no RBTS forfeits");
-        assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed has no sampler seed");
-        assertEq(engine.commitRbtsScoreBps(contentId, roundId, ck1), 0, "ck1 not scored");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 0, "ck1 stake not returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 0, "ck2 stake not returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "ck3 stake not returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 0, "ck4 stake not returned");
+        assertFalse(engine.roundRbtsScored(contentId, roundId), "refresh only re-captures seed");
+
+        vm.roll(block.number + 1);
+        engine.settleRound(contentId, roundId);
+        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
+        assertTrue(engine.roundRbtsScored(contentId, roundId), "refreshed seed scores rewards");
+        assertNotEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "refreshed seed has sampler seed");
+        assertGt(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 0, "ck1 stake returned");
+        assertGt(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 0, "ck2 stake returned");
+        assertGt(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "ck3 stake returned");
+        assertGt(engine.commitRbtsStakeReturned(contentId, roundId, ck4), 0, "ck4 stake returned");
     }
 
-    function test_AdvisoryLaunchCreditExpiredRbtsSeedCannotClaimWithoutScoring() public {
+    function test_AdvisoryLaunchCreditExpiredRbtsSeedRefreshesBeforeClaim() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1105,18 +1108,24 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.settleRound(contentId, roundId);
         vm.roll(seedBlock + 257);
 
-        vm.expectRevert(RoundRevealLib.RbtsSeedUnavailable.selector);
         engine.settleRound(contentId, roundId);
-        assertFalse(engine.roundRbtsScored(contentId, roundId), "round does not reach RBTS accounting");
-        assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed produces no score seed");
+        assertFalse(engine.roundRbtsScored(contentId, roundId), "refresh waits for next block");
 
         vm.expectRevert(AdvisoryVoteRecorder.RoundNotSettled.selector);
         advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
 
+        vm.roll(block.number + 1);
+        engine.settleRound(contentId, roundId);
+        assertTrue(engine.roundRbtsScored(contentId, roundId), "refreshed seed reaches RBTS accounting");
+        assertNotEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "refreshed seed produces score seed");
+
+        (uint16 claimedScoreBps, uint256 paidAmount) = advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
         (,,,,,,,, bool launchCreditClaimed, uint16 storedScoreBps) =
             advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
-        assertFalse(launchCreditClaimed, "expired seed cannot finalize launch claim");
-        assertEq(storedScoreBps, 0, "expired seed stores no advisory score");
+        assertFalse(launchCreditClaimed, "fixture has no launch pool to record credit");
+        assertEq(paidAmount, 0, "fixture has no launch payment");
+        assertEq(claimedScoreBps, storedScoreBps, "claim returns stored score");
+        assertGt(storedScoreBps, 0, "refreshed seed stores advisory score");
     }
 
     function test_AdvisoryLaunchCreditRevealAfterRbtsSeedCaptureRejected() public {
@@ -1145,7 +1154,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
     }
 
-    function test_RbtsExpiredSeedDoesNotUseFallbackOrSettlementEntropy() public {
+    function test_RbtsExpiredSeedRefreshDoesNotUseFallbackOrSettlementEntropy() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1166,14 +1175,27 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         bytes32 settlementPrevrandao = keccak256("expired-settlement-prevrandao");
         vm.prevrandao(settlementPrevrandao);
-        vm.expectRevert(RoundRevealLib.RbtsSeedUnavailable.selector);
         engine.settleRound(contentId, roundId);
+        assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "refresh call does not score");
 
-        assertEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "expired seed has no sampler seed");
-        assertEq(engine.roundRbtsRewardWeight(contentId, roundId), 0, "expired seed has no reward weight");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck1), 0, "ck1 stake not returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck2), 0, "ck2 stake not returned");
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, ck3), 0, "ck3 stake not returned");
+        vm.roll(block.number + 1);
+        vm.recordLogs();
+        engine.settleRound(contentId, roundId);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 capturedEntropy = _rbtsEntropyFromLogs(logs, contentId, roundId);
+        assertNotEq(capturedEntropy, settlementPrevrandao, "refreshed seed must not use prevrandao fallback");
+
+        bytes32 revealedSetHash;
+        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck1));
+        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck2));
+        revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck3));
+        bytes32 fallbackScoreSeed = keccak256(
+            abi.encode(
+                block.chainid, address(engine), contentId, roundId, uint256(3), revealedSetHash, settlementPrevrandao
+            )
+        );
+        assertNotEq(engine.roundRbtsScoreSeed(contentId, roundId), fallbackScoreSeed, "score seed must not use fallback");
+        assertNotEq(engine.roundRbtsScoreSeed(contentId, roundId), bytes32(0), "refreshed seed has sampler seed");
     }
 
     function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {
