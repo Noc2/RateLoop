@@ -598,7 +598,7 @@ function completeBroadcast() {
     receipts,
     "LoopReputation",
     "mint(address,uint256)",
-    [governance, "25000000000000"],
+    [governance, "34000000000000"],
     directAddressByName.get("LoopReputation")
   );
   pushCall(
@@ -638,7 +638,7 @@ function completeBroadcast() {
     receipts,
     "LoopReputation",
     "mint(address,uint256)",
-    [launchPool, "75000000000000"],
+    [launchPool, "66000000000000"],
     directAddressByName.get("LoopReputation")
   );
   pushCall(
@@ -654,18 +654,7 @@ function completeBroadcast() {
     receipts,
     "LaunchDistributionPool",
     "accountPrefundedPoolDeposit(uint256)",
-    ["75000000000000"],
-    launchPool
-  );
-  pushCall(
-    transactions,
-    receipts,
-    "LaunchDistributionPool",
-    "setLegacyContributorRoot(bytes32,uint256)",
-    [
-      "0xcaa28d15e6c6c1bb47d347a413cb808e40c38a7e43171ce9a131983a92b97d18",
-      "9000000000000",
-    ],
+    ["66000000000000"],
     launchPool
   );
   pushCall(
@@ -794,7 +783,7 @@ test("reconstructDeploymentExportFromBroadcast accepts Foundry proxy and decoded
       (tx) =>
         tx.contractName === "LoopReputation" &&
         tx.function === "mint(address,uint256)" &&
-        tx.arguments?.[1] === "25000000000000",
+        tx.arguments?.[1] === "34000000000000",
     ],
     [
       "setGovernor",
@@ -807,7 +796,7 @@ test("reconstructDeploymentExportFromBroadcast accepts Foundry proxy and decoded
       (tx) =>
         tx.contractName === "LoopReputation" &&
         tx.function === "mint(address,uint256)" &&
-        tx.arguments?.[1] === "75000000000000",
+        tx.arguments?.[1] === "66000000000000",
     ],
   ]) {
     encodeExistingCallWithAbi(

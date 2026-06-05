@@ -24,8 +24,8 @@ contract FormalVerification_GovernanceTest is Test {
     address mockTreasury = address(13);
 
     // Realistic launch balances excluded from dynamic quorum.
-    uint256 constant LAUNCH_DISTRIBUTION_BAL = 75_000_000e6;
-    uint256 constant TREASURY_BAL = 25_000_000e6;
+    uint256 constant LAUNCH_DISTRIBUTION_BAL = 66_000_000e6;
+    uint256 constant TREASURY_BAL = 34_000_000e6;
     // Total excluded at launch = 100M
 
     function setUp() public {
@@ -135,10 +135,10 @@ contract FormalVerification_GovernanceTest is Test {
 
     // ==================== Test 4: Mature Protocol Quorum ====================
 
-    /// @notice At maturity: launch distribution drained 42M.
+    /// @notice At maturity: verified/referral launch distribution drained 42M.
     ///         Circulating = total - remaining_pools. Quorum scales with circulating.
     function test_QuorumGrows_MatureProtocol() public {
-        // Simulate launch distribution draining 42M to users from the 75M launch pool.
+        // Simulate launch distribution draining 42M to users from the 66M launch pool.
         vm.prank(mockLaunchDistribution);
         token.transfer(address(100), 42_000_000e6);
 

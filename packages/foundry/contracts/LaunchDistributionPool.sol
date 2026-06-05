@@ -5,7 +5,6 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { RaterRegistry } from "./RaterRegistry.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
@@ -46,7 +45,7 @@ interface IRevealGraceConfig {
 }
 
 /// @title LaunchDistributionPool
-/// @notice Holds the 75M LREP launch allocation and releases it through verified/referral, earned, and legacy paths.
+/// @notice Holds the 66M LREP launch allocation and releases it through verified/referral and earned rater paths.
 contract LaunchDistributionPool is
     ILaunchDistributionPool,
     IRoundPayoutSnapshotConsumer,
@@ -64,15 +63,11 @@ contract LaunchDistributionPool is
     error PoolDepleted();
     error InvalidPolicy();
     error SnapshotNotFinalized();
-    error LegacyClaimWindowClosed();
-    error LegacyClaimWindowOpen();
     error PendingCreditNotStale();
 
     uint256 public constant VERIFIED_REFERRAL_POOL_AMOUNT = 42_000_000e6;
     uint256 public constant EARNED_RATER_POOL_AMOUNT = 24_000_000e6;
-    uint256 public constant LEGACY_CONTRIBUTOR_POOL_AMOUNT = 9_000_000e6;
-    uint256 public constant TOTAL_POOL_AMOUNT =
-        VERIFIED_REFERRAL_POOL_AMOUNT + EARNED_RATER_POOL_AMOUNT + LEGACY_CONTRIBUTOR_POOL_AMOUNT;
+    uint256 public constant TOTAL_POOL_AMOUNT = VERIFIED_REFERRAL_POOL_AMOUNT + EARNED_RATER_POOL_AMOUNT;
 
     uint32 public constant ELIGIBILITY_RATING_COUNT = 5;
     uint32 public constant REWARDING_RATING_COUNT = 10;
@@ -88,10 +83,6 @@ contract LaunchDistributionPool is
     uint16 public constant BPS_DENOMINATOR = 10_000;
     uint8 public constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     uint32 public constant MIN_ANCHOR_CREDENTIAL_AGE_SECONDS = 7 days;
-    uint16 public constant LEGACY_IMMEDIATE_BPS = 100;
-    uint64 public constant LEGACY_VESTING_DURATION = 730 days;
-    uint64 public constant LEGACY_CLAIM_GRACE_PERIOD = 91 days;
-    uint64 public constant LEGACY_CLAIM_DURATION = LEGACY_VESTING_DURATION + LEGACY_CLAIM_GRACE_PERIOD;
     uint64 public constant STALE_PENDING_EARNED_RATER_CREDIT_DELAY = 30 days;
 
     uint256 public constant REFERRAL_BONUS_BPS = 5_000;
@@ -117,11 +108,6 @@ contract LaunchDistributionPool is
     uint256 public poolBalance;
     uint256 public earnedRaterDistributed;
     uint256 public verifiedReferralDistributed;
-    uint256 public legacyContributorDistributed;
-    uint256 public legacyContributorTreasuryRecovered;
-    uint256 public legacyContributorAllocationTotal;
-    bytes32 public legacyContributorRoot;
-    uint64 public legacyContributorVestingStart;
 
     uint256 public eligibleRaterCount;
     uint256 public verifiedClaimCount;
@@ -140,7 +126,6 @@ contract LaunchDistributionPool is
     mapping(bytes32 => address) public launchFullCapNullifierRater;
     mapping(address => bool) public verifiedBonusClaimedByAccount;
     mapping(address => uint256) public referralEarnings;
-    mapping(address => uint256) public legacyContributorClaimed;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditRecorded;
     mapping(address => mapping(bytes32 => bool)) public raterVerifiedAnchorSeen;
     mapping(address => uint32) public raterDistinctVerifiedAnchorCount;
@@ -230,9 +215,6 @@ contract LaunchDistributionPool is
     );
     event VerifiedBonusClaimed(address indexed account, uint256 amount, bytes32 indexed nullifierHash);
     event ReferralBonusPaid(address indexed referrer, address indexed referee, uint256 amount);
-    event LegacyContributorRootUpdated(bytes32 indexed root, uint256 allocationTotal, uint64 vestingStart);
-    event LegacyContributorClaimed(address indexed account, uint256 amount, uint256 allocation, uint256 totalClaimed);
-    event LegacyContributorUnclaimedSwept(address indexed treasury, uint256 amount);
 
     modifier onlyAuthorized() {
         if (!authorizedCallers[msg.sender]) revert InvalidAddress();
@@ -362,18 +344,6 @@ contract LaunchDistributionPool is
         _setLaunchRewardPolicy(policy);
     }
 
-    function setLegacyContributorRoot(bytes32 root, uint256 allocationTotal) external onlyOwner {
-        if (root == bytes32(0)) revert InvalidProof();
-        if (allocationTotal != LEGACY_CONTRIBUTOR_POOL_AMOUNT) revert InvalidAmount();
-        if (legacyContributorRoot != bytes32(0)) revert AlreadyClaimed();
-        if (legacyContributorDistributed != 0 || legacyContributorTreasuryRecovered != 0) revert AlreadyClaimed();
-        if (_legacyContributorClaimWindowClosed()) revert AlreadyClaimed();
-        legacyContributorRoot = root;
-        legacyContributorAllocationTotal = allocationTotal;
-        legacyContributorVestingStart = uint64(block.timestamp);
-        emit LegacyContributorRootUpdated(root, allocationTotal, legacyContributorVestingStart);
-    }
-
     function depositPool(uint256 amount) external {
         if (amount == 0) revert InvalidAmount();
         lrepToken.safeTransferFrom(msg.sender, address(this), amount);
@@ -412,26 +382,6 @@ contract LaunchDistributionPool is
         emit SurplusRecovered(to, recovered);
     }
 
-    function sweepExpiredLegacyContributorAllocationToTreasury()
-        external
-        onlyOwner
-        nonReentrant
-        returns (uint256 sweptAmount)
-    {
-        if (legacyContributorRoot == bytes32(0)) revert InvalidProof();
-        if (!_legacyContributorClaimWindowClosed()) revert LegacyClaimWindowOpen();
-
-        uint256 recovered = legacyContributorTreasuryRecovered;
-        uint256 allocationTotal = legacyContributorAllocationTotal;
-        uint256 claimedOrRecovered = legacyContributorDistributed + recovered;
-        sweptAmount = allocationTotal > claimedOrRecovered ? allocationTotal - claimedOrRecovered : 0;
-        if (sweptAmount == 0) revert AlreadyClaimed();
-
-        legacyContributorTreasuryRecovered = recovered + sweptAmount;
-        _pay(governance, sweptAmount);
-        emit LegacyContributorUnclaimedSwept(governance, sweptAmount);
-    }
-
     function claimVerifiedBonus(address referrer) external nonReentrant returns (uint256 paidAmount) {
         RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(msg.sender);
         if (!credential.verified || credential.revoked || credential.expiresAt <= block.timestamp) {
@@ -457,25 +407,6 @@ contract LaunchDistributionPool is
 
         uint256 referralBonus = _claimReferralBonus(referrer, msg.sender, baseBonus);
         paidAmount += referralBonus;
-    }
-
-    function claimLegacyContributorAllocation(uint256 allocation, bytes32[] calldata proof)
-        external
-        nonReentrant
-        returns (uint256 paidAmount)
-    {
-        _validateLegacyContributorProof(msg.sender, allocation, proof);
-        if (_legacyContributorClaimWindowClosed()) revert LegacyClaimWindowClosed();
-        paidAmount = _claimableLegacyContributorAllocation(msg.sender, allocation);
-        if (paidAmount == 0) revert AlreadyClaimed();
-        if (legacyContributorDistributed + paidAmount > legacyContributorAllocationTotal) revert PoolDepleted();
-        if (paidAmount > _remainingLegacyContributorPool()) revert PoolDepleted();
-
-        uint256 totalClaimed = legacyContributorClaimed[msg.sender] + paidAmount;
-        legacyContributorClaimed[msg.sender] = totalClaimed;
-        legacyContributorDistributed += paidAmount;
-        _pay(msg.sender, paidAmount);
-        emit LegacyContributorClaimed(msg.sender, paidAmount, allocation, totalClaimed);
     }
 
     function unlockFullEarnedRaterCap(address rater) external nonReentrant returns (uint256 catchUpPaid) {
@@ -904,32 +835,6 @@ contract LaunchDistributionPool is
         return _remainingVerifiedReferralPool();
     }
 
-    function remainingLegacyContributorPool() external view returns (uint256) {
-        return _remainingLegacyContributorPool();
-    }
-
-    function legacyContributorLeaf(address account, uint256 allocation) external pure returns (bytes32) {
-        return _legacyContributorLeaf(account, allocation);
-    }
-
-    function vestedLegacyContributorAllocation(address account, uint256 allocation, bytes32[] calldata proof)
-        external
-        view
-        returns (uint256)
-    {
-        _validateLegacyContributorProof(account, allocation, proof);
-        return _vestedLegacyContributorAllocation(allocation);
-    }
-
-    function claimableLegacyContributorAllocation(address account, uint256 allocation, bytes32[] calldata proof)
-        external
-        view
-        returns (uint256)
-    {
-        _validateLegacyContributorProof(account, allocation, proof);
-        return _claimableLegacyContributorAllocation(account, allocation);
-    }
-
     function isRoundPayoutSnapshotConsumed(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view
@@ -1156,49 +1061,6 @@ contract LaunchDistributionPool is
         verifiedReferralDistributed += referralBonus;
         _pay(referrer, referralBonus);
         emit ReferralBonusPaid(referrer, referee, referralBonus);
-    }
-
-    function _validateLegacyContributorProof(address account, uint256 allocation, bytes32[] calldata proof)
-        internal
-        view
-    {
-        if (account == address(0) || allocation == 0) revert InvalidAmount();
-        if (allocation > legacyContributorAllocationTotal) revert InvalidAmount();
-        bytes32 root = legacyContributorRoot;
-        if (root == bytes32(0)) revert InvalidProof();
-        bytes32 leaf = _legacyContributorLeaf(account, allocation);
-        if (!MerkleProof.verifyCalldata(proof, root, leaf)) revert InvalidProof();
-    }
-
-    function _claimableLegacyContributorAllocation(address account, uint256 allocation)
-        internal
-        view
-        returns (uint256)
-    {
-        if (_legacyContributorClaimWindowClosed()) return 0;
-        uint256 vestedAmount = _vestedLegacyContributorAllocation(allocation);
-        uint256 claimed = legacyContributorClaimed[account];
-        return vestedAmount > claimed ? vestedAmount - claimed : 0;
-    }
-
-    function _legacyContributorClaimWindowClosed() internal view returns (bool) {
-        uint64 start = legacyContributorVestingStart;
-        if (start == 0) return false;
-        return block.timestamp >= uint256(start) + LEGACY_CLAIM_DURATION;
-    }
-
-    function _vestedLegacyContributorAllocation(uint256 allocation) internal view returns (uint256) {
-        uint64 start = legacyContributorVestingStart;
-        if (block.timestamp < start) return 0;
-        uint256 immediateAmount = (allocation * LEGACY_IMMEDIATE_BPS) / BPS_DENOMINATOR;
-        uint256 deferredAmount = allocation - immediateAmount;
-        uint256 elapsed = block.timestamp - uint256(start);
-        if (elapsed >= LEGACY_VESTING_DURATION) return allocation;
-        return immediateAmount + ((deferredAmount * elapsed) / LEGACY_VESTING_DURATION);
-    }
-
-    function _legacyContributorLeaf(address account, uint256 allocation) internal pure returns (bytes32) {
-        return keccak256(bytes.concat(keccak256(abi.encode(account, allocation))));
     }
 
     function _passesLaunchRewardContext(
@@ -1553,10 +1415,6 @@ contract LaunchDistributionPool is
 
     function _remainingVerifiedReferralPool() internal view returns (uint256) {
         return VERIFIED_REFERRAL_POOL_AMOUNT - verifiedReferralDistributed;
-    }
-
-    function _remainingLegacyContributorPool() internal view returns (uint256) {
-        return LEGACY_CONTRIBUTOR_POOL_AMOUNT - legacyContributorDistributed - legacyContributorTreasuryRecovered;
     }
 
     function _pay(address to, uint256 amount) internal returns (uint256 paidAmount) {

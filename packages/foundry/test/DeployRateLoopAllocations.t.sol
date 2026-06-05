@@ -45,10 +45,6 @@ contract DeployRateLoopHarness is DeployRateLoop {
         );
     }
 
-    function activateLegacyContributorRoot(LaunchDistributionPool launchPool) external {
-        _activateLegacyContributorRoot(launchPool);
-    }
-
     function fundLaunchDistributionPool(LoopReputation lrepToken, LaunchDistributionPool launchPool) external {
         _fundLaunchDistributionPool(lrepToken, launchPool);
     }
@@ -83,21 +79,15 @@ contract DeployRateLoopAllocationsTest is Test {
 
         assertEq(deployScript.TOTAL_SUPPLY_CAP(), lrepToken.MAX_SUPPLY(), "script cap should match token MAX_SUPPLY");
         assertEq(totalLaunchAllocation, deployScript.TOTAL_SUPPLY_CAP(), "launch allocations should sum to full cap");
-        assertEq(deployScript.LAUNCH_DISTRIBUTION_AMOUNT(), 75_000_000 * 1e6, "launch distribution should be 75M");
+        assertEq(deployScript.LAUNCH_DISTRIBUTION_AMOUNT(), 66_000_000 * 1e6, "launch distribution should be 66M");
         assertEq(launchPool.VERIFIED_REFERRAL_POOL_AMOUNT(), 42_000_000 * 1e6, "verified/referral pool should be 42M");
         assertEq(launchPool.EARNED_RATER_POOL_AMOUNT(), 24_000_000 * 1e6, "earned rater pool should be 24M");
-        assertEq(launchPool.LEGACY_CONTRIBUTOR_POOL_AMOUNT(), 9_000_000 * 1e6, "legacy pool should be 9M");
-        assertEq(
-            deployScript.LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL(),
-            launchPool.LEGACY_CONTRIBUTOR_POOL_AMOUNT(),
-            "legacy manifest total should fill legacy pool"
-        );
         assertEq(
             launchPool.TOTAL_POOL_AMOUNT(),
             deployScript.LAUNCH_DISTRIBUTION_AMOUNT(),
-            "launch pool split should equal 75M"
+            "launch pool split should equal 66M"
         );
-        assertEq(deployScript.TREASURY_AMOUNT(), 25_000_000 * 1e6, "treasury should be 25M");
+        assertEq(deployScript.TREASURY_AMOUNT(), 34_000_000 * 1e6, "treasury should be 34M");
     }
 
     function test_FundLaunchDistributionPoolMintsDirectlyToPool() public {
@@ -125,32 +115,6 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(launchPool.poolBalance(), deployScript.LAUNCH_DISTRIBUTION_AMOUNT());
         assertEq(lrepToken.balanceOf(address(deployScript)), 0);
         assertEq(lrepToken.allowance(address(deployScript), address(launchPool)), 0);
-    }
-
-    function test_ActivateLegacyContributorRootConfiguresGeneratedManifestRoot() public {
-        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
-        LoopReputation lrepToken = new LoopReputation(address(this), address(this));
-        RaterRegistry raterRegistry = new RaterRegistry(
-            address(this),
-            address(this),
-            address(new MockWorldIDVerifier()),
-            42,
-            uint256(keccak256("rateloop-human-credential-v4")),
-            uint256(keccak256("rateloop-human-presence-v1")),
-            365 days,
-            15 minutes,
-            7,
-            0
-        );
-        LaunchDistributionPool launchPool =
-            new LaunchDistributionPool(address(lrepToken), address(raterRegistry), address(deployScript));
-        launchPool.transferOwnership(address(deployScript));
-
-        deployScript.activateLegacyContributorRoot(launchPool);
-
-        assertEq(launchPool.legacyContributorRoot(), deployScript.LEGACY_CONTRIBUTOR_ROOT());
-        assertEq(launchPool.legacyContributorAllocationTotal(), deployScript.LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL());
-        assertEq(launchPool.legacyContributorVestingStart(), block.timestamp);
     }
 
     function test_WorldIdActionHashMatchesLocalConfigVector() public {
