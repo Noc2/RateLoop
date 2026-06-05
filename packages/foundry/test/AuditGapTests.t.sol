@@ -95,7 +95,6 @@ contract AuditGapTests is VotingTestBase {
             )
         );
         frontendRegistry.setVotingEngine(address(votingEngine));
-        frontendRegistry.addFeeCreditor(address(rewardDistributor));
 
         // Wire up
         registry.setVotingEngine(address(votingEngine));
@@ -103,6 +102,7 @@ contract AuditGapTests is VotingTestBase {
         mockCategoryRegistry.seedDefaultTestCategories();
         registry.setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setRewardDistributor(address(rewardDistributor));
+        frontendRegistry.addFeeCreditor(address(rewardDistributor));
         ProtocolConfig(address(votingEngine.protocolConfig())).setCategoryRegistry(address(mockCategoryRegistry));
         ProtocolConfig(address(votingEngine.protocolConfig())).setTreasury(treasury);
         ProtocolConfig(address(votingEngine.protocolConfig())).setFrontendRegistry(address(frontendRegistry));
