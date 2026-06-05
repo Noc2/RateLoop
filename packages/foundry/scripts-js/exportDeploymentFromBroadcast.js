@@ -432,7 +432,7 @@ const REQUIRED_COMPLETION_CALLS = [
     target: "LoopReputation",
     functionName: "mint(address,uint256)",
     abi: LOOP_REPUTATION_COMPLETION_ABI,
-    args: (ctx) => [ctx.governance, "34000000000000"],
+    args: (ctx) => [ctx.governance, "25000000000000"],
   },
   {
     label: "TimelockController.grantRole(PROPOSER_ROLE)",
@@ -477,14 +477,25 @@ const REQUIRED_COMPLETION_CALLS = [
     target: "LoopReputation",
     functionName: "mint(address,uint256)",
     abi: LOOP_REPUTATION_COMPLETION_ABI,
-    args: (ctx) => [ctx.launchDistributionPool, "66000000000000"],
+    args: (ctx) => [ctx.launchDistributionPool, "75000000000000"],
   },
   {
     label: "LaunchDistributionPool.accountPrefundedPoolDeposit",
     contractName: "LaunchDistributionPool",
     target: "LaunchDistributionPool",
     functionName: "accountPrefundedPoolDeposit(uint256)",
-    args: () => ["66000000000000"],
+    args: () => ["75000000000000"],
+  },
+  {
+    label: "LaunchDistributionPool.setLegacyContributorRoot",
+    contractName: "LaunchDistributionPool",
+    target: "LaunchDistributionPool",
+    functionName: "setLegacyContributorRoot(bytes32,uint256)",
+    args: () => [
+      "0xcaa28d15e6c6c1bb47d347a413cb808e40c38a7e43171ce9a131983a92b97d18",
+      "9000000000000",
+    ],
+    final: true,
   },
   {
     label: "LaunchDistributionPool.transferOwnership",

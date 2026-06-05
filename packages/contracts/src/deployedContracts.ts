@@ -25186,6 +25186,71 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "LEGACY_CLAIM_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_CLAIM_GRACE_PERIOD",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_CONTRIBUTOR_POOL_AMOUNT",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_IMMEDIATE_BPS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_VESTING_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR",
           inputs: [],
           outputs: [
@@ -25449,6 +25514,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "claimLegacyContributorAllocation",
+          inputs: [
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "paidAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "claimVerifiedBonus",
           inputs: [
             {
@@ -25465,6 +25554,35 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "claimableLegacyContributorAllocation",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -25889,6 +26007,114 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
           ],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorAllocationTotal",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorClaimed",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorDistributed",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorLeaf",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "legacyContributorRoot",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorTreasuryRecovered",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorVestingStart",
+          inputs: [],
           outputs: [
             {
               name: "",
@@ -26572,6 +26798,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "remainingLegacyContributorPool",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "remainingVerifiedReferralPool",
           inputs: [],
           outputs: [
@@ -26834,6 +27073,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setLegacyContributorRoot",
+          inputs: [
+            {
+              name: "root",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "allocationTotal",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setRaterRegistry",
           inputs: [
             {
@@ -26856,6 +27113,19 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "sweepExpiredLegacyContributorAllocationToTreasury",
+          inputs: [],
+          outputs: [
+            {
+              name: "sweptAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
           stateMutability: "nonpayable",
         },
         {
@@ -26988,6 +27258,35 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "function",
           name: "verifiedReferralDistributed",
           inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "vestedLegacyContributorAllocation",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
           outputs: [
             {
               name: "",
@@ -27361,6 +27660,81 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "LegacyContributorClaimed",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "totalClaimed",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "LegacyContributorRootUpdated",
+          inputs: [
+            {
+              name: "root",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "allocationTotal",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "vestingStart",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "LegacyContributorUnclaimedSwept",
+          inputs: [
+            {
+              name: "treasury",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "OwnershipTransferred",
           inputs: [
             {
@@ -27686,6 +28060,16 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "LegacyClaimWindowClosed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "LegacyClaimWindowOpen",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "NotVerified",
           inputs: [],
         },
@@ -27761,6 +28145,10 @@ const deployedContracts: GenericContractsDeclaration = {
       ],
       inheritedFunctions: {
         authorizedCallers: "contracts/interfaces/ILaunchDistributionPool.sol",
+        claimLegacyContributorAllocation:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
+        claimableLegacyContributorAllocation:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
         clusterPayoutOracle: "contracts/interfaces/ILaunchDistributionPool.sol",
         earnedRewardCreditRecorded:
           "contracts/interfaces/ILaunchDistributionPool.sol",
@@ -27775,6 +28163,10 @@ const deployedContracts: GenericContractsDeclaration = {
         recordEarnedRaterRewardWithSourceReady:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         roundUnverifiedLaunchCreditCount:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
+        sweepExpiredLegacyContributorAllocationToTreasury:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
+        vestedLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         isRoundPayoutSnapshotConsumed:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
@@ -50376,6 +50768,71 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "LEGACY_CLAIM_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_CLAIM_GRACE_PERIOD",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_CONTRIBUTOR_POOL_AMOUNT",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_IMMEDIATE_BPS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint16",
+              internalType: "uint16",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "LEGACY_VESTING_DURATION",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "MAX_DISTINCT_RATERS_PER_VERIFIED_ANCHOR",
           inputs: [],
           outputs: [
@@ -50639,6 +51096,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "claimLegacyContributorAllocation",
+          inputs: [
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "paidAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "claimVerifiedBonus",
           inputs: [
             {
@@ -50655,6 +51136,35 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "claimableLegacyContributorAllocation",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -51079,6 +51589,114 @@ const deployedContracts: GenericContractsDeclaration = {
               internalType: "uint256",
             },
           ],
+          outputs: [
+            {
+              name: "",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorAllocationTotal",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorClaimed",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorDistributed",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorLeaf",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
+          name: "legacyContributorRoot",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorTreasuryRecovered",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "legacyContributorVestingStart",
+          inputs: [],
           outputs: [
             {
               name: "",
@@ -51762,6 +52380,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "remainingLegacyContributorPool",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "remainingVerifiedReferralPool",
           inputs: [],
           outputs: [
@@ -52024,6 +52655,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setLegacyContributorRoot",
+          inputs: [
+            {
+              name: "root",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "allocationTotal",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setRaterRegistry",
           inputs: [
             {
@@ -52046,6 +52695,19 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "sweepExpiredLegacyContributorAllocationToTreasury",
+          inputs: [],
+          outputs: [
+            {
+              name: "sweptAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
           stateMutability: "nonpayable",
         },
         {
@@ -52178,6 +52840,35 @@ const deployedContracts: GenericContractsDeclaration = {
           type: "function",
           name: "verifiedReferralDistributed",
           inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "vestedLegacyContributorAllocation",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "proof",
+              type: "bytes32[]",
+              internalType: "bytes32[]",
+            },
+          ],
           outputs: [
             {
               name: "",
@@ -52551,6 +53242,81 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "LegacyContributorClaimed",
+          inputs: [
+            {
+              name: "account",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "allocation",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "totalClaimed",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "LegacyContributorRootUpdated",
+          inputs: [
+            {
+              name: "root",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "allocationTotal",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "vestingStart",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "LegacyContributorUnclaimedSwept",
+          inputs: [
+            {
+              name: "treasury",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "OwnershipTransferred",
           inputs: [
             {
@@ -52876,6 +53642,16 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "LegacyClaimWindowClosed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "LegacyClaimWindowOpen",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "NotVerified",
           inputs: [],
         },
@@ -52951,6 +53727,10 @@ const deployedContracts: GenericContractsDeclaration = {
       ],
       inheritedFunctions: {
         authorizedCallers: "contracts/interfaces/ILaunchDistributionPool.sol",
+        claimLegacyContributorAllocation:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
+        claimableLegacyContributorAllocation:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
         clusterPayoutOracle: "contracts/interfaces/ILaunchDistributionPool.sol",
         earnedRewardCreditRecorded:
           "contracts/interfaces/ILaunchDistributionPool.sol",
@@ -52965,6 +53745,10 @@ const deployedContracts: GenericContractsDeclaration = {
         recordEarnedRaterRewardWithSourceReady:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         roundUnverifiedLaunchCreditCount:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
+        sweepExpiredLegacyContributorAllocationToTreasury:
+          "contracts/interfaces/ILaunchDistributionPool.sol",
+        vestedLegacyContributorAllocation:
           "contracts/interfaces/ILaunchDistributionPool.sol",
         isRoundPayoutSnapshotConsumed:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
