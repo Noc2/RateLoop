@@ -437,6 +437,7 @@ contract LaunchDistributionPool is
         if (verifiedCredentialClaimed[credentialKey] || verifiedBonusClaimedByAccount[msg.sender]) {
             revert AlreadyClaimed();
         }
+        credentialKey = _consumeCredentialClaimKey(credential.provider, credential.nullifierHash);
 
         uint256 baseBonus = currentVerifiedBonus();
         uint256 remaining = _remainingVerifiedReferralPool();
@@ -477,11 +478,13 @@ contract LaunchDistributionPool is
         if (!raterLaunchCapAssigned[rater]) revert InvalidAmount();
         if (raterFullLaunchCapUnlocked[rater]) return 0;
 
-        (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(rater);
+        (bytes32 nullifierHash, bytes32 credentialKey, RaterRegistry.HumanCredentialProvider provider) =
+            _activeHumanCredential(rater);
         if (nullifierHash == bytes32(0)) revert NotVerified();
 
         address claimedBy = launchFullCapNullifierRater[credentialKey];
         if (claimedBy != address(0) && claimedBy != rater) revert AlreadyClaimed();
+        credentialKey = _consumeCredentialClaimKey(provider, nullifierHash);
 
         uint256 previousCap = raterLaunchCap[rater];
         uint256 fullCap = raterFullLaunchCap[rater];
@@ -1040,10 +1043,12 @@ contract LaunchDistributionPool is
         internal
         returns (uint256 activeCap, bool fullCapUnlocked)
     {
-        (bytes32 nullifierHash, bytes32 credentialKey) = _activeHumanCredential(rater);
+        (bytes32 nullifierHash, bytes32 credentialKey, RaterRegistry.HumanCredentialProvider provider) =
+            _activeHumanCredential(rater);
         if (nullifierHash != bytes32(0)) {
             address claimedBy = launchFullCapNullifierRater[credentialKey];
             if (claimedBy == address(0) || claimedBy == rater) {
+                credentialKey = _consumeCredentialClaimKey(provider, nullifierHash);
                 fullCapUnlocked = true;
                 raterFullLaunchCapUnlocked[rater] = true;
                 raterLaunchCapNullifier[rater] = nullifierHash;
@@ -1351,14 +1356,18 @@ contract LaunchDistributionPool is
     }
 
     function _activeHumanNullifier(address rater) internal view returns (bytes32) {
-        (bytes32 nullifierHash,) = _activeHumanCredential(rater);
+        (bytes32 nullifierHash,,) = _activeHumanCredential(rater);
         return nullifierHash;
     }
 
     function _activeHumanCredential(address rater)
         internal
         view
-        returns (bytes32 nullifierHash, bytes32 credentialKey)
+        returns (
+            bytes32 nullifierHash,
+            bytes32 credentialKey,
+            RaterRegistry.HumanCredentialProvider provider
+        )
     {
         RaterRegistry.HumanCredential memory credential = raterRegistry.getHumanCredential(rater);
         if (
@@ -1366,8 +1375,19 @@ contract LaunchDistributionPool is
                 && credential.nullifierHash != bytes32(0)
         ) {
             nullifierHash = credential.nullifierHash;
-            credentialKey = _credentialClaimKey(credential.provider, credential.nullifierHash);
+            provider = credential.provider;
+            credentialKey = _credentialClaimKey(provider, credential.nullifierHash);
         }
+    }
+
+    function _consumeCredentialClaimKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)
+        internal
+        returns (bytes32)
+    {
+        if (provider == RaterRegistry.HumanCredentialProvider.WorldIdV4) {
+            return raterRegistry.consumeWorldIdV4LaunchNullifier(nullifierHash);
+        }
+        return _credentialClaimKey(provider, nullifierHash);
     }
 
     function _credentialClaimKey(RaterRegistry.HumanCredentialProvider provider, bytes32 nullifierHash)

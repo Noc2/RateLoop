@@ -14,6 +14,7 @@ import {IRaterIdentityRegistry} from "./interfaces/IRaterIdentityRegistry.sol";
 contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentityRegistry {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant SEEDER_ROLE = keccak256("SEEDER_ROLE");
+    bytes32 public constant LAUNCH_CONSUMER_ROLE = keccak256("LAUNCH_CONSUMER_ROLE");
 
     uint256 public constant WORLD_ID_GROUP_ID = 1;
     bytes32 public constant SEEDED_HUMAN_SCOPE = keccak256("rateloop-seeded-human-v1");
@@ -213,6 +214,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (admin == address(0) || governance == address(0)) {
             revert InvalidAddress();
         }
+        _setRoleAdmin(LAUNCH_CONSUMER_ROLE, SEEDER_ROLE);
         _setWorldIdVerifierConfig(
             _worldIdRouter, _worldIdScope, _worldIdExternalNullifierHash, _worldIdCredentialTtl, true
         );
@@ -647,9 +649,27 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (v4NullifierHash == bytes32(0) || legacyNullifierHash == bytes32(0)) revert InvalidCredential();
         bytes32 currentAlias = worldIdV4LaunchNullifierAlias[v4NullifierHash];
         if (currentAlias != bytes32(0) && currentAlias != legacyNullifierHash) revert InvalidCredential();
-        if (currentAlias == bytes32(0) && worldIdV4LaunchNullifierSeen[v4NullifierHash]) revert InvalidCredential();
+        if (currentAlias == bytes32(0) && worldIdV4LaunchNullifierSeen[v4NullifierHash]) {
+            revert InvalidCredential();
+        }
         worldIdV4LaunchNullifierAlias[v4NullifierHash] = legacyNullifierHash;
         emit WorldIdV4LaunchNullifierAliasSet(v4NullifierHash, legacyNullifierHash);
+    }
+
+    /// @notice Mark an unaliased World ID v4 nullifier as consumed by launch accounting.
+    /// @dev Attestation alone must not freeze migration aliases. Launch consumers call this only
+    ///      once an unaliased v4 identity actually claims a launch bonus or unlocks a full cap.
+    function consumeWorldIdV4LaunchNullifier(bytes32 v4NullifierHash)
+        external
+        onlyRole(LAUNCH_CONSUMER_ROLE)
+        returns (bytes32 launchIdentityKey)
+    {
+        if (v4NullifierHash == bytes32(0)) revert InvalidCredential();
+        bytes32 legacyNullifierHash = worldIdV4LaunchNullifierAlias[v4NullifierHash];
+        if (legacyNullifierHash != bytes32(0)) return _worldIdLaunchIdentityKey(legacyNullifierHash);
+
+        launchIdentityKey = _worldIdLaunchIdentityKey(v4NullifierHash);
+        worldIdV4LaunchNullifierSeen[v4NullifierHash] = true;
     }
 
     /// @notice M-Identity-2: explicit governance action to re-bind a rater's canonical identity
@@ -782,7 +802,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             provider = HumanCredentialProvider.WorldId;
         }
         if (provider == HumanCredentialProvider.WorldId) {
-            return keccak256(abi.encode("rateloop.launch-world-id-human-v1", nullifierHash));
+            return _worldIdLaunchIdentityKey(nullifierHash);
         }
         return keccak256(abi.encode(provider, nullifierHash));
     }
@@ -896,9 +916,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (_canonicalHumanIdentityKey[rater] == bytes32(0)) {
             _canonicalHumanIdentityKey[rater] = credentialIdentityKey(provider, nullifierHash);
         }
-        if (provider == HumanCredentialProvider.WorldIdV4) {
-            worldIdV4LaunchNullifierSeen[nullifierHash] = true;
-        }
         _clearInboundDelegation(rater);
 
         _humanCredentials[rater] = HumanCredential({
@@ -917,6 +934,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         );
 
         _forceHumanCredentialCompatibleProfile(rater);
+    }
+
+    function _worldIdLaunchIdentityKey(bytes32 nullifierHash) private pure returns (bytes32) {
+        return keccak256(abi.encode("rateloop.launch-world-id-human-v1", nullifierHash));
     }
 
     function _forceHumanCredentialCompatibleProfile(address rater) internal {
