@@ -82,6 +82,21 @@ const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const SUPPORTED_BOUNTY_ELIGIBILITY = new Set([0, 1, 2, 3, 129, 130, 131]);
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
+const QUESTION_CONTEXT_DOMAIN = keccak256(
+  stringToHex("rateloop-question-context-v4"),
+);
+const QUESTION_REVEAL_DOMAIN = keccak256(
+  stringToHex("rateloop-question-reveal-v6"),
+);
+const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(
+  stringToHex("rateloop-question-bundle-item-v4"),
+);
+const QUESTION_BUNDLE_DOMAIN = keccak256(
+  stringToHex("rateloop-question-bundle-v4"),
+);
+const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(
+  stringToHex("rateloop-question-bundle-reveal-v5"),
+);
 const X402_QUESTION_PAYMENT_DOMAIN = keccak256(
   stringToHex("rateloop-x402-question-payment-v3"),
 );
@@ -1600,10 +1615,9 @@ function buildQuestionSubmissionKey(question: LocalQuestionItemPayload): Hex {
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "string" },
+        { type: "bytes32" },
         { type: "uint256" },
         { type: "bytes32" },
-        { type: "string" },
         { type: "bytes32" },
         { type: "string" },
         { type: "string" },
@@ -1611,11 +1625,10 @@ function buildQuestionSubmissionKey(question: LocalQuestionItemPayload): Hex {
         { type: "string" },
       ],
       [
-        "rateloop-question-context-v3",
+        QUESTION_CONTEXT_DOMAIN,
         question.categoryId,
         buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
-        question.detailsUrl,
-        question.detailsHash,
+        buildSubmissionDetailsHash(question.detailsUrl, question.detailsHash),
         question.contextUrl,
         question.title,
         question.description,
@@ -1733,7 +1746,7 @@ function buildSingleQuestionRevealCommitment(params: {
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "string" },
+        { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
@@ -1747,7 +1760,7 @@ function buildSingleQuestionRevealCommitment(params: {
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-reveal-v5",
+        QUESTION_REVEAL_DOMAIN,
         params.question.submissionKey,
         buildSubmissionMediaHash(
           params.question.imageUrls,
@@ -1777,7 +1790,7 @@ function buildQuestionBundleHash(
     keccak256(
       encodeAbiParameters(
         [
-          { type: "string" },
+          { type: "bytes32" },
           { type: "bytes32" },
           { type: "bytes32" },
           { type: "bytes32" },
@@ -1788,7 +1801,7 @@ function buildQuestionBundleHash(
           { type: "bytes32" },
         ],
         [
-          "rateloop-question-bundle-item-v3",
+          QUESTION_BUNDLE_ITEM_DOMAIN,
           keccak256(
             encodeAbiParameters(
               [{ type: "string" }, { type: "string" }, { type: "string" }, { type: "string" }],
@@ -1808,8 +1821,8 @@ function buildQuestionBundleHash(
   );
   return keccak256(
     encodeAbiParameters(
-      [{ type: "string" }, { type: "bytes32[]" }],
-      ["rateloop-question-bundle-v3", questionHashes],
+      [{ type: "bytes32" }, { type: "bytes32[]" }],
+      [QUESTION_BUNDLE_DOMAIN, questionHashes],
     ),
   );
 }
@@ -1823,7 +1836,7 @@ function buildQuestionBundleRevealCommitment(params: {
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "string" },
+        { type: "bytes32" },
         { type: "bytes32" },
         { type: "address" },
         { type: "uint8" },
@@ -1840,7 +1853,7 @@ function buildQuestionBundleRevealCommitment(params: {
         { type: "uint16" },
       ],
       [
-        "rateloop-question-bundle-reveal-v4",
+        QUESTION_BUNDLE_REVEAL_DOMAIN,
         buildQuestionBundleHash(params.questions),
         params.submitter,
         params.rewardTerms.asset,

@@ -362,6 +362,7 @@ const calldata = encodeFunctionData({
       question.description,
       question.tags,
       question.categoryId,
+      [question.details.detailsUrl, question.details.detailsHash],
       question.salt,
       [DEFAULT_QUESTION_METADATA_HASH, DEFAULT_RESULT_SPEC_HASH],
     ]),

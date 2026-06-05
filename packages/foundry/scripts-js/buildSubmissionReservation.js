@@ -34,6 +34,7 @@ const DEFAULT_QUESTION_METADATA_HASH =
 const DEFAULT_RESULT_SPEC_HASH =
   "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
+const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v4"));
 const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v6"));
 const DEFAULT_ROUND_CONFIG = {
   epochDuration: 20 * 60,
@@ -315,6 +316,59 @@ async function resolveDefaultRoundConfig(publicClient, registry) {
   };
 }
 
+function buildSubmissionMediaHash(imageUrls, videoUrl) {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string[]" }, { type: "string" }],
+      [imageUrls, videoUrl]
+    )
+  );
+}
+
+function buildSubmissionDetailsHash(detailsUrl, detailsHash) {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "string" }, { type: "bytes32" }],
+      [detailsUrl, detailsHash]
+    )
+  );
+}
+
+function buildQuestionSubmissionKey({
+  categoryId,
+  contextUrl,
+  description,
+  imageUrls,
+  tags,
+  title,
+  videoUrl,
+}) {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" },
+        { type: "uint256" },
+        { type: "bytes32" },
+        { type: "bytes32" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+        { type: "string" },
+      ],
+      [
+        QUESTION_CONTEXT_DOMAIN,
+        BigInt(categoryId),
+        buildSubmissionMediaHash(imageUrls, videoUrl),
+        buildSubmissionDetailsHash("", EMPTY_DETAILS_HASH),
+        contextUrl,
+        title,
+        description,
+        tags,
+      ]
+    )
+  );
+}
+
 const {
   rpcUrl,
   registry,
@@ -345,42 +399,23 @@ const roundConfig =
 assertSupportedContextUrl(contextUrl, {
   allowEmpty: media.imageUrls.length > 0 || Boolean(media.videoUrl),
 });
-const [, submissionKey] = await publicClient.readContract({
-  address: registry,
-  abi: parseAbi([
-    "function previewQuestionSubmissionKey(string contextUrl, string[] imageUrls, string videoUrl, string title, string description, string tags, uint256 categoryId, (string detailsUrl, bytes32 detailsHash) details) view returns (uint256 resolvedCategoryId, bytes32 submissionKey)",
-  ]),
-  functionName: "previewQuestionSubmissionKey",
-  args: [
-    contextUrl,
-    media.imageUrls,
-    media.videoUrl,
-    title,
-    description,
-    tags,
-    BigInt(categoryId),
-    { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH },
-  ],
+const mediaHash = buildSubmissionMediaHash(media.imageUrls, media.videoUrl);
+const submissionKey = buildQuestionSubmissionKey({
+  categoryId,
+  contextUrl,
+  description,
+  imageUrls: media.imageUrls,
+  tags,
+  title,
+  videoUrl: media.videoUrl,
 });
-
-const mediaHash = keccak256(
-  encodeAbiParameters(
-    [{ type: "string[]" }, { type: "string" }],
-    [media.imageUrls, media.videoUrl]
-  )
-);
 const textHash = keccak256(
   encodeAbiParameters(
     [{ type: "string" }, { type: "string" }, { type: "string" }],
     [title, description, tags]
   )
 );
-const detailsHash = keccak256(
-  encodeAbiParameters(
-    [{ type: "string" }, { type: "bytes32" }],
-    ["", EMPTY_DETAILS_HASH]
-  )
-);
+const detailsHash = buildSubmissionDetailsHash("", EMPTY_DETAILS_HASH);
 const rewardTermsHash = keccak256(
   encodeAbiParameters(
     [

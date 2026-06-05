@@ -51,6 +51,12 @@ const X402_VALID_BEFORE = "9999999999";
 const TEST_SIGNATURE = `0x${"1".repeat(64)}${"3".repeat(64)}1b` as const;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
 const EMPTY_DETAILS = { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH } as const;
+const QUESTION_CONTEXT_DOMAIN = keccak256(
+  stringToHex("rateloop-question-context-v4"),
+);
+const QUESTION_REVEAL_DOMAIN = keccak256(
+  stringToHex("rateloop-question-reveal-v6"),
+);
 const X402_SIGN_OPTIONS: NonNullable<
   Parameters<typeof signX402AuthorizationRequest>[2]
 > = {
@@ -188,10 +194,9 @@ function expectedSubmissionKey() {
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "string" },
+        { type: "bytes32" },
         { type: "uint256" },
         { type: "bytes32" },
-        { type: "string" },
         { type: "bytes32" },
         { type: "string" },
         { type: "string" },
@@ -199,7 +204,7 @@ function expectedSubmissionKey() {
         { type: "string" },
       ],
       [
-        "rateloop-question-context-v3",
+        QUESTION_CONTEXT_DOMAIN,
         1n,
         keccak256(
           encodeAbiParameters(
@@ -207,8 +212,7 @@ function expectedSubmissionKey() {
             [[], ""],
           ),
         ),
-        "",
-        EMPTY_DETAILS_HASH,
+        submissionDetailsHash(),
         QUESTION_CONTEXT_URL,
         QUESTION_TITLE,
         "",
@@ -290,7 +294,7 @@ function expectedRevealCommitment() {
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "string" },
+        { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
@@ -304,7 +308,7 @@ function expectedRevealCommitment() {
         { type: "bytes32" },
       ],
       [
-        "rateloop-question-reveal-v5",
+        QUESTION_REVEAL_DOMAIN,
         expectedSubmissionKey(),
         keccak256(
           encodeAbiParameters(
