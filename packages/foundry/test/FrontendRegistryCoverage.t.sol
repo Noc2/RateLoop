@@ -30,36 +30,17 @@ contract MockVotingEngine_FR is IRoundVotingEngine {
         return 0;
     }
 
-    function activeRoundId(uint256) external pure override returns (uint256) {
-        return 0;
-    }
-
     function isDormancyBlocked(uint256) external pure override returns (bool) {
         return false;
     }
 
-    function rounds(uint256, uint256)
+    function roundCore(uint256, uint256)
         external
         pure
         override
-        returns (
-            uint48,
-            RoundLib.RoundState,
-            uint16,
-            uint16,
-            uint64,
-            uint64,
-            uint64,
-            uint16,
-            uint16,
-            bool,
-            uint48,
-            uint48,
-            uint64,
-            uint64
-        )
+        returns (uint48, RoundLib.RoundState, uint16, uint16, uint64, uint48, uint48)
     {
-        return (0, RoundLib.RoundState.Open, 0, 0, 0, 0, 0, 0, 0, false, 0, 0, 0, 0);
+        return (0, RoundLib.RoundState.Open, 0, 0, 0, 0, 0);
     }
 
     function transferReward(address, uint256) external override { }

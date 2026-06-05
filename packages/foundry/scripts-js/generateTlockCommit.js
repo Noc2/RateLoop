@@ -48,10 +48,9 @@ if (isUpArg !== "true" && isUpArg !== "false") {
 const votingEngineAbi = parseAbi([
   "function protocolConfig() view returns (address)",
   "function currentRoundId(uint256 contentId) view returns (uint256)",
-  "function previewCommitRoundId(uint256 contentId) view returns (uint256)",
-  "function previewCommitReferenceRatingBps(uint256 contentId) view returns (uint16)",
+  "function previewCommitContext(uint256 contentId) view returns (uint256 openRoundId, uint16 referenceRatingBps)",
   "function roundConfigSnapshot(uint256 contentId, uint256 roundId) view returns (uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters)",
-  "function rounds(uint256 contentId, uint256 roundId) view returns (uint48 startTime, uint8 state, uint16 voteCount, uint16 revealedCount, uint64 totalStake, uint64 upPool, uint64 downPool, uint16 upCount, uint16 downCount, bool upWins, uint48 settledAt, uint48 thresholdReachedAt, uint64 weightedUpPool, uint64 weightedDownPool)",
+  "function roundCore(uint256 contentId, uint256 roundId) view returns (uint48 startTime, uint8 state, uint16 voteCount, uint16 revealedCount, uint64 totalStake, uint48 thresholdReachedAt, uint48 settledAt)",
 ]);
 const contentRegistryAbi = parseAbi([
   "function getContentRoundConfig(uint256 contentId) view returns (uint32 epochDuration, uint32 maxDuration, uint16 minVoters, uint16 maxVoters)",
@@ -111,18 +110,13 @@ const drandPeriodRaw = await chainClient.readContract({
   functionName: "drandPeriod",
 });
 const drandPeriod = BigInt(drandPeriodRaw);
-const roundReferenceRatingBps = await chainClient.readContract({
-  address: votingEngine,
-  abi: votingEngineAbi,
-  functionName: "previewCommitReferenceRatingBps",
-  args: [contentId],
-});
-const previewRoundId = await chainClient.readContract({
-  address: votingEngine,
-  abi: votingEngineAbi,
-  functionName: "previewCommitRoundId",
-  args: [contentId],
-});
+const [previewRoundId, roundReferenceRatingBps] =
+  await chainClient.readContract({
+    address: votingEngine,
+    abi: votingEngineAbi,
+    functionName: "previewCommitContext",
+    args: [contentId],
+  });
 const currentRoundId = await chainClient.readContract({
   address: votingEngine,
   abi: votingEngineAbi,
@@ -137,7 +131,7 @@ if (currentRoundId === previewRoundId && currentRoundId > 0n) {
   const round = await chainClient.readContract({
     address: votingEngine,
     abi: votingEngineAbi,
-    functionName: "rounds",
+    functionName: "roundCore",
     args: [contentId, currentRoundId],
   });
   const [startTime, state] = round;

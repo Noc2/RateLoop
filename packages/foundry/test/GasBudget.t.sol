@@ -58,7 +58,7 @@ contract GasBudgetTest is RoundIntegrationTest {
 
         string memory imageUrl = _submissionImageUrl("gas-submit");
         string[] memory imageUrls = _singleImageUrls(imageUrl);
-        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 submissionKey = _questionSubmissionKey(
             "https://example.com/context", imageUrls, "", "test goal", "test goal", "test", 1, _emptySubmissionDetails()
         );
         bytes32 salt = keccak256(
@@ -97,7 +97,7 @@ contract GasBudgetTest is RoundIntegrationTest {
     function testGas_commitVote_underBudget() public {
         vm.pauseGasMetering();
         uint256 contentId = _submitContent();
-        uint16 roundReferenceRatingBps = votingEngine.previewCommitReferenceRatingBps(contentId);
+        uint16 roundReferenceRatingBps = _previewCommitReferenceRatingBps(votingEngine, contentId);
         bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(1)));
         bytes32 commitHash = _commitHash(true, salt, voter1, contentId);
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
@@ -113,7 +113,7 @@ contract GasBudgetTest is RoundIntegrationTest {
             abi.encodeWithSelector(
                 bytes4(keccak256("commitVote(uint256,uint256,uint64,bytes32,bytes32,bytes,uint256,address)")),
                 contentId,
-                _roundContext(votingEngine.previewCommitRoundId(contentId), roundReferenceRatingBps),
+                _roundContext(_previewCommitRoundId(votingEngine, contentId), roundReferenceRatingBps),
                 _tlockCommitTargetRound(),
                 _tlockDrandChainHash(),
                 commitHash,
@@ -137,7 +137,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
             contentId,
             cachedRoundContext1,
@@ -263,7 +263,7 @@ contract GasBudgetTest is RoundIntegrationTest {
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext5 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
             contentId,
             cachedRoundContext5,

@@ -804,12 +804,13 @@ advance_to_round_reveal_window() {
   local contentId="$1"
   local roundId="$2"
   local revealableAfter
+  local lifecycleOutput
   local latestTs
   local nextTs
 
-  revealableAfter=$(cast call "$VOTING_ENGINE" "lastCommitRevealableAfter(uint256,uint256)(uint256)" \
+  lifecycleOutput=$(cast call "$VOTING_ENGINE" "roundLifecycleState(uint256,uint256)(uint256,uint256,uint256,uint48)" \
     "$contentId" "$roundId" --rpc-url "$RPC")
-  revealableAfter="${revealableAfter%% *}"
+  revealableAfter=$(printf '%s\n' "$lifecycleOutput" | awk 'NR == 2 { print $1; exit }')
   latestTs=$(cast block latest --field timestamp --rpc-url "$RPC")
   latestTs="${latestTs%% *}"
 

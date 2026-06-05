@@ -147,7 +147,7 @@ contract AuditGapTests is VotingTestBase {
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), stakeAmt);
         uint256 cachedRoundContext1 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
             contentId,
             cachedRoundContext1,
@@ -184,7 +184,7 @@ contract AuditGapTests is VotingTestBase {
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext2 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         vm.expectRevert(); // EnforcedPause
         votingEngine.commitVote(
             contentId,
@@ -273,7 +273,7 @@ contract AuditGapTests is VotingTestBase {
         votingEngine.pause();
 
         votingEngine.processUnrevealedVotes(contentId, 1, 0, 10);
-        assertEq(votingEngine.roundUnrevealedCleanupRemaining(contentId, 1), 0);
+        assertEq(_roundUnrevealedCleanupRemaining(votingEngine, contentId, 1), 0);
     }
 
     /// @notice claimCancelledRoundRefund does NOT require whenNotPaused (users must always be able to withdraw)
@@ -375,11 +375,13 @@ contract AuditGapTests is VotingTestBase {
         assertTrue(v2After > v2Before, "Winner 2 should receive reward");
 
         // 3. Lower-scoring claim (voter3 - revealed reports get RBTS stake return plus any positive-spread reward)
-        uint256 expectedLoserClaim = votingEngine.commitRbtsStakeReturned(contentId, 1, ck3);
-        uint256 scoreWeight = votingEngine.commitRbtsRewardWeight(contentId, 1, ck3);
+        uint256 expectedLoserClaim = _commitRbtsStakeReturned(votingEngine, contentId, 1, ck3);
+        uint256 scoreWeight = _commitRbtsRewardWeight(votingEngine, contentId, 1, ck3);
         if (scoreWeight > 0) {
             expectedLoserClaim += RewardMath.calculateVoterReward(
-                scoreWeight, votingEngine.roundRbtsRewardWeight(contentId, 1), votingEngine.roundVoterPool(contentId, 1)
+                scoreWeight,
+                _roundRbtsRewardWeight(votingEngine, contentId, 1),
+                _roundVoterPool(votingEngine, contentId, 1)
             );
         }
 
@@ -525,7 +527,7 @@ contract AuditGapTests is VotingTestBase {
         vm.startPrank(voter1);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext3 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
         votingEngine.commitVote(
             contentId,
@@ -565,8 +567,8 @@ contract AuditGapTests is VotingTestBase {
         _settleAfterRbtsSeed(votingEngine, contentId, 1);
 
         uint256 forfeitedPool = _roundRbtsForfeitedPool(votingEngine, contentId, 1);
-        if (votingEngine.roundRbtsRewardWeight(contentId, 1) > 0) {
-            assertEq(votingEngine.roundVoterPool(contentId, 1), forfeitedPool, "Voter pool should equal forfeitures");
+        if (_roundRbtsRewardWeight(votingEngine, contentId, 1) > 0) {
+            assertEq(_roundVoterPool(votingEngine, contentId, 1), forfeitedPool, "Voter pool should equal forfeitures");
         }
 
         uint256 v1Before = lrepToken.balanceOf(voter1);
@@ -574,7 +576,7 @@ contract AuditGapTests is VotingTestBase {
         rewardDistributor.claimReward(contentId, 1);
         uint256 payout = lrepToken.balanceOf(voter1) - v1Before;
         assertGt(payout, 0, "Voter should receive a claim");
-        assertLe(payout, STAKE + votingEngine.roundVoterPool(contentId, 1), "claim stays inside forfeiture pool");
+        assertLe(payout, STAKE + _roundVoterPool(votingEngine, contentId, 1), "claim stays inside forfeiture pool");
     }
 
     // =========================================================================

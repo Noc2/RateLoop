@@ -63,7 +63,6 @@ contract RoundVotingEngine is
     error DrandChainHashMismatch();
     error TargetRoundOutOfWindow();
     error RoundNotOpen();
-    error ActiveRoundStillOpen();
     error RoundNotExpired();
     error RoundNotSettledOrTied();
     error RoundNotCancelledOrTied();
@@ -93,6 +92,7 @@ contract RoundVotingEngine is
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+    uint8 internal constant MAX_RBTS_SEED_REFRESHES = 2;
     address internal constant DISABLED_ADVISORY_VOTE_RECORDER = address(1);
 
     // --- State ---
@@ -125,7 +125,7 @@ contract RoundVotingEngine is
     ProtocolConfig public protocolConfig;
 
     // Round data: contentId => roundId => Round
-    mapping(uint256 => mapping(uint256 => RoundLib.Round)) public rounds;
+    mapping(uint256 => mapping(uint256 => RoundLib.Round)) internal rounds;
 
     // Per-content round tracking
     mapping(uint256 => uint256) public currentRoundId; // contentId => latest current-round slot (0 = none)
@@ -141,25 +141,25 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(address => uint256)) internal lastVoteTimestamp;
 
     // Reward accounting per round
-    mapping(uint256 => mapping(uint256 => uint256)) public roundVoterPool; // contentId => roundId => voter pool
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundVoterPool; // contentId => roundId => voter pool
     mapping(uint256 => mapping(uint256 => uint256)) internal roundWinningStake; // contentId => roundId => reward-distribution weight
 
     // Robust BTS reward accounting per round.
-    mapping(uint256 => mapping(uint256 => bool)) public roundRbtsScored;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsRewardWeight;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundRbtsRewardClaimants;
+    mapping(uint256 => mapping(uint256 => bool)) internal roundRbtsScored;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsRewardWeight;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsRewardClaimants;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsParticipationWeight;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsParticipationClaimants;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsForfeitedPool;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundRbtsForfeitClaimants;
     mapping(uint256 => mapping(uint256 => uint16)) internal roundRbtsMeanScoreBps;
-    mapping(uint256 => mapping(uint256 => bytes32)) public roundRbtsScoreSeed;
+    mapping(uint256 => mapping(uint256 => bytes32)) internal roundRbtsScoreSeed;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundThresholdReachedBlock;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitPredictedUpBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitPredictedUpBps;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsWeight;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) public commitRbtsScoreBps;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitRbtsRewardWeight;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public commitRbtsStakeReturned;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint16))) internal commitRbtsScoreBps;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsRewardWeight;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsStakeReturned;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsForfeitedStake;
 
     // Cancelled/tied round refund claims: contentId => roundId => voter => claimed
@@ -178,20 +178,20 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint16)) internal roundReferenceRatingBpsSnapshot;
 
     // Voter to commit hash lookup: contentId => roundId => voter => commitHash (O(1) claim lookups)
-    mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) public voterCommitHash;
+    mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) internal voterCommitHash;
 
     // Stable rater-identity keyed commit lookups for duplicate prevention and delegated wallets.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public identityCommitKey;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) public commitIdentityKey;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => address))) public commitIdentityHolder;
-    mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) public holderCommitKey;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) public identityRoundStake;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) internal identityCommitKey;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32))) internal commitIdentityKey;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => address))) internal commitIdentityHolder;
+    mapping(uint256 => mapping(uint256 => mapping(address => bytes32))) internal holderCommitKey;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal identityRoundStake;
 
     // Frontend fee aggregation (computed incrementally during revealVote for O(1) settlement)
-    mapping(uint256 => mapping(uint256 => uint256)) public roundStakeWithEligibleFrontend;
-    mapping(uint256 => mapping(uint256 => mapping(address => uint256))) public roundPerFrontendStake;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundFrontendPool;
-    mapping(uint256 => mapping(uint256 => uint256)) public roundEligibleFrontendCount;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundStakeWithEligibleFrontend;
+    mapping(uint256 => mapping(uint256 => mapping(address => uint256))) internal roundPerFrontendStake;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundFrontendPool;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundEligibleFrontendCount;
     mapping(uint256 => mapping(uint256 => address)) public roundRaterRegistrySnapshot;
     mapping(uint256 => mapping(uint256 => address)) internal roundAdvisoryVoteRecorderSnapshot;
 
@@ -398,29 +398,6 @@ contract RoundVotingEngine is
             stakeAmount,
             frontend
         );
-    }
-
-    /// @notice Bind an advisory commit to the current staked open round.
-    /// @dev Records no vote/stake accounting; zero-stake advisory commits cannot open or roll rounds.
-    function prepareAdvisoryRound(uint256 contentId, uint256 roundContext) external view {
-        uint256 roundId = currentRoundId[contentId];
-        if (roundId == 0) revert RoundNotOpen();
-        if (roundId != roundContext >> 16) revert InvalidCommitHash();
-        if (msg.sender != _getRoundAdvisoryVoteRecorder(contentId, roundId)) revert Unauthorized();
-
-        RoundLib.Round storage round = rounds[contentId][roundId];
-        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        uint16 roundReferenceRatingBps = uint16(roundContext);
-        if (roundReferenceRatingBps != _getRoundReferenceRatingBps(contentId, roundId)) {
-            revert InvalidCommitHash();
-        }
-
-        if (!RoundLib.acceptsVotes(round, roundCfg.maxDuration)) revert RoundNotOpen();
-        unchecked {
-            if (block.timestamp >= uint256(round.startTime) + uint256(roundCfg.epochDuration)) revert RoundNotOpen();
-        }
-        if (round.voteCount == 0 || round.totalStake == 0) revert RoundNotOpen();
-        if (round.thresholdReachedAt != 0) revert ThresholdReached();
     }
 
     function _commitVote(
@@ -957,7 +934,9 @@ contract RoundVotingEngine is
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
             return;
         }
-        if (RoundRevealLib.refreshExpiredRbtsSeed(roundRbtsSeedEntropy, contentId, roundId)) {
+        if (RoundRevealLib.refreshExpiredRbtsSeed(
+                roundRbtsSeedEntropy, _roundRbtsSeedRefreshCount, contentId, roundId, MAX_RBTS_SEED_REFRESHES
+            )) {
             return;
         }
 
@@ -1167,19 +1146,12 @@ contract RoundVotingEngine is
         return roundReferenceRatingBpsSnapshot[contentId][roundId];
     }
 
-    function previewCommitReferenceRatingBps(uint256 contentId) public view returns (uint16) {
-        uint256 openRoundId = previewCommitRoundId(contentId);
-        unchecked {
-            if (openRoundId == nextRoundId[contentId] + 1) {
-                return registry.getRating(contentId);
-            }
-        }
-
-        return _getRoundReferenceRatingBps(contentId, openRoundId);
-    }
-
-    function previewCommitRoundId(uint256 contentId) public view returns (uint256) {
-        uint256 openRoundId = currentRoundId[contentId];
+    function previewCommitContext(uint256 contentId)
+        external
+        view
+        returns (uint256 openRoundId, uint16 referenceRatingBps)
+    {
+        openRoundId = currentRoundId[contentId];
         if (openRoundId != 0) {
             RoundLib.Round storage round = rounds[contentId][openRoundId];
             RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, openRoundId);
@@ -1188,13 +1160,14 @@ contract RoundVotingEngine is
                     && !_canCancelExpiredRound(contentId, openRoundId, round, roundCfg)
                     && !_canFinalizeRevealFailedRound(contentId, openRoundId, round)
             ) {
-                return openRoundId;
+                return (openRoundId, _getRoundReferenceRatingBps(contentId, openRoundId));
             }
         }
 
         unchecked {
-            return nextRoundId[contentId] + 1;
+            openRoundId = nextRoundId[contentId] + 1;
         }
+        return (openRoundId, registry.getRating(contentId));
     }
 
     function _getCategoryRegistry() internal view returns (ICategoryRegistry) {
@@ -1312,7 +1285,9 @@ contract RoundVotingEngine is
         internal
         returns (uint256 rewardWeight, uint256 forfeitedPool, bytes32 scoreSeed)
     {
-        bytes32 settlementEntropy = RoundRevealLib.finalizeRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
+        bytes32 settlementEntropy = RoundRevealLib.finalizeRbtsSeed(
+            roundRbtsSeedEntropy, _roundRbtsSeedRefreshCount, contentId, roundId, MAX_RBTS_SEED_REFRESHES
+        );
         RoundRevealLib.ScoreRbtsResult memory result = RoundRevealLib.scoreRbtsRewards(
             roundCommitHashes[contentId][roundId],
             commits[contentId][roundId],
@@ -1424,8 +1399,8 @@ contract RoundVotingEngine is
 
     // Note: computeCurrentEpochEnd removed to fit size limit.
     // Use config().epochDuration plus rounds(contentId, roundId).startTime to compute off-chain.
-    // previewCommitRoundId / previewCommitReferenceRatingBps are public above (their internal
-    // wrappers were merged into the externals to fit the EIP-170 size limit).
+    // previewCommitContext is public above (the split preview helpers were merged
+    // to fit the EIP-170 size limit).
 
     function getRoundCommitKey(uint256 contentId, uint256 roundId, uint256 index) external view returns (bytes32) {
         bytes32[] storage commitKeys = roundCommitHashes[contentId][roundId];
@@ -1458,56 +1433,155 @@ contract RoundVotingEngine is
         );
     }
 
-    function roundRbtsScoringClosed(uint256 contentId, uint256 roundId) external view returns (bool) {
-        return roundRbtsSeedEntropy[contentId][roundId] != bytes32(0);
-    }
-
-    function roundDrandConfig(uint256 contentId, uint256 roundId)
+    function advisoryRoundContext(uint256 contentId, uint256 roundId, uint64 targetRound)
         external
         view
-        returns (bytes32 chainHash, uint64 genesisTime, uint64 period)
+        returns (
+            uint16 referenceRatingBps,
+            uint256 targetRevealableAt,
+            bytes32 drandChainHash,
+            uint64 drandGenesisTime,
+            uint64 drandPeriod,
+            bool rbtsScoringClosed,
+            address advisoryVoteRecorder
+        )
     {
         return (
+            _getRoundReferenceRatingBps(contentId, roundId),
+            targetRound == 0 ? 0 : _targetRoundRevealableAt(contentId, roundId, targetRound),
             roundDrandChainHashSnapshot[contentId][roundId],
             roundDrandGenesisTimeSnapshot[contentId][roundId],
-            roundDrandPeriodSnapshot[contentId][roundId]
+            roundDrandPeriodSnapshot[contentId][roundId],
+            roundRbtsSeedEntropy[contentId][roundId] != bytes32(0),
+            _getRoundAdvisoryVoteRecorder(contentId, roundId)
         );
     }
 
-    function targetRoundRevealableTimestamp(uint256 contentId, uint256 roundId, uint64 targetRound)
+    function voteCooldownTimestamps(uint256 contentId, address voter, address identityHolder, bytes32 identityKey)
         external
         view
-        returns (uint256)
+        returns (uint256 voterLastVote, uint256 identityHolderLastVote, uint256 identityLastVote)
     {
-        return _targetRoundRevealableAt(contentId, roundId, targetRound);
+        voterLastVote = lastVoteTimestamp[contentId][voter];
+        if (identityHolder != address(0) && identityHolder != voter) {
+            identityHolderLastVote = lastVoteTimestamp[contentId][identityHolder];
+        }
+        if (identityKey != bytes32(0)) {
+            identityLastVote = lastVoteTimestampByIdentity[contentId][identityKey];
+        }
     }
 
-    function roundReferenceRatingBpsForRound(uint256 contentId, uint256 roundId) external view returns (uint16) {
-        return _getRoundReferenceRatingBps(contentId, roundId);
-    }
-
-    function voterLastVoteTimestamp(uint256 contentId, address voter) external view returns (uint256) {
-        return lastVoteTimestamp[contentId][voter];
-    }
-
-    function identityLastVoteTimestamp(uint256 contentId, bytes32 identityKey) external view returns (uint256) {
-        return lastVoteTimestampByIdentity[contentId][identityKey];
-    }
-
-    function commitRbtsScoringWeight(uint256 contentId, uint256 roundId, bytes32 commitKey)
+    function rbtsRoundState(uint256 contentId, uint256 roundId)
         external
         view
-        returns (uint256)
+        returns (bool scored, bytes32 scoreSeed, uint256 rewardWeight, uint256 rewardClaimants, uint256 voterPool)
     {
-        return commitRbtsWeight[contentId][roundId][commitKey];
+        return (
+            roundRbtsScored[contentId][roundId],
+            roundRbtsScoreSeed[contentId][roundId],
+            roundRbtsRewardWeight[contentId][roundId],
+            roundRbtsRewardClaimants[contentId][roundId],
+            roundVoterPool[contentId][roundId]
+        );
     }
 
-    function activeRoundId(uint256 contentId) external view returns (uint256) {
-        uint256 roundId = currentRoundId[contentId];
-        if (roundId == 0) return 0;
-        RoundLib.Round storage round = rounds[contentId][roundId];
-        if (round.state != RoundLib.RoundState.Open || _isEmptyRoundStaleSinceActivity(contentId, round)) return 0;
-        return roundId;
+    function rbtsCommitState(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        external
+        view
+        returns (
+            uint16 predictedUpBps,
+            uint16 scoreBps,
+            uint256 scoringWeight,
+            uint256 rewardWeight,
+            uint256 stakeReturned
+        )
+    {
+        return (
+            commitPredictedUpBps[contentId][roundId][commitKey],
+            commitRbtsScoreBps[contentId][roundId][commitKey],
+            commitRbtsWeight[contentId][roundId][commitKey],
+            commitRbtsRewardWeight[contentId][roundId][commitKey],
+            commitRbtsStakeReturned[contentId][roundId][commitKey]
+        );
+    }
+
+    function frontendFeeState(uint256 contentId, uint256 roundId, address frontend)
+        external
+        view
+        returns (
+            uint256 totalFrontendPool,
+            uint256 frontendStake,
+            uint256 totalEligibleStake,
+            uint256 totalFrontendClaimants
+        )
+    {
+        return (
+            roundFrontendPool[contentId][roundId],
+            roundPerFrontendStake[contentId][roundId][frontend],
+            roundStakeWithEligibleFrontend[contentId][roundId],
+            roundEligibleFrontendCount[contentId][roundId]
+        );
+    }
+
+    function roundLifecycleState(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            uint256 revealGracePeriod,
+            uint256 lastRevealableAfter,
+            uint256 cleanupRemaining,
+            uint48 clusterPayoutReadyAt
+        )
+    {
+        return (
+            roundRevealGracePeriodSnapshot[contentId][roundId],
+            lastCommitRevealableAfter[contentId][roundId],
+            roundUnrevealedCleanupRemaining[contentId][roundId],
+            roundClusterPayoutReadyAt[contentId][roundId]
+        );
+    }
+
+    function voterCommitKey(uint256 contentId, uint256 roundId, address voter)
+        external
+        view
+        returns (bytes32 commitHash, bytes32 commitKey)
+    {
+        commitHash = voterCommitHash[contentId][roundId][voter];
+        if (commitHash != bytes32(0)) {
+            commitKey = keccak256(abi.encodePacked(voter, commitHash));
+        }
+    }
+
+    function identityCommitState(uint256 contentId, uint256 roundId, bytes32 identityKey, address holder)
+        external
+        view
+        returns (bytes32 identityKeyCommitKey, bytes32 holderKey, uint256 identityStake)
+    {
+        identityKeyCommitKey = identityCommitKey[contentId][roundId][identityKey];
+        holderKey = holderCommitKey[contentId][roundId][holder];
+        identityStake = identityRoundStake[contentId][roundId][identityKey];
+    }
+
+    function commitIdentityState(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        external
+        view
+        returns (
+            bytes32 identityKey,
+            address holder,
+            uint48 committedAt,
+            uint8 credentialMask,
+            uint8 freshCredentialMask,
+            bool frontendEligible
+        )
+    {
+        return (
+            commitIdentityKey[contentId][roundId][commitKey],
+            commitIdentityHolder[contentId][roundId][commitKey],
+            commitCommittedAt[contentId][roundId][commitKey],
+            commitCredentialMask[contentId][roundId][commitKey],
+            commitFreshCredentialMask[contentId][roundId][commitKey],
+            frontendEligibleAtCommit[contentId][roundId][commitKey]
+        );
     }
 
     function isDormancyBlocked(uint256 contentId) external view returns (bool) {
@@ -1549,7 +1623,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint256))) internal epochUnrevealedCount;
 
     // Per-round reveal grace period snapshot for governance consistency across open rounds.
-    mapping(uint256 => mapping(uint256 => uint256)) public roundRevealGracePeriodSnapshot;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundRevealGracePeriodSnapshot;
 
     // Per-round drand config snapshot so reveal timing stays stable across governance updates.
     mapping(uint256 => mapping(uint256 => bytes32)) internal roundDrandChainHashSnapshot;
@@ -1557,16 +1631,16 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint64)) internal roundDrandPeriodSnapshot;
 
     // Latest effective revealable timestamp among all commits in a round, including drand target delay.
-    mapping(uint256 => mapping(uint256 => uint256)) public lastCommitRevealableAfter;
+    mapping(uint256 => mapping(uint256 => uint256)) internal lastCommitRevealableAfter;
 
     // Commit-time frontend eligibility snapshot to prevent retroactive fee eligibility changes.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public frontendEligibleAtCommit;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) internal frontendEligibleAtCommit;
 
     // Frontend registry snapshot per round so historical fee claims do not depend on live registry replacement.
     mapping(uint256 => mapping(uint256 => address)) public roundFrontendRegistrySnapshot;
 
     // Settled rounds with expired unrevealed votes must be cleaned before reward claims.
-    mapping(uint256 => mapping(uint256 => uint256)) public roundUnrevealedCleanupRemaining;
+    mapping(uint256 => mapping(uint256 => uint256)) internal roundUnrevealedCleanupRemaining;
 
     // Cumulative cleanup incentive paid per round.
     mapping(uint256 => mapping(uint256 => uint256)) internal roundCleanupIncentivePaid;
@@ -1577,13 +1651,13 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint64)) internal roundRatingDownEvidence;
 
     // Commit timestamp used for bounty eligibility.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint48))) public commitCommittedAt;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint48))) internal commitCommittedAt;
 
     /// @notice Tracks bundle-observer terminal notifications that reverted on the escrow side.
     /// @dev Set true by `_notifyBundleRoundTerminal` on revert; cleared by
     ///      `replayBundleObserverNotify` (or by a subsequent successful notification).
     ///      Indexed by (contentId, roundId).
-    mapping(uint256 contentId => mapping(uint256 roundId => bool)) public pendingBundleObserverReplay;
+    mapping(uint256 contentId => mapping(uint256 roundId => bool)) internal pendingBundleObserverReplay;
 
     // True if at least one commit in this round originated from an address with an active human
     // credential. `cancelExpiredRound` requires this flag before the min-RBTS-quorum cancel-lockout
@@ -1606,10 +1680,9 @@ contract RoundVotingEngine is
     ///      as freshly initialized. The annotation marks the in-place swap so OZ Upgrades tools
     ///      do not flag the storage layout change.
     /// @custom:oz-renamed-from roundDeferredCleanupBounty
-    mapping(uint256 contentId => mapping(uint256 roundId => uint48)) public roundClusterPayoutReadyAt;
+    mapping(uint256 contentId => mapping(uint256 roundId => uint48)) internal roundClusterPayoutReadyAt;
 
-    /// @dev Deprecated pre-deploy seed-refresh counter slot. Kept reserved so storage-layout
-    ///      snapshots do not shift if this code is compared to earlier local builds.
+    /// @dev Counts expired delayed-seed refreshes before deterministic fallback entropy is used.
     mapping(uint256 contentId => mapping(uint256 roundId => uint8)) internal _roundRbtsSeedRefreshCount;
 
     /// @notice L-Cleanup-1: accumulated LREP that `processUnrevealedVotes` tried to send to
@@ -1619,8 +1692,8 @@ contract RoundVotingEngine is
     uint256 internal _pendingTreasuryForfeitLrep;
 
     // Commit-time credential snapshots for bounty qualification.
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) public commitCredentialMask;
-    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) public commitFreshCredentialMask;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) internal commitCredentialMask;
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) internal commitFreshCredentialMask;
 
     // --- Storage gap reserved for future upgrades ---
     uint256[18] private __gap;

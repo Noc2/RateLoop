@@ -182,7 +182,7 @@ contract SecurityReentrancyTest is SecurityHarnessBase {
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
             contentId, cachedRoundContext1, targetRound, drandChainHash, commitHash, ciphertext, STAKE, address(0)
         );
@@ -428,7 +428,7 @@ contract SecuritySettlementTimingTest is SecurityHarnessBase {
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext2 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
             contentId, cachedRoundContext2, targetRound, drandChainHash, commitHash, ciphertext, STAKE, address(0)
         );

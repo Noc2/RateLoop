@@ -43,6 +43,7 @@ abstract contract ContentSubmissionTestBase {
     uint256 internal constant DEFAULT_SUBMISSION_REWARD_EXPIRES_AT = DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY;
     bytes32 internal constant DEFAULT_QUESTION_METADATA_HASH = keccak256("rateloop.generic.question.metadata.v1");
     bytes32 internal constant DEFAULT_RESULT_SPEC_HASH = keccak256("rateloop.generic.result.spec.v1");
+    bytes32 internal constant QUESTION_CONTEXT_DOMAIN = keccak256("rateloop-question-context-v4");
     bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v6");
     bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v4");
     bytes32 internal constant QUESTION_BUNDLE_DOMAIN = keccak256("rateloop-question-bundle-v4");
@@ -194,17 +195,16 @@ abstract contract ContentSubmissionTestBase {
         if (hasActivePrank) {
             HEVM.startPrank(msgSender, txOrigin);
         }
-        (, submissionKey) = reservation.registry
-            .previewQuestionSubmissionKey(
-                reservation.contextUrl,
-                reservation.imageUrls,
-                reservation.videoUrl,
-                reservation.title,
-                reservation.description,
-                reservation.tags,
-                reservation.categoryId,
-                reservation.details
-            );
+        submissionKey = _questionSubmissionKey(
+            reservation.contextUrl,
+            reservation.imageUrls,
+            reservation.videoUrl,
+            reservation.title,
+            reservation.description,
+            reservation.tags,
+            reservation.categoryId,
+            reservation.details
+        );
         uint256 rewardAmount = _defaultSubmissionRewardAmount(reservation.registry);
         bytes32 revealCommitment = _questionReservationRevealCommitment(reservation, submissionKey, rewardAmount);
         IERC20(reservation.registry.lrepToken()).approve(rewardEscrow, rewardAmount);
@@ -395,6 +395,30 @@ abstract contract ContentSubmissionTestBase {
 
     function _submissionMediaHash(string[] memory imageUrls, string memory videoUrl) internal pure returns (bytes32) {
         return keccak256(abi.encode(imageUrls, videoUrl));
+    }
+
+    function _questionSubmissionKey(
+        string memory contextUrl,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        string memory title,
+        string memory description,
+        string memory tags,
+        uint256 resolvedCategoryId,
+        ContentRegistry.SubmissionDetails memory details
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                QUESTION_CONTEXT_DOMAIN,
+                resolvedCategoryId,
+                _submissionMediaHash(imageUrls, videoUrl),
+                keccak256(abi.encode(details.detailsUrl, details.detailsHash)),
+                contextUrl,
+                title,
+                description,
+                tags
+            )
+        );
     }
 
     function _submitQuestionImageWithReservation(
@@ -944,7 +968,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         if (currentRoundId != 0 && currentRoundId != artifacts.roundId) {
             artifacts.roundId = currentRoundId;
             uint16 roundReferenceRatingBps =
-                request.engine.roundReferenceRatingBpsForRound(request.contentId, currentRoundId);
+                _roundReferenceRatingBpsForRound(request.engine, request.contentId, currentRoundId);
             if (roundReferenceRatingBps != 0) {
                 artifacts.roundReferenceRatingBps = roundReferenceRatingBps;
             }
@@ -1004,8 +1028,8 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     }
 
     function _commitEpochEnd(RoundVotingEngine engine, uint256 contentId) internal view returns (uint256) {
-        uint256 roundId = engine.previewCommitRoundId(contentId);
-        (uint48 startTime,,,,,,,,,,,,,) = engine.rounds(contentId, roundId);
+        uint256 roundId = _previewCommitRoundId(engine, contentId);
+        (uint48 startTime,,,,,,) = engine.roundCore(contentId, roundId);
         uint256 epochDuration = _tlockEpochDuration();
         if (startTime == 0) {
             return block.timestamp + epochDuration;
@@ -1193,10 +1217,26 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     function _previewTestCommitRoundId(address engine, uint256 contentId) internal view returns (uint256) {
         if (engine != address(0)) {
-            return RoundVotingEngine(engine).previewCommitRoundId(contentId);
+            return _previewCommitRoundId(RoundVotingEngine(engine), contentId);
         }
 
         return _defaultTestCommitRoundId(contentId);
+    }
+
+    function _previewCommitRoundId(RoundVotingEngine engine, uint256 contentId)
+        internal
+        view
+        returns (uint256 roundId)
+    {
+        (roundId,) = engine.previewCommitContext(contentId);
+    }
+
+    function _previewCommitReferenceRatingBps(RoundVotingEngine engine, uint256 contentId)
+        internal
+        view
+        returns (uint16 referenceRatingBps)
+    {
+        (, referenceRatingBps) = engine.previewCommitContext(contentId);
     }
 
     function _defaultTestCommitRoundId(uint256) internal view virtual returns (uint256) {
@@ -1463,5 +1503,238 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     /// @dev Build commit key: keccak256(abi.encodePacked(voter, commitHash)).
     function _commitKey(address voter, bytes32 hash) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(voter, hash));
+    }
+
+    function _roundRbtsScored(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (bool scored)
+    {
+        (scored,,,,) = engine.rbtsRoundState(contentId, roundId);
+    }
+
+    function _roundRbtsScoringClosed(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (bool closed)
+    {
+        (,,,,, closed,) = engine.advisoryRoundContext(contentId, roundId, 0);
+    }
+
+    function _roundReferenceRatingBpsForRound(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint16 referenceRatingBps)
+    {
+        (referenceRatingBps,,,,,,) = engine.advisoryRoundContext(contentId, roundId, 0);
+    }
+
+    function _targetRoundRevealableTimestamp(
+        RoundVotingEngine engine,
+        uint256 contentId,
+        uint256 roundId,
+        uint64 targetRound
+    ) internal view returns (uint256 targetRevealableAt) {
+        (, targetRevealableAt,,,,,) = engine.advisoryRoundContext(contentId, roundId, targetRound);
+    }
+
+    function _roundDrandConfig(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (bytes32 chainHash, uint64 genesisTime, uint64 period)
+    {
+        (,, chainHash, genesisTime, period,,) = engine.advisoryRoundContext(contentId, roundId, 0);
+    }
+
+    function _roundRbtsScoreSeed(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (bytes32 scoreSeed)
+    {
+        (, scoreSeed,,,) = engine.rbtsRoundState(contentId, roundId);
+    }
+
+    function _roundRbtsRewardWeight(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256 rewardWeight)
+    {
+        (,, rewardWeight,,) = engine.rbtsRoundState(contentId, roundId);
+    }
+
+    function _roundRbtsRewardClaimants(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256 rewardClaimants)
+    {
+        (,,, rewardClaimants,) = engine.rbtsRoundState(contentId, roundId);
+    }
+
+    function _roundVoterPool(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256 voterPool)
+    {
+        (,,,, voterPool) = engine.rbtsRoundState(contentId, roundId);
+    }
+
+    function _lastCommitRevealableAfter(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256 lastRevealableAfter)
+    {
+        (, lastRevealableAfter,,) = engine.roundLifecycleState(contentId, roundId);
+    }
+
+    function _roundUnrevealedCleanupRemaining(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256 cleanupRemaining)
+    {
+        (,, cleanupRemaining,) = engine.roundLifecycleState(contentId, roundId);
+    }
+
+    function _roundClusterPayoutReadyAt(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint48 readyAt)
+    {
+        (,,, readyAt) = engine.roundLifecycleState(contentId, roundId);
+    }
+
+    function _commitPredictedUpBps(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (uint16 predictedUpBps)
+    {
+        (predictedUpBps,,,,) = engine.rbtsCommitState(contentId, roundId, commitKey);
+    }
+
+    function _commitRbtsScoreBps(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (uint16 scoreBps)
+    {
+        (, scoreBps,,,) = engine.rbtsCommitState(contentId, roundId, commitKey);
+    }
+
+    function _commitRbtsScoringWeight(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (uint256 scoringWeight)
+    {
+        (,, scoringWeight,,) = engine.rbtsCommitState(contentId, roundId, commitKey);
+    }
+
+    function _commitRbtsRewardWeight(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (uint256 rewardWeight)
+    {
+        (,,, rewardWeight,) = engine.rbtsCommitState(contentId, roundId, commitKey);
+    }
+
+    function _commitRbtsStakeReturned(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (uint256 stakeReturned)
+    {
+        (,,,, stakeReturned) = engine.rbtsCommitState(contentId, roundId, commitKey);
+    }
+
+    function _roundFrontendPool(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256 totalFrontendPool)
+    {
+        (totalFrontendPool,,,) = engine.frontendFeeState(contentId, roundId, address(0));
+    }
+
+    function _roundStakeWithEligibleFrontend(RoundVotingEngine engine, uint256 contentId, uint256 roundId)
+        internal
+        view
+        returns (uint256 totalEligibleStake)
+    {
+        (,, totalEligibleStake,) = engine.frontendFeeState(contentId, roundId, address(0));
+    }
+
+    function _voterCommitHash(RoundVotingEngine engine, uint256 contentId, uint256 roundId, address voter)
+        internal
+        view
+        returns (bytes32 commitHash)
+    {
+        (commitHash,) = engine.voterCommitKey(contentId, roundId, voter);
+    }
+
+    function _identityCommitKey(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 identityKey)
+        internal
+        view
+        returns (bytes32 commitKey)
+    {
+        (commitKey,,) = engine.identityCommitState(contentId, roundId, identityKey, address(0));
+    }
+
+    function _holderCommitKey(RoundVotingEngine engine, uint256 contentId, uint256 roundId, address holder)
+        internal
+        view
+        returns (bytes32 commitKey)
+    {
+        (, commitKey,) = engine.identityCommitState(contentId, roundId, bytes32(0), holder);
+    }
+
+    function _identityRoundStake(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 identityKey)
+        internal
+        view
+        returns (uint256 stake)
+    {
+        (,, stake) = engine.identityCommitState(contentId, roundId, identityKey, address(0));
+    }
+
+    function _commitIdentityKey(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (bytes32 identityKey)
+    {
+        (identityKey,,,,,) = engine.commitIdentityState(contentId, roundId, commitKey);
+    }
+
+    function _commitIdentityHolder(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (address holder)
+    {
+        (, holder,,,,) = engine.commitIdentityState(contentId, roundId, commitKey);
+    }
+
+    function _commitCommittedAt(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (uint48 committedAt)
+    {
+        (,, committedAt,,,) = engine.commitIdentityState(contentId, roundId, commitKey);
+    }
+
+    function _commitCredentialMask(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (uint8 credentialMask)
+    {
+        (,,, credentialMask,,) = engine.commitIdentityState(contentId, roundId, commitKey);
+    }
+
+    function _commitFreshCredentialMask(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (uint8 freshCredentialMask)
+    {
+        (,,,, freshCredentialMask,) = engine.commitIdentityState(contentId, roundId, commitKey);
+    }
+
+    function _commitFrontendEligible(RoundVotingEngine engine, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (bool frontendEligible)
+    {
+        (,,,,, frontendEligible) = engine.commitIdentityState(contentId, roundId, commitKey);
     }
 }

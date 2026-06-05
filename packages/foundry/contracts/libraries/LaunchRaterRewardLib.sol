@@ -59,7 +59,7 @@ library LaunchRaterRewardLib {
         bytes32 commitKey,
         address fallbackAccount
     ) internal view returns (address) {
-        address holder = votingEngine.commitIdentityHolder(contentId, roundId, commitKey);
+        (, address holder,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
         return holder == address(0) ? fallbackAccount : holder;
     }
 

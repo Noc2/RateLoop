@@ -183,7 +183,7 @@ contract AdversarialTests is VotingTestBase {
             _commitHash(isUp, salt, voter, contentId, referenceRatingBps, targetRound, drandChainHash, ciphertext);
         vm.startPrank(voter);
         lrepToken.approve(address(engine), stake);
-        uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(contentId), referenceRatingBps);
+        uint256 cachedRoundContext1 = _roundContext(_previewCommitRoundId(engine, contentId), referenceRatingBps);
         engine.commitVote(
             contentId, cachedRoundContext1, targetRound, drandChainHash, commitHash, ciphertext, stake, address(0)
         );
@@ -254,7 +254,7 @@ contract AdversarialTests is VotingTestBase {
         assertEq(uint8(round.state), uint8(RoundLib.RoundState.Settled));
         assertTrue(round.upWins);
 
-        uint256 voterPool = engine.roundVoterPool(contentId, roundId);
+        uint256 voterPool = _roundVoterPool(engine, contentId, roundId);
         uint256 totalStake = round.upPool + round.downPool;
 
         // Claim every revealed voter. Under RBTS, score-eligible losing-side voters
@@ -293,11 +293,13 @@ contract AdversarialTests is VotingTestBase {
         cks[2] = ck3;
         _settleRound(contentId, roundId, cks);
 
-        uint256 expectedClaim = engine.commitRbtsStakeReturned(contentId, roundId, ck2);
-        uint256 scoreWeight = engine.commitRbtsRewardWeight(contentId, roundId, ck2);
+        uint256 expectedClaim = _commitRbtsStakeReturned(engine, contentId, roundId, ck2);
+        uint256 scoreWeight = _commitRbtsRewardWeight(engine, contentId, roundId, ck2);
         if (scoreWeight > 0) {
             expectedClaim += RewardMath.calculateVoterReward(
-                scoreWeight, engine.roundRbtsRewardWeight(contentId, roundId), engine.roundVoterPool(contentId, roundId)
+                scoreWeight,
+                _roundRbtsRewardWeight(engine, contentId, roundId),
+                _roundVoterPool(engine, contentId, roundId)
             );
         }
 
@@ -309,7 +311,7 @@ contract AdversarialTests is VotingTestBase {
         assertEq(balAfter - balBefore, expectedClaim, "Claim should match RBTS claim value");
         assertLe(
             balAfter - balBefore,
-            5e6 + engine.roundVoterPool(contentId, roundId),
+            5e6 + _roundVoterPool(engine, contentId, roundId),
             "Losing leg claim stays inside stake plus reward pool"
         );
     }
@@ -626,8 +628,8 @@ contract AdversarialTests is VotingTestBase {
         _settleRound(contentId, roundId, cks);
 
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
-        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
-            assertEq(engine.roundVoterPool(contentId, roundId), forfeitedPool);
+        if (_roundRbtsRewardWeight(engine, contentId, roundId) > 0) {
+            assertEq(_roundVoterPool(engine, contentId, roundId), forfeitedPool);
         }
     }
 
@@ -709,7 +711,7 @@ contract AdversarialTests is VotingTestBase {
 
         vm.startPrank(voter1);
         token2.approve(address(eng2), STAKE);
-        uint256 cachedRoundContext2 = _roundContext(eng2.previewCommitRoundId(1), _defaultRatingReferenceBps());
+        uint256 cachedRoundContext2 = _roundContext(_previewCommitRoundId(eng2, 1), _defaultRatingReferenceBps());
         eng2.commitVote(1, cachedRoundContext2, targetRound1, drandChainHash, ch1, ct1, STAKE, address(0));
         vm.stopPrank();
 
@@ -721,7 +723,7 @@ contract AdversarialTests is VotingTestBase {
 
         vm.startPrank(voter2);
         token2.approve(address(eng2), STAKE);
-        uint256 cachedRoundContext3 = _roundContext(eng2.previewCommitRoundId(1), _defaultRatingReferenceBps());
+        uint256 cachedRoundContext3 = _roundContext(_previewCommitRoundId(eng2, 1), _defaultRatingReferenceBps());
         eng2.commitVote(1, cachedRoundContext3, targetRound2, drandChainHash, ch2, ct2, STAKE, address(0));
         vm.stopPrank();
 
@@ -733,7 +735,7 @@ contract AdversarialTests is VotingTestBase {
 
         vm.startPrank(voter3);
         token2.approve(address(eng2), STAKE);
-        uint256 cachedRoundContext4 = _roundContext(eng2.previewCommitRoundId(1), _defaultRatingReferenceBps());
+        uint256 cachedRoundContext4 = _roundContext(_previewCommitRoundId(eng2, 1), _defaultRatingReferenceBps());
         eng2.commitVote(1, cachedRoundContext4, targetRound3, drandChainHash, ch3, ct3, STAKE, address(0));
         vm.stopPrank();
 
@@ -755,8 +757,8 @@ contract AdversarialTests is VotingTestBase {
         // the voter pool, with the frontend share falling back to voters when no eligible
         // frontend is attached.
         uint256 forfeitedPool = _roundRbtsForfeitedPool(eng2, 1, 1);
-        uint256 voterPool = eng2.roundVoterPool(1, 1);
-        if (eng2.roundRbtsRewardWeight(1, 1) > 0) {
+        uint256 voterPool = _roundVoterPool(eng2, 1, 1);
+        if (_roundRbtsRewardWeight(eng2, 1, 1) > 0) {
             assertEq(voterPool, forfeitedPool, "Voter pool should come only from RBTS forfeitures");
         }
     }
@@ -863,7 +865,7 @@ contract AdversarialTests is VotingTestBase {
         vm.startPrank(holder);
         lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext4 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         engine.commitVote(
             contentId,
             cachedRoundContext4,
@@ -889,7 +891,7 @@ contract AdversarialTests is VotingTestBase {
         vm.startPrank(delegate);
         lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext5 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
         engine.commitVote(
             contentId,
@@ -956,7 +958,7 @@ contract AdversarialTests is VotingTestBase {
         );
         vm.startPrank(delegate);
         lrepToken.approve(address(engine), STAKE);
-        uint256 cachedRoundContext6 = _roundContext(engine.previewCommitRoundId(contentId), referenceRatingBps2);
+        uint256 cachedRoundContext6 = _roundContext(_previewCommitRoundId(engine, contentId), referenceRatingBps2);
         vm.expectRevert(RoundVotingEngine.CooldownActive.selector);
         engine.commitVote(
             contentId,
@@ -1068,7 +1070,7 @@ contract AdversarialTests is VotingTestBase {
         vm.startPrank(voter1);
         lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext7 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         engine.commitVote(
             contentId,
             cachedRoundContext7,
@@ -1101,7 +1103,7 @@ contract AdversarialTests is VotingTestBase {
         vm.startPrank(voter1);
         lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext8 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         engine.commitVote(
             contentId,
             cachedRoundContext8,
@@ -1137,7 +1139,7 @@ contract AdversarialTests is VotingTestBase {
         vm.startPrank(voter1);
         lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext9 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         engine.commitVote(
             contentId,
             cachedRoundContext9,
@@ -1176,7 +1178,7 @@ contract AdversarialTests is VotingTestBase {
         vm.startPrank(voter1);
         lrepToken.approve(address(engine), STAKE);
         uint256 cachedRoundContext10 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.InvalidCiphertext.selector);
         engine.commitVote(
             contentId,
@@ -1255,7 +1257,7 @@ contract AdversarialTests is VotingTestBase {
         vm.startPrank(voter1);
         lrepToken.approve(address(engine), 0);
         uint256 cachedRoundContext12 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
         engine.commitVote(
             contentId,
@@ -1282,7 +1284,7 @@ contract AdversarialTests is VotingTestBase {
         vm.startPrank(voter1);
         lrepToken.approve(address(engine), tooMuch);
         uint256 cachedRoundContext13 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         vm.expectRevert(RoundVotingEngine.InvalidStake.selector);
         engine.commitVote(
             contentId,

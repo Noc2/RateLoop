@@ -28,13 +28,13 @@ library FrontendFeeDustLib {
         if (sortedFrontends.length == 0) revert InvalidFinalizationInput();
 
         requireSettledStaleRound(votingEngine, contentId, roundId, staleDelay);
-        if (votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) > 0) {
+        (,, uint256 cleanupRemaining,) = votingEngine.roundLifecycleState(contentId, roundId);
+        if (cleanupRemaining > 0) {
             revert UnrevealedCleanupPending();
         }
 
-        uint256 totalFrontendPool = votingEngine.roundFrontendPool(contentId, roundId);
-        uint256 totalEligibleStake = votingEngine.roundStakeWithEligibleFrontend(contentId, roundId);
-        uint256 totalFrontendClaimants = votingEngine.roundEligibleFrontendCount(contentId, roundId);
+        (uint256 totalFrontendPool,, uint256 totalEligibleStake, uint256 totalFrontendClaimants) =
+            votingEngine.frontendFeeState(contentId, roundId, address(0));
         if (totalFrontendPool == 0 || totalEligibleStake == 0 || totalFrontendClaimants == 0) revert NoRewardDust();
 
         processedCount = roundFrontendFeeDustProcessedCount[contentId][roundId];
@@ -46,7 +46,7 @@ library FrontendFeeDustLib {
             if (frontend == address(0) || frontend <= previous) revert InvalidFinalizationInput();
             previous = frontend;
 
-            uint256 frontendStake = votingEngine.roundPerFrontendStake(contentId, roundId, frontend);
+            (, uint256 frontendStake,,) = votingEngine.frontendFeeState(contentId, roundId, frontend);
             if (frontendStake == 0) revert InvalidFinalizationInput();
             expectedTotal += (totalFrontendPool * frontendStake) / totalEligibleStake;
         }
@@ -65,34 +65,7 @@ library FrontendFeeDustLib {
         uint256 roundId,
         uint256 staleDelay
     ) internal view {
-        (
-            uint48 startTime,
-            RoundLib.RoundState state,
-            uint16 voteCount,
-            uint16 revealedCount,
-            uint64 totalStake,
-            uint64 upPool,
-            uint64 downPool,
-            uint16 upCount,
-            uint16 downCount,
-            bool upWins,
-            uint48 settledAt,
-            uint48 thresholdReachedAt,
-            uint64 weightedUpPool,
-            uint64 weightedDownPool
-        ) = votingEngine.rounds(contentId, roundId);
-        startTime;
-        voteCount;
-        revealedCount;
-        totalStake;
-        upPool;
-        downPool;
-        upCount;
-        downCount;
-        upWins;
-        thresholdReachedAt;
-        weightedUpPool;
-        weightedDownPool;
+        (, RoundLib.RoundState state,,,,, uint48 settledAt) = votingEngine.roundCore(contentId, roundId);
 
         if (state != RoundLib.RoundState.Settled) revert RoundNotSettled();
         if (settledAt == 0 || block.timestamp < uint256(settledAt) + staleDelay) revert RewardFinalizationTooEarly();

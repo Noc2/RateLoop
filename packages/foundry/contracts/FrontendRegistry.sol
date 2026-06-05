@@ -36,8 +36,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     uint256 public constant MAX_FEE_CREDIT = 50_000e6;
     /// @notice Maximum bytes allowed in a slashing reason.
     uint256 public constant MAX_SLASH_REASON_LENGTH = 280;
-    bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER =
-        keccak256("rateloop.round-reward-distributor.v1");
+    bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
 
     /// @notice Fixed LREP stake required for frontend registration (1,000 LREP with 6 decimals)
     uint256 public constant STAKE_AMOUNT = 1000e6;
@@ -604,7 +603,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
             revert("Invalid fee creditor");
         }
         if (config == address(0)) revert("Invalid fee creditor");
-        try IFeeCreditorProtocolConfig(config).isRewardDistributorForEngine(creditor, engine) returns (bool authorized) {
+        try IFeeCreditorProtocolConfig(config).isRewardDistributorForEngine(creditor, engine) returns (
+            bool authorized
+        ) {
             if (!authorized) revert("Invalid fee creditor");
         } catch {
             revert("Invalid fee creditor");

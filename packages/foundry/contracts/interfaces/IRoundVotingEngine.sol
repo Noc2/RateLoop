@@ -14,15 +14,10 @@ interface IRoundVotingEngine {
     /// @return Latest current-round ID, or 0 if no round has been opened.
     function currentRoundId(uint256 contentId) external view returns (uint256);
 
-    /// @notice Get the active, non-terminal round ID for a content item.
-    /// @param contentId The content ID to query.
-    /// @return Active round ID, or 0 if there is no usable open round.
-    function activeRoundId(uint256 contentId) external view returns (uint256);
-
     /// @notice Whether the current round should block dormancy for a content item.
     function isDormancyBlocked(uint256 contentId) external view returns (bool);
 
-    function rounds(uint256 contentId, uint256 roundId)
+    function roundCore(uint256 contentId, uint256 roundId)
         external
         view
         returns (
@@ -31,15 +26,8 @@ interface IRoundVotingEngine {
             uint16 voteCount,
             uint16 revealedCount,
             uint64 totalStake,
-            uint64 upPool,
-            uint64 downPool,
-            uint16 upCount,
-            uint16 downCount,
-            bool upWins,
-            uint48 settledAt,
             uint48 thresholdReachedAt,
-            uint64 weightedUpPool,
-            uint64 weightedDownPool
+            uint48 settledAt
         );
 
     /// @notice Transfer LREP reward tokens to a recipient. Only callable by RewardDistributor.

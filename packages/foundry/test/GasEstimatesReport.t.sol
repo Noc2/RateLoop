@@ -158,7 +158,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
 
         string memory imageUrl = _submissionImageUrl("gas-report");
         string[] memory imageUrls = _singleImageUrls(imageUrl);
-        (, bytes32 submissionKey) = registry.previewQuestionSubmissionKey(
+        bytes32 submissionKey = _questionSubmissionKey(
             "https://example.com/context", imageUrls, "", "test goal", "test goal", "test", 1, _emptySubmissionDetails()
         );
         bytes32 salt = keccak256(
@@ -195,7 +195,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
     function testGasEstimate_voteApprovePlusCommit_logs() public {
         vm.pauseGasMetering();
         uint256 contentId = _submitContent();
-        uint16 roundReferenceRatingBps = votingEngine.previewCommitReferenceRatingBps(contentId);
+        uint16 roundReferenceRatingBps = _previewCommitReferenceRatingBps(votingEngine, contentId);
         bytes32 salt = keccak256(abi.encodePacked(voter1, contentId, true, uint256(1000)));
         bytes32 commitHash = _commitHash(true, salt, contentId);
         bytes memory ciphertext = _testCiphertext(true, salt, contentId);
@@ -208,7 +208,7 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         bytes memory callData = abi.encodeWithSelector(
             bytes4(keccak256("commitVote(uint256,uint256,uint64,bytes32,bytes32,bytes,uint256,address)")),
             contentId,
-            _roundContext(votingEngine.previewCommitRoundId(contentId), roundReferenceRatingBps),
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), roundReferenceRatingBps),
             _tlockCommitTargetRound(),
             _tlockDrandChainHash(),
             commitHash,

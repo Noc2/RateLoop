@@ -628,7 +628,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         uint256 requestedDeadline = block.timestamp + 1;
         uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
-        (,,,,,,,,,, uint48 settledAt,,,) = votingEngine.rounds(contentId, roundId);
+        (,,,,,, uint48 settledAt) = votingEngine.roundCore(contentId, roundId);
 
         assertGt(block.timestamp, requestedDeadline);
         assertEq(
@@ -667,7 +667,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         uint256 requestedDeadline = block.timestamp + 7 days;
         uint256 poolId = _createFeedbackBonusPoolWithDeadline(contentId, requestedDeadline);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
-        (,,,,,,,,,, uint48 settledAt,,,) = votingEngine.rounds(contentId, roundId);
+        (,,,,,, uint48 settledAt) = votingEngine.roundCore(contentId, roundId);
         uint256 minimumDecisionDeadline = uint256(settledAt) + feedbackBonusEscrow.MIN_FEEDBACK_AWARD_DECISION_SECONDS();
 
         assertGt(requestedDeadline, minimumDecisionDeadline);
@@ -979,12 +979,12 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         bytes32 voter1FeedbackHash = _feedbackHash(contentId, roundId, voter1);
         bytes32 voter4FeedbackHash = _feedbackHash(contentId, roundId, voter4);
 
-        assertEq(votingEngine.commitRbtsScoringWeight(contentId, roundId, commitKeys[3]), 0);
+        assertEq(_commitRbtsScoringWeight(votingEngine, contentId, roundId, commitKeys[3]), 0);
         vm.prank(funder);
         vm.expectRevert("Vote not revealed");
         feedbackBonusEscrow.awardFeedbackBonus(poolId, voter4, voter4FeedbackHash, 10e6);
 
-        assertGt(votingEngine.commitRbtsScoringWeight(contentId, roundId, commitKeys[0]), 0);
+        assertGt(_commitRbtsScoringWeight(votingEngine, contentId, roundId, commitKeys[0]), 0);
         vm.prank(funder);
         uint256 recipientAmount = feedbackBonusEscrow.awardFeedbackBonus(poolId, voter1, voter1FeedbackHash, 10e6);
         assertEq(recipientAmount, 10e6);
@@ -997,7 +997,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         vm.prank(owner);
         raterRegistry.revokeHumanCredential(voter1);
         uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
-        bytes32 commitHash = votingEngine.voterCommitHash(contentId, roundId, voter1);
+        bytes32 commitHash = _voterCommitHash(votingEngine, contentId, roundId, voter1);
         bytes32 commitKey = _commitKey(voter1, commitHash);
         (address committedVoter,,,, bool revealed,,) = votingEngine.commitCore(contentId, roundId, commitKey);
 
@@ -1073,7 +1073,7 @@ contract FeedbackBonusEscrowTest is VotingTestBase {
         voters[1] = voter2;
         voters[2] = voter3;
         uint256 roundId = _settleRoundWith(voters, contentId, _directions(true, true, false));
-        assertTrue(votingEngine.holderCommitKey(contentId, roundId, voter1) != bytes32(0));
+        assertTrue(_holderCommitKey(votingEngine, contentId, roundId, voter1) != bytes32(0));
 
         bytes32 oldAnchor = bytes32(uint256(uint160(voter1)));
         vm.startPrank(owner);

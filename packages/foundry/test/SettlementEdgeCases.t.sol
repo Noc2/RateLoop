@@ -155,7 +155,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _openRoundForTest(engine, contentId, voter);
         vm.prank(voter);
         lrepToken.approve(address(engine), stakeAmt);
-        uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(contentId), referenceRatingBps);
+        uint256 cachedRoundContext1 = _roundContext(_previewCommitRoundId(engine, contentId), referenceRatingBps);
         vm.prank(voter);
         engine.commitVote(
             contentId,
@@ -179,7 +179,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         view
         returns (bytes32)
     {
-        return _commitKey(voter, votingEngine.voterCommitHash(contentId, roundId, voter));
+        return _commitKey(voter, _voterCommitHash(votingEngine, contentId, roundId, voter));
     }
 
     function _expectedRbtsStakeReturn(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, address voter)
@@ -188,7 +188,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         returns (uint256)
     {
         bytes32 commitKey = _commitKeyForVoter(votingEngine, contentId, roundId, voter);
-        return votingEngine.commitRbtsStakeReturned(contentId, roundId, commitKey);
+        return _commitRbtsStakeReturned(votingEngine, contentId, roundId, commitKey);
     }
 
     function _expectedRbtsVoterReward(RoundVotingEngine votingEngine, uint256 contentId, uint256 roundId, address voter)
@@ -197,11 +197,11 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         returns (uint256)
     {
         bytes32 commitKey = _commitKeyForVoter(votingEngine, contentId, roundId, voter);
-        uint256 rewardWeight = votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+        uint256 rewardWeight = _commitRbtsRewardWeight(votingEngine, contentId, roundId, commitKey);
         return RewardMath.calculateVoterReward(
             rewardWeight,
-            votingEngine.roundRbtsRewardWeight(contentId, roundId),
-            votingEngine.roundVoterPool(contentId, roundId)
+            _roundRbtsRewardWeight(votingEngine, contentId, roundId),
+            _roundVoterPool(votingEngine, contentId, roundId)
         );
     }
 
@@ -240,7 +240,7 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _openRoundForTest(votingEngine, contentId, voter);
         vm.prank(voter);
         token.approve(address(votingEngine), stakeAmt);
-        uint256 cachedRoundContext2 = _roundContext(votingEngine.previewCommitRoundId(contentId), referenceRatingBps);
+        uint256 cachedRoundContext2 = _roundContext(_previewCommitRoundId(votingEngine, contentId), referenceRatingBps);
         vm.prank(voter);
         votingEngine.commitVote(
             contentId, cachedRoundContext2, targetRound, drandChainHash, commitHash, ciphertext, stakeAmt, address(0)
@@ -592,10 +592,10 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 treasuryAfter = lrepToken.balanceOf(treasury);
-        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
+        if (_roundRbtsRewardWeight(engine, contentId, roundId) > 0) {
             uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
             (uint256 voterShare, uint256 platformShare, uint256 treasuryShare) = RewardMath.splitPool(forfeitedPool);
-            assertEq(engine.roundVoterPool(contentId, roundId), voterShare + platformShare);
+            assertEq(_roundVoterPool(engine, contentId, roundId), voterShare + platformShare);
             assertEq(treasuryAfter - treasuryBefore, treasuryShare);
         }
     }
@@ -637,8 +637,8 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
-        uint256 voterPool = engine.roundVoterPool(contentId, roundId);
-        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
+        uint256 voterPool = _roundVoterPool(engine, contentId, roundId);
+        if (_roundRbtsRewardWeight(engine, contentId, roundId) > 0) {
             assertEq(voterPool, forfeitedPool);
         }
     }
@@ -649,8 +649,8 @@ contract SettlementEdgeCasesTest is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
-        uint256 voterPool = engine.roundVoterPool(contentId, roundId);
-        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
+        uint256 voterPool = _roundVoterPool(engine, contentId, roundId);
+        if (_roundRbtsRewardWeight(engine, contentId, roundId) > 0) {
             assertEq(voterPool, forfeitedPool);
         }
     }
@@ -673,8 +673,8 @@ contract SettlementEdgeCasesTest is VotingTestBase {
 
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine2, contentId, roundId);
 
-        if (engine2.roundRbtsRewardWeight(contentId, roundId) > 0) {
-            assertEq(engine2.roundVoterPool(contentId, roundId), forfeitedPool);
+        if (_roundRbtsRewardWeight(engine2, contentId, roundId) > 0) {
+            assertEq(_roundVoterPool(engine2, contentId, roundId), forfeitedPool);
         }
     }
 

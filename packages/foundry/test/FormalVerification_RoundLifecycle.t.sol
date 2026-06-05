@@ -154,7 +154,7 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         _openRoundForTest(engine, cid, voter);
         vm.prank(voter);
         lrepToken.approve(address(engine), stake);
-        uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(cid), c.referenceRatingBps);
+        uint256 cachedRoundContext1 = _roundContext(_previewCommitRoundId(engine, cid), c.referenceRatingBps);
         vm.prank(voter);
         engine.commitVote(
             cid, cachedRoundContext1, c.targetRound, c.drandChainHash, c.commitHash, c.ciphertext, stake, address(0)

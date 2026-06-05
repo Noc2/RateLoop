@@ -2704,8 +2704,8 @@ contract MockLaunchOracleFrontendRegistry {
 /// @dev Test source for M-Oracle-1 readiness checks. Always returns 1 (epoch-second 1) so that
 ///      any positive block.timestamp counts as ready.
 contract MockAlwaysReadyClusterSource {
-    function roundClusterPayoutReadyAt(uint256, uint256) external pure returns (uint48) {
-        return 1;
+    function roundLifecycleState(uint256, uint256) external pure returns (uint256, uint256, uint256, uint48) {
+        return (0, 0, 0, 1);
     }
 
     function roundCore(uint256, uint256) external pure returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48) {
@@ -2722,8 +2722,8 @@ contract MockAlwaysReadyClusterSource {
 }
 
 contract MockWeakClusterSource {
-    function roundClusterPayoutReadyAt(uint256, uint256) external pure returns (uint48) {
-        return 1;
+    function roundLifecycleState(uint256, uint256) external pure returns (uint256, uint256, uint256, uint48) {
+        return (0, 0, 0, 1);
     }
 }
 
@@ -2737,8 +2737,8 @@ contract MockGraceClusterSource {
         gracePeriod = _gracePeriod;
     }
 
-    function roundClusterPayoutReadyAt(uint256, uint256) external view returns (uint48) {
-        return settledAt;
+    function roundLifecycleState(uint256, uint256) external view returns (uint256, uint256, uint256, uint48) {
+        return (0, 0, 0, settledAt);
     }
 
     function roundCore(uint256, uint256) external view returns (uint48, uint8, uint16, uint16, uint64, uint48, uint48) {

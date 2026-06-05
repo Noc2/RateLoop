@@ -136,7 +136,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         _openRoundForTest(engine, cid, voter);
         vm.prank(voter);
         lrepToken.approve(address(engine), stake);
-        uint256 cachedRoundContext1 = _roundContext(engine.previewCommitRoundId(cid), _defaultRatingReferenceBps());
+        uint256 cachedRoundContext1 = _roundContext(_previewCommitRoundId(engine, cid), _defaultRatingReferenceBps());
         vm.prank(voter);
         engine.commitVote(
             cid, cachedRoundContext1, targetRound, drandChainHash, commitHash, ciphertext, stake, address(0)
@@ -227,9 +227,9 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
         uint256 winnerPayout = _claimPayout(v[0], cid, rid);
         assertGt(winnerPayout, 0, "Winner receives RBTS claim value");
-        assertLe(winnerPayout, 5e6 + engine.roundVoterPool(cid, rid), "Winner claim stays inside pool bounds");
+        assertLe(winnerPayout, 5e6 + _roundVoterPool(engine, cid, rid), "Winner claim stays inside pool bounds");
 
-        uint256 expectedLoserPayout = engine.commitRbtsStakeReturned(cid, rid, downKey);
+        uint256 expectedLoserPayout = _commitRbtsStakeReturned(engine, cid, rid, downKey);
         uint256 loserPayout = _claimPayout(v[3], cid, rid);
         assertEq(loserPayout, expectedLoserPayout, "Losing-side claim has no loser rebate");
     }
@@ -269,7 +269,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         }
         assertEq(
             distributor.roundVoterRewardClaimedAmount(cid, rid),
-            engine.roundVoterPool(cid, rid),
+            _roundVoterPool(engine, cid, rid),
             "All score-eligible claims exhaust voter pool"
         );
     }
@@ -296,7 +296,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
         uint256 payout = _claimPayout(v[4], cid, rid);
         assertGt(payout, 0, "Winning whale receives RBTS claim value");
-        assertLe(payout, 10e6 + engine.roundVoterPool(cid, rid), "Winning whale claim stays inside pool bounds");
+        assertLe(payout, 10e6 + _roundVoterPool(engine, cid, rid), "Winning whale claim stays inside pool bounds");
     }
 
     // ==================== Test 4: Collusion at Threshold - Negligible Profit ====================
@@ -351,13 +351,13 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         _forceSettle(cid);
 
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, rid);
-        if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
-            assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
+        if (_roundRbtsRewardWeight(engine, cid, rid) > 0) {
+            assertEq(_roundVoterPool(engine, cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
         }
 
         uint256 payout = _claimPayout(v[0], cid, rid);
         assertGt(payout, 0, "Voter gets RBTS claim value");
-        assertLe(payout, 5e6 + engine.roundVoterPool(cid, rid), "Voter claim stays inside pool bounds");
+        assertLe(payout, 5e6 + _roundVoterPool(engine, cid, rid), "Voter claim stays inside pool bounds");
 
         assertEq(lrepToken.balanceOf(submitter), submitterBefore, "Submitter receives no voter-pool payout");
     }
@@ -418,7 +418,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
         uint256 payout = _claimPayout(v[0], cid, rid);
         assertGt(payout, 0, "Whale receives RBTS claim value");
-        assertLe(payout, 10e6 + engine.roundVoterPool(cid, rid), "Whale claim stays inside pool bounds");
+        assertLe(payout, 10e6 + _roundVoterPool(engine, cid, rid), "Whale claim stays inside pool bounds");
     }
 
     // ==================== Test 8: Minnows Defeat Whale ====================
@@ -446,10 +446,10 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
         assertTrue(round.upWins, "Minnows outweigh whale (450 > 100)");
 
-        uint256 expectedPayout = engine.commitRbtsStakeReturned(cid, rid, whaleKey);
+        uint256 expectedPayout = _commitRbtsStakeReturned(engine, cid, rid, whaleKey);
         uint256 payout = _claimPayout(v[0], cid, rid);
         assertEq(payout, expectedPayout, "Losing whale claim has no loser rebate");
-        assertLe(payout, 10e6 + engine.roundVoterPool(cid, rid), "Losing whale claim stays inside pool bounds");
+        assertLe(payout, 10e6 + _roundVoterPool(engine, cid, rid), "Losing whale claim stays inside pool bounds");
     }
 
     // ==================== Test 9: Manufactured Dissent Unprofitable ====================
@@ -509,8 +509,10 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, cid, rid);
             assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled), "Round settled");
             uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, rid);
-            if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
-                assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
+            if (_roundRbtsRewardWeight(engine, cid, rid) > 0) {
+                assertEq(
+                    _roundVoterPool(engine, cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures"
+                );
             }
 
             // Claim rewards so voters have tokens back for next round
@@ -538,8 +540,8 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
             _forceSettle(cid);
             uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, rid);
-            if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
-                uint256 voterPool = engine.roundVoterPool(cid, rid);
+            if (_roundRbtsRewardWeight(engine, cid, rid) > 0) {
+                uint256 voterPool = _roundVoterPool(engine, cid, rid);
                 assertLe(voterPool, forfeitedPool, "Voter pool cannot exceed forfeitures");
                 if (forfeitedPool > 0) {
                     assertGt(voterPool, 0, "Forfeitures should fund voters after protocol share");
@@ -557,8 +559,10 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
             uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
             _forceSettle(cid);
             uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, rid);
-            if (engine.roundRbtsRewardWeight(cid, rid) > 0) {
-                assertEq(engine.roundVoterPool(cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures");
+            if (_roundRbtsRewardWeight(engine, cid, rid) > 0) {
+                assertEq(
+                    _roundVoterPool(engine, cid, rid), forfeitedPool, "Voter pool comes only from RBTS forfeitures"
+                );
             }
         }
     }

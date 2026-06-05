@@ -141,7 +141,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         vm.startPrank(voter);
         lrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         engine.commitVote(
             contentId,
             cachedRoundContext1,
@@ -380,10 +380,10 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
-        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
-            assertEq(engine.roundVoterPool(contentId, roundId), forfeitedPool);
+        if (_roundRbtsRewardWeight(engine, contentId, roundId) > 0) {
+            assertEq(_roundVoterPool(engine, contentId, roundId), forfeitedPool);
         }
     }
 
@@ -412,7 +412,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         uint256 weightedDownPoolBefore = beforeLateReveal.weightedDownPool;
         uint256 upEvidenceBefore = _roundRatingUpEvidence(engine, contentId, roundId);
         uint256 downEvidenceBefore = _roundRatingDownEvidence(engine, contentId, roundId);
-        uint256 frontendStakeBefore = engine.roundStakeWithEligibleFrontend(contentId, roundId);
+        uint256 frontendStakeBefore = _roundStakeWithEligibleFrontend(engine, contentId, roundId);
 
         _reveal(contentId, roundId, ck4, false, s4);
         RoundLib.Round memory afterLateReveal = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -426,17 +426,19 @@ contract SelectiveRevelationTest is VotingTestBase {
             downEvidenceBefore + 2_000_000,
             "late reveal adds down evidence"
         );
-        assertEq(engine.roundStakeWithEligibleFrontend(contentId, roundId), frontendStakeBefore, "late frontend stake");
-        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 10e6, "late reveal scored");
+        assertEq(
+            _roundStakeWithEligibleFrontend(engine, contentId, roundId), frontendStakeBefore, "late frontend stake"
+        );
+        assertEq(_commitRbtsScoringWeight(engine, contentId, roundId, ck4), 10e6, "late reveal scored");
 
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertFalse(settled.upWins, "late down reveal flips settlement");
-        assertGt(engine.commitRbtsScoringWeight(contentId, roundId, ck1), 0, "threshold reveal set scored");
-        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 10e6, "late reveal has scoring weight");
+        assertGt(_commitRbtsScoringWeight(engine, contentId, roundId, ck1), 0, "threshold reveal set scored");
+        assertEq(_commitRbtsScoringWeight(engine, contentId, roundId, ck4), 10e6, "late reveal has scoring weight");
         assertEq(
-            engine.commitRbtsStakeReturned(contentId, roundId, ck4)
+            _commitRbtsStakeReturned(engine, contentId, roundId, ck4)
                 + _commitRbtsForfeitedStake(engine, contentId, roundId, ck4),
             10e6,
             "late reveal stake accounted through RBTS"
@@ -482,14 +484,14 @@ contract SelectiveRevelationTest is VotingTestBase {
             downEvidenceBefore + 2_000_000,
             "same-block late down evidence"
         );
-        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 10e6, "same-block late reveal scored");
+        assertEq(_commitRbtsScoringWeight(engine, contentId, roundId, ck4), 10e6, "same-block late reveal scored");
 
         _settleAfterRbtsSeed(engine, contentId, roundId);
 
         RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertFalse(settled.upWins, "same-block down reveal flips settlement");
         assertEq(
-            engine.commitRbtsStakeReturned(contentId, roundId, ck4)
+            _commitRbtsStakeReturned(engine, contentId, roundId, ck4)
                 + _commitRbtsForfeitedStake(engine, contentId, roundId, ck4),
             10e6,
             "same-block late reveal stake accounted through RBTS"
@@ -528,7 +530,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         (,,,, bool revealedAfter,,) = engine.commitCore(contentId, roundId, ck4);
         assertFalse(revealedAfter, "post-closure reveal does not mutate commit");
         assertEq(afterReveal.revealedCount, beforeReveal.revealedCount, "revealed count unchanged");
-        assertEq(engine.commitRbtsScoringWeight(contentId, roundId, ck4), 0, "RBTS weight unchanged");
+        assertEq(_commitRbtsScoringWeight(engine, contentId, roundId, ck4), 0, "RBTS weight unchanged");
     }
 
     // =========================================================================
@@ -548,7 +550,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        uint256 revealGraceDeadline = engine.lastCommitRevealableAfter(contentId, roundId) + GRACE_PERIOD;
+        uint256 revealGraceDeadline = _lastCommitRevealableAfter(engine, contentId, roundId) + GRACE_PERIOD;
 
         // Warp past the tlock-backed revealable timestamp + full grace period.
         vm.warp(revealGraceDeadline + 1);
@@ -562,14 +564,14 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
 
         vm.expectRevert(RoundRewardDistributor.UnrevealedCleanupPending.selector);
         vm.prank(voters[0]);
         rewardDistributor.claimReward(contentId, roundId);
 
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
-        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 0);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0);
     }
 
     function test_FinalGraceExpiry_UnrevealedPastEpochDoesNotCreateSubsidy() public {
@@ -584,7 +586,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        uint256 revealGraceDeadline = engine.lastCommitRevealableAfter(contentId, roundId) + GRACE_PERIOD;
+        uint256 revealGraceDeadline = _lastCommitRevealableAfter(engine, contentId, roundId) + GRACE_PERIOD;
 
         vm.warp(revealGraceDeadline + 1);
 
@@ -596,10 +598,10 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
-        if (engine.roundRbtsRewardWeight(contentId, roundId) > 0) {
-            assertEq(engine.roundVoterPool(contentId, roundId), forfeitedPool);
+        if (_roundRbtsRewardWeight(engine, contentId, roundId) > 0) {
+            assertEq(_roundVoterPool(engine, contentId, roundId), forfeitedPool);
         }
     }
 
@@ -622,15 +624,15 @@ contract SelectiveRevelationTest is VotingTestBase {
         _reveal(contentId, roundId, commitKeys[1], true, salts[1]);
         _reveal(contentId, roundId, commitKeys[2], true, salts[2]);
 
-        uint256 revealGraceDeadline = engine.lastCommitRevealableAfter(contentId, roundId) + GRACE_PERIOD;
+        uint256 revealGraceDeadline = _lastCommitRevealableAfter(engine, contentId, roundId) + GRACE_PERIOD;
         vm.warp(revealGraceDeadline + 1);
 
         vm.expectRevert(RoundVotingEngine.UnrevealedPastEpochVotes.selector);
         _reveal(contentId, roundId, commitKeys[3], false, salts[3]);
 
         _settleAfterRbtsSeed(engine, contentId, roundId);
-        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
-        assertEq(engine.commitRbtsStakeReturned(contentId, roundId, commitKeys[3]), 0);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, commitKeys[3]), 0);
     }
 
     /// @notice Within grace period, unrevealed votes still block settlement.
@@ -743,7 +745,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         vm.prank(owner);
         cfg.setRevealGracePeriod(2 hours);
 
-        vm.warp(engine.lastCommitRevealableAfter(contentId, roundId) + GRACE_PERIOD + 1);
+        vm.warp(_lastCommitRevealableAfter(engine, contentId, roundId) + GRACE_PERIOD + 1);
 
         _reveal(contentId, roundId, commitKeys[0], true, salts[0]);
         _reveal(contentId, roundId, commitKeys[1], true, salts[1]);
@@ -753,7 +755,7 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
     }
 
     function test_RevealGracePeriodSnapshot_NewRoundUsesUpdatedValue() public {
@@ -774,7 +776,7 @@ contract SelectiveRevelationTest is VotingTestBase {
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         assertEq(_roundRevealGracePeriodSnapshot(engine, contentId, roundId), 2 hours);
 
-        uint256 lastRevealableAfter = engine.lastCommitRevealableAfter(contentId, roundId);
+        uint256 lastRevealableAfter = _lastCommitRevealableAfter(engine, contentId, roundId);
         vm.warp(lastRevealableAfter + GRACE_PERIOD + 1);
 
         _reveal(contentId, roundId, commitKeys[0], true, salts[0]);
@@ -790,7 +792,7 @@ contract SelectiveRevelationTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
-        assertEq(engine.roundUnrevealedCleanupRemaining(contentId, roundId), 1);
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 1);
     }
 
     // =========================================================================

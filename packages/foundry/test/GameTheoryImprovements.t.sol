@@ -146,7 +146,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         vm.startPrank(voter);
         lrepToken.approve(address(engine), stake);
         uint256 cachedRoundContext1 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         engine.commitVote(contentId, cachedRoundContext1, targetRound, drandChainHash, ch, ct, stake, address(0));
         vm.stopPrank();
     }
@@ -154,7 +154,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
     /// @dev Reveal a previously committed vote. Caller must warp past revealableAfter first.
     function _reveal(address voter, uint256 contentId, uint256 roundId, bool isUp) internal {
         bytes32 salt = bytes32(uint256(uint160(voter)) ^ uint256(contentId));
-        bytes32 ch = engine.voterCommitHash(contentId, roundId, voter);
+        bytes32 ch = _voterCommitHash(engine, contentId, roundId, voter);
         bytes32 ck = _commitKey(voter, ch);
 
         vm.prank(voter);
@@ -252,7 +252,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertTrue(settled.upWins, "earlier higher-weight side wins weighted-only tie");
         assertEq(
             _roundWinningStake(engine, cid, roundId),
-            engine.roundRbtsRewardWeight(cid, roundId),
+            _roundRbtsRewardWeight(engine, cid, roundId),
             "roundWinningStake tracks RBTS reward weight"
         );
 
@@ -309,7 +309,7 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled), "Round settled");
         assertTrue(settled.upWins, "UP wins (weighted UP pool 125 > DOWN pool 100)");
 
-        uint256 voterPool = engine.roundVoterPool(cid, roundId);
+        uint256 voterPool = _roundVoterPool(engine, cid, roundId);
 
         uint256 aliceBefore = lrepToken.balanceOf(alice);
         vm.prank(alice);
@@ -437,8 +437,8 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         assertTrue(settled.upWins, "UP wins (unanimous)");
 
         uint256 forfeitedPool = _roundRbtsForfeitedPool(engine, cid, roundId);
-        uint256 voterPool = engine.roundVoterPool(cid, roundId);
-        if (engine.roundRbtsRewardWeight(cid, roundId) > 0) {
+        uint256 voterPool = _roundVoterPool(engine, cid, roundId);
+        if (_roundRbtsRewardWeight(engine, cid, roundId) > 0) {
             assertEq(voterPool, forfeitedPool, "Voter pool comes only from RBTS forfeitures");
         }
 

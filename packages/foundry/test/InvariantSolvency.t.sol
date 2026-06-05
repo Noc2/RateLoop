@@ -134,7 +134,7 @@ contract InvariantSolvency is VotingTestBase {
             VotingHandler.RoundRecord memory rec = handler.getRoundRecord(i);
             if (!rec.settled) continue;
 
-            uint256 voterPool = engine.roundVoterPool(rec.contentId, rec.roundId);
+            uint256 voterPool = _roundVoterPool(engine, rec.contentId, rec.roundId);
             RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, rec.contentId, rec.roundId);
 
             // Total claimed includes score-spread stake returns and voter-pool rewards.
@@ -185,7 +185,7 @@ contract InvariantSolvency is VotingTestBase {
                 obligations += round.totalStake;
             } else if (round.state == RoundLib.RoundState.Settled) {
                 // Settled rounds: unclaimed voter rewards.
-                uint256 voterPool = engine.roundVoterPool(rec.contentId, rec.roundId);
+                uint256 voterPool = _roundVoterPool(engine, rec.contentId, rec.roundId);
                 // Upper bound on remaining obligations: all original stake + full voter pool,
                 // minus what's already been claimed
                 uint256 maxRemaining = round.totalStake + voterPool;

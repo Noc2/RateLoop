@@ -189,7 +189,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         (bytes32 replacementCommitKey,) = _commitWithFrontend(voter2, contentId, true, replacementOnlyFrontend);
 
         assertEq(votingEngine.roundFrontendRegistrySnapshot(contentId, roundId), address(originalRegistry));
-        assertFalse(votingEngine.frontendEligibleAtCommit(contentId, roundId, replacementCommitKey));
+        assertFalse(_commitFrontendEligible(votingEngine, contentId, roundId, replacementCommitKey));
     }
 
     function _commit(address voter, uint256 contentId, bool isUp) internal returns (bytes32 commitKey, bytes32 salt) {
@@ -208,7 +208,7 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), STAKE);
         uint256 cachedRoundContext1 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         votingEngine.commitVote(
             contentId,
             cachedRoundContext1,

@@ -2,7 +2,6 @@
 pragma solidity ^0.8.34;
 
 import { VotingTestBase } from "./helpers/VotingTestHelpers.sol";
-import { stdStorage, StdStorage } from "forge-std/Test.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ContentRegistry } from "../contracts/ContentRegistry.sol";
 import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
@@ -91,8 +90,8 @@ contract ClaimingBundleObserver {
 
     function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
         observedSettled = settled;
-        observedVoterPool = votingEngine.roundVoterPool(contentId, roundId);
-        observedFrontendPool = votingEngine.roundFrontendPool(contentId, roundId);
+        (,,,, observedVoterPool) = votingEngine.rbtsRoundState(contentId, roundId);
+        (observedFrontendPool,,,) = votingEngine.frontendFeeState(contentId, roundId, address(0));
         if (!settled) return;
 
         try rewardDistributor.claimReward(contentId, roundId) {
@@ -105,8 +104,6 @@ contract ClaimingBundleObserver {
 
 /// @title RoundRewardDistributor branch coverage tests (tlock commit-reveal)
 contract RoundRewardDistributorBranchesTest is VotingTestBase {
-    using stdStorage for StdStorage;
-
     LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public votingEngine;
@@ -126,6 +123,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     uint256 public constant T0 = 1000;
     uint256 public constant STAKE = 5e6;
     uint256 public constant EPOCH_DURATION = 5 minutes;
+    uint256 internal constant ROUND_RBTS_SCORED_SLOT = 11;
+    uint256 internal constant COMMIT_RBTS_SCORE_BPS_SLOT = 23;
 
     event LaunchRaterRewardCreditFailed(
         uint256 indexed contentId,
@@ -237,7 +236,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         vm.prank(voter);
         lrepToken.approve(address(votingEngine), stake);
         uint256 cachedRoundContext1 =
-            _roundContext(votingEngine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(votingEngine, contentId), _defaultRatingReferenceBps());
         vm.prank(voter);
         votingEngine.commitVote(
             contentId, cachedRoundContext1, _tlockCommitTargetRound(), _tlockDrandChainHash(), ch, ct, stake, address(0)
@@ -255,8 +254,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         returns (bytes32 commitKey, bytes32 salt)
     {
         salt = keccak256(abi.encodePacked(voter, predictedRatingBps, block.timestamp));
-        uint256 roundId = votingEngine.previewCommitRoundId(contentId);
-        uint16 referenceRatingBps = votingEngine.previewCommitReferenceRatingBps(contentId);
+        uint256 roundId = _previewCommitRoundId(votingEngine, contentId);
+        uint16 referenceRatingBps = _previewCommitReferenceRatingBps(votingEngine, contentId);
         uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
         bool isUp = predictedRatingBps >= 5_000;
@@ -325,6 +324,34 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
                 try votingEngine.settleRound(contentId, roundId) { } catch { }
             }
         }
+    }
+
+    function _roundMappingSlot(uint256 baseSlot, uint256 contentId, uint256 roundId) internal pure returns (bytes32) {
+        return keccak256(abi.encode(roundId, keccak256(abi.encode(contentId, baseSlot))));
+    }
+
+    function _commitMappingSlot(uint256 baseSlot, uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(commitKey, _roundMappingSlot(baseSlot, contentId, roundId)));
+    }
+
+    function _writeRoundRbtsScored(uint256 contentId, uint256 roundId, bool scored) internal {
+        vm.store(
+            address(votingEngine),
+            _roundMappingSlot(ROUND_RBTS_SCORED_SLOT, contentId, roundId),
+            bytes32(uint256(scored ? 1 : 0))
+        );
+    }
+
+    function _writeCommitRbtsScoreBps(uint256 contentId, uint256 roundId, bytes32 commitKey, uint16 scoreBps) internal {
+        vm.store(
+            address(votingEngine),
+            _commitMappingSlot(COMMIT_RBTS_SCORE_BPS_SLOT, contentId, roundId, commitKey),
+            bytes32(uint256(scoreBps))
+        );
     }
 
     function _setupSettledRound() internal returns (uint256 contentId, uint256 roundId) {
@@ -512,8 +539,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     function test_ClaimReward_RbtsScoredVoterGetsStakeReturnAndReward() public {
         (uint256 contentId, uint256 roundId) = _setupSettledRound();
         bytes32 voter3CommitKey =
-            keccak256(abi.encodePacked(voter3, votingEngine.voterCommitHash(contentId, roundId, voter3)));
-        uint256 rbtsStakeReturned = votingEngine.commitRbtsStakeReturned(contentId, roundId, voter3CommitKey);
+            keccak256(abi.encodePacked(voter3, _voterCommitHash(votingEngine, contentId, roundId, voter3)));
+        uint256 rbtsStakeReturned = _commitRbtsStakeReturned(votingEngine, contentId, roundId, voter3CommitKey);
 
         uint256 balBefore = lrepToken.balanceOf(voter3);
         vm.prank(voter3);
@@ -528,8 +555,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
     function test_ClaimReward_UnscoredRoundReverts() public {
         (uint256 contentId, uint256 roundId) = _setupSettledRound();
-        stdstore.target(address(votingEngine)).sig("roundRbtsScored(uint256,uint256)").with_key(contentId)
-            .with_key(roundId).checked_write(false);
+        _writeRoundRbtsScored(contentId, roundId, false);
 
         vm.prank(voter1);
         vm.expectRevert(RoundRewardDistributor.RoundNotSettled.selector);
@@ -675,8 +701,8 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         uint256 contentId = 1;
         uint16 predictedRatingBps = 8_000;
         bytes32 salt = keccak256(abi.encodePacked(voter1, predictedRatingBps, block.timestamp));
-        uint256 roundId = votingEngine.previewCommitRoundId(contentId);
-        uint16 referenceRatingBps = votingEngine.previewCommitReferenceRatingBps(contentId);
+        uint256 roundId = _previewCommitRoundId(votingEngine, contentId);
+        uint16 referenceRatingBps = _previewCommitReferenceRatingBps(votingEngine, contentId);
         uint64 targetRound = _tlockCommitTargetRound();
         bytes32 drandChainHash = _tlockDrandChainHash();
         bool isUp = predictedRatingBps >= 5_000;
@@ -718,7 +744,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     function test_ClaimReward_EmitsLaunchCreditFailureWithoutBlockingClaim() public {
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         bytes32 voter1CommitKey =
-            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+            keccak256(abi.encodePacked(voter1, _voterCommitHash(votingEngine, contentId, roundId, voter1)));
         MockRevertingLaunchDistributionPool revertingLaunchPool = new MockRevertingLaunchDistributionPool();
 
         ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
@@ -743,10 +769,9 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         _verifyHuman(voter2, bytes32("anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         bytes32 voter1CommitKey =
-            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+            keccak256(abi.encodePacked(voter1, _voterCommitHash(votingEngine, contentId, roundId, voter1)));
 
-        stdstore.target(address(votingEngine)).sig("commitRbtsScoreBps(uint256,uint256,bytes32)").with_key(contentId)
-            .with_key(roundId).with_key(voter1CommitKey).checked_write(launchPool.MIN_QUALIFYING_SCORE_BPS() - 1);
+        _writeCommitRbtsScoreBps(contentId, roundId, voter1CommitKey, uint16(launchPool.MIN_QUALIFYING_SCORE_BPS() - 1));
 
         vm.prank(voter1);
         rewardDistributor.claimReward(contentId, roundId);
@@ -762,7 +787,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         _verifyHuman(voter2, bytes32("anchor-voter-2"));
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         bytes32 voter1CommitKey =
-            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+            keccak256(abi.encodePacked(voter1, _voterCommitHash(votingEngine, contentId, roundId, voter1)));
 
         bytes32[] memory anchorIds = new bytes32[](1);
         anchorIds[0] = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, bytes32("anchor-voter-2"));
@@ -815,7 +840,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
 
         (uint256 contentId, uint256 roundId) = _setupSettledPredictionRound();
         bytes32 voter1CommitKey =
-            keccak256(abi.encodePacked(voter1, votingEngine.voterCommitHash(contentId, roundId, voter1)));
+            keccak256(abi.encodePacked(voter1, _voterCommitHash(votingEngine, contentId, roundId, voter1)));
         bytes32 anchorId = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, anchorNullifier);
         bytes32[] memory anchorIds = new bytes32[](1);
         anchorIds[0] = anchorId;

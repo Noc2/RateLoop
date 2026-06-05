@@ -20,6 +20,8 @@ library RoundRevealLib {
     uint64 internal constant RATING_EVIDENCE_MAX_STAKE_BONUS = 1_000_000;
     uint256 internal constant RBTS_SEED_BLOCK_FLAG = 1 << 255;
     uint256 internal constant RBTS_SEED_TIMESTAMP_SHIFT = 64;
+    uint256 internal constant RBTS_SEED_ORIGINAL_BLOCK_SHIFT = 112;
+    uint256 internal constant RBTS_SEED_BLOCK_MASK = uint256(type(uint64).max);
 
     error RoundNotOpen();
     error NoCommit();
@@ -284,8 +286,12 @@ library RoundRevealLib {
 
     function refreshExpiredRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        mapping(
+            uint256 => mapping(uint256 => uint8)
+        ) storage roundRbtsSeedRefreshCount,
         uint256 contentId,
-        uint256 roundId
+        uint256 roundId,
+        uint8 maxRefreshes
     ) external returns (bool refreshed) {
         bytes32 currentMarker = roundRbtsSeedEntropy[contentId][roundId];
         uint256 seedWord = uint256(currentMarker);
@@ -293,8 +299,13 @@ library RoundRevealLib {
 
         uint256 seedBlock = uint64(seedWord);
         if (block.number <= seedBlock || Blockhash.blockHash(seedBlock) != bytes32(0)) return false;
+        uint8 refreshCount = roundRbtsSeedRefreshCount[contentId][roundId];
+        if (refreshCount >= maxRefreshes) return false;
 
-        bytes32 refreshedMarker = bytes32((seedWord & ~uint256(type(uint64).max)) | uint256(block.number.toUint64()));
+        unchecked {
+            roundRbtsSeedRefreshCount[contentId][roundId] = refreshCount + 1;
+        }
+        bytes32 refreshedMarker = bytes32((seedWord & ~RBTS_SEED_BLOCK_MASK) | uint256(block.number.toUint64()));
         roundRbtsSeedEntropy[contentId][roundId] = refreshedMarker;
         emit RbtsSeedCaptured(contentId, roundId, refreshedMarker);
         return true;
@@ -302,8 +313,10 @@ library RoundRevealLib {
 
     function finalizeRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
+        mapping(uint256 => mapping(uint256 => uint8)) storage roundRbtsSeedRefreshCount,
         uint256 contentId,
-        uint256 roundId
+        uint256 roundId,
+        uint8 maxRefreshes
     ) external returns (bytes32 settlementEntropy) {
         settlementEntropy = roundRbtsSeedEntropy[contentId][roundId];
         uint256 seedWord = uint256(settlementEntropy);
@@ -313,8 +326,14 @@ library RoundRevealLib {
         if (block.number <= seedBlock) revert RevealGraceActive();
         bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
         if (seedBlockhash == bytes32(0)) {
-            emit RbtsSeedCaptured(contentId, roundId, bytes32(0));
-            revert RbtsSeedUnavailable();
+            uint8 refreshCount = roundRbtsSeedRefreshCount[contentId][roundId];
+            if (refreshCount < maxRefreshes) {
+                emit RbtsSeedCaptured(contentId, roundId, bytes32(0));
+                revert RbtsSeedUnavailable();
+            }
+            settlementEntropy = _fallbackRbtsSeed(contentId, roundId, seedWord, refreshCount);
+            emit RbtsSeedCaptured(contentId, roundId, settlementEntropy);
+            return settlementEntropy;
         }
         settlementEntropy = keccak256(
             abi.encode(
@@ -344,10 +363,31 @@ library RoundRevealLib {
     ) private {
         bytes32 seedBlockMarker = bytes32(
             RBTS_SEED_BLOCK_FLAG | (uint256(block.timestamp.toUint48()) << RBTS_SEED_TIMESTAMP_SHIFT)
+                | (uint256(block.number.toUint64()) << RBTS_SEED_ORIGINAL_BLOCK_SHIFT)
                 | uint256(block.number.toUint64())
         );
         roundRbtsSeedEntropy[contentId][roundId] = seedBlockMarker;
         emit RbtsSeedCaptured(contentId, roundId, seedBlockMarker);
+    }
+
+    function _fallbackRbtsSeed(uint256 contentId, uint256 roundId, uint256 seedWord, uint8 refreshCount)
+        private
+        view
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encode(
+                "rateloop.rbts.delayed-seed.fallback.v1",
+                block.chainid,
+                address(this),
+                contentId,
+                roundId,
+                uint64(seedWord >> RBTS_SEED_ORIGINAL_BLOCK_SHIFT),
+                uint64(seedWord),
+                uint48(seedWord >> RBTS_SEED_TIMESTAMP_SHIFT),
+                refreshCount
+            )
+        );
     }
 
     function _ratingEvidenceWeight(uint64 stakeAmount, uint8 epochIndex) private pure returns (uint64) {

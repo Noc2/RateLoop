@@ -320,7 +320,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
 
         (bytes32 identityKey, address rewardRecipient, bytes32 commitKey, address frontend) =
             _requireRevealedIndependentRater(pool, recipient);
-        bytes32 awardIdentityKey = votingEngine.commitIdentityKey(pool.contentId, pool.roundId, commitKey);
+        (bytes32 awardIdentityKey,,,,,) = votingEngine.commitIdentityState(pool.contentId, pool.roundId, commitKey);
         if (awardIdentityKey == bytes32(0)) awardIdentityKey = identityKey;
         require(
             !identityKeyAwarded[poolId][identityKey] && !identityKeyAwarded[poolId][awardIdentityKey],
@@ -496,13 +496,13 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         }
 
         require(roundId == currentRoundId, "Invalid target round");
-        (, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(contentId, roundId);
+        (, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(contentId, roundId);
         require(state == RoundLib.RoundState.Open, "Round not open");
     }
 
     function _feedbackBonusAwardDeadline(FeedbackBonusPool storage pool) internal view returns (uint256) {
-        (uint48 startTime, RoundLib.RoundState state,,,,,,,,, uint48 settledAt,,,) =
-            votingEngine.rounds(pool.contentId, pool.roundId);
+        (uint48 startTime, RoundLib.RoundState state,,,,, uint48 settledAt) =
+            votingEngine.roundCore(pool.contentId, pool.roundId);
         uint256 requestedDeadline = pool.feedbackClosesAt;
 
         if (settledAt != 0 && state != RoundLib.RoundState.Open) {
@@ -527,7 +527,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         returns (bytes32 identityKey, address rewardRecipient, bytes32 commitKey, address frontend)
     {
         require(recipient != address(0), "Invalid recipient");
-        (, RoundLib.RoundState state,,,,,,,,,,,,) = votingEngine.rounds(pool.contentId, pool.roundId);
+        (, RoundLib.RoundState state,,,,,) = votingEngine.roundCore(pool.contentId, pool.roundId);
         require(
             state == RoundLib.RoundState.Settled || state == RoundLib.RoundState.Tied
                 || state == RoundLib.RoundState.RevealFailed,
@@ -542,7 +542,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             votingEngine.commitCore(pool.contentId, pool.roundId, commitKey);
         frontend = commitFrontend;
         require(voter != address(0) && revealed, "Vote not revealed");
-        require(votingEngine.commitRbtsScoringWeight(pool.contentId, pool.roundId, commitKey) != 0, "Vote not scored");
+        (,, uint256 scoringWeight,,) = votingEngine.rbtsCommitState(pool.contentId, pool.roundId, commitKey);
+        require(scoringWeight != 0, "Vote not scored");
     }
 
     function _isExcludedRater(FeedbackBonusPool storage pool, bytes32 identityKey) internal view returns (bool) {
@@ -598,7 +599,8 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         view
         returns (address frontendRecipient)
     {
-        if (!votingEngine.frontendEligibleAtCommit(contentId, roundId, commitKey)) {
+        (,,,,, bool frontendEligible) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
+        if (!frontendEligible) {
             return address(0);
         }
 
@@ -615,7 +617,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             }
             // Round-time eligibility gate: a frontend that re-registered after the round
             // settled cannot revive feedback-bonus fees. Subsumes slash/exit checks.
-            (,,,,,,,,,, uint48 roundSettledAt,,,) = votingEngine.rounds(contentId, roundId);
+            (,,,,,, uint48 roundSettledAt) = votingEngine.roundCore(contentId, roundId);
             if (_canClaimFeesForRound(frontendRegistry, frontend, roundSettledAt)) {
                 frontendRecipient = operator;
             }
@@ -646,9 +648,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         rewardRecipient = resolved.holder == address(0) ? recipient : resolved.holder;
 
         if (identityKey != bytes32(0)) {
-            commitKey = votingEngine.identityCommitKey(pool.contentId, pool.roundId, identityKey);
+            (commitKey,,) = votingEngine.identityCommitState(pool.contentId, pool.roundId, identityKey, rewardRecipient);
             if (commitKey != bytes32(0)) {
-                address committedHolder = votingEngine.commitIdentityHolder(pool.contentId, pool.roundId, commitKey);
+                (, address committedHolder,,,,) =
+                    votingEngine.commitIdentityState(pool.contentId, pool.roundId, commitKey);
                 if (committedHolder != address(0)) {
                     rewardRecipient = committedHolder;
                 }
@@ -658,13 +661,14 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         }
 
         if (rewardRecipient != address(0)) {
-            commitKey = votingEngine.holderCommitKey(pool.contentId, pool.roundId, rewardRecipient);
+            (, commitKey,) =
+                votingEngine.identityCommitState(pool.contentId, pool.roundId, identityKey, rewardRecipient);
             if (commitKey != bytes32(0)) {
-                bytes32 committedIdentityKey = votingEngine.commitIdentityKey(pool.contentId, pool.roundId, commitKey);
+                (bytes32 committedIdentityKey, address committedHolder,,,,) =
+                    votingEngine.commitIdentityState(pool.contentId, pool.roundId, commitKey);
                 if (committedIdentityKey != bytes32(0)) {
                     identityKey = committedIdentityKey;
                 }
-                address committedHolder = votingEngine.commitIdentityHolder(pool.contentId, pool.roundId, commitKey);
                 if (committedHolder != address(0)) {
                     rewardRecipient = committedHolder;
                 }
@@ -672,14 +676,13 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             }
         }
 
-        bytes32 commitHash = votingEngine.voterCommitHash(pool.contentId, pool.roundId, recipient);
-        if (commitHash != bytes32(0)) {
-            commitKey = keccak256(abi.encodePacked(recipient, commitHash));
-            bytes32 committedIdentityKey = votingEngine.commitIdentityKey(pool.contentId, pool.roundId, commitKey);
+        (, commitKey) = votingEngine.voterCommitKey(pool.contentId, pool.roundId, recipient);
+        if (commitKey != bytes32(0)) {
+            (bytes32 committedIdentityKey, address committedHolder,,,,) =
+                votingEngine.commitIdentityState(pool.contentId, pool.roundId, commitKey);
             if (committedIdentityKey != bytes32(0)) {
                 identityKey = committedIdentityKey;
             }
-            address committedHolder = votingEngine.commitIdentityHolder(pool.contentId, pool.roundId, commitKey);
             if (committedHolder != address(0)) {
                 rewardRecipient = committedHolder;
             }

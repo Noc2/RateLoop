@@ -17,7 +17,15 @@ import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotC
 ///      authoritatively answer whether a (contentId, roundId) payload is source-ready for a
 ///      cluster snapshot proposal. Avoids a heavy import dependency.
 interface IRoundClusterReadyAtSource {
-    function roundClusterPayoutReadyAt(uint256 contentId, uint256 roundId) external view returns (uint48);
+    function roundLifecycleState(uint256 contentId, uint256 roundId)
+        external
+        view
+        returns (
+            uint256 revealGracePeriod,
+            uint256 lastRevealableAfter,
+            uint256 cleanupRemaining,
+            uint48 clusterPayoutReadyAt
+        );
     function roundCore(uint256 contentId, uint256 roundId)
         external
         view
@@ -988,13 +996,12 @@ contract LaunchDistributionPool is
         returns (bool ok, uint48 readyAt)
     {
         bytes memory data;
-        (ok, data) = source.staticcall(
-            abi.encodeCall(IRoundClusterReadyAtSource.roundClusterPayoutReadyAt, (contentId, roundId))
-        );
-        if (!ok || data.length < 32) return (false, 0);
+        (ok, data) =
+            source.staticcall(abi.encodeCall(IRoundClusterReadyAtSource.roundLifecycleState, (contentId, roundId)));
+        if (!ok || data.length < 128) return (false, 0);
         uint256 rawReadyAt;
         assembly ("memory-safe") {
-            rawReadyAt := mload(add(data, 32))
+            rawReadyAt := mload(add(data, 128))
         }
         if (rawReadyAt > type(uint48).max) return (false, 0);
         return (true, uint48(rawReadyAt));

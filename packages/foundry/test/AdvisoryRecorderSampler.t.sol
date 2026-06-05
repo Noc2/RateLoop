@@ -137,10 +137,8 @@ contract AdvisoryRecorderSamplerTest is Test {
         );
         vm.mockCall(
             engineAddress,
-            abi.encodeWithSignature(
-                "commitRbtsScoringWeight(uint256,uint256,bytes32)", CONTENT_ID, ROUND_ID, commitKey
-            ),
-            abi.encode(scoringWeight)
+            abi.encodeWithSignature("rbtsCommitState(uint256,uint256,bytes32)", CONTENT_ID, ROUND_ID, commitKey),
+            abi.encode(uint16(0), uint16(0), scoringWeight, uint256(0), uint256(0))
         );
     }
 

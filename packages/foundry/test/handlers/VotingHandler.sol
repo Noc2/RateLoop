@@ -126,7 +126,7 @@ contract VotingHandler is VotingTestBase {
         }
         lrepToken.approve(address(engine), stakeAmount);
         uint256 cachedRoundContext1 =
-            _roundContext(engine.previewCommitRoundId(contentId), _defaultRatingReferenceBps());
+            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
         try engine.commitVote(
             contentId,
             cachedRoundContext1,

@@ -229,7 +229,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         rewardCommitClaimed[contentId][roundId][commitKey] = true;
         rewardClaimed[contentId][roundId][commit.voter] = true;
 
-        if (!votingEngine.roundRbtsScored(contentId, roundId)) revert RoundNotSettled();
+        (bool scored,,,,) = votingEngine.rbtsRoundState(contentId, roundId);
+        if (!scored) revert RoundNotSettled();
         _claimRbtsReward(contentId, roundId, commitKey, commit, rewardRecipient);
     }
 
@@ -240,13 +241,11 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         RoundLib.Commit memory commit,
         address rewardRecipient
     ) internal {
-        uint256 scoreWeight = votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
-        uint256 stakeReturned = votingEngine.commitRbtsStakeReturned(contentId, roundId, commitKey);
+        (,,, uint256 scoreWeight, uint256 stakeReturned) = votingEngine.rbtsCommitState(contentId, roundId, commitKey);
         uint256 reward;
         if (scoreWeight > 0) {
-            uint256 voterPool = votingEngine.roundVoterPool(contentId, roundId);
-            uint256 totalScoreWeight = votingEngine.roundRbtsRewardWeight(contentId, roundId);
-            uint256 totalRewardClaimants = votingEngine.roundRbtsRewardClaimants(contentId, roundId);
+            (,, uint256 totalScoreWeight, uint256 totalRewardClaimants, uint256 voterPool) =
+                votingEngine.rbtsRoundState(contentId, roundId);
             uint256 claimedCount = roundVoterRewardClaimedCount[contentId][roundId];
             uint256 claimedAmount = roundVoterRewardClaimedAmount[contentId][roundId];
             if (voterPool == 0) {
@@ -287,7 +286,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         ProtocolConfig config = ProtocolConfig(votingEngine.protocolConfig());
         address launchPool = config.launchDistributionPool();
         if (launchPool == address(0)) return;
-        uint16 scoreBps = votingEngine.commitRbtsScoreBps(contentId, roundId, commitKey);
+        (, uint16 scoreBps,,,) = votingEngine.rbtsCommitState(contentId, roundId, commitKey);
         if (scoreBps == 0) return;
         LaunchCreditAttempt attempt = _tryRecordLaunchRaterCredit(
             config, launchPool, contentId, roundId, commitKey, rewardRecipient, scoreBps, stakeAmount
@@ -328,6 +327,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         ) returns (
             bytes32[] memory verifiedAnchorIds
         ) {
+            (,, uint256 cleanupRemaining, uint48 readyAt) = votingEngine.roundLifecycleState(contentId, roundId);
+            bool cleanupComplete = cleanupRemaining == 0;
             try ILaunchDistributionPool(launchPool)
                 .recordEarnedRaterRewardWithSourceReady(
                     rewardRecipient,
@@ -336,10 +337,10 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                     commitKey,
                     scoreBps,
                     round.revealedCount,
-                    votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
+                    cleanupComplete,
                     stakeAmount,
                     verifiedAnchorIds,
-                    votingEngine.roundClusterPayoutReadyAt(contentId, roundId)
+                    readyAt
                 ) returns (
                 uint256
             ) {
@@ -356,7 +357,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                             commitKey,
                             scoreBps,
                             round.revealedCount,
-                            votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) == 0,
+                            cleanupComplete,
                             stakeAmount,
                             verifiedAnchorIds.length
                         )) {
@@ -469,7 +470,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         ProtocolConfig config = ProtocolConfig(votingEngine.protocolConfig());
         address launchPool = config.launchDistributionPool();
         require(launchPool != address(0), "Launch pool unset");
-        uint16 scoreBps = votingEngine.commitRbtsScoreBps(contentId, roundId, commitKey);
+        (, uint16 scoreBps,,,) = votingEngine.rbtsCommitState(contentId, roundId, commitKey);
         require(scoreBps != 0, "No launch score");
 
         claimAccountingStarted = true;
@@ -560,12 +561,11 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         _readSettledStaleRound(contentId, roundId);
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        if (!votingEngine.roundRbtsScored(contentId, roundId)) revert RoundNotSettled();
-        uint256 totalWinningClaimants = votingEngine.roundRbtsRewardClaimants(contentId, roundId);
+        (bool scored,, uint256 weightedWinningStake, uint256 totalWinningClaimants, uint256 voterPool) =
+            votingEngine.rbtsRoundState(contentId, roundId);
+        if (!scored) revert RoundNotSettled();
         if (sortedWinningVoters.length != totalWinningClaimants) revert InvalidFinalizationInput();
 
-        uint256 voterPool = votingEngine.roundVoterPool(contentId, roundId);
-        uint256 weightedWinningStake = votingEngine.roundRbtsRewardWeight(contentId, roundId);
         if (totalWinningClaimants == 0 || voterPool == 0 || weightedWinningStake == 0) revert NoRewardDust();
 
         uint256 expectedTotal;
@@ -581,7 +581,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                 revert InvalidFinalizationInput();
             }
 
-            uint256 effectiveStake = votingEngine.commitRbtsRewardWeight(contentId, roundId, commitKey);
+            (,,, uint256 effectiveStake,) = votingEngine.rbtsCommitState(contentId, roundId, commitKey);
             if (effectiveStake == 0) {
                 revert InvalidFinalizationInput();
             }
@@ -672,9 +672,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     }
 
     function _findVoterCommitKey(uint256 contentId, uint256 roundId, address voter) internal view returns (bytes32) {
-        bytes32 commitHash = votingEngine.voterCommitHash(contentId, roundId, voter);
-        if (commitHash == bytes32(0)) return bytes32(0);
-        return keccak256(abi.encodePacked(voter, commitHash));
+        (, bytes32 commitKey) = votingEngine.voterCommitKey(contentId, roundId, voter);
+        return commitKey;
     }
 
     function _resolveClaimCommit(uint256 contentId, uint256 roundId, address account)
@@ -692,16 +691,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             round.voteCount,
             round.revealedCount,
             round.totalStake,
-            round.upPool,
-            round.downPool,
-            round.upCount,
-            round.downCount,
-            round.upWins,
-            round.settledAt,
             round.thresholdReachedAt,
-            round.weightedUpPool,
-            round.weightedDownPool
-        ) = votingEngine.rounds(contentId, roundId);
+            round.settledAt
+        ) = votingEngine.roundCore(contentId, roundId);
     }
 
     function _readCommit(uint256 contentId, uint256 roundId, bytes32 commitKey)
@@ -732,10 +724,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
         if (frontendFeeClaimed[contentId][roundId][frontend]) revert AlreadyClaimed();
 
-        uint256 totalFrontendPool = votingEngine.roundFrontendPool(contentId, roundId);
-        uint256 frontendStake = votingEngine.roundPerFrontendStake(contentId, roundId, frontend);
-        uint256 totalEligibleStake = votingEngine.roundStakeWithEligibleFrontend(contentId, roundId);
-        uint256 totalFrontendClaimants = votingEngine.roundEligibleFrontendCount(contentId, roundId);
+        (uint256 totalFrontendPool, uint256 frontendStake, uint256 totalEligibleStake, uint256 totalFrontendClaimants) =
+            votingEngine.frontendFeeState(contentId, roundId, frontend);
 
         if (totalFrontendPool == 0) revert NoPool();
         if (frontendStake == 0) revert NoStake();
@@ -760,7 +750,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     }
 
     function _requireNoPendingUnrevealedCleanup(uint256 contentId, uint256 roundId) internal view {
-        if (votingEngine.roundUnrevealedCleanupRemaining(contentId, roundId) > 0) {
+        (,, uint256 cleanupRemaining,) = votingEngine.roundLifecycleState(contentId, roundId);
+        if (cleanupRemaining > 0) {
             revert UnrevealedCleanupPending();
         }
     }
@@ -895,7 +886,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         _readSettledStaleRound(contentId, roundId);
         _requireNoPendingUnrevealedCleanup(contentId, roundId);
 
-        uint256 totalFrontendClaimants = votingEngine.roundEligibleFrontendCount(contentId, roundId);
+        (uint256 totalFrontendPool,,, uint256 totalFrontendClaimants) =
+            votingEngine.frontendFeeState(contentId, roundId, address(0));
         if (
             totalFrontendClaimants == 0
                 || roundFrontendFeeDustProcessedCount[contentId][roundId] != totalFrontendClaimants
@@ -903,7 +895,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             revert InvalidFinalizationInput();
         }
 
-        uint256 totalFrontendPool = votingEngine.roundFrontendPool(contentId, roundId);
         uint256 expectedTotal = roundFrontendFeeDustExpectedTotal[contentId][roundId];
         releasedDust =
             _finalizableDust(totalFrontendPool, expectedTotal, roundFrontendClaimedAmount[contentId][roundId]);

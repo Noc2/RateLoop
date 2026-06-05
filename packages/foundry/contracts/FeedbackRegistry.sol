@@ -156,11 +156,8 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
             return msg.sender;
         }
 
-        bytes32 commitHash = engine.voterCommitHash(contentId, roundId, msg.sender);
-        require(
-            commitHash != bytes32(0) && keccak256(abi.encodePacked(msg.sender, commitHash)) == commitKey,
-            "Only commit voter"
-        );
+        (, bytes32 senderCommitKey) = engine.voterCommitKey(contentId, roundId, msg.sender);
+        require(senderCommitKey == commitKey, "Only commit voter");
         return msg.sender;
     }
 
@@ -169,7 +166,7 @@ contract FeedbackRegistry is IFeedbackRegistry, Initializable, AccessControlUpgr
         view
         returns (RoundLib.RoundState state)
     {
-        (, state,,,,,,,,,,,,) = engine.rounds(contentId, roundId);
+        (, state,,,,,) = engine.roundCore(contentId, roundId);
     }
 
     function _isAwardableFeedback(FeedbackRecord storage record, bytes32 feedbackHash) private view returns (bool) {
