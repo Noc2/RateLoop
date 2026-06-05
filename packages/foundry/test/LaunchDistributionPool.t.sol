@@ -274,18 +274,26 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.authorizedCallers(address(0xCA11)));
     }
 
-    function test_WithdrawRemainingOnlyWithdrawsSurplusAboveReservedLaunchBuckets() public {
-        vm.expectRevert(LaunchDistributionPool.InvalidAmount.selector);
-        pool.withdrawRemaining(bob, 1);
+    function test_WithdrawRemainingCanRecoverTrackedLaunchBalance() public {
+        uint256 partialAmount = pool.TOTAL_POOL_AMOUNT() / 3;
 
-        uint256 surplus = 100e6;
-        lrep.mint(address(this), surplus);
-        lrep.approve(address(pool), surplus);
-        pool.depositPool(surplus);
+        assertEq(pool.withdrawRemaining(bob, partialAmount), partialAmount);
+        assertEq(lrep.balanceOf(bob), partialAmount);
+        assertEq(pool.poolBalance(), pool.TOTAL_POOL_AMOUNT() - partialAmount);
 
-        assertEq(pool.withdrawRemaining(bob, type(uint256).max), surplus);
-        assertEq(lrep.balanceOf(bob), surplus);
-        assertEq(pool.poolBalance(), pool.TOTAL_POOL_AMOUNT());
+        uint256 remaining = pool.TOTAL_POOL_AMOUNT() - partialAmount;
+        assertEq(pool.withdrawRemaining(bob, type(uint256).max), remaining);
+        assertEq(lrep.balanceOf(bob), pool.TOTAL_POOL_AMOUNT());
+        assertEq(pool.poolBalance(), 0);
+    }
+
+    function test_FullyRecoveredLaunchPoolCannotPayVerifiedBonus() public {
+        _verify(alice, bytes32("alice-human"));
+        pool.withdrawRemaining(bob, type(uint256).max);
+
+        vm.prank(alice);
+        vm.expectRevert(LaunchDistributionPool.PoolDepleted.selector);
+        pool.claimVerifiedBonus(address(0));
     }
 
     function test_DefaultLaunchRewardPolicyUsesAntiFarmDefaults() public view {
