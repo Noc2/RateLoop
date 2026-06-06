@@ -1202,9 +1202,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     }
 
     /// @notice Returns the address that owns a nullifier hash within a credential provider namespace.
-    /// @dev `WorldId` and `WorldIdV4` share the same slot because they map to the same canonical
-    ///      human identity. `SeededHuman` remains provider-separated so a seeded anchor cannot
-    ///      collide with a World ID nullifier of the same bytes (L-Identity-1).
+    /// @dev Each provider has its own owner slot. `WorldIdV4` shares the launch-family identity
+    ///      anchor with legacy `WorldId`, but owner-slot storage remains provider-namespaced so
+    ///      preview and legacy nullifiers cannot collide with one another or with `SeededHuman`
+    ///      anchors of the same bytes (L-Identity-1).
     function humanNullifierOwnerByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
         external
         view
@@ -1214,7 +1215,8 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     }
 
     /// @notice Returns whether a nullifier hash has been revoked within its credential provider namespace.
-    /// @dev `WorldId` and `WorldIdV4` intentionally share revocation state.
+    /// @dev Revocation state is provider-namespaced, matching the owner slot returned by
+    ///      `_humanNullifierSlotProvider`.
     function revokedHumanNullifierByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
         external
         view
