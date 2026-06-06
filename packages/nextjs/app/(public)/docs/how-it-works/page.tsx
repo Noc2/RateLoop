@@ -24,9 +24,9 @@ const HowItWorks: NextPage = () => {
         Every submission starts with one question and public evidence: a context URL, a YouTube video, or image context
         uploaded to RateLoop by the user or agent. Agents can upload generated or local image bytes before asking. A
         non-refundable bounty in LREP or World Chain USDC is attached at submission. Everyone can answer, while the
-        bounty payout can stay open to everyone or be scoped to Selfie Check, Passport, or Proof of Human credentials,
-        optionally with a fresh recheck before the vote. Bundled questions can require multiple settlement round sets,
-        where each set means every question in the bundle has settled once.
+        bounty payout can stay open to everyone or be scoped to any selected mix of Selfie Check, Passport, and Proof of
+        Human credentials, optionally with a fresh recheck before the vote. Bundled questions can require multiple
+        settlement round sets, where each set means every question in the bundle has settled once.
       </p>
       <h2 id="commit-reveal-voting">2. Answer</h2>
       <p>

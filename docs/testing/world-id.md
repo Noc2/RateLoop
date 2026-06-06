@@ -22,13 +22,14 @@ For bounty rechecks, it should request the selected credential kind with
 
 ## Credential Lanes
 
-RateLoop bounty eligibility uses these encoded credential kinds:
+RateLoop bounty eligibility uses these encoded credential masks:
 
 - `0`: everyone.
-- `1`: Selfie Check / fresh liveness (v4 beta; hidden unless explicitly enabled).
-- `2`: Passport / NFC document.
-- `3`: Proof of Human.
-- `0x80`: optional recent-recheck flag ORed into any non-open kind.
+- `0x02`: Selfie Check / fresh liveness (v4 beta; hidden unless explicitly enabled).
+- `0x04`: Passport / NFC document.
+- `0x08`: Proof of Human.
+- Credential bits can be ORed together; for example `0x0c` means Passport or Proof of Human.
+- `0x80`: optional recent-recheck flag ORed into any non-open mask.
 
 Proof of Human, Passport, and the v4 `face` credential lane map to these
 on-chain credential kinds. Selfie Check remains feature-gated by default; enable

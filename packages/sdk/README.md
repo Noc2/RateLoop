@@ -155,12 +155,19 @@ const encryptedCommit = await buildCommitVoteParams({
   roundReferenceRatingBps: ratingRuntime.roundReferenceRatingBps ?? 5000,
   defaultFrontendCode: "0xYourFrontendCode",
   runtime: {
-    targetRound: ratingRuntime.targetRound === undefined ? undefined : BigInt(ratingRuntime.targetRound),
+    targetRound:
+      ratingRuntime.targetRound === undefined
+        ? undefined
+        : BigInt(ratingRuntime.targetRound),
     drandChainHash: ratingRuntime.drandChainHash,
     drandGenesisTimeSeconds:
-      ratingRuntime.drandGenesisTimeSeconds === undefined ? undefined : BigInt(ratingRuntime.drandGenesisTimeSeconds),
+      ratingRuntime.drandGenesisTimeSeconds === undefined
+        ? undefined
+        : BigInt(ratingRuntime.drandGenesisTimeSeconds),
     drandPeriodSeconds:
-      ratingRuntime.drandPeriodSeconds === undefined ? undefined : BigInt(ratingRuntime.drandPeriodSeconds),
+      ratingRuntime.drandPeriodSeconds === undefined
+        ? undefined
+        : BigInt(ratingRuntime.drandPeriodSeconds),
     roundStartTimeSeconds: ratingRuntime.roundStartTimeSeconds ?? null,
   },
 });
@@ -192,10 +199,13 @@ const replaySafeVerifier = buildWebhookVerifier({
     store: webhookEventStore,
   },
 });
-const handled = await replaySafeVerifier.handleOnce({ body: webhookBody, headers: webhookHeaders }, async event => {
-  // Fetch status/result by operationKey before irreversible side effects.
-  return processCallback(event.body);
-});
+const handled = await replaySafeVerifier.handleOnce(
+  { body: webhookBody, headers: webhookHeaders },
+  async (event) => {
+    // Fetch status/result by operationKey before irreversible side effects.
+    return processCallback(event.body);
+  },
+);
 if (handled.status === "duplicate") {
   return new Response("ok");
 }
@@ -209,7 +219,7 @@ can call `uploadImage` directly. Use the returned `imageUrl` in `question.imageU
 
 For ranked-option bundles, `requiredSettledRounds` is the number of completed bundle round sets to fund. Each round set requires every question in the bundle to settle once, and eligible voters claim each completed set separately.
 
-`bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. Use `1` for Selfie Check, `2` for Passport, `3` for Proof of Human, or add `128` to require a recent recheck (`129`, `130`, `131`). Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
+`bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. It is a bitmask: `2` Selfie Check, `4` Passport, `8` Proof of Human. Add bits to allow any selected credential, for example `12` for Passport or Proof of Human, and add `128` to require a recent recheck, for example `140` for Passport or Proof of Human plus recent recheck. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
 
 For ask flows, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe default. For rating existing content, use `getRatingContext -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, callbacks, balance tooling, and audit surfaces. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet. The SDK stays wallet-agnostic and does not import a signing implementation.
 

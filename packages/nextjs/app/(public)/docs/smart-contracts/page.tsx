@@ -315,8 +315,8 @@ const SmartContracts: NextPage = () => {
           and interpretation data stays off-chain; the contract commits to its hashes in <code>contentHash</code> and
           emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks use the same function after
           the user or scoped agent wallet executes the returned funding and submission calls. <code>rewardTerms</code>{" "}
-          also commits to bounty eligibility: everyone, Selfie Check, Passport, Proof of Human, or one of those
-          credential scopes with a recent-recheck requirement.
+          also commits to bounty eligibility: everyone, any selected mix of Selfie Check, Passport, and Proof of Human
+          credentials, optionally with a recent-recheck requirement.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a

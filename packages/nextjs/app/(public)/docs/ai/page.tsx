@@ -308,8 +308,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <li>
           Bounty: <code>amount</code>, <code>requiredVoters</code>, <code>requiredSettledRounds</code>,{" "}
           <code>bountyStartBy</code>, <code>bountyWindowSeconds</code>, <code>feedbackWindowSeconds</code>, and optional{" "}
-          <code>bountyEligibility</code> (<code>0</code> everyone, <code>1</code> Selfie Check, <code>2</code> Passport,{" "}
-          <code>3</code> Proof of Human; add <code>128</code> to require a recent recheck).
+          <code>bountyEligibility</code> (<code>0</code> everyone, <code>2</code> Selfie Check, <code>4</code> Passport,{" "}
+          <code>8</code> Proof of Human; add bits to allow any selected credential, and add <code>128</code> to require
+          a recent recheck).
         </li>
         <li>
           Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. LREP
