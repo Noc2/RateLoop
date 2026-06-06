@@ -735,7 +735,9 @@ contract RoundVotingEngine is
         if (roundId > 0 && !RoundLib.isTerminal(rounds[contentId][roundId])) {
             RoundLib.Round storage round = rounds[contentId][roundId];
             RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-            if (_isEmptyRoundStaleSinceActivity(contentId, round)) {
+            if (_isRoundContentLifecycleStale(contentId, roundId)) {
+                _markRoundCancelled(contentId, roundId, round);
+            } else if (_isEmptyRoundStaleSinceActivity(contentId, round)) {
                 _markRoundCancelled(contentId, roundId, round);
             } else if (_canCancelExpiredRound(contentId, roundId, round, roundCfg)) {
                 _markRoundCancelled(contentId, roundId, round);
@@ -747,6 +749,7 @@ contract RoundVotingEngine is
         }
 
         roundId = RoundCreationLib.activateNewRound(currentRoundId, nextRoundId, rounds, contentId);
+        _snapshotRoundContentLifecycle(contentId, roundId);
         RoundCreationLib.snapshotRoundVotingConfig(
             roundConfigSnapshot,
             roundRatingConfigSnapshot,
@@ -888,6 +891,7 @@ contract RoundVotingEngine is
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
 
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+        _requireRoundContentLifecycleActive(contentId, roundId);
 
         // Must have enough revealed votes for both the round config and Robust BTS.
         if (round.revealedCount < _rbtsRevealQuorum(roundCfg.minVoters)) revert NotEnoughVotes();
@@ -1155,6 +1159,7 @@ contract RoundVotingEngine is
             RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, openRoundId);
             if (
                 !RoundLib.isTerminal(round) && !_isEmptyRoundStaleSinceActivity(contentId, round)
+                    && !_isRoundContentLifecycleStale(contentId, openRoundId)
                     && !_canCancelExpiredRound(contentId, openRoundId, round, roundCfg)
                     && !_canFinalizeRevealFailedRound(contentId, openRoundId, round)
             ) {
@@ -1275,6 +1280,22 @@ contract RoundVotingEngine is
         return lastActivityAt > round.startTime && lastActivityAt <= block.timestamp;
     }
 
+    function _snapshotRoundContentLifecycle(uint256 contentId, uint256 roundId) internal {
+        (uint64 id,,,,, ContentRegistry.ContentStatus status, uint8 dormantCount,,,) = registry.contents(contentId);
+        if (id == 0 || status != ContentRegistry.ContentStatus.Active) revert ContentNotActive();
+        roundContentDormantCountSnapshot[contentId][roundId] = dormantCount;
+    }
+
+    function _isRoundContentLifecycleStale(uint256 contentId, uint256 roundId) internal view returns (bool) {
+        (uint64 id,,,,, ContentRegistry.ContentStatus status, uint8 dormantCount,,,) = registry.contents(contentId);
+        return id == 0 || status != ContentRegistry.ContentStatus.Active
+            || dormantCount != roundContentDormantCountSnapshot[contentId][roundId];
+    }
+
+    function _requireRoundContentLifecycleActive(uint256 contentId, uint256 roundId) internal view {
+        if (_isRoundContentLifecycleStale(contentId, roundId)) revert ContentNotActive();
+    }
+
     function _contentLastActivityAt(uint256 contentId) internal view returns (uint48 lastActivityAt) {
         (,,,, lastActivityAt,,,,,) = registry.contents(contentId);
     }
@@ -1325,6 +1346,7 @@ contract RoundVotingEngine is
         uint16 predictedUpBps,
         bytes32 salt
     ) internal {
+        _requireRoundContentLifecycleActive(contentId, roundId);
         RoundLib.Round storage round = rounds[contentId][roundId];
         RoundLib.Commit storage commit = commits[contentId][roundId][commitKey];
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
@@ -1692,6 +1714,10 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) internal commitCredentialMask;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint8))) internal commitFreshCredentialMask;
 
+    // Per-round content dormancy generation snapshot. If content becomes dormant and is later
+    // revived, pre-dormancy rounds cannot resume reveal/settlement in the revived lifecycle.
+    mapping(uint256 => mapping(uint256 => uint8)) internal roundContentDormantCountSnapshot;
+
     // --- Storage gap reserved for future upgrades ---
-    uint256[18] private __gap;
+    uint256[17] private __gap;
 }

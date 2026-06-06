@@ -182,6 +182,54 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Dormant));
     }
 
+    function test_MarkDormant_AllSybilQuorumRoundCannotRevealAfterDormancy() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 salt1, uint256 roundId) = _commitWithKey(voter1, contentId, true);
+        _commitWithKey(voter2, contentId, false);
+        _commitWithKey(voter3, contentId, true);
+        assertFalse(engine.isDormancyBlocked(contentId), "all-sybil round stays refund-cancellable");
+
+        vm.warp(T0 + 31 days);
+        registry.markDormant(contentId);
+
+        vm.expectRevert(RoundVotingEngine.ContentNotActive.selector);
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, salt1);
+
+        engine.cancelExpiredRound(contentId, roundId);
+        RoundLib.Round memory cancelledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(cancelledRound.state), uint256(RoundLib.RoundState.Cancelled));
+    }
+
+    function test_ReviveAfterAllSybilQuorumRound_StartsFreshRound() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 salt1, uint256 staleRoundId) = _commitWithKey(voter1, contentId, true);
+        _commitWithKey(voter2, contentId, false);
+        _commitWithKey(voter3, contentId, true);
+
+        vm.warp(T0 + 31 days);
+        registry.markDormant(contentId);
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 5e6);
+        registry.reviveContent(contentId);
+        vm.stopPrank();
+
+        vm.expectRevert(RoundVotingEngine.ContentNotActive.selector);
+        engine.revealVoteByCommitKey(contentId, staleRoundId, ck1, true, 5_000, salt1);
+
+        _commit(voter4, contentId, true);
+
+        RoundLib.Round memory staleRound = RoundEngineReadHelpers.round(engine, contentId, staleRoundId);
+        assertEq(uint256(staleRound.state), uint256(RoundLib.RoundState.Cancelled));
+        uint256 freshRoundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        assertEq(freshRoundId, staleRoundId + 1);
+        RoundLib.Round memory freshRound = RoundEngineReadHelpers.round(engine, contentId, freshRoundId);
+        assertEq(uint256(freshRound.state), uint256(RoundLib.RoundState.Open));
+        assertEq(freshRound.voteCount, 1);
+    }
+
     function test_ReviveAfterEmptyOpenRound_StartsFreshRound() public {
         uint256 contentId = _submitContent();
 
@@ -218,22 +266,26 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
     }
 
     function _commit(address voter, uint256 contentId, bool isUp) internal {
-        bytes32 salt = keccak256(abi.encodePacked(voter, block.timestamp));
-        _openRoundForTest(engine, contentId, voter);
-        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(address(engine), voter, isUp, salt, contentId);
-        vm.startPrank(voter);
-        lrepToken.approve(address(engine), STAKE);
-        uint256 cachedRoundContext2 = _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps);
-        engine.commitVote(
-            contentId,
-            cachedRoundContext2,
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            STAKE,
-            address(0)
+        _commitWithKey(voter, contentId, isUp);
+    }
+
+    function _commitWithKey(address voter, uint256 contentId, bool isUp)
+        internal
+        returns (bytes32 commitKey, bytes32 salt, uint256 roundId)
+    {
+        salt = keccak256(abi.encodePacked(voter, block.timestamp));
+        commitKey = _commitTestVote(
+            DirectTestCommitRequest({
+                engine: engine,
+                lrepToken: lrepToken,
+                voter: voter,
+                contentId: contentId,
+                isUp: isUp,
+                stake: STAKE,
+                frontend: address(0),
+                salt: salt
+            })
         );
-        vm.stopPrank();
+        roundId = engine.currentRoundId(contentId);
     }
 }
