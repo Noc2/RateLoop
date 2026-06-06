@@ -1,4 +1,4 @@
-import { fetchPonderJson, ponderApi, resolvePonderUrl } from "./client";
+import { fetchPonderJson, invalidatePonderCache, isPonderAvailable, ponderApi, resolvePonderUrl } from "./client";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -24,6 +24,44 @@ test("resolvePonderUrl disables localhost URLs in production without crashing mo
 
 test("resolvePonderUrl can allow localhost URLs for local production-style E2E", () => {
   assert.equal(resolvePonderUrl("http://localhost:42069", true, true), "http://localhost:42069");
+});
+
+test("isPonderAvailable proxies browser health checks through Next", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  let requestedUrl = "";
+  let requestedCache: RequestCache | undefined;
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {},
+  });
+
+  globalThis.fetch = (async (input, init) => {
+    requestedUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    requestedCache = init?.cache;
+    return new Response(JSON.stringify({ available: false }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    invalidatePonderCache();
+
+    assert.equal(await isPonderAvailable(), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow) {
+      Object.defineProperty(globalThis, "window", originalWindow);
+    } else {
+      delete (globalThis as { window?: unknown }).window;
+    }
+    invalidatePonderCache();
+  }
+
+  assert.equal(requestedUrl, "/api/ponder/availability");
+  assert.equal(requestedCache, "no-store");
 });
 
 test("fetchPonderJson returns parsed json responses", async () => {

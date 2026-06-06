@@ -248,22 +248,44 @@ export async function isPonderAvailable(): Promise<boolean> {
   }
 
   availabilityPromise = (async () => {
-    try {
-      const res = await fetch(`${ponderUrl}/health`, {
-        signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
-      });
-      cachedAvailability = res.ok;
-    } catch {
-      cachedAvailability = false;
-    } finally {
-      cacheExpiry = Date.now() + CACHE_DURATION;
-      availabilityPromise = null;
-    }
+    cachedAvailability =
+      typeof window === "undefined"
+        ? await checkPonderAvailabilityDirect(ponderUrl)
+        : await checkPonderAvailabilityThroughApi();
+
+    cacheExpiry = Date.now() + CACHE_DURATION;
+    availabilityPromise = null;
 
     return cachedAvailability;
   })();
 
   return availabilityPromise;
+}
+
+async function checkPonderAvailabilityDirect(ponderUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${ponderUrl}/health`, {
+      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function checkPonderAvailabilityThroughApi(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/ponder/availability", {
+      cache: "no-store",
+      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
+    });
+    if (!res.ok) return false;
+
+    const data = (await res.json()) as { available?: unknown };
+    return data.available === true;
+  } catch {
+    return false;
+  }
 }
 
 export function invalidatePonderCache() {

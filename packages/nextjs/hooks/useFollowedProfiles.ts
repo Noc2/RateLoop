@@ -5,7 +5,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAddress } from "viem";
 import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import type { SignedCollectionReadAccessResult, SignedCollectionToggleResult } from "~~/hooks/useSignedCollection";
-import { type PonderFollowResponse, ponderApi } from "~~/services/ponder/client";
+import {
+  type PonderFollowResponse,
+  invalidatePonderCache,
+  isPonderAvailable,
+  ponderApi,
+} from "~~/services/ponder/client";
 import { isSignatureRejected } from "~~/utils/signatureErrors";
 
 export interface FollowedProfileItem {
@@ -41,6 +46,24 @@ function normalizeFollowItems(items: FollowedProfileItem[]) {
   }));
 }
 
+export async function fetchFollowedProfiles(address?: string): Promise<PonderFollowResponse> {
+  const normalizedAddress = address?.toLowerCase();
+  if (!normalizedAddress) return EMPTY_FOLLOWED_RESPONSE;
+
+  const available = await isPonderAvailable();
+  if (!available) return EMPTY_FOLLOWED_RESPONSE;
+
+  try {
+    return await ponderApi.getAllFollows(normalizedAddress);
+  } catch (error) {
+    invalidatePonderCache();
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[Ponder] Failed to fetch followed profiles:", error);
+    }
+    return EMPTY_FOLLOWED_RESPONSE;
+  }
+}
+
 export function useFollowedProfiles(address?: string, options?: UseFollowedProfilesOptions) {
   void options;
   const normalizedAddress = address?.toLowerCase();
@@ -60,8 +83,7 @@ export function useFollowedProfiles(address?: string, options?: UseFollowedProfi
   const followQuery = useQuery({
     queryKey,
     queryFn: async () => {
-      if (!normalizedAddress) return EMPTY_FOLLOWED_RESPONSE;
-      return ponderApi.getAllFollows(normalizedAddress);
+      return fetchFollowedProfiles(normalizedAddress);
     },
     enabled: Boolean(normalizedAddress),
     staleTime: 15_000,
