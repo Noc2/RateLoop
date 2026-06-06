@@ -4,18 +4,20 @@ pragma solidity ^0.8.34;
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { IRaterRegistryStatus } from "../interfaces/IRaterRegistryStatus.sol";
 import {
-    BOUNTY_ELIGIBILITY_KIND_MASK,
+    BOUNTY_ELIGIBILITY_CREDENTIAL_MASK,
     BOUNTY_ELIGIBILITY_OPEN,
-    BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
-    BOUNTY_ELIGIBILITY_SELFIE,
-    BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+    BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG
 } from "./QuestionRewardPoolEscrowTypes.sol";
 
 library QuestionRewardPoolEscrowEligibilityLib {
     function isValidPolicy(uint8 bountyEligibility) internal pure returns (bool) {
-        uint8 kind = bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK;
-        if (kind == BOUNTY_ELIGIBILITY_OPEN) return bountyEligibility == BOUNTY_ELIGIBILITY_OPEN;
-        return kind >= BOUNTY_ELIGIBILITY_SELFIE && kind <= BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
+        uint8 unsupportedBits =
+            bountyEligibility & ~(BOUNTY_ELIGIBILITY_CREDENTIAL_MASK | BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG);
+        if (unsupportedBits != 0) return false;
+
+        uint8 credentialMask = _credentialMask(bountyEligibility);
+        if (credentialMask == BOUNTY_ELIGIBILITY_OPEN) return bountyEligibility == BOUNTY_ELIGIBILITY_OPEN;
+        return true;
     }
 
     function isAccountEligibleForBounty(ProtocolConfig protocolConfig, uint8 bountyEligibility, address account)
@@ -27,10 +29,11 @@ library QuestionRewardPoolEscrowEligibilityLib {
         if (!isValidPolicy(bountyEligibility)) return false;
         if (account == address(0)) return false;
 
-        uint8 kind = bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK;
-        if (!_hasActiveCredentialKind(protocolConfig, account, kind)) return false;
+        uint8 requiredMask = _credentialMask(bountyEligibility);
+        (uint8 activeMask, uint8 freshMask) = _credentialStatusBits(protocolConfig, account);
+        if ((activeMask & requiredMask) == 0) return false;
         if ((bountyEligibility & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) != 0) {
-            return _hasRecentCredentialRecheck(protocolConfig, account, kind);
+            return (activeMask & freshMask & requiredMask) != 0;
         }
         return true;
     }
@@ -42,11 +45,10 @@ library QuestionRewardPoolEscrowEligibilityLib {
     {
         if (bountyEligibility == BOUNTY_ELIGIBILITY_OPEN) return true;
         if (!isValidPolicy(bountyEligibility)) return false;
-        uint8 kind = bountyEligibility & BOUNTY_ELIGIBILITY_KIND_MASK;
-        uint8 requiredBit = uint8(1 << kind);
-        if ((credentialMask & requiredBit) == 0) return false;
+        uint8 requiredMask = _credentialMask(bountyEligibility);
+        if ((credentialMask & requiredMask) == 0) return false;
         if ((bountyEligibility & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) != 0) {
-            return (freshCredentialMask & requiredBit) != 0;
+            return (credentialMask & freshCredentialMask & requiredMask) != 0;
         }
         return true;
     }
@@ -55,46 +57,23 @@ library QuestionRewardPoolEscrowEligibilityLib {
         return bytes32(0);
     }
 
-    function _hasActiveHumanCredential(ProtocolConfig protocolConfig, address account) private view returns (bool) {
-        if (address(protocolConfig) == address(0)) return false;
-        address raterRegistry = protocolConfig.raterRegistry();
-        if (raterRegistry == address(0)) return false;
-
-        try IRaterRegistryStatus(raterRegistry).hasActiveHumanCredential(account) returns (bool active) {
-            return active;
-        } catch {
-            return false;
-        }
+    function _credentialMask(uint8 bountyEligibility) private pure returns (uint8) {
+        return bountyEligibility & BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
     }
 
-    function _hasActiveCredentialKind(ProtocolConfig protocolConfig, address account, uint8 kind)
+    function _credentialStatusBits(ProtocolConfig protocolConfig, address account)
         private
         view
-        returns (bool)
+        returns (uint8 activeMask, uint8 freshMask)
     {
-        if (kind == BOUNTY_ELIGIBILITY_VERIFIED_HUMAN) return _hasActiveHumanCredential(protocolConfig, account);
-        if (address(protocolConfig) == address(0)) return false;
+        if (address(protocolConfig) == address(0)) return (0, 0);
         address raterRegistry = protocolConfig.raterRegistry();
-        if (raterRegistry == address(0)) return false;
-        try IRaterRegistryStatus(raterRegistry).hasActiveCredentialKind(account, kind) returns (bool active) {
-            return active;
-        } catch {
-            return false;
-        }
-    }
+        if (raterRegistry == address(0)) return (0, 0);
 
-    function _hasRecentCredentialRecheck(ProtocolConfig protocolConfig, address account, uint8 kind)
-        private
-        view
-        returns (bool)
-    {
-        if (address(protocolConfig) == address(0)) return false;
-        address raterRegistry = protocolConfig.raterRegistry();
-        if (raterRegistry == address(0)) return false;
-        try IRaterRegistryStatus(raterRegistry).hasRecentCredentialRecheck(account, kind) returns (bool fresh) {
-            return fresh;
+        try IRaterRegistryStatus(raterRegistry).credentialStatusBits(account) returns (uint8 active, uint8 fresh) {
+            return (active, fresh);
         } catch {
-            return false;
+            return (0, 0);
         }
     }
 }

@@ -17,7 +17,13 @@ import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol"
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
 import { RoundEngineReadHelpers } from "./helpers/RoundEngineReadHelpers.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
-import { AuthorizedRewardPoolParams, RoundSnapshot } from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
+import {
+    AuthorizedRewardPoolParams,
+    BOUNTY_ELIGIBILITY_PASSPORT,
+    BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
+    BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
+    RoundSnapshot
+} from "../contracts/libraries/QuestionRewardPoolEscrowTypes.sol";
 import { TlockVoteLib } from "../contracts/libraries/TlockVoteLib.sol";
 import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
 import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
@@ -67,9 +73,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint256 internal constant MAX_FRONTEND_FEE_BPS = 500;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
-    uint8 internal constant BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 3;
-    uint8 internal constant BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
-
     mapping(uint256 => mapping(uint256 => uint256)) internal mockedRoundCommitCount;
 
     /// @dev M-Oracle-1: stub so the test contract can act as a question-reward consumer in the
@@ -402,8 +405,58 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _claimQuestionRewardAndAssert(voter1, rewardPoolId, roundId);
     }
 
+    function testMultiCredentialBountyAllowsPassportOrVerifiedHuman() public {
+        uint8 passportOrHumanEligibility = BOUNTY_ELIGIBILITY_PASSPORT | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, BOUNTY_ELIGIBILITY_PASSPORT, 0);
+        raterIdentityRegistry.setCredentialStatusMasks(voter2, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN, 0);
+        raterIdentityRegistry.setCredentialStatusMasks(voter3, BOUNTY_ELIGIBILITY_PASSPORT, 0);
+        raterIdentityRegistry.setCredentialStatusMasks(voter4, 0, 0);
+
+        uint256 contentId = _submitQuestion("passport-or-human-bounty");
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, passportOrHumanEligibility);
+
+        uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(snapshot.rawEligibleVoters, 3);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
+
+        vm.prank(voter4);
+        vm.expectRevert("Not bounty eligible");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId);
+    }
+
+    function testRecentMultiCredentialBountyAllowsAnyFreshSelectedCredential() public {
+        uint8 passportOrHumanEligibility = BOUNTY_ELIGIBILITY_PASSPORT | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
+        uint8 recentPassportOrHumanEligibility = BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG | passportOrHumanEligibility;
+        raterIdentityRegistry.setCredentialStatusMasks(voter1, passportOrHumanEligibility, BOUNTY_ELIGIBILITY_PASSPORT);
+        raterIdentityRegistry.setCredentialStatusMasks(
+            voter2, passportOrHumanEligibility, BOUNTY_ELIGIBILITY_VERIFIED_HUMAN
+        );
+        raterIdentityRegistry.setCredentialStatusMasks(voter3, BOUNTY_ELIGIBILITY_PASSPORT, BOUNTY_ELIGIBILITY_PASSPORT);
+        raterIdentityRegistry.setCredentialStatusMasks(voter4, passportOrHumanEligibility, 0);
+
+        uint256 contentId = _submitQuestion("recent-passport-or-human-bounty");
+        uint256 rewardPoolId =
+            _createRewardPoolWithEligibility(contentId, REWARD_POOL_AMOUNT, 3, 1, recentPassportOrHumanEligibility);
+
+        uint256 roundId = _settleRoundWith(_fourVoters(), contentId, _directions(true, true, false, true));
+        rewardPoolEscrow.qualifyRound(rewardPoolId, roundId);
+
+        RoundSnapshot memory snapshot = rewardPoolEscrow.getRoundSnapshot(rewardPoolId, roundId);
+        assertEq(snapshot.rawEligibleVoters, 3);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter1), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter2), 0);
+        assertGt(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter3), 0);
+        assertEq(rewardPoolEscrow.claimableQuestionReward(rewardPoolId, roundId, voter4), 0);
+    }
+
     function testRecentRecheckBountyUsesFreshnessSnapshotAtCommit() public {
-        uint8 humanBit = uint8(1 << BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+        uint8 humanBit = BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
         uint8 recentHumanEligibility = BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
         raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, humanBit);
         raterIdentityRegistry.setCredentialStatusMasks(voter2, humanBit, humanBit);
@@ -426,7 +479,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testRecentRecheckBountyRejectsVoterRecheckedAfterCommit() public {
-        uint8 humanBit = uint8(1 << BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+        uint8 humanBit = BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
         uint8 recentHumanEligibility = BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
         raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, humanBit);
         raterIdentityRegistry.setCredentialStatusMasks(voter2, humanBit, humanBit);
@@ -1426,7 +1479,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testRecentRecheckBundleUsesFreshnessSnapshotAtCommit() public {
-        uint8 humanBit = uint8(1 << BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+        uint8 humanBit = BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
         uint8 recentHumanEligibility = BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
         raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, humanBit);
         raterIdentityRegistry.setCredentialStatusMasks(voter2, humanBit, humanBit);
@@ -1452,7 +1505,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testRecentRecheckBundleRequiresEveryQuestionCommitFreshAtCommit() public {
-        uint8 humanBit = uint8(1 << BOUNTY_ELIGIBILITY_VERIFIED_HUMAN);
+        uint8 humanBit = BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
         uint8 recentHumanEligibility = BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
         raterIdentityRegistry.setCredentialStatusMasks(voter1, humanBit, humanBit);
         raterIdentityRegistry.setCredentialStatusMasks(voter2, humanBit, humanBit);
