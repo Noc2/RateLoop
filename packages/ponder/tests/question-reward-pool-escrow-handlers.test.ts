@@ -131,7 +131,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           feedbackWindowSeconds: 2_592_000n,
           frontendFeeBps: 300n,
           asset: 1n,
-          bountyEligibility: 1n,
+          bountyEligibility: 2n,
           bountyEligibilityDataHash: EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
           nonRefundable: false,
         },
@@ -150,7 +150,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
         unallocatedAmount: 100_000_000n,
         frontendFeeBps: 300,
         bountyKind: 0,
-        bountyEligibility: 1,
+        bountyEligibility: 2,
         bountyEligibilityDataHash: EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
         challengedRoundId: 0n,
         requiredVoters: 5,
@@ -223,7 +223,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       event: {
         args: {
           rewardPoolId: 7n,
-          bountyEligibility: 1n,
+          bountyEligibility: 2n,
         },
         block: { number: 12n, timestamp: 1_900n },
       },
@@ -234,7 +234,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       event: {
         args: {
           bundleId: 9n,
-          bountyEligibility: 1n,
+          bountyEligibility: 2n,
         },
         block: { number: 13n, timestamp: 2_000n },
       },
@@ -245,7 +245,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       table: "questionRewardPool",
       key: { id: 7n },
       values: {
-        bountyEligibility: 1,
+        bountyEligibility: 2,
         updatedAt: 1_900n,
       },
     });
@@ -253,7 +253,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
       table: "questionBundleReward",
       key: { id: 9n },
       values: {
-        bountyEligibility: 1,
+        bountyEligibility: 2,
         updatedAt: 2_000n,
       },
     });
@@ -369,7 +369,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           contentId: 1n,
           roundId: 3n,
           claimant: "0x0000000000000000000000000000000000000002",
-          identityKey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          identityKey:
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           amount: 9_700_000n,
           frontend: "0x00000000000000000000000000000000000000f1",
           frontendRecipient: "0x00000000000000000000000000000000000000f1",
@@ -413,7 +414,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           table: "questionRewardPoolClaim",
           values: expect.objectContaining({
             id: "7-3-0x0000000000000000000000000000000000000002-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            identityKey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            identityKey:
+              "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             amount: 9_700_000n,
             grossAmount: 10_000_000n,
             frontendFee: 300_000n,
@@ -522,7 +524,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           contentId: 1n,
           roundId: 3n,
           claimant: "0x0000000000000000000000000000000000000002",
-          identityKey: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          identityKey:
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           amount: 9_700_000n,
           frontend: "0x00000000000000000000000000000000000000f1",
           frontendRecipient: "0x00000000000000000000000000000000000000f1",
@@ -564,7 +567,7 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           feedbackWindowSeconds: 2_592_000n,
           frontendFeeBps: 300n,
           asset: 1n,
-          bountyEligibility: 1n,
+          bountyEligibility: 2n,
           bountyEligibilityDataHash: EMPTY_BOUNTY_ELIGIBILITY_DATA_HASH,
         },
         block: { number: 20n, timestamp: 1_700n },
@@ -611,7 +614,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           bundleId: 9n,
           roundSetIndex: 1n,
           claimant: "0x00000000000000000000000000000000000000A2",
-          identityKey: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          identityKey:
+            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           amount: 19_400_000n,
           frontend: "0x00000000000000000000000000000000000000f1",
           frontendRecipient: "0x00000000000000000000000000000000000000f1",
@@ -657,7 +661,8 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
           table: "questionBundleClaim",
           values: expect.objectContaining({
             id: "9-1-0x00000000000000000000000000000000000000a2-0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            identityKey: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            identityKey:
+              "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             roundSetIndex: 1,
             amount: 19_400_000n,
             frontendFee: 600_000n,

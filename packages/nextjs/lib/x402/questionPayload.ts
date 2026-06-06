@@ -392,7 +392,9 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
     throw new X402QuestionInputError("bounty.feedbackWindowSeconds cannot exceed bounty.bountyWindowSeconds.");
   }
   if (!isSupportedBountyEligibility(bountyEligibility)) {
-    throw new X402QuestionInputError("bounty.bountyEligibility must be 0, 1, 2, 3, 129, 130, or 131.");
+    throw new X402QuestionInputError(
+      "bounty.bountyEligibility must be 0 or a supported credential bitmask: 2 Selfie Check, 4 Passport, 8 Proof of Human, add values to allow any selected credential, and add 128 to require a recent recheck.",
+    );
   }
   assertSupportedX402BundleBounty({
     bountyStartBy,

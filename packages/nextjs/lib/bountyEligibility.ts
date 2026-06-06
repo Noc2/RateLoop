@@ -9,68 +9,87 @@ import {
 } from "~~/lib/world-id/credentials";
 
 export const BOUNTY_ELIGIBILITY_OPEN = 0;
-export const BOUNTY_ELIGIBILITY_SELFIE = WORLD_CREDENTIAL_SELFIE;
-export const BOUNTY_ELIGIBILITY_PASSPORT = WORLD_CREDENTIAL_PASSPORT;
-export const BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = WORLD_CREDENTIAL_PROOF_OF_HUMAN;
-export const BOUNTY_ELIGIBILITY_KIND_MASK = 0x7f;
+export const BOUNTY_ELIGIBILITY_SELFIE = 1 << WORLD_CREDENTIAL_SELFIE;
+export const BOUNTY_ELIGIBILITY_PASSPORT = 1 << WORLD_CREDENTIAL_PASSPORT;
+export const BOUNTY_ELIGIBILITY_VERIFIED_HUMAN = 1 << WORLD_CREDENTIAL_PROOF_OF_HUMAN;
+export const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK =
+  BOUNTY_ELIGIBILITY_SELFIE | BOUNTY_ELIGIBILITY_PASSPORT | BOUNTY_ELIGIBILITY_VERIFIED_HUMAN;
 export const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
-
-export type BountyEligibilityBase = typeof BOUNTY_ELIGIBILITY_OPEN | WorldCredentialKind;
-
-export const BOUNTY_ELIGIBILITY_BASE_OPTIONS: Array<{
-  id: BountyEligibilityBase;
-  label: string;
-  mode: number;
-}> = [
-  { id: BOUNTY_ELIGIBILITY_OPEN, label: "Everyone", mode: BOUNTY_ELIGIBILITY_OPEN },
-  ...WORLD_CREDENTIAL_BOUNTY_OPTIONS.map(option => ({
-    id: option.id,
-    label: option.label,
-    mode: option.id,
-  })),
+const BOUNTY_ELIGIBILITY_KINDS: WorldCredentialKind[] = [
+  WORLD_CREDENTIAL_SELFIE,
+  WORLD_CREDENTIAL_PASSPORT,
+  WORLD_CREDENTIAL_PROOF_OF_HUMAN,
 ];
 
-export function getBountyEligibilityBase(value: number): BountyEligibilityBase {
-  const kind = value & BOUNTY_ELIGIBILITY_KIND_MASK;
-  return isWorldCredentialKind(kind) ? kind : BOUNTY_ELIGIBILITY_OPEN;
+export const BOUNTY_ELIGIBILITY_CREDENTIAL_OPTIONS: Array<{
+  bit: number;
+  kind: WorldCredentialKind;
+  label: string;
+}> = WORLD_CREDENTIAL_BOUNTY_OPTIONS.map(option => ({
+  bit: getBountyEligibilityBitForKind(option.id),
+  kind: option.id,
+  label: option.label,
+}));
+
+export function getBountyEligibilityBitForKind(kind: WorldCredentialKind): number {
+  return 1 << kind;
+}
+
+export function getBountyEligibilityCredentialMask(value: number): number {
+  return value & BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
+}
+
+export function getBountyEligibilityKinds(value: number): WorldCredentialKind[] {
+  const credentialMask = getBountyEligibilityCredentialMask(value);
+  return BOUNTY_ELIGIBILITY_KINDS.filter(kind => {
+    return (credentialMask & getBountyEligibilityBitForKind(kind)) !== 0;
+  });
 }
 
 export function bountyEligibilityRequiresRecentRecheck(value: number): boolean {
-  return (value & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) !== 0 && getBountyEligibilityBase(value) !== 0;
+  return (value & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) !== 0 && getBountyEligibilityCredentialMask(value) !== 0;
 }
 
-export function buildBountyEligibility(base: BountyEligibilityBase, requireRecentRecheck: boolean): number {
-  if (base === BOUNTY_ELIGIBILITY_OPEN) return BOUNTY_ELIGIBILITY_OPEN;
-  return base | (requireRecentRecheck ? BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG : 0);
+export function buildBountyEligibility(credentialMask: number, requireRecentRecheck: boolean): number {
+  const supportedMask = credentialMask & BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
+  if (supportedMask === BOUNTY_ELIGIBILITY_OPEN) return BOUNTY_ELIGIBILITY_OPEN;
+  return supportedMask | (requireRecentRecheck ? BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG : 0);
 }
 
 export function isSupportedBountyEligibility(value: number): boolean {
-  const kind = value & BOUNTY_ELIGIBILITY_KIND_MASK;
-  if (kind === BOUNTY_ELIGIBILITY_OPEN) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xff) return false;
+
+  const unsupportedBits = value & ~(BOUNTY_ELIGIBILITY_CREDENTIAL_MASK | BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG);
+  if (unsupportedBits !== 0) return false;
+
+  const credentialMask = getBountyEligibilityCredentialMask(value);
+  if (credentialMask === BOUNTY_ELIGIBILITY_OPEN) {
     return (value & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) === 0;
   }
-  return isWorldCredentialKind(kind);
+  return getBountyEligibilityKinds(value).every(isWorldCredentialKind);
 }
 
 export function getBountyEligibilityLabel(value: number | null | undefined): string {
   if (value === null || value === undefined) return "Mixed bounty scopes";
 
-  const base = getBountyEligibilityBase(value);
-  if (base === BOUNTY_ELIGIBILITY_OPEN) return "Everyone";
+  const kinds = getBountyEligibilityKinds(value);
+  if (kinds.length === 0) return "Everyone";
 
-  const label = getWorldCredentialOption(base).shortLabel;
+  const label = kinds.map(kind => getWorldCredentialOption(kind).shortLabel).join(" or ");
   return bountyEligibilityRequiresRecentRecheck(value) ? `${label} + recent recheck` : label;
 }
 
 export function getBountyEligibilityRequirement(value: number | null | undefined): {
-  kind: WorldCredentialKind;
+  credentialMask: number;
+  kinds: WorldCredentialKind[];
   requiresRecentRecheck: boolean;
 } | null {
   if (value === null || value === undefined) return null;
-  const base = getBountyEligibilityBase(value);
-  if (base === BOUNTY_ELIGIBILITY_OPEN) return null;
+  const credentialMask = getBountyEligibilityCredentialMask(value);
+  if (credentialMask === BOUNTY_ELIGIBILITY_OPEN) return null;
   return {
-    kind: base,
+    credentialMask,
+    kinds: getBountyEligibilityKinds(value),
     requiresRecentRecheck: bountyEligibilityRequiresRecentRecheck(value),
   };
 }

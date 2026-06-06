@@ -20,8 +20,8 @@ const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 const SNAPSHOT_STATUS_PROPOSED = 1;
 const SNAPSHOT_STATUS_REJECTED = 4;
 const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
-const BOUNTY_ELIGIBILITY_KIND_MASK = 0x7f;
-const BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 3;
+const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 0x0e;
+const BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 0x08;
 const ZERO_HASH = `0x${"0".repeat(64)}` as const;
 
 function validPositiveBigIntParam(value: string | undefined): bigint | null {
@@ -190,23 +190,24 @@ export function registerCorrelationRoutes(app: ApiApp) {
             )
           )`,
           or(
-            sql`(${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_KIND_MASK}) = 0`,
+            sql`(${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_CREDENTIAL_MASK}) = 0`,
             sql`(
-              (${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_KIND_MASK}) > 0
+              (${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_CREDENTIAL_MASK}) > 0
               and (
                 ${vote.credentialMask}
-                & (1 << (${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_KIND_MASK}))
+                & (${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_CREDENTIAL_MASK})
               ) != 0
               and (
                 (${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG}) = 0
                 or (
-                  ${vote.freshCredentialMask}
-                  & (1 << (${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_KIND_MASK}))
+                  ${vote.credentialMask}
+                  & ${vote.freshCredentialMask}
+                  & (${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_CREDENTIAL_MASK})
                 ) != 0
               )
             )`,
             and(
-              sql`(${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_KIND_MASK}) = ${BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN}`,
+              sql`(${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN}) != 0`,
               sql`(${questionRewardPool.bountyEligibility} & ${BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG}) = 0`,
               sql`${raterHumanCredential.rater} is not null`,
             ),

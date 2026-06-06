@@ -79,7 +79,8 @@ const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
-const SUPPORTED_BOUNTY_ELIGIBILITY = new Set([0, 1, 2, 3, 129, 130, 131]);
+const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 2 | 4 | 8;
+const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 128;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const QUESTION_CONTEXT_DOMAIN = keccak256(
@@ -940,7 +941,8 @@ function readOptionalString(value: unknown): string {
 }
 
 function readOptionalBytes32(value: unknown, fieldName: string): Hex {
-  if (value === undefined || value === null || value === "") return EMPTY_DETAILS_HASH;
+  if (value === undefined || value === null || value === "")
+    return EMPTY_DETAILS_HASH;
   return normalizeBytes32(value, fieldName);
 }
 
@@ -955,6 +957,23 @@ function parseNonNegativeInteger(value: unknown, fieldName: string): bigint {
     throw new Error(`${fieldName} must be a non-negative integer.`);
   }
   return BigInt(rawValue);
+}
+
+function isSupportedBountyEligibility(value: number): boolean {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 255) return false;
+  if (
+    (value &
+      ~(
+        BOUNTY_ELIGIBILITY_CREDENTIAL_MASK |
+        BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG
+      )) !==
+    0
+  ) {
+    return false;
+  }
+
+  const credentialMask = value & BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
+  return credentialMask === 0 ? value === 0 : true;
 }
 
 function parsePositiveAtomicAmount(value: unknown, fieldName: string): bigint {
@@ -1304,9 +1323,9 @@ function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
       "bounty.feedbackWindowSeconds cannot exceed bounty.bountyWindowSeconds.",
     );
   }
-  if (!SUPPORTED_BOUNTY_ELIGIBILITY.has(bountyEligibility)) {
+  if (!isSupportedBountyEligibility(bountyEligibility)) {
     throw new Error(
-      "bounty.bountyEligibility must be 0, 1, 2, 3, 129, 130, or 131.",
+      "bounty.bountyEligibility must be 0 or a supported credential bitmask: 2 Selfie Check, 4 Passport, 8 Proof of Human, add values to allow any selected credential, and add 128 to require a recent recheck.",
     );
   }
 
@@ -1405,10 +1424,14 @@ function normalizeLocalQuestion(
     ? sanitizeHttpsUrl(rawDetailsUrl, `${fieldPrefix}.detailsUrl`)
     : "";
   if (detailsUrl && detailsHash.toLowerCase() === EMPTY_DETAILS_HASH) {
-    throw new Error(`${fieldPrefix}.detailsHash is required when detailsUrl is provided.`);
+    throw new Error(
+      `${fieldPrefix}.detailsHash is required when detailsUrl is provided.`,
+    );
   }
   if (!detailsUrl && detailsHash.toLowerCase() !== EMPTY_DETAILS_HASH) {
-    throw new Error(`${fieldPrefix}.detailsUrl is required when detailsHash is provided.`);
+    throw new Error(
+      `${fieldPrefix}.detailsUrl is required when detailsHash is provided.`,
+    );
   }
   if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {
     throw new Error(`${fieldPrefix}.videoUrl must be a supported YouTube URL.`);
@@ -1461,14 +1484,14 @@ function normalizeLocalQuestion(
     voteSemantics: templateSelection.template.voteSemantics,
   });
 
-    return {
-      categoryId,
-      contextUrl,
-      description,
-      detailsHash,
-      detailsUrl,
-      imageUrls,
-      questionMetadataHash: spec.questionMetadataHash,
+  return {
+    categoryId,
+    contextUrl,
+    description,
+    detailsHash,
+    detailsUrl,
+    imageUrls,
+    questionMetadataHash: spec.questionMetadataHash,
     resultSpecHash: spec.resultSpecHash,
     tags,
     tagList,
@@ -1804,8 +1827,18 @@ function buildQuestionBundleHash(
           QUESTION_BUNDLE_ITEM_DOMAIN,
           keccak256(
             encodeAbiParameters(
-              [{ type: "string" }, { type: "string" }, { type: "string" }, { type: "string" }],
-              [question.contextUrl, question.title, question.description, question.tags],
+              [
+                { type: "string" },
+                { type: "string" },
+                { type: "string" },
+                { type: "string" },
+              ],
+              [
+                question.contextUrl,
+                question.title,
+                question.description,
+                question.tags,
+              ],
             ),
           ),
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
@@ -1895,13 +1928,13 @@ function buildExpectedLocalSignerQuestionPlan(params: {
   } as const;
   const questions = payload.questions.map((question, index) => {
     const submissionKey = buildQuestionSubmissionKey(question);
-      return {
-        categoryId: question.categoryId,
-        contextUrl: question.contextUrl,
-        description: question.description,
-        detailsHash: question.detailsHash,
-        detailsUrl: question.detailsUrl,
-        imageUrls: question.imageUrls,
+    return {
+      categoryId: question.categoryId,
+      contextUrl: question.contextUrl,
+      description: question.description,
+      detailsHash: question.detailsHash,
+      detailsUrl: question.detailsUrl,
+      imageUrls: question.imageUrls,
       salt: buildDeterministicQuestionSalt({
         index,
         operationKey: operation.operationKey,

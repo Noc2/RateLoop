@@ -33,9 +33,8 @@ import {
   normalizeQuestionDetailsText,
 } from "~~/lib/attachments/questionDetails.shared";
 import {
-  BOUNTY_ELIGIBILITY_BASE_OPTIONS,
+  BOUNTY_ELIGIBILITY_CREDENTIAL_OPTIONS,
   BOUNTY_ELIGIBILITY_OPEN,
-  type BountyEligibilityBase,
   buildBountyEligibility,
 } from "~~/lib/bountyEligibility";
 import {
@@ -492,7 +491,7 @@ export function ContentSubmissionSection() {
   const [rewardAmountTouched, setRewardAmountTouched] = useState(false);
   const [rewardRequiredVoters, setRewardRequiredVoters] = useState("3");
   const [rewardRequiredRounds, setRewardRequiredRounds] = useState("1");
-  const [bountyEligibility, setBountyEligibility] = useState<BountyEligibilityBase>(BOUNTY_ELIGIBILITY_OPEN);
+  const [bountyEligibility, setBountyEligibility] = useState(BOUNTY_ELIGIBILITY_OPEN);
   const [bountyRequiresRecentRecheck, setBountyRequiresRecentRecheck] = useState(false);
   const [bountyWindowPreset, setBountyWindowPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
   const [customBountyWindowAmount, setCustomBountyWindowAmount] = useState(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
@@ -2863,23 +2862,44 @@ export function ContentSubmissionSection() {
           Bounty eligibility
           <InfoTooltip text="Everyone can answer. This only selects which revealed answers can qualify for the bounty payout and the eligible result view." />
         </p>
-        <div className="grid grid-cols-2 gap-2">
-          {BOUNTY_ELIGIBILITY_BASE_OPTIONS.map(option => (
-            <button
-              key={option.id}
-              type="button"
-              aria-pressed={bountyEligibility === option.id}
-              onClick={() => {
-                setBountyEligibility(option.id);
-                if (option.id === BOUNTY_ELIGIBILITY_OPEN) {
-                  setBountyRequiresRecentRecheck(false);
-                }
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="flex min-h-10 items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              className="checkbox checkbox-primary checkbox-sm"
+              checked={bountyEligibility === BOUNTY_ELIGIBILITY_OPEN}
+              onChange={() => {
+                setBountyEligibility(BOUNTY_ELIGIBILITY_OPEN);
+                setBountyRequiresRecentRecheck(false);
               }}
-              className={`btn btn-sm ${bountyEligibility === option.id ? "btn-primary" : "btn-outline"}`}
-            >
-              {option.label}
-            </button>
-          ))}
+            />
+            <span className="font-medium">Everyone</span>
+          </label>
+          {BOUNTY_ELIGIBILITY_CREDENTIAL_OPTIONS.map(option => {
+            const checked = (bountyEligibility & option.bit) !== 0;
+            return (
+              <label
+                key={option.kind}
+                className="flex min-h-10 items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-primary checkbox-sm"
+                  checked={checked}
+                  onChange={event => {
+                    const nextEligibility = event.target.checked
+                      ? bountyEligibility | option.bit
+                      : bountyEligibility & ~option.bit;
+                    setBountyEligibility(nextEligibility);
+                    if (nextEligibility === BOUNTY_ELIGIBILITY_OPEN) {
+                      setBountyRequiresRecentRecheck(false);
+                    }
+                  }}
+                />
+                <span className="font-medium">{option.label}</span>
+              </label>
+            );
+          })}
         </div>
         <label
           className={`mt-3 flex items-center justify-between gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-sm ${

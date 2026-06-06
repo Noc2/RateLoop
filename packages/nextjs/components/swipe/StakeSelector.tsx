@@ -11,7 +11,7 @@ import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useContentLabel } from "~~/hooks/useCategoryRegistry";
 import { useRaterIdentityStake, useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
-import { getBountyEligibilityRequirement } from "~~/lib/bountyEligibility";
+import { getBountyEligibilityBitForKind, getBountyEligibilityRequirement } from "~~/lib/bountyEligibility";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import {
   type OpenRoundFallbackData,
@@ -123,6 +123,14 @@ export function canStakeSelectorRequestWorldIdProof(
   return Boolean(address && eligibilityAddress && address.toLowerCase() === eligibilityAddress.toLowerCase());
 }
 
+function normalizeCredentialStatusBits(data: unknown): { activeMask: number; freshMask: number } | undefined {
+  if (!Array.isArray(data) || data.length < 2) return undefined;
+  return {
+    activeMask: Number(data[0] ?? 0),
+    freshMask: Number(data[1] ?? 0),
+  };
+}
+
 export function getInitialPredictedUpPercent(initialIsUp?: boolean) {
   if (initialIsUp === true) return 60;
   if (initialIsUp === false) return 40;
@@ -190,18 +198,13 @@ export function StakeSelector({
     contractName: REPUTATION_CONTRACT_NAME,
     functionName: "symbol",
   });
-  const { data: hasRequiredCredential, refetch: refetchHasRequiredCredential } = useScaffoldReadContract({
+  const { data: credentialStatusBits, refetch: refetchCredentialStatusBits } = useScaffoldReadContract({
     contractName: "RaterRegistry",
-    functionName: "hasActiveCredentialKind",
-    args: [bountyEligibilityAddress, bountyRequirement?.kind ?? 0],
+    functionName: "credentialStatusBits",
+    args: [bountyEligibilityAddress],
     query: { enabled: Boolean(bountyEligibilityAddress && bountyRequirement) },
   });
-  const { data: hasRecentCredentialRecheck, refetch: refetchHasRecentCredentialRecheck } = useScaffoldReadContract({
-    contractName: "RaterRegistry",
-    functionName: "hasRecentCredentialRecheck",
-    args: [bountyEligibilityAddress, bountyRequirement?.kind ?? 0],
-    query: { enabled: Boolean(bountyEligibilityAddress && bountyRequirement?.requiresRecentRecheck) },
-  });
+  const credentialStatus = useMemo(() => normalizeCredentialStatusBits(credentialStatusBits), [credentialStatusBits]);
 
   const symbol = tokenSymbol ?? "LREP";
   const normalizedCurrentRating = normalizeStakeSelectorRating(currentRating);
@@ -244,18 +247,8 @@ export function StakeSelector({
   useEffect(() => {
     if (!isOpen || !bountyRequirement) return;
     if (!bountyEligibilityAddress) return;
-    void refetchHasRequiredCredential();
-    if (bountyRequirement.requiresRecentRecheck) {
-      void refetchHasRecentCredentialRecheck();
-    }
-  }, [
-    bountyEligibilityAddress,
-    bountyRequirement,
-    isOpen,
-    recheckRefreshKey,
-    refetchHasRecentCredentialRecheck,
-    refetchHasRequiredCredential,
-  ]);
+    void refetchCredentialStatusBits();
+  }, [bountyEligibilityAddress, bountyRequirement, isOpen, recheckRefreshKey, refetchCredentialStatusBits]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -268,38 +261,61 @@ export function StakeSelector({
 
   const isCapacityLimited = amount > 0 && maxByCapacity < maxByBalance;
   const cooldownActive = cooldownSecondsRemaining > 0;
+  const hasRequiredCredential =
+    bountyRequirement && credentialStatus
+      ? (credentialStatus.activeMask & bountyRequirement.credentialMask) !== 0
+      : undefined;
+  const hasRecentCredentialRecheck =
+    bountyRequirement?.requiresRecentRecheck === true && credentialStatus
+      ? (credentialStatus.activeMask & credentialStatus.freshMask & bountyRequirement.credentialMask) !== 0
+      : undefined;
   const isWorldIdEligibilityPending =
     Boolean(bountyRequirement) &&
-    (!bountyEligibilityAddress ||
-      hasRequiredCredential === undefined ||
-      (bountyRequirement?.requiresRecentRecheck === true &&
-        hasRequiredCredential === true &&
-        hasRecentCredentialRecheck === undefined));
-  const missingCredentialKind = bountyRequirement && hasRequiredCredential === false ? bountyRequirement.kind : null;
-  const missingFreshRecheckKind =
+    (!bountyEligibilityAddress || hasRequiredCredential === undefined || credentialStatus === undefined);
+  const missingCredentialKinds = bountyRequirement && hasRequiredCredential === false ? bountyRequirement.kinds : [];
+  const missingFreshRecheckKinds =
     bountyRequirement?.requiresRecentRecheck === true &&
     hasRequiredCredential === true &&
     hasRecentCredentialRecheck === false
-      ? bountyRequirement.kind
-      : null;
-  const worldIdActionKind = missingCredentialKind ?? missingFreshRecheckKind;
-  const worldIdActionPurpose: WorldIdProofPurpose | null = missingCredentialKind
-    ? "credential"
-    : missingFreshRecheckKind
-      ? "presence"
-      : null;
-  const worldIdActionLabel =
-    worldIdActionKind && worldIdActionPurpose
-      ? !isWorldCredentialEnabledForBountyUi(worldIdActionKind)
-        ? `${getWorldCredentialOption(worldIdActionKind).shortLabel} unavailable`
-        : !canRequestWorldIdProof
+      ? bountyRequirement.kinds.filter(kind => {
+          const bit = getBountyEligibilityBitForKind(kind);
+          return credentialStatus
+            ? (credentialStatus.activeMask & bit) !== 0 && (credentialStatus.freshMask & bit) === 0
+            : false;
+        })
+      : [];
+  const worldIdActionPurpose: WorldIdProofPurpose | null =
+    missingCredentialKinds.length > 0 ? "credential" : missingFreshRecheckKinds.length > 0 ? "presence" : null;
+  const worldIdActionKinds = missingCredentialKinds.length > 0 ? missingCredentialKinds : missingFreshRecheckKinds;
+  const worldIdActions =
+    worldIdActionPurpose === null
+      ? []
+      : worldIdActionKinds.map(kind => ({
+          kind,
+          label: !isWorldCredentialEnabledForBountyUi(kind)
+            ? `${getWorldCredentialOption(kind).shortLabel} unavailable`
+            : !canRequestWorldIdProof
+              ? worldIdActionPurpose === "presence"
+                ? `Holder must recheck ${getWorldCredentialOption(kind).shortLabel}`
+                : `Holder must verify ${getWorldCredentialOption(kind).shortLabel}`
+              : worldIdActionPurpose === "presence"
+                ? `Recheck ${getWorldCredentialOption(kind).shortLabel}`
+                : `Verify ${getWorldCredentialOption(kind).shortLabel}`,
+          purpose: worldIdActionPurpose,
+        }));
+  const hasEnabledWorldIdAction = worldIdActions.some(action => isWorldCredentialEnabledForBountyUi(action.kind));
+  const worldIdActionMessage =
+    worldIdActions.length === 0 || !worldIdActionPurpose
+      ? null
+      : canRequestWorldIdProof
+        ? hasEnabledWorldIdAction
           ? worldIdActionPurpose === "presence"
-            ? `Holder must recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
-            : `Holder must verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
-          : worldIdActionPurpose === "presence"
-            ? `Recheck ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
-            : `Verify ${getWorldCredentialOption(worldIdActionKind).shortLabel}`
-      : null;
+            ? "Recheck one eligible credential before voting to qualify for this bounty."
+            : "Verify one eligible credential before voting to qualify for this bounty."
+          : "One of the selected credential lanes is not enabled for this deployment."
+        : worldIdActionPurpose === "presence"
+          ? "The delegated holder must recheck before this vote can qualify for the bounty."
+          : "The delegated holder must verify before this vote can qualify for the bounty.";
   const formDisabled = isConfirming || !roundAcceptsVotes;
   const confirmDisabled = formDisabled || cooldownActive || amount < 0 || (amount > 0 && amount > maxStake);
   const roundUnavailableMessage = getRoundVoteUnavailableMessage(roundSnapshot);
@@ -548,41 +564,38 @@ export function StakeSelector({
               </div>
             </div>
 
-            {(isWorldIdEligibilityPending || (worldIdActionKind && worldIdActionPurpose && worldIdActionLabel)) && (
+            {(isWorldIdEligibilityPending || (worldIdActions.length > 0 && worldIdActionMessage)) && (
               <div className="mb-4 rounded-lg border border-base-content/10 bg-base-300/60 p-3 text-sm text-base-content/75">
                 {isWorldIdEligibilityPending ? (
                   <div className="flex items-center gap-2">
                     <span className="loading loading-spinner loading-xs" />
                     <span>Checking bounty eligibility...</span>
                   </div>
-                ) : worldIdActionKind && worldIdActionPurpose && worldIdActionLabel ? (
+                ) : worldIdActions.length > 0 && worldIdActionMessage ? (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <span>
-                      {canRequestWorldIdProof
-                        ? isWorldCredentialEnabledForBountyUi(worldIdActionKind)
-                          ? "Verify before voting to qualify for this bounty."
-                          : `${getWorldCredentialOption(worldIdActionKind).shortLabel} v4 is not enabled for this deployment.`
-                        : worldIdActionPurpose === "presence"
-                          ? "The delegated holder must recheck before this vote can qualify for the bounty."
-                          : "The delegated holder must verify before this vote can qualify for the bounty."}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!canRequestWorldIdProof) return;
-                        if (!isWorldCredentialEnabledForBountyUi(worldIdActionKind)) return;
-                        onRequestWorldIdProof?.({ kind: worldIdActionKind, purpose: worldIdActionPurpose });
-                      }}
-                      className="btn btn-sm btn-outline shrink-0"
-                      disabled={
-                        isConfirming ||
-                        !canRequestWorldIdProof ||
-                        !isWorldCredentialEnabledForBountyUi(worldIdActionKind) ||
-                        !onRequestWorldIdProof
-                      }
-                    >
-                      {worldIdActionLabel}
-                    </button>
+                    <span>{worldIdActionMessage}</span>
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                      {worldIdActions.map(action => (
+                        <button
+                          key={`${action.purpose}-${action.kind}`}
+                          type="button"
+                          onClick={() => {
+                            if (!canRequestWorldIdProof) return;
+                            if (!isWorldCredentialEnabledForBountyUi(action.kind)) return;
+                            onRequestWorldIdProof?.({ kind: action.kind, purpose: action.purpose });
+                          }}
+                          className="btn btn-sm btn-outline shrink-0"
+                          disabled={
+                            isConfirming ||
+                            !canRequestWorldIdProof ||
+                            !isWorldCredentialEnabledForBountyUi(action.kind) ||
+                            !onRequestWorldIdProof
+                          }
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </div>

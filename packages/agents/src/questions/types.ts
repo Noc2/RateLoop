@@ -24,7 +24,24 @@ export type AgentAskExample = {
   bounty: {
     amount: string | number | bigint;
     asset?: "USDC" | "usdc" | string;
-    bountyEligibility?: 0 | 1 | 2 | 3 | 129 | 130 | 131 | string | number;
+    bountyEligibility?:
+      | 0
+      | 2
+      | 4
+      | 6
+      | 8
+      | 10
+      | 12
+      | 14
+      | 130
+      | 132
+      | 134
+      | 136
+      | 138
+      | 140
+      | 142
+      | string
+      | number;
     bountyStartBy?: string | number | bigint;
     bountyWindowSeconds?: string | number | bigint;
     feedbackWindowSeconds?: string | number | bigint;

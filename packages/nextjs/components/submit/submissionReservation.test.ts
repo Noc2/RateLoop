@@ -113,7 +113,7 @@ test("buildSubmissionRevealCommitment changes when bounty eligibility changes", 
   const edited = buildSubmissionRevealCommitment(
     {
       ...DEFAULT_DRAFT,
-      bountyEligibility: 1,
+      bountyEligibility: 4,
     },
     SALT,
     ADDRESS,

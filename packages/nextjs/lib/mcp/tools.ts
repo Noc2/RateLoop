@@ -83,6 +83,11 @@ import {
 import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
 import { issueSignedActionChallenge } from "~~/lib/auth/signedActions";
 import { verifySignedActionChallenge } from "~~/lib/auth/signedRouteHelpers";
+import {
+  BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG,
+  BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
+  getBountyEligibilityCredentialMask,
+} from "~~/lib/bountyEligibility";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getPrimaryServerTargetNetwork, getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { buildContentFeedbackRoundContext, listContentFeedback } from "~~/lib/feedback/contentFeedback";
@@ -2005,10 +2010,23 @@ function isRaterEligibleForBounty(
 ) {
   if (mode === 0) return true;
   if (!status) return false;
+  if (mode === null || mode === undefined) return false;
+
+  const normalizedMode = Number(mode);
+  if (!Number.isFinite(normalizedMode)) return false;
 
   const verifiedHuman = status.humanCredential.verified;
-  if (mode === 1) return verifiedHuman;
-  return false;
+  const credentialMask = getBountyEligibilityCredentialMask(normalizedMode);
+  const activeMask =
+    Number(status.worldCredentials?.activeMask ?? 0) | (verifiedHuman ? BOUNTY_ELIGIBILITY_VERIFIED_HUMAN : 0);
+  if ((activeMask & credentialMask) === 0) return false;
+
+  if ((normalizedMode & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) !== 0) {
+    const freshRecheckMask = Number(status.worldCredentials?.freshRecheckMask ?? 0);
+    return (activeMask & freshRecheckMask & credentialMask) !== 0;
+  }
+
+  return true;
 }
 
 function defaultAgentResultTemplate() {

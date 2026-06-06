@@ -392,7 +392,7 @@ test("buildX402QuestionOperation binds bounty eligibility into the payload hash"
       ...VALID_REQUEST,
       bounty: {
         ...VALID_REQUEST.bounty,
-        bountyEligibility: "1",
+        bountyEligibility: "4",
       },
     }),
   );
@@ -455,16 +455,16 @@ test("parseX402QuestionRequest accepts bundle payouts with multiple settled roun
   assert.equal(payload.bounty.requiredSettledRounds, 2n);
 });
 
-test("parseX402QuestionRequest accepts credential bounty scopes with recent recheck", () => {
+test("parseX402QuestionRequest accepts multi-credential bounty scopes with recent recheck", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,
     bounty: {
       ...VALID_REQUEST.bounty,
-      bountyEligibility: "130",
+      bountyEligibility: "140",
     },
   });
 
-  assert.equal(payload.bounty.bountyEligibility, 130);
+  assert.equal(payload.bounty.bountyEligibility, 140);
 });
 
 test("parseX402QuestionRequest rejects unsupported bounty scopes", () => {
@@ -474,10 +474,10 @@ test("parseX402QuestionRequest rejects unsupported bounty scopes", () => {
         ...VALID_REQUEST,
         bounty: {
           ...VALID_REQUEST.bounty,
-          bountyEligibility: "4",
+          bountyEligibility: "1",
         },
       }),
-    /bountyEligibility must be 0, 1, 2, 3, 129, 130, or 131/,
+    /bountyEligibility must be 0 or a supported credential bitmask/,
   );
 });
 

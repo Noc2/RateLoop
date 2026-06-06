@@ -490,14 +490,33 @@ function formatQuestionRewardAsset(value: number | string | bigint | null | unde
 }
 
 const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 0x80;
-const BOUNTY_ELIGIBILITY_KIND_MASK = 0x7f;
+const BOUNTY_ELIGIBILITY_CREDENTIALS = [
+  { bit: 0x02, kind: 1, name: "selfie" },
+  { bit: 0x04, kind: 2, name: "passport" },
+  { bit: 0x08, kind: 3, name: "proof_of_human" },
+] as const;
+const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = BOUNTY_ELIGIBILITY_CREDENTIALS.reduce(
+  (mask, credential) => mask | credential.bit,
+  0,
+);
 
-function bountyEligibilityKindName(kind: number) {
-  if (kind === 0) return "everyone";
-  if (kind === 1) return "selfie";
-  if (kind === 2) return "passport";
-  if (kind === 3) return "proof_of_human";
-  return "unknown";
+function bountyEligibilityCredentialNames(mask: number) {
+  return BOUNTY_ELIGIBILITY_CREDENTIALS.filter((credential) => (mask & credential.bit) !== 0).map(
+    (credential) => credential.name,
+  );
+}
+
+function bountyEligibilityLegacyKind(mask: number) {
+  if (mask === 0) return 0;
+  const credential = BOUNTY_ELIGIBILITY_CREDENTIALS.find((item) => item.bit === mask);
+  return credential?.kind ?? null;
+}
+
+function bountyEligibilityKindName(mask: number) {
+  if (mask === 0) return "everyone";
+  const names = bountyEligibilityCredentialNames(mask);
+  if (names.length === 0) return "unknown";
+  return names.join("_or_");
 }
 
 function formatBountyEligibilityPolicy(
@@ -505,11 +524,13 @@ function formatBountyEligibilityPolicy(
 ) {
   if (eligibilityValue === null) return null;
   const value = toNumberValue(eligibilityValue);
-  const kind = value & BOUNTY_ELIGIBILITY_KIND_MASK;
+  const credentialMask = value & BOUNTY_ELIGIBILITY_CREDENTIAL_MASK;
   return {
     value,
-    kind,
-    kindName: bountyEligibilityKindName(kind),
+    kind: bountyEligibilityLegacyKind(credentialMask),
+    kindName: bountyEligibilityKindName(credentialMask),
+    credentialMask,
+    credentialNames: bountyEligibilityCredentialNames(credentialMask),
     requiresRecentRecheck:
       (value & BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG) !== 0,
   };

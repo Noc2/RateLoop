@@ -1120,6 +1120,25 @@ export type PonderVoterStatsBatch = Record<string, PonderVoterStats>;
 export type PonderRaterTypeName = "Unknown" | "Human" | "AI" | "Team" | "Hybrid";
 export type PonderHumanCredentialStatus = "missing" | "verified" | "expired" | "revoked";
 export type PonderParticipationLane = "verified_human" | "open";
+export type PonderWorldCredentialStatus = PonderHumanCredentialStatus;
+export type PonderWorldCredentialRecheckStatus = "missing" | "fresh" | "expired" | "revoked";
+
+export interface PonderWorldCredentialStatusItem {
+  kind: number;
+  verified: boolean;
+  revoked: boolean;
+  status: PonderWorldCredentialStatus;
+  verifiedAt: string | null;
+  expiresAt: string | null;
+  evidenceHash: string | null;
+  recheck: {
+    verified: boolean;
+    status: PonderWorldCredentialRecheckStatus;
+    lastRecheckedAt: string | null;
+    freshUntil: string | null;
+    evidenceHash: string | null;
+  };
+}
 
 export interface PonderRaterParticipationStatusResponse {
   asOf: {
@@ -1138,6 +1157,11 @@ export interface PonderRaterParticipationStatusResponse {
     verifiedAt: string | null;
     expiresAt: string | null;
     evidenceHash: string | null;
+  };
+  worldCredentials?: {
+    activeMask: number;
+    freshRecheckMask: number;
+    kinds: Record<string, PonderWorldCredentialStatusItem>;
   };
   launchRewards: {
     eligible: boolean;

@@ -55,7 +55,7 @@ export interface RateLoopAgentBounty {
   bountyStartBy?: string | number | bigint;
   bountyWindowSeconds?: string | number | bigint;
   feedbackWindowSeconds?: string | number | bigint;
-  bountyEligibility?: 0 | 1 | 2 | 3 | 129 | 130 | 131 | string | number;
+  bountyEligibility?: string | number;
   [key: string]: unknown;
 }
 
@@ -165,7 +165,14 @@ export interface ImageUploadResponse {
   imageUrl?: string | null;
   moderationStatus?: string;
   nextAction?: string;
-  status: "uploading" | "processing" | "approved" | "blocked" | "failed" | "deleted" | string;
+  status:
+    | "uploading"
+    | "processing"
+    | "approved"
+    | "blocked"
+    | "failed"
+    | "deleted"
+    | string;
   width?: number | null;
   [key: string]: unknown;
 }
@@ -603,7 +610,9 @@ export interface RateLoopAgentClient {
   confirmFeedbackBonusTransactions(
     params: ConfirmFeedbackBonusTransactionsRequest,
   ): Promise<QuestionStatusResponse>;
-  getRatingContext(params: GetRatingContextRequest): Promise<RatingContextResponse>;
+  getRatingContext(
+    params: GetRatingContextRequest,
+  ): Promise<RatingContextResponse>;
   prepareRatingTransactions(
     params: PrepareRatingTransactionsRequest,
   ): Promise<PrepareRatingTransactionsResponse>;
@@ -1114,10 +1123,16 @@ export function parseAgentResult(value: unknown): RateLoopAgentResult {
 }
 
 export function buildWebhookVerifier(
-  options: WebhookVerifierOptions & { replayProtection: WebhookReplayProtectionOptions },
+  options: WebhookVerifierOptions & {
+    replayProtection: WebhookReplayProtectionOptions;
+  },
 ): ReplayProtectedWebhookVerifier;
-export function buildWebhookVerifier(options: WebhookVerifierOptions): WebhookVerifier;
-export function buildWebhookVerifier(options: WebhookVerifierOptions): WebhookVerifier | ReplayProtectedWebhookVerifier {
+export function buildWebhookVerifier(
+  options: WebhookVerifierOptions,
+): WebhookVerifier;
+export function buildWebhookVerifier(
+  options: WebhookVerifierOptions,
+): WebhookVerifier | ReplayProtectedWebhookVerifier {
   if (!options.secret) {
     throw new RateLoopSdkError("Webhook verifier secret is required");
   }
@@ -1608,7 +1623,10 @@ function jsonAgentHeaders(config: NormalizedAgentConfig) {
   };
 }
 
-function signingIntentReadHeaders(config: NormalizedAgentConfig, params: SigningIntentLookup) {
+function signingIntentReadHeaders(
+  config: NormalizedAgentConfig,
+  params: SigningIntentLookup,
+) {
   return {
     ...agentHeaders(config),
     "x-rateloop-signing-intent-token": params.token.trim(),
