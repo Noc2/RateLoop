@@ -230,6 +230,46 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
         assertEq(freshRound.voteCount, 1);
     }
 
+    function test_CommitVoteAgainstRevivedStaleRoundReverts() public {
+        ProtocolConfig config = ProtocolConfig(address(engine.protocolConfig()));
+        vm.prank(owner);
+        config.setConfig(1 hours, 60 days, 3, 100);
+        uint256 contentId = _submitContent();
+
+        _commitWithKey(voter1, contentId, true);
+        _commitWithKey(voter2, contentId, false);
+        (,, uint256 staleRoundId) = _commitWithKey(voter3, contentId, true);
+
+        vm.warp(T0 + 31 days);
+        registry.markDormant(contentId);
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(registry), 5e6);
+        registry.reviveContent(contentId);
+        vm.stopPrank();
+
+        bytes32 salt = keccak256(abi.encodePacked(voter4, block.timestamp, contentId));
+        TestCommitArtifacts memory artifacts = _buildTestCommitArtifacts(voter4, true, salt, contentId);
+
+        vm.startPrank(voter4);
+        lrepToken.approve(address(engine), STAKE);
+        vm.expectRevert(RoundVotingEngine.ContentNotActive.selector);
+        engine.commitVote(
+            contentId,
+            _roundContext(staleRoundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
+            STAKE,
+            address(0)
+        );
+        vm.stopPrank();
+
+        RoundLib.Round memory staleRound = RoundEngineReadHelpers.round(engine, contentId, staleRoundId);
+        assertEq(staleRound.voteCount, 3);
+    }
+
     function test_ReviveAfterEmptyOpenRound_StartsFreshRound() public {
         uint256 contentId = _submitContent();
 

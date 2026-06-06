@@ -420,6 +420,7 @@ contract RoundVotingEngine is
         uint256 expectedRoundId = roundContext >> 16;
         if (roundId != expectedRoundId) revert InvalidCommitHash();
         RoundLib.Round storage round = rounds[contentId][roundId];
+        _requireRoundContentLifecycleActive(contentId, roundId);
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
         uint16 roundReferenceRatingBps = uint16(roundContext);
         uint16 expectedReferenceRatingBps = _getRoundReferenceRatingBps(contentId, roundId);
