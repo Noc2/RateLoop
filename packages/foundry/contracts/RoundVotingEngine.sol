@@ -2,11 +2,8 @@
 pragma solidity ^0.8.34;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
@@ -19,6 +16,7 @@ import { RoundSettlementDistributionLib } from "./libraries/RoundSettlementDistr
 import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundCreationLib } from "./libraries/RoundCreationLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
+import { RoundVotingReadLib } from "./libraries/RoundVotingReadLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
@@ -40,13 +38,7 @@ import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 ///      and the final reveal grace deadline has passed.
 ///      Epoch-weighting: epoch-1 (blind) = 100% reward weight; epoch-2+ (informed) = 25%.
 ///      Win condition uses weighted pools, not raw stake, preventing late-voter herding.
-contract RoundVotingEngine is
-    IRoundVotingEngine,
-    Initializable,
-    AccessControlUpgradeable,
-    PausableUpgradeable,
-    ReentrancyGuardTransient
-{
+contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
@@ -68,6 +60,10 @@ contract RoundVotingEngine is
     error RoundNotCancelledOrTied();
     error ThresholdReached();
     error RevealGraceActive();
+    error EnforcedPause();
+    error ExpectedPause();
+    error AccessControlUnauthorizedAccount(address account, bytes32 neededRole);
+    error AccessControlBadConfirmation();
 
     error NotEnoughVotes();
     error AlreadyCommitted();
@@ -84,6 +80,7 @@ contract RoundVotingEngine is
     error NothingProcessed();
 
     // --- Access Control Roles ---
+    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     // --- Constants ---
@@ -259,6 +256,24 @@ contract RoundVotingEngine is
     event ForfeitedFundsAddedToTreasury(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event CurrentEpochRefunded(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event TreasuryFeeDistributed(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
+    event Paused(address account);
+    event Unpaused(address account);
+    event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
+    event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
+    event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
+
+    bytes32 private constant PAUSABLE_STORAGE_LOCATION =
+        0xcd5ed15c6e187e77e9aee88184c21f4f2182ab5827cb3b7e07fbedcd63f03300;
+    bytes32 private constant ACCESS_CONTROL_STORAGE_LOCATION =
+        0x02dd7bc7dec4dceedda775e58dd541e08a116c6c53815c0bd028192f7b626800;
+
+    struct RoleData {
+        mapping(address account => bool) hasRole;
+    }
+
+    struct AccessControlStorage {
+        mapping(bytes32 role => RoleData) roles;
+    }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -269,9 +284,6 @@ contract RoundVotingEngine is
         public
         initializer
     {
-        __AccessControl_init();
-        __Pausable_init();
-
         if (_governance == address(0)) revert InvalidAddress();
         if (_lrepToken == address(0)) revert InvalidAddress();
         if (_registry == address(0)) revert InvalidAddress();
@@ -291,6 +303,58 @@ contract RoundVotingEngine is
     function recoverSurplusLrep() external {
         if (!hasRole(bytes32(0), msg.sender)) revert Unauthorized();
         lrepToken.safeTransfer(msg.sender, lrepToken.balanceOf(address(this)) - accountedLrepBalance);
+    }
+
+    function hasRole(bytes32 role, address account) public view returns (bool) {
+        return _accessControlStorage().roles[role].hasRole[account];
+    }
+
+    function getRoleAdmin(bytes32) public pure returns (bytes32) {
+        return DEFAULT_ADMIN_ROLE;
+    }
+
+    function grantRole(bytes32 role, address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _grantRole(role, account);
+    }
+
+    function revokeRole(bytes32 role, address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        _revokeRole(role, account);
+    }
+
+    function renounceRole(bytes32 role, address callerConfirmation) public {
+        if (callerConfirmation != msg.sender) revert AccessControlBadConfirmation();
+        _revokeRole(role, callerConfirmation);
+    }
+
+    modifier onlyRole(bytes32 role) {
+        _checkRole(role, msg.sender);
+        _;
+    }
+
+    function _checkRole(bytes32 role, address account) internal view {
+        if (!hasRole(role, account)) revert AccessControlUnauthorizedAccount(account, role);
+    }
+
+    function _grantRole(bytes32 role, address account) internal returns (bool) {
+        AccessControlStorage storage $ = _accessControlStorage();
+        if ($.roles[role].hasRole[account]) return false;
+        $.roles[role].hasRole[account] = true;
+        emit RoleGranted(role, account, msg.sender);
+        return true;
+    }
+
+    function _revokeRole(bytes32 role, address account) internal returns (bool) {
+        AccessControlStorage storage $ = _accessControlStorage();
+        if (!$.roles[role].hasRole[account]) return false;
+        $.roles[role].hasRole[account] = false;
+        emit RoleRevoked(role, account, msg.sender);
+        return true;
+    }
+
+    function _accessControlStorage() private pure returns (AccessControlStorage storage $) {
+        assembly ("memory-safe") {
+            $.slot := ACCESS_CONTROL_STORAGE_LOCATION
+        }
     }
 
     function rewardDistributorConfigShape()
@@ -539,8 +603,19 @@ contract RoundVotingEngine is
         // stake safeTransferFrom in _commitVote fails closed. (Kept inline
         // rather than in a library to avoid embedding another library-address
         // push in RoundVotingEngine's EIP-170-constrained bytecode.)
-        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) { }
-            catch { }
+        address token = address(lrepToken);
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, shl(224, 0xd505accf)) // permit(address,address,uint256,uint256,uint8,bytes32,bytes32)
+            mstore(add(ptr, 0x04), caller())
+            mstore(add(ptr, 0x24), address())
+            mstore(add(ptr, 0x44), stakeAmount)
+            mstore(add(ptr, 0x64), permitDeadline)
+            mstore(add(ptr, 0x84), v)
+            mstore(add(ptr, 0xa4), r)
+            mstore(add(ptr, 0xc4), s)
+            pop(call(gas(), token, 0, ptr, 0xe4, 0, 0))
+        }
     }
 
     function _computeCommitEpoch(RoundLib.Round storage round, RoundLib.RoundConfig memory roundCfg)
@@ -853,7 +928,7 @@ contract RoundVotingEngine is
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters);
+        uint16 rbtsRevealQuorum = roundCfg.minVoters;
         if (round.voteCount < rbtsRevealQuorum) revert NotEnoughVotes();
         if (round.revealedCount >= rbtsRevealQuorum) revert ThresholdReached();
         if (!_canFinalizeRevealFailedRound(contentId, roundId, round)) revert RevealGraceActive();
@@ -895,7 +970,7 @@ contract RoundVotingEngine is
         _requireRoundContentLifecycleActive(contentId, roundId);
 
         // Must have enough revealed votes for both the round config and Robust BTS.
-        if (round.revealedCount < _rbtsRevealQuorum(roundCfg.minVoters)) revert NotEnoughVotes();
+        if (round.revealedCount < roundCfg.minVoters) revert NotEnoughVotes();
 
         uint256 unrevealedPastEpochCount;
         bool scoringClosed = roundRbtsSeedEntropy[contentId][roundId] != bytes32(0);
@@ -1154,24 +1229,21 @@ contract RoundVotingEngine is
         view
         returns (uint256 openRoundId, uint16 referenceRatingBps)
     {
-        openRoundId = currentRoundId[contentId];
-        if (openRoundId != 0) {
-            RoundLib.Round storage round = rounds[contentId][openRoundId];
-            RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, openRoundId);
-            if (
-                !RoundLib.isTerminal(round) && !_isEmptyRoundStaleSinceActivity(contentId, round)
-                    && !_isRoundContentLifecycleStale(contentId, openRoundId)
-                    && !_canCancelExpiredRound(contentId, openRoundId, round, roundCfg)
-                    && !_canFinalizeRevealFailedRound(contentId, openRoundId, round)
-            ) {
-                return (openRoundId, _getRoundReferenceRatingBps(contentId, openRoundId));
-            }
-        }
-
-        unchecked {
-            openRoundId = nextRoundId[contentId] + 1;
-        }
-        return (openRoundId, registry.getRating(contentId));
+        return RoundVotingReadLib.previewCommitContext(
+            currentRoundId,
+            nextRoundId,
+            rounds,
+            roundConfigSnapshot,
+            roundReferenceRatingBpsSnapshot,
+            roundRevealGracePeriodSnapshot,
+            lastCommitRevealableAfter,
+            roundHasHumanVerifiedCommit,
+            roundContentDormantCountSnapshot,
+            registry,
+            protocolConfig,
+            contentId,
+            MIN_RBTS_PARTICIPANTS
+        );
     }
 
     function _getCategoryRegistry() internal view returns (ICategoryRegistry) {
@@ -1240,7 +1312,7 @@ contract RoundVotingEngine is
         RoundLib.RoundConfig memory roundCfg
     ) internal view returns (bool) {
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) return false;
-        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters);
+        uint16 rbtsRevealQuorum = roundCfg.minVoters;
         if (round.revealedCount >= rbtsRevealQuorum) return false;
         return round.voteCount < rbtsRevealQuorum || !roundHasHumanVerifiedCommit[contentId][roundId];
     }
@@ -1380,7 +1452,7 @@ contract RoundVotingEngine is
                 predictedUpBps: predictedUpBps,
                 salt: salt,
                 roundReferenceRatingBps: _getRoundReferenceRatingBps(contentId, roundId),
-                minVoters: _rbtsRevealQuorum(roundCfg.minVoters),
+                minVoters: roundCfg.minVoters,
                 targetRoundRevealableAt: targetRoundRevealableAt,
                 drandChainHash: _getRoundDrandChainHash(contentId, roundId),
                 countForSettlement: true
@@ -1411,10 +1483,6 @@ contract RoundVotingEngine is
     // =========================================================================
     // VIEW FUNCTIONS
     // =========================================================================
-
-    function _rbtsRevealQuorum(uint16 minVoters) internal pure returns (uint16) {
-        return minVoters < MIN_RBTS_PARTICIPANTS ? MIN_RBTS_PARTICIPANTS : minVoters;
-    }
 
     // Note: computeCurrentEpochEnd removed to fit size limit.
     // Use config().epochDuration plus rounds(contentId, roundId).startTime to compute off-chain.
@@ -1604,30 +1672,49 @@ contract RoundVotingEngine is
     }
 
     function isDormancyBlocked(uint256 contentId) external view returns (bool) {
-        uint256 roundId = currentRoundId[contentId];
-        if (roundId == 0) return false;
-
-        RoundLib.Round storage round = rounds[contentId][roundId];
-        if (round.state != RoundLib.RoundState.Open || round.voteCount == 0 || round.totalStake == 0) return false;
-        if (_isEmptyRoundStaleSinceActivity(contentId, round)) return false;
-
-        RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
-        uint16 rbtsRevealQuorum = _rbtsRevealQuorum(roundCfg.minVoters);
-        if (round.revealedCount >= rbtsRevealQuorum) return true;
-        if (round.voteCount < rbtsRevealQuorum) return false;
-        if (!roundHasHumanVerifiedCommit[contentId][roundId]) return false;
-        if (_canCancelExpiredRound(contentId, roundId, round, roundCfg)) return false;
-        return true;
+        return RoundVotingReadLib.isDormancyBlocked(
+            currentRoundId, rounds, roundConfigSnapshot, roundHasHumanVerifiedCommit, protocolConfig, contentId
+        );
     }
 
     // --- Admin ---
 
+    modifier whenNotPaused() {
+        assembly ("memory-safe") {
+            if sload(PAUSABLE_STORAGE_LOCATION) {
+                mstore(0, shl(224, 0xd93c0665))
+                revert(0, 4)
+            }
+        }
+        _;
+    }
+
+    function paused() public view returns (bool paused_) {
+        assembly ("memory-safe") {
+            paused_ := sload(PAUSABLE_STORAGE_LOCATION)
+        }
+    }
+
     function pause() external onlyRole(PAUSER_ROLE) {
-        _pause();
+        assembly ("memory-safe") {
+            if sload(PAUSABLE_STORAGE_LOCATION) {
+                mstore(0, shl(224, 0xd93c0665))
+                revert(0, 4)
+            }
+            sstore(PAUSABLE_STORAGE_LOCATION, 1)
+        }
+        emit Paused(msg.sender);
     }
 
     function unpause() external onlyRole(PAUSER_ROLE) {
-        _unpause();
+        assembly ("memory-safe") {
+            if iszero(sload(PAUSABLE_STORAGE_LOCATION)) {
+                mstore(0, shl(224, 0x8dfc202b))
+                revert(0, 4)
+            }
+            sstore(PAUSABLE_STORAGE_LOCATION, 0)
+        }
+        emit Unpaused(msg.sender);
     }
 
     // =========================================================================
