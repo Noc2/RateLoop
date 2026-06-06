@@ -227,6 +227,28 @@ function resolveOptionalAddress(
   const sharedAddress = getSharedArtifactAddress(activeChainId, contractName);
   const envValue = readEnv(key);
 
+  if (activeNetwork === "hardhat") {
+    if (envValue) {
+      if (!isAddress(envValue)) {
+        throw new Error(`${key} must be a valid address.`);
+      }
+
+      if (
+        sharedAddress &&
+        envValue.toLowerCase() !== sharedAddress.toLowerCase()
+      ) {
+        console.warn(
+          `[ponder config] Using ${key}=${envValue} for local hardhat; shared ${contractName} artifact points at ${sharedAddress}.`,
+        );
+      }
+
+      return envValue as `0x${string}`;
+    }
+
+    if (sharedAddress) return sharedAddress;
+    return ZERO_ADDRESS;
+  }
+
   if (envValue) {
     if (!isAddress(envValue)) {
       throw new Error(`${key} must be a valid address.`);

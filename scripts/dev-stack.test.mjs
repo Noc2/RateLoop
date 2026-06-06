@@ -161,3 +161,18 @@ test("includes local Ponder address overrides in the deployment fingerprint", ()
   assert.notEqual(withOverride, withDifferentOverride);
   assert.equal(base, withUnrelatedEnv);
 });
+
+test("includes optional local Ponder address overrides in the deployment fingerprint", () => {
+  const base = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {},
+  });
+  const withFeedbackRegistryOverride = getPonderDeploymentFingerprint({
+    deployedContractsContent: "contracts",
+    env: {
+      PONDER_FEEDBACK_REGISTRY_ADDRESS: "0x3333333333333333333333333333333333333333",
+    },
+  });
+
+  assert.notEqual(base, withFeedbackRegistryOverride);
+});

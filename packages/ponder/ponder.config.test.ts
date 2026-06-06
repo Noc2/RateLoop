@@ -268,4 +268,28 @@ describe("ponder config", () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Using PONDER_CONTENT_REGISTRY_ADDRESS"));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("using start block 0"));
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  itWithHardhatClusterPayoutOracleArtifact(
+    "prefers local hardhat env addresses for optional contracts",
+    async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const localClusterPayoutOracleAddress = "0x2222222222222222222222222222222222222222";
+      const { default: config } = await loadPonderConfig({
+        PONDER_NETWORK: "hardhat",
+        PONDER_RPC_URL_31337: "http://127.0.0.1:8545",
+        PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS: localClusterPayoutOracleAddress,
+      });
+
+      const loadedConfig = config as any;
+
+      expect(loadedConfig.contracts.ClusterPayoutOracle.network.hardhat.address).toBe(
+        localClusterPayoutOracleAddress,
+      );
+      expect(loadedConfig.contracts.ClusterPayoutOracle.network.hardhat.address).not.toBe(
+        chain31337!.ClusterPayoutOracle.address,
+      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Using PONDER_CLUSTER_PAYOUT_ORACLE_ADDRESS"));
+    },
+    PONDER_CONFIG_TEST_TIMEOUT_MS,
+  );
 });
