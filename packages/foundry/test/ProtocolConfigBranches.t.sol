@@ -4,6 +4,7 @@ pragma solidity ^0.8.34;
 import { Test } from "forge-std/Test.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
 import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { RatingLib } from "../contracts/libraries/RatingLib.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
@@ -742,7 +743,7 @@ contract ProtocolConfigBranchesTest is Test {
         assertTrue(config.isRewardDistributorForEngine(replacementDistributor, engine));
     }
 
-    function test_ReplaceRevokedRewardDistributor_RequiresConfiguredPayoutIntegrations() public {
+    function test_ReplaceRevokedRewardDistributor_RequiresConfiguredLaunchIntegration() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         address engine = _newRewardEngine(config);
@@ -759,15 +760,47 @@ contract ProtocolConfigBranchesTest is Test {
         vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
         config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
 
-        frontend.setFeeCreditorForEngine(engine, replacementDistributor);
-        vm.expectRevert(ProtocolConfig.InvalidConfig.selector);
-        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
-
         launchPool.setAuthorizedCaller(replacementDistributor, true);
         config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
 
         assertEq(config.rewardDistributor(), replacementDistributor);
         assertTrue(config.isRewardDistributorForEngine(replacementDistributor, engine));
+        assertEq(frontend.feeCreditorForEngine(engine), address(0));
+    }
+
+    function test_ReplaceRevokedRewardDistributor_AllowsRealFrontendRegistryRotationAfterReplacement() public {
+        ProtocolConfig config = deployInitializedProtocolConfig(address(this));
+
+        address engine = _newRewardEngine(config);
+        address firstDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        address replacementDistributor = address(new MockRewardDistributorWithClaimStateForConfig(engine, false));
+        FrontendRegistry frontend = FrontendRegistry(
+            address(
+                new ERC1967Proxy(
+                    address(new FrontendRegistry()),
+                    abi.encodeCall(FrontendRegistry.initialize, (address(this), address(this), MOCK_LREP))
+                )
+            )
+        );
+
+        frontend.setVotingEngine(engine);
+        config.setFrontendRegistry(address(frontend));
+        config.setRewardDistributor(firstDistributor);
+        frontend.initializeFeeCreditor(firstDistributor);
+        assertEq(frontend.feeCreditorForEngine(engine), firstDistributor);
+
+        config.revokeRewardDistributor(firstDistributor);
+
+        vm.expectRevert("Invalid fee creditor");
+        frontend.addFeeCreditor(replacementDistributor);
+
+        config.replaceRevokedRewardDistributor(firstDistributor, replacementDistributor);
+        frontend.addFeeCreditor(replacementDistributor);
+
+        assertEq(frontend.feeCreditorForEngine(engine), replacementDistributor);
+        assertEq(frontend.feeCreditor(), replacementDistributor);
+        assertFalse(frontend.hasRole(frontend.FEE_CREDITOR_ROLE(), firstDistributor));
+        assertTrue(frontend.hasRole(frontend.FEE_CREDITOR_ROLE(), replacementDistributor));
     }
 
     function test_ReplaceRevokedRewardDistributor_RejectsActiveOrClaimStartedDistributor() public {

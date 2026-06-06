@@ -533,15 +533,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     function _validateRewardDistributorReplacementIntegrations(address value, address engine) internal view {
         _validateRewardDistributorShape(value, engine);
 
-        address frontendRegistry_ = frontendRegistry;
-        if (frontendRegistry_ != address(0)) {
-            try IFrontendRegistry(frontendRegistry_).feeCreditorForEngine(engine) returns (address creditor) {
-                if (creditor != value) revert InvalidConfig();
-            } catch {
-                revert InvalidConfig();
-            }
-        }
-
         address launchPool = launchDistributionPool;
         if (launchPool != address(0)) {
             try ILaunchDistributionPool(launchPool).authorizedCallers(value) returns (bool authorized) {
