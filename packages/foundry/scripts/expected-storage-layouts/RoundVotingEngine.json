@@ -411,6 +411,12 @@
     {
       "slot": 68,
       "offset": 0,
+      "label": "roundContentDormantCountSnapshot",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint8))"
+    },
+    {
+      "slot": 69,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -432,8 +438,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[18]",
-      "numberOfBytes": "576",
+      "label": "uint256[17]",
+      "numberOfBytes": "544",
       "base": "t_uint256"
     },
     {
