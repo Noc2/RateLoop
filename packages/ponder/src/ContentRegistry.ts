@@ -1,5 +1,6 @@
 import { ContentRegistryAbi } from "@rateloop/contracts/abis";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { eq } from "ponder";
 import { decodeEventLog } from "viem";
 import { ponder } from "ponder:registry";
 import {
@@ -176,6 +177,19 @@ async function upsertContentAnchors(
   }
 }
 
+async function findBundleQuestionByContentId(
+  context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
+  contentId: bigint,
+) {
+  const [bundleQuestion] = await context.db.sql
+    .select()
+    .from(questionBundleQuestion)
+    .where(eq(questionBundleQuestion.contentId, contentId))
+    .limit(1);
+
+  return bundleQuestion;
+}
+
 ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
   const {
     contentId,
@@ -189,6 +203,10 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
   } = event.args;
   const canonicalUrl = getCanonicalUrlParts(url);
   const roundConfig = await readContentRoundConfigAtEventBlock(
+    context,
+    contentId,
+  );
+  const bundleQuestion = await findBundleQuestionByContentId(
     context,
     contentId,
   );
@@ -224,6 +242,12 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
       roundMaxDuration: Number(roundConfig.maxDuration),
       roundMinVoters: Number(roundConfig.minVoters),
       roundMaxVoters: Number(roundConfig.maxVoters),
+      ...(bundleQuestion
+        ? {
+            bundleId: bundleQuestion.bundleId,
+            bundleIndex: bundleQuestion.bundleIndex,
+          }
+        : {}),
     })
     .onConflictDoNothing();
 
@@ -314,11 +338,14 @@ ponder.on(
       return;
     }
 
-    await context.db.update(content, { id: contentId }).set({
-      bundleId,
-      bundleIndex: normalizedBundleIndex,
-      lastActivityAt: event.block.timestamp,
-    });
+    const existingContent = await context.db.find(content, { id: contentId });
+    if (existingContent) {
+      await context.db.update(content, { id: contentId }).set({
+        bundleId,
+        bundleIndex: normalizedBundleIndex,
+        lastActivityAt: event.block.timestamp,
+      });
+    }
 
     await context.db
       .insert(questionBundleQuestion)

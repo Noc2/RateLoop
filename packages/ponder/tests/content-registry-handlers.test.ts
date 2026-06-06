@@ -71,13 +71,20 @@ vi.mock("ponder:registry", () => ({
   },
 }));
 
+vi.mock("ponder", () => ({
+  eq: vi.fn((left: unknown, right: unknown) => ({ left, right })),
+}));
+
 vi.mock("ponder:schema", () => ({
   category: "category",
   content: "content",
   contentMedia: "contentMedia",
   globalStats: "globalStats",
   profile: "profile",
-  questionBundleQuestion: "questionBundleQuestion",
+  questionBundleQuestion: {
+    contentId: "questionBundleQuestion.contentId",
+    toString: () => "questionBundleQuestion",
+  },
   ratingChange: "ratingChange",
   round: "round",
 }));
@@ -90,6 +97,10 @@ vi.mock("@rateloop/contracts/protocol", () => ({
   ROUND_STATE: { Settled: 1 },
 }));
 
+function tableName(table: unknown) {
+  return String(table);
+}
+
 function createDb(existingRound = { id: "1-2" }) {
   const updateCalls: Array<{
     table: string;
@@ -98,26 +109,41 @@ function createDb(existingRound = { id: "1-2" }) {
   }> = [];
   const insertCalls: Array<{ table: string; values: Record<string, unknown> }> =
     [];
+  const questionBundleRows: Array<Record<string, unknown>> = [];
 
   return {
     db: {
       find: vi.fn(async () => existingRound),
-      insert: vi.fn((table: string) => ({
+      insert: vi.fn((table: unknown) => ({
         values: vi.fn((values: Record<string, unknown>) => {
-          insertCalls.push({ table, values });
+          const normalizedTable = tableName(table);
+          insertCalls.push({ table: normalizedTable, values });
+          if (normalizedTable === "questionBundleQuestion") {
+            questionBundleRows.push(values);
+          }
           return {
             onConflictDoNothing: vi.fn(async () => undefined),
             onConflictDoUpdate: vi.fn(async () => undefined),
           };
         }),
       })),
-      update: vi.fn((table: string, key: Record<string, unknown>) => ({
+      update: vi.fn((table: unknown, key: Record<string, unknown>) => ({
         set: vi.fn(async (values: Record<string, unknown>) => {
-          updateCalls.push({ table, key, values });
+          updateCalls.push({ table: tableName(table), key, values });
         }),
       })),
+      sql: {
+        select: vi.fn(() => ({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => questionBundleRows.slice(0, 1)),
+            })),
+          })),
+        })),
+      },
     },
     insertCalls,
+    questionBundleRows,
     updateCalls,
   };
 }
@@ -497,6 +523,102 @@ describe("ContentRegistry ponder handlers", () => {
             bundleId: 3n,
             contentId: 9n,
             bundleIndex: 2,
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("applies bundle links that arrive before content submission", async () => {
+    const { db, insertCalls, updateCalls } = createDb(null);
+    const readContract = vi.fn(async () => ({
+      epochDuration: 600,
+      maxDuration: 7200,
+      minVoters: 5,
+      maxVoters: 50,
+    }));
+    const registeredHandlers = await loadHandlers();
+    const linkHandler = registeredHandlers.get(
+      "ContentRegistry:QuestionBundleContentLinked",
+    );
+    const contentHandler = registeredHandlers.get(
+      "ContentRegistry:ContentSubmitted",
+    );
+
+    expect(linkHandler).toBeDefined();
+    expect(contentHandler).toBeDefined();
+
+    await linkHandler!({
+      event: {
+        args: {
+          bundleId: 3n,
+          contentId: 7n,
+          bundleIndex: 0n,
+        },
+        block: {
+          number: 42n,
+          timestamp: 998n,
+        },
+      },
+      context: {
+        db,
+      },
+    });
+
+    await contentHandler!({
+      event: {
+        args: {
+          contentId: 7n,
+          submitter: "0x0000000000000000000000000000000000000001",
+          contentHash: "0xabc",
+          url: "https://example.com/question",
+          title: "Question?",
+          description: "Context",
+          tags: "tag",
+          categoryId: 1n,
+        },
+        block: {
+          number: 42n,
+          timestamp: 999n,
+        },
+      },
+      context: {
+        client: { readContract },
+        contracts: {
+          ContentRegistry: {
+            address: REGISTRY_ADDRESS,
+          },
+        },
+        db,
+      },
+    });
+
+    expect(updateCalls).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: { id: 7n },
+          table: "content",
+          values: expect.objectContaining({ bundleId: 3n, bundleIndex: 0 }),
+        }),
+      ]),
+    );
+    expect(insertCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "questionBundleQuestion",
+          values: expect.objectContaining({
+            id: "3-0",
+            bundleId: 3n,
+            contentId: 7n,
+            bundleIndex: 0,
+          }),
+        }),
+        expect.objectContaining({
+          table: "content",
+          values: expect.objectContaining({
+            id: 7n,
+            bundleId: 3n,
+            bundleIndex: 0,
           }),
         }),
       ]),
