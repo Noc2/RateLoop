@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getDbPushPlan, getPonderDataResetPlan, getPonderDeploymentFingerprint } from "./dev-stack.mjs";
+import {
+  getDbPushPlan,
+  getDevStackNetworkAlignmentWarning,
+  getPonderDataResetPlan,
+  getPonderDeploymentFingerprint,
+} from "./dev-stack.mjs";
 
 const localDatabaseConfig = {
   url: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
@@ -175,4 +180,52 @@ test("includes optional local Ponder address overrides in the deployment fingerp
   });
 
   assert.notEqual(base, withFeedbackRegistryOverride);
+});
+
+test("warns when Keeper points at local Ponder for a different chain", () => {
+  const warning = getDevStackNetworkAlignmentWarning({
+    keeperEnabled: true,
+    keeperEnv: {
+      CHAIN_ID: "4801",
+      PONDER_BASE_URL: "http://localhost:42069",
+    },
+    ponderEnv: {
+      PONDER_NETWORK: "hardhat",
+    },
+  });
+
+  assert.match(warning ?? "", /Keeper is configured for chain 4801/);
+  assert.match(warning ?? "", /Ponder is configured for hardhat \(chain 31337\)/);
+});
+
+test("does not warn when Keeper and local Ponder target the same chain", () => {
+  assert.equal(
+    getDevStackNetworkAlignmentWarning({
+      keeperEnabled: true,
+      keeperEnv: {
+        CHAIN_ID: "31337",
+        PONDER_BASE_URL: "http://localhost:42069",
+      },
+      ponderEnv: {
+        PONDER_NETWORK: "hardhat",
+      },
+    }),
+    null,
+  );
+});
+
+test("does not warn when Keeper uses a remote Ponder API", () => {
+  assert.equal(
+    getDevStackNetworkAlignmentWarning({
+      keeperEnabled: true,
+      keeperEnv: {
+        CHAIN_ID: "4801",
+        PONDER_BASE_URL: "https://ponder.example.com",
+      },
+      ponderEnv: {
+        PONDER_NETWORK: "hardhat",
+      },
+    }),
+    null,
+  );
 });

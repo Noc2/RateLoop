@@ -43,6 +43,11 @@ const keeperService = {
   command: yarnCommand,
   args: ["keeper:dev"],
 };
+const ponderNetworkChainIds = {
+  hardhat: "31337",
+  worldchainSepolia: "4801",
+  worldchain: "480",
+};
 const allowRemoteDbPushFlag = "--allow-remote-db-push";
 const skipDbPushFlag = "--skip-db-push";
 const ponderLocalDeploymentEnvKeys = [
@@ -156,6 +161,32 @@ function getPonderNetworkFromEnv(env) {
 
 function getPonderRpcUrlFromEnv(env) {
   return env.PONDER_RPC_URL_31337?.trim() || "http://127.0.0.1:8545";
+}
+
+export function getDevStackNetworkAlignmentWarning({
+  keeperEnabled = false,
+  keeperEnv = {},
+  ponderEnv = {},
+} = {}) {
+  if (!keeperEnabled) return null;
+
+  const ponderBaseUrl = keeperEnv.PONDER_BASE_URL?.trim();
+  if (!ponderBaseUrl || !isLocalPonderRpcUrl(ponderBaseUrl)) return null;
+
+  const ponderNetwork = getPonderNetworkFromEnv(ponderEnv);
+  const ponderChainId = ponderNetworkChainIds[ponderNetwork];
+  const keeperChainId = keeperEnv.CHAIN_ID?.trim();
+
+  if (!ponderChainId || !keeperChainId || keeperChainId === ponderChainId) {
+    return null;
+  }
+
+  return (
+    `Keeper is configured for chain ${keeperChainId}, but its PONDER_BASE_URL points at the local Ponder service ` +
+    `while Ponder is configured for ${ponderNetwork} (chain ${ponderChainId}). ` +
+    "Update packages/keeper/.env.local and packages/ponder/.env.local to target the same chain, " +
+    "or set PONDER_BASE_URL to the matching remote Ponder API."
+  );
 }
 
 export function getPonderDeploymentFingerprint({ deployedContractsContent, env = {} } = {}) {
@@ -494,7 +525,17 @@ Environment:
   }
 
   runDbPush(databaseConfig, { skipDbPush, allowRemoteDbPush });
-  resetLocalPonderDataIfDeploymentChanged(resolvePonderStartupEnv());
+  const ponderStartupEnv = resolvePonderStartupEnv();
+  resetLocalPonderDataIfDeploymentChanged(ponderStartupEnv);
+
+  const alignmentWarning = getDevStackNetworkAlignmentWarning({
+    keeperEnabled: keeperStartup.enabled,
+    keeperEnv: keeperStartup.env,
+    ponderEnv: ponderStartupEnv,
+  });
+  if (alignmentWarning) {
+    console.warn(`[dev-stack] ${alignmentWarning}`);
+  }
 
   const services = keeperStartup.enabled ? [...baseServices, keeperService] : baseServices;
   if (!keeperStartup.enabled) {
