@@ -5,6 +5,8 @@ import {
   getDevStackNetworkAlignmentWarning,
   getPonderDataResetPlan,
   getPonderDeploymentFingerprint,
+  getPonderRpcPreflightPlan,
+  getPonderRpcReadinessError,
 } from "./dev-stack.mjs";
 
 const localDatabaseConfig = {
@@ -136,6 +138,72 @@ test("does not reset Ponder data for non-local Ponder networks", () => {
       reason: "Ponder is not targeting local hardhat",
     },
   );
+});
+
+test("checks the local hardhat Ponder RPC before starting services", () => {
+  assert.deepEqual(
+    getPonderRpcPreflightPlan({
+      ponderNetwork: "hardhat",
+      ponderRpcUrl: "http://127.0.0.1:8545",
+    }),
+    {
+      shouldCheck: true,
+      rpcUrl: "http://127.0.0.1:8545",
+      expectedChainId: "31337",
+      envKey: "PONDER_RPC_URL_31337",
+    },
+  );
+});
+
+test("skips the Ponder RPC startup check outside local hardhat", () => {
+  assert.deepEqual(
+    getPonderRpcPreflightPlan({
+      ponderNetwork: "worldchainSepolia",
+      ponderRpcUrl: "https://worldchain-sepolia.g.alchemy.com/public",
+    }),
+    {
+      shouldCheck: false,
+      reason: "Ponder is not targeting local hardhat",
+    },
+  );
+});
+
+test("accepts a ready local hardhat Ponder RPC", async () => {
+  const error = await getPonderRpcReadinessError({
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ result: "0x7a69" }),
+    }),
+  });
+
+  assert.equal(error, null);
+});
+
+test("reports a missing local hardhat Ponder RPC before services start", async () => {
+  const error = await getPonderRpcReadinessError({
+    fetchImpl: async () => {
+      throw new Error("fetch failed", {
+        cause: new Error("connect ECONNREFUSED 127.0.0.1:8545"),
+      });
+    },
+  });
+
+  assert.match(error ?? "", /Ponder is configured for local hardhat at http:\/\/127\.0\.0\.1:8545/);
+  assert.match(error ?? "", /yarn chain/);
+  assert.match(error ?? "", /yarn deploy/);
+  assert.match(error ?? "", /ECONNREFUSED/);
+});
+
+test("reports local hardhat Ponder RPC chain ID mismatches", async () => {
+  const error = await getPonderRpcReadinessError({
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ result: "0x12c1" }),
+    }),
+  });
+
+  assert.match(error ?? "", /reports chain 4801/);
+  assert.match(error ?? "", /expects chain 31337/);
 });
 
 test("includes local Ponder address overrides in the deployment fingerprint", () => {

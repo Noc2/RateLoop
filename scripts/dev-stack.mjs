@@ -67,6 +67,7 @@ const ponderLocalDeploymentEnvKeys = [
   "PONDER_ROUND_VOTING_ENGINE_ADDRESS",
 ];
 const resetColor = "\u001b[0m";
+const ponderRpcProbeTimeoutMs = 2_500;
 const managedChildren = [];
 let shuttingDown = false;
 
@@ -161,6 +162,94 @@ function getPonderNetworkFromEnv(env) {
 
 function getPonderRpcUrlFromEnv(env) {
   return env.PONDER_RPC_URL_31337?.trim() || "http://127.0.0.1:8545";
+}
+
+export function getPonderRpcPreflightPlan({
+  ponderNetwork = "hardhat",
+  ponderRpcUrl = "http://127.0.0.1:8545",
+} = {}) {
+  if (ponderNetwork !== "hardhat" || !isLocalPonderRpcUrl(ponderRpcUrl)) {
+    return {
+      shouldCheck: false,
+      reason: "Ponder is not targeting local hardhat",
+    };
+  }
+
+  return {
+    shouldCheck: true,
+    rpcUrl: ponderRpcUrl,
+    expectedChainId: "31337",
+    envKey: "PONDER_RPC_URL_31337",
+  };
+}
+
+function formatPonderRpcStartupHelp(rpcUrl) {
+  return (
+    `Ponder is configured for local hardhat at ${rpcUrl}, but that RPC is not ready.\n` +
+    "[dev-stack] Start Anvil with `yarn chain` in another terminal, run `yarn deploy` after the chain is ready, then rerun `yarn dev:stack`.\n" +
+    "[dev-stack] To use a deployed network instead, update packages/ponder/.env.local with the matching PONDER_NETWORK and RPC URL."
+  );
+}
+
+function getFetchFailureMessage(error, timeoutMs) {
+  if (error instanceof Error) {
+    if (error.name === "AbortError") {
+      return `timed out after ${timeoutMs}ms`;
+    }
+
+    if (error.cause instanceof Error && error.cause.message && error.cause.message !== error.message) {
+      return `${error.message}: ${error.cause.message}`;
+    }
+
+    return error.message;
+  }
+
+  return String(error);
+}
+
+export async function getPonderRpcReadinessError({
+  ponderNetwork = "hardhat",
+  ponderRpcUrl = "http://127.0.0.1:8545",
+  fetchImpl = fetch,
+  timeoutMs = ponderRpcProbeTimeoutMs,
+} = {}) {
+  const plan = getPonderRpcPreflightPlan({ ponderNetwork, ponderRpcUrl });
+  if (!plan.shouldCheck) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+  try {
+    response = await fetchImpl(plan.rpcUrl, {
+      method: "POST",
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }),
+      headers: { "content-type": "application/json" },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    return `${formatPonderRpcStartupHelp(plan.rpcUrl)}\n[dev-stack] ${plan.envKey} probe failed: ${getFetchFailureMessage(error, timeoutMs)}.`;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    return `${formatPonderRpcStartupHelp(plan.rpcUrl)}\n[dev-stack] ${plan.envKey} returned HTTP ${response.status} on eth_chainId.`;
+  }
+
+  const body = await response.json().catch(() => null);
+  const reportedChainId = typeof body?.result === "string" ? Number.parseInt(body.result, 16) : NaN;
+  if (!Number.isFinite(reportedChainId)) {
+    return `${formatPonderRpcStartupHelp(plan.rpcUrl)}\n[dev-stack] ${plan.envKey} returned no chainId from eth_chainId.`;
+  }
+
+  if (String(reportedChainId) !== plan.expectedChainId) {
+    return (
+      `${formatPonderRpcStartupHelp(plan.rpcUrl)}\n` +
+      `[dev-stack] ${plan.envKey} reports chain ${reportedChainId}, but local hardhat expects chain ${plan.expectedChainId}.`
+    );
+  }
+
+  return null;
 }
 
 export function getDevStackNetworkAlignmentWarning({
@@ -526,6 +615,14 @@ Environment:
 
   runDbPush(databaseConfig, { skipDbPush, allowRemoteDbPush });
   const ponderStartupEnv = resolvePonderStartupEnv();
+  const ponderReadinessError = await getPonderRpcReadinessError({
+    ponderNetwork: getPonderNetworkFromEnv(ponderStartupEnv),
+    ponderRpcUrl: getPonderRpcUrlFromEnv(ponderStartupEnv),
+  });
+  if (ponderReadinessError) {
+    throw new Error(ponderReadinessError);
+  }
+
   resetLocalPonderDataIfDeploymentChanged(ponderStartupEnv);
 
   const alignmentWarning = getDevStackNetworkAlignmentWarning({
