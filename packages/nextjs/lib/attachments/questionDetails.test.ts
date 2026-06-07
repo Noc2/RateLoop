@@ -124,6 +124,31 @@ test("stores normalized approved details with a verifiable sha256 hash", async (
   assert.equal(stored?.status, "approved");
 });
 
+test("does not publish details from localhost because on-chain details URLs must be public HTTPS", async () => {
+  process.env.APP_URL = "http://localhost:3000";
+  const normalizedText = "Local-only details";
+  const result = await createQuestionDetailsFromText({
+    detailsId: "det_localdetailsurl01",
+    requestUrl: "http://localhost:3000/api/attachments/details/upload",
+    sha256: sha256Hex(normalizedText),
+    sizeBytes: new TextEncoder().encode(normalizedText).byteLength,
+    text: normalizedText,
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: WALLET,
+    },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.detailsHash, null);
+  assert.equal(result.detailsUrl, null);
+  assert.match(result.error ?? "", /public HTTPS origin/);
+
+  const stored = await getQuestionDetails("det_localdetailsurl01");
+  assert.equal(stored?.normalizedText, null);
+  assert.equal(stored?.status, "failed");
+});
+
 test("stores failed details without publishing text when size or hash validation fails", async () => {
   const result = await createQuestionDetailsFromText({
     detailsId: "det_questiondetails02",

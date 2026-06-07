@@ -20,6 +20,8 @@ const DEFAULT_QUESTION_DETAILS_ORPHAN_SWEEP_LIMIT = 100;
 const DEFAULT_UNATTACHED_QUESTION_DETAILS_ORPHAN_TTL_MS = 24 * 60 * 60 * 1000;
 const QUESTION_DETAILS_ID_PATTERN = /^det_[A-Za-z0-9_-]{16,80}$/;
 const PRODUCTION_QUESTION_DETAILS_ORIGINS = ["https://rateloop.ai", "https://www.rateloop.ai"];
+const QUESTION_DETAILS_PUBLIC_URL_ERROR =
+  "Question Details require APP_URL or NEXT_PUBLIC_APP_URL to be a public HTTPS origin before on-chain submission. Set one to your hosted RateLoop URL, or leave Details empty while submitting from localhost.";
 const BLOCKED_MODERATION_CATEGORIES = new Set([
   "sexual/minors",
   "sexual",
@@ -113,6 +115,42 @@ function getConfiguredQuestionDetailsBaseUrl() {
 
 export function getQuestionDetailsUrl(requestUrl: string, detailsId: string) {
   return new URL(getQuestionDetailsPath(detailsId), getConfiguredQuestionDetailsBaseUrl() ?? requestUrl).toString();
+}
+
+function isLocalhostDetailsHostname(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+}
+
+function isPublicHttpsQuestionDetailsUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password) return false;
+
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      isLocalhostDetailsHostname(hostname) ||
+      !hostname.includes(".") ||
+      hostname.endsWith(".local") ||
+      hostname.endsWith(".internal") ||
+      /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) ||
+      hostname.startsWith("[") ||
+      hostname.includes(":")
+    ) {
+      return false;
+    }
+
+    const urlBytes = value;
+    if (urlBytes.length === 0 || urlBytes.length > 2048) return false;
+    for (let index = 0; index < urlBytes.length; index += 1) {
+      const code = urlBytes.charCodeAt(index);
+      if (code < 0x21 || code > 0x7e) return false;
+      if (urlBytes[index] === "\\" || urlBytes[index] === "@") return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getAllowedQuestionDetailsOrigins() {
@@ -376,6 +414,13 @@ export async function createQuestionDetailsFromText(params: CreateQuestionDetail
     status =
       moderation.status === "approved" ? "approved" : moderation.status === "review_required" ? "failed" : "blocked";
     error = moderation.status === "review_required" ? "Details require moderation review before publication." : null;
+    if (
+      status === "approved" &&
+      !isPublicHttpsQuestionDetailsUrl(getQuestionDetailsUrl(params.requestUrl, params.detailsId))
+    ) {
+      status = "failed";
+      error = QUESTION_DETAILS_PUBLIC_URL_ERROR;
+    }
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "Details processing failed.";
   }
