@@ -31,7 +31,8 @@ import {RateLoopGovernor} from "../contracts/governance/RateLoopGovernor.sol";
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
 contract DeployRateLoop is ScaffoldETHDeploy {
     error UnsupportedWorldChain(uint256 chainId);
-    error WorldIdVerifierOverrideHasNoCode(address verifier);
+    error WorldIdVerifierHasNoCode(address verifier);
+    error MainnetWorldIdVerifierOverrideNotAllowed(address verifier);
     uint256 public constant TIMELOCK_MIN_DELAY = 2 days;
 
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
@@ -190,18 +191,19 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         RoundRewardDistributor rewardDistributor = RoundRewardDistributor(address(rewardDistributorProxy));
 
-        MockWorldIDVerifier localWorldIdVerifier;
+        MockWorldIDVerifier worldIdMockVerifier;
         address worldIdVerifierAddress = _resolveWorldIdVerifierAddress(isLocalDev);
-        if (isLocalDev) {
-            localWorldIdVerifier = new MockWorldIDVerifier();
-            worldIdVerifierAddress = address(localWorldIdVerifier);
-            console.log("MockWorldIDVerifier deployed at:", worldIdVerifierAddress);
-        } else {
-            if (worldIdVerifierAddress == address(0)) {
-                console.log("World ID v4 verifier unavailable; deploying RaterRegistry with World ID disabled");
+        bool deployWorldIdMockVerifier = _shouldDeployWorldIdMockVerifier(isLocalDev, worldIdVerifierAddress);
+        if (deployWorldIdMockVerifier) {
+            worldIdMockVerifier = new MockWorldIDVerifier();
+            worldIdVerifierAddress = address(worldIdMockVerifier);
+            if (isLocalDev) {
+                console.log("MockWorldIDVerifier deployed at:", worldIdVerifierAddress);
             } else {
-                console.log("World ID v4 verifier resolved at:", worldIdVerifierAddress);
+                console.log("World Chain Sepolia MockWorldIDVerifier deployed at:", worldIdVerifierAddress);
             }
+        } else {
+            console.log("World ID v4 verifier resolved at:", worldIdVerifierAddress);
         }
         WorldIdDeployConfig memory worldIdConfig = _resolveWorldIdDeployConfig(worldIdVerifierAddress);
 
@@ -455,7 +457,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("ClusterPayoutOracle", address(clusterPayoutOracle)));
         deployments.push(Deployment("RaterRegistry", address(raterRegistryProxy)));
         deployments.push(Deployment("RaterRegistryProxyAdmin", _proxyAdmin(address(raterRegistryProxy))));
-        if (isLocalDev) deployments.push(Deployment("MockWorldIDVerifier", address(localWorldIdVerifier)));
+        if (address(worldIdMockVerifier) != address(0)) {
+            deployments.push(Deployment("MockWorldIDVerifier", address(worldIdMockVerifier)));
+        }
         deployments.push(Deployment("LaunchDistributionPool", address(launchDistributionPool)));
         deployments.push(Deployment("AdvisoryVoteRecorder", address(advisoryVoteRecorder)));
         if (isLocalDev) deployments.push(Deployment("MockERC20", usdcTokenAddress));
@@ -520,11 +524,25 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     }
 
     function _resolveWorldIdVerifierAddress(bool isLocalDev) internal view returns (address) {
+        bool hasOverride = vm.envExists(WORLD_ID_V4_VERIFIER_ADDRESS_ENV);
+        address verifierOverride = hasOverride ? vm.envOr(WORLD_ID_V4_VERIFIER_ADDRESS_ENV, address(0)) : address(0);
+        return _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride);
+    }
+
+    function _resolveWorldIdVerifierAddressForChain(bool isLocalDev, bool hasOverride, address verifierOverride)
+        internal
+        view
+        returns (address)
+    {
         if (isLocalDev) return address(0);
-        if (block.chainid == 480 || block.chainid == 4801) {
-            bool hasOverride = vm.envExists(WORLD_ID_V4_VERIFIER_ADDRESS_ENV);
-            address verifier =
-                hasOverride ? vm.envOr(WORLD_ID_V4_VERIFIER_ADDRESS_ENV, address(0)) : WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
+        if (block.chainid == 480) {
+            if (hasOverride && verifierOverride != WORLD_CHAIN_WORLD_ID_V4_VERIFIER) {
+                revert MainnetWorldIdVerifierOverrideNotAllowed(verifierOverride);
+            }
+            return _resolveWorldIdVerifierCandidate(WORLD_CHAIN_WORLD_ID_V4_VERIFIER, true);
+        }
+        if (block.chainid == 4801) {
+            address verifier = hasOverride ? verifierOverride : WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
             return _resolveWorldIdVerifierCandidate(verifier, hasOverride);
         }
         revert UnsupportedWorldChain(block.chainid);
@@ -533,8 +551,12 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     function _resolveWorldIdVerifierCandidate(address verifier, bool requireLiveCode) internal view returns (address) {
         if (verifier == address(0)) return address(0);
         if (verifier.code.length > 0) return verifier;
-        if (requireLiveCode) revert WorldIdVerifierOverrideHasNoCode(verifier);
+        if (requireLiveCode) revert WorldIdVerifierHasNoCode(verifier);
         return address(0);
+    }
+
+    function _shouldDeployWorldIdMockVerifier(bool isLocalDev, address resolvedVerifier) internal view returns (bool) {
+        return isLocalDev || (block.chainid == 4801 && resolvedVerifier == address(0));
     }
 
     function _resolveWorldIdDeployConfig(address verifier) internal view returns (WorldIdDeployConfig memory config) {

@@ -19,6 +19,22 @@ contract DeployRateLoopHarness is DeployRateLoop {
         return _resolveWorldIdVerifierCandidate(verifier, requireLiveCode);
     }
 
+    function resolveWorldIdVerifierAddressForChain(bool isLocalDev, bool hasOverride, address verifierOverride)
+        external
+        view
+        returns (address)
+    {
+        return _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride);
+    }
+
+    function shouldDeployWorldIdMockVerifier(bool isLocalDev, address resolvedVerifier) external view returns (bool) {
+        return _shouldDeployWorldIdMockVerifier(isLocalDev, resolvedVerifier);
+    }
+
+    function worldChainWorldIdV4Verifier() external pure returns (address) {
+        return WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
+    }
+
     function resolveWorldIdDeployConfig(address verifier)
         external
         view
@@ -203,9 +219,7 @@ contract DeployRateLoopAllocationsTest is Test {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         address missingVerifier = address(0xBEEF);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierOverrideHasNoCode.selector, missingVerifier)
-        );
+        vm.expectRevert(abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierHasNoCode.selector, missingVerifier));
         deployScript.resolveWorldIdVerifierCandidate(missingVerifier, true);
     }
 
@@ -215,6 +229,64 @@ contract DeployRateLoopAllocationsTest is Test {
 
         assertEq(deployScript.resolveWorldIdVerifierCandidate(address(verifier), false), address(verifier));
         assertEq(deployScript.resolveWorldIdVerifierCandidate(address(verifier), true), address(verifier));
+    }
+
+    function test_WorldChainSepoliaDeploysMockWhenBundledVerifierIsMissing() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        vm.chainId(4801);
+
+        address resolvedVerifier = deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0));
+
+        assertEq(resolvedVerifier, address(0));
+        assertTrue(deployScript.shouldDeployWorldIdMockVerifier(false, resolvedVerifier));
+    }
+
+    function test_WorldChainSepoliaUsesLiveVerifierOverrideInsteadOfMock() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        vm.chainId(4801);
+
+        address resolvedVerifier = deployScript.resolveWorldIdVerifierAddressForChain(false, true, address(verifier));
+
+        assertEq(resolvedVerifier, address(verifier));
+        assertFalse(deployScript.shouldDeployWorldIdMockVerifier(false, resolvedVerifier));
+    }
+
+    function test_LocalDevDeploysMockVerifier() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        vm.chainId(31337);
+
+        address resolvedVerifier = deployScript.resolveWorldIdVerifierAddressForChain(true, false, address(0));
+
+        assertEq(resolvedVerifier, address(0));
+        assertTrue(deployScript.shouldDeployWorldIdMockVerifier(true, resolvedVerifier));
+    }
+
+    function test_WorldChainMainnetRequiresBundledVerifierCode() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        address bundledVerifier = deployScript.worldChainWorldIdV4Verifier();
+        vm.chainId(480);
+
+        vm.expectRevert(abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierHasNoCode.selector, bundledVerifier));
+        deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0));
+    }
+
+    function test_WorldChainMainnetRejectsVerifierOverride() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        vm.chainId(480);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployRateLoop.MainnetWorldIdVerifierOverrideNotAllowed.selector, address(verifier))
+        );
+        deployScript.resolveWorldIdVerifierAddressForChain(false, true, address(verifier));
+    }
+
+    function test_WorldChainMainnetNeverDeploysMockVerifier() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        vm.chainId(480);
+
+        assertFalse(deployScript.shouldDeployWorldIdMockVerifier(false, address(0)));
     }
 
     function test_WorldIdDeployConfigDisablesAllFieldsWithoutVerifier() public {
