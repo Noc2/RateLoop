@@ -405,10 +405,7 @@ const submissionKey = buildQuestionSubmissionKey({
   videoUrl: media.videoUrl,
 });
 const textHash = keccak256(
-  encodeAbiParameters(
-    [{ type: "string" }, { type: "string" }],
-    [title, tags]
-  )
+  encodeAbiParameters([{ type: "string" }, { type: "string" }], [title, tags])
 );
 const detailsHash = buildSubmissionDetailsHash("", EMPTY_DETAILS_HASH);
 const rewardTermsHash = keccak256(

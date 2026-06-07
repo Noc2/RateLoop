@@ -154,15 +154,8 @@ function parseQuestionArgs(questionArgs) {
 
   const questions = [];
   for (let index = 0; index < questionArgs.length; index += 7) {
-    const [
-      contextUrl,
-      imageUrlsJson,
-      videoUrl,
-      title,
-      tags,
-      categoryId,
-      salt,
-    ] = questionArgs.slice(index, index + 7);
+    const [contextUrl, imageUrlsJson, videoUrl, title, tags, categoryId, salt] =
+      questionArgs.slice(index, index + 7);
     const imageUrls = parseImageUrls(imageUrlsJson);
     const trimmedVideoUrl = videoUrl.trim();
     if (trimmedVideoUrl && !isSupportedYouTubeUrl(trimmedVideoUrl)) {
@@ -274,16 +267,8 @@ function buildQuestionBundleHash(questions) {
           QUESTION_BUNDLE_ITEM_DOMAIN,
           keccak256(
             encodeAbiParameters(
-              [
-                { type: "string" },
-                { type: "string" },
-                { type: "string" },
-              ],
-              [
-                question.contextUrl,
-                question.title,
-                question.tags,
-              ]
+              [{ type: "string" }, { type: "string" }, { type: "string" }],
+              [question.contextUrl, question.title, question.tags]
             )
           ),
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
