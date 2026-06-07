@@ -32,6 +32,7 @@ const DIRECT_DEPLOYMENT_NAMES = new Set([
   "ClusterPayoutOracle",
   "LaunchDistributionPool",
   "AdvisoryVoteRecorder",
+  "MockWorldIDVerifier",
 ]);
 
 const ROLE_HASHES = {

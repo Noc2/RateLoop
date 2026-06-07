@@ -728,6 +728,31 @@ test("reconstructDeploymentExportFromBroadcast maps proxies and proxy admins", (
   );
 });
 
+test("reconstructDeploymentExportFromBroadcast exports optional mock World ID verifier", () => {
+  const { transactions, receipts } = completeBroadcast();
+  const mockVerifier = address(700);
+  const hash = nextTxHash(transactions);
+  transactions.push({
+    transactionType: "CREATE",
+    contractName: "MockWorldIDVerifier",
+    contractAddress: mockVerifier,
+    transaction: { from: fixtureDeployer },
+    hash,
+  });
+  receipts.push(successfulReceipt(hash, "0xc9"));
+
+  const deploymentExport = reconstructDeploymentExportFromBroadcast(
+    { transactions, receipts },
+    "worldchainSepolia"
+  );
+
+  assert.equal(
+    deploymentAt(deploymentExport, mockVerifier),
+    "MockWorldIDVerifier"
+  );
+  assert.equal(deploymentExport.deploymentBlockNumber, 201);
+});
+
 test("reconstructDeploymentExportFromBroadcast accepts Foundry proxy and decoded call shapes", () => {
   const { transactions, receipts } = completeBroadcast();
   const adminRole =
