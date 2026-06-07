@@ -9,6 +9,7 @@ const originalCredentialAction = env.NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION;
 const originalPresenceAction = env.NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION;
 const originalAppId = env.NEXT_PUBLIC_WORLD_ID_APP_ID;
 const originalEnvironment = env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT;
+const originalV4IdkitRpId = env.WORLD_ID_V4_IDKIT_RP_ID;
 const originalV4RpId = env.WORLD_ID_V4_RP_ID;
 const originalSigningKey = env.WORLD_ID_SIGNING_KEY;
 
@@ -48,6 +49,9 @@ afterEach(() => {
   if (originalEnvironment === undefined) delete env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT;
   else env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT = originalEnvironment;
 
+  if (originalV4IdkitRpId === undefined) delete env.WORLD_ID_V4_IDKIT_RP_ID;
+  else env.WORLD_ID_V4_IDKIT_RP_ID = originalV4IdkitRpId;
+
   if (originalV4RpId === undefined) delete env.WORLD_ID_V4_RP_ID;
   else env.WORLD_ID_V4_RP_ID = originalV4RpId;
 
@@ -60,7 +64,8 @@ test("World ID RP context route signs a short-lived v4 credential request", asyn
   env.NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION = "rateloop-presence";
   env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_test";
   env.NEXT_PUBLIC_WORLD_ID_ENVIRONMENT = "staging";
-  env.WORLD_ID_V4_RP_ID = "rp_test";
+  env.WORLD_ID_V4_IDKIT_RP_ID = "rp_test";
+  env.WORLD_ID_V4_RP_ID = "1";
   env.WORLD_ID_SIGNING_KEY = TEST_SIGNING_KEY;
 
   const response = await POST(makeRequest());
@@ -80,7 +85,7 @@ test("World ID RP context route signs presence requests with the presence action
   env.NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION = "rateloop-test";
   env.NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION = "rateloop-presence";
   env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_test";
-  env.WORLD_ID_V4_RP_ID = "rp_test";
+  env.WORLD_ID_V4_IDKIT_RP_ID = "rp_test";
   env.WORLD_ID_SIGNING_KEY = TEST_SIGNING_KEY;
 
   const response = await POST(makeRequest({ purpose: "presence" }));
@@ -93,10 +98,37 @@ test("World ID RP context route signs presence requests with the presence action
 
 test("World ID RP context route fails closed without signing credentials", async () => {
   env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_test";
-  env.WORLD_ID_V4_RP_ID = "rp_test";
+  env.WORLD_ID_V4_IDKIT_RP_ID = "rp_test";
   delete env.WORLD_ID_SIGNING_KEY;
 
   const response = await POST(makeRequest());
+  const body = await response.json();
 
   assert.equal(response.status, 503);
+  assert.equal(body.error, "World ID signing key is not configured for this deployment.");
+});
+
+test("World ID RP context route fails closed without an IDKit RP ID", async () => {
+  env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_test";
+  delete env.WORLD_ID_V4_IDKIT_RP_ID;
+  delete env.WORLD_ID_V4_RP_ID;
+  env.WORLD_ID_SIGNING_KEY = TEST_SIGNING_KEY;
+
+  const response = await POST(makeRequest());
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(body.error, "World ID relying-party ID is not configured for this deployment.");
+});
+
+test("World ID RP context route rejects app IDs in the RP context field", async () => {
+  env.NEXT_PUBLIC_WORLD_ID_APP_ID = "app_test";
+  env.WORLD_ID_V4_IDKIT_RP_ID = "app_test";
+  env.WORLD_ID_SIGNING_KEY = TEST_SIGNING_KEY;
+
+  const response = await POST(makeRequest());
+  const body = await response.json();
+
+  assert.equal(response.status, 503);
+  assert.equal(body.error, "World ID relying-party ID must use the rp_ value from the World Developer Portal.");
 });

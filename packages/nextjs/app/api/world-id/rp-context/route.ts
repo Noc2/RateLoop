@@ -21,8 +21,15 @@ export async function POST(request: NextRequest): Promise<Response> {
   const purpose = await readPurpose(request);
   const config = getWorldIdServerConfig(purpose);
 
-  if (!config.rpId || !config.signingKey) {
-    return NextResponse.json({ error: "World ID is not configured for this deployment." }, { status: 503 });
+  if (!config.rpId || config.rpIdError) {
+    return NextResponse.json(
+      { error: config.rpIdError ?? "World ID relying-party ID is not configured for this deployment." },
+      { status: 503 },
+    );
+  }
+
+  if (!config.signingKey) {
+    return NextResponse.json({ error: "World ID signing key is not configured for this deployment." }, { status: 503 });
   }
 
   try {

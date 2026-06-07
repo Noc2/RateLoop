@@ -12,11 +12,17 @@ Keep these values aligned across the deploy script, Next.js runtime, and World
 Developer Portal:
 
 - `NEXT_PUBLIC_WORLD_ID_APP_ID`
+- `WORLD_ID_V4_IDKIT_RP_ID`
 - `WORLD_ID_V4_RP_ID`
 - `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION` (`rateloop-human-credential-v1` by default)
 - `NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION` (`rateloop-human-presence-v1` by default)
 - `WORLD_ID_V4_ISSUER_SCHEMA_ID`
 - `WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN` when using a deployment-specific lower bound
+
+`WORLD_ID_V4_IDKIT_RP_ID` is the public `rp_...` IDKit relying-party ID sent in
+`rp_context.rp_id`. `WORLD_ID_V4_RP_ID` is the numeric on-chain RP value passed
+to `IWorldIDVerifier.verify` during contract deploys. Do not use the `app_...`
+app ID as either RP value.
 
 The frontend should request v4-only proofs with `allow_legacy_proofs=false`.
 For bounty rechecks, it should request the selected credential kind with
@@ -106,7 +112,8 @@ NEXT_PUBLIC_WORLD_ID_APP_ID=<staging app id>
 NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION=rateloop-human-credential-v1
 NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION=rateloop-human-presence-v1
 NEXT_PUBLIC_WORLD_ID_ENVIRONMENT=staging
-WORLD_ID_V4_RP_ID=<numeric rp id>
+WORLD_ID_V4_IDKIT_RP_ID=<staging rp_ id>
+WORLD_ID_V4_RP_ID=<numeric on-chain rp id>
 WORLD_ID_V4_ISSUER_SCHEMA_ID=<issuer schema id>
 WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN=0
 WORLD_ID_SIGNING_KEY=<staging request signing key>
@@ -170,9 +177,13 @@ Expected results:
 
 - `World ID is not configured for this deployment.` means the app ID, RP ID, or
   signing key is missing at runtime.
+- `World ID relying-party ID must use the rp_ value from the World Developer Portal.`
+  means the Next.js runtime is using an app ID (`app_...`) or numeric on-chain
+  RP value for `rp_context.rp_id`; set `WORLD_ID_V4_IDKIT_RP_ID` to the `rp_...`
+  value and redeploy.
 - `invalid_rp_signature` usually means `WORLD_ID_SIGNING_KEY`,
-  `WORLD_ID_V4_RP_ID`, or `NEXT_PUBLIC_WORLD_ID_ENVIRONMENT` does not match the
-  staging app.
+  `WORLD_ID_V4_IDKIT_RP_ID`, or `NEXT_PUBLIC_WORLD_ID_ENVIRONMENT` does not
+  match the staging app.
 - `World ID action does not match this deployment.` means the IDKit result action
   differs from `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION` or
   `NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION`.
