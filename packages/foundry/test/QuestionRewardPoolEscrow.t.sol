@@ -107,7 +107,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     struct X402TestQuestion {
         string contextUrl;
         string title;
-        string description;
         string tags;
         string[] imageUrls;
         RoundLib.RoundConfig roundConfig;
@@ -4350,7 +4349,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         address agentWallet = _x402AgentWallet();
         string memory contextUrl = "https://example.com/agent-funded-context";
         string memory title = "Which supplier should the agent shortlist?";
-        string memory description = "Check that direct agent submissions fund escrow from the signer.";
         string memory tags = "agents,bounty";
         string[] memory imageUrls = new string[](1);
         imageUrls[0] = _submissionImageUrl("agent-funded-context");
@@ -4381,7 +4379,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             submissionKey,
             _submissionMediaHash(imageUrls, ""),
             title,
-            description,
             tags,
             CATEGORY_ID,
             salt,
@@ -5097,7 +5094,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     function _x402TestQuestion() internal view returns (X402TestQuestion memory question) {
         question.contextUrl = "https://example.com/x402-agent-question";
         question.title = "Should the agent proceed with this supplier?";
-        question.description = "Review the supplied context and vote on whether the agent should continue.";
         question.tags = "agents,bounty";
         question.imageUrls = new string[](1);
         question.imageUrls[0] = _submissionImageUrl("x402-agent-question");
@@ -5220,7 +5216,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             submissionKey,
             _submissionMediaHash(question.imageUrls, ""),
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             question.salt,
