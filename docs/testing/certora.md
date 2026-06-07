@@ -213,11 +213,20 @@ authorization check and the LREP ERC20 are summarized `NONDET`. The full engine
 compiled and verified under solc 0.8.35 + via_ir despite the hand-rolled assembly
 access control / pause and transient-storage reentrancy guard.
 
-Still deferred (need lifecycle + multi-transaction settlement modeling): round
-terminal-state absorption, single-use refunds, refund <= stake, the
-distributor-side single-use reward claim, aggregate-claimed <= pool, and the rating
-bounds. Note the reward-claimed flags live in `RoundRewardDistributor`, so the
-no-double-claim ↔ solvency link spans both contracts.
+Implementation status (`certora/specs/RoundRewardDistributor.spec`, verified
+directly): the **claim-flag integrity slice is verified** — two rules prove
+`claimReward` never clears a recorded reward-claim flag (keyed by voter address and
+by commit key). With the contract's up-front guard that reverts on an already-set
+flag, this is the backbone of no-double-claim. The engine's `transferReward` and
+the LREP token are summarized `NONDET`; the engine view calls fall back to
+side-effect-free.
+
+Still deferred (need lifecycle + multi-transaction settlement modeling, and a
+faithful engine model for the derived commit/voter keys): round terminal-state
+absorption, single-use refunds, refund <= stake, the exact single-use reward-claim
+revert, aggregate-claimed <= pool, and the rating bounds. The no-double-claim ↔
+solvency link spans the engine + distributor, so closing it fully means verifying
+the two together.
 
 Modeling notes:
 
