@@ -40,6 +40,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     error TreasuryNotSet();
     error UnauthorizedCaller();
     error UnauthorizedFrontendFeeCaller();
+    error FrontendFeeCreditorNotConfigured();
     error FrontendFeeNotClaimable();
     error FrontendFeeNotConfiscatable();
     error UnrevealedCleanupPending();
@@ -822,12 +823,21 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         }
 
         IFrontendRegistry snapshotRegistry = IFrontendRegistry(snapshotRegistryAddress);
+        _requireFrontendFeeCreditorConfigured(snapshotRegistry);
 
         try snapshotRegistry.creditFees(frontend, fee) {
             votingEngine.transferReward(snapshotRegistryAddress, fee);
         } catch {
             emit FrontendFeeCreditFailed(contentId, roundId, frontend, snapshotRegistryAddress, fee);
             _routeRewardToProtocol(fee);
+        }
+    }
+
+    function _requireFrontendFeeCreditorConfigured(IFrontendRegistry snapshotRegistry) internal view {
+        try snapshotRegistry.feeCreditorForEngine(address(votingEngine)) returns (address creditor) {
+            if (creditor != address(this)) revert FrontendFeeCreditorNotConfigured();
+        } catch {
+            revert FrontendFeeCreditorNotConfigured();
         }
     }
 
