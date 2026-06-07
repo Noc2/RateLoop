@@ -1,36 +1,37 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { ScaffoldETHDeploy } from "./DeployHelpers.s.sol";
-import { console } from "forge-std/console.sol";
-import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { AdvisoryVoteRecorder } from "../contracts/AdvisoryVoteRecorder.sol";
-import { ContentRegistry } from "../contracts/ContentRegistry.sol";
-import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
-import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
-import { FrontendRegistry } from "../contracts/FrontendRegistry.sol";
-import { CategoryRegistry } from "../contracts/CategoryRegistry.sol";
-import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
-import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
-import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
-import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
-import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
-import { RateLoopGovernor } from "../contracts/governance/RateLoopGovernor.sol";
+import {ScaffoldETHDeploy} from "./DeployHelpers.s.sol";
+import {console} from "forge-std/console.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {AdvisoryVoteRecorder} from "../contracts/AdvisoryVoteRecorder.sol";
+import {ContentRegistry} from "../contracts/ContentRegistry.sol";
+import {RoundVotingEngine} from "../contracts/RoundVotingEngine.sol";
+import {RoundRewardDistributor} from "../contracts/RoundRewardDistributor.sol";
+import {FrontendRegistry} from "../contracts/FrontendRegistry.sol";
+import {CategoryRegistry} from "../contracts/CategoryRegistry.sol";
+import {FeedbackBonusEscrow} from "../contracts/FeedbackBonusEscrow.sol";
+import {FeedbackRegistry} from "../contracts/FeedbackRegistry.sol";
+import {ProfileRegistry} from "../contracts/ProfileRegistry.sol";
+import {ProtocolConfig} from "../contracts/ProtocolConfig.sol";
+import {QuestionRewardPoolEscrow} from "../contracts/QuestionRewardPoolEscrow.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {X402QuestionSubmitter} from "../contracts/X402QuestionSubmitter.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
+import {RateLoopGovernor} from "../contracts/governance/RateLoopGovernor.sol";
 
 /// @notice Fresh RateLoop deployment script for World Chain.
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
 contract DeployRateLoop is ScaffoldETHDeploy {
     error UnsupportedWorldChain(uint256 chainId);
+    error WorldIdVerifierOverrideHasNoCode(address verifier);
     uint256 public constant TIMELOCK_MIN_DELAY = 2 days;
 
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
@@ -44,6 +45,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
     address internal constant WORLD_CHAIN_SEPOLIA_USDC = 0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88;
     address internal constant WORLD_CHAIN_WORLD_ID_V4_VERIFIER = 0x00000000009E00F9FE82CfeeBB4556686da094d7;
+    string internal constant WORLD_ID_V4_VERIFIER_ADDRESS_ENV = "WORLD_ID_V4_VERIFIER_ADDRESS";
     uint64 internal constant WORLD_ID_CREDENTIAL_TTL_SECONDS = 365 days;
     uint64 internal constant WORLD_ID_PRESENCE_TTL_SECONDS = 15 minutes;
     uint64 internal constant DEFAULT_WORLD_ID_V4_RP_ID = 1;
@@ -67,9 +69,24 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     uint64 internal constant TESTNET_DRAND_GENESIS_TIME = 1_689_232_296;
     uint64 internal constant TESTNET_DRAND_PERIOD = 3;
 
+    struct WorldIdDeployConfig {
+        address verifier;
+        uint64 rpId;
+        uint256 credentialAction;
+        uint256 presenceAction;
+        uint64 credentialTtl;
+        uint64 presenceTtl;
+        uint64 issuerSchemaId;
+        uint256 credentialGenesisIssuedAtMin;
+    }
+
     function _preBroadcastChecks() internal view override {
         if (block.chainid != 31337 && block.chainid != 480 && block.chainid != 4801) {
             revert UnsupportedWorldChain(block.chainid);
+        }
+        if (block.chainid == 480 || block.chainid == 4801) {
+            _validateUsdcToken(_resolveWorldChainUsdcAddress());
+            _resolveWorldIdVerifierAddress(false);
         }
     }
 
@@ -180,19 +197,13 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             worldIdVerifierAddress = address(localWorldIdVerifier);
             console.log("MockWorldIDVerifier deployed at:", worldIdVerifierAddress);
         } else {
-            // WORLDID-1 (2026-05-21 testnet-readiness audit): assert the v4 WorldID verifier
-            // constant is a real deployed contract. Catches the case where the address in
-            // `WORLD_CHAIN_WORLD_ID_V4_VERIFIER` was typo'd, was wiped from the chain, or has not
-            // yet been deployed on a fresh testnet. The actual
-            // address values must still be verified against the live Address Book at
-            // https://docs.world.org/world-id/reference/address-book before each deploy.
-            require(worldIdVerifierAddress.code.length > 0, "WorldID verifier has no code on this chain");
+            if (worldIdVerifierAddress == address(0)) {
+                console.log("World ID v4 verifier unavailable; deploying RaterRegistry with World ID disabled");
+            } else {
+                console.log("World ID v4 verifier resolved at:", worldIdVerifierAddress);
+            }
         }
-        uint64 worldIdRpId = _resolveWorldIdRpId();
-        uint256 worldIdCredentialAction = _resolveWorldIdCredentialAction();
-        uint256 worldIdPresenceAction = _resolveWorldIdPresenceAction();
-        uint64 worldIdIssuerSchemaId = _resolveWorldIdIssuerSchemaId();
-        uint256 worldIdCredentialGenesisIssuedAtMin = _resolveWorldIdCredentialGenesisIssuedAtMin();
+        WorldIdDeployConfig memory worldIdConfig = _resolveWorldIdDeployConfig(worldIdVerifierAddress);
 
         address usdcTokenAddress;
         MockERC20 localUsdcToken;
@@ -210,14 +221,14 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         RaterRegistry raterRegistryImpl = new RaterRegistry(
             deployer,
             governance,
-            worldIdVerifierAddress,
-            worldIdRpId,
-            worldIdCredentialAction,
-            worldIdPresenceAction,
-            WORLD_ID_CREDENTIAL_TTL_SECONDS,
-            WORLD_ID_PRESENCE_TTL_SECONDS,
-            worldIdIssuerSchemaId,
-            worldIdCredentialGenesisIssuedAtMin
+            worldIdConfig.verifier,
+            worldIdConfig.rpId,
+            worldIdConfig.credentialAction,
+            worldIdConfig.presenceAction,
+            worldIdConfig.credentialTtl,
+            worldIdConfig.presenceTtl,
+            worldIdConfig.issuerSchemaId,
+            worldIdConfig.credentialGenesisIssuedAtMin
         );
         TransparentUpgradeableProxy raterRegistryProxy = new TransparentUpgradeableProxy(
             address(raterRegistryImpl),
@@ -227,14 +238,14 @@ contract DeployRateLoop is ScaffoldETHDeploy {
                 (
                     deployer,
                     governance,
-                    worldIdVerifierAddress,
-                    worldIdRpId,
-                    worldIdCredentialAction,
-                    worldIdPresenceAction,
-                    WORLD_ID_CREDENTIAL_TTL_SECONDS,
-                    WORLD_ID_PRESENCE_TTL_SECONDS,
-                    worldIdIssuerSchemaId,
-                    worldIdCredentialGenesisIssuedAtMin
+                    worldIdConfig.verifier,
+                    worldIdConfig.rpId,
+                    worldIdConfig.credentialAction,
+                    worldIdConfig.presenceAction,
+                    worldIdConfig.credentialTtl,
+                    worldIdConfig.presenceTtl,
+                    worldIdConfig.issuerSchemaId,
+                    worldIdConfig.credentialGenesisIssuedAtMin
                 )
             )
         );
@@ -469,10 +480,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("CategoryRegistry:", address(categoryRegistry));
         console.log("ClusterPayoutOracle:", address(clusterPayoutOracle));
         console.log("RaterRegistry:", address(raterRegistry));
-        console.log("World ID v4 Verifier:", worldIdVerifierAddress);
-        console.log("World ID RP ID:", worldIdRpId);
-        console.log("World ID Credential Action:", worldIdCredentialAction);
-        console.log("World ID Presence Action:", worldIdPresenceAction);
+        console.log("World ID v4 Verifier:", worldIdConfig.verifier);
+        console.log("World ID RP ID:", worldIdConfig.rpId);
+        console.log("World ID Credential Action:", worldIdConfig.credentialAction);
+        console.log("World ID Presence Action:", worldIdConfig.presenceAction);
         console.log("LaunchDistributionPool:", address(launchDistributionPool));
         console.log("AdvisoryVoteRecorder:", address(advisoryVoteRecorder));
         console.log("Governance:", governance);
@@ -510,8 +521,33 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 
     function _resolveWorldIdVerifierAddress(bool isLocalDev) internal view returns (address) {
         if (isLocalDev) return address(0);
-        if (block.chainid == 480 || block.chainid == 4801) return WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
+        if (block.chainid == 480 || block.chainid == 4801) {
+            bool hasOverride = vm.envExists(WORLD_ID_V4_VERIFIER_ADDRESS_ENV);
+            address verifier =
+                hasOverride ? vm.envOr(WORLD_ID_V4_VERIFIER_ADDRESS_ENV, address(0)) : WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
+            return _resolveWorldIdVerifierCandidate(verifier, hasOverride);
+        }
         revert UnsupportedWorldChain(block.chainid);
+    }
+
+    function _resolveWorldIdVerifierCandidate(address verifier, bool requireLiveCode) internal view returns (address) {
+        if (verifier == address(0)) return address(0);
+        if (verifier.code.length > 0) return verifier;
+        if (requireLiveCode) revert WorldIdVerifierOverrideHasNoCode(verifier);
+        return address(0);
+    }
+
+    function _resolveWorldIdDeployConfig(address verifier) internal view returns (WorldIdDeployConfig memory config) {
+        config.verifier = verifier;
+        if (verifier == address(0)) return config;
+
+        config.rpId = _resolveWorldIdRpId();
+        config.credentialAction = _resolveWorldIdCredentialAction();
+        config.presenceAction = _resolveWorldIdPresenceAction();
+        config.credentialTtl = WORLD_ID_CREDENTIAL_TTL_SECONDS;
+        config.presenceTtl = WORLD_ID_PRESENCE_TTL_SECONDS;
+        config.issuerSchemaId = _resolveWorldIdIssuerSchemaId();
+        config.credentialGenesisIssuedAtMin = _resolveWorldIdCredentialGenesisIssuedAtMin();
     }
 
     /// @notice Per-chain drand `(chainHash, genesisTime, period)` resolver. Mainnet (480) and local dev
@@ -726,4 +762,4 @@ contract DeployRateLoop is ScaffoldETHDeploy {
 }
 
 /// @notice Main deployment entrypoint used by scaffold-eth/yarn deploy.
-contract DeployScript is DeployRateLoop { }
+contract DeployScript is DeployRateLoop {}

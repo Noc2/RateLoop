@@ -1,8 +1,10 @@
 # World ID v4 Testing
 
 RateLoop is v4-only for new deployments. Local tests use `MockWorldIDVerifier`;
-World Chain deploys use the World ID v4 verifier proxy and never request or
-submit deprecated proof formats.
+World Chain deploys use a live World ID v4 verifier when one is configured and
+never request or submit deprecated proof formats. If no live v4 verifier exists
+on the target chain, the deploy script leaves World ID disabled in
+`RaterRegistry` so governance can configure the verifier later.
 
 Keep these values aligned across the deploy script, Next.js runtime, and World
 Developer Portal:
@@ -105,6 +107,8 @@ WORLD_ID_V4_ISSUER_SCHEMA_ID=<issuer schema id>
 WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN=0
 WORLD_ID_SIGNING_KEY=<staging request signing key>
 NEXT_PUBLIC_PONDER_URL=<reachable Ponder URL for this deployment>
+# Optional. Use a nonzero value only after confirming it has code on World Chain Sepolia.
+WORLD_ID_V4_VERIFIER_ADDRESS=<v4 verifier address or 0x0000000000000000000000000000000000000000>
 ```
 
 Add `NEXT_PUBLIC_WORLD_ID_ENABLE_V4_SELFIE=true` only for staging apps where v4
@@ -123,9 +127,11 @@ Deploy contracts to World Chain Sepolia:
 yarn deploy --network worldchainSepolia --keystore <foundry keystore name>
 ```
 
-The deploy script uses the World ID v4 verifier proxy for World Chain networks
-and stores the numeric RP ID, credential action hash, presence action hash,
-issuer schema ID, and credential genesis lower bound in `RaterRegistry`.
+The deploy script uses `WORLD_ID_V4_VERIFIER_ADDRESS` when it is explicitly set.
+If unset, it tries the bundled World Chain v4 verifier address only when that
+address has code on the selected chain. If neither path resolves to a deployed
+verifier, `RaterRegistry` is deployed with World ID disabled; later governance
+can call the mutable v4 config setters after a verifier is available.
 
 Start the app with the Sepolia env above:
 

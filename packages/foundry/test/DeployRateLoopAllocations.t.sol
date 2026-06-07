@@ -1,18 +1,49 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
-import { DeployRateLoop } from "../script/Deploy.s.sol";
-import { LaunchDistributionPool } from "../contracts/LaunchDistributionPool.sol";
-import { LoopReputation } from "../contracts/LoopReputation.sol";
-import { RaterRegistry } from "../contracts/RaterRegistry.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
-import { MockWorldIDVerifier } from "../contracts/mocks/MockWorldIDVerifier.sol";
+import {Test} from "forge-std/Test.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {DeployRateLoop} from "../script/Deploy.s.sol";
+import {LaunchDistributionPool} from "../contracts/LaunchDistributionPool.sol";
+import {LoopReputation} from "../contracts/LoopReputation.sol";
+import {RaterRegistry} from "../contracts/RaterRegistry.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
+import {MockWorldIDVerifier} from "../contracts/mocks/MockWorldIDVerifier.sol";
 
 contract DeployRateLoopHarness is DeployRateLoop {
     function worldIdActionHash(string memory action) external pure returns (uint256) {
         return uint256(keccak256(bytes(action)));
+    }
+
+    function resolveWorldIdVerifierCandidate(address verifier, bool requireLiveCode) external view returns (address) {
+        return _resolveWorldIdVerifierCandidate(verifier, requireLiveCode);
+    }
+
+    function resolveWorldIdDeployConfig(address verifier)
+        external
+        view
+        returns (
+            address resolvedVerifier,
+            uint64 rpId,
+            uint256 credentialAction,
+            uint256 presenceAction,
+            uint64 credentialTtl,
+            uint64 presenceTtl,
+            uint64 issuerSchemaId,
+            uint256 credentialGenesisIssuedAtMin
+        )
+    {
+        WorldIdDeployConfig memory config = _resolveWorldIdDeployConfig(verifier);
+        return (
+            config.verifier,
+            config.rpId,
+            config.credentialAction,
+            config.presenceAction,
+            config.credentialTtl,
+            config.presenceTtl,
+            config.issuerSchemaId,
+            config.credentialGenesisIssuedAtMin
+        );
     }
 
     function validateUsdcToken(address token) external view {
@@ -160,6 +191,79 @@ contract DeployRateLoopAllocationsTest is Test {
             deployScript.worldIdActionHash("rateloop-human-credential-v1"),
             uint256(keccak256(bytes("rateloop-human-credential-v1")))
         );
+    }
+
+    function test_WorldIdVerifierCandidateDisablesMissingBundledVerifier() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+
+        assertEq(deployScript.resolveWorldIdVerifierCandidate(address(0xBEEF), false), address(0));
+    }
+
+    function test_WorldIdVerifierCandidateRejectsMissingExplicitOverride() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        address missingVerifier = address(0xBEEF);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierOverrideHasNoCode.selector, missingVerifier)
+        );
+        deployScript.resolveWorldIdVerifierCandidate(missingVerifier, true);
+    }
+
+    function test_WorldIdVerifierCandidateAcceptsLiveVerifier() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+
+        assertEq(deployScript.resolveWorldIdVerifierCandidate(address(verifier), false), address(verifier));
+        assertEq(deployScript.resolveWorldIdVerifierCandidate(address(verifier), true), address(verifier));
+    }
+
+    function test_WorldIdDeployConfigDisablesAllFieldsWithoutVerifier() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+
+        (
+            address verifier,
+            uint64 rpId,
+            uint256 credentialAction,
+            uint256 presenceAction,
+            uint64 credentialTtl,
+            uint64 presenceTtl,
+            uint64 issuerSchemaId,
+            uint256 credentialGenesisIssuedAtMin
+        ) = deployScript.resolveWorldIdDeployConfig(address(0));
+
+        assertEq(verifier, address(0));
+        assertEq(rpId, 0);
+        assertEq(credentialAction, 0);
+        assertEq(presenceAction, 0);
+        assertEq(credentialTtl, 0);
+        assertEq(presenceTtl, 0);
+        assertEq(issuerSchemaId, 0);
+        assertEq(credentialGenesisIssuedAtMin, 0);
+    }
+
+    function test_WorldIdDeployConfigKeepsConfiguredFieldsWithVerifier() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+
+        (
+            address resolvedVerifier,
+            uint64 rpId,
+            uint256 credentialAction,
+            uint256 presenceAction,
+            uint64 credentialTtl,
+            uint64 presenceTtl,
+            uint64 issuerSchemaId,
+            uint256 credentialGenesisIssuedAtMin
+        ) = deployScript.resolveWorldIdDeployConfig(address(verifier));
+
+        assertEq(resolvedVerifier, address(verifier));
+        assertEq(rpId, 1);
+        assertEq(credentialAction, uint256(keccak256(bytes("rateloop-human-credential-v1"))));
+        assertEq(presenceAction, uint256(keccak256(bytes("rateloop-human-presence-v1"))));
+        assertEq(credentialTtl, 365 days);
+        assertEq(presenceTtl, 15 minutes);
+        assertEq(issuerSchemaId, 1);
+        assertEq(credentialGenesisIssuedAtMin, 0);
     }
 
     function test_RaterRegistryDeployHandoffLeavesWorldIdV4ConfigMutable() public {

@@ -40,9 +40,10 @@ Create a `.env` file (see `.env.example`):
 | `ALCHEMY_API_KEY`                                     | Optional RPC provider key for testnet/mainnet deploys                  |
 | `WORLDCHAIN_RPC_URL`                                  | Optional World Chain mainnet RPC override for live deploys             |
 | `WORLDCHAIN_SEPOLIA_RPC_URL`                          | Optional World Chain Sepolia RPC override for live deploys             |
-| `NEXT_PUBLIC_WORLD_ID_APP_ID`                         | World ID app ID required for live `RaterRegistry` deploys              |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`                         | World ID app ID used when a live verifier is configured                |
 | `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`              | World ID v4 credential action; defaults to `rateloop-human-credential-v1` |
 | `NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION`                | World ID v4 fresh-presence/recheck action; defaults to `rateloop-human-presence-v1` |
+| `WORLD_ID_V4_VERIFIER_ADDRESS`                        | Optional explicit v4 verifier override; unset uses the bundled World Chain address only if it has code, and `0x0000000000000000000000000000000000000000` disables World ID until governance configures a verifier |
 | `WORLD_ID_V4_RP_ID`                                   | Numeric World ID relying-party ID from the Developer Portal            |
 | `WORLD_ID_V4_ISSUER_SCHEMA_ID`                        | World ID v4 issuer schema ID accepted by the deployment                |
 | `WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN`        | Optional v4 credential genesis issuance lower bound; defaults to `0`   |
