@@ -12,13 +12,13 @@ const DEFAULT_RESULT_SPEC_HASH =
   "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
 const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(
-  toBytes("rateloop-question-bundle-item-v4")
+  toBytes("rateloop-question-bundle-item-v5")
 );
 const QUESTION_BUNDLE_DOMAIN = keccak256(
-  toBytes("rateloop-question-bundle-v4")
+  toBytes("rateloop-question-bundle-v5")
 );
 const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(
-  toBytes("rateloop-question-bundle-reveal-v5")
+  toBytes("rateloop-question-bundle-reveal-v6")
 );
 const MAX_SUBMISSION_IMAGE_URLS = 4;
 const UPLOADED_IMAGE_URL_PATTERN =
@@ -27,7 +27,7 @@ const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const DEFAULT_BOUNTY_ELIGIBILITY = 0;
 
 const abi = parseAbi([
-  "function submitQuestionBundleWithRewardAndRoundConfig((string contextUrl,string[] imageUrls,string videoUrl,string title,string description,string tags,uint256 categoryId,(string detailsUrl,bytes32 detailsHash) details,bytes32 salt,(bytes32 questionMetadataHash,bytes32 resultSpecHash) spec)[] questions,(uint8 asset,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility) rewardTerms,(uint32 epochDuration,uint32 maxDuration,uint16 minVoters,uint16 maxVoters) roundConfig)",
+  "function submitQuestionBundleWithRewardAndRoundConfig((string contextUrl,string[] imageUrls,string videoUrl,string title,string tags,uint256 categoryId,(string detailsUrl,bytes32 detailsHash) details,bytes32 salt,(bytes32 questionMetadataHash,bytes32 resultSpecHash) spec)[] questions,(uint8 asset,uint256 amount,uint256 requiredVoters,uint256 requiredSettledRounds,uint256 bountyStartBy,uint256 bountyWindowSeconds,uint256 feedbackWindowSeconds,uint8 bountyEligibility) rewardTerms,(uint32 epochDuration,uint32 maxDuration,uint16 minVoters,uint16 maxVoters) roundConfig)",
 ]);
 
 function fail(message) {
@@ -37,7 +37,7 @@ function fail(message) {
 
 function usage() {
   fail(
-    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <requiredSettledRounds> <bountyStartBy> <bountyWindowSeconds> <feedbackWindowSeconds> <epochDuration> <maxDuration> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [question args...]"
+    "Usage: node buildQuestionBundleReservation.js <submitter> <rewardAsset> <rewardAmount> <requiredVoters> <requiredSettledRounds> <bountyStartBy> <bountyWindowSeconds> <feedbackWindowSeconds> <epochDuration> <maxDuration> <minVoters> <maxVoters> -- <contextUrl> <imageUrlsJson> <videoUrl> <title> <tags> <categoryId> <salt> [question args...]"
   );
 }
 
@@ -148,22 +148,21 @@ function parseImageUrls(value) {
 }
 
 function parseQuestionArgs(questionArgs) {
-  if (questionArgs.length < 16 || questionArgs.length % 8 !== 0) {
+  if (questionArgs.length < 14 || questionArgs.length % 7 !== 0) {
     usage();
   }
 
   const questions = [];
-  for (let index = 0; index < questionArgs.length; index += 8) {
+  for (let index = 0; index < questionArgs.length; index += 7) {
     const [
       contextUrl,
       imageUrlsJson,
       videoUrl,
       title,
-      description,
       tags,
       categoryId,
       salt,
-    ] = questionArgs.slice(index, index + 8);
+    ] = questionArgs.slice(index, index + 7);
     const imageUrls = parseImageUrls(imageUrlsJson);
     const trimmedVideoUrl = videoUrl.trim();
     if (trimmedVideoUrl && !isSupportedYouTubeUrl(trimmedVideoUrl)) {
@@ -182,7 +181,6 @@ function parseQuestionArgs(questionArgs) {
       imageUrls,
       videoUrl: trimmedVideoUrl,
       title,
-      description,
       tags,
       categoryId: BigInt(categoryId),
       details: { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH },
@@ -280,12 +278,10 @@ function buildQuestionBundleHash(questions) {
                 { type: "string" },
                 { type: "string" },
                 { type: "string" },
-                { type: "string" },
               ],
               [
                 question.contextUrl,
                 question.title,
-                question.description,
                 question.tags,
               ]
             )
@@ -375,7 +371,6 @@ const calldata = encodeFunctionData({
       question.imageUrls,
       question.videoUrl,
       question.title,
-      question.description,
       question.tags,
       question.categoryId,
       [question.details.detailsUrl, question.details.detailsHash],

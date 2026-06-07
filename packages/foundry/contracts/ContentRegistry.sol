@@ -54,7 +54,7 @@ interface IQuestionRewardPoolEscrow {
 
 /// @title ContentRegistry
 /// @notice Manages content lifecycle: submission → active → dormant → revived / cancelled.
-/// @dev Stores only a metadata hash on-chain; full URL/question/description are emitted in events.
+/// @dev Stores only a metadata hash on-chain; full URL/question details are emitted in events.
 contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -84,11 +84,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint256 internal constant MIN_SUBMISSION_REWARD_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_SUBMISSION_REWARD_SETTLED_ROUNDS = 16;
     uint256 internal constant MAX_QUESTION_BUNDLE_COUNT = 10;
-    bytes32 internal constant QUESTION_CONTEXT_DOMAIN = keccak256("rateloop-question-context-v4");
-    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v6");
-    bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v4");
-    bytes32 internal constant QUESTION_BUNDLE_DOMAIN = keccak256("rateloop-question-bundle-v4");
-    bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v5");
+    bytes32 internal constant QUESTION_CONTEXT_DOMAIN = keccak256("rateloop-question-context-v5");
+    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v7");
+    bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v5");
+    bytes32 internal constant QUESTION_BUNDLE_DOMAIN = keccak256("rateloop-question-bundle-v5");
+    bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v6");
 
     // Rating safety thresholds
     uint256 internal constant SLASH_RATING_THRESHOLD = 25; // Rating below this triggers slash
@@ -101,7 +101,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     // String length limits (prevent storage bloat)
     uint256 internal constant MAX_URL_LENGTH = 2048;
     uint256 internal constant MAX_QUESTION_LENGTH = 120;
-    uint256 internal constant MAX_VOTER_SUMMARY_LENGTH = 280;
     uint256 internal constant MAX_TAGS_LENGTH = 256;
     uint256 internal constant MAX_IMAGE_URLS = 4;
     uint16 internal constant MAX_QUESTION_BUNDLE_ROUND_VOTERS = 100;
@@ -138,7 +137,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     struct SubmissionMetadata {
         string url;
         string title;
-        string description;
         string tags;
         uint256 categoryId;
     }
@@ -169,7 +167,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string[] imageUrls;
         string videoUrl;
         string title;
-        string description;
         string tags;
         uint256 categoryId;
         SubmissionDetails details;
@@ -244,7 +241,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bytes32 contentHash,
         string url,
         string title,
-        string description,
         string tags,
         uint256 indexed categoryId
     );
@@ -495,7 +491,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string[] memory imageUrls,
         string memory videoUrl,
         string memory title,
-        string memory description,
         string memory tags,
         uint256 categoryId,
         SubmissionDetails memory details,
@@ -505,9 +500,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         QuestionSpecCommitment memory spec
     ) public nonReentrant whenNotPaused returns (uint256) {
         _validateSubmissionDetails(details);
-        SubmissionMetadata memory metadata = _validatedContextSubmissionMetadata(
-            contextUrl, imageUrls, videoUrl, title, description, tags, categoryId
-        );
+        SubmissionMetadata memory metadata =
+            _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, tags, categoryId);
         return _submitValidatedQuestionWithMedia(
             metadata, imageUrls, videoUrl, details, salt, rewardTerms, _validatedRoundConfig(roundConfig), 0, spec
         );
@@ -543,7 +537,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 question.imageUrls,
                 question.videoUrl,
                 question.title,
-                question.description,
                 question.tags,
                 question.categoryId
             );
@@ -606,7 +599,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 contentHash,
                 metadataList[i].url,
                 metadataList[i].title,
-                metadataList[i].description,
                 metadataList[i].tags,
                 resolvedCategoryIds[i]
             );
@@ -652,7 +644,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string[] memory imageUrls,
         string memory videoUrl,
         string memory title,
-        string memory description,
         string memory tags,
         uint256 categoryId,
         SubmissionDetails memory details,
@@ -671,7 +662,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             bountyEligibility: 0
         });
         SubmissionMetadata memory metadata =
-            _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, description, tags, categoryId);
+            _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, tags, categoryId);
 
         return _submitValidatedQuestionWithMedia(
             metadata, imageUrls, videoUrl, details, salt, rewardTerms, _defaultRoundConfig(), 0, spec
@@ -683,7 +674,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string[] memory imageUrls,
         string memory videoUrl,
         string memory title,
-        string memory description,
         string memory tags,
         uint256 categoryId,
         SubmissionDetails memory details,
@@ -696,7 +686,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(submitter != address(0), "Invalid submitter");
         require(rewardTerms.asset == SUBMISSION_REWARD_ASSET_USDC, "USDC required");
         SubmissionMetadata memory metadata =
-            _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, description, tags, categoryId);
+            _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, tags, categoryId);
         RoundLib.RoundConfig memory validatedRoundConfig = _validatedRoundConfig(roundConfig);
         (uint256 resolvedCategoryId, bytes32 submissionKey, PendingSubmission memory pending) = _prepareQuestionMediaSubmission(
             metadata, imageUrls, videoUrl, details, salt, rewardTerms, validatedRoundConfig, spec, submitter
@@ -757,7 +747,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string[] memory imageUrls,
         string memory videoUrl,
         string memory title,
-        string memory description,
         string memory tags,
         uint256 categoryId
     ) internal view returns (SubmissionMetadata memory metadata) {
@@ -767,9 +756,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         }
         submissionMediaValidator.validateOptionalMediaSet(imageUrls, videoUrl);
         require(hasContextUrl || imageUrls.length > 0 || bytes(videoUrl).length != 0, "Context or media required");
-        metadata = SubmissionMetadata({
-            url: contextUrl, title: title, description: description, tags: tags, categoryId: categoryId
-        });
+        metadata = SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId });
         _validateTextFields(metadata);
         require(address(categoryRegistry) != address(0), "Category unset");
     }
@@ -778,7 +765,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(bytes(metadata.url).length <= MAX_URL_LENGTH, "URL too long");
         require(bytes(metadata.title).length > 0, "Question required");
         require(bytes(metadata.title).length <= MAX_QUESTION_LENGTH, "Question too long");
-        require(bytes(metadata.description).length <= MAX_VOTER_SUMMARY_LENGTH, "Description too long");
         require(bytes(metadata.tags).length > 0, "Tags required");
         require(bytes(metadata.tags).length <= MAX_TAGS_LENGTH, "Tags too long");
     }
@@ -843,7 +829,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             submissionKey,
             mediaHash,
             metadata.title,
-            metadata.description,
             metadata.tags,
             details,
             metadata.categoryId,
@@ -894,7 +879,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 videoUrl,
                 _submissionDetailsHash(details),
                 metadata.title,
-                metadata.description,
                 metadata.tags,
                 resolvedCategoryId,
                 spec.questionMetadataHash,
@@ -941,7 +925,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 _submissionDetailsHash(details),
                 metadata.url,
                 metadata.title,
-                metadata.description,
                 metadata.tags
             )
         );
@@ -1041,7 +1024,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             contentHash,
             metadata.url,
             metadata.title,
-            metadata.description,
             metadata.tags,
             resolvedCategoryId
         );
@@ -1263,7 +1245,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bytes32 submissionKey,
         bytes32 mediaHash,
         string memory title,
-        string memory description,
         string memory tags,
         SubmissionDetails memory details,
         uint256 categoryId,
@@ -1278,7 +1259,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 QUESTION_REVEAL_DOMAIN,
                 submissionKey,
                 mediaHash,
-                keccak256(abi.encode(title, description, tags)),
+                keccak256(abi.encode(title, tags)),
                 _submissionDetailsHash(details),
                 categoryId,
                 salt,
@@ -1310,7 +1291,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                         abi.encode(
                             metadataList[i].url,
                             metadataList[i].title,
-                            metadataList[i].description,
                             metadataList[i].tags
                         )
                     ),

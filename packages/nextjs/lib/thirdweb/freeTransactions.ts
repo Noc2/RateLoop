@@ -34,11 +34,7 @@ import {
   getServerRpcOverrides,
   getServerTargetNetworkById,
 } from "~~/lib/env/server";
-import {
-  findBlockedContentTags,
-  getContentDescriptionValidationError,
-  getContentTitleValidationError,
-} from "~~/lib/moderation/submissionValidation";
+import { findBlockedContentTags, getContentTitleValidationError } from "~~/lib/moderation/submissionValidation";
 import { buildFreeTransactionOperationKey } from "~~/lib/thirdweb/freeTransactionOperation";
 import { isFreeTransactionStoreUnavailableError } from "~~/lib/thirdweb/freeTransactionStoreFallback";
 import { sanitizeExternalUrl } from "~~/utils/externalUrl";
@@ -164,7 +160,6 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
       { name: "imageUrls", type: "string[]" },
       { name: "videoUrl", type: "string" },
       { name: "title", type: "string" },
-      { name: "description", type: "string" },
       { name: "tags", type: "string" },
       { name: "categoryId", type: "uint256" },
       {
@@ -188,7 +183,6 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
       { name: "imageUrls", type: "string[]" },
       { name: "videoUrl", type: "string" },
       { name: "title", type: "string" },
-      { name: "description", type: "string" },
       { name: "tags", type: "string" },
       { name: "categoryId", type: "uint256" },
       {
@@ -248,7 +242,6 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
           { name: "imageUrls", type: "string[]" },
           { name: "videoUrl", type: "string" },
           { name: "title", type: "string" },
-          { name: "description", type: "string" },
           { name: "tags", type: "string" },
           { name: "categoryId", type: "uint256" },
           {
@@ -731,7 +724,6 @@ function normalizeAddressArg(value: unknown): `0x${string}` | null {
 
 type SponsoredSubmissionQuestion = {
   contextUrl: string;
-  description: string;
   detailsHash: string;
   detailsUrl: string;
   imageUrls: string[];
@@ -769,16 +761,14 @@ function readSponsoredSubmissionQuestionFromArgs(args: readonly unknown[]): Spon
   const imageUrls = readStringArrayField(args[1]);
   const videoUrl = readStringField(args[2]);
   const title = readStringField(args[3]);
-  const description = readStringField(args[4]);
-  const tags = readStringField(args[5]);
-  const details = readSubmissionDetailsField(args[7]);
+  const tags = readStringField(args[4]);
+  const details = readSubmissionDetailsField(args[6]);
 
   if (
     contextUrl === null ||
     imageUrls === null ||
     videoUrl === null ||
     title === null ||
-    description === null ||
     tags === null ||
     details === null
   ) {
@@ -787,7 +777,6 @@ function readSponsoredSubmissionQuestionFromArgs(args: readonly unknown[]): Spon
 
   return {
     contextUrl,
-    description,
     detailsHash: details.detailsHash,
     detailsUrl: details.detailsUrl,
     imageUrls,
@@ -802,16 +791,14 @@ function readSponsoredSubmissionQuestionFromTuple(value: unknown): SponsoredSubm
   const imageUrls = readStringArrayField(getTupleField(value, "imageUrls", 1));
   const videoUrl = readStringField(getTupleField(value, "videoUrl", 2));
   const title = readStringField(getTupleField(value, "title", 3));
-  const description = readStringField(getTupleField(value, "description", 4));
-  const tags = readStringField(getTupleField(value, "tags", 5));
-  const details = readSubmissionDetailsField(getTupleField(value, "details", 7));
+  const tags = readStringField(getTupleField(value, "tags", 4));
+  const details = readSubmissionDetailsField(getTupleField(value, "details", 6));
 
   if (
     contextUrl === null ||
     imageUrls === null ||
     videoUrl === null ||
     title === null ||
-    description === null ||
     tags === null ||
     details === null
   ) {
@@ -820,7 +807,6 @@ function readSponsoredSubmissionQuestionFromTuple(value: unknown): SponsoredSubm
 
   return {
     contextUrl,
-    description,
     detailsHash: details.detailsHash,
     detailsUrl: details.detailsUrl,
     imageUrls,
@@ -865,11 +851,9 @@ async function validateSponsoredSubmissionQuestion(
   walletAddress: `0x${string}`,
 ) {
   const title = question.title.trim();
-  const description = question.description.trim();
   const tags = question.tags.trim();
 
   if (!title || title !== question.title) return false;
-  if (description !== question.description) return false;
   if (!tags || tags !== question.tags || tags.length > MAX_CONTENT_TAGS_LENGTH) return false;
   if (question.contextUrl.trim() !== question.contextUrl || question.videoUrl.trim() !== question.videoUrl)
     return false;
@@ -878,7 +862,7 @@ async function validateSponsoredSubmissionQuestion(
   if (question.videoUrl && question.imageUrls.length > 0) return false;
   if (!question.contextUrl && question.imageUrls.length === 0 && !question.videoUrl) return false;
   if (!hasCanonicalUploadedImageUrls(question.imageUrls)) return false;
-  if (getContentTitleValidationError(title) || getContentDescriptionValidationError(description)) return false;
+  if (getContentTitleValidationError(title)) return false;
 
   const parsedTags = parseTags(tags);
   if (parsedTags.length === 0 || parsedTags.length > 3 || findBlockedContentTags(parsedTags).length > 0) {

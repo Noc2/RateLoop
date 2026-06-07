@@ -78,7 +78,6 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
 
         string memory url = "https://example.com/delegate-content";
         string memory title = "goal";
-        string memory description = "goal";
         string memory tags = "tags";
         bytes32 salt = keccak256("delegate-content-salt");
         string memory contextUrl = "https://example.com/context";
@@ -87,7 +86,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
 
         vm.startPrank(delegate);
         _reserveQuestionMediaSubmission(
-            registry, contextUrl, imageUrls, "", title, description, tags, 1, salt, delegate
+            registry, contextUrl, imageUrls, "", title, tags, 1, salt, delegate
         );
         vm.stopPrank();
 
@@ -105,7 +104,6 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             1,
             _emptySubmissionDetails(),
@@ -126,14 +124,13 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         mockRaterIdentityRegistry.setDelegate(delegate);
 
         string memory title = "Is this supported?";
-        string memory description = "Question submission identity should remain stable.";
         string memory tags = "identity";
         string memory url = _submissionImageUrl("identity-check");
         bytes32 salt = keccak256("delegate-question-salt");
         string[] memory imageUrls = _singleImageUrls(url);
 
         vm.startPrank(delegate);
-        _reserveQuestionMediaSubmission(registry, url, imageUrls, "", title, description, tags, 1, salt, delegate);
+        _reserveQuestionMediaSubmission(registry, url, imageUrls, "", title, tags, 1, salt, delegate);
         vm.stopPrank();
 
         vm.prank(submitter);
@@ -146,7 +143,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
 
         vm.startPrank(delegate);
         uint256 contentId = registry.submitQuestion(
-            url, imageUrls, "", title, description, tags, 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
+            url, imageUrls, "", title, tags, 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
         );
         vm.stopPrank();
 

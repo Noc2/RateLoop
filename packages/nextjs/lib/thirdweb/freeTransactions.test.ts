@@ -82,7 +82,6 @@ const submitQuestionWithRewardAndRoundConfigAbi = [
       { name: "imageUrls", type: "string[]" },
       { name: "videoUrl", type: "string" },
       { name: "title", type: "string" },
-      { name: "description", type: "string" },
       { name: "tags", type: "string" },
       { name: "categoryId", type: "uint256" },
       {
@@ -282,7 +281,6 @@ function submitQuestionWithRewardCall(
       question.imageUrls,
       question.videoUrl,
       question.title,
-      question.description,
       question.tags,
       1n,
       {

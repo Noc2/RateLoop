@@ -45,11 +45,6 @@ export const X402QuestionSubmitterAbi = [
             "internalType": "string"
           },
           {
-            "name": "description",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
             "name": "tags",
             "type": "string",
             "internalType": "string"
@@ -322,11 +317,6 @@ export const X402QuestionSubmitterAbi = [
       },
       {
         "name": "title",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "description",
         "type": "string",
         "internalType": "string"
       },

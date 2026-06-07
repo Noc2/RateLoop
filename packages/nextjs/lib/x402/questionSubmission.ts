@@ -55,7 +55,7 @@ const RESERVED_SUBMISSION_WAIT_MS = 1_100;
 const TX_RECEIPT_TIMEOUT_MS = 180_000;
 const FEEDBACK_BONUS_ASSET_LREP = 0;
 const FEEDBACK_BONUS_ASSET_USDC = 1;
-const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v4"));
+const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 type FeedbackBonusAsset = "LREP" | "USDC";
 
 function questionDetailsTuple(question: Pick<X402QuestionPayload["questions"][number], "detailsHash" | "detailsUrl">) {
@@ -311,7 +311,6 @@ function buildQuestionContentHash(question: X402QuestionPayload["questions"][num
         { type: "bytes32" },
         { type: "string" },
         { type: "string" },
-        { type: "string" },
         { type: "uint256" },
         { type: "bytes32" },
         { type: "bytes32" },
@@ -323,7 +322,6 @@ function buildQuestionContentHash(question: X402QuestionPayload["questions"][num
         question.videoUrl,
         buildSubmissionDetailsHash(question.detailsUrl, question.detailsHash),
         question.title,
-        question.description,
         question.tags,
         question.categoryId,
         question.questionMetadataHash,
@@ -592,7 +590,6 @@ const X402QuestionSubmitterAbi = [
         components: [
           { name: "url", type: "string" },
           { name: "title", type: "string" },
-          { name: "description", type: "string" },
           { name: "tags", type: "string" },
           { name: "categoryId", type: "uint256" },
         ],
@@ -659,7 +656,6 @@ const X402QuestionSubmitterAbi = [
       { name: "imageUrls", type: "string[]" },
       { name: "videoUrl", type: "string" },
       { name: "title", type: "string" },
-      { name: "description", type: "string" },
       { name: "tags", type: "string" },
       { name: "categoryId", type: "uint256" },
       {
@@ -1007,7 +1003,6 @@ async function preflightX402QuestionSubmissionWithClient(params: {
       detailsUrl: question.detailsUrl,
       imageUrls: question.imageUrls,
       title: question.title,
-      description: question.description,
       tags: question.tags,
       videoUrl: question.videoUrl,
     });
@@ -1091,7 +1086,6 @@ function buildQuestionSubmissionCallContext(params: {
   const questions = params.payload.questions.map((question, index) => ({
     categoryId: question.categoryId,
     contextUrl: question.contextUrl,
-    description: question.description,
     detailsHash: question.detailsHash,
     detailsUrl: question.detailsUrl,
     imageUrls: question.imageUrls,
@@ -1138,7 +1132,6 @@ function buildQuestionSubmissionCallContext(params: {
       })
     : buildQuestionSubmissionRevealCommitment({
         categoryId: primaryQuestion.categoryId,
-        description: primaryQuestion.description,
         detailsHash: primaryQuestion.detailsHash,
         detailsUrl: primaryQuestion.detailsUrl,
         imageUrls: primaryQuestion.imageUrls,
@@ -1170,7 +1163,6 @@ function buildQuestionSubmissionCallContext(params: {
         primaryQuestion.imageUrls,
         primaryQuestion.videoUrl,
         primaryQuestion.title,
-        primaryQuestion.description,
         primaryQuestion.tags,
         primaryQuestion.categoryId,
         questionDetailsTuple(primaryQuestion),
@@ -1448,7 +1440,6 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     args: [
       {
         categoryId: question.categoryId,
-        description: question.description,
         tags: question.tags,
         title: question.title,
         url: question.contextUrl,
@@ -1519,7 +1510,6 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
                 question.imageUrls,
                 question.videoUrl,
                 question.title,
-                question.description,
                 question.tags,
                 question.categoryId,
                 questionDetailsTuple(question),

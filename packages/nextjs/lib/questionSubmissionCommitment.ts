@@ -1,10 +1,10 @@
 import { type Address, type Hex, encodeAbiParameters, keccak256, toBytes } from "viem";
 
-const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v6"));
-const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v4"));
-const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(toBytes("rateloop-question-bundle-item-v4"));
-const QUESTION_BUNDLE_DOMAIN = keccak256(toBytes("rateloop-question-bundle-v4"));
-const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v5"));
+const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v7"));
+const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
+const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(toBytes("rateloop-question-bundle-item-v5"));
+const QUESTION_BUNDLE_DOMAIN = keccak256(toBytes("rateloop-question-bundle-v5"));
+const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-bundle-reveal-v6"));
 
 type QuestionSubmissionRoundConfig = {
   epochDuration: bigint | number;
@@ -15,7 +15,6 @@ type QuestionSubmissionRoundConfig = {
 
 type QuestionSubmissionRevealCommitmentParams = {
   categoryId: bigint;
-  description: string;
   detailsHash: Hex;
   detailsUrl: string;
   imageUrls: readonly string[];
@@ -46,14 +45,12 @@ type QuestionSubmissionKeyParams = {
   imageUrls: readonly string[];
   tags: string;
   title: string;
-  description: string;
   videoUrl: string;
 };
 
 type QuestionBundleSubmissionItem = {
   categoryId: bigint;
   contextUrl: string;
-  description: string;
   detailsHash: Hex;
   detailsUrl: string;
   imageUrls: readonly string[];
@@ -104,7 +101,6 @@ export function buildQuestionSubmissionKey(params: QuestionSubmissionKeyParams):
         { type: "string" },
         { type: "string" },
         { type: "string" },
-        { type: "string" },
       ],
       [
         QUESTION_CONTEXT_DOMAIN,
@@ -113,7 +109,6 @@ export function buildQuestionSubmissionKey(params: QuestionSubmissionKeyParams):
         buildSubmissionDetailsHash(params.detailsUrl, params.detailsHash),
         params.contextUrl,
         params.title,
-        params.description,
         params.tags,
       ],
     ),
@@ -123,10 +118,7 @@ export function buildQuestionSubmissionKey(params: QuestionSubmissionKeyParams):
 export function buildQuestionSubmissionRevealCommitment(params: QuestionSubmissionRevealCommitmentParams): Hex {
   const mediaHash = buildSubmissionMediaHash(params.imageUrls, params.videoUrl);
   const textHash = keccak256(
-    encodeAbiParameters(
-      [{ type: "string" }, { type: "string" }, { type: "string" }],
-      [params.title, params.description, params.tags],
-    ),
+    encodeAbiParameters([{ type: "string" }, { type: "string" }], [params.title, params.tags]),
   );
   const rewardTermsHash = keccak256(
     encodeAbiParameters(
@@ -216,8 +208,8 @@ function buildQuestionBundleHash(questions: readonly QuestionBundleSubmissionIte
           QUESTION_BUNDLE_ITEM_DOMAIN,
           keccak256(
             encodeAbiParameters(
-              [{ type: "string" }, { type: "string" }, { type: "string" }, { type: "string" }],
-              [question.contextUrl, question.title, question.description, question.tags],
+              [{ type: "string" }, { type: "string" }, { type: "string" }],
+              [question.contextUrl, question.title, question.tags],
             ),
           ),
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),

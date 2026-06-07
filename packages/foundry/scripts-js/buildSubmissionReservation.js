@@ -9,13 +9,13 @@ import {
 
 const args = process.argv.slice(2);
 if (
-  args.length < 9 ||
-  args.length === 10 ||
-  args.length > 22 ||
-  (args.length > 18 && args.length < 22)
+  args.length < 8 ||
+  args.length === 9 ||
+  args.length > 21 ||
+  (args.length > 17 && args.length < 21)
 ) {
   console.error(
-    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <description|empty> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [requiredSettledRounds] [bountyStartBy] [bountyWindowSeconds] [feedbackWindowSeconds] [epochDuration maxDuration minVoters maxVoters]"
+    "Usage: node buildSubmissionReservation.js <rpcUrl> <registry> <submitter> <contextUrl> <imageUrlsJson> <videoUrl> <title> <tags> <categoryId> <salt> [rewardAsset] [rewardAmount] [requiredVoters] [requiredSettledRounds] [bountyStartBy] [bountyWindowSeconds] [feedbackWindowSeconds] [epochDuration maxDuration minVoters maxVoters]"
   );
   process.exit(1);
 }
@@ -35,10 +35,10 @@ const DEFAULT_RESULT_SPEC_HASH =
   "0x8e5f27bc3269c62c92754f76279bd83838462060fc6cd77411b7407027cfa11f";
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}`;
 const QUESTION_CONTEXT_DOMAIN = keccak256(
-  toBytes("rateloop-question-context-v4")
+  toBytes("rateloop-question-context-v5")
 );
 const QUESTION_REVEAL_DOMAIN = keccak256(
-  toBytes("rateloop-question-reveal-v6")
+  toBytes("rateloop-question-reveal-v7")
 );
 const DEFAULT_ROUND_CONFIG = {
   epochDuration: 20 * 60,
@@ -191,14 +191,13 @@ function toSubmissionMedia(value) {
 }
 
 function parseArgs(rawArgs) {
-  if (rawArgs.length === 9) {
+  if (rawArgs.length === 8) {
     const [
       rpcUrl,
       registry,
       submitter,
       mediaUrlOrImageArrayJson,
       title,
-      description,
       tags,
       categoryId,
       salt,
@@ -211,7 +210,6 @@ function parseArgs(rawArgs) {
       contextUrl: "",
       media,
       title,
-      description,
       tags,
       categoryId,
       salt,
@@ -235,7 +233,6 @@ function parseArgs(rawArgs) {
     imageUrlsJson,
     videoUrl,
     title,
-    description,
     tags,
     categoryId,
     salt,
@@ -268,7 +265,6 @@ function parseArgs(rawArgs) {
     contextUrl,
     media: { imageUrls, videoUrl: trimmedVideoUrl },
     title,
-    description,
     tags,
     categoryId,
     salt,
@@ -341,7 +337,6 @@ function buildSubmissionDetailsHash(detailsUrl, detailsHash) {
 function buildQuestionSubmissionKey({
   categoryId,
   contextUrl,
-  description,
   imageUrls,
   tags,
   title,
@@ -357,7 +352,6 @@ function buildQuestionSubmissionKey({
         { type: "string" },
         { type: "string" },
         { type: "string" },
-        { type: "string" },
       ],
       [
         QUESTION_CONTEXT_DOMAIN,
@@ -366,7 +360,6 @@ function buildQuestionSubmissionKey({
         buildSubmissionDetailsHash("", EMPTY_DETAILS_HASH),
         contextUrl,
         title,
-        description,
         tags,
       ]
     )
@@ -380,7 +373,6 @@ const {
   contextUrl,
   media,
   title,
-  description,
   tags,
   categoryId,
   salt,
@@ -407,7 +399,6 @@ const mediaHash = buildSubmissionMediaHash(media.imageUrls, media.videoUrl);
 const submissionKey = buildQuestionSubmissionKey({
   categoryId,
   contextUrl,
-  description,
   imageUrls: media.imageUrls,
   tags,
   title,
@@ -415,8 +406,8 @@ const submissionKey = buildQuestionSubmissionKey({
 });
 const textHash = keccak256(
   encodeAbiParameters(
-    [{ type: "string" }, { type: "string" }, { type: "string" }],
-    [title, description, tags]
+    [{ type: "string" }, { type: "string" }],
+    [title, tags]
   )
 );
 const detailsHash = buildSubmissionDetailsHash("", EMPTY_DETAILS_HASH);

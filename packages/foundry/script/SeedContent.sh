@@ -511,13 +511,13 @@ for ((i = 0; i < TOTAL_ITEMS; i++)); do
   echo "  Approving LREP Bounty: $BOUNTY_AMOUNT"
   cast send "$TOKEN" "approve(address,uint256)" "$QUESTION_REWARD_POOL_ESCROW" "$BOUNTY_AMOUNT" --private-key "$KEY" --rpc-url "$RPC" > /dev/null
 
-  # 2. Reserve the hidden submission commitment before revealing the question metadata
-  printf -v SALT "%064x" "$((i + 1))"
-  REVEAL_COMMITMENT=$(node "$SCRIPT_DIR/../scripts-js/buildSubmissionReservation.js" \
-    "$RPC" "$REGISTRY" "$ADDR" "$CONTEXT_URL" "$IMAGE_URLS_ARG" "$VIDEO_URL_ARG" "$TITLE" "$DESCRIPTION" "$TAG" "$CATEGORY_ID" "0x$SALT" \
-    "0" "$BOUNTY_AMOUNT" "$SUBMISSION_BOUNTY_REQUIRED_VOTERS" "$SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS" \
-    "$SUBMISSION_BOUNTY_START_BY" "$SUBMISSION_BOUNTY_WINDOW_SECONDS" "$SUBMISSION_BOUNTY_FEEDBACK_WINDOW_SECONDS" \
-    "$ROUND_EPOCH_DURATION" "$ROUND_MAX_DURATION" "$ROUND_MIN_VOTERS" "$ROUND_MAX_VOTERS")
+	  # 2. Reserve the hidden submission commitment before revealing the question metadata
+	  printf -v SALT "%064x" "$((i + 1))"
+	  REVEAL_COMMITMENT=$(node "$SCRIPT_DIR/../scripts-js/buildSubmissionReservation.js" \
+	    "$RPC" "$REGISTRY" "$ADDR" "$CONTEXT_URL" "$IMAGE_URLS_ARG" "$VIDEO_URL_ARG" "$TITLE" "$TAG" "$CATEGORY_ID" "0x$SALT" \
+	    "0" "$BOUNTY_AMOUNT" "$SUBMISSION_BOUNTY_REQUIRED_VOTERS" "$SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS" \
+	    "$SUBMISSION_BOUNTY_START_BY" "$SUBMISSION_BOUNTY_WINDOW_SECONDS" "$SUBMISSION_BOUNTY_FEEDBACK_WINDOW_SECONDS" \
+	    "$ROUND_EPOCH_DURATION" "$ROUND_MAX_DURATION" "$ROUND_MIN_VOTERS" "$ROUND_MAX_VOTERS")
   echo "  Reserving submission..."
   cast send "$REGISTRY" "reserveSubmission(bytes32)" "$REVEAL_COMMITMENT" \
     --private-key "$KEY" --rpc-url "$RPC" > /dev/null
@@ -525,10 +525,10 @@ for ((i = 0; i < TOTAL_ITEMS; i++)); do
   # The registry enforces a small reveal delay to make front-running reservations harder.
   sleep 1
 
-  # 3. Reveal the submission with the same deterministic salt used for the reservation
-  echo "  Submitting question: $TITLE ($MEDIA_KIND, bounty: $BOUNTY_AMOUNT, round: ${ROUND_EPOCH_DURATION}s/${ROUND_MIN_VOTERS} voters, context: $CONTEXT_URL, category: $CATEGORY_SLUG -> $CATEGORY_ID)"
-  cast send "$REGISTRY" "submitQuestionWithRewardAndRoundConfig(string,string[],string,string,string,string,uint256,(string,bytes32),bytes32,(uint8,uint256,uint256,uint256,uint256,uint256,uint256,uint8),(uint32,uint32,uint16,uint16),(bytes32,bytes32))" \
-    "$CONTEXT_URL" "$IMAGE_URLS_ARG" "$VIDEO_URL_ARG" "$TITLE" "$DESCRIPTION" "$TAG" "$CATEGORY_ID" "(\"\",$EMPTY_DETAILS_HASH)" "0x$SALT" \
+	  # 3. Reveal the submission with the same deterministic salt used for the reservation
+	  echo "  Submitting question: $TITLE ($MEDIA_KIND, bounty: $BOUNTY_AMOUNT, round: ${ROUND_EPOCH_DURATION}s/${ROUND_MIN_VOTERS} voters, context: $CONTEXT_URL, category: $CATEGORY_SLUG -> $CATEGORY_ID)"
+	  cast send "$REGISTRY" "submitQuestionWithRewardAndRoundConfig(string,string[],string,string,string,uint256,(string,bytes32),bytes32,(uint8,uint256,uint256,uint256,uint256,uint256,uint256,uint8),(uint32,uint32,uint16,uint16),(bytes32,bytes32))" \
+	    "$CONTEXT_URL" "$IMAGE_URLS_ARG" "$VIDEO_URL_ARG" "$TITLE" "$TAG" "$CATEGORY_ID" "(\"\",$EMPTY_DETAILS_HASH)" "0x$SALT" \
     "(0,$BOUNTY_AMOUNT,$SUBMISSION_BOUNTY_REQUIRED_VOTERS,$SUBMISSION_BOUNTY_REQUIRED_SETTLED_ROUNDS,$SUBMISSION_BOUNTY_START_BY,$SUBMISSION_BOUNTY_WINDOW_SECONDS,$SUBMISSION_BOUNTY_FEEDBACK_WINDOW_SECONDS,$SUBMISSION_BOUNTY_ELIGIBILITY)" \
     "($ROUND_EPOCH_DURATION,$ROUND_MAX_DURATION,$ROUND_MIN_VOTERS,$ROUND_MAX_VOTERS)" \
     "($DEFAULT_QUESTION_METADATA_HASH,$DEFAULT_RESULT_SPEC_HASH)" \

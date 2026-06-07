@@ -349,7 +349,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question A?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -361,7 +360,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question B?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -398,9 +396,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 abi.encode(
                     QUESTION_BUNDLE_ITEM_DOMAIN,
                     keccak256(
-                        abi.encode(
-                            questions[i].contextUrl, questions[i].title, questions[i].description, questions[i].tags
-                        )
+                        abi.encode(questions[i].contextUrl, questions[i].title, questions[i].tags)
                     ),
                     keccak256(abi.encode(questions[i].imageUrls, questions[i].videoUrl)),
                     keccak256(abi.encode(questions[i].details.detailsUrl, questions[i].details.detailsHash)),
@@ -444,7 +440,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             reservation.imageUrls,
             reservation.videoUrl,
             reservation.title,
-            reservation.description,
             reservation.tags,
             reservation.categoryId,
             _emptySubmissionDetails()
@@ -535,7 +530,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             "Question?",
-            "Context",
             "Products",
             1,
             _emptySubmissionDetails(),
@@ -562,7 +556,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         reservation.imageUrls = imageUrls;
         reservation.videoUrl = "";
         reservation.title = "Question?";
-        reservation.description = "Context";
         reservation.tags = "Products";
         reservation.categoryId = 1;
         reservation.details = details;
@@ -575,7 +568,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectEmit(true, false, false, true, address(registry));
         emit ContentDetailsSubmitted(1, details.detailsUrl, details.detailsHash);
         uint256 id = registry.submitQuestion(
-            contextUrl, imageUrls, "", "Question?", "Context", "Products", 1, details, salt, _defaultQuestionSpec()
+            contextUrl, imageUrls, "", "Question?", "Products", 1, details, salt, _defaultQuestionSpec()
         );
         vm.stopPrank();
 
@@ -587,14 +580,13 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         string memory contextUrl = "https://example.com/context";
         string[] memory imageUrls = _emptyImageUrls();
         bytes32 emptyDetailsKey = _questionSubmissionKey(
-            contextUrl, imageUrls, "", "Question?", "Context", "Products", 1, _emptySubmissionDetails()
+            contextUrl, imageUrls, "", "Question?", "Products", 1, _emptySubmissionDetails()
         );
         bytes32 detailsKey = _questionSubmissionKey(
             contextUrl,
             imageUrls,
             "",
             "Question?",
-            "Context",
             "Products",
             1,
             ContentRegistry.SubmissionDetails({
@@ -613,7 +605,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "",
             "Question?",
-            "Context",
             "Products",
             1,
             ContentRegistry.SubmissionDetails({
@@ -631,7 +622,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "",
             "Question?",
-            "Context",
             "Products",
             1,
             ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: keccak256(bytes("long-form details")) }),
@@ -668,7 +658,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             "Question?",
-            "Context",
             "Products",
             1,
             _emptySubmissionDetails(),
@@ -690,7 +679,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls("https://example.com/reviews/widget-1"),
             "",
             "Question?",
-            "Context",
             "Products",
             1,
             _emptySubmissionDetails(),
@@ -712,7 +700,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             "Question?",
-            "Context",
             "Products",
             1,
             _emptySubmissionDetails()
@@ -739,7 +726,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             url,
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -759,7 +745,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "https://youtu.be/jNQXAC9IVRw?t=1",
             "Question?",
-            "Context",
             "Video",
             1,
             _emptySubmissionDetails()
@@ -769,7 +754,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "https://www.youtube.com/embed/jNQXAC9IVRw",
             "Question?",
-            "Context",
             "Video",
             1,
             _emptySubmissionDetails()
@@ -779,7 +763,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "https://youtube.com/watch?feature=share&v=jNQXAC9IVRw",
             "Question?",
-            "Context",
             "Video",
             1,
             _emptySubmissionDetails()
@@ -805,7 +788,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
                 _emptyImageUrls(),
                 urls[i],
                 "Question?",
-                "Context",
                 "Video",
                 1,
                 _emptySubmissionDetails(),
@@ -849,7 +831,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -896,7 +877,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             "Which product image works better?",
-            "Compare the two images for usefulness.",
             "Products,Images",
             1,
             _emptySubmissionDetails(),
@@ -940,7 +920,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             ),
             "",
             "Question?",
-            "Context",
             "Products",
             1,
             _emptySubmissionDetails()
@@ -952,7 +931,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             ),
             "",
             "Question?",
-            "Context",
             "Products",
             1,
             _emptySubmissionDetails()
@@ -992,7 +970,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             changedImageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -1036,7 +1013,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             changedImageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -1090,7 +1066,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -1163,7 +1138,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -1214,7 +1188,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -1274,7 +1247,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -1331,7 +1303,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -1346,7 +1317,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -1372,7 +1342,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             "Question?",
-            "Context voters should consider",
             "Products",
             1,
             _emptySubmissionDetails(),
@@ -1401,7 +1370,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             "Question?",
-            "Context voters should consider",
             "Products",
             1,
             _emptySubmissionDetails(),
@@ -1430,7 +1398,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             "Question?",
-            "Context voters should consider",
             "Products",
             1,
             _emptySubmissionDetails(),
@@ -1459,7 +1426,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             "Question?",
-            "Context voters should consider",
             "Products",
             1,
             _emptySubmissionDetails(),
@@ -1484,7 +1450,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1531,7 +1496,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question A?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1543,7 +1507,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question B?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1573,7 +1536,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question A?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1585,7 +1547,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question B?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1615,7 +1576,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question A?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1627,7 +1587,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question B?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1655,7 +1614,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _singleImageUrls(_uploadedImageUrl("bundle-media-variant-a")),
             videoUrl: "",
             title: "Question?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1667,7 +1625,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _singleImageUrls(_uploadedImageUrl("bundle-media-variant-b")),
             videoUrl: "",
             title: "Question?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1687,7 +1644,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             questions[0].imageUrls,
             questions[0].videoUrl,
             questions[0].title,
-            questions[0].description,
             questions[0].tags,
             questions[0].categoryId,
             _emptySubmissionDetails()
@@ -1697,7 +1653,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             questions[1].imageUrls,
             questions[1].videoUrl,
             questions[1].title,
-            questions[1].description,
             questions[1].tags,
             questions[1].categoryId,
             _emptySubmissionDetails()
@@ -1723,7 +1678,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: imageUrls,
             videoUrl: "",
             title: "Question?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1735,7 +1689,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: imageUrls,
             videoUrl: "",
             title: "Question?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1766,7 +1719,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question A?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1778,7 +1730,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls: _emptyImageUrls(),
             videoUrl: "",
             title: "Question B?",
-            description: "Context voters should consider",
             tags: "Products",
             categoryId: 1,
             details: _emptySubmissionDetails(),
@@ -1833,7 +1784,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),
@@ -1861,7 +1811,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "https://www.youtube.com/watch?v=jNQXAC9IVRw",
             "Question?",
-            "Context",
             "Media",
             5,
             _emptySubmissionDetails(),
@@ -1882,7 +1831,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             "Question?",
-            "Context",
             "Media",
             5,
             _emptySubmissionDetails(),
@@ -1899,7 +1847,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(noIdSubmitter);
         lrepToken.approve(address(registry), 10e6);
         NoMediaQuestionText memory question =
-            NoMediaQuestionText({ url: "https://example.com/no-id", title: "goal", description: "goal", tags: "tags" });
+            NoMediaQuestionText({ url: "https://example.com/no-id", title: "goal", tags: "tags" });
         bytes32 salt = _contentSubmissionSalt(question.url, noIdSubmitter);
         _reserveNoMediaQuestionSubmission(registry, question, 1, salt, noIdSubmitter);
         vm.warp(block.timestamp + 1);
@@ -1971,7 +1919,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         lrepToken.approve(address(reg2), 10e6);
         NoMediaQuestionText memory question = NoMediaQuestionText({
-            url: "https://example.com/no-config", title: "goal", description: "goal", tags: "tags"
+            url: "https://example.com/no-config", title: "goal", tags: "tags"
         });
         bytes32 salt = _contentSubmissionSalt(question.url, submitter);
         bytes32 submissionKey = _questionSubmissionKey(
@@ -1979,7 +1927,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "",
             question.title,
-            question.description,
             question.tags,
             1,
             _emptySubmissionDetails()
@@ -1990,7 +1937,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "",
             question.title,
-            question.description,
             question.tags,
             1,
             salt,
@@ -2017,7 +1963,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls("javascript:alert(1)"),
             "",
             "goal",
-            "goal",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2035,7 +1980,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://example.com/context",
             _singleImageUrls("http://example.com/1.jpg"),
             "",
-            "goal",
             "goal",
             "tags",
             1,
@@ -2055,7 +1999,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls("https://example.com/ bad.jpg"),
             "",
             "goal",
-            "goal",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2073,7 +2016,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://safe.com@evil.com/context",
             _singleImageUrls(_uploadedImageUrl("valid-image-userinfo")),
             "",
-            "goal",
             "goal",
             "tags",
             1,
@@ -2093,7 +2035,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls("https://safe.com\\@evil.com/1.jpg"),
             "",
             "goal",
-            "goal",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2111,7 +2052,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://goo%67le.com/context",
             _singleImageUrls(_uploadedImageUrl("valid-image-percent-host")),
             "",
-            "goal",
             "goal",
             "tags",
             1,
@@ -2131,7 +2071,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls(_uploadedImageUrl("valid-image-unsafe-context")),
             "",
             "goal",
-            "goal",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2144,7 +2083,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://example.com/context",
             _singleImageUrls("https://example.com/\"quote\".jpg"),
             "",
-            "goal",
             "goal",
             "tags",
             1,
@@ -2164,7 +2102,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls("https://example.com/bad%zz.jpg"),
             "",
             "goal",
-            "goal",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2183,7 +2120,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls(_uploadedImageUrl("valid-image-empty-host")),
             "",
             "goal",
-            "goal",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2195,7 +2131,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://example.com/context",
             _singleImageUrls("https:///1.jpg"),
             "",
-            "goal",
             "goal",
             "tags",
             1,
@@ -2215,7 +2150,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls("https://www.rateloop.ai/api/attachments/images/att_0123456789abcdef.webp"),
             "",
             "goal",
-            "goal",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2233,7 +2167,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://example.com/context",
             _singleImageUrls(string.concat(_uploadedImageUrl("valid-image-with-query"), "?download=1")),
             "",
-            "goal",
             "goal",
             "tags",
             1,
@@ -2256,7 +2189,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://example.com/context",
             _singleImageUrls(_uploadedImageUrl("valid-image-unregistered-category")),
             "",
-            "goal",
             "goal",
             "tags",
             99,
@@ -2303,7 +2235,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             1,
             _emptySubmissionDetails(),
@@ -2351,7 +2282,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             oversizedCategoryId,
             _emptySubmissionDetails(),
@@ -2383,7 +2313,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls(longUrl),
             "",
             "goal",
-            "goal",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2401,7 +2330,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls(_uploadedImageUrl("max-length-context")),
             "",
             "Question?",
-            "Context.",
             "tags",
             1,
             _emptySubmissionDetails()
@@ -2414,7 +2342,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "",
             "Question?",
-            "Context.",
             "tags",
             1,
             _emptySubmissionDetails()
@@ -2430,7 +2357,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             longVideoUrl,
             "Question?",
-            "Context.",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2474,7 +2400,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls(_uploadedImageUrl("valid-image-long-title")),
             "",
             string(longGoal),
-            string(longGoal),
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2498,7 +2423,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _singleImageUrls(_uploadedImageUrl("valid-image-long-tags")),
             "",
             "goal",
-            "goal",
             string(longTags),
             1,
             _emptySubmissionDetails(),
@@ -2517,7 +2441,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://example.com/1",
             _emptyImageUrls(),
             "",
-            "goal",
             "goal",
             "tags",
             1,
@@ -2546,7 +2469,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             1,
             _emptySubmissionDetails(),
@@ -2560,7 +2482,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             1,
             _emptySubmissionDetails(),
@@ -2589,7 +2510,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             firstImageUrls,
             "",
             title,
-            description,
             tags,
             1,
             _emptySubmissionDetails(),
@@ -2606,7 +2526,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             secondImageUrls,
             "",
             title,
-            description,
             tags,
             1,
             _emptySubmissionDetails(),
@@ -2629,7 +2548,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "",
             "goal",
-            "goal",
             "tags",
             1,
             _emptySubmissionDetails(),
@@ -2647,7 +2565,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _reserveQuestionMediaSubmission(registry, "", imageUrls, "", "goal", "goal", "tags", 1, salt, submitter);
         vm.warp(block.timestamp + 1);
         uint256 contentId = registry.submitQuestion(
-            "", imageUrls, "", "goal", "goal", "tags", 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
+            "", imageUrls, "", "goal", "tags", 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
         );
         vm.stopPrank();
 
@@ -2664,7 +2582,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.submitQuestion(
             "https://example.com/context",
             _singleImageUrls(_uploadedImageUrl("valid-image-empty-title")),
-            "",
             "",
             "",
             "tags",
@@ -2684,7 +2601,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://example.com/context",
             _singleImageUrls(_uploadedImageUrl("valid-image-empty-tags")),
             "",
-            "goal",
             "goal",
             "",
             1,
@@ -3479,7 +3395,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         registry.releaseDormantSubmissionKey(1);
 
         bytes32 submissionKey = _questionSubmissionKey(
-            url, _emptyImageUrls(), "", title, description, tags, 1, _emptySubmissionDetails()
+            url, _emptyImageUrls(), "", title, tags, 1, _emptySubmissionDetails()
         );
         assertTrue(registry.submissionKeyUsed(submissionKey), "active resubmission keeps canonical key reserved");
     }
@@ -3507,7 +3423,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             url,
             _emptyImageUrls(),
             "",
-            "goal",
             "goal",
             "tags",
             1,
@@ -3676,7 +3591,6 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptyImageUrls(),
             "",
             "Question?",
-            "Context.",
             "tag",
             1,
             _emptySubmissionDetails(),

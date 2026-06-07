@@ -288,16 +288,14 @@ async function buildSubmissionReservation(
         { type: "string" },
         { type: "string" },
         { type: "string" },
-        { type: "string" },
       ],
       [
-        keccak256(toBytes("rateloop-question-context-v4")),
+        keccak256(toBytes("rateloop-question-context-v5")),
         categoryId,
         keccak256(encodeAbiParameters([{ type: "string[]" }, { type: "string" }], [media.imageUrls, media.videoUrl])),
         keccak256(encodeAbiParameters([{ type: "string" }, { type: "bytes32" }], ["", detailsHash])),
         url,
         title,
-        description,
         tags,
       ],
     ),
@@ -306,7 +304,6 @@ async function buildSubmissionReservation(
   const salt = keccak256(stringToHex(`${fromAddress}:${categoryId}:${JSON.stringify(media)}:${title}:${Date.now()}`));
   const revealCommitment = buildQuestionSubmissionRevealCommitment({
     categoryId,
-    description,
     detailsHash,
     detailsUrl: "",
     imageUrls: media.imageUrls,
@@ -978,9 +975,16 @@ export async function submitContentDirect(
           { name: "imageUrls", type: "string[]" },
           { name: "videoUrl", type: "string" },
           { name: "title", type: "string" },
-          { name: "description", type: "string" },
           { name: "tags", type: "string" },
           { name: "categoryId", type: "uint256" },
+          {
+            name: "details",
+            type: "tuple",
+            components: [
+              { name: "detailsUrl", type: "string" },
+              { name: "detailsHash", type: "bytes32" },
+            ],
+          },
           { name: "salt", type: "bytes32" },
           {
             name: "rewardTerms",
@@ -1025,9 +1029,12 @@ export async function submitContentDirect(
       media.imageUrls,
       media.videoUrl,
       title,
-      description,
       tags,
       resolvedCategoryId,
+      {
+        detailsHash: `0x${"0".repeat(64)}`,
+        detailsUrl: "",
+      },
       reservation.salt,
       rewardTerms,
       resolvedRoundConfig,

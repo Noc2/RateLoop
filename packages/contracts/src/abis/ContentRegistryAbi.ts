@@ -856,11 +856,6 @@ export const ContentRegistryAbi = [
         "internalType": "string"
       },
       {
-        "name": "description",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
         "name": "tags",
         "type": "string",
         "internalType": "string"
@@ -945,11 +940,6 @@ export const ContentRegistryAbi = [
           },
           {
             "name": "title",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "description",
             "type": "string",
             "internalType": "string"
           },
@@ -1118,11 +1108,6 @@ export const ContentRegistryAbi = [
         "internalType": "string"
       },
       {
-        "name": "description",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
         "name": "tags",
         "type": "string",
         "internalType": "string"
@@ -1281,11 +1266,6 @@ export const ContentRegistryAbi = [
       },
       {
         "name": "title",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "description",
         "type": "string",
         "internalType": "string"
       },
@@ -1704,12 +1684,6 @@ export const ContentRegistryAbi = [
       },
       {
         "name": "title",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "description",
         "type": "string",
         "indexed": false,
         "internalType": "string"

@@ -172,7 +172,6 @@ export function buildSubmissionRevealCommitment(
 ): `0x${string}` {
   return buildQuestionSubmissionRevealCommitment({
     categoryId: draft.categoryId,
-    description: draft.description,
     detailsHash: draft.detailsHash,
     detailsUrl: draft.detailsUrl,
     imageUrls: draft.imageUrls,

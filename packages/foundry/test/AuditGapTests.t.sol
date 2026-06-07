@@ -305,7 +305,6 @@ contract AuditGapTests is VotingTestBase {
             _singleImageUrls(_submissionImageUrl("pause-test-6")),
             "",
             "goal",
-            "goal",
             "tag",
             1,
             _emptySubmissionDetails(),

@@ -2185,7 +2185,6 @@ export function ContentSubmissionSection() {
           detailsUrl: question.detailsUrl,
           imageUrls: question.imageUrls,
           title: question.title,
-          description: question.description,
           tags: question.tags,
           videoUrl: question.videoUrl,
         });
@@ -2205,7 +2204,6 @@ export function ContentSubmissionSection() {
           })
         : buildQuestionSubmissionRevealCommitment({
             categoryId: primaryQuestion.categoryId,
-            description: primaryQuestion.description,
             detailsHash: primaryQuestion.detailsHash,
             detailsUrl: primaryQuestion.detailsUrl,
             imageUrls: primaryQuestion.imageUrls,
@@ -2331,7 +2329,6 @@ export function ContentSubmissionSection() {
                     primaryQuestion.imageUrls,
                     primaryQuestion.videoUrl,
                     primaryQuestion.title,
-                    primaryQuestion.description,
                     primaryQuestion.tags,
                     primaryQuestion.categoryId,
                     { detailsUrl: primaryQuestion.detailsUrl, detailsHash: primaryQuestion.detailsHash },
@@ -2392,7 +2389,6 @@ export function ContentSubmissionSection() {
                 primaryQuestion.imageUrls,
                 primaryQuestion.videoUrl,
                 primaryQuestion.title,
-                primaryQuestion.description,
                 primaryQuestion.tags,
                 primaryQuestion.categoryId,
                 { detailsUrl: primaryQuestion.detailsUrl, detailsHash: primaryQuestion.detailsHash },

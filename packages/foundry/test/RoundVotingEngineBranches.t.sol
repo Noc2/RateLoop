@@ -696,7 +696,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         lrepToken.approve(rewardEscrow, rewardAmount);
 
         bytes32 submissionKey = _questionSubmissionKey(
-            url, imageUrls, videoUrl, title, description, tags, categoryId, _emptySubmissionDetails()
+            url, imageUrls, videoUrl, title, tags, categoryId, _emptySubmissionDetails()
         );
         bytes32 salt = _contentSubmissionSalt(url, submitter);
         bytes32 revealCommitment = _questionRevealCommitment(
@@ -720,7 +720,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
             imageUrls,
             videoUrl,
             title,
-            description,
             tags,
             categoryId,
             _emptySubmissionDetails(),

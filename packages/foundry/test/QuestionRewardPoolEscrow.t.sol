@@ -1079,7 +1079,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             imageUrls,
             "",
             QUESTION,
-            DESCRIPTION,
             TAGS,
             CATEGORY_ID,
             _emptySubmissionDetails()
@@ -1111,7 +1110,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             imageUrls,
             "",
             QUESTION,
-            DESCRIPTION,
             TAGS,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -4377,7 +4375,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         usdc.mint(agentWallet, REWARD_POOL_AMOUNT);
 
         bytes32 submissionKey = _questionSubmissionKey(
-            contextUrl, imageUrls, "", title, description, tags, CATEGORY_ID, _emptySubmissionDetails()
+            contextUrl, imageUrls, "", title, tags, CATEGORY_ID, _emptySubmissionDetails()
         );
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
@@ -4406,7 +4404,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             imageUrls,
             "",
             title,
-            description,
             tags,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -4456,7 +4453,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.imageUrls,
             "",
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -4494,7 +4490,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.imageUrls,
             "",
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -4531,7 +4526,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.imageUrls,
             "",
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -4594,7 +4588,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.imageUrls,
             "",
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -4640,7 +4633,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.imageUrls,
             "",
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -4713,7 +4705,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.imageUrls,
             "",
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -4749,7 +4740,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.imageUrls,
             "",
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -4793,7 +4783,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.imageUrls,
             "",
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -5030,7 +5019,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             imageUrls,
             "",
             QUESTION,
-            DESCRIPTION,
             TAGS,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -5061,7 +5049,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
 
         bytes32 submissionKey = _questionSubmissionKey(
-            contextUrl, imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
+            contextUrl, imageUrls, "", QUESTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
         );
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         bytes32 revealCommitment = _questionRevealCommitment(
@@ -5095,7 +5083,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             imageUrls,
             "",
             QUESTION,
-            DESCRIPTION,
             TAGS,
             CATEGORY_ID,
             _emptySubmissionDetails(),
@@ -5225,7 +5212,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             question.imageUrls,
             "",
             question.title,
-            question.description,
             question.tags,
             CATEGORY_ID,
             _emptySubmissionDetails()
@@ -5258,7 +5244,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         ContentRegistry.SubmissionMetadata memory metadata = ContentRegistry.SubmissionMetadata({
             url: question.contextUrl,
             title: question.title,
-            description: question.description,
             tags: question.tags,
             categoryId: CATEGORY_ID
         });
@@ -5315,7 +5300,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         usdc.mint(agentWallet, rewardTerms.amount);
         bytes32 submissionKey = _questionSubmissionKey(
-            contextUrl, imageUrls, "", QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
+            contextUrl, imageUrls, "", QUESTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
         );
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
@@ -5339,7 +5324,6 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             imageUrls,
             "",
             QUESTION,
-            DESCRIPTION,
             TAGS,
             CATEGORY_ID,
             _emptySubmissionDetails(),

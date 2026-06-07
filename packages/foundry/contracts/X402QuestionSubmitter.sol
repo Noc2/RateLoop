@@ -55,7 +55,6 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         string[] memory imageUrls,
         string memory videoUrl,
         string memory title,
-        string memory description,
         string memory tags,
         uint256 categoryId,
         ContentRegistry.SubmissionDetails memory details,
@@ -72,9 +71,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         require(
             paymentAuthorization.nonce
                 == computeX402QuestionPaymentNonce(
-                    ContentRegistry.SubmissionMetadata({
-                        url: contextUrl, title: title, description: description, tags: tags, categoryId: categoryId
-                    }),
+                    ContentRegistry.SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId }),
                     imageUrls,
                     videoUrl,
                     details,
@@ -116,7 +113,6 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             imageUrls,
             videoUrl,
             title,
-            description,
             tags,
             categoryId,
             details,
@@ -183,7 +179,6 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
                 keccak256(bytes(details.detailsUrl)),
                 details.detailsHash,
                 keccak256(bytes(metadata.title)),
-                keccak256(bytes(metadata.description)),
                 keccak256(bytes(metadata.tags)),
                 metadata.categoryId,
                 salt

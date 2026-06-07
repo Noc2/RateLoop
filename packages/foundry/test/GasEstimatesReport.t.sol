@@ -159,11 +159,10 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         string memory imageUrl = _submissionImageUrl("gas-report");
         string[] memory imageUrls = _singleImageUrls(imageUrl);
         bytes32 submissionKey = _questionSubmissionKey(
-            "https://example.com/context", imageUrls, "", "test goal", "test goal", "test", 1, _emptySubmissionDetails()
+            "https://example.com/context", imageUrls, "", "test goal", "test", 1, _emptySubmissionDetails()
         );
-        bytes32 salt = keccak256(
-            abi.encode(imageUrl, "test goal", "test goal", "test", uint256(1), submitter, block.timestamp, block.number)
-        );
+        bytes32 salt =
+            keccak256(abi.encode(imageUrl, "test goal", "test", uint256(1), submitter, block.timestamp, block.number));
         bytes32 revealCommitment = _defaultQuestionRevealCommitment(
             registry, submissionKey, imageUrls, "", "test goal", "test goal", "test", 1, salt, submitter
         );
@@ -173,11 +172,10 @@ contract UserTransactionGasEstimatesTest is RoundIntegrationTest {
         );
         vm.warp(block.timestamp + 1);
         bytes memory revealCallData = abi.encodeWithSignature(
-            "submitQuestion(string,string[],string,string,string,string,uint256,(string,bytes32),bytes32,(bytes32,bytes32))",
+            "submitQuestion(string,string[],string,string,string,uint256,(string,bytes32),bytes32,(bytes32,bytes32))",
             "https://example.com/context",
             imageUrls,
             "",
-            "test goal",
             "test goal",
             "test",
             1,
