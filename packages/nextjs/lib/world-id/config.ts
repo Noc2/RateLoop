@@ -16,7 +16,7 @@ function resolveWorldIdE2EMode(value: string | undefined): WorldIdE2EMode {
 }
 
 function resolveWorldIdRpContextId() {
-  const rpId = cleanEnv(process.env.WORLD_ID_V4_IDKIT_RP_ID) ?? cleanEnv(process.env.WORLD_ID_V4_RP_ID);
+  const rpId = cleanEnv(process.env.WORLD_ID_RP_ID) ?? cleanEnv(process.env.WORLD_ID_V4_RP_ID);
   if (!rpId) {
     return {
       error: "World ID relying-party ID is not configured for this deployment.",
