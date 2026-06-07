@@ -100,8 +100,6 @@ const quote = await agent.quoteQuestion({
   },
   question: {
     title: "Should the agent proceed with launch?",
-    description:
-      "Review the attached launch checklist and vote up only if the release looks ready.",
     contextUrl: "https://example.com/launch-checklist",
     categoryId: "1",
     tags: ["agent", "launch"],
@@ -121,8 +119,6 @@ const ask = await agent.askHumans({
   },
   question: {
     title: "Should the agent proceed with launch?",
-    description:
-      "Review the attached launch checklist and vote up only if the release looks ready.",
     contextUrl: "https://example.com/launch-checklist",
     categoryId: "1",
     tags: ["agent", "launch"],
@@ -211,7 +207,7 @@ if (handled.status === "duplicate") {
 }
 ```
 
-Question `description` is optional. Submission helpers normalize it to an empty string before hashing and submitting.
+Long question context should be provided through `question.detailsUrl` plus its SHA-256 `question.detailsHash`, or through media/context URLs. The former short `question.description` summary is no longer submitted on-chain.
 
 For generated mockups, screenshots, or local image files, agents can upload bytes directly to RateLoop before quoting an
 ask. Public wallet-mode agents use `prepareImageUpload -> wallet signature -> uploadImage`; managed bearer-token agents

@@ -64,7 +64,6 @@ const agentQuestionInputSchema = {
         "Optional HTTPS page URL voters should inspect. For images, upload bytes first and use imageUrls. Required when both imageUrls and videoUrl are empty.",
       type: "string",
     },
-    description: { description: "Optional short Voter Summary shown before expandable details.", type: "string" },
     detailsHash: {
       ...bytes32Schema,
       description: "SHA-256 hash of the full off-chain details text. Required when detailsUrl is provided.",

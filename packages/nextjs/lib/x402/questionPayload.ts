@@ -9,10 +9,7 @@ import { findAgentResultTemplate } from "~~/lib/agent/templates";
 import { normalizeUploadedImageAttachmentUrl } from "~~/lib/attachments/imageAttachmentUrls";
 import { isSupportedBountyEligibility } from "~~/lib/bountyEligibility";
 import { normalizeSubmissionContextUrl } from "~~/lib/contentMedia";
-import {
-  getContentDescriptionValidationError,
-  getContentTitleValidationError,
-} from "~~/lib/moderation/submissionValidation";
+import { getContentTitleValidationError } from "~~/lib/moderation/submissionValidation";
 import { findBlockedContentTags } from "~~/lib/moderation/submissionValidation";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
@@ -66,7 +63,6 @@ export type X402QuestionItemPayload = {
   imageUrls: string[];
   videoUrl: string;
   title: string;
-  description: string;
   detailsHash: `0x${string}`;
   detailsUrl: string;
   tags: string;
@@ -464,14 +460,9 @@ function normalizeQuestion(
 
   const fieldPrefix = `questions[${index}]`;
   const title = readString(value.title, `${fieldPrefix}.title`);
-  const description = readOptionalString(value.description);
   const titleError = getContentTitleValidationError(title);
   if (titleError) {
     throw new X402QuestionInputError(titleError);
-  }
-  const descriptionError = getContentDescriptionValidationError(description);
-  if (descriptionError) {
-    throw new X402QuestionInputError(descriptionError);
   }
 
   const imageUrls = normalizeImageUrls(value.imageUrls);
@@ -498,7 +489,6 @@ function normalizeQuestion(
   return {
     categoryId,
     contextUrl,
-    description,
     detailsHash: details.detailsHash,
     detailsUrl: details.detailsUrl,
     imageUrls,
@@ -613,7 +603,6 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
       },
       categoryId: normalizedQuestion.categoryId,
       contextUrl: normalizedQuestion.contextUrl,
-      description: normalizedQuestion.description,
       imageUrls: normalizedQuestion.imageUrls,
       roundConfig,
       study: {
@@ -632,7 +621,6 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
     return {
       categoryId: normalizedQuestion.categoryId,
       contextUrl: normalizedQuestion.contextUrl,
-      description: normalizedQuestion.description,
       detailsHash: normalizedQuestion.detailsHash,
       detailsUrl: normalizedQuestion.detailsUrl,
       imageUrls: normalizedQuestion.imageUrls,
@@ -675,7 +663,6 @@ export function toCanonicalQuestionPayload(payload: X402QuestionPayload) {
     questions: payload.questions.map(question => ({
       categoryId: question.categoryId.toString(),
       contextUrl: question.contextUrl,
-      description: question.description,
       detailsHash: question.detailsHash,
       detailsUrl: question.detailsUrl,
       imageUrls: question.imageUrls,

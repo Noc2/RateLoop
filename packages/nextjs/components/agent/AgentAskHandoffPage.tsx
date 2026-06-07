@@ -26,8 +26,6 @@ import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
-import { MAX_CONTENT_DESCRIPTION_LENGTH } from "~~/lib/contentDescription";
-import { getContentDescriptionValidationError } from "~~/lib/moderation/submissionValidation";
 import {
   type FeedbackBonusAsset,
   formatFeedbackBonusAmount,
@@ -133,7 +131,6 @@ type ImageSignatureStep = {
 type QuestionSummary = {
   categoryId: string;
   contextUrl: string;
-  description: string;
   tags: string[];
   templateId: string;
   title: string;
@@ -150,7 +147,6 @@ type RoundSettings = {
 type DraftQuestionForm = {
   categoryId: string;
   contextUrl: string;
-  description: string;
   tags: string;
   templateId: string;
   title: string;
@@ -282,7 +278,6 @@ function readQuestionSummaries(handoff: Handoff | null): QuestionSummary[] {
   return readQuestionRecords(handoff).map((question, index) => ({
     categoryId: readDisplayValue(question.categoryId),
     contextUrl: readString(question.contextUrl),
-    description: readString(question.description),
     tags: readQuestionTags(question.tags),
     templateId: readString(question.templateId),
     title: readString(question.title) || `Question ${index + 1}`,
@@ -394,7 +389,6 @@ function createDraftForm(handoff: Handoff): DraftForm {
       ? questions.map(question => ({
           categoryId: question.categoryId,
           contextUrl: question.contextUrl,
-          description: question.description,
           tags: question.tags.join(", "),
           templateId: question.templateId,
           title: question.title,
@@ -404,7 +398,6 @@ function createDraftForm(handoff: Handoff): DraftForm {
           {
             categoryId: "",
             contextUrl: "",
-            description: "",
             tags: "",
             templateId: "",
             title: readQuestionTitle(handoff),
@@ -539,20 +532,12 @@ function parseTagsInput(value: string) {
     .filter(Boolean);
 }
 
-function getDraftQuestionDescriptionError(question: DraftQuestionForm) {
-  const description = question.description.trim();
-  return description ? getContentDescriptionValidationError(description) : null;
-}
-
 function applyDraftQuestion(baseQuestion: JsonRecord, draft: DraftQuestionForm, index: number): JsonRecord {
   const title = draft.title.trim();
   const categoryId = draft.categoryId.trim();
-  const description = draft.description.trim();
-  const descriptionError = description ? getContentDescriptionValidationError(description) : null;
   const tags = parseTagsInput(draft.tags);
   if (!title) throw new Error(`Question ${index + 1} needs a title.`);
   if (!categoryId) throw new Error(`Question ${index + 1} needs a category.`);
-  if (descriptionError) throw new Error(descriptionError);
   if (tags.length === 0 || tags.length > 3) {
     throw new Error(`Question ${index + 1} needs one to three tags.`);
   }
@@ -560,7 +545,6 @@ function applyDraftQuestion(baseQuestion: JsonRecord, draft: DraftQuestionForm, 
   const nextQuestion: JsonRecord = {
     ...baseQuestion,
     categoryId,
-    description,
     tags,
     title,
   };
@@ -693,7 +677,7 @@ function readSubmittedContentForShare(handoff: Handoff | null, ask: unknown): Su
     description:
       questions.length > 1
         ? `${questions.length} question bundle. Answer all questions to qualify for the bounty.`
-        : (primaryQuestion?.description ?? ""),
+        : "",
     id: contentId,
     lastActivityAt: new Date().toISOString(),
     title: primaryQuestion?.title || readQuestionTitle(handoff),
@@ -865,12 +849,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
   const draftFormJson = useMemo(() => (draftForm ? JSON.stringify(draftForm) : ""), [draftForm]);
   const isDraftDirty = Boolean(draftForm && savedDraftJson && draftFormJson !== savedDraftJson);
-  const draftQuestionDescriptionErrors = useMemo(
-    () => draftForm?.questions.map(getDraftQuestionDescriptionError) ?? [],
-    [draftForm?.questions],
-  );
-  const hasDraftQuestionDescriptionError = draftQuestionDescriptionErrors.some(Boolean);
-
   const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
   const isFeedbackBonusStep = handoff?.status === "feedback_bonus_prepared";
   const connectedMismatch = Boolean(handoff?.walletAddress && address && !sameAddress(handoff.walletAddress, address));
@@ -882,9 +860,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const isBusy = isPreparing || isExecuting || isSigningMessage || isSavingDraft || switchingChainId !== null;
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
-  const canSaveDraft = Boolean(
-    handoff && draftForm && isDraftEditable && isDraftDirty && !hasDraftQuestionDescriptionError && !isBusy,
-  );
+  const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && isDraftDirty && !isBusy);
   const draftRoundMaxDurationMinuteBounds = useMemo(
     () =>
       getRoundMaxDurationMinuteBoundsForBlind(
@@ -1461,7 +1437,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               <div className="space-y-3">
                 {draftForm?.questions.length ? (
                   draftForm.questions.map((question, index) => {
-                    const descriptionError = draftQuestionDescriptionErrors[index] ?? null;
                     return (
                       <div key={`${index}-${question.title}`} className="surface-card-nested rounded-lg p-4">
                         <label className="form-control">
@@ -1475,28 +1450,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                             onChange={event => updateDraftQuestion(index, { title: event.target.value })}
                           />
                         </label>
-
-                        <label className="form-control mt-4 border-t border-base-300/60 pt-4">
-                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Description <span className="text-base-content/60">(optional)</span>
-                          </span>
-                          <textarea
-                            className={`textarea textarea-bordered mt-1 min-h-28 w-full leading-relaxed ${
-                              descriptionError ? "textarea-error" : ""
-                            }`}
-                            disabled={!canEditDraft}
-                            maxLength={MAX_CONTENT_DESCRIPTION_LENGTH}
-                            placeholder="Add the short summary voters see first"
-                            value={question.description}
-                            onChange={event => updateDraftQuestion(index, { description: event.target.value })}
-                          />
-                        </label>
-                        {descriptionError ? <p className="mt-1 text-sm text-error">{descriptionError}</p> : null}
-                        <div className="mt-1 text-right">
-                          <span className="text-sm text-base-content/60">
-                            {question.description.length}/{MAX_CONTENT_DESCRIPTION_LENGTH}
-                          </span>
-                        </div>
 
                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
                           <label className="form-control">

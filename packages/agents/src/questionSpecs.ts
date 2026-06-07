@@ -29,7 +29,6 @@ export type AgentQuestionSpecInput = {
   };
   categoryId: bigint | string;
   contextUrl: string;
-  description?: string;
   imageUrls: readonly string[];
   roundConfig?: AgentQuestionRoundConfig;
   study?: {
@@ -93,12 +92,11 @@ export function buildQuestionMetadata(
       : null,
     categoryId: input.categoryId.toString(),
     contextUrl: input.contextUrl,
-    description: input.description ?? "",
     imageUrls: [...input.imageUrls],
     roundConfig: input.roundConfig
       ? serializeRoundConfig(input.roundConfig)
       : null,
-    schemaVersion: "rateloop.question.v1",
+    schemaVersion: "rateloop.question.v2",
     study: input.study ?? null,
     targetAudience: input.targetAudience ?? null,
     tags: [...input.tags],

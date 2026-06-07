@@ -36,7 +36,6 @@ export interface RateLoopAgentClientOptions {
 
 export interface RateLoopAgentQuestionItem {
   title: string;
-  description?: string;
   contextUrl?: string;
   categoryId: string | number | bigint;
   detailsHash?: `0x${string}` | string;

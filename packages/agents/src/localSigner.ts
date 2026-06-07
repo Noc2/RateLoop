@@ -84,19 +84,19 @@ const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 128;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const QUESTION_CONTEXT_DOMAIN = keccak256(
-  stringToHex("rateloop-question-context-v4"),
+  stringToHex("rateloop-question-context-v5"),
 );
 const QUESTION_REVEAL_DOMAIN = keccak256(
-  stringToHex("rateloop-question-reveal-v6"),
+  stringToHex("rateloop-question-reveal-v7"),
 );
 const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(
-  stringToHex("rateloop-question-bundle-item-v4"),
+  stringToHex("rateloop-question-bundle-item-v5"),
 );
 const QUESTION_BUNDLE_DOMAIN = keccak256(
-  stringToHex("rateloop-question-bundle-v4"),
+  stringToHex("rateloop-question-bundle-v5"),
 );
 const QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256(
-  stringToHex("rateloop-question-bundle-reveal-v5"),
+  stringToHex("rateloop-question-bundle-reveal-v6"),
 );
 const X402_QUESTION_PAYMENT_DOMAIN = keccak256(
   stringToHex("rateloop-x402-question-payment-v3"),
@@ -289,7 +289,6 @@ type LocalQuestionPayload = {
 type LocalQuestionItemPayload = {
   categoryId: bigint;
   contextUrl: string;
-  description: string;
   detailsHash: Hex;
   detailsUrl: string;
   imageUrls: string[];
@@ -319,7 +318,6 @@ type LocalRewardTerms = {
 type LocalQuestionSubmission = {
   categoryId: bigint;
   contextUrl: string;
-  description: string;
   detailsHash: Hex;
   detailsUrl: string;
   imageUrls: string[];
@@ -1405,7 +1403,6 @@ function normalizeLocalQuestion(
 
   const fieldPrefix = `questions[${index}]`;
   const title = readRequiredString(value.title, `${fieldPrefix}.title`);
-  const description = readOptionalString(value.description);
   const imageUrls = normalizeImageUrls(value.imageUrls);
   const rawContextUrl = readOptionalString(value.contextUrl);
   const contextUrl = rawContextUrl
@@ -1468,7 +1465,6 @@ function normalizeLocalQuestion(
     },
     categoryId,
     contextUrl,
-    description,
     imageUrls,
     roundConfig,
     study: {
@@ -1487,7 +1483,6 @@ function normalizeLocalQuestion(
   return {
     categoryId,
     contextUrl,
-    description,
     detailsHash,
     detailsUrl,
     imageUrls,
@@ -1602,7 +1597,6 @@ function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
     questions: payload.questions.map((question) => ({
       categoryId: question.categoryId.toString(),
       contextUrl: question.contextUrl,
-      description: question.description,
       detailsHash: question.detailsHash,
       detailsUrl: question.detailsUrl,
       imageUrls: question.imageUrls,
@@ -1645,7 +1639,6 @@ function buildQuestionSubmissionKey(question: LocalQuestionItemPayload): Hex {
         { type: "string" },
         { type: "string" },
         { type: "string" },
-        { type: "string" },
       ],
       [
         QUESTION_CONTEXT_DOMAIN,
@@ -1654,7 +1647,6 @@ function buildQuestionSubmissionKey(question: LocalQuestionItemPayload): Hex {
         buildSubmissionDetailsHash(question.detailsUrl, question.detailsHash),
         question.contextUrl,
         question.title,
-        question.description,
         question.tags,
       ],
     ),
@@ -1758,12 +1750,8 @@ function buildSingleQuestionRevealCommitment(params: {
 }): Hex {
   const textHash = keccak256(
     encodeAbiParameters(
-      [{ type: "string" }, { type: "string" }, { type: "string" }],
-      [
-        params.question.title,
-        params.question.description,
-        params.question.tags,
-      ],
+      [{ type: "string" }, { type: "string" }],
+      [params.question.title, params.question.tags],
     ),
   );
   return keccak256(
@@ -1831,12 +1819,10 @@ function buildQuestionBundleHash(
                 { type: "string" },
                 { type: "string" },
                 { type: "string" },
-                { type: "string" },
               ],
               [
                 question.contextUrl,
                 question.title,
-                question.description,
                 question.tags,
               ],
             ),
@@ -1931,7 +1917,6 @@ function buildExpectedLocalSignerQuestionPlan(params: {
     return {
       categoryId: question.categoryId,
       contextUrl: question.contextUrl,
-      description: question.description,
       detailsHash: question.detailsHash,
       detailsUrl: question.detailsUrl,
       imageUrls: question.imageUrls,
@@ -2010,7 +1995,6 @@ function buildX402QuestionPaymentNonce(params: {
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
-        { type: "bytes32" },
         { type: "uint256" },
         { type: "bytes32" },
       ],
@@ -2021,7 +2005,6 @@ function buildX402QuestionPaymentNonce(params: {
         keccak256(stringToHex(params.question.detailsUrl)),
         params.question.detailsHash,
         keccak256(stringToHex(params.question.title)),
-        keccak256(stringToHex(params.question.description)),
         keccak256(stringToHex(params.question.tags)),
         params.question.categoryId,
         params.question.salt,
@@ -2363,32 +2346,27 @@ function assertQuestionSubmission(
     `${fieldName}.title`,
   );
   assertEqualString(
-    readStructField(value, "description", 4, fieldName),
-    expected.description,
-    `${fieldName}.description`,
-  );
-  assertEqualString(
-    readStructField(value, "tags", 5, fieldName),
+    readStructField(value, "tags", 4, fieldName),
     expected.tags,
     `${fieldName}.tags`,
   );
   assertEqualBigInt(
-    readStructField(value, "categoryId", 6, fieldName),
+    readStructField(value, "categoryId", 5, fieldName),
     expected.categoryId,
     `${fieldName}.categoryId`,
   );
   assertSubmissionDetails(
-    readStructField(value, "details", 7, fieldName),
+    readStructField(value, "details", 6, fieldName),
     expected,
     `${fieldName}.details`,
   );
   assertEqualBytes32(
-    readStructField(value, "salt", 8, fieldName),
+    readStructField(value, "salt", 7, fieldName),
     expected.salt,
     `${fieldName}.salt`,
   );
   assertQuestionSpec(
-    readStructField(value, "spec", 9, fieldName),
+    readStructField(value, "spec", 8, fieldName),
     expected.spec,
     `${fieldName}.spec`,
   );
@@ -2553,41 +2531,36 @@ function validateSubmitQuestionCall(params: {
   );
   assertEqualString(
     args[4],
-    params.expectedPlan.primaryQuestion.description,
-    `transactionPlan.calls[${params.index}].description`,
-  );
-  assertEqualString(
-    args[5],
     params.expectedPlan.primaryQuestion.tags,
     `transactionPlan.calls[${params.index}].tags`,
   );
   assertEqualBigInt(
-    args[6],
+    args[5],
     params.expectedPlan.primaryQuestion.categoryId,
     `transactionPlan.calls[${params.index}].categoryId`,
   );
   assertSubmissionDetails(
-    args[7],
+    args[6],
     params.expectedPlan.primaryQuestion,
     `transactionPlan.calls[${params.index}].details`,
   );
   assertEqualBytes32(
-    args[8],
+    args[7],
     params.expectedPlan.primaryQuestion.salt,
     `transactionPlan.calls[${params.index}].salt`,
   );
   assertRewardTerms(
-    args[9],
+    args[8],
     params.expectedPlan.rewardTerms,
     `transactionPlan.calls[${params.index}].rewardTerms`,
   );
   assertRoundConfig(
-    args[10],
+    args[9],
     params.expectedPlan.roundConfig,
     `transactionPlan.calls[${params.index}].roundConfig`,
   );
   assertQuestionSpec(
-    args[11],
+    args[10],
     params.expectedPlan.primaryQuestion.spec,
     `transactionPlan.calls[${params.index}].spec`,
   );
@@ -2648,45 +2621,40 @@ function validateSubmitX402QuestionCall(params: {
   );
   assertEqualString(
     args[4],
-    params.expectedPlan.primaryQuestion.description,
-    `transactionPlan.calls[${params.index}].description`,
-  );
-  assertEqualString(
-    args[5],
     params.expectedPlan.primaryQuestion.tags,
     `transactionPlan.calls[${params.index}].tags`,
   );
   assertEqualBigInt(
-    args[6],
+    args[5],
     params.expectedPlan.primaryQuestion.categoryId,
     `transactionPlan.calls[${params.index}].categoryId`,
   );
   assertSubmissionDetails(
-    args[7],
+    args[6],
     params.expectedPlan.primaryQuestion,
     `transactionPlan.calls[${params.index}].details`,
   );
   assertEqualBytes32(
-    args[8],
+    args[7],
     params.expectedPlan.primaryQuestion.salt,
     `transactionPlan.calls[${params.index}].salt`,
   );
   assertRewardTerms(
-    args[9],
+    args[8],
     params.expectedPlan.rewardTerms,
     `transactionPlan.calls[${params.index}].rewardTerms`,
   );
   assertRoundConfig(
-    args[10],
+    args[9],
     params.expectedPlan.roundConfig,
     `transactionPlan.calls[${params.index}].roundConfig`,
   );
   assertQuestionSpec(
-    args[11],
+    args[10],
     params.expectedPlan.primaryQuestion.spec,
     `transactionPlan.calls[${params.index}].spec`,
   );
-  const authorization = decoded.args?.[12];
+  const authorization = decoded.args?.[11];
   if (!authorization || typeof authorization !== "object") {
     throw new Error(
       `transactionPlan.calls[${params.index}].paymentAuthorization is required.`,

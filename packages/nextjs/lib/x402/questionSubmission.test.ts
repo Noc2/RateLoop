@@ -41,7 +41,6 @@ function buildPayload(clientRequestId: string): X402QuestionPayload {
       {
         categoryId: 5n,
         contextUrl: "https://example.com/context",
-        description: "Would you approve this action?",
         detailsHash: `0x${"0".repeat(64)}` as const,
         detailsUrl: "",
         imageUrls: [] as string[],
@@ -206,10 +205,9 @@ function buildContentSubmittedLog(params: {
         { name: "contentHash", type: "bytes32" },
         { name: "url", type: "string" },
         { name: "title", type: "string" },
-        { name: "description", type: "string" },
         { name: "tags", type: "string" },
       ],
-      [params.contentHash ?? `0x${"1".repeat(64)}`, "https://example.com/context", "Question", "Description", "agents"],
+      [params.contentHash ?? `0x${"1".repeat(64)}`, "https://example.com/context", "Question", "agents"],
     ),
     topics: encodeEventTopics({
       abi: ContentRegistryAbi,

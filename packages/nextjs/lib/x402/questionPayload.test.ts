@@ -184,16 +184,16 @@ test("parseX402QuestionRequest rejects uploaded image paths on untrusted origins
   );
 });
 
-test("parseX402QuestionRequest accepts an omitted description", () => {
+test("parseX402QuestionRequest ignores legacy description input", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,
     question: {
       ...VALID_REQUEST.question,
-      description: undefined,
+      description: "Legacy voter summary",
     },
   });
 
-  assert.equal(payload.questions[0].description, "");
+  assert.ok(!("description" in payload.questions[0]));
 });
 
 test("parseX402QuestionRequest accepts ordered question bundles", () => {

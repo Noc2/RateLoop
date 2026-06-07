@@ -103,7 +103,6 @@ describe("agent templates", () => {
     const first = buildQuestionSpecHashes({
       categoryId: "1",
       contextUrl: "https://example.com",
-      description: "Vote up only if the source supports the claim.",
       imageUrls: [],
       tags: ["source"],
       title: "Does this source support the claim?",
@@ -112,7 +111,6 @@ describe("agent templates", () => {
     const second = buildQuestionSpecHashes({
       categoryId: "1",
       contextUrl: "https://example.com",
-      description: "Vote up only if the source supports the claim.",
       imageUrls: [],
       tags: ["source"],
       title: "Does this source support the claim?",

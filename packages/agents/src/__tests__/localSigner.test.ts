@@ -52,10 +52,10 @@ const TEST_SIGNATURE = `0x${"1".repeat(64)}${"3".repeat(64)}1b` as const;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
 const EMPTY_DETAILS = { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH } as const;
 const QUESTION_CONTEXT_DOMAIN = keccak256(
-  stringToHex("rateloop-question-context-v4"),
+  stringToHex("rateloop-question-context-v5"),
 );
 const QUESTION_REVEAL_DOMAIN = keccak256(
-  stringToHex("rateloop-question-reveal-v6"),
+  stringToHex("rateloop-question-reveal-v7"),
 );
 const X402_SIGN_OPTIONS: NonNullable<
   Parameters<typeof signX402AuthorizationRequest>[2]
@@ -122,7 +122,6 @@ function questionSpec() {
     },
     categoryId: 1n,
     contextUrl: QUESTION_CONTEXT_URL,
-    description: "",
     imageUrls: [],
     roundConfig: roundConfigBigInt(),
     study: { bundleIndex: 0 },
@@ -427,7 +426,6 @@ function submitQuestionData(amount = BigInt(X402_AMOUNT)) {
       [],
       "",
       QUESTION_TITLE,
-      "",
       QUESTION_TAG,
       1n,
       EMPTY_DETAILS,
@@ -449,7 +447,6 @@ function submitX402QuestionData(amount = BigInt(X402_AMOUNT)) {
       [],
       "",
       QUESTION_TITLE,
-      "",
       QUESTION_TAG,
       1n,
       EMPTY_DETAILS,
@@ -788,7 +785,6 @@ describe("local signer", () => {
         [],
         "",
         "Changed question title",
-        "",
         QUESTION_TAG,
         1n,
         EMPTY_DETAILS,
