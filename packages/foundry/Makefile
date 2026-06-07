@@ -1,4 +1,4 @@
-.PHONY: build deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
+.PHONY: build deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn certora certora-check coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
 
 TEST_ARGS ?=
 COVERAGE_ARGS ?=
@@ -120,6 +120,18 @@ slither:
 
 aderyn:
 	aderyn .
+
+# Formal verification (Certora). See certora/README.md and docs/testing/certora.md.
+# base.conf carries the shared compiler/prover settings; the target conf is merged on top.
+CERTORA_BASE_CONF ?= certora/confs/base.conf
+CERTORA_CONF ?= certora/confs/math.conf
+CERTORA_ARGS ?=
+
+certora:
+	certoraRun $(CERTORA_BASE_CONF) $(CERTORA_CONF) $(CERTORA_ARGS)
+
+certora-check:
+	certoraRun $(CERTORA_BASE_CONF) $(CERTORA_CONF) --compilation_steps_only $(CERTORA_ARGS)
 
 coverage:
 	forge coverage --offline --ir-minimum $(COVERAGE_ARGS)
