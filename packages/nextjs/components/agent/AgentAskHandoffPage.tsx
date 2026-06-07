@@ -1456,9 +1456,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                         />
                       </label>
 
-                      <label className="form-control mt-3">
+                      <label className="form-control mt-4 border-t border-base-300/60 pt-4">
                         <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                          Voter Summary
+                          Description <span className="text-base-content/60">(optional)</span>
                         </span>
                         <textarea
                           className="textarea textarea-bordered mt-1 min-h-28 w-full leading-relaxed"
