@@ -155,7 +155,6 @@ function canonicalPayload() {
       {
         categoryId: "1",
         contextUrl: QUESTION_CONTEXT_URL,
-        description: "",
         detailsHash: EMPTY_DETAILS_HASH,
         detailsUrl: "",
         imageUrls: [],
@@ -200,7 +199,6 @@ function expectedSubmissionKey() {
         { type: "string" },
         { type: "string" },
         { type: "string" },
-        { type: "string" },
       ],
       [
         QUESTION_CONTEXT_DOMAIN,
@@ -214,7 +212,6 @@ function expectedSubmissionKey() {
         submissionDetailsHash(),
         QUESTION_CONTEXT_URL,
         QUESTION_TITLE,
-        "",
         QUESTION_TAG,
       ],
     ),
@@ -317,8 +314,8 @@ function expectedRevealCommitment() {
         ),
         keccak256(
           encodeAbiParameters(
-            [{ type: "string" }, { type: "string" }, { type: "string" }],
-            [QUESTION_TITLE, "", QUESTION_TAG],
+            [{ type: "string" }, { type: "string" }],
+            [QUESTION_TITLE, QUESTION_TAG],
           ),
         ),
         submissionDetailsHash(),
@@ -352,7 +349,6 @@ function x402PaymentNonce(from = account.address) {
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
-        { type: "bytes32" },
         { type: "uint256" },
         { type: "bytes32" },
       ],
@@ -363,7 +359,6 @@ function x402PaymentNonce(from = account.address) {
         keccak256(stringToHex("")),
         EMPTY_DETAILS_HASH,
         keccak256(stringToHex(QUESTION_TITLE)),
-        keccak256(stringToHex("")),
         keccak256(stringToHex(QUESTION_TAG)),
         1n,
         expectedSalt(),
