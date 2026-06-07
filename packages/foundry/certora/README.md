@@ -98,9 +98,10 @@ yarn foundry:certora:check
   needs `CERTORAKEY`.
 - Status:
   - Phase 1 (`math.conf`) — **verified**: all `Math.spec` rules pass.
-  - Phase 2 (`cluster-payout-oracle.conf`) — **verified (first slice)**: the
-    `verifyPayoutWeight` safety rules pass. Lifecycle / bond / rejected-root
-    properties are deferred (see `ClusterPayoutOracle.spec` header).
+  - Phase 2 (`cluster-payout-oracle.conf`) — **verified**: `verifyPayoutWeight`
+    safety, rejected-root non-reuse, and single-use bond withdrawal all pass. Full
+    lifecycle monotonicity / finalization timing remain deferred (see
+    `ClusterPayoutOracle.spec` header).
   - Verified under certora-cli 8.13.1 / solc 0.8.35 ("No errors found by Prover!").
 - `.certora_internal/` (prover scratch output) is git-ignored.
 - `RatingMath`'s logit/sigmoid paths use PRBMath `SD59x18` (`exp`/`ln`) and are out

@@ -155,17 +155,27 @@ Target properties:
 - parent epoch rejection makes child payout snapshots unverifiable or non-finalizable
 - bond credits are withdrawable once and cannot be over-withdrawn
 
-Implementation status (`certora/specs/ClusterPayoutOracle.spec`): the
-`verifyPayoutWeight` slice is **implemented and verified**. Four rules prove that a
-`true` result implies the caller is the pinned consumer, the snapshot is currently
-finalized (status `Finalized` + current correlation epoch, via
-`isRoundPayoutSnapshotFinalized`), `independenceBps <= BPS_DENOMINATOR`, and
-`effectiveWeight <= baseWeight`. These are pure view properties over arbitrary
-state, so no harness or mocks are required for this slice. The remaining
-properties (proposer authorization, finalization timing, rejected-root/digest
-non-reuse, parent-epoch rejection cascade, single-use bond withdrawal) are the
-next slice — they need state-transition rules and, for the bond path, an ERC20
-model.
+Implementation status (`certora/specs/ClusterPayoutOracle.spec`): **implemented and
+verified** across three property groups:
+
+- `verifyPayoutWeight` (4 rules): a `true` result implies the caller is the pinned
+  consumer, the snapshot is currently finalized (status `Finalized` + current
+  correlation epoch, via `isRoundPayoutSnapshotFinalized`), `independenceBps <=
+  BPS_DENOMINATOR`, and `effectiveWeight <= baseWeight`. Pure view properties over
+  arbitrary state — no harness/mocks.
+- rejected-root non-reuse (1 rule): a blacklisted `(snapshotKey, weightRoot)` can
+  never be re-proposed — `proposeRoundPayoutSnapshot` reverts.
+- single-use bond withdrawal (3 rules): a withdrawal zeroes the caller's pending
+  credit and an empty withdrawal reverts, so a credit is drawable at most once and
+  never over-withdrawn. External calls (frontend registry, snapshot consumer, bond
+  ERC20) are summarized `NONDET`.
+
+Note on method: abstract parametric "no method ever clears the blacklist"
+monotonicity rules tripped a Certora modeling quirk over the struct-heavy mutating
+functions, so the non-reuse guarantee is stated concretely as a propose-reverts
+rule, which is both provable and the property that actually matters. Still
+deferred: full lifecycle monotonicity, rejected-digest/consumed-slot guards,
+finalization timing, and the parent-epoch rejection cascade.
 
 Modeling notes:
 
