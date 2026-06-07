@@ -25,6 +25,8 @@ import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHead
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import { MAX_CONTENT_DESCRIPTION_LENGTH } from "~~/lib/contentDescription";
+import { getContentDescriptionValidationError } from "~~/lib/moderation/submissionValidation";
 import {
   type FeedbackBonusAsset,
   formatFeedbackBonusAmount,
@@ -536,12 +538,20 @@ function parseTagsInput(value: string) {
     .filter(Boolean);
 }
 
+function getDraftQuestionDescriptionError(question: DraftQuestionForm) {
+  const description = question.description.trim();
+  return description ? getContentDescriptionValidationError(description) : null;
+}
+
 function applyDraftQuestion(baseQuestion: JsonRecord, draft: DraftQuestionForm, index: number): JsonRecord {
   const title = draft.title.trim();
   const categoryId = draft.categoryId.trim();
+  const description = draft.description.trim();
+  const descriptionError = description ? getContentDescriptionValidationError(description) : null;
   const tags = parseTagsInput(draft.tags);
   if (!title) throw new Error(`Question ${index + 1} needs a title.`);
   if (!categoryId) throw new Error(`Question ${index + 1} needs a category.`);
+  if (descriptionError) throw new Error(descriptionError);
   if (tags.length === 0 || tags.length > 3) {
     throw new Error(`Question ${index + 1} needs one to three tags.`);
   }
@@ -549,7 +559,7 @@ function applyDraftQuestion(baseQuestion: JsonRecord, draft: DraftQuestionForm, 
   const nextQuestion: JsonRecord = {
     ...baseQuestion,
     categoryId,
-    description: draft.description.trim(),
+    description,
     tags,
     title,
   };
@@ -854,6 +864,11 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
   const draftFormJson = useMemo(() => (draftForm ? JSON.stringify(draftForm) : ""), [draftForm]);
   const isDraftDirty = Boolean(draftForm && savedDraftJson && draftFormJson !== savedDraftJson);
+  const draftQuestionDescriptionErrors = useMemo(
+    () => draftForm?.questions.map(getDraftQuestionDescriptionError) ?? [],
+    [draftForm?.questions],
+  );
+  const hasDraftQuestionDescriptionError = draftQuestionDescriptionErrors.some(Boolean);
 
   const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
   const isFeedbackBonusStep = handoff?.status === "feedback_bonus_prepared";
@@ -866,7 +881,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const isBusy = isPreparing || isExecuting || isSigningMessage || isSavingDraft || switchingChainId !== null;
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
-  const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && isDraftDirty && !isBusy);
+  const canSaveDraft = Boolean(
+    handoff && draftForm && isDraftEditable && isDraftDirty && !hasDraftQuestionDescriptionError && !isBusy,
+  );
   const draftRoundMaxDurationMinuteBounds = useMemo(
     () =>
       getRoundMaxDurationMinuteBoundsForBlind(
@@ -1442,96 +1459,109 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
               <div className="space-y-3">
                 {draftForm?.questions.length ? (
-                  draftForm.questions.map((question, index) => (
-                    <div key={`${index}-${question.title}`} className="surface-card-nested rounded-lg p-4">
-                      <label className="form-control">
-                        <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                          {hasQuestionBundle ? `Question ${index + 1}` : "Question"}
-                        </span>
-                        <input
-                          className="input input-bordered mt-1 w-full"
-                          disabled={!canEditDraft}
-                          value={question.title}
-                          onChange={event => updateDraftQuestion(index, { title: event.target.value })}
-                        />
-                      </label>
-
-                      <label className="form-control mt-4 border-t border-base-300/60 pt-4">
-                        <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                          Description <span className="text-base-content/60">(optional)</span>
-                        </span>
-                        <textarea
-                          className="textarea textarea-bordered mt-1 min-h-28 w-full leading-relaxed"
-                          disabled={!canEditDraft}
-                          value={question.description}
-                          onChange={event => updateDraftQuestion(index, { description: event.target.value })}
-                        />
-                      </label>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  draftForm.questions.map((question, index) => {
+                    const descriptionError = draftQuestionDescriptionErrors[index] ?? null;
+                    return (
+                      <div key={`${index}-${question.title}`} className="surface-card-nested rounded-lg p-4">
                         <label className="form-control">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Category
+                            {hasQuestionBundle ? `Question ${index + 1}` : "Question"}
                           </span>
                           <input
                             className="input input-bordered mt-1 w-full"
                             disabled={!canEditDraft}
-                            value={question.categoryId}
-                            onChange={event => updateDraftQuestion(index, { categoryId: event.target.value })}
+                            value={question.title}
+                            onChange={event => updateDraftQuestion(index, { title: event.target.value })}
                           />
                         </label>
-                        <label className="form-control">
+
+                        <label className="form-control mt-4 border-t border-base-300/60 pt-4">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Template
+                            Description <span className="text-base-content/60">(optional)</span>
+                          </span>
+                          <textarea
+                            className={`textarea textarea-bordered mt-1 min-h-28 w-full leading-relaxed ${
+                              descriptionError ? "textarea-error" : ""
+                            }`}
+                            disabled={!canEditDraft}
+                            maxLength={MAX_CONTENT_DESCRIPTION_LENGTH}
+                            placeholder="Add the short summary voters see first"
+                            value={question.description}
+                            onChange={event => updateDraftQuestion(index, { description: event.target.value })}
+                          />
+                        </label>
+                        {descriptionError ? <p className="mt-1 text-sm text-error">{descriptionError}</p> : null}
+                        <div className="mt-1 text-right">
+                          <span className="text-sm text-base-content/60">
+                            {question.description.length}/{MAX_CONTENT_DESCRIPTION_LENGTH}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="form-control">
+                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                              Category
+                            </span>
+                            <input
+                              className="input input-bordered mt-1 w-full"
+                              disabled={!canEditDraft}
+                              value={question.categoryId}
+                              onChange={event => updateDraftQuestion(index, { categoryId: event.target.value })}
+                            />
+                          </label>
+                          <label className="form-control">
+                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                              Template
+                            </span>
+                            <input
+                              className="input input-bordered mt-1 w-full"
+                              disabled={!canEditDraft}
+                              value={question.templateId}
+                              onChange={event => updateDraftQuestion(index, { templateId: event.target.value })}
+                            />
+                          </label>
+                        </div>
+
+                        <label className="form-control mt-4">
+                          <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            <TagIcon className="h-3.5 w-3.5" />
+                            <span>Tags</span>
                           </span>
                           <input
                             className="input input-bordered mt-1 w-full"
                             disabled={!canEditDraft}
-                            value={question.templateId}
-                            onChange={event => updateDraftQuestion(index, { templateId: event.target.value })}
+                            value={question.tags}
+                            onChange={event => updateDraftQuestion(index, { tags: event.target.value })}
                           />
                         </label>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="form-control">
+                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                              Context URL
+                            </span>
+                            <input
+                              className="input input-bordered mt-1 w-full"
+                              disabled={!canEditDraft}
+                              value={question.contextUrl}
+                              onChange={event => updateDraftQuestion(index, { contextUrl: event.target.value })}
+                            />
+                          </label>
+                          <label className="form-control">
+                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                              Video URL
+                            </span>
+                            <input
+                              className="input input-bordered mt-1 w-full"
+                              disabled={!canEditDraft}
+                              value={question.videoUrl}
+                              onChange={event => updateDraftQuestion(index, { videoUrl: event.target.value })}
+                            />
+                          </label>
+                        </div>
                       </div>
-
-                      <label className="form-control mt-4">
-                        <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                          <TagIcon className="h-3.5 w-3.5" />
-                          <span>Tags</span>
-                        </span>
-                        <input
-                          className="input input-bordered mt-1 w-full"
-                          disabled={!canEditDraft}
-                          value={question.tags}
-                          onChange={event => updateDraftQuestion(index, { tags: event.target.value })}
-                        />
-                      </label>
-
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <label className="form-control">
-                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Context URL
-                          </span>
-                          <input
-                            className="input input-bordered mt-1 w-full"
-                            disabled={!canEditDraft}
-                            value={question.contextUrl}
-                            onChange={event => updateDraftQuestion(index, { contextUrl: event.target.value })}
-                          />
-                        </label>
-                        <label className="form-control">
-                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                            Video URL
-                          </span>
-                          <input
-                            className="input input-bordered mt-1 w-full"
-                            disabled={!canEditDraft}
-                            value={question.videoUrl}
-                            onChange={event => updateDraftQuestion(index, { videoUrl: event.target.value })}
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="surface-card-nested rounded-lg p-4 text-sm text-base-content/55">
                     Question details are unavailable for this handoff.
