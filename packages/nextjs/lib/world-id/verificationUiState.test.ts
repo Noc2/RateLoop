@@ -1,4 +1,5 @@
 import {
+  WORLD_ID_INVALID_CREDENTIAL_MESSAGE,
   WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
   WORLD_ID_RATE_LIMITED_MESSAGE,
   type WorldIdVerificationStep,
@@ -23,6 +24,15 @@ test("formats already-used World ID attestation reverts for display", () => {
       'The contract function "attestHumanCredentialWithV4Proof" reverted. Error: NullifierAlreadyAssigned()',
     ),
     WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE,
+  );
+});
+
+test("formats invalid World ID credential reverts as fresh retry guidance", () => {
+  assert.equal(
+    getWorldIdCredentialAttestationErrorMessage(
+      'The contract function "attestHumanCredentialWithV4Proof" reverted. Error: InvalidCredential()',
+    ),
+    WORLD_ID_INVALID_CREDENTIAL_MESSAGE,
   );
 });
 

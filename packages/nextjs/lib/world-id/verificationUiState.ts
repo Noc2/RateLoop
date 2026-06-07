@@ -39,6 +39,9 @@ export const WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE =
 export const WORLD_ID_RATE_LIMITED_MESSAGE =
   "The network is busy right now. Please wait a moment, then try verifying with World ID again.";
 
+export const WORLD_ID_INVALID_CREDENTIAL_MESSAGE =
+  "This World ID proof expired or is no longer valid for the connected wallet. Try again with a fresh World ID request.";
+
 const WALLET_SESSION_RECONNECTING_MESSAGE =
   "Your wallet session is still reconnecting. Wait a moment, then try verifying again. If this keeps happening, disconnect and sign in again.";
 
@@ -82,6 +85,15 @@ export function getWorldIdCredentialAttestationErrorMessage(
 
   if (message.includes("NullifierAlreadyAssigned")) {
     return WORLD_ID_NULLIFIER_ALREADY_ASSIGNED_MESSAGE;
+  }
+
+  if (
+    message.includes("InvalidCredential") &&
+    (message.includes("attestHumanCredentialWithV4Proof") ||
+      message.includes("attestWorldCredentialWithV4Proof") ||
+      message.includes("attestHumanPresenceWithV4Proof"))
+  ) {
+    return WORLD_ID_INVALID_CREDENTIAL_MESSAGE;
   }
 
   if (message.includes("Request exceeds defined limit") || message.includes("Request is being rate limited")) {
