@@ -91,9 +91,11 @@ yarn foundry:certora:check
   so this is safe. Phases 2–4 verify the real contracts, which need `via_ir`; that
   combination will need a certora-cli release that supports 0.8.35's IR steps (or a
   pinned older solc).
-- `make certora-check` (compile-only, no `CERTORAKEY` / no cloud) passes today — it
-  compiles the harness and type-checks `Math.spec`. The full `make certora` run
-  (solver proofs) needs `CERTORAKEY`.
+- `make certora-check` (compile-only, no `CERTORAKEY` / no cloud) compiles the
+  harness and type-checks `Math.spec`. The full `make certora` run (solver proofs)
+  needs `CERTORAKEY`.
+- Status: Phase 1 is **verified** — all rules in `Math.spec` pass under certora-cli
+  8.13.1 / solc 0.8.35 (`make certora` → "No errors found by Prover!").
 - `.certora_internal/` (prover scratch output) is git-ignored.
 - `RatingMath`'s logit/sigmoid paths use PRBMath `SD59x18` (`exp`/`ln`) and are out
   of scope for Phase 1; only its integer helpers are wrapped here.
