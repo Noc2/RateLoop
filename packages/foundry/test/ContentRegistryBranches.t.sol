@@ -395,9 +395,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             questionHashes[i] = keccak256(
                 abi.encode(
                     QUESTION_BUNDLE_ITEM_DOMAIN,
-                    keccak256(
-                        abi.encode(questions[i].contextUrl, questions[i].title, questions[i].tags)
-                    ),
+                    keccak256(abi.encode(questions[i].contextUrl, questions[i].title, questions[i].tags)),
                     keccak256(abi.encode(questions[i].imageUrls, questions[i].videoUrl)),
                     keccak256(abi.encode(questions[i].details.detailsUrl, questions[i].details.detailsHash)),
                     resolvedCategoryId,
@@ -579,9 +577,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
     function test_QuestionSubmissionKey_IncludesDetails() public pure {
         string memory contextUrl = "https://example.com/context";
         string[] memory imageUrls = _emptyImageUrls();
-        bytes32 emptyDetailsKey = _questionSubmissionKey(
-            contextUrl, imageUrls, "", "Question?", "Products", 1, _emptySubmissionDetails()
-        );
+        bytes32 emptyDetailsKey =
+            _questionSubmissionKey(contextUrl, imageUrls, "", "Question?", "Products", 1, _emptySubmissionDetails());
         bytes32 detailsKey = _questionSubmissionKey(
             contextUrl,
             imageUrls,
@@ -696,13 +693,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             "https://cdn.example.com/review/image.webp#sha256=0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
         _questionSubmissionKey(
-            "https://example.com/context",
-            imageUrls,
-            "",
-            "Question?",
-            "Products",
-            1,
-            _emptySubmissionDetails()
+            "https://example.com/context", imageUrls, "", "Question?", "Products", 1, _emptySubmissionDetails()
         );
     }
 
@@ -722,15 +713,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         vm.warp(block.timestamp + 1);
         uint256 id = registry.submitQuestion(
-            "",
-            imageUrls,
-            url,
-            title,
-            tags,
-            categoryId,
-            _emptySubmissionDetails(),
-            salt,
-            _defaultQuestionSpec()
+            "", imageUrls, url, title, tags, categoryId, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
         );
         vm.stopPrank();
 
@@ -1918,29 +1901,14 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(submitter);
         lrepToken.approve(address(reg2), 10e6);
-        NoMediaQuestionText memory question = NoMediaQuestionText({
-            url: "https://example.com/no-config", title: "goal", tags: "tags"
-        });
+        NoMediaQuestionText memory question =
+            NoMediaQuestionText({ url: "https://example.com/no-config", title: "goal", tags: "tags" });
         bytes32 salt = _contentSubmissionSalt(question.url, submitter);
         bytes32 submissionKey = _questionSubmissionKey(
-            question.url,
-            _emptyImageUrls(),
-            "",
-            question.title,
-            question.tags,
-            1,
-            _emptySubmissionDetails()
+            question.url, _emptyImageUrls(), "", question.title, question.tags, 1, _emptySubmissionDetails()
         );
         bytes32 revealCommitment = _defaultQuestionRevealCommitment(
-            reg2,
-            submissionKey,
-            _emptyImageUrls(),
-            "",
-            question.title,
-            question.tags,
-            1,
-            salt,
-            submitter
+            reg2, submissionKey, _emptyImageUrls(), "", question.title, question.tags, 1, salt, submitter
         );
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), DEFAULT_SUBMISSION_REWARD_POOL);
         reg2.reserveSubmission(revealCommitment);
@@ -2338,13 +2306,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SubmitQuestion_AllowsPercentEncodedPath() public view {
         _questionSubmissionKey(
-            "https://example.com/a%20b",
-            _emptyImageUrls(),
-            "",
-            "Question?",
-            "tags",
-            1,
-            _emptySubmissionDetails()
+            "https://example.com/a%20b", _emptyImageUrls(), "", "Question?", "tags", 1, _emptySubmissionDetails()
         );
     }
 
@@ -2544,15 +2506,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         lrepToken.approve(address(registry), 10e6);
         vm.expectRevert("Context or media required");
         registry.submitQuestion(
-            "",
-            _emptyImageUrls(),
-            "",
-            "goal",
-            "tags",
-            1,
-            _emptySubmissionDetails(),
-            bytes32(0),
-            _defaultQuestionSpec()
+            "", _emptyImageUrls(), "", "goal", "tags", 1, _emptySubmissionDetails(), bytes32(0), _defaultQuestionSpec()
         );
         vm.stopPrank();
     }
@@ -3394,9 +3348,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.expectRevert("No submission key");
         registry.releaseDormantSubmissionKey(1);
 
-        bytes32 submissionKey = _questionSubmissionKey(
-            url, _emptyImageUrls(), "", title, tags, 1, _emptySubmissionDetails()
-        );
+        bytes32 submissionKey =
+            _questionSubmissionKey(url, _emptyImageUrls(), "", title, tags, 1, _emptySubmissionDetails());
         assertTrue(registry.submissionKeyUsed(submissionKey), "active resubmission keeps canonical key reserved");
     }
 

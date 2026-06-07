@@ -71,7 +71,9 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         require(
             paymentAuthorization.nonce
                 == computeX402QuestionPaymentNonce(
-                    ContentRegistry.SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId }),
+                    ContentRegistry.SubmissionMetadata({
+                        url: contextUrl, title: title, tags: tags, categoryId: categoryId
+                    }),
                     imageUrls,
                     videoUrl,
                     details,

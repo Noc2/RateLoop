@@ -1019,13 +1019,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             );
 
         emit ContentSubmitted(
-            contentId,
-            submitter,
-            contentHash,
-            metadata.url,
-            metadata.title,
-            metadata.tags,
-            resolvedCategoryId
+            contentId, submitter, contentHash, metadata.url, metadata.title, metadata.tags, resolvedCategoryId
         );
         _emitContentMediaSubmitted(contentId, imageUrls, videoUrl, spec);
         _emitContentDetailsSubmitted(contentId, details);
@@ -1287,13 +1281,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             questionHashes[i] = keccak256(
                 abi.encode(
                     QUESTION_BUNDLE_ITEM_DOMAIN,
-                    keccak256(
-                        abi.encode(
-                            metadataList[i].url,
-                            metadataList[i].title,
-                            metadataList[i].tags
-                        )
-                    ),
+                    keccak256(abi.encode(metadataList[i].url, metadataList[i].title, metadataList[i].tags)),
                     mediaHashes[i],
                     _submissionDetailsHash(questions[i].details),
                     resolvedCategoryIds[i],

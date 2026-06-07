@@ -1074,13 +1074,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: 200
         });
         bytes32 submissionKey = _questionSubmissionKey(
-            "https://example.com/context",
-            imageUrls,
-            "",
-            QUESTION,
-            TAGS,
-            CATEGORY_ID,
-            _emptySubmissionDetails()
+            "https://example.com/context", imageUrls, "", QUESTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
         );
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
@@ -4372,9 +4366,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         raterIdentityRegistry.setDelegate(agentWallet);
         usdc.mint(agentWallet, REWARD_POOL_AMOUNT);
 
-        bytes32 submissionKey = _questionSubmissionKey(
-            contextUrl, imageUrls, "", title, tags, CATEGORY_ID, _emptySubmissionDetails()
-        );
+        bytes32 submissionKey =
+            _questionSubmissionKey(contextUrl, imageUrls, "", title, tags, CATEGORY_ID, _emptySubmissionDetails());
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
             _submissionMediaHash(imageUrls, ""),
@@ -5045,9 +5038,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             abi.encode(contextUrl, mediaUrl, QUESTION, DESCRIPTION, TAGS, CATEGORY_ID, submitter, block.timestamp)
         );
 
-        bytes32 submissionKey = _questionSubmissionKey(
-            contextUrl, imageUrls, "", QUESTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
-        );
+        bytes32 submissionKey =
+            _questionSubmissionKey(contextUrl, imageUrls, "", QUESTION, TAGS, CATEGORY_ID, _emptySubmissionDetails());
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
@@ -5237,10 +5229,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         uint256 validAfter = block.timestamp - 1;
         uint256 validBefore = block.timestamp + 30 minutes;
         ContentRegistry.SubmissionMetadata memory metadata = ContentRegistry.SubmissionMetadata({
-            url: question.contextUrl,
-            title: question.title,
-            tags: question.tags,
-            categoryId: CATEGORY_ID
+            url: question.contextUrl, title: question.title, tags: question.tags, categoryId: CATEGORY_ID
         });
         authorization = Eip3009Authorization({
             from: agentWallet,
@@ -5294,9 +5283,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         activeTlockContentRegistry = registry;
 
         usdc.mint(agentWallet, rewardTerms.amount);
-        bytes32 submissionKey = _questionSubmissionKey(
-            contextUrl, imageUrls, "", QUESTION, TAGS, CATEGORY_ID, _emptySubmissionDetails()
-        );
+        bytes32 submissionKey =
+            _questionSubmissionKey(contextUrl, imageUrls, "", QUESTION, TAGS, CATEGORY_ID, _emptySubmissionDetails());
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
             _submissionMediaHash(imageUrls, ""),

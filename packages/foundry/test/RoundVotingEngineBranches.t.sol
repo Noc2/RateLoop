@@ -695,9 +695,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.startPrank(submitter);
         lrepToken.approve(rewardEscrow, rewardAmount);
 
-        bytes32 submissionKey = _questionSubmissionKey(
-            url, imageUrls, videoUrl, title, tags, categoryId, _emptySubmissionDetails()
-        );
+        bytes32 submissionKey =
+            _questionSubmissionKey(url, imageUrls, videoUrl, title, tags, categoryId, _emptySubmissionDetails());
         bytes32 salt = _contentSubmissionSalt(url, submitter);
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,

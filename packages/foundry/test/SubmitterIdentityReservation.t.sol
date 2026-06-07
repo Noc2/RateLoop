@@ -85,9 +85,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
         string[] memory imageUrls = _singleImageUrls(imageUrl);
 
         vm.startPrank(delegate);
-        _reserveQuestionMediaSubmission(
-            registry, contextUrl, imageUrls, "", title, tags, 1, salt, delegate
-        );
+        _reserveQuestionMediaSubmission(registry, contextUrl, imageUrls, "", title, tags, 1, salt, delegate);
         vm.stopPrank();
 
         vm.prank(submitter);
@@ -100,15 +98,7 @@ contract SubmitterIdentityReservationTest is Test, ContentSubmissionTestBase {
 
         vm.startPrank(delegate);
         uint256 contentId = registry.submitQuestion(
-            contextUrl,
-            imageUrls,
-            "",
-            title,
-            tags,
-            1,
-            _emptySubmissionDetails(),
-            salt,
-            _defaultQuestionSpec()
+            contextUrl, imageUrls, "", title, tags, 1, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
         );
         vm.stopPrank();
 

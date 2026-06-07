@@ -522,15 +522,7 @@ abstract contract ContentSubmissionTestBase {
         );
         HEVM.warp(block.timestamp + 1);
         contentId = registry.submitQuestion(
-            imageUrl,
-            imageUrls,
-            "",
-            title,
-            tags,
-            categoryId,
-            _emptySubmissionDetails(),
-            salt,
-            _defaultQuestionSpec()
+            imageUrl, imageUrls, "", title, tags, categoryId, _emptySubmissionDetails(), salt, _defaultQuestionSpec()
         );
     }
 
