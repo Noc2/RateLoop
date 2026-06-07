@@ -240,10 +240,10 @@ await votingEngine.write.commitVote([
 
       <h2>Long Question Details</h2>
       <p>
-        For long public written context, keep <code>question.description</code> as the short voter summary and provide
-        the full text off-chain with <code>question.detailsUrl</code> plus its SHA-256 <code>question.detailsHash</code>
-        . The hosted Ask page can create these details from the Details textarea; external frontends and agents can host
-        equivalent immutable text themselves as long as raters can fetch the URL and verify it against the hash.
+        For public written context, provide the full text off-chain with <code>question.detailsUrl</code> plus its
+        SHA-256 <code>question.detailsHash</code>. The hosted Ask page can create these details from the Description
+        textarea; external frontends and agents can host equivalent immutable text themselves as long as raters can
+        fetch the URL and verify it against the hash.
       </p>
 
       <h2>Frontend Attribution</h2>

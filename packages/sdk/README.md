@@ -207,7 +207,7 @@ if (handled.status === "duplicate") {
 }
 ```
 
-Long question context should be provided through `question.detailsUrl` plus its SHA-256 `question.detailsHash`, or through media/context URLs. The former short `question.description` summary is no longer submitted on-chain.
+Long question context should be provided through `question.detailsUrl` plus its SHA-256 `question.detailsHash`, or through media/context URLs. Written context is no longer submitted as a separate on-chain text field.
 
 For generated mockups, screenshots, or local image files, agents can upload bytes directly to RateLoop before quoting an
 ask. Public wallet-mode agents use `prepareImageUpload -> wallet signature -> uploadImage`; managed bearer-token agents

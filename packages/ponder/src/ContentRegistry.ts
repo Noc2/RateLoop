@@ -197,7 +197,6 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
     contentHash,
     url,
     title,
-    description,
     tags,
     categoryId,
   } = event.args;
@@ -221,7 +220,7 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
       canonicalUrl: canonicalUrl?.canonicalUrl ?? url.trim(),
       urlHost: canonicalUrl?.urlHost ?? "",
       title,
-      description,
+      description: "",
       tags,
       categoryId,
       status: 0,

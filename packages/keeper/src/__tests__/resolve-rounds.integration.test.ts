@@ -401,7 +401,6 @@ describe("resolveRounds integration", () => {
     const submissionImageUrl = `https://example.com/keeper-integration-${Date.now()}.jpg`;
     const submissionContextUrl = submissionImageUrl;
     const submissionTitle = "Keeper integration test";
-    const submissionDescription = "integration";
     const submissionTags = "keeper,integration";
     const submissionCategoryId = 1n;
     const submissionSalt = `0x${"44".repeat(32)}` as `0x${string}`;
@@ -417,8 +416,8 @@ describe("resolveRounds integration", () => {
     );
     const submissionTextHash = keccak256(
       encodeAbiParameters(
-        [{ type: "string" }, { type: "string" }, { type: "string" }],
-        [submissionTitle, submissionDescription, submissionTags],
+        [{ type: "string" }, { type: "string" }],
+        [submissionTitle, submissionTags],
       ),
     );
     const submissionDetailsHash = keccak256(
@@ -437,16 +436,14 @@ describe("resolveRounds integration", () => {
           { type: "string" },
           { type: "string" },
           { type: "string" },
-          { type: "string" },
         ],
         [
-          keccak256(stringToHex("rateloop-question-context-v4")),
+          keccak256(stringToHex("rateloop-question-context-v5")),
           submissionCategoryId,
           submissionMediaHash,
           submissionDetailsHash,
           submissionContextUrl,
           submissionTitle,
-          submissionDescription,
           submissionTags,
         ],
       ),
@@ -494,7 +491,7 @@ describe("resolveRounds integration", () => {
           { type: "bytes32" },
         ],
         [
-          keccak256(stringToHex("rateloop-question-reveal-v6")),
+          keccak256(stringToHex("rateloop-question-reveal-v7")),
           submissionKey,
           submissionMediaHash,
           submissionTextHash,
@@ -537,7 +534,6 @@ describe("resolveRounds integration", () => {
             [submissionImageUrl],
             "",
             submissionTitle,
-            submissionDescription,
             submissionTags,
             submissionCategoryId,
             submissionDetails,

@@ -51,7 +51,6 @@ const askPayloadExample = `{
   "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
-    "description": "Review the generated concept image. Vote up only if a first-time viewer can explain what the product does, who it is for, and why they should care. Vote down if it feels unclear, generic, or untrustworthy. In feedback, mention the biggest missing detail.",
     "imageUrls": ["https://www.rateloop.ai/uploads/example-generated-concept.webp"],
     "categoryId": "5",
     "tags": ["agent", "design", "generated-context"],
@@ -263,9 +262,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           If context is a generated, local, or user-provided image, keep the bytes ready as <code>generatedImages</code>
-          . If the user has a business plan, white paper, or other long written context, keep <code>description</code>{" "}
-          as a short voter summary and provide the longer text through the Ask form Details field or a public{" "}
-          <code>detailsUrl</code> with its SHA-256 <code>detailsHash</code>.
+          . If the user has a business plan, white paper, or other written context, provide it through the Ask form
+          Description field or a public <code>detailsUrl</code> with its SHA-256 <code>detailsHash</code>.
         </li>
         <li>
           Add a small <code>feedbackBonus</code> when written reasons, objections, bug details, or product rationale
@@ -299,7 +297,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           Public context: use <code>question.contextUrl</code> for a public page, <code>question.videoUrl</code> for
           YouTube, or pass generated/local/user image bytes as <code>generatedImages</code> to the browser handoff.
           Longer written details belong in <code>question.detailsUrl</code> plus <code>question.detailsHash</code> when
-          the agent hosts them, or in the browser Ask form Details field when the user reviews the ask.
+          the agent hosts them, or in the browser Ask form Description field when the user reviews the ask.
         </li>
         <li>
           Wallet: optional expected <code>walletAddress</code> on World Chain with USDC for the bounty, plus LREP when
@@ -319,8 +317,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>{'paymentMode: "wallet_calls"'}</code>; <code>x402_authorization</code> remains USDC-only.
         </li>
         <li>
-          Question fields: title, voter summary (<code>description</code>), optional <code>detailsUrl</code>/
-          <code>detailsHash</code>, category id, tags, and optional template id.
+          Question fields: title, optional <code>detailsUrl</code>/<code>detailsHash</code>, category id, tags, and
+          optional template id.
         </li>
       </ul>
       <p>

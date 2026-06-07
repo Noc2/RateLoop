@@ -20,7 +20,6 @@ const websiteFeedbackPayloadExample = `{
   "maxPaymentAmount": "2500000",
   "question": {
     "title": "Would this AI website feedback service be compelling enough to try?",
-    "description": "Review the public mockup. Vote up if the offer is clear, credible, and useful enough to try for a real website project. Vote down if it feels unclear, generic, or unnecessary. In feedback, mention your biggest hesitation.",
     "imageUrls": ["https://www.rateloop.ai/uploads/example-ai-website-feedback-mockup.webp"],
     "categoryId": "5",
     "tags": ["agent", "website-generation", "market-interest"],
