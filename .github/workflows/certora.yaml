@@ -1,0 +1,70 @@
+name: Certora
+
+# Formal verification lane. Intentionally NOT a PR gate yet: it runs on demand and
+# on a weekly schedule until prover runtimes and false-positive rates are understood
+# (see docs/testing/certora.md "CI Plan"). Promote to path-filtered PR runs later.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+
+permissions:
+  contents: read
+
+env:
+  # Pin once a known-good version is established (e.g. "==7.x.y"). Empty = latest.
+  CERTORA_CLI_VERSION: ""
+  SOLC_VERSION: "0.8.35"
+
+jobs:
+  certora:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        conf:
+          - certora/confs/math.conf
+          - certora/confs/cluster-payout-oracle.conf
+          - certora/confs/round-voting-engine.conf
+          - certora/confs/round-reward-distributor.conf
+          - certora/confs/no-double-claim.conf
+    name: ${{ matrix.conf }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+
+      - uses: ./.github/actions/setup-foundry
+
+      - name: Install Java 21
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openjdk-21-jre-headless
+          java --version
+
+      - name: Install Certora CLI and solc
+        run: |
+          python3 -m pip install --upgrade pip
+          if [ -n "$CERTORA_CLI_VERSION" ]; then
+            python3 -m pip install "certora-cli${CERTORA_CLI_VERSION}" solc-select
+          else
+            python3 -m pip install certora-cli solc-select
+          fi
+          solc-select install "$SOLC_VERSION"
+          solc-select use "$SOLC_VERSION"
+          certoraRun --version
+          solc --version
+
+      - name: Run Certora proofs
+        working-directory: packages/foundry
+        env:
+          CERTORAKEY: ${{ secrets.CERTORAKEY }}
+          CONF: ${{ matrix.conf }}
+        run: |
+          if [ -z "$CERTORAKEY" ]; then
+            echo "::warning::CERTORAKEY secret not set; skipping prover run."
+            exit 0
+          fi
+          # --wait_for_results makes the job fail if any rule is violated.
+          certoraRun "$CONF" --wait_for_results all

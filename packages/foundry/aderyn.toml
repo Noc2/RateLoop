@@ -13,9 +13,16 @@ exclude = ["/mocks/"]
 # - reentrancy: all flagged functions use nonReentrant; external calls target trusted system contracts
 # - storage-array-edit-with-memory: storage pointer is used correctly (read, not write)
 # - weak-randomness: only in mocks (already excluded above, belt-and-suspenders)
+# - incorrect-shift-order: false positive on the `shl(224, 0xSELECTOR)` idiom used to
+#   load a 4-byte function selector into the high bytes of a word (RoundVotingEngine
+#   permit/pause assembly). Yul `shl(shift, value)` order is correct here; aderyn's
+#   heuristic misreads the constant shift as a swapped operand. (If a genuinely
+#   reversed shift is ever added this exclusion would hide it — re-audit if the
+#   assembly shifts change.)
 exclude = [
   "abi-encode-packed-hash-collision",
   "contract-locks-ether",
+  "incorrect-shift-order",
   "reentrancy-state-change",
   "storage-array-memory-edit",
   "weak-randomness",

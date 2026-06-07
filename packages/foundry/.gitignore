@@ -17,3 +17,7 @@ localhost.json
 report.md
 report.json
 report.sarif
+
+# Certora prover scratch output
+.certora_internal/
+.last_confs/

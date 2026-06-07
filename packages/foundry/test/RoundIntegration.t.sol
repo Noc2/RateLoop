@@ -2974,8 +2974,12 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.expectRevert(RoundRewardDistributor.FrontendFeeCreditorNotConfigured.selector);
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
 
-        assertFalse(rewardDistributor.frontendFeeClaimed(contentId, roundId, frontendOp), "claim should remain retryable");
-        assertEq(rewardDistributor.roundFrontendClaimedAmount(contentId, roundId), 0, "claim accounting should not advance");
+        assertFalse(
+            rewardDistributor.frontendFeeClaimed(contentId, roundId, frontendOp), "claim should remain retryable"
+        );
+        assertEq(
+            rewardDistributor.roundFrontendClaimedAmount(contentId, roundId), 0, "claim accounting should not advance"
+        );
         assertEq(frontendReg.getAccumulatedFees(frontendOp), 0, "failed registry credit should not accrue fees");
         assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "fee should not route to protocol");
 

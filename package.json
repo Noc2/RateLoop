@@ -42,6 +42,8 @@
     "foundry:verify": "yarn workspace @rateloop/foundry verify",
     "foundry:slither": "yarn workspace @rateloop/foundry slither",
     "foundry:aderyn": "yarn workspace @rateloop/foundry aderyn",
+    "foundry:certora": "yarn workspace @rateloop/foundry certora",
+    "foundry:certora:check": "yarn workspace @rateloop/foundry certora:check",
     "foundry:coverage": "yarn workspace @rateloop/foundry coverage",
     "generate": "yarn foundry:generate",
     "seed": "bash packages/foundry/script/SeedContent.sh",
