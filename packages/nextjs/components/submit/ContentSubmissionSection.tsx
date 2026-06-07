@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import { useQuery } from "@tanstack/react-query";
 import { decodeEventLog, encodeFunctionData, isAddress, toHex } from "viem";
-import { useAccount, useConfig, useReadContract, useSignMessage } from "wagmi";
+import { useAccount, useConfig, useReadContract } from "wagmi";
 import { getPublicClient, readContract, waitForTransactionReceipt, writeContract } from "wagmi/actions";
 import { ChevronDownIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
@@ -25,6 +25,7 @@ import { fetchThumbnailMetadataBatch, shouldFetchMetadataUrl } from "~~/hooks/us
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
+import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
 import { buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
 import {
@@ -465,7 +466,10 @@ export function ContentSubmissionSection() {
   const submitCallSponsorshipMode = canUseSponsoredSubmitCalls ? "sponsored" : "self-funded";
   const { showWalletRpcOverloadNotification } = useWalletRpcRecovery();
   const { requireAcceptance } = useTermsAcceptance();
-  const { signMessageAsync } = useSignMessage();
+  const { signMessageAsync } = useWalletMessageSigner({
+    address: connectedAddress,
+    localWalletClient: localE2ETestWalletClient,
+  });
 
   const [mediaMode, setMediaMode] = useState<MediaMode>("images");
   const [contextUrl, setContextUrl] = useState("");

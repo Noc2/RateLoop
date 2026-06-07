@@ -2758,6 +2758,21 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.stopPrank();
     }
 
+    function _deployReplacementRewardDistributor() internal returns (RoundRewardDistributor replacementDistributor) {
+        RoundRewardDistributor distImpl = new RoundRewardDistributor();
+        replacementDistributor = RoundRewardDistributor(
+            address(
+                new ERC1967Proxy(
+                    address(distImpl),
+                    abi.encodeCall(
+                        RoundRewardDistributor.initialize,
+                        (owner, address(lrepToken), address(votingEngine), address(registry))
+                    )
+                )
+            )
+        );
+    }
+
     function _registerFrontend(FrontendRegistry frontendReg, address frontendOp) internal {
         vm.startPrank(owner);
         lrepToken.mint(frontendOp, 2000e6);
@@ -2946,7 +2961,7 @@ contract RoundIntegrationTest is VotingTestBase {
         assertEq(rewardDistributor.roundFrontendClaimedAmount(contentId, roundId), frontendPool);
     }
 
-    function test_ClaimFrontendFee_CreditFailureEmitsFallbackEvent() public {
+    function test_ClaimFrontendFee_UnconfiguredFeeCreditorRevertsAndPreservesClaim() public {
         (FrontendRegistry frontendReg, address frontendOp) = _setupFrontendRegistry();
         (uint256 contentId, uint256 roundId) = _settleRoundWithFrontend(frontendOp);
 
@@ -2956,12 +2971,52 @@ contract RoundIntegrationTest is VotingTestBase {
         (uint256 fee,,,) = rewardDistributor.previewFrontendFee(contentId, roundId, frontendOp);
         uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
 
-        vm.expectEmit(true, true, true, true, address(rewardDistributor));
-        emit RoundRewardDistributor.FrontendFeeCreditFailed(contentId, roundId, frontendOp, address(frontendReg), fee);
+        vm.expectRevert(RoundRewardDistributor.FrontendFeeCreditorNotConfigured.selector);
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
 
+        assertFalse(rewardDistributor.frontendFeeClaimed(contentId, roundId, frontendOp), "claim should remain retryable");
+        assertEq(rewardDistributor.roundFrontendClaimedAmount(contentId, roundId), 0, "claim accounting should not advance");
         assertEq(frontendReg.getAccumulatedFees(frontendOp), 0, "failed registry credit should not accrue fees");
-        assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore + fee, "fee should route to protocol");
+        assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "fee should not route to protocol");
+
+        vm.prank(owner);
+        frontendReg.addFeeCreditor(address(rewardDistributor));
+        _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
+
+        assertEq(frontendReg.getAccumulatedFees(frontendOp), fee, "retry should credit frontend after rotation");
+    }
+
+    function test_ClaimFrontendFee_ReplacementDistributorRequiresFrontendRotation() public {
+        (FrontendRegistry frontendReg, address frontendOp) = _setupFrontendRegistry();
+        (uint256 contentId, uint256 roundId) = _settleRoundWithFrontend(frontendOp);
+        RoundRewardDistributor replacementDistributor = _deployReplacementRewardDistributor();
+        ProtocolConfig config = ProtocolConfig(address(votingEngine.protocolConfig()));
+
+        vm.startPrank(owner);
+        config.revokeRewardDistributor(address(rewardDistributor));
+        config.replaceRevokedRewardDistributor(address(rewardDistributor), address(replacementDistributor));
+        vm.stopPrank();
+
+        (uint256 fee,,,) = replacementDistributor.previewFrontendFee(contentId, roundId, frontendOp);
+        uint256 treasuryBalanceBefore = lrepToken.balanceOf(treasury);
+
+        vm.prank(frontendOp);
+        vm.expectRevert(RoundRewardDistributor.FrontendFeeCreditorNotConfigured.selector);
+        replacementDistributor.claimFrontendFee(contentId, roundId, frontendOp);
+
+        assertFalse(
+            replacementDistributor.frontendFeeClaimed(contentId, roundId, frontendOp),
+            "replacement claim should remain retryable"
+        );
+        assertEq(frontendReg.getAccumulatedFees(frontendOp), 0, "unrotated replacement should not accrue fees");
+        assertEq(lrepToken.balanceOf(treasury), treasuryBalanceBefore, "unrotated replacement should not route fee");
+
+        vm.prank(owner);
+        frontendReg.addFeeCreditor(address(replacementDistributor));
+        vm.prank(frontendOp);
+        replacementDistributor.claimFrontendFee(contentId, roundId, frontendOp);
+
+        assertEq(frontendReg.getAccumulatedFees(frontendOp), fee, "rotated replacement should credit frontend");
     }
 
     function test_ClaimFrontendFee_RegistryLookupFailureIsConfiscatable() public {

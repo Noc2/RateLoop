@@ -372,6 +372,34 @@ function pruneIncompleteNonLocalGeneratedContracts(contracts, deployments) {
   );
 }
 
+export function pruneNonLocalGeneratedContractsToDeploymentExports(
+  contracts,
+  deployments
+) {
+  return Object.fromEntries(
+    Object.entries(contracts).map(([chainId, chainConfig]) => {
+      if (
+        !isNonLocalDeploymentChain(chainId) ||
+        !isCompleteDeploymentExport(deployments[chainId])
+      ) {
+        return [chainId, chainConfig];
+      }
+
+      const exportedContractNames = deploymentExportContractNames(
+        deployments[chainId]
+      );
+      return [
+        chainId,
+        Object.fromEntries(
+          Object.entries(chainConfig).filter(([contractName]) =>
+            exportedContractNames.has(contractName)
+          )
+        ),
+      ];
+    })
+  );
+}
+
 function deploymentExportContractNames(chainDeployments) {
   if (typeof chainDeployments !== "object" || chainDeployments === null) {
     return new Set();
@@ -762,8 +790,11 @@ function main() {
     deployedContractsTargetFile
   );
   const generatedContractsForValidation =
-    pruneIncompleteNonLocalGeneratedContracts(
-      allGeneratedContracts,
+    pruneNonLocalGeneratedContractsToDeploymentExports(
+      pruneIncompleteNonLocalGeneratedContracts(
+        allGeneratedContracts,
+        deployments
+      ),
       deployments
     );
   const existingContractsForPublish =

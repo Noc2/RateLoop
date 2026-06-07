@@ -32,7 +32,20 @@ const DIRECT_DEPLOYMENT_NAMES = new Set([
   "ClusterPayoutOracle",
   "LaunchDistributionPool",
   "AdvisoryVoteRecorder",
+  "MockWorldIDVerifier",
 ]);
+
+const TREASURY_LREP_AMOUNT = 25_000_000n * 1_000_000n;
+const WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT = 250n * 1_000_000n;
+const WORLD_CHAIN_SEPOLIA_TEST_ACCOUNTS = [
+  "0xfa9605A2c38a0B4f16f689FDD07B63F295b86d1C",
+  "0x113aFCbA5C5Ee43125C2a24c8E06dd9b4dA38f15",
+  "0xf51BA40d80c7687A6A46c6A279ec145069A9da10",
+  "0x623F82Ef0Fa750AB28D8912C53690B04826874bE",
+];
+const WORLD_CHAIN_SEPOLIA_TEST_LREP_TOTAL =
+  WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT *
+  BigInt(WORLD_CHAIN_SEPOLIA_TEST_ACCOUNTS.length);
 
 const ROLE_HASHES = {
   defaultAdmin:
@@ -432,8 +445,17 @@ const REQUIRED_COMPLETION_CALLS = [
     target: "LoopReputation",
     functionName: "mint(address,uint256)",
     abi: LOOP_REPUTATION_COMPLETION_ABI,
-    args: (ctx) => [ctx.governance, "25000000000000"],
+    args: (ctx) => [ctx.governance, expectedTreasuryMintAmount(ctx)],
   },
+  ...WORLD_CHAIN_SEPOLIA_TEST_ACCOUNTS.map((account) => ({
+    label: `LoopReputation.mint(WorldChainSepoliaTestAccount:${account})`,
+    contractName: "LoopReputation",
+    target: "LoopReputation",
+    functionName: "mint(address,uint256)",
+    abi: LOOP_REPUTATION_COMPLETION_ABI,
+    args: () => [account, WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT.toString()],
+    requiredWhen: (ctx) => ctx.networkName === "worldchainSepolia",
+  })),
   {
     label: "TimelockController.grantRole(PROPOSER_ROLE)",
     contractName: "TimelockController",
@@ -644,6 +666,7 @@ function firstBroadcaster(transactions) {
 
 function completionContext(transactions, deployments) {
   return {
+    networkName: deployments.networkName,
     deployer: firstBroadcaster(transactions),
     governance: requireDeploymentAddress(deployments, "TimelockController"),
     timelockController: requireDeploymentAddress(
@@ -692,6 +715,15 @@ function completionContext(transactions, deployments) {
       "FeedbackBonusEscrow"
     ),
   };
+}
+
+function expectedTreasuryMintAmount(ctx) {
+  if (ctx.networkName === "worldchainSepolia") {
+    return (
+      TREASURY_LREP_AMOUNT - WORLD_CHAIN_SEPOLIA_TEST_LREP_TOTAL
+    ).toString();
+  }
+  return TREASURY_LREP_AMOUNT.toString();
 }
 
 function expectedTargetAddress(requirement, ctx) {
@@ -975,6 +1007,9 @@ function assertRequiredCompletionCalls(
   const missing = [];
   const staleFinal = [];
   for (const requirement of REQUIRED_COMPLETION_CALLS) {
+    if (requirement.requiredWhen && !requirement.requiredWhen(ctx)) {
+      continue;
+    }
     const count = transactions.filter((tx) =>
       callMatches(tx, receiptByHash, requirement, ctx)
     ).length;
@@ -1065,6 +1100,9 @@ export function reconstructDeploymentExportFromBroadcast(
   if (latestBlockNumber === 0) {
     throw new Error("Latest broadcast has no receipt block numbers");
   }
+
+  deployments.networkName = networkName;
+
   assertProxyAdminsPinnedToGovernance(transactions, deployments);
   assertRequiredCompletionCalls(transactions, receiptByHash, deployments);
   assertContentRegistryEndsUnpaused(transactions, receiptByHash, deployments);

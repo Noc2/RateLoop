@@ -14,6 +14,12 @@ import {
   getWorldIdSignalForPurpose,
 } from "~~/lib/world-id/credentials";
 import { parseWorldIdProof } from "~~/lib/world-id/onchainProof";
+import {
+  assertWorldIdProofHasSubmissionWindow,
+  getWorldIdCredentialRequestExpiresAtMin,
+  getWorldIdRequestPollingTimeoutMs,
+  isWorldIdProofExpiredError,
+} from "~~/lib/world-id/proofExpiry";
 import { pollWorldIdRequest } from "~~/lib/world-id/requestPolling";
 import {
   formatWorldIdError,
@@ -112,6 +118,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         expectedCredential: option.identifier,
         expectedSignal: signal,
       });
+      assertWorldIdProofHasSubmissionWindow(parsedProof.expiresAtMin);
 
       await (writeRaterRegistry as any)(
         {
@@ -173,17 +180,31 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         environment: requestContext.environment,
         ...(purpose === "presence" ? { require_user_presence: true } : {}),
         rp_context: requestContext.rpContext,
-      }).constraints(CredentialRequest(option.identifier, { signal }));
+      }).constraints(
+        CredentialRequest(option.identifier, {
+          expires_at_min: getWorldIdCredentialRequestExpiresAtMin(purpose),
+          signal,
+        }),
+      );
       if (activeRequestRef.current !== requestId || abortController.signal.aborted) return;
 
       setConnectorURI(request.connectorURI);
       setIsPreparing(false);
+
+      const pollingTimeoutMs = getWorldIdRequestPollingTimeoutMs(requestContext.rpContext);
+      if (pollingTimeoutMs !== undefined && pollingTimeoutMs <= 0) {
+        setStatus("error");
+        setMessage("World ID request expired. Try again with a fresh request.");
+        setErrorCode("timeout");
+        return;
+      }
 
       const completion = await pollWorldIdRequest(request, {
         onAwaitingConfirmation: value => {
           if (activeRequestRef.current === requestId) setIsAwaitingApproval(value);
         },
         signal: abortController.signal,
+        ...(pollingTimeoutMs === undefined ? {} : { timeoutMs: pollingTimeoutMs }),
       });
       if (activeRequestRef.current !== requestId || abortController.signal.aborted) return;
 
@@ -210,7 +231,7 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
       const nextMessage = getWorldIdCredentialAttestationErrorMessage(error);
       setStatus("error");
       setMessage(nextMessage);
-      setErrorCode("generic_error");
+      setErrorCode(isWorldIdProofExpiredError(error) ? "timeout" : "generic_error");
     } finally {
       if (activeRequestRef.current === requestId) {
         setIsPreparing(false);

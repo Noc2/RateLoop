@@ -31,12 +31,14 @@ import {RateLoopGovernor} from "../contracts/governance/RateLoopGovernor.sol";
 /// @dev Rater identity is resolved through RaterRegistry; no separate proof-of-personhood token is deployed.
 contract DeployRateLoop is ScaffoldETHDeploy {
     error UnsupportedWorldChain(uint256 chainId);
-    error WorldIdVerifierOverrideHasNoCode(address verifier);
+    error WorldIdVerifierHasNoCode(address verifier);
+    error MainnetWorldIdVerifierOverrideNotAllowed(address verifier);
     uint256 public constant TIMELOCK_MIN_DELAY = 2 days;
 
     uint256 public constant TOTAL_SUPPLY_CAP = 100_000_000 * 1e6;
     uint256 public constant TREASURY_AMOUNT = 25_000_000 * 1e6;
     uint256 public constant LAUNCH_DISTRIBUTION_AMOUNT = TOTAL_SUPPLY_CAP - TREASURY_AMOUNT;
+    uint256 public constant WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT = 250 * 1e6;
     bytes32 public constant LEGACY_CONTRIBUTOR_ROOT =
         0xcaa28d15e6c6c1bb47d347a413cb808e40c38a7e43171ce9a131983a92b97d18;
     uint256 public constant LEGACY_CONTRIBUTOR_ALLOCATION_TOTAL = 9_000_000 * 1e6;
@@ -190,18 +192,17 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         );
         RoundRewardDistributor rewardDistributor = RoundRewardDistributor(address(rewardDistributorProxy));
 
-        MockWorldIDVerifier localWorldIdVerifier;
+        MockWorldIDVerifier worldIdMockVerifier;
         address worldIdVerifierAddress = _resolveWorldIdVerifierAddress(isLocalDev);
-        if (isLocalDev) {
-            localWorldIdVerifier = new MockWorldIDVerifier();
-            worldIdVerifierAddress = address(localWorldIdVerifier);
+        bool deployWorldIdMockVerifier = _shouldDeployWorldIdMockVerifier(isLocalDev, worldIdVerifierAddress);
+        if (deployWorldIdMockVerifier) {
+            worldIdMockVerifier = new MockWorldIDVerifier();
+            worldIdVerifierAddress = address(worldIdMockVerifier);
             console.log("MockWorldIDVerifier deployed at:", worldIdVerifierAddress);
+        } else if (worldIdVerifierAddress == address(0)) {
+            console.log("World ID v4 verifier unavailable; deploying with World ID verifier disabled");
         } else {
-            if (worldIdVerifierAddress == address(0)) {
-                console.log("World ID v4 verifier unavailable; deploying RaterRegistry with World ID disabled");
-            } else {
-                console.log("World ID v4 verifier resolved at:", worldIdVerifierAddress);
-            }
+            console.log("World ID v4 verifier resolved at:", worldIdVerifierAddress);
         }
         WorldIdDeployConfig memory worldIdConfig = _resolveWorldIdDeployConfig(worldIdVerifierAddress);
 
@@ -336,12 +337,15 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
         protocolConfig.setConfig(20 minutes, 20 minutes, 3, 100);
 
-        lrepToken.mint(governance, TREASURY_AMOUNT);
+        lrepToken.mint(governance, _treasuryMintAmountForChain(block.chainid));
         console.log("Minted LREP treasury allocation");
 
         LaunchDistributionPool launchDistributionPool =
             new LaunchDistributionPool(address(lrepToken), address(raterRegistry), governance);
         raterRegistry.grantRole(raterRegistry.LAUNCH_CONSUMER_ROLE(), address(launchDistributionPool));
+        if (block.chainid == 4801) {
+            _fundWorldChainSepoliaTestingAccounts(lrepToken, raterRegistry);
+        }
         if (!isLocalDev) {
             _renounceRaterRegistryDeployerRoles(raterRegistry, deployer);
         }
@@ -455,7 +459,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(Deployment("ClusterPayoutOracle", address(clusterPayoutOracle)));
         deployments.push(Deployment("RaterRegistry", address(raterRegistryProxy)));
         deployments.push(Deployment("RaterRegistryProxyAdmin", _proxyAdmin(address(raterRegistryProxy))));
-        if (isLocalDev) deployments.push(Deployment("MockWorldIDVerifier", address(localWorldIdVerifier)));
+        if (address(worldIdMockVerifier) != address(0)) {
+            deployments.push(Deployment("MockWorldIDVerifier", address(worldIdMockVerifier)));
+        }
         deployments.push(Deployment("LaunchDistributionPool", address(launchDistributionPool)));
         deployments.push(Deployment("AdvisoryVoteRecorder", address(advisoryVoteRecorder)));
         if (isLocalDev) deployments.push(Deployment("MockERC20", usdcTokenAddress));
@@ -520,11 +526,25 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     }
 
     function _resolveWorldIdVerifierAddress(bool isLocalDev) internal view returns (address) {
+        bool hasOverride = vm.envExists(WORLD_ID_V4_VERIFIER_ADDRESS_ENV);
+        address verifierOverride = hasOverride ? vm.envOr(WORLD_ID_V4_VERIFIER_ADDRESS_ENV, address(0)) : address(0);
+        return _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride);
+    }
+
+    function _resolveWorldIdVerifierAddressForChain(bool isLocalDev, bool hasOverride, address verifierOverride)
+        internal
+        view
+        returns (address)
+    {
         if (isLocalDev) return address(0);
-        if (block.chainid == 480 || block.chainid == 4801) {
-            bool hasOverride = vm.envExists(WORLD_ID_V4_VERIFIER_ADDRESS_ENV);
-            address verifier =
-                hasOverride ? vm.envOr(WORLD_ID_V4_VERIFIER_ADDRESS_ENV, address(0)) : WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
+        if (block.chainid == 480) {
+            if (hasOverride && verifierOverride != WORLD_CHAIN_WORLD_ID_V4_VERIFIER) {
+                revert MainnetWorldIdVerifierOverrideNotAllowed(verifierOverride);
+            }
+            return _resolveWorldIdVerifierCandidate(WORLD_CHAIN_WORLD_ID_V4_VERIFIER, true);
+        }
+        if (block.chainid == 4801) {
+            address verifier = hasOverride ? verifierOverride : WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
             return _resolveWorldIdVerifierCandidate(verifier, hasOverride);
         }
         revert UnsupportedWorldChain(block.chainid);
@@ -533,8 +553,12 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     function _resolveWorldIdVerifierCandidate(address verifier, bool requireLiveCode) internal view returns (address) {
         if (verifier == address(0)) return address(0);
         if (verifier.code.length > 0) return verifier;
-        if (requireLiveCode) revert WorldIdVerifierOverrideHasNoCode(verifier);
+        if (requireLiveCode) revert WorldIdVerifierHasNoCode(verifier);
         return address(0);
+    }
+
+    function _shouldDeployWorldIdMockVerifier(bool isLocalDev, address) internal pure returns (bool) {
+        return isLocalDev;
     }
 
     function _resolveWorldIdDeployConfig(address verifier) internal view returns (WorldIdDeployConfig memory config) {
@@ -624,6 +648,40 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         }
         holders[count] = candidate;
         return count + 1;
+    }
+
+    function _worldChainSepoliaTestingAccounts() internal pure returns (address[4] memory accounts) {
+        accounts = [
+            0xfa9605A2c38a0B4f16f689FDD07B63F295b86d1C,
+            0x113aFCbA5C5Ee43125C2a24c8E06dd9b4dA38f15,
+            0xf51BA40d80c7687A6A46c6A279ec145069A9da10,
+            0x623F82Ef0Fa750AB28D8912C53690B04826874bE
+        ];
+    }
+
+    function _worldChainSepoliaTestingLrepTotal() internal pure returns (uint256) {
+        return WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT * _worldChainSepoliaTestingAccounts().length;
+    }
+
+    function _treasuryMintAmountForChain(uint256 chainId) internal pure returns (uint256) {
+        if (chainId == 4801) {
+            return TREASURY_AMOUNT - _worldChainSepoliaTestingLrepTotal();
+        }
+        return TREASURY_AMOUNT;
+    }
+
+    function _fundWorldChainSepoliaTestingAccounts(LoopReputation lrepToken, RaterRegistry raterRegistry) internal {
+        address[4] memory testAccounts = _worldChainSepoliaTestingAccounts();
+        for (uint256 i = 0; i < testAccounts.length; i++) {
+            address account = testAccounts[i];
+            lrepToken.mint(account, WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT);
+            bytes32 anchorId = keccak256(abi.encodePacked("rateloop:worldchain-sepolia-human-v1", account));
+            bytes32 evidenceHash = keccak256(abi.encodePacked("rateloop:worldchain-sepolia-evidence-v1", account));
+            raterRegistry.seedHumanCredential(
+                account, uint64(block.timestamp + WORLD_ID_CREDENTIAL_TTL_SECONDS), anchorId, evidenceHash
+            );
+        }
+        console.log("Funded World Chain Sepolia test human accounts:", testAccounts.length);
     }
 
     function _fundLocalDevAccounts(LoopReputation lrepToken, MockERC20 localUsdcToken, RaterRegistry raterRegistry)

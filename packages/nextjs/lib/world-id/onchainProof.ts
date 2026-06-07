@@ -1,9 +1,11 @@
 import type { IDKitResult, ResponseItemV4 } from "@worldcoin/idkit";
 import { hashSignal } from "@worldcoin/idkit/hashing";
-import { type Hex, hexToBigInt, isHex } from "viem";
+import { hexToBigInt, isHex } from "viem";
 import type { WorldIdCredentialIdentifier } from "~~/lib/world-id/credentials";
 
 type WorldIdV4ProofTuple = [bigint, bigint, bigint, bigint, bigint];
+const UINT256_MAX = (1n << 256n) - 1n;
+const DECIMAL_UINT_PATTERN = /^(0|[1-9]\d*)$/;
 
 type V4ProofResponse = {
   identifier: string;
@@ -43,20 +45,21 @@ function isV4Response(response: unknown): response is V4ProofResponse {
   );
 }
 
-function requireHex(value: unknown, fieldName: string): Hex {
+function decodeUint256String(value: unknown, fieldName: string): bigint {
   if (typeof value !== "string") {
     throw new Error(`World ID returned an invalid ${fieldName}.`);
   }
 
-  if (!isHex(value)) {
+  const decoded = isHex(value) ? hexToBigInt(value) : DECIMAL_UINT_PATTERN.test(value) ? BigInt(value) : null;
+  if (decoded === null || decoded > UINT256_MAX) {
     throw new Error(`World ID returned an invalid ${fieldName}.`);
   }
 
-  return value;
+  return decoded;
 }
 
 function decodeV4Proof(proof: V4ProofResponse["proof"]): WorldIdV4ProofTuple {
-  const decoded = proof.map((item, index) => hexToBigInt(requireHex(item, `v4 proof item ${index}`)));
+  const decoded = proof.map((item, index) => decodeUint256String(item, `v4 proof item ${index}`));
   return decoded as WorldIdV4ProofTuple;
 }
 
@@ -103,10 +106,10 @@ export function parseWorldIdV4Proof(
 
   return {
     protocolVersion: "4.0",
-    nullifierHash: hexToBigInt(requireHex(response.nullifier, "nullifier")),
+    nullifierHash: decodeUint256String(response.nullifier, "nullifier"),
     proof: decodeV4Proof(response.proof),
     nullifier: response.nullifier,
-    nonce: hexToBigInt(requireHex(result.nonce, "nonce")),
+    nonce: decodeUint256String(result.nonce, "nonce"),
     signalHash: response.signal_hash,
     issuerSchemaId: response.issuer_schema_id,
     expiresAtMin: response.expires_at_min,

@@ -8,7 +8,20 @@ import { toHex } from "viem";
 const TEST_SIGNAL = "0x63cada40e8acf7a1d47229af5be35b78b16035fa";
 const TEST_V4_PROOF = [11n, 12n, 13n, 14n, 42n] as const;
 
-function makeV4Result(signal = TEST_SIGNAL, identifier = "proof_of_human"): IDKitResult {
+type WorldIdV4TestResult = IDKitResult & {
+  protocol_version: "4.0";
+  action: string;
+  responses: Array<{
+    identifier: string;
+    signal_hash: string;
+    proof: string[];
+    nullifier: string;
+    issuer_schema_id: number;
+    expires_at_min: number;
+  }>;
+};
+
+function makeV4Result(signal = TEST_SIGNAL, identifier = "proof_of_human"): WorldIdV4TestResult {
   return {
     protocol_version: "4.0",
     nonce: "0x1234",
@@ -20,6 +33,23 @@ function makeV4Result(signal = TEST_SIGNAL, identifier = "proof_of_human"): IDKi
         signal_hash: hashSignal(signal),
         proof: [...TEST_V4_PROOF].map(value => toHex(value)),
         nullifier: "0x1234",
+        issuer_schema_id: 1,
+        expires_at_min: 1_800_000_000,
+      },
+    ],
+  };
+}
+
+function makeDecimalV4Result(): WorldIdV4TestResult {
+  return {
+    ...makeV4Result(),
+    nonce: "4660",
+    responses: [
+      {
+        identifier: "proof_of_human",
+        signal_hash: hashSignal(TEST_SIGNAL),
+        proof: [...TEST_V4_PROOF].map(value => value.toString()),
+        nullifier: "4660",
         issuer_schema_id: 1,
         expires_at_min: 1_800_000_000,
       },
@@ -53,6 +83,18 @@ test("parses World ID v4 proofs for on-chain attestation", () => {
   assert.equal(parsed.signalHash, hashSignal(TEST_SIGNAL));
 });
 
+test("parses decimal World ID v4 proof fields for on-chain attestation", () => {
+  const parsed = parseWorldIdV4Proof(makeDecimalV4Result(), {
+    expectedAction: "rateloop-test",
+    expectedCredential: "proof_of_human",
+    expectedSignal: TEST_SIGNAL,
+  });
+
+  assert.equal(parsed.nullifierHash, 4660n);
+  assert.deepEqual(parsed.proof, [...TEST_V4_PROOF]);
+  assert.equal(parsed.nonce, 4660n);
+});
+
 test("rejects legacy World ID proofs", () => {
   assert.throws(
     () =>
@@ -62,6 +104,21 @@ test("rejects legacy World ID proofs", () => {
         expectedSignal: TEST_SIGNAL,
       }),
     /World ID 4.0/,
+  );
+});
+
+test("rejects malformed World ID v4 proof fields", () => {
+  const result = makeV4Result();
+  result.responses[0]!.proof[0] = "not-a-proof-limb";
+
+  assert.throws(
+    () =>
+      parseWorldIdProof(result, {
+        expectedAction: "rateloop-test",
+        expectedCredential: "proof_of_human",
+        expectedSignal: TEST_SIGNAL,
+      }),
+    /invalid v4 proof item 0/,
   );
 });
 

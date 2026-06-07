@@ -19,6 +19,38 @@ contract DeployRateLoopHarness is DeployRateLoop {
         return _resolveWorldIdVerifierCandidate(verifier, requireLiveCode);
     }
 
+    function resolveWorldIdVerifierAddressForChain(bool isLocalDev, bool hasOverride, address verifierOverride)
+        external
+        view
+        returns (address)
+    {
+        return _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride);
+    }
+
+    function shouldDeployWorldIdMockVerifier(bool isLocalDev, address resolvedVerifier) external pure returns (bool) {
+        return _shouldDeployWorldIdMockVerifier(isLocalDev, resolvedVerifier);
+    }
+
+    function treasuryMintAmountForChain(uint256 chainId) external pure returns (uint256) {
+        return _treasuryMintAmountForChain(chainId);
+    }
+
+    function worldChainSepoliaTestingAccounts() external pure returns (address[4] memory) {
+        return _worldChainSepoliaTestingAccounts();
+    }
+
+    function worldChainSepoliaTestingLrepTotal() external pure returns (uint256) {
+        return _worldChainSepoliaTestingLrepTotal();
+    }
+
+    function fundWorldChainSepoliaTestingAccounts(LoopReputation lrepToken, RaterRegistry raterRegistry) external {
+        _fundWorldChainSepoliaTestingAccounts(lrepToken, raterRegistry);
+    }
+
+    function worldChainWorldIdV4Verifier() external pure returns (address) {
+        return WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
+    }
+
     function resolveWorldIdDeployConfig(address verifier)
         external
         view
@@ -158,6 +190,49 @@ contract DeployRateLoopAllocationsTest is Test {
         assertEq(lrepToken.allowance(address(deployScript), address(launchPool)), 0);
     }
 
+    function test_WorldChainSepoliaTestingGrantsComeFromTreasuryAllocation() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+
+        uint256 sepoliaTreasuryMint = deployScript.treasuryMintAmountForChain(4801);
+        uint256 testingGrantTotal = deployScript.worldChainSepoliaTestingLrepTotal();
+
+        assertEq(testingGrantTotal, 4 * deployScript.WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT());
+        assertEq(sepoliaTreasuryMint, deployScript.TREASURY_AMOUNT() - testingGrantTotal);
+        assertEq(
+            sepoliaTreasuryMint + testingGrantTotal + deployScript.LAUNCH_DISTRIBUTION_AMOUNT(),
+            deployScript.TOTAL_SUPPLY_CAP(),
+            "Sepolia test grants should stay inside capped supply"
+        );
+        assertEq(deployScript.treasuryMintAmountForChain(480), deployScript.TREASURY_AMOUNT());
+        assertEq(deployScript.treasuryMintAmountForChain(31337), deployScript.TREASURY_AMOUNT());
+    }
+
+    function test_FundWorldChainSepoliaTestingAccountsSeedsCredentialsAndLrep() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        LoopReputation lrepToken = new LoopReputation(address(deployScript), address(this));
+        RaterRegistry raterRegistry = new RaterRegistry(
+            address(deployScript),
+            address(this),
+            address(0),
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        );
+
+        deployScript.fundWorldChainSepoliaTestingAccounts(lrepToken, raterRegistry);
+
+        address[4] memory testAccounts = deployScript.worldChainSepoliaTestingAccounts();
+        for (uint256 i = 0; i < testAccounts.length; i++) {
+            assertEq(lrepToken.balanceOf(testAccounts[i]), deployScript.WORLD_CHAIN_SEPOLIA_TEST_LREP_AMOUNT());
+            assertTrue(raterRegistry.hasActiveHumanCredential(testAccounts[i]));
+        }
+        assertEq(lrepToken.totalSupply(), deployScript.worldChainSepoliaTestingLrepTotal());
+    }
+
     function test_ActivateLegacyContributorRootConfiguresGeneratedManifestRoot() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         LoopReputation lrepToken = new LoopReputation(address(this), address(this));
@@ -203,9 +278,7 @@ contract DeployRateLoopAllocationsTest is Test {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         address missingVerifier = address(0xBEEF);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierOverrideHasNoCode.selector, missingVerifier)
-        );
+        vm.expectRevert(abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierHasNoCode.selector, missingVerifier));
         deployScript.resolveWorldIdVerifierCandidate(missingVerifier, true);
     }
 
@@ -215,6 +288,64 @@ contract DeployRateLoopAllocationsTest is Test {
 
         assertEq(deployScript.resolveWorldIdVerifierCandidate(address(verifier), false), address(verifier));
         assertEq(deployScript.resolveWorldIdVerifierCandidate(address(verifier), true), address(verifier));
+    }
+
+    function test_WorldChainSepoliaDoesNotDeployMockWhenBundledVerifierIsMissing() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        vm.chainId(4801);
+
+        address resolvedVerifier = deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0));
+
+        assertEq(resolvedVerifier, address(0));
+        assertFalse(deployScript.shouldDeployWorldIdMockVerifier(false, resolvedVerifier));
+    }
+
+    function test_WorldChainSepoliaUsesLiveVerifierOverrideInsteadOfMock() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        vm.chainId(4801);
+
+        address resolvedVerifier = deployScript.resolveWorldIdVerifierAddressForChain(false, true, address(verifier));
+
+        assertEq(resolvedVerifier, address(verifier));
+        assertFalse(deployScript.shouldDeployWorldIdMockVerifier(false, resolvedVerifier));
+    }
+
+    function test_LocalDevDeploysMockVerifier() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        vm.chainId(31337);
+
+        address resolvedVerifier = deployScript.resolveWorldIdVerifierAddressForChain(true, false, address(0));
+
+        assertEq(resolvedVerifier, address(0));
+        assertTrue(deployScript.shouldDeployWorldIdMockVerifier(true, resolvedVerifier));
+    }
+
+    function test_WorldChainMainnetRequiresBundledVerifierCode() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        address bundledVerifier = deployScript.worldChainWorldIdV4Verifier();
+        vm.chainId(480);
+
+        vm.expectRevert(abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierHasNoCode.selector, bundledVerifier));
+        deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0));
+    }
+
+    function test_WorldChainMainnetRejectsVerifierOverride() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        vm.chainId(480);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployRateLoop.MainnetWorldIdVerifierOverrideNotAllowed.selector, address(verifier))
+        );
+        deployScript.resolveWorldIdVerifierAddressForChain(false, true, address(verifier));
+    }
+
+    function test_WorldChainMainnetNeverDeploysMockVerifier() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        vm.chainId(480);
+
+        assertFalse(deployScript.shouldDeployWorldIdMockVerifier(false, address(0)));
     }
 
     function test_WorldIdDeployConfigDisablesAllFieldsWithoutVerifier() public {

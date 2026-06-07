@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
-import { useSignMessage } from "wagmi";
 import { ArrowUpTrayIcon } from "@heroicons/react/24/outline";
 import {
   IMAGE_ATTACHMENT_UPLOAD_PHASE_COPY,
@@ -10,6 +9,7 @@ import {
   getBlobUploadProgress,
   getImageAttachmentUploadProgress,
 } from "~~/components/submit/imageAttachmentUploadProgress";
+import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { getMaxImageUploadSizeBytes } from "~~/lib/auth/imageUploadChallenge.shared";
 import { notification } from "~~/utils/scaffold-eth";
 import { isSignatureRejected } from "~~/utils/signatureErrors";
@@ -100,7 +100,7 @@ async function pollApprovedImageUrl(attachmentId: string): Promise<string> {
 
 export function ImageAttachmentUploader({ address, disabled = false, onUploaded }: ImageAttachmentUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { signMessageAsync } = useSignMessage();
+  const { signMessageAsync } = useWalletMessageSigner({ address });
   const [isUploading, setIsUploading] = useState(false);
   const [uploadPhase, setUploadPhase] = useState<ImageAttachmentUploadPhase | null>(null);
   const [progress, setProgress] = useState(0);

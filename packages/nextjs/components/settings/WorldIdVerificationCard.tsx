@@ -35,6 +35,12 @@ import { getWorldIdClientConfig } from "~~/lib/world-id/config";
 import { WORLD_CREDENTIAL_PROOF_OF_HUMAN, getWorldIdSignalForPurpose } from "~~/lib/world-id/credentials";
 import { readLocalE2EWorldIdMock } from "~~/lib/world-id/e2eMock";
 import { parseWorldIdProof } from "~~/lib/world-id/onchainProof";
+import {
+  assertWorldIdProofHasSubmissionWindow,
+  getWorldIdCredentialRequestExpiresAtMin,
+  getWorldIdRequestPollingTimeoutMs,
+  isWorldIdProofExpiredError,
+} from "~~/lib/world-id/proofExpiry";
 import { pollWorldIdRequest } from "~~/lib/world-id/requestPolling";
 import {
   formatWorldIdError,
@@ -391,6 +397,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           expectedCredential: "proof_of_human",
           expectedSignal: signal,
         });
+        assertWorldIdProofHasSubmissionWindow(parsedProof.expiresAtMin);
 
         if (!hasWorldIdV4AttestFunction) {
           throw new Error(`This RaterRegistry deployment does not expose ${WORLD_ID_V4_ATTEST_FUNCTION_NAME}.`);
@@ -572,13 +579,28 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         environment: requestContext.environment,
         rp_context: requestContext.rpContext,
       });
-      const request = await requestBuilder.constraints(CredentialRequest("proof_of_human", { signal }));
+      const request = await requestBuilder.constraints(
+        CredentialRequest("proof_of_human", {
+          expires_at_min: getWorldIdCredentialRequestExpiresAtMin("credential"),
+          signal,
+        }),
+      );
       if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
         return;
       }
 
       setConnectorURI(request.connectorURI);
       setIsPreparingWorldIdRequest(false);
+
+      const pollingTimeoutMs = getWorldIdRequestPollingTimeoutMs(requestContext.rpContext);
+      if (pollingTimeoutMs !== undefined && pollingTimeoutMs <= 0) {
+        setVerificationState({
+          status: "error",
+          message: "World ID request expired. Try again with a fresh request.",
+        });
+        setWorldIdErrorCode("timeout");
+        return;
+      }
 
       const completion = await pollWorldIdRequest(request, {
         onAwaitingConfirmation: value => {
@@ -587,6 +609,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
           }
         },
         signal: abortController.signal,
+        ...(pollingTimeoutMs === undefined ? {} : { timeoutMs: pollingTimeoutMs }),
       });
       if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
         return;
@@ -622,7 +645,7 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         status: "error",
         message,
       });
-      setWorldIdErrorCode("generic_error");
+      setWorldIdErrorCode(isWorldIdProofExpiredError(error) ? "timeout" : "generic_error");
     } finally {
       if (activeWorldIdRequestRef.current === requestId) {
         setIsPreparingWorldIdRequest(false);

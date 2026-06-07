@@ -1380,6 +1380,11 @@ export const RoundRewardDistributorAbi = [
   },
   {
     "type": "error",
+    "name": "FrontendFeeCreditorNotConfigured",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "FrontendFeeNotClaimable",
     "inputs": []
   },
