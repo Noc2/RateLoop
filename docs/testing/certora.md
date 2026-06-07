@@ -54,10 +54,19 @@ own keys win on conflict), so compiler drift only has to be fixed in one place.
 `base.conf` itself.
 
 Caveat on `via_ir`: the Foundry build uses `via_ir = true`, so the base config
-mirrors it for fidelity. If the IR pipeline causes Certora compilation or timeout
-issues on the pure-math harnesses (which do not depend on IR-specific codegen),
-dropping `solc_via_ir` for the math configs is acceptable — record the deviation
-in the conf comment if you do.
+mirrors it for fidelity. Two wrinkles surfaced when the prover was actually run:
+
+- certora-cli 8.13.1 only maps Yul optimizer steps through solc 0.8.34, so solc
+  0.8.35 + `via_ir` errors with "Yul Optimizer steps missing for requested Solidity
+  version". 0.8.35 did not change the Yul optimizer, so `base.conf` passes 0.8.34's
+  exact step string via `yul_optimizer_steps` (lifted from certora-cli's
+  `solc0_8_34_to_0_8_34` table). This lets the full contracts verify under the real
+  production solc + `via_ir`. Revisit once certora-cli maps 0.8.35 natively.
+- The pure-math harnesses do not depend on IR codegen and hit stack-too-deep on
+  nothing, so `math.conf` overrides `solc_via_ir` to `false` to sidestep the issue
+  entirely. The full contracts (e.g. `ClusterPayoutOracle`) genuinely need
+  `via_ir` (legacy codegen hits stack-too-deep), hence the `yul_optimizer_steps`
+  route above.
 
 The three Phase 1 math libraries (`RewardMath`, `RatingMath`, `RobustBtsMath`)
 expose only `internal` functions, so they cannot be verified directly. Each needs
@@ -145,6 +154,18 @@ Target properties:
   - the Merkle proof verifies for the exact payout leaf
 - parent epoch rejection makes child payout snapshots unverifiable or non-finalizable
 - bond credits are withdrawable once and cannot be over-withdrawn
+
+Implementation status (`certora/specs/ClusterPayoutOracle.spec`): the
+`verifyPayoutWeight` slice is **implemented and verified**. Four rules prove that a
+`true` result implies the caller is the pinned consumer, the snapshot is currently
+finalized (status `Finalized` + current correlation epoch, via
+`isRoundPayoutSnapshotFinalized`), `independenceBps <= BPS_DENOMINATOR`, and
+`effectiveWeight <= baseWeight`. These are pure view properties over arbitrary
+state, so no harness or mocks are required for this slice. The remaining
+properties (proposer authorization, finalization timing, rejected-root/digest
+non-reuse, parent-epoch rejection cascade, single-use bond withdrawal) are the
+next slice — they need state-transition rules and, for the bond path, an ERC20
+model.
 
 Modeling notes:
 

@@ -14,12 +14,14 @@ covers how to run what is wired up today.
 certora/
   README.md
   confs/
-    base.conf            shared compiler + prover settings (no file targets)
-    math.conf            Phase 1: math-library harness + spec
+    base.conf                   shared compiler + prover settings (no file targets)
+    math.conf                   Phase 1: math-library harness + spec
+    cluster-payout-oracle.conf  Phase 2: ClusterPayoutOracle
   harnesses/
-    MathHarness.sol      external wrappers around the internal math libraries
+    MathHarness.sol             external wrappers around the internal math libraries
   specs/
-    Math.spec            Phase 1 properties (conservation, bounds, monotonicity)
+    Math.spec                   Phase 1 properties (conservation, bounds, monotonicity)
+    ClusterPayoutOracle.spec    Phase 2 properties (verifyPayoutWeight guarantees)
 ```
 
 `confs/base.conf` carries the compiler settings only. Each target conf inherits
@@ -84,18 +86,22 @@ yarn foundry:certora:check
 - Remappings (including `@prb/math`) are read from `remappings.txt` automatically.
   If Certora fails to resolve an import, add the mapping under a `packages` key in
   `base.conf`.
-- The Foundry build uses `via_ir = true`; `base.conf` mirrors it. `math.conf`
-  overrides it to `false`: certora-cli 8.13.1 lacks the Yul optimizer step
-  sequence for solc 0.8.35 + `via_ir` ("Yul Optimizer steps missing for requested
-  Solidity version"). The pure-math harness compiles fine on the legacy pipeline,
-  so this is safe. Phases 2–4 verify the real contracts, which need `via_ir`; that
-  combination will need a certora-cli release that supports 0.8.35's IR steps (or a
-  pinned older solc).
+- The Foundry build uses `via_ir = true`. certora-cli 8.13.1 only maps Yul
+  optimizer steps through solc 0.8.34, so solc 0.8.35 + `via_ir` would error with
+  "Yul Optimizer steps missing for requested Solidity version". 0.8.35 did not
+  change the Yul optimizer, so `base.conf` passes 0.8.34's exact step string via
+  `yul_optimizer_steps` — this verifies the real production solc + `via_ir` (used by
+  the full-contract phases). `math.conf` overrides `solc_via_ir` to `false` since
+  the pure-math harness compiles fine on the legacy pipeline and doesn't need IR.
 - `make certora-check` (compile-only, no `CERTORAKEY` / no cloud) compiles the
-  harness and type-checks `Math.spec`. The full `make certora` run (solver proofs)
+  target and type-checks its spec. The full `make certora` run (solver proofs)
   needs `CERTORAKEY`.
-- Status: Phase 1 is **verified** — all rules in `Math.spec` pass under certora-cli
-  8.13.1 / solc 0.8.35 (`make certora` → "No errors found by Prover!").
+- Status:
+  - Phase 1 (`math.conf`) — **verified**: all `Math.spec` rules pass.
+  - Phase 2 (`cluster-payout-oracle.conf`) — **verified (first slice)**: the
+    `verifyPayoutWeight` safety rules pass. Lifecycle / bond / rejected-root
+    properties are deferred (see `ClusterPayoutOracle.spec` header).
+  - Verified under certora-cli 8.13.1 / solc 0.8.35 ("No errors found by Prover!").
 - `.certora_internal/` (prover scratch output) is git-ignored.
 - `RatingMath`'s logit/sigmoid paths use PRBMath `SD59x18` (`exp`/`ln`) and are out
   of scope for Phase 1; only its integer helpers are wrapped here.

@@ -6,11 +6,6 @@ name: Certora
 
 on:
   workflow_dispatch:
-    inputs:
-      conf:
-        description: "Target conf, relative to packages/foundry"
-        required: false
-        default: "certora/confs/math.conf"
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC
 
@@ -25,6 +20,13 @@ env:
 jobs:
   certora:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        conf:
+          - certora/confs/math.conf
+          - certora/confs/cluster-payout-oracle.conf
+    name: ${{ matrix.conf }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -55,10 +57,11 @@ jobs:
         working-directory: packages/foundry
         env:
           CERTORAKEY: ${{ secrets.CERTORAKEY }}
-          CONF: ${{ github.event.inputs.conf || 'certora/confs/math.conf' }}
+          CONF: ${{ matrix.conf }}
         run: |
           if [ -z "$CERTORAKEY" ]; then
             echo "::warning::CERTORAKEY secret not set; skipping prover run."
             exit 0
           fi
-          certoraRun "$CONF"
+          # --wait_for_results makes the job fail if any rule is violated.
+          certoraRun "$CONF" --wait_for_results all
