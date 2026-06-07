@@ -944,6 +944,8 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
     question: {
       ...originalRequest.question,
       description: "Edited after the agent handoff.",
+      detailsHash: `0x${"a".repeat(64)}`,
+      detailsUrl: "https://rateloop.ai/api/attachments/details/det_agenthandoffedit",
       tags: ["agents", "running"],
       title: "Edited pitch interest",
     },
@@ -1003,7 +1005,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
   const payload = preparedPayload as {
     bounty: { amount: bigint };
-    questions: Array<{ description: string; tagList: string[]; title: string }>;
+    questions: Array<{ detailsHash: string; detailsUrl: string; tagList: string[]; title: string }>;
     roundConfig: { epochDuration: bigint; maxDuration: bigint; maxVoters: bigint; minVoters: bigint };
   };
 
@@ -1012,7 +1014,8 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(prepareBody.draftRevision, 1);
   assert.equal(prepareBody.preparedDraftRevision, 1);
   assert.equal(payload.questions[0]?.title, "Edited pitch interest");
-  assert.equal(payload.questions[0]?.description, "Edited after the agent handoff.");
+  assert.equal(payload.questions[0]?.detailsUrl, "https://rateloop.ai/api/attachments/details/det_agenthandoffedit");
+  assert.equal(payload.questions[0]?.detailsHash, `0x${"a".repeat(64)}`);
   assert.deepEqual(payload.questions[0]?.tagList, ["agents", "running"]);
   assert.equal(payload.bounty.amount, 2_500_000n);
   assert.equal(payload.roundConfig.epochDuration, 600n);

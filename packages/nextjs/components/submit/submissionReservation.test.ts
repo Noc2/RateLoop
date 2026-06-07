@@ -59,7 +59,7 @@ test("buildSubmissionReservationStorageKey is chain-scoped", () => {
   assert.notEqual(worldchain, sepolia);
 });
 
-test("buildSubmissionRevealCommitment changes when the reserved metadata changes", () => {
+test("buildSubmissionRevealCommitment changes when the reserved details metadata changes", () => {
   const initial = buildSubmissionRevealCommitment(
     {
       ...DEFAULT_DRAFT,
@@ -71,7 +71,8 @@ test("buildSubmissionRevealCommitment changes when the reserved metadata changes
   const edited = buildSubmissionRevealCommitment(
     {
       ...DEFAULT_DRAFT,
-      description: "edited description",
+      detailsHash: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
     },
     SALT,
     ADDRESS,
