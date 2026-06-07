@@ -1,6 +1,7 @@
 import {
   WORLD_ID_PROOF_EXPIRED_MESSAGE,
   assertWorldIdProofHasSubmissionWindow,
+  getWorldIdCredentialRequestExpiresAtMin,
   getWorldIdRequestPollingTimeoutMs,
 } from "./proofExpiry";
 import assert from "node:assert/strict";
@@ -18,6 +19,14 @@ test("returns an expired polling timeout when the request has no submission buff
 test("leaves polling timeout unset when the request expiry is unavailable", () => {
   assert.equal(getWorldIdRequestPollingTimeoutMs({}), undefined);
   assert.equal(getWorldIdRequestPollingTimeoutMs({ expires_at: "soon" }), undefined);
+});
+
+test("sets credential requests to require the deployed one-year credential window", () => {
+  assert.equal(getWorldIdCredentialRequestExpiresAtMin("credential", 1_700_000_000_000), 1_731_536_000);
+});
+
+test("sets presence requests to require the deployed fresh recheck window", () => {
+  assert.equal(getWorldIdCredentialRequestExpiresAtMin("presence", 1_700_000_000_000), 1_700_000_900);
 });
 
 test("accepts World ID proof expiry with enough submission window", () => {

@@ -37,6 +37,7 @@ import { readLocalE2EWorldIdMock } from "~~/lib/world-id/e2eMock";
 import { parseWorldIdProof } from "~~/lib/world-id/onchainProof";
 import {
   assertWorldIdProofHasSubmissionWindow,
+  getWorldIdCredentialRequestExpiresAtMin,
   getWorldIdRequestPollingTimeoutMs,
   isWorldIdProofExpiredError,
 } from "~~/lib/world-id/proofExpiry";
@@ -578,7 +579,12 @@ export function WorldIdVerificationCard({ address }: { address?: string }) {
         environment: requestContext.environment,
         rp_context: requestContext.rpContext,
       });
-      const request = await requestBuilder.constraints(CredentialRequest("proof_of_human", { signal }));
+      const request = await requestBuilder.constraints(
+        CredentialRequest("proof_of_human", {
+          expires_at_min: getWorldIdCredentialRequestExpiresAtMin("credential"),
+          signal,
+        }),
+      );
       if (activeWorldIdRequestRef.current !== requestId || abortController.signal.aborted) {
         return;
       }

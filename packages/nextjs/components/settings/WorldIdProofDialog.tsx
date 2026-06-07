@@ -16,6 +16,7 @@ import {
 import { parseWorldIdProof } from "~~/lib/world-id/onchainProof";
 import {
   assertWorldIdProofHasSubmissionWindow,
+  getWorldIdCredentialRequestExpiresAtMin,
   getWorldIdRequestPollingTimeoutMs,
   isWorldIdProofExpiredError,
 } from "~~/lib/world-id/proofExpiry";
@@ -179,7 +180,12 @@ export function WorldIdProofDialog({ address, kind, onClose, onSuccess, open, pu
         environment: requestContext.environment,
         ...(purpose === "presence" ? { require_user_presence: true } : {}),
         rp_context: requestContext.rpContext,
-      }).constraints(CredentialRequest(option.identifier, { signal }));
+      }).constraints(
+        CredentialRequest(option.identifier, {
+          expires_at_min: getWorldIdCredentialRequestExpiresAtMin(purpose),
+          signal,
+        }),
+      );
       if (activeRequestRef.current !== requestId || abortController.signal.aborted) return;
 
       setConnectorURI(request.connectorURI);
