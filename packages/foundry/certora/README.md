@@ -84,9 +84,16 @@ yarn foundry:certora:check
 - Remappings (including `@prb/math`) are read from `remappings.txt` automatically.
   If Certora fails to resolve an import, add the mapping under a `packages` key in
   `base.conf`.
-- The Foundry build uses `via_ir = true`; `base.conf` mirrors it. If the IR
-  pipeline causes prover trouble on the pure-math harnesses, dropping
-  `solc_via_ir` there is safe — the math helpers do not depend on IR codegen.
+- The Foundry build uses `via_ir = true`; `base.conf` mirrors it. `math.conf`
+  overrides it to `false`: certora-cli 8.13.1 lacks the Yul optimizer step
+  sequence for solc 0.8.35 + `via_ir` ("Yul Optimizer steps missing for requested
+  Solidity version"). The pure-math harness compiles fine on the legacy pipeline,
+  so this is safe. Phases 2–4 verify the real contracts, which need `via_ir`; that
+  combination will need a certora-cli release that supports 0.8.35's IR steps (or a
+  pinned older solc).
+- `make certora-check` (compile-only, no `CERTORAKEY` / no cloud) passes today — it
+  compiles the harness and type-checks `Math.spec`. The full `make certora` run
+  (solver proofs) needs `CERTORAKEY`.
 - `.certora_internal/` (prover scratch output) is git-ignored.
 - `RatingMath`'s logit/sigmoid paths use PRBMath `SD59x18` (`exp`/`ln`) and are out
   of scope for Phase 1; only its integer helpers are wrapped here.
