@@ -22,9 +22,10 @@ certora/
     Math.spec            Phase 1 properties (conservation, bounds, monotonicity)
 ```
 
-`confs/base.conf` carries the compiler settings only. Target confs are merged on
-top of it by passing both files to `certoraRun` (later files override earlier
-ones), so compiler drift only has to be fixed in one place.
+`confs/base.conf` carries the compiler settings only. Each target conf inherits
+them via an `"override_base_config": "certora/confs/base.conf"` key (the target's
+own keys win on conflict), so compiler drift only has to be fixed in one place.
+`certoraRun` takes a single conf file — pass the target conf, not `base.conf`.
 
 ## Prerequisites
 

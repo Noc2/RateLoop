@@ -48,7 +48,10 @@ Each `.conf` should mirror the project compiler settings (verified against
 - remappings resolved from Foundry, or pinned explicitly if Certora needs them
 
 Put these shared settings in `confs/base.conf` and let each target conf inherit
-them, so compiler drift only has to be fixed in one place.
+them via an `"override_base_config": "certora/confs/base.conf"` key (the target's
+own keys win on conflict), so compiler drift only has to be fixed in one place.
+`certoraRun` accepts a single conf file, so always pass the target conf — never
+`base.conf` itself.
 
 Caveat on `via_ir`: the Foundry build uses `via_ir = true`, so the base config
 mirrors it for fidelity. If the IR pipeline causes Certora compilation or timeout

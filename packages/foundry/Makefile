@@ -122,16 +122,16 @@ aderyn:
 	aderyn .
 
 # Formal verification (Certora). See certora/README.md and docs/testing/certora.md.
-# base.conf carries the shared compiler/prover settings; the target conf is merged on top.
-CERTORA_BASE_CONF ?= certora/confs/base.conf
+# The target conf inherits shared compiler/prover settings from base.conf via its
+# "override_base_config" key; certoraRun takes a single conf file.
 CERTORA_CONF ?= certora/confs/math.conf
 CERTORA_ARGS ?=
 
 certora:
-	certoraRun $(CERTORA_BASE_CONF) $(CERTORA_CONF) $(CERTORA_ARGS)
+	certoraRun $(CERTORA_CONF) $(CERTORA_ARGS)
 
 certora-check:
-	certoraRun $(CERTORA_BASE_CONF) $(CERTORA_CONF) --compilation_steps_only $(CERTORA_ARGS)
+	certoraRun $(CERTORA_CONF) --compilation_steps_only $(CERTORA_ARGS)
 
 coverage:
 	forge coverage --offline --ir-minimum $(COVERAGE_ARGS)

@@ -61,4 +61,4 @@ jobs:
             echo "::warning::CERTORAKEY secret not set; skipping prover run."
             exit 0
           fi
-          certoraRun certora/confs/base.conf "$CONF"
+          certoraRun "$CONF"

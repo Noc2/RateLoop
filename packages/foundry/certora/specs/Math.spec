@@ -90,10 +90,11 @@ rule positiveWeightZeroAtOrBelowMean(uint256 rbtsWeight, uint16 scoreBps, uint16
 // RewardMath — content rating bounds and direction
 // ---------------------------------------------------------------------------
 
-/// The live rating is always a whole number in [0, 100].
+/// The live rating is always a whole number in [0, 100]. (rating is uint16, so the
+/// lower bound is structural; the cap is the property worth proving.)
 rule ratingWithinBounds(uint256 totalUpStake, uint256 totalDownStake) {
     uint16 rating = calculateRating(totalUpStake, totalDownStake);
-    assert rating >= 0 && rating <= 100;
+    assert rating <= 100;
 }
 
 /// An UP-majority (or tie) round never settles below the neutral rating of 50.
