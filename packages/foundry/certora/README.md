@@ -17,11 +17,14 @@ certora/
     base.conf                   shared compiler + prover settings (no file targets)
     math.conf                   Phase 1: math-library harness + spec
     cluster-payout-oracle.conf  Phase 2: ClusterPayoutOracle
+    round-voting-engine.conf    Phase 3: RoundVotingEngine
   harnesses/
     MathHarness.sol             external wrappers around the internal math libraries
+    RoundVotingEngineHarness.sol  exposes the engine's internal LREP accounting
   specs/
     Math.spec                   Phase 1 properties (conservation, bounds, monotonicity)
-    ClusterPayoutOracle.spec    Phase 2 properties (verifyPayoutWeight guarantees)
+    ClusterPayoutOracle.spec    Phase 2 properties (verifyPayoutWeight, non-reuse, bond)
+    RoundVotingEngine.spec      Phase 3 properties (transferReward accounting/auth)
 ```
 
 `confs/base.conf` carries the compiler settings only. Each target conf inherits
@@ -102,6 +105,10 @@ yarn foundry:certora:check
     safety, rejected-root non-reuse, and single-use bond withdrawal all pass. Full
     lifecycle monotonicity / finalization timing remain deferred (see
     `ClusterPayoutOracle.spec` header).
+  - Phase 3 (`round-voting-engine.conf`) — **verified (first slice)**:
+    `transferReward` decreases the engine's accounted LREP by exactly the transferred
+    amount, never increases it, and rejects the zero recipient. Round lifecycle /
+    refund / rating properties remain deferred.
   - Verified under certora-cli 8.13.1 / solc 0.8.35 ("No errors found by Prover!").
 - `.certora_internal/` (prover scratch output) is git-ignored.
 - `RatingMath`'s logit/sigmoid paths use PRBMath `SD59x18` (`exp`/`ln`) and are out

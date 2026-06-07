@@ -26,6 +26,7 @@ jobs:
         conf:
           - certora/confs/math.conf
           - certora/confs/cluster-payout-oracle.conf
+          - certora/confs/round-voting-engine.conf
     name: ${{ matrix.conf }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

@@ -205,6 +205,20 @@ Target properties:
 - content ratings remain bounded after settlement
 - weighted UP-majority settlement cannot produce a below-neutral rating
 
+Implementation status (`certora/specs/RoundVotingEngine.spec`, verified via
+`RoundVotingEngineHarness`): the **`transferReward` slice is verified** — three
+rules prove it decreases the engine's accounted LREP by exactly the transferred
+amount, never increases it, and rejects the zero recipient. The ProtocolConfig
+authorization check and the LREP ERC20 are summarized `NONDET`. The full engine
+compiled and verified under solc 0.8.35 + via_ir despite the hand-rolled assembly
+access control / pause and transient-storage reentrancy guard.
+
+Still deferred (need lifecycle + multi-transaction settlement modeling): round
+terminal-state absorption, single-use refunds, refund <= stake, the
+distributor-side single-use reward claim, aggregate-claimed <= pool, and the rating
+bounds. Note the reward-claimed flags live in `RoundRewardDistributor`, so the
+no-double-claim ↔ solvency link spans both contracts.
+
 Modeling notes:
 
 - Expect harnesses for setup and round-state exposure.
