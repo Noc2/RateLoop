@@ -20,7 +20,6 @@ async function fillBasicQuestionFields(page: Page, uniqueId: number) {
   const titleInput = page.getByPlaceholder("Write a subjective question voters can rate");
   await expect(titleInput).toBeVisible({ timeout: 3_000 });
   await titleInput.fill(title);
-  await page.getByPlaceholder("Add context voters should consider").fill(`E2E test description ${uniqueId}`);
 
   return title;
 }
