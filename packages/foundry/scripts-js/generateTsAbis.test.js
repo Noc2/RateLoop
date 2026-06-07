@@ -10,6 +10,7 @@ import {
   filterGeneratedContractsForDeployTarget,
   parseTransactionAndReceiptRun,
   processAllDeployments,
+  pruneNonLocalGeneratedContractsToDeploymentExports,
 } from "./generateTsAbis.js";
 
 const ORIGINAL_DEPLOY_TARGET_NETWORK = process.env.DEPLOY_TARGET_NETWORK;
@@ -387,6 +388,43 @@ describe("assertSharedDeploymentArtifactsSynced", () => {
         },
         { hasArtifact: () => true }
       )
+    );
+  });
+});
+
+describe("pruneNonLocalGeneratedContractsToDeploymentExports", () => {
+  test("drops stale non-local contracts absent from a completed deployment export", () => {
+    const generatedContracts = {
+      31337: {
+        MockWorldIDVerifier: { address: "0xlocal" },
+      },
+      4801: {
+        ContentRegistry: {
+          address: "0x0000000000000000000000000000000000000001",
+        },
+        MockWorldIDVerifier: {
+          address: "0x0000000000000000000000000000000000000002",
+        },
+      },
+    };
+
+    assert.deepEqual(
+      pruneNonLocalGeneratedContractsToDeploymentExports(generatedContracts, {
+        4801: {
+          "0x0000000000000000000000000000000000000001": "ContentRegistry",
+          deploymentComplete: "true",
+        },
+      }),
+      {
+        31337: {
+          MockWorldIDVerifier: { address: "0xlocal" },
+        },
+        4801: {
+          ContentRegistry: {
+            address: "0x0000000000000000000000000000000000000001",
+          },
+        },
+      }
     );
   });
 });

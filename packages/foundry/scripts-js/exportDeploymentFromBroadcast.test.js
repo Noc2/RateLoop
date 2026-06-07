@@ -79,6 +79,19 @@ function address(index) {
 }
 
 const fixtureDeployer = address(101);
+const treasuryMintAmount = "25000000000000";
+const worldChainSepoliaTestingAccounts = [
+  "0xfa9605A2c38a0B4f16f689FDD07B63F295b86d1C",
+  "0x113aFCbA5C5Ee43125C2a24c8E06dd9b4dA38f15",
+  "0xf51BA40d80c7687A6A46c6A279ec145069A9da10",
+  "0x623F82Ef0Fa750AB28D8912C53690B04826874bE",
+];
+const worldChainSepoliaTestLrepAmount = "250000000";
+const worldChainSepoliaTreasuryMintAmount = (
+  BigInt(treasuryMintAmount) -
+  BigInt(worldChainSepoliaTestLrepAmount) *
+    BigInt(worldChainSepoliaTestingAccounts.length)
+).toString();
 
 function txHash(index) {
   return `0x${index.toString(16).padStart(64, "0")}`;
@@ -208,7 +221,10 @@ function assertRejectsTamperedCompletion(mutator, expectedLabel) {
   );
 }
 
-function completeBroadcast() {
+function completeBroadcast({
+  treasuryMint = worldChainSepoliaTreasuryMintAmount,
+  includeWorldChainSepoliaTestMints = true,
+} = {}) {
   const transactions = [];
   const receipts = [];
   let nextAddress = 1;
@@ -598,9 +614,21 @@ function completeBroadcast() {
     receipts,
     "LoopReputation",
     "mint(address,uint256)",
-    [governance, "25000000000000"],
+    [governance, treasuryMint],
     directAddressByName.get("LoopReputation")
   );
+  if (includeWorldChainSepoliaTestMints) {
+    for (const account of worldChainSepoliaTestingAccounts) {
+      pushCall(
+        transactions,
+        receipts,
+        "LoopReputation",
+        "mint(address,uint256)",
+        [account, worldChainSepoliaTestLrepAmount],
+        directAddressByName.get("LoopReputation")
+      );
+    }
+  }
   pushCall(
     transactions,
     receipts,
@@ -728,6 +756,36 @@ test("reconstructDeploymentExportFromBroadcast maps proxies and proxy admins", (
   );
 });
 
+test("reconstructDeploymentExportFromBroadcast accepts full treasury mint on worldchain", () => {
+  const { transactions, receipts } = completeBroadcast({
+    treasuryMint: treasuryMintAmount,
+    includeWorldChainSepoliaTestMints: false,
+  });
+
+  const deploymentExport = reconstructDeploymentExportFromBroadcast(
+    { transactions, receipts },
+    "worldchain"
+  );
+
+  assert.equal(deploymentExport.deploymentComplete, "true");
+  assert.equal(deploymentExport.networkName, "worldchain");
+});
+
+test("reconstructDeploymentExportFromBroadcast requires Sepolia test-account mints", () => {
+  const { transactions, receipts } = completeBroadcast({
+    includeWorldChainSepoliaTestMints: false,
+  });
+
+  assert.throws(
+    () =>
+      reconstructDeploymentExportFromBroadcast(
+        { transactions, receipts },
+        "worldchainSepolia"
+      ),
+    /Broadcast is missing required completion calls: LoopReputation\.mint\(WorldChainSepoliaTestAccount/
+  );
+});
+
 test("reconstructDeploymentExportFromBroadcast exports optional mock World ID verifier", () => {
   const { transactions, receipts } = completeBroadcast();
   const mockVerifier = address(700);
@@ -819,7 +877,7 @@ test("reconstructDeploymentExportFromBroadcast accepts Foundry proxy and decoded
       (tx) =>
         tx.contractName === "LoopReputation" &&
         tx.function === "mint(address,uint256)" &&
-        tx.arguments?.[1] === "25000000000000",
+        tx.arguments?.[1] === worldChainSepoliaTreasuryMintAmount,
     ],
     [
       "setGovernor",
