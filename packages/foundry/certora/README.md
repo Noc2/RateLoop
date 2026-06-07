@@ -19,6 +19,7 @@ certora/
     cluster-payout-oracle.conf  Phase 2: ClusterPayoutOracle
     round-voting-engine.conf    Phase 3: RoundVotingEngine
     round-reward-distributor.conf  Phase 3: RoundRewardDistributor
+    no-double-claim.conf        Phase 3: cross-contract no-double-claim
   harnesses/
     MathHarness.sol             external wrappers around the internal math libraries
     RoundVotingEngineHarness.sol  exposes the engine's internal LREP accounting
@@ -27,6 +28,7 @@ certora/
     ClusterPayoutOracle.spec    Phase 2 properties (verifyPayoutWeight, non-reuse, bond)
     RoundVotingEngine.spec      Phase 3 properties (transferReward accounting/auth)
     RoundRewardDistributor.spec Phase 3 properties (claim-flag integrity)
+    NoDoubleClaim.spec          Phase 3 cross-contract no-double-claim
 ```
 
 `confs/base.conf` carries the compiler settings only. Each target conf inherits
@@ -113,7 +115,12 @@ yarn foundry:certora:check
     refund / rating properties remain deferred.
   - Phase 3 (`round-reward-distributor.conf`) — **verified (first slice)**:
     `claimReward` never clears a recorded reward-claim flag (by voter or by commit).
-    Aggregate-claimed <= pool and the exact single-use revert remain deferred.
+    Aggregate-claimed <= pool remains deferred.
+  - Phase 3 (`no-double-claim.conf`) — **verified (cross-contract)**: the same
+    caller cannot claim a settled round's reward twice (the second `claimReward`
+    reverts), and a successful claim records the commit flag. Spans the distributor
+    (claim gate) and the engine (payout). See `NoDoubleClaim.spec` for the
+    deterministic-resolution modeling note.
   - Verified under certora-cli 8.13.1 / solc 0.8.35 ("No errors found by Prover!").
 - `.certora_internal/` (prover scratch output) is git-ignored.
 - `RatingMath`'s logit/sigmoid paths use PRBMath `SD59x18` (`exp`/`ln`) and are out

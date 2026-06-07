@@ -28,6 +28,7 @@ jobs:
           - certora/confs/cluster-payout-oracle.conf
           - certora/confs/round-voting-engine.conf
           - certora/confs/round-reward-distributor.conf
+          - certora/confs/no-double-claim.conf
     name: ${{ matrix.conf }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

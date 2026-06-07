@@ -221,12 +221,23 @@ flag, this is the backbone of no-double-claim. The engine's `transferReward` and
 the LREP token are summarized `NONDET`; the engine view calls fall back to
 side-effect-free.
 
-Still deferred (need lifecycle + multi-transaction settlement modeling, and a
-faithful engine model for the derived commit/voter keys): round terminal-state
-absorption, single-use refunds, refund <= stake, the exact single-use reward-claim
-revert, aggregate-claimed <= pool, and the rating bounds. The no-double-claim ↔
-solvency link spans the engine + distributor, so closing it fully means verifying
-the two together.
+Cross-contract no-double-claim (`certora/specs/NoDoubleClaim.spec`,
+`no-double-claim.conf`) is **verified**: two rules prove the same caller cannot
+claim a settled round's reward twice (the second `claimReward` reverts) and that a
+successful claim records the commit flag. This spans both contracts — the payout
+goes through the engine's `transferReward`, but the single-use gate lives in the
+distributor's claim flags. Commit resolution (`resolveClaimCommit`) is abstracted
+as a `persistent` deterministic ghost, which is faithful because `claimReward`
+never writes the engine/registry storage that resolution reads, so the same caller
+resolves the same commit on every call. (Two modeling pitfalls were needed to make
+this sound: every non-resolution engine view must be summarized `NONDET` rather
+than left unresolved — an unresolved call is havoc-all and wipes the just-set claim
+flag — and the resolution ghost must be `persistent`, else it is re-havoc'd between
+the two calls and the guard is spuriously bypassed.)
+
+Still deferred (need lifecycle + multi-transaction settlement modeling): round
+terminal-state absorption, single-use refunds, refund <= stake, aggregate-claimed
+<= pool, and the rating bounds.
 
 Modeling notes:
 
