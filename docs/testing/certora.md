@@ -38,14 +38,28 @@ packages/foundry/certora/
     *.sol
 ```
 
-Each `.conf` should mirror the project compiler settings:
+Each `.conf` should mirror the project compiler settings (verified against
+`packages/foundry/foundry.toml` `[profile.default]`):
 
 - `solc`: `0.8.35`
 - `solc_evm_version`: `cancun`
 - `solc_via_ir`: `true`
-- `solc_optimize`: `true`
-- optimizer runs: `100`
+- `solc_optimize`: `100` (the optimizer-runs count; `--solc_optimize 100` on the CLI)
 - remappings resolved from Foundry, or pinned explicitly if Certora needs them
+
+Put these shared settings in `confs/base.conf` and let each target conf inherit
+them, so compiler drift only has to be fixed in one place.
+
+Caveat on `via_ir`: the Foundry build uses `via_ir = true`, so the base config
+mirrors it for fidelity. If the IR pipeline causes Certora compilation or timeout
+issues on the pure-math harnesses (which do not depend on IR-specific codegen),
+dropping `solc_via_ir` for the math configs is acceptable — record the deviation
+in the conf comment if you do.
+
+The three Phase 1 math libraries (`RewardMath`, `RatingMath`, `RobustBtsMath`)
+expose only `internal` functions, so they cannot be verified directly. Each needs
+a thin external harness contract under `certora/harnesses/` that re-exports the
+target functions as `external`/`public` so CVL can call them `envfree`.
 
 ## Local Setup
 
@@ -59,7 +73,12 @@ certoraRun --version
 export CERTORAKEY=<personal_access_key>
 ```
 
-Current local prerequisite gap as of this plan: `certoraRun`, Java, and `solc` were not on PATH. Python and Foundry were present.
+Current local prerequisite gap (verified 2026-06-07): `certoraRun`, `solc`, and
+Java are not on PATH. `python3` (3.14.0) and Foundry (`forge` 1.5.1) are present.
+This means the spec/harness/config artifacts can be authored and the harnesses
+can be compile-checked with `forge build`, but the prover itself cannot be run
+locally until `certora-cli`, `solc 0.8.35`, and Java 21+ are installed and a
+`CERTORAKEY` is exported. CI is therefore the first place the proofs actually run.
 
 Recommended setup:
 
@@ -88,6 +107,13 @@ Target properties:
 - forfeiture is zero when score is at or above the mean
 - ratings, score bps values, and shadow predictions remain in expected bounds
 - monotonic inputs produce monotonic outputs where the protocol expects that behavior
+
+Scope caveat for `RatingMath`: restrict Phase 1 to its pure integer helpers
+(`clampRatingBps`, `displayRatingFromBps`, `evidenceRatingBps`). The logit/sigmoid
+paths (`ratingBpsToLogitX18`, `logitX18ToRatingBps`, `applySettlement`) go through
+PRBMath `SD59x18` `exp`/`ln`, which the prover cannot reason about precisely;
+defer them or model them with summaries/`NONDET` in a later phase rather than
+asserting bit-exact transcendental results.
 
 This phase validates compiler settings, remappings, harness layout, config files, and CI wiring with minimal modeling burden.
 
@@ -236,14 +262,24 @@ CI setup:
 
 ## Suggested First PR Scope
 
-Keep the first implementation PR deliberately small:
+Keep the first implementation PR deliberately small. As implemented on this branch
+it is:
 
 - add `packages/foundry/certora/README.md`
-- add `packages/foundry/certora/confs/math.conf`
-- add `packages/foundry/certora/specs/Math.spec`
-- add minimal math harnesses if needed
-- add `certora:check` script only if compilation works locally
+- add `packages/foundry/certora/confs/base.conf` (shared compiler settings)
+- add `packages/foundry/certora/confs/math.conf` (inherits base, targets the math harness)
+- add `packages/foundry/certora/harnesses/MathHarness.sol` (one harness re-exporting
+  the `RewardMath` / `RatingMath` / `RobustBtsMath` pure helpers as external)
+- add `packages/foundry/certora/specs/Math.spec` (conservation, bound, and
+  monotonicity rules over the harness)
+- wire `certora` / `certora:check` scripts (Makefile + `package.json`, root + foundry)
+- ignore `.certora_internal/`
+- add a non-gating `workflow_dispatch` CI lane (`.github/workflows/certora.yaml`)
 - document how to run with `CERTORAKEY`
+
+Phases 2–4 (ClusterPayoutOracle, RoundVotingEngine/RoundRewardDistributor,
+QuestionRewardPoolEscrow) stay deferred until the math lane is green in CI, per the
+"do not prove the whole protocol in one run" non-goal above.
 
 Do not add PR-required CI until the first proof jobs are stable.
 
