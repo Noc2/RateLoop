@@ -502,7 +502,7 @@ function FeedContentMetaCard({
   const [showShare, setShowShare] = useState(false);
   const hasFollowButton = !(normalizedAddress && item.submitter.toLowerCase() === normalizedAddress);
   const description = item.description.trim();
-  const hasDescription = description.length > 0;
+  const hasDescription = description.length > 0 || Boolean(item.detailsUrl);
   const contextUrl = item.url.trim();
   const contextLabel = getSourceLabel(contextUrl);
   const hasContextLink = contextUrl.length > 0 && contextLabel.trim().length > 0;

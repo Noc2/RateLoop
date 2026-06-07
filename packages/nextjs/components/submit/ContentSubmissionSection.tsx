@@ -51,7 +51,6 @@ import {
   parseBountyWindowAmount,
   resolveBountyReferenceNowSeconds,
 } from "~~/lib/bountyWindows";
-import { MAX_CONTENT_DESCRIPTION_LENGTH } from "~~/lib/contentDescription";
 import {
   MAX_SUBMISSION_IMAGE_URLS,
   MAX_SUBMISSION_URL_LENGTH,
@@ -67,7 +66,6 @@ import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 import {
   findBlockedContentTags,
-  getContentDescriptionValidationError,
   getContentTagValidationError,
   getContentTitleValidationError,
 } from "~~/lib/moderation/submissionValidation";
@@ -144,6 +142,7 @@ const DEFAULT_SUBMISSION_ROUND_MAX_VOTERS = 100;
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
 const MIN_HUMAN_RESPONSE_WINDOW_MINUTES = 20;
+const QUESTION_DETAILS_PREVIEW_WORDS = 32;
 const ROUND_RESPONSE_WINDOW_PRESETS = [
   { id: "2m", label: "2m", minutes: 2 },
   { id: "5m", label: "5m", minutes: 5 },
@@ -162,7 +161,6 @@ type QuestionDraft = {
   imageUrls: string[];
   videoUrl: string;
   title: string;
-  description: string;
   detailsText: string;
   selectedCategory: Category | null;
   selectedSubcategories: string[];
@@ -177,7 +175,6 @@ type ValidatedQuestionDraft = {
   submittedImageUrls: string[];
   submittedVideoUrl: string;
   submittedTags: string;
-  trimmedDescription: string;
   trimmedDetailsText: string;
   trimmedTitle: string;
   selectedCategory: Category | null;
@@ -192,7 +189,6 @@ function createEmptyQuestionDraft(): QuestionDraft {
     imageUrls: [""],
     videoUrl: "",
     title: "",
-    description: "",
     detailsText: "",
     selectedCategory: null,
     selectedSubcategories: [],
@@ -206,6 +202,14 @@ function createQuestionDraftWithTaxonomy(source: QuestionTaxonomySelection): Que
     selectedCategory: source.selectedCategory,
     selectedSubcategories: [...source.selectedSubcategories],
   };
+}
+
+function getDetailsPreviewText(value: string, wordLimit = QUESTION_DETAILS_PREVIEW_WORDS) {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= wordLimit) {
+    return words.join(" ");
+  }
+  return `${words.slice(0, wordLimit).join(" ")}...`;
 }
 
 const EMPTY_SUBMISSION_DETAILS = {
@@ -480,8 +484,6 @@ export function ContentSubmissionSection() {
   const [videoUrlError, setVideoUrlError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [titleError, setTitleError] = useState<string | null>(null);
-  const [description, setDescription] = useState("");
-  const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [detailsText, setDetailsText] = useState("");
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -583,7 +585,6 @@ export function ContentSubmissionSection() {
     imageUrls,
     videoUrl,
     title,
-    description,
     detailsText,
     selectedCategory,
     selectedSubcategories,
@@ -606,8 +607,6 @@ export function ContentSubmissionSection() {
     setVideoUrlError(null);
     setTitle(draft.title);
     setTitleError(null);
-    setDescription(draft.description);
-    setDescriptionError(null);
     setDetailsText(draft.detailsText);
     setDetailsError(null);
     setSelectedCategory(draft.selectedCategory);
@@ -1513,15 +1512,8 @@ export function ContentSubmissionSection() {
     setTitleError(getContentTitleValidationError(value));
   };
 
-  const handleDescriptionChange = (value: string) => {
-    setDescription(value);
-    patchActiveQuestionDraft({ description: value });
-    setDescriptionError(getContentDescriptionValidationError(value));
-  };
-
   const validateQuestionSection = (draft = getActiveQuestionDraft(), applyErrors = true): ValidatedQuestionDraft => {
     const trimmedTitle = draft.title.trim();
-    const trimmedDescription = draft.description.trim();
     const trimmedContextUrl = draft.contextUrl.trim();
     const submittedContextUrl = normalizeSubmissionContextUrl(trimmedContextUrl) ?? "";
     let trimmedDetailsText = "";
@@ -1548,7 +1540,6 @@ export function ContentSubmissionSection() {
     const nextVideoUrlError = getMediaUrlValidationError(draft.videoUrl, "video");
     const nextContextUrlError = getContextUrlValidationError(trimmedContextUrl);
     const nextTitleError = trimmedTitle ? getContentTitleValidationError(trimmedTitle) : null;
-    const nextDescriptionError = trimmedDescription ? getContentDescriptionValidationError(trimmedDescription) : null;
     const blockedContentTags = findBlockedContentTags(draft.selectedSubcategories);
     const submittedTags = serializeTags(draft.selectedSubcategories);
     const tagsValidationError =
@@ -1566,7 +1557,6 @@ export function ContentSubmissionSection() {
       setVideoUrlError(nextVideoUrlError);
       setContextUrlError(nextContextUrlError);
       setTitleError(nextTitleError);
-      setDescriptionError(nextDescriptionError);
       setDetailsError(nextDetailsError);
     }
 
@@ -1579,7 +1569,6 @@ export function ContentSubmissionSection() {
       !questionFieldsComplete ||
       Boolean(nextContextUrlError) ||
       Boolean(nextTitleError) ||
-      Boolean(nextDescriptionError) ||
       Boolean(nextDetailsError) ||
       hasMediaError ||
       Boolean(tagsValidationError) ||
@@ -1594,7 +1583,6 @@ export function ContentSubmissionSection() {
       submittedImageUrls,
       submittedVideoUrl,
       submittedTags,
-      trimmedDescription,
       trimmedDetailsText,
       trimmedTitle,
     };
@@ -2130,7 +2118,6 @@ export function ContentSubmissionSection() {
           },
           categoryId: question.selectedCategory.id,
           contextUrl: question.submittedContextUrl,
-          description: question.trimmedDescription,
           imageUrls: question.submittedImageUrls,
           roundConfig: selectedRoundConfig,
           study: {
@@ -2146,7 +2133,6 @@ export function ContentSubmissionSection() {
           imageUrls: question.submittedImageUrls,
           videoUrl: question.submittedVideoUrl,
           title: question.trimmedTitle,
-          description: question.trimmedDescription,
           tags: question.submittedTags,
           categoryId: question.selectedCategory.id,
           detailsUrl: details.detailsUrl,
@@ -2530,7 +2516,7 @@ export function ContentSubmissionSection() {
               description:
                 questionCount > 1
                   ? `${questionCount} question bundle. Answer all questions to qualify for the bounty.`
-                  : primarySubmittedQuestion.trimmedDescription,
+                  : getDetailsPreviewText(primarySubmittedQuestion.trimmedDetailsText),
               lastActivityAt: new Date().toISOString(),
             }
           : null;
@@ -2548,8 +2534,6 @@ export function ContentSubmissionSection() {
       setVideoUrlError(null);
       setTitle("");
       setTitleError(null);
-      setDescription("");
-      setDescriptionError(null);
       setDetailsText("");
       setDetailsError(null);
       setSelectedCategory(null);
@@ -2704,8 +2688,9 @@ export function ContentSubmissionSection() {
     </div>
   );
 
+  const detailsPreviewText = getDetailsPreviewText(detailsText);
   const questionPreviewCard =
-    previewUrl || title || description ? (
+    previewUrl || title || detailsPreviewText ? (
       <div className="surface-card rounded-2xl p-4 space-y-3">
         <p className="text-base font-medium uppercase tracking-wider text-base-content/60">Preview</p>
         {title ? <h3 className="line-clamp-2 text-lg font-semibold text-base-content">{title}</h3> : null}
@@ -2713,12 +2698,12 @@ export function ContentSubmissionSection() {
           <ContentEmbed
             url={previewUrl}
             title={title}
-            description={description}
+            description={detailsPreviewText}
             thumbnailUrl={contextPreviewThumbnailUrl}
             compact
           />
         ) : null}
-        {description ? <p className="text-base text-base-content/70">{description}</p> : null}
+        {detailsPreviewText ? <p className="text-base text-base-content/70">{detailsPreviewText}</p> : null}
         {selectedSubcategories.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {selectedSubcategories.map(tag => (
@@ -3824,31 +3809,10 @@ export function ContentSubmissionSection() {
 
                 <div>
                   <label className="mb-2 block text-base font-medium">
-                    Voter Summary <span className="text-base-content/60">(optional)</span>
+                    Description <span className="text-base-content/60">(optional)</span>
                   </label>
                   <textarea
-                    placeholder="Add the short summary voters see first"
-                    className={`textarea textarea-bordered h-24 w-full bg-base-100 ${
-                      descriptionError ? "textarea-error" : ""
-                    }`}
-                    value={description}
-                    onChange={e => handleDescriptionChange(e.target.value)}
-                    maxLength={MAX_CONTENT_DESCRIPTION_LENGTH}
-                  />
-                  {descriptionError ? <p className="mt-1 text-base text-error">{descriptionError}</p> : null}
-                  <div className="mt-1 text-right">
-                    <span className="text-base text-base-content/60">
-                      {description.length}/{MAX_CONTENT_DESCRIPTION_LENGTH}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-base font-medium">
-                    Details <span className="text-base-content/60">(optional)</span>
-                  </label>
-                  <textarea
-                    placeholder="Add longer context voters can expand before rating"
+                    placeholder="Add context voters can expand before rating"
                     className={`textarea textarea-bordered min-h-32 w-full bg-base-100 ${
                       detailsError ? "textarea-error" : ""
                     }`}
