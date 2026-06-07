@@ -373,12 +373,6 @@ BUNDLE_TITLES=(
   "Rate answer C for the refund response"
 )
 
-BUNDLE_DESCRIPTIONS=(
-  "Shared prompt: a customer asks for a refund after a delayed package. Answer A apologizes, checks order details and policy eligibility, then escalates edge cases. Vote up if this exact answer is safe and useful."
-  "Shared prompt: a customer asks for a refund after a delayed package. Answer B promises an instant full refund before checking policy and asks for payment details by email. Vote up only if this exact answer is safe and useful."
-  "Shared prompt: a customer asks for a refund after a delayed package. Answer C explains likely eligibility, requests the order number, avoids sensitive payment data, and routes unusual cases to a human. Vote up if this exact answer is safe and useful."
-)
-
 BUNDLE_TAGS=(
   "Bundled Bounty,AI Answers,Answer A"
   "Bundled Bounty,AI Answers,Answer B"
@@ -452,7 +446,6 @@ BUNDLE_QUESTION_COUNT="${#BUNDLE_CONTEXT_URLS[@]}"
 if [ "$BUNDLE_QUESTION_COUNT" -ne "${#BUNDLE_IMAGE_URLS[@]}" ] ||
   [ "$BUNDLE_QUESTION_COUNT" -ne "${#BUNDLE_VIDEO_URLS[@]}" ] ||
   [ "$BUNDLE_QUESTION_COUNT" -ne "${#BUNDLE_TITLES[@]}" ] ||
-  [ "$BUNDLE_QUESTION_COUNT" -ne "${#BUNDLE_DESCRIPTIONS[@]}" ] ||
   [ "$BUNDLE_QUESTION_COUNT" -ne "${#BUNDLE_TAGS[@]}" ] ||
   [ "$BUNDLE_QUESTION_COUNT" -ne "${#BUNDLE_CATEGORY_SLUGS[@]}" ] ||
   [ "$BUNDLE_QUESTION_COUNT" -ne "${#BUNDLE_CATEGORY_IDS[@]}" ]; then
@@ -563,7 +556,6 @@ for ((i = 0; i < BUNDLE_QUESTION_COUNT; i++)); do
     "${BUNDLE_IMAGE_URLS[$i]}"
     "${BUNDLE_VIDEO_URLS[$i]}"
     "${BUNDLE_TITLES[$i]}"
-    "${BUNDLE_DESCRIPTIONS[$i]}"
     "${BUNDLE_TAGS[$i]}"
     "${BUNDLE_CATEGORY_IDS[$i]}"
     "0x$BUNDLE_SALT"
