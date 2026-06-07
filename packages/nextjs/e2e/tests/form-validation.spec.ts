@@ -6,7 +6,6 @@ async function fillRequiredQuestionFields(page: Page, contextUrl?: string): Prom
 
   const uniqueId = Date.now();
   await page.getByPlaceholder("Write a subjective question voters can rate").fill(`Validation test ${uniqueId}`);
-  await page.locator("textarea").first().fill(`Validation content ${uniqueId}`);
 
   await selectAskSubcategory(page);
 
@@ -37,7 +36,7 @@ test.describe("Ask form validation", () => {
 
     await continueToBountyStep(page);
 
-    await expect(page.getByText("Add a website, document, image, or YouTube video before submitting.")).toBeVisible({
+    await expect(page.getByText("Add a website, image, or YouTube video before submitting.")).toBeVisible({
       timeout: 5_000,
     });
   });
