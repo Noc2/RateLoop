@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress } from "viem";
-import { useAccount, useConfig, useSignMessage } from "wagmi";
+import { useAccount, useConfig } from "wagmi";
 import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
 import {
   ArrowPathIcon,
@@ -25,6 +25,7 @@ import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHead
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { MAX_CONTENT_DESCRIPTION_LENGTH } from "~~/lib/contentDescription";
 import { getContentDescriptionValidationError } from "~~/lib/moderation/submissionValidation";
 import {
@@ -766,7 +767,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const searchParams = useSearchParams();
   const wagmiConfig = useConfig();
   const { address, chain, chainId } = useAccount();
-  const { signMessageAsync, isPending: isSigningMessage } = useSignMessage();
+  const { signMessageAsync, isPending: isSigningMessage } = useWalletMessageSigner({ address });
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const [token] = useState(() => readToken(searchParams));
   const [handoff, setHandoff] = useState<Handoff | null>(null);
