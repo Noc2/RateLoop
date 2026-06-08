@@ -173,6 +173,10 @@ type DraftForm = {
   roundMinVoters: string;
 };
 
+type SaveDraftOptions = {
+  showSuccess?: boolean;
+};
+
 type SubmittedContentModalState = {
   description: string;
   id: bigint;
@@ -1049,6 +1053,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
   const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && hasUnsavedDraft && !isBusy);
+  const canSaveDraftBeforeSubmit = Boolean(draftForm && isDraftEditable);
   const draftRoundMaxDurationMinuteBounds = useMemo(
     () =>
       getRoundMaxDurationMinuteBoundsForBlind(
@@ -1064,7 +1069,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       !connectedMismatch &&
       !isTerminalStatus &&
       !isBusy &&
-      !hasUnsavedDraft &&
+      (!hasUnsavedDraft || canSaveDraftBeforeSubmit) &&
       (hasTransactionPlan || (connectedChainId && canPrepareHandoffStatus(handoff.status))),
   );
 
@@ -1242,115 +1247,130 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     setDraftError(null);
   }, []);
 
-  const handleSaveDraft = useCallback(async () => {
-    if (!handoff || !draftForm) return;
-    setDraftError(null);
-    setIsSavingDraft(true);
-    try {
-      const requestBody = await buildDraftRequestBody(handoff, draftForm, roundConfigBounds, async description => {
-        if (!address) {
-          throw new Error("Connect a wallet before saving a description.");
-        }
-        if (handoff.walletAddress && !sameAddress(handoff.walletAddress, address)) {
-          throw new Error("Connected wallet does not match this handoff.");
-        }
-        return uploadQuestionDetailsForHandoff({
-          signMessageAsync,
-          submitterAddress: address,
-          text: description,
-        });
-      });
-      const response = await fetch(`/api/agent/handoffs/${handoffId}`, {
-        body: JSON.stringify({
-          requestBody,
-          token,
-        }),
-        headers: { "content-type": "application/json" },
-        method: "PATCH",
-      });
-      const body = (await response.json()) as Handoff | { error?: string; message?: string };
-      if (!response.ok) throw new Error(readResponseError(body, "Failed to save draft."));
-      setHandoff(body as Handoff);
-      notification.success("Draft saved.");
-    } catch (saveError) {
-      setDraftError(saveError instanceof Error ? saveError.message : "Failed to save draft.");
-    } finally {
-      setIsSavingDraft(false);
-    }
-  }, [address, draftForm, handoff, handoffId, roundConfigBounds, signMessageAsync, token]);
-
-  const prepareHandoff = useCallback(async () => {
-    if (!address) {
-      notification.error("Connect the wallet that will fund this ask.");
-      return null;
-    }
-    if (!connectedChainId) {
-      notification.error("Connect a supported network before preparing this ask.");
-      return null;
-    }
-    if (connectedMismatch) {
-      notification.error("Connected wallet does not match this handoff.");
-      return null;
-    }
-    if (hasUnsavedDraft) {
-      notification.error("Save the draft before submitting.");
-      return null;
-    }
-
-    setIsPreparing(true);
-    showTransactionSubmittingToast({
-      description: "Approve the wallet request to continue.",
-      title: "Preparing ask",
-    });
-    setImageSignatureSteps([]);
-    setError(null);
-    try {
-      let prepared = await postPrepare();
-      setHandoff(prepared);
-      const uploadChallenges = prepared.uploadChallenges ?? [];
-      if (uploadChallenges.length > 0) {
-        setImageSignatureSteps(
-          uploadChallenges.map(challenge => ({
-            assetId: challenge.assetId,
-            filename: imageSignatureLabel(challenge, prepared),
-            status: "pending",
-          })),
-        );
-        const imageSignatures = [];
-        for (const challenge of uploadChallenges) {
-          const signature = await signMessageAsync({ message: challenge.message });
-          imageSignatures.push({
-            assetId: challenge.assetId,
-            challengeId: challenge.challengeId,
-            signature,
+  const saveDraft = useCallback(
+    async (options: SaveDraftOptions = {}) => {
+      if (!handoff || !draftForm) return null;
+      setDraftError(null);
+      setIsSavingDraft(true);
+      try {
+        const requestBody = await buildDraftRequestBody(handoff, draftForm, roundConfigBounds, async description => {
+          if (!address) {
+            throw new Error("Connect a wallet before saving a description.");
+          }
+          if (handoff.walletAddress && !sameAddress(handoff.walletAddress, address)) {
+            throw new Error("Connected wallet does not match this handoff.");
+          }
+          return uploadQuestionDetailsForHandoff({
+            signMessageAsync,
+            submitterAddress: address,
+            text: description,
           });
-          setImageSignatureSteps(current =>
-            current.map(step => (step.assetId === challenge.assetId ? { ...step, status: "signed" } : step)),
-          );
+        });
+        const response = await fetch(`/api/agent/handoffs/${handoffId}`, {
+          body: JSON.stringify({
+            requestBody,
+            token,
+          }),
+          headers: { "content-type": "application/json" },
+          method: "PATCH",
+        });
+        const body = (await response.json()) as Handoff | { error?: string; message?: string };
+        if (!response.ok) throw new Error(readResponseError(body, "Failed to save draft."));
+        const savedHandoff = body as Handoff;
+        setHandoff(savedHandoff);
+        if (options.showSuccess !== false) {
+          notification.success("Draft saved.");
         }
-        prepared = await postPrepare(imageSignatures);
+        return savedHandoff;
+      } catch (saveError) {
+        setDraftError(saveError instanceof Error ? saveError.message : "Failed to save draft.");
+        return null;
+      } finally {
+        setIsSavingDraft(false);
+      }
+    },
+    [address, draftForm, handoff, handoffId, roundConfigBounds, signMessageAsync, token],
+  );
+
+  const handleSaveDraft = useCallback(async () => {
+    await saveDraft();
+  }, [saveDraft]);
+
+  const prepareHandoff = useCallback(
+    async (options: { skipUnsavedDraftCheck?: boolean } = {}) => {
+      if (!address) {
+        notification.error("Connect the wallet that will fund this ask.");
+        return null;
+      }
+      if (!connectedChainId) {
+        notification.error("Connect a supported network before preparing this ask.");
+        return null;
+      }
+      if (connectedMismatch) {
+        notification.error("Connected wallet does not match this handoff.");
+        return null;
+      }
+      if (hasUnsavedDraft && !options.skipUnsavedDraftCheck) {
+        notification.error("Save the draft before submitting.");
+        return null;
       }
 
-      setHandoff(prepared);
+      setIsPreparing(true);
+      showTransactionSubmittingToast({
+        description: "Approve the wallet request to continue.",
+        title: "Preparing ask",
+      });
       setImageSignatureSteps([]);
-      return prepared;
-    } catch (prepareError) {
-      setError(prepareError instanceof Error ? prepareError.message : "Failed to prepare handoff.");
-      return null;
-    } finally {
-      setIsPreparing(false);
-      dismissTransactionStatusToast();
-    }
-  }, [
-    address,
-    connectedChainId,
-    connectedMismatch,
-    dismissTransactionStatusToast,
-    hasUnsavedDraft,
-    postPrepare,
-    showTransactionSubmittingToast,
-    signMessageAsync,
-  ]);
+      setError(null);
+      try {
+        let prepared = await postPrepare();
+        setHandoff(prepared);
+        const uploadChallenges = prepared.uploadChallenges ?? [];
+        if (uploadChallenges.length > 0) {
+          setImageSignatureSteps(
+            uploadChallenges.map(challenge => ({
+              assetId: challenge.assetId,
+              filename: imageSignatureLabel(challenge, prepared),
+              status: "pending",
+            })),
+          );
+          const imageSignatures = [];
+          for (const challenge of uploadChallenges) {
+            const signature = await signMessageAsync({ message: challenge.message });
+            imageSignatures.push({
+              assetId: challenge.assetId,
+              challengeId: challenge.challengeId,
+              signature,
+            });
+            setImageSignatureSteps(current =>
+              current.map(step => (step.assetId === challenge.assetId ? { ...step, status: "signed" } : step)),
+            );
+          }
+          prepared = await postPrepare(imageSignatures);
+        }
+
+        setHandoff(prepared);
+        setImageSignatureSteps([]);
+        return prepared;
+      } catch (prepareError) {
+        setError(prepareError instanceof Error ? prepareError.message : "Failed to prepare handoff.");
+        return null;
+      } finally {
+        setIsPreparing(false);
+        dismissTransactionStatusToast();
+      }
+    },
+    [
+      address,
+      connectedChainId,
+      connectedMismatch,
+      dismissTransactionStatusToast,
+      hasUnsavedDraft,
+      postPrepare,
+      showTransactionSubmittingToast,
+      signMessageAsync,
+    ],
+  );
 
   const executeHandoff = useCallback(
     async (targetHandoff: Handoff) => {
@@ -1471,21 +1491,24 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       notification.error("Connected wallet does not match this handoff.");
       return;
     }
-    if (hasUnsavedDraft) {
-      notification.error("Save the draft before submitting.");
-      return;
+
+    let executableHandoff = handoff;
+    const shouldAutoSaveDraft = hasUnsavedDraft;
+    if (shouldAutoSaveDraft) {
+      const savedHandoff = await saveDraft({ showSuccess: false });
+      if (!savedHandoff) return;
+      executableHandoff = savedHandoff;
     }
 
     const accepted = await requireAcceptance("submit");
     if (!accepted) return;
 
-    let executableHandoff = handoff;
     if (!executableHandoff.transactionPlan?.calls?.length) {
       if (isFeedbackBonusStep) {
         notification.error("Feedback Bonus funding is waiting for a transaction plan.");
         return;
       }
-      const prepared = await prepareHandoff();
+      const prepared = await prepareHandoff({ skipUnsavedDraftCheck: shouldAutoSaveDraft });
       if (!prepared) return;
       executableHandoff = prepared;
     }
@@ -1500,6 +1523,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     isFeedbackBonusStep,
     prepareHandoff,
     requireAcceptance,
+    saveDraft,
   ]);
 
   const handleCloseShareModal = useCallback(() => {
