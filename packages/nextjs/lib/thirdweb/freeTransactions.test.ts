@@ -410,7 +410,7 @@ after(() => {
   }
 });
 
-test("pending reservations are idempotent and reserve capacity without incrementing confirmed quota", async () => {
+test("pending reservations consume quota on verifier approval and stay idempotent while active", async () => {
   const firstCalls = [voteCall("0x01")];
   const secondCalls = [voteCall("0x02")];
   const thirdCalls = [voteCall("0x03")];
@@ -422,7 +422,7 @@ test("pending reservations are idempotent and reserve capacity without increment
   assert.equal(firstDecision.summary.remaining, 1);
 
   const quotaAfterFirst = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
-  assert.equal(Number(quotaAfterFirst.rows[0]?.free_tx_used), 0);
+  assert.equal(Number(quotaAfterFirst.rows[0]?.free_tx_used), 1);
 
   const repeatedDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(firstCalls) as never);
   assert.equal(repeatedDecision.isAllowed, true);
@@ -443,7 +443,7 @@ test("pending reservations are idempotent and reserve capacity without increment
   assert.equal(deniedDecision.summary?.used, 2);
 });
 
-test("confirm increments confirmed quota exactly once", async () => {
+test("confirm finalizes a consumed reservation without double-counting quota", async () => {
   const calls = [voteCall("0x04")];
   const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
   assert.equal(initialDecision.isAllowed, true);
@@ -567,26 +567,67 @@ test("confirm still rejects relayed receipts without wallet execution proof", as
   );
 });
 
-test("expired pending reservations release held capacity for new operations", async () => {
+test("expired pending reservations stay charged and do not release capacity", async () => {
+  const originalLimit = env.FREE_TRANSACTION_LIMIT;
   const expiredCalls = [voteCall("0x05")];
   const freshCalls = [voteCall("0x06")];
 
-  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(expiredCalls) as never);
+  try {
+    env.FREE_TRANSACTION_LIMIT = "1";
+
+    const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+      buildRequest(expiredCalls) as never,
+    );
+    assert.equal(initialDecision.isAllowed, true);
+    if (!initialDecision.isAllowed) return;
+    assert.equal(initialDecision.summary.used, 1);
+    assert.equal(initialDecision.summary.remaining, 0);
+
+    await dbModule.dbClient.execute({
+      sql: "UPDATE free_transaction_reservations SET expires_at = ?",
+      args: [new Date(Date.now() - 60_000)],
+    });
+
+    const freshDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(freshCalls) as never);
+    assert.equal(freshDecision.isAllowed, false);
+    if (freshDecision.isAllowed) return;
+    assert.equal(freshDecision.debugCode, "free_tx_exhausted");
+    assert.equal(freshDecision.summary?.used, 1);
+    assert.equal(freshDecision.summary?.remaining, 0);
+
+    const quotaRows = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
+    assert.equal(Number(quotaRows.rows[0]?.free_tx_used), 1);
+  } finally {
+    if (originalLimit === undefined) {
+      delete env.FREE_TRANSACTION_LIMIT;
+    } else {
+      env.FREE_TRANSACTION_LIMIT = originalLimit;
+    }
+  }
+});
+
+test("refreshing an expired reservation for the same operation consumes another quota slot", async () => {
+  const calls = [voteCall("0x0601")];
+
+  const initialDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
   assert.equal(initialDecision.isAllowed, true);
+  if (!initialDecision.isAllowed) return;
+  assert.equal(initialDecision.summary.used, 1);
+  assert.equal(initialDecision.summary.remaining, 1);
 
   await dbModule.dbClient.execute({
     sql: "UPDATE free_transaction_reservations SET expires_at = ?",
     args: [new Date(Date.now() - 60_000)],
   });
 
-  const freshDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(freshCalls) as never);
-  assert.equal(freshDecision.isAllowed, true);
-  if (!freshDecision.isAllowed) return;
-  assert.equal(freshDecision.summary.used, 1);
-  assert.equal(freshDecision.summary.remaining, 1);
+  const refreshedDecision = await freeTransactions.evaluateFreeTransactionAllowance(buildRequest(calls) as never);
+  assert.equal(refreshedDecision.isAllowed, true);
+  if (!refreshedDecision.isAllowed) return;
+  assert.equal(refreshedDecision.summary.used, 2);
+  assert.equal(refreshedDecision.summary.remaining, 0);
 
   const quotaRows = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
-  assert.equal(Number(quotaRows.rows[0]?.free_tx_used), 0);
+  assert.equal(Number(quotaRows.rows[0]?.free_tx_used), 2);
 });
 
 test("supported sponsored operation families are allowlisted", async () => {
@@ -813,7 +854,7 @@ test("confirm leaves the reservation pending when receipt verification fails", a
   );
 
   const quotaRows = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
-  assert.equal(Number(quotaRows.rows[0]?.free_tx_used), 0);
+  assert.equal(Number(quotaRows.rows[0]?.free_tx_used), 1);
 
   const reservationRows = await dbModule.dbClient.execute("SELECT status FROM free_transaction_reservations");
   assert.equal(reservationRows.rows[0]?.status, "pending");
@@ -841,7 +882,7 @@ test("confirm fails closed when the quota store is unavailable after receipts ve
   }
 
   const quotaRows = await dbModule.dbClient.execute("SELECT free_tx_used FROM free_transaction_quotas");
-  assert.equal(Number(quotaRows.rows[0]?.free_tx_used), 0);
+  assert.equal(Number(quotaRows.rows[0]?.free_tx_used), 1);
 
   const reservationRows = await dbModule.dbClient.execute("SELECT status FROM free_transaction_reservations");
   assert.equal(reservationRows.rows[0]?.status, "pending");
