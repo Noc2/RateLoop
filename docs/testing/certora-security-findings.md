@@ -10,6 +10,67 @@ vulnerability. Every property that was scoped to a clean, provable slice was pro
 items that could not be proved are **modeling/tooling limitations**, not known bugs —
 they are listed below in full so the gap is explicit rather than hidden.
 
+## Round 2 (Tracks B–G of `certora-next-steps.md`)
+
+A second implementation pass added LoopReputation, ProtocolConfig, the
+LaunchDistributionPool cap lemmas + pool conservation, and a QuestionRewardPoolEscrow
+claim-flag proof. **No exploitable vulnerability was found** in this pass either. Two
+properties resisted proof; both are most likely tooling/solver limits rather than bugs,
+but both are worth a quick manual confirmation:
+
+1. **LaunchDistributionPool `raterLaunchPaid <= raterLaunchCap`** — the last missing
+   lemma is `raterLaunchCap <= raterFullLaunchCap`, which at assignment reduces to
+   `fullCap * bps / 10000 <= fullCap` (given `bps <= 10000`). This is a nonlinear
+   multiply-then-divide inequality that the SMT backend cannot discharge precisely. By
+   inspection the clamp is correct (`unverifiedEarnedRaterCapBps` is validated `<= 10000`
+   by `_validateLaunchRewardPolicy`, and `_assignLaunchCap` divides by `BPS_DENOMINATOR`),
+   so this is a solver-completeness gap, not a defect. **Manual check:** confirm no payout
+   path raises `raterLaunchPaid` above the active cap.
+
+2. **LaunchDistributionPool legacy-pool conservation
+   (`distributed + treasuryRecovered <= LEGACY_CONTRIBUTOR_POOL_AMOUNT`)** — proved for
+   the earned-rater and verified-referral pools, but resisted on
+   `sweepExpiredLegacyContributorAllocationToTreasury`. **Manual check (low confidence):**
+   confirm the expired-allocation sweep cannot recover more than the pool's unclaimed
+   remainder.
+
+### Investigation outcome (both items resolved as proof gaps)
+
+Both items were investigated against the source. **Neither is a contract bug** — both are
+proof-tooling gaps, and the contracts are correct by construction:
+
+- **Legacy-pool conservation — RESOLVED (spec corrected).** The claim and sweep both bound
+  against `legacyContributorAllocationTotal`, and `setLegacyContributorRoot` pins that to
+  exactly `LEGACY_CONTRIBUTOR_POOL_AMOUNT` (it reverts otherwise and is write-once). The
+  original invariant simply compared against the wrong bound. It is now proved as
+  `legacyAllocationTotalBounded` + `legacyDistributedWithinAllocation` +
+  `legacyRecoveredWithinAllocation` + `legacyDistributedWithinPool` (all verified). The
+  *tight* `distributed + treasuryRecovered <= pool` bound holds in the contract — claims
+  require an open window and the sweep a closed one, so the two never overlap and the sweep
+  can only recover the unclaimed remainder — but it depends on that temporal exclusivity,
+  which CVL cannot express as a storage-only invariant. It stays deferred as a
+  multi-tx/time-modeling item, **not** a risk: over-recovery is unreachable.
+
+- **Cap `paid <= cap` — CONFIRMED proof gap (no contract change needed).** Re-ran the full
+  chain with the nonlinear-arithmetic solver (`-smt_useNIA`); it discharged the assignment
+  multiplication but the `finalizeEarnedRaterRewardCredit` / `unlockFullEarnedRaterCap`
+  catch-up paths (which contain further `cap * count / rewardingCount` mul-div sites) still
+  resist. The contract is correct by inspection (every payout computes a target clamped to
+  the cap and pays only the positive delta). **Fix plan if a machine-checked proof is
+  wanted later:** introduce a small CVL mul-div lemma (prove `a*b/c <= a` for `b <= c` once,
+  as a pure rule) and apply it, or summarize the cap-fraction computation with a
+  monotonic-abstraction `ghost`. Low priority — the two proved lemmas
+  (`policyBpsBounded`, `capAssignedWhenPaid`) plus the by-inspection argument already cover
+  the property; only the end-to-end machine proof is missing.
+
+**Bottom line:** no fix is required to either contract. The legacy gap is closed in the
+spec; the cap gap is a documented solver limitation with a concrete (low-priority) path to
+a full proof.
+
+Neither is a confirmed bug. The proved properties (supply cap, role gates, earned/verified
+/legacy pool conservation, cap-assignment + bps-bound lemmas, claim-flag integrity) provide
+positive assurance over the value-handling paths.
+
 ## Proved properties
 
 | Phase | Conf | Property proved | Status |

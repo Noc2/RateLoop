@@ -152,6 +152,21 @@ yarn foundry:certora:check
     (stake <= STAKE_AMOUNT), single-use stake return, and exact bounded slash.
   - Phase 7 (`feedback-bonus-escrow.conf`) — **verified**: per-pool remaining <= funded
     (payouts bounded by funding), and a feedback hash is awarded at most once per pool.
+  - Phase 8 (`loop-reputation.conf`) — **verified**: totalSupply <= MAX_SUPPLY, mint is
+    MINTER_ROLE-gated, governance lock is governor-only, transfers respect the lock.
+    (Pins `solc_via_ir=false` — ERC20Votes checkpoint function-pointers crash the prover
+    under IR; the contract needs no IR.)
+  - Phase 10 (`protocol-config.conf`) — **verified**: the address-book setters are
+    role-gated (CONFIG / TREASURY / DEFAULT_ADMIN).
+  - Phase 5b (`launch-distribution-pool-cap.conf`) — **verified (lemmas)**:
+    `policyBpsBounded` + `capAssignedWhenPaid`. Headline paid<=cap deferred (nonlinear
+    SMT) — see `certora-security-findings.md`.
+  - Phase 5c (`launch-distribution-pool-conservation.conf`) — **verified**: earned-rater
+    and verified-referral pool payouts never exceed their funded pools. Legacy-pool sweep
+    deferred.
+  - Phase 4a (`question-reward-escrow-claim.conf`) — **authored, proof deferred**: the
+    claim-flag-never-cleared rule type-checks but the solver exceeds the 15-min window on
+    this large contract; not in CI. Run manually with a larger budget.
   - Verified under certora-cli 8.13.1 / solc 0.8.35 ("No errors found by Prover!").
   - See [`docs/testing/certora-followup.md`](../../../docs/testing/certora-followup.md)
     for the phase plan and [`certora-security-findings.md`](../../../docs/testing/certora-security-findings.md)

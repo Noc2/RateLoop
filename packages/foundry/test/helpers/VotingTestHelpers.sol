@@ -701,8 +701,7 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
 
     mapping(bytes32 => TestRevealPayload) internal testRevealPayloads;
 
-    bytes32 internal constant DEFAULT_DRAND_CHAIN_HASH =
-        TEST_PROTOCOL_CONFIG_DRAND_CHAIN_HASH;
+    bytes32 internal constant DEFAULT_DRAND_CHAIN_HASH = TEST_PROTOCOL_CONFIG_DRAND_CHAIN_HASH;
     uint64 internal constant DEFAULT_DRAND_GENESIS_TIME = TEST_PROTOCOL_CONFIG_DRAND_GENESIS_TIME;
     uint64 internal constant DEFAULT_DRAND_PERIOD = TEST_PROTOCOL_CONFIG_DRAND_PERIOD;
     uint256 internal constant DEFAULT_TLOCK_EPOCH_DURATION = 20 minutes;
