@@ -55,8 +55,7 @@ contract HarnessAdvisoryRecorder is AdvisoryVoteRecorder {
 ///        2. The reference draw (uint256(seed) % revealedLen) is uniformly distributed.
 ///        3. The peer draw excludes the reference and is uniformly distributed over the rest.
 contract AdvisoryRecorderSamplerTest is Test {
-    bytes32 internal constant QUICKNET_CHAIN_HASH =
-        0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
+    bytes32 internal constant QUICKNET_CHAIN_HASH = 0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
     uint64 internal constant QUICKNET_TEST_GENESIS_TIME = 1;
     uint64 internal constant QUICKNET_TEST_PERIOD = 3;
     HarnessAdvisoryRecorder internal recorder;
@@ -88,14 +87,7 @@ contract AdvisoryRecorderSamplerTest is Test {
                     address(protocolConfigImpl),
                     abi.encodeCall(
                         ProtocolConfig.initializeWithDrandConfig,
-                        (
-                            owner,
-                            owner,
-                            owner,
-                            QUICKNET_CHAIN_HASH,
-                            QUICKNET_TEST_GENESIS_TIME,
-                            QUICKNET_TEST_PERIOD
-                        )
+                        (owner, owner, owner, QUICKNET_CHAIN_HASH, QUICKNET_TEST_GENESIS_TIME, QUICKNET_TEST_PERIOD)
                     )
                 )
             )

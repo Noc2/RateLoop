@@ -84,8 +84,7 @@ contract UpgradeTest is Test {
     address public governance = address(2);
     address public attacker = address(999);
     bytes32 internal constant ERC1967_ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
-    bytes32 internal constant QUICKNET_CHAIN_HASH =
-        0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
+    bytes32 internal constant QUICKNET_CHAIN_HASH = 0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
     uint64 internal constant QUICKNET_TEST_GENESIS_TIME = 1;
     uint64 internal constant QUICKNET_TEST_PERIOD = 3;
 
@@ -114,14 +113,7 @@ contract UpgradeTest is Test {
             governance,
             abi.encodeCall(
                 ProtocolConfig.initializeWithDrandConfig,
-                (
-                    admin,
-                    governance,
-                    governance,
-                    QUICKNET_CHAIN_HASH,
-                    QUICKNET_TEST_GENESIS_TIME,
-                    QUICKNET_TEST_PERIOD
-                )
+                (admin, governance, governance, QUICKNET_CHAIN_HASH, QUICKNET_TEST_GENESIS_TIME, QUICKNET_TEST_PERIOD)
             )
         );
         protocolConfig = ProtocolConfig(address(pcProxy));
