@@ -28,6 +28,11 @@ import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import {
+  MAX_QUESTION_DETAILS_TEXT_LENGTH,
+  getQuestionDetailsTextSizeBytes,
+  normalizeQuestionDetailsText,
+} from "~~/lib/attachments/questionDetails.shared";
+import {
   type FeedbackBonusAsset,
   formatFeedbackBonusAmount,
   formatSubmissionRewardAmount,
@@ -128,6 +133,9 @@ type ImageSignatureStep = {
 type QuestionSummary = {
   categoryId: string;
   contextUrl: string;
+  description: string;
+  detailsHash: string;
+  detailsUrl: string;
   tags: string[];
   templateId: string;
   title: string;
@@ -144,6 +152,9 @@ type RoundSettings = {
 type DraftQuestionForm = {
   categoryId: string;
   contextUrl: string;
+  description: string;
+  detailsHash: string;
+  detailsUrl: string;
   tags: string;
   templateId: string;
   title: string;
@@ -169,6 +180,7 @@ type SubmittedContentModalState = {
 };
 
 const SECONDS_PER_MINUTE = 60;
+const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const SINGLE_QUESTION_SUBMISSION_SELECTOR = "0x339aaa84";
 const BUNDLE_QUESTION_SUBMISSION_SELECTOR = "0x4bef7869";
 
@@ -176,6 +188,13 @@ const BOUNTY_AMOUNT_TOOLTIP =
   "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
 const FEEDBACK_BONUS_AMOUNT_TOOLTIP =
   "Optional pool reserved for useful public feedback after settlement. Use up to 6 decimal places.";
+
+type QuestionDetailsReference = {
+  detailsHash: Hex;
+  detailsUrl: string;
+};
+
+type UploadQuestionDetails = (text: string) => Promise<QuestionDetailsReference>;
 
 function DraftFieldLabel({ children, htmlFor, tooltip }: { children: ReactNode; htmlFor: string; tooltip: string }) {
   return (
@@ -273,10 +292,125 @@ function readQuestionTags(value: unknown) {
   return tags.map(tag => readString(tag)).filter(Boolean);
 }
 
+function readQuestionDetailsReference(source: JsonRecord | null | undefined): QuestionDetailsReference | null {
+  if (!source) return null;
+  const detailsUrl = readString(source.detailsUrl);
+  const detailsHash = readString(source.detailsHash);
+  if (!detailsUrl || !/^0x[a-fA-F0-9]{64}$/.test(detailsHash) || detailsHash.toLowerCase() === EMPTY_DETAILS_HASH) {
+    return null;
+  }
+
+  return {
+    detailsHash: detailsHash as Hex,
+    detailsUrl,
+  };
+}
+
+function readNormalizedDraftDescription(value: string) {
+  return value.trim() ? normalizeQuestionDetailsText(value) : "";
+}
+
+function draftQuestionNeedsDetailsUpload(baseQuestion: JsonRecord | undefined, draft: DraftQuestionForm) {
+  const description = draft.description.trim();
+  if (!description) return false;
+
+  const baseDescription = readString(baseQuestion?.description);
+  return description !== baseDescription.trim() || !readQuestionDetailsReference(baseQuestion);
+}
+
+function draftNeedsQuestionDetailsUpload(handoff: Handoff | null, draftForm: DraftForm | null) {
+  if (!handoff || !draftForm) return false;
+
+  const baseQuestions = readQuestionRecords(handoff);
+  return draftForm.questions.some((question, index) =>
+    draftQuestionNeedsDetailsUpload(baseQuestions[index] ?? baseQuestions[0], question),
+  );
+}
+
+function createQuestionDetailsId() {
+  const bytes = new Uint8Array(18);
+  window.crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `det_${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
+}
+
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map(byte => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function uploadQuestionDetailsForHandoff(params: {
+  signMessageAsync: (input: { message: string }) => Promise<Hex>;
+  submitterAddress: Address;
+  text: string;
+}): Promise<QuestionDetailsReference> {
+  const normalizedText = normalizeQuestionDetailsText(params.text);
+  const detailsId = createQuestionDetailsId();
+  const sha256 = await sha256Hex(normalizedText);
+  const sizeBytes = getQuestionDetailsTextSizeBytes(normalizedText);
+  const challengeResponse = await fetch("/api/attachments/details/challenge", {
+    body: JSON.stringify({
+      address: params.submitterAddress,
+      detailsId,
+      sha256,
+      sizeBytes,
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  const challenge = (await challengeResponse.json().catch(() => null)) as {
+    challengeId?: string;
+    error?: string;
+    message?: string;
+  } | null;
+  if (!challengeResponse.ok || !challenge?.challengeId || !challenge.message) {
+    throw new Error(challenge?.error || "Could not prepare description upload.");
+  }
+
+  const signature = await params.signMessageAsync({ message: challenge.message });
+  const uploadResponse = await fetch("/api/attachments/details/upload", {
+    body: JSON.stringify({
+      address: params.submitterAddress,
+      challengeId: challenge.challengeId,
+      detailsId,
+      sha256,
+      signature,
+      sizeBytes,
+      text: normalizedText,
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+  const upload = (await uploadResponse.json().catch(() => null)) as {
+    detailsHash?: string | null;
+    detailsUrl?: string | null;
+    error?: string;
+  } | null;
+  if (
+    !uploadResponse.ok ||
+    !upload?.detailsUrl ||
+    !upload.detailsHash ||
+    !/^0x[a-fA-F0-9]{64}$/.test(upload.detailsHash)
+  ) {
+    throw new Error(upload?.error || "Could not upload description.");
+  }
+
+  return {
+    detailsHash: upload.detailsHash as Hex,
+    detailsUrl: upload.detailsUrl,
+  };
+}
+
 function readQuestionSummaries(handoff: Handoff | null): QuestionSummary[] {
   return readQuestionRecords(handoff).map((question, index) => ({
     categoryId: readDisplayValue(question.categoryId),
     contextUrl: readString(question.contextUrl),
+    description: readString(question.description),
+    detailsHash: readString(question.detailsHash),
+    detailsUrl: readString(question.detailsUrl),
     tags: readQuestionTags(question.tags),
     templateId: readString(question.templateId),
     title: readString(question.title) || `Question ${index + 1}`,
@@ -388,6 +522,9 @@ function createDraftForm(handoff: Handoff): DraftForm {
       ? questions.map(question => ({
           categoryId: question.categoryId,
           contextUrl: question.contextUrl,
+          description: question.description,
+          detailsHash: question.detailsHash,
+          detailsUrl: question.detailsUrl,
           tags: question.tags.join(", "),
           templateId: question.templateId,
           title: question.title,
@@ -397,6 +534,9 @@ function createDraftForm(handoff: Handoff): DraftForm {
           {
             categoryId: "",
             contextUrl: "",
+            description: "",
+            detailsHash: EMPTY_DETAILS_HASH,
+            detailsUrl: "",
             tags: "",
             templateId: "",
             title: readQuestionTitle(handoff),
@@ -531,7 +671,12 @@ function parseTagsInput(value: string) {
     .filter(Boolean);
 }
 
-function applyDraftQuestion(baseQuestion: JsonRecord, draft: DraftQuestionForm, index: number): JsonRecord {
+async function applyDraftQuestion(
+  baseQuestion: JsonRecord,
+  draft: DraftQuestionForm,
+  index: number,
+  uploadQuestionDetails: UploadQuestionDetails,
+): Promise<JsonRecord> {
   const title = draft.title.trim();
   const categoryId = draft.categoryId.trim();
   const tags = parseTagsInput(draft.tags);
@@ -565,14 +710,36 @@ function applyDraftQuestion(baseQuestion: JsonRecord, draft: DraftQuestionForm, 
   } else {
     delete nextQuestion.templateId;
   }
+
+  const description = readNormalizedDraftDescription(draft.description);
+  const baseDescription = readNormalizedDraftDescription(readString(baseQuestion.description));
+  if (description) {
+    nextQuestion.description = description;
+    const currentDetails = readQuestionDetailsReference(baseQuestion);
+    if (description === baseDescription && currentDetails) {
+      nextQuestion.detailsHash = currentDetails.detailsHash;
+      nextQuestion.detailsUrl = currentDetails.detailsUrl;
+    } else {
+      const uploadedDetails = await uploadQuestionDetails(description);
+      nextQuestion.detailsHash = uploadedDetails.detailsHash;
+      nextQuestion.detailsUrl = uploadedDetails.detailsUrl;
+    }
+  } else {
+    delete nextQuestion.description;
+    if (baseDescription) {
+      delete nextQuestion.detailsHash;
+      delete nextQuestion.detailsUrl;
+    }
+  }
   return nextQuestion;
 }
 
-function buildDraftRequestBody(
+async function buildDraftRequestBody(
   handoff: Handoff,
   form: DraftForm,
   roundConfigBounds: QuestionRoundConfigBounds,
-): JsonRecord {
+  uploadQuestionDetails: UploadQuestionDetails,
+): Promise<JsonRecord> {
   const requestBody = structuredClone(handoff.requestBody ?? {}) as JsonRecord;
   const bountyAmount = parseSubmissionRewardAmount(form.bountyAmount);
   if (bountyAmount === null) {
@@ -649,20 +816,29 @@ function buildDraftRequestBody(
   };
 
   if (Array.isArray(requestBody.questions)) {
-    requestBody.questions = requestBody.questions.map((question, index) =>
-      applyDraftQuestion(isJsonRecord(question) ? question : {}, form.questions[index] ?? form.questions[0], index),
-    );
+    const nextQuestions = [];
+    for (const [index, question] of requestBody.questions.entries()) {
+      nextQuestions.push(
+        await applyDraftQuestion(
+          isJsonRecord(question) ? question : {},
+          form.questions[index] ?? form.questions[0],
+          index,
+          uploadQuestionDetails,
+        ),
+      );
+    }
+    requestBody.questions = nextQuestions;
     return requestBody;
   }
 
   if (isJsonRecord(requestBody.question)) {
-    requestBody.question = applyDraftQuestion(requestBody.question, form.questions[0], 0);
+    requestBody.question = await applyDraftQuestion(requestBody.question, form.questions[0], 0, uploadQuestionDetails);
     return requestBody;
   }
 
   return {
     ...requestBody,
-    ...applyDraftQuestion(requestBody, form.questions[0], 0),
+    ...(await applyDraftQuestion(requestBody, form.questions[0], 0, uploadQuestionDetails)),
   };
 }
 
@@ -676,7 +852,7 @@ function readSubmittedContentForShare(handoff: Handoff | null, ask: unknown): Su
     description:
       questions.length > 1
         ? `${questions.length} question bundle. Answer all questions to qualify for the bounty.`
-        : "",
+        : primaryQuestion?.description || "",
     id: contentId,
     lastActivityAt: new Date().toISOString(),
     title: primaryQuestion?.title || readQuestionTitle(handoff),
@@ -864,6 +1040,11 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
   const draftFormJson = useMemo(() => (draftForm ? JSON.stringify(draftForm) : ""), [draftForm]);
   const isDraftDirty = Boolean(draftForm && savedDraftJson && draftFormJson !== savedDraftJson);
+  const draftNeedsDescriptionUpload = useMemo(
+    () => draftNeedsQuestionDetailsUpload(handoff, draftForm),
+    [draftForm, handoff],
+  );
+  const hasUnsavedDraft = isDraftDirty || draftNeedsDescriptionUpload;
   const isTerminalStatus = handoff?.status === "expired" || handoff?.status === "submitted";
   const isFeedbackBonusStep = handoff?.status === "feedback_bonus_prepared";
   const connectedMismatch = Boolean(handoff?.walletAddress && address && !sameAddress(handoff.walletAddress, address));
@@ -875,7 +1056,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const isBusy = isPreparing || isExecuting || isSigningMessage || isSavingDraft || switchingChainId !== null;
   const isDraftEditable = Boolean(handoff && (handoff.status === "pending" || handoff.status === "failed"));
   const canEditDraft = Boolean(isDraftEditable && !isBusy);
-  const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && isDraftDirty && !isBusy);
+  const canSaveDraft = Boolean(handoff && draftForm && isDraftEditable && hasUnsavedDraft && !isBusy);
   const draftRoundMaxDurationMinuteBounds = useMemo(
     () =>
       getRoundMaxDurationMinuteBoundsForBlind(
@@ -891,7 +1072,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       !connectedMismatch &&
       !isTerminalStatus &&
       !isBusy &&
-      !isDraftDirty &&
+      !hasUnsavedDraft &&
       (hasTransactionPlan || (connectedChainId && canPrepareHandoffStatus(handoff.status))),
   );
 
@@ -1072,16 +1253,21 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const handleSaveDraft = useCallback(async () => {
     if (!handoff || !draftForm) return;
     setDraftError(null);
-    let requestBody: JsonRecord;
-    try {
-      requestBody = buildDraftRequestBody(handoff, draftForm, roundConfigBounds);
-    } catch (saveError) {
-      setDraftError(saveError instanceof Error ? saveError.message : "Draft is invalid.");
-      return;
-    }
-
     setIsSavingDraft(true);
     try {
+      const requestBody = await buildDraftRequestBody(handoff, draftForm, roundConfigBounds, async description => {
+        if (!address) {
+          throw new Error("Connect a wallet before saving a description.");
+        }
+        if (handoff.walletAddress && !sameAddress(handoff.walletAddress, address)) {
+          throw new Error("Connected wallet does not match this handoff.");
+        }
+        return uploadQuestionDetailsForHandoff({
+          signMessageAsync,
+          submitterAddress: address,
+          text: description,
+        });
+      });
       const response = await fetch(`/api/agent/handoffs/${handoffId}`, {
         body: JSON.stringify({
           requestBody,
@@ -1099,7 +1285,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     } finally {
       setIsSavingDraft(false);
     }
-  }, [draftForm, handoff, handoffId, roundConfigBounds, token]);
+  }, [address, draftForm, handoff, handoffId, roundConfigBounds, signMessageAsync, token]);
 
   const prepareHandoff = useCallback(async () => {
     if (!address) {
@@ -1114,7 +1300,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       notification.error("Connected wallet does not match this handoff.");
       return null;
     }
-    if (isDraftDirty) {
+    if (hasUnsavedDraft) {
       notification.error("Save the draft before submitting.");
       return null;
     }
@@ -1168,7 +1354,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     connectedChainId,
     connectedMismatch,
     dismissTransactionStatusToast,
-    isDraftDirty,
+    hasUnsavedDraft,
     postPrepare,
     showTransactionSubmittingToast,
     signMessageAsync,
@@ -1293,7 +1479,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       notification.error("Connected wallet does not match this handoff.");
       return;
     }
-    if (isDraftDirty) {
+    if (hasUnsavedDraft) {
       notification.error("Save the draft before submitting.");
       return;
     }
@@ -1310,7 +1496,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     }
 
     await executeHandoff(executableHandoff);
-  }, [address, connectedMismatch, executeHandoff, handoff, isDraftDirty, isFeedbackBonusStep, prepareHandoff]);
+  }, [address, connectedMismatch, executeHandoff, handoff, hasUnsavedDraft, isFeedbackBonusStep, prepareHandoff]);
 
   const handleCloseShareModal = useCallback(() => {
     setSubmittedContent(null);
@@ -1439,7 +1625,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 {handoff.editedByUser ? (
                   <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">Edited</span>
                 ) : null}
-                {isDraftDirty ? <span className="reward-chip px-2 py-0.5 text-xs text-warning">Unsaved</span> : null}
+                {hasUnsavedDraft ? <span className="reward-chip px-2 py-0.5 text-xs text-warning">Unsaved</span> : null}
                 {!isDraftEditable ? (
                   <span className="reward-chip reward-chip-muted px-2 py-0.5 text-xs">Locked</span>
                 ) : null}
@@ -1486,6 +1672,23 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                             value={question.title}
                             onChange={event => updateDraftQuestion(index, { title: event.target.value })}
                           />
+                        </label>
+
+                        <label className="form-control mt-4">
+                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            Description <span className="text-base-content/35">(optional)</span>
+                          </span>
+                          <textarea
+                            className="textarea textarea-bordered mt-1 min-h-28 w-full resize-y"
+                            disabled={!canEditDraft}
+                            maxLength={MAX_QUESTION_DETAILS_TEXT_LENGTH}
+                            placeholder="Add context voters can expand before rating"
+                            value={question.description}
+                            onChange={event => updateDraftQuestion(index, { description: event.target.value })}
+                          />
+                          <span className="mt-1 text-right text-xs text-base-content/45">
+                            {question.description.length}/{MAX_QUESTION_DETAILS_TEXT_LENGTH}
+                          </span>
                         </label>
 
                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
