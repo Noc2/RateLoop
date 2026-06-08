@@ -26,6 +26,15 @@ function isVercelPreviewDeployment(): boolean {
   return process.env.VERCEL_ENV === "preview";
 }
 
+function resolveVercelHostUrl(rawValue: string | undefined): string | undefined {
+  const trimmed = rawValue?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 function normalizeDatabaseUrl(rawUrl: string): string {
   try {
     const parsed = new URL(rawUrl);
@@ -75,6 +84,29 @@ export function resolveAppUrl(
   } catch {
     return null;
   }
+}
+
+export function resolveOptionalAppUrl(options: {
+  rawAppUrl?: string;
+  rawPublicAppUrl?: string;
+  rawVercelEnv?: string;
+  rawVercelProjectProductionUrl?: string;
+  rawVercelUrl?: string;
+  production: boolean;
+  allowLocalhostInProduction?: boolean;
+}): string | undefined {
+  const allowLocalhostInProduction = options.allowLocalhostInProduction ?? false;
+
+  return (
+    resolveAppUrl(options.rawAppUrl ?? options.rawPublicAppUrl, options.production, allowLocalhostInProduction) ??
+    resolveAppUrl(
+      options.rawVercelEnv === "production" ? resolveVercelHostUrl(options.rawVercelProjectProductionUrl) : undefined,
+      options.production,
+      allowLocalhostInProduction,
+    ) ??
+    resolveAppUrl(resolveVercelHostUrl(options.rawVercelUrl), options.production, allowLocalhostInProduction) ??
+    undefined
+  );
 }
 
 export function resolveServerPonderUrl(
@@ -155,10 +187,15 @@ export function getDatabaseConfig() {
 }
 
 export function getOptionalAppUrl(): string | undefined {
-  return (
-    resolveAppUrl(readEnv("APP_URL") ?? readEnv("NEXT_PUBLIC_APP_URL"), isProduction, allowLocalE2EProductionBuild) ??
-    undefined
-  );
+  return resolveOptionalAppUrl({
+    rawAppUrl: readEnv("APP_URL"),
+    rawPublicAppUrl: readEnv("NEXT_PUBLIC_APP_URL"),
+    rawVercelEnv: readEnv("VERCEL_ENV"),
+    rawVercelProjectProductionUrl: readEnv("VERCEL_PROJECT_PRODUCTION_URL"),
+    rawVercelUrl: readEnv("VERCEL_URL"),
+    production: isProduction,
+    allowLocalhostInProduction: allowLocalE2EProductionBuild,
+  });
 }
 
 export function getResendConfig() {
