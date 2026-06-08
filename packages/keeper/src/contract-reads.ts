@@ -354,7 +354,7 @@ export async function readCurrentRoundIds(
   };
 }
 
-export interface RoundLifecycleState {
+interface RoundLifecycleState {
   revealGracePeriod: bigint;
   lastCommitRevealableAfter: bigint;
   cleanupRemaining: bigint;
@@ -391,28 +391,6 @@ export async function readRoundLifecycleState(
     cleanupRemaining: toBigInt(lifecycle?.cleanupRemaining),
     clusterPayoutReadyAt: toBigInt(lifecycle?.clusterPayoutReadyAt),
   };
-}
-
-export async function readRoundRevealGracePeriod(
-  publicClient: Pick<PublicClient, "readContract">,
-  engineAddr: `0x${string}`,
-  contentId: bigint,
-  roundId: bigint,
-): Promise<bigint> {
-  const { revealGracePeriod: snapshot } = await readRoundLifecycleState(
-    publicClient,
-    engineAddr,
-    contentId,
-    roundId,
-  );
-
-  if (snapshot === 0n) {
-    throw new Error(
-      `Missing reveal grace period snapshot for content ${contentId} round ${roundId}`,
-    );
-  }
-
-  return snapshot;
 }
 
 const RPC_BATCH_SIZE = 50;

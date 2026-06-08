@@ -11,7 +11,7 @@ interface CachedCorrelationArtifactRow {
   canonical_json: string;
 }
 
-export interface CachedCorrelationArtifact {
+interface CachedCorrelationArtifact {
   artifactHash: `0x${string}`;
   canonicalJson: string;
 }
