@@ -20,15 +20,28 @@ certora/
     round-voting-engine.conf    Phase 3: RoundVotingEngine
     round-reward-distributor.conf  Phase 3: RoundRewardDistributor
     no-double-claim.conf        Phase 3: cross-contract no-double-claim
+    round-voting-engine-lifecycle.conf  Phase 3b: refund state gates
+    question-reward-escrow.conf Phase 4: QuestionRewardPoolEscrow refunded-pool gate
+    launch-distribution-pool.conf  Phase 5: LaunchDistributionPool verified-bonus single-use
+    frontend-registry.conf      Phase 6: FrontendRegistry stake conservation
+    feedback-bonus-escrow.conf  Phase 7: FeedbackBonusEscrow conservation
   harnesses/
     MathHarness.sol             external wrappers around the internal math libraries
-    RoundVotingEngineHarness.sol  exposes the engine's internal LREP accounting
+    RoundVotingEngineHarness.sol  exposes engine LREP accounting + round/commit state
+    QuestionRewardPoolEscrowHarness.sol  exposes a reward pool's refunded flag
+    FrontendRegistryHarness.sol exposes per-operator stake/operator/slashed scalars
+    FeedbackBonusEscrowHarness.sol  exposes per-pool funded/remaining scalars
   specs/
     Math.spec                   Phase 1 properties (conservation, bounds, monotonicity)
     ClusterPayoutOracle.spec    Phase 2 properties (verifyPayoutWeight, non-reuse, bond)
     RoundVotingEngine.spec      Phase 3 properties (transferReward accounting/auth)
     RoundRewardDistributor.spec Phase 3 properties (claim-flag integrity)
     NoDoubleClaim.spec          Phase 3 cross-contract no-double-claim
+    RoundVotingEngineLifecycle.spec  Phase 3b refund state gates
+    QuestionRewardPoolEscrow.spec  Phase 4 refunded-pool claim gate
+    LaunchDistributionPool.spec Phase 5 verified-bonus single-use
+    FrontendRegistry.spec       Phase 6 stake conservation
+    FeedbackBonusEscrow.spec    Phase 7 conservation + single-award
 ```
 
 `confs/base.conf` carries the compiler settings only. Each target conf inherits
@@ -121,7 +134,28 @@ yarn foundry:certora:check
     reverts), and a successful claim records the commit flag. Spans the distributor
     (claim gate) and the engine (payout). See `NoDoubleClaim.spec` for the
     deterministic-resolution modeling note.
+  - Phase 3b (`round-voting-engine-lifecycle.conf`) — **verified (refund gates)**:
+    `claimCancelledRoundRefund` reverts on Open and on Settled rounds (refunds only in
+    terminal-but-not-settled states). Lifecycle monotonicity and single-use refund stay
+    deferred — see `RoundVotingEngineLifecycle.spec` and
+    `docs/testing/certora-security-findings.md` for the via_ir tooling reasons.
+  - Phase 4 (`question-reward-escrow.conf`) — **authored, proof deferred**: the spec
+    (a refunded reward pool rejects claims) compiles and type-checks, but the solver run
+    exceeds certora-cli's 15-minute no-output window on this 1,490-line + 11-library
+    contract, so it is **not** in the CI matrix. Run manually with a longer prover budget.
+    Per-commit no-double-claim and snapshot claimed<=allocation stay deferred
+    (internal-resolution + contract size). See `certora-security-findings.md`.
+  - Phase 5 (`launch-distribution-pool.conf`) — **verified (first slice)**: the launch
+    verified-bonus is single-use per account; a claim records the account flag. The
+    per-rater paid<=cap invariant stays deferred (true but not self-inductive).
+  - Phase 6 (`frontend-registry.conf`) — **verified**: no overstaking
+    (stake <= STAKE_AMOUNT), single-use stake return, and exact bounded slash.
+  - Phase 7 (`feedback-bonus-escrow.conf`) — **verified**: per-pool remaining <= funded
+    (payouts bounded by funding), and a feedback hash is awarded at most once per pool.
   - Verified under certora-cli 8.13.1 / solc 0.8.35 ("No errors found by Prover!").
+  - See [`docs/testing/certora-followup.md`](../../../docs/testing/certora-followup.md)
+    for the phase plan and [`certora-security-findings.md`](../../../docs/testing/certora-security-findings.md)
+    for verification results and deferral reasons.
 - `.certora_internal/` (prover scratch output) is git-ignored.
 - `RatingMath`'s logit/sigmoid paths use PRBMath `SD59x18` (`exp`/`ln`) and are out
   of scope for Phase 1; only its integer helpers are wrapped here.
