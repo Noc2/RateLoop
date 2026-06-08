@@ -7,6 +7,22 @@ evidence changes it. The plan in [`certora-followup.md`](./certora-followup.md) 
 holds for *what* to prove; this doc is about *how* to unblock the parts that were parked
 as "tooling-limited," plus the cheapest new wins.
 
+## Implementation status (round 2, 2026-06-08)
+
+Tracks B–G below were implemented (everything except Track A, which needs a Certora
+escalation). Verified slices, with deferrals recorded in
+[`certora-security-findings.md`](./certora-security-findings.md):
+
+| Track | Outcome |
+|---|---|
+| **E — LoopReputation** | ✅ supply cap (self-inductive), mint/lock access control, lock-respecting transfers. Pinned `solc_via_ir=false` (ERC20Votes checkpoint function-pointers crash the prover under IR). |
+| **E — ProtocolConfig** | ✅ six address-book setters are role-gated (CONFIG/TREASURY/DEFAULT_ADMIN). |
+| **B — LaunchDistributionPool cap** | ◑ `policyBpsBounded` + `capAssignedWhenPaid` proved; headline `paid<=cap` deferred (nonlinear `fullCap*bps/10000<=fullCap` is beyond the SMT backend). |
+| **C — LaunchDistributionPool conservation** | ◑ earned-rater + verified-referral pool conservation proved; legacy-pool sweep deferred. |
+| **D — QuestionRewardPoolEscrow no-double-claim** | ◑ authored (claim-flag-never-cleared, resolution-free); solver exceeds the 15-min window even with splitting flags → excluded from CI, run manually. |
+| **F — port Foundry invariants** | ✅ already covered: the InvariantRating bounds (`rating<=100`, up-majority`>=50`) are proved in `Math.spec` (`ratingWithinBounds`, `ratingUpMajorityAtLeastNeutral`, `ratingDownMajorityAtMostNeutral`). InvariantSolvency C-02/C-03 stay deferred (cross-contract, multi-tx). |
+| **G — CI + tooling** | ✅ the four new green confs added to the CI matrix; QRPE confs excluded with a note. |
+
 ## TL;DR recommendation
 
 This round started from a research lead that the certora-cli flags

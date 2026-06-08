@@ -40,6 +40,13 @@ jobs:
           - certora/confs/launch-distribution-pool.conf
           - certora/confs/frontend-registry.conf
           - certora/confs/feedback-bonus-escrow.conf
+          - certora/confs/loop-reputation.conf
+          - certora/confs/protocol-config.conf
+          - certora/confs/launch-distribution-pool-cap.conf
+          - certora/confs/launch-distribution-pool-conservation.conf
+          # NOTE: question-reward-escrow.conf and question-reward-escrow-claim.conf are
+          # intentionally excluded — both exceed certora-cli's 15-minute output window on
+          # this 1,490-line + 11-library contract. Run them manually with a larger budget.
     name: ${{ matrix.conf }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
