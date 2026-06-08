@@ -22,6 +22,7 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
+import { useTermsAcceptance } from "~~/contexts/TermsAcceptanceContext";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
@@ -936,6 +937,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const { dismiss: dismissTransactionStatusToast, showSubmitting: showTransactionSubmittingToast } =
     useTransactionStatusToast();
+  const { requireAcceptance } = useTermsAcceptance();
   const [token] = useState(readToken);
   const [handoff, setHandoff] = useState<Handoff | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1474,6 +1476,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       return;
     }
 
+    const accepted = await requireAcceptance("submit");
+    if (!accepted) return;
+
     let executableHandoff = handoff;
     if (!executableHandoff.transactionPlan?.calls?.length) {
       if (isFeedbackBonusStep) {
@@ -1486,7 +1491,16 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     }
 
     await executeHandoff(executableHandoff);
-  }, [address, connectedMismatch, executeHandoff, handoff, hasUnsavedDraft, isFeedbackBonusStep, prepareHandoff]);
+  }, [
+    address,
+    connectedMismatch,
+    executeHandoff,
+    handoff,
+    hasUnsavedDraft,
+    isFeedbackBonusStep,
+    prepareHandoff,
+    requireAcceptance,
+  ]);
 
   const handleCloseShareModal = useCallback(() => {
     setSubmittedContent(null);
