@@ -3,6 +3,7 @@
 import React from "react";
 import dynamic from "next/dynamic";
 import { GenericLinkCard } from "./embeds";
+import { ContentImageLightbox } from "~~/components/shared/ContentImageLightbox";
 import { ExternalLinkBehaviorProvider, SafeExternalLink } from "~~/components/shared/SafeExternalLink";
 import { isUploadedImageUrl } from "~~/lib/contentMedia";
 import { detectPlatform } from "~~/utils/platforms";
@@ -29,6 +30,9 @@ interface ContentEmbedProps {
   imageFit?: "cover" | "contain";
   imageLinkUrl?: string | null;
   onImageLinkClick?: React.MouseEventHandler<HTMLElement>;
+  enableImageLightbox?: boolean;
+  imageLightboxTriggerLabel?: string;
+  imageLightboxModalLabel?: string;
 }
 
 /** Error boundary that catches render errors in embed components and falls back to a link card. */
@@ -68,6 +72,9 @@ export function ContentEmbed({
   imageFit = "cover",
   imageLinkUrl,
   onImageLinkClick,
+  enableImageLightbox = false,
+  imageLightboxTriggerLabel,
+  imageLightboxModalLabel,
 }: ContentEmbedProps) {
   if (!url?.trim()) {
     return (
@@ -95,14 +102,24 @@ export function ContentEmbed({
   const platformInfo = detectPlatform(url);
 
   if (isUploadedImageUrl(url)) {
-    const image = (
-      <img
-        src={url}
-        alt={title || "Question media"}
-        className={`h-full w-full ${imageFit === "contain" ? "object-contain" : "object-cover"}`}
-        loading={isActive ? "eager" : "lazy"}
-      />
-    );
+    const imageAlt = title || "Question media";
+    const imageClassName = `h-full w-full ${imageFit === "contain" ? "object-contain" : "object-cover"}`;
+
+    if (enableImageLightbox) {
+      return (
+        <ContentImageLightbox
+          src={url}
+          alt={imageAlt}
+          imageClassName={imageClassName}
+          loading={isActive ? "eager" : "lazy"}
+          triggerLabel={imageLightboxTriggerLabel}
+          modalLabel={imageLightboxModalLabel}
+          modalImageClassName="sm:max-w-[92vw]"
+        />
+      );
+    }
+
+    const image = <img src={url} alt={imageAlt} className={imageClassName} loading={isActive ? "eager" : "lazy"} />;
 
     if (imageLinkUrl?.trim()) {
       return (
