@@ -1374,9 +1374,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
   const executeHandoff = useCallback(
     async (targetHandoff: Handoff) => {
-      const calls = targetHandoff.transactionPlan?.calls ?? [];
       const isExecutingFeedbackBonus = targetHandoff.status === "feedback_bonus_prepared";
-      if (!calls.length) {
+      if (!(targetHandoff.transactionPlan?.calls ?? []).length) {
         notification.error(
           isExecutingFeedbackBonus
             ? "Feedback Bonus funding is not prepared yet."
@@ -1394,71 +1393,104 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       }
 
       setIsExecuting(true);
-      showTransactionSubmittingToast({ action: isExecutingFeedbackBonus ? "Feedback Bonus" : "ask" });
       setError(null);
-      const hashes: Hex[] = [];
+      setSubmittedContent(null);
 
       try {
-        if (targetHandoff.chainId && connectedChainId !== targetHandoff.chainId) {
-          await switchToChain(targetHandoff.chainId);
-        }
+        let activeChainId = connectedChainId;
+        let currentHandoff = targetHandoff;
+        let submittedContentForShare: SubmittedContentModalState | null = null;
 
-        const handoffChainId = targetHandoff.chainId ?? undefined;
-        const questionSubmissionCall = findHandoffQuestionSubmissionCall(calls);
-        if (questionSubmissionCall) {
-          const publicClient = getPublicClient(
-            wagmiConfig,
-            handoffChainId === undefined ? undefined : { chainId: handoffChainId },
-          );
-          await assertContentRegistryQuestionSubmissionSelector(
-            publicClient,
-            questionSubmissionCall.to,
-            questionSubmissionCall.kind,
-          );
-        }
-
-        for (const [index, call] of calls.entries()) {
-          const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
-          const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
-          const value = assertZeroValue(call.value, `transactionPlan.calls[${index}].value`);
-          const hash = await sendTransaction(wagmiConfig, { chainId: handoffChainId, data, to, value });
-          hashes.push(hash);
-          await waitForTransactionReceipt(wagmiConfig, { chainId: handoffChainId, hash });
-          if (call.waitAfterMs && call.waitAfterMs > 0) {
-            await delay(call.waitAfterMs);
+        while (true) {
+          const calls = currentHandoff.transactionPlan?.calls ?? [];
+          const isFundingFeedbackBonus = currentHandoff.status === "feedback_bonus_prepared";
+          if (!calls.length) {
+            throw new Error(
+              isFundingFeedbackBonus
+                ? "Feedback Bonus funding is not prepared yet."
+                : "This ask could not prepare wallet calls.",
+            );
           }
-        }
 
-        const response = await fetch(`/api/agent/handoffs/${handoffId}/complete`, {
-          body: JSON.stringify({ token, transactionHashes: hashes }),
-          headers: { "content-type": "application/json" },
-          method: "POST",
-        });
-        const body = (await response.json()) as CompleteResponse | { error?: string; message?: string };
-        if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
-        const nextHandoff = body as CompleteResponse;
-        setHandoff(current => ({
-          ...nextHandoff,
-          publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? null,
-        }));
-        if (
-          !isExecutingFeedbackBonus &&
-          (nextHandoff.status === "submitted" || nextHandoff.status === "feedback_bonus_prepared")
-        ) {
-          const nextSubmittedContent = readSubmittedContentForShare(targetHandoff, nextHandoff.ask);
-          if (nextSubmittedContent) {
-            setSubmittedContent(nextSubmittedContent);
+          showTransactionSubmittingToast(
+            isFundingFeedbackBonus
+              ? {
+                  description: "Approve the Feedback Bonus wallet calls so raters can see the bonus.",
+                  title: "Funding Feedback Bonus",
+                }
+              : { action: "ask" },
+          );
+
+          if (currentHandoff.chainId && activeChainId !== currentHandoff.chainId) {
+            await switchToChain(currentHandoff.chainId);
+            activeChainId = currentHandoff.chainId;
           }
-        }
-        if (nextHandoff.status === "feedback_bonus_prepared") {
+
+          const handoffChainId = currentHandoff.chainId ?? undefined;
+          const questionSubmissionCall = findHandoffQuestionSubmissionCall(calls);
+          if (questionSubmissionCall) {
+            const publicClient = getPublicClient(
+              wagmiConfig,
+              handoffChainId === undefined ? undefined : { chainId: handoffChainId },
+            );
+            await assertContentRegistryQuestionSubmissionSelector(
+              publicClient,
+              questionSubmissionCall.to,
+              questionSubmissionCall.kind,
+            );
+          }
+
+          const hashes: Hex[] = [];
+          for (const [index, call] of calls.entries()) {
+            const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
+            const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
+            const value = assertZeroValue(call.value, `transactionPlan.calls[${index}].value`);
+            const hash = await sendTransaction(wagmiConfig, { chainId: handoffChainId, data, to, value });
+            hashes.push(hash);
+            await waitForTransactionReceipt(wagmiConfig, { chainId: handoffChainId, hash });
+            if (call.waitAfterMs && call.waitAfterMs > 0) {
+              await delay(call.waitAfterMs);
+            }
+          }
+
+          const response = await fetch(`/api/agent/handoffs/${handoffId}/complete`, {
+            body: JSON.stringify({ token, transactionHashes: hashes }),
+            headers: { "content-type": "application/json" },
+            method: "POST",
+          });
+          const body = (await response.json()) as CompleteResponse | { error?: string; message?: string };
+          if (!response.ok) throw new Error(readResponseError(body, "Failed to confirm RateLoop ask."));
+          const nextHandoff = body as CompleteResponse;
+          const nextPublicUrl = nextHandoff.publicUrl ?? currentHandoff.publicUrl ?? null;
+          const nextHandoffWithPublicUrl = {
+            ...nextHandoff,
+            publicUrl: nextPublicUrl,
+          };
+          setHandoff(current => ({
+            ...nextHandoff,
+            publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? currentHandoff.publicUrl ?? null,
+          }));
+
+          if (!isFundingFeedbackBonus) {
+            submittedContentForShare =
+              readSubmittedContentForShare(currentHandoff, nextHandoff.ask) ?? submittedContentForShare;
+          }
+
+          if (!isFundingFeedbackBonus && nextHandoff.status === "feedback_bonus_prepared") {
+            currentHandoff = nextHandoffWithPublicUrl;
+            continue;
+          }
+
           dismissTransactionStatusToast();
-          notification.success("Ask submitted. Feedback Bonus funding is ready.");
-        } else if (isExecutingFeedbackBonus) {
-          dismissTransactionStatusToast();
-          notification.success("Feedback Bonus funded.");
-        } else {
-          dismissTransactionStatusToast();
-          notification.success("Ask submitted to RateLoop.");
+          if (isFundingFeedbackBonus) {
+            notification.success("Ask submitted and Feedback Bonus funded.");
+          } else {
+            notification.success("Ask submitted to RateLoop.");
+          }
+          if (nextHandoff.status === "submitted" && submittedContentForShare) {
+            setSubmittedContent(submittedContentForShare);
+          }
+          break;
         }
       } catch (executeError) {
         dismissTransactionStatusToast();
@@ -1942,7 +1974,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 <h2 className="text-lg font-semibold">{isFeedbackBonusStep ? "Fund Feedback Bonus" : "Submit Ask"}</h2>
                 {isFeedbackBonusStep ? (
                   <p className="mt-1 text-sm text-base-content/60">
-                    The question is submitted. Fund the optional Feedback Bonus with the connected wallet.
+                    The question is submitted, but raters will not see the Feedback Bonus until these wallet calls are
+                    funded.
                   </p>
                 ) : null}
               </div>
@@ -1975,7 +2008,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
               </div>
             </div>
 
-            {handoff.publicUrl ? (
+            {handoff.publicUrl && !isFeedbackBonusStep ? (
               <Link className="btn btn-outline btn-sm mt-4" href={handoff.publicUrl}>
                 View public result
               </Link>
