@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   createThirdwebInAppWallet,
   getThirdwebWalletIds,
+  getThirdwebWalletSmartAccountOptions,
+  getThirdwebWalletSponsorshipMode,
   getThirdwebWallets,
   isThirdwebInAppWalletId,
   shouldIncludeThirdwebWalletAuthOption,
@@ -69,6 +71,29 @@ test("createThirdwebInAppWallet uses the RateLoop login hero for wallet branding
     src: "/thirdweb-login-hero.svg",
     width: 288,
   });
+});
+
+test("createThirdwebInAppWallet enables sponsored smart accounts on World Chain Sepolia", () => {
+  const wallet = createThirdwebInAppWallet(4801);
+  const config = wallet.getConfig() as {
+    executionMode?: { mode?: string; smartAccount?: { chain?: { id?: number }; sponsorGas?: boolean } };
+    smartAccount?: { chain?: { id?: number }; sponsorGas?: boolean };
+  };
+
+  assert.equal(config.executionMode?.mode, "EIP4337");
+  assert.equal(config.executionMode?.smartAccount?.chain?.id, 4801);
+  assert.equal(config.executionMode?.smartAccount?.sponsorGas, true);
+  assert.equal(config.smartAccount?.chain?.id, 4801);
+  assert.equal(config.smartAccount?.sponsorGas, true);
+  assert.equal(getThirdwebWalletSponsorshipMode(wallet), "sponsored");
+});
+
+test("getThirdwebWalletSmartAccountOptions exposes Sepolia smart account options for the wagmi bridge", () => {
+  const smartAccount = getThirdwebWalletSmartAccountOptions(4801, { sponsorshipMode: "self-funded" });
+
+  assert.equal(smartAccount?.chain.id, 4801);
+  assert.equal(smartAccount && "sponsorGas" in smartAccount ? smartAccount.sponsorGas : undefined, false);
+  assert.equal(getThirdwebWalletSmartAccountOptions(480), undefined);
 });
 
 test("getThirdwebWallets keeps wallet auth inside in-app wallet when no branded injected wallet exists", () => {

@@ -4,6 +4,7 @@ import { getThirdwebWalletAuthConfig } from "~~/services/thirdweb/auth";
 import {
   getPreferredThirdwebChainId,
   getThirdwebWalletExecutionMode,
+  getThirdwebWalletSmartAccountOptions,
   thirdwebClient,
 } from "~~/services/thirdweb/client";
 import { setConnectedThirdwebConnectorWallet } from "~~/services/thirdweb/connectorWalletState";
@@ -47,12 +48,14 @@ export const wagmiConnectors = () => {
 
   if (thirdwebClient) {
     const preferredChainId = getPreferredThirdwebChainId();
+    const executionMode = getThirdwebWalletExecutionMode(preferredChainId);
+    const smartAccount = getThirdwebWalletSmartAccountOptions(preferredChainId);
 
     connectors.push(
       inAppWalletConnector({
         auth: getThirdwebWalletAuthConfig(),
         client: thirdwebClient,
-        executionMode: getThirdwebWalletExecutionMode(preferredChainId),
+        executionMode,
         metadata: {
           icon: RATELOOP_THIRDWEB_ICON,
           name: "RateLoop Wallet",
@@ -60,6 +63,7 @@ export const wagmiConnectors = () => {
         onConnect: wallet => {
           setConnectedThirdwebConnectorWallet(wallet);
         },
+        ...(smartAccount ? { smartAccount } : {}),
       }),
     );
   }

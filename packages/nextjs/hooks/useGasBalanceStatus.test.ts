@@ -86,14 +86,14 @@ test("hides free transaction allowance on unsupported chains", () => {
   );
 });
 
-test("hides free transaction allowance for in-app wallets on World Chain Sepolia", () => {
+test("shows free transaction allowance for in-app wallets on World Chain Sepolia", () => {
   assert.equal(
     shouldShowFreeTransactionAllowance({
       chainId: 4801,
       connectorId: "in-app-wallet",
       isThirdwebInApp: true,
     }),
-    false,
+    true,
   );
 });
 
