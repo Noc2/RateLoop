@@ -3,7 +3,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress } from "viem";
 import { useAccount, useConfig } from "wagmi";
 import { getPublicClient, sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
@@ -222,7 +221,7 @@ function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function readToken(searchParams: URLSearchParams) {
+function readToken() {
   if (typeof window !== "undefined") {
     const hash = window.location.hash;
     if (hash) {
@@ -231,7 +230,7 @@ function readToken(searchParams: URLSearchParams) {
       if (fromHash) return fromHash;
     }
   }
-  return searchParams.get("token") ?? "";
+  return "";
 }
 
 function isJsonRecord(value: unknown): value is JsonRecord {
@@ -938,14 +937,13 @@ function canPrepareHandoffStatus(status: string | undefined) {
 }
 
 export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
-  const searchParams = useSearchParams();
   const wagmiConfig = useConfig();
   const { address, chain, chainId } = useAccount();
   const { signMessageAsync, isPending: isSigningMessage } = useWalletMessageSigner({ address });
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
   const { dismiss: dismissTransactionStatusToast, showSubmitting: showTransactionSubmittingToast } =
     useTransactionStatusToast();
-  const [token] = useState(() => readToken(searchParams));
+  const [token] = useState(readToken);
   const [handoff, setHandoff] = useState<Handoff | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPreparing, setIsPreparing] = useState(false);
@@ -994,10 +992,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const hasTokenInQuery = window.location.search.includes("token=");
     const hasTokenInHash = window.location.hash.includes("token=");
-    if (!hasTokenInQuery && !hasTokenInHash) return;
-    window.history.replaceState(null, "", window.location.pathname);
+    if (!hasTokenInHash) return;
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
   }, []);
 
   const loadHandoff = useCallback(async () => {
