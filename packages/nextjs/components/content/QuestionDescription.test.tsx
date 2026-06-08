@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { MAX_QUESTION_DETAILS_TEXT_BYTES } from "~~/lib/attachments/questionDetails.shared";
+import { resolveQuestionDetailsFetchUrl } from "~~/lib/attachments/questionDetailsUrls";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -52,4 +53,38 @@ test("readQuestionDetailsResponseText rejects streamed details above the byte ca
   const response = new Response("a".repeat(MAX_QUESTION_DETAILS_TEXT_BYTES + 1));
 
   await assert.rejects(readQuestionDetailsResponseText(response), /Details are too large/);
+});
+
+test("resolveQuestionDetailsFetchUrl rewrites RateLoop details URLs to same-origin paths", () => {
+  assert.equal(
+    resolveQuestionDetailsFetchUrl(
+      "https://rateloop.ai/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh",
+      "https://www.rateloop.ai",
+    ),
+    "/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh",
+  );
+  assert.equal(
+    resolveQuestionDetailsFetchUrl(
+      "https://www.rateloop.ai/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh",
+      "https://rateloop.ai",
+    ),
+    "/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh",
+  );
+});
+
+test("resolveQuestionDetailsFetchUrl leaves external and preview details URLs unchanged", () => {
+  assert.equal(
+    resolveQuestionDetailsFetchUrl(
+      "https://rateloop.ai/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh",
+      "https://rate-loop-nextjs-git-main-noc2-6281s-projects.vercel.app",
+    ),
+    "https://rateloop.ai/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh",
+  );
+  assert.equal(
+    resolveQuestionDetailsFetchUrl(
+      "https://evil.example/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh",
+      "https://www.rateloop.ai",
+    ),
+    "https://evil.example/api/attachments/details/det_5AGUshsagKf6qq6hUWV-s3Bh",
+  );
 });
