@@ -25,6 +25,7 @@ import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHead
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
+import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import {
   type FeedbackBonusAsset,
@@ -116,11 +117,6 @@ type PrepareResponse = Handoff & {
 type CompleteResponse = Handoff & {
   ask?: JsonRecord | null;
   nextAction?: string;
-};
-
-type ExecutionStep = {
-  hash?: string;
-  status: "pending" | "sent" | "confirmed";
 };
 
 type ImageSignatureStep = {
@@ -771,6 +767,8 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const { address, chain, chainId } = useAccount();
   const { signMessageAsync, isPending: isSigningMessage } = useWalletMessageSigner({ address });
   const { switchToChain, switchingChainId } = useRateLoopSwitchNetwork();
+  const { dismiss: dismissTransactionStatusToast, showSubmitting: showTransactionSubmittingToast } =
+    useTransactionStatusToast();
   const [token] = useState(() => readToken(searchParams));
   const [handoff, setHandoff] = useState<Handoff | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -782,7 +780,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
   const [draftForm, setDraftForm] = useState<DraftForm | null>(null);
   const [savedDraftJson, setSavedDraftJson] = useState("");
   const [draftSourceKey, setDraftSourceKey] = useState("");
-  const [steps, setSteps] = useState<ExecutionStep[]>([]);
   const [imageSignatureSteps, setImageSignatureSteps] = useState<ImageSignatureStep[]>([]);
   const [submittedContent, setSubmittedContent] = useState<SubmittedContentModalState | null>(null);
   const boundsChainId = handoff?.chainId ?? chain?.id ?? chainId;
@@ -1123,7 +1120,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     }
 
     setIsPreparing(true);
-    setSteps([]);
+    showTransactionSubmittingToast({
+      description: "Approve the wallet request to continue.",
+      title: "Preparing ask",
+    });
     setImageSignatureSteps([]);
     setError(null);
     try {
@@ -1161,8 +1161,18 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       return null;
     } finally {
       setIsPreparing(false);
+      dismissTransactionStatusToast();
     }
-  }, [address, connectedChainId, connectedMismatch, isDraftDirty, postPrepare, signMessageAsync]);
+  }, [
+    address,
+    connectedChainId,
+    connectedMismatch,
+    dismissTransactionStatusToast,
+    isDraftDirty,
+    postPrepare,
+    showTransactionSubmittingToast,
+    signMessageAsync,
+  ]);
 
   const executeHandoff = useCallback(
     async (targetHandoff: Handoff) => {
@@ -1186,10 +1196,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       }
 
       setIsExecuting(true);
+      showTransactionSubmittingToast({ action: isExecutingFeedbackBonus ? "Feedback Bonus" : "ask" });
       setError(null);
       const hashes: Hex[] = [];
-      const nextSteps: ExecutionStep[] = calls.map(() => ({ status: "pending" }));
-      setSteps(nextSteps);
 
       try {
         if (targetHandoff.chainId && connectedChainId !== targetHandoff.chainId) {
@@ -1216,13 +1225,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           const value = assertZeroValue(call.value, `transactionPlan.calls[${index}].value`);
           const hash = await sendTransaction(wagmiConfig, { chainId: handoffChainId, data, to, value });
           hashes.push(hash);
-          setSteps(current =>
-            current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "sent" } : step)),
-          );
           await waitForTransactionReceipt(wagmiConfig, { chainId: handoffChainId, hash });
-          setSteps(current =>
-            current.map((step, stepIndex) => (stepIndex === index ? { ...step, hash, status: "confirmed" } : step)),
-          );
           if (call.waitAfterMs && call.waitAfterMs > 0) {
             await delay(call.waitAfterMs);
           }
@@ -1240,7 +1243,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           ...nextHandoff,
           publicUrl: nextHandoff.publicUrl ?? current?.publicUrl ?? null,
         }));
-        setSteps([]);
         if (
           !isExecutingFeedbackBonus &&
           (nextHandoff.status === "submitted" || nextHandoff.status === "feedback_bonus_prepared")
@@ -1251,19 +1253,34 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
           }
         }
         if (nextHandoff.status === "feedback_bonus_prepared") {
+          dismissTransactionStatusToast();
           notification.success("Ask submitted. Feedback Bonus funding is ready.");
         } else if (isExecutingFeedbackBonus) {
+          dismissTransactionStatusToast();
           notification.success("Feedback Bonus funded.");
         } else {
+          dismissTransactionStatusToast();
           notification.success("Ask submitted to RateLoop.");
         }
       } catch (executeError) {
+        dismissTransactionStatusToast();
         setError(executeError instanceof Error ? executeError.message : "Failed to execute wallet calls.");
       } finally {
         setIsExecuting(false);
+        dismissTransactionStatusToast();
       }
     },
-    [address, connectedChainId, connectedMismatch, handoffId, switchToChain, token, wagmiConfig],
+    [
+      address,
+      connectedChainId,
+      connectedMismatch,
+      dismissTransactionStatusToast,
+      handoffId,
+      showTransactionSubmittingToast,
+      switchToChain,
+      token,
+      wagmiConfig,
+    ],
   );
 
   const handleSubmitAsk = useCallback(async () => {
@@ -1306,17 +1323,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     if (isFeedbackBonusStep) return isExecuting ? "Funding..." : "Fund Bonus";
     return isExecuting ? "Submitting..." : "Submit";
   })();
-  const confirmedStepCount = steps.filter(step => step.status === "confirmed").length;
-  const progressLabel =
-    steps.length > 0
-      ? confirmedStepCount === steps.length
-        ? "Wallet calls confirmed."
-        : `Confirming wallet call ${Math.min(confirmedStepCount + 1, steps.length)} of ${steps.length}.`
-      : isPreparing || isSigningMessage
-        ? "Preparing the ask in your wallet."
-        : isDraftDirty
-          ? "Save the draft before submitting."
-          : null;
 
   const questionSummaries = readQuestionSummaries(handoff);
   const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
@@ -1750,8 +1756,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 </GradientActionButton>
               </div>
             </div>
-
-            {progressLabel ? <p className="mt-4 text-sm text-base-content/60">{progressLabel}</p> : null}
 
             {handoff.publicUrl ? (
               <Link className="btn btn-outline btn-sm mt-4" href={handoff.publicUrl}>
