@@ -10,16 +10,15 @@
  * clamps to (or reverts above) the remaining pool, so each bound is a self-inductive
  * invariant:
  *
- *   earnedRaterDistributed       <= EARNED_RATER_POOL_AMOUNT
- *   verifiedReferralDistributed  <= VERIFIED_REFERRAL_POOL_AMOUNT
+ *   earnedRaterDistributed                  <= EARNED_RATER_POOL_AMOUNT
+ *   verifiedReferralDistributed             <= VERIFIED_REFERRAL_POOL_AMOUNT
+ *   legacyContributorDistributed            <= LEGACY_CONTRIBUTOR_POOL_AMOUNT
+ *   legacyContributorTreasuryRecovered      <= legacyContributorAllocationTotal (<= pool)
  *
- * (Two notes. (1) An earlier attempt also tied Σ raterLaunchPaid to
- * earnedRaterDistributed via a ghost+hook; that equality is fragile under the SafeERC20
- * external calls that havoc a non-persistent ghost, and is not needed — the distributed
- * counter already IS the aggregate sum, so the scalar invariants below carry the
- * property. (2) The legacy pool's combined `distributed + treasuryRecovered <= pool`
- * bound resisted on sweepExpiredLegacyContributorAllocationToTreasury and is left
- * deferred — the sweep's reachable-state relationship needs an auxiliary invariant.)
+ * (An earlier attempt also tied Σ raterLaunchPaid to earnedRaterDistributed via a
+ * ghost+hook; that equality is fragile under the SafeERC20 external calls that havoc a
+ * non-persistent ghost, and is not needed — the distributed counter already IS the
+ * aggregate sum, so the scalar invariants below carry the property.)
  */
 
 methods {
@@ -27,6 +26,7 @@ methods {
     function verifiedReferralDistributed() external returns (uint256) envfree;
     function legacyContributorDistributed() external returns (uint256) envfree;
     function legacyContributorTreasuryRecovered() external returns (uint256) envfree;
+    function legacyContributorAllocationTotal() external returns (uint256) envfree;
     function EARNED_RATER_POOL_AMOUNT() external returns (uint256) envfree;
     function VERIFIED_REFERRAL_POOL_AMOUNT() external returns (uint256) envfree;
     function LEGACY_CONTRIBUTOR_POOL_AMOUNT() external returns (uint256) envfree;
@@ -48,3 +48,30 @@ invariant earnedRaterPoolConserved()
 // Verified-referral pool: total paid never exceeds the funded pool.
 invariant verifiedReferralPoolConserved()
     to_mathint(verifiedReferralDistributed()) <= to_mathint(VERIFIED_REFERRAL_POOL_AMOUNT());
+
+// Legacy pool (revisited). The claim and sweep paths bound against
+// legacyContributorAllocationTotal, which setLegacyContributorRoot pins to exactly
+// LEGACY_CONTRIBUTOR_POOL_AMOUNT (it reverts otherwise and is write-once). So the legacy
+// conservation splits cleanly into three self-inductive invariants:
+invariant legacyAllocationTotalBounded()
+    to_mathint(legacyContributorAllocationTotal()) <= to_mathint(LEGACY_CONTRIBUTOR_POOL_AMOUNT());
+
+invariant legacyDistributedWithinAllocation()
+    to_mathint(legacyContributorDistributed()) <= to_mathint(legacyContributorAllocationTotal());
+
+invariant legacyRecoveredWithinAllocation()
+    to_mathint(legacyContributorTreasuryRecovered()) <= to_mathint(legacyContributorAllocationTotal());
+
+// Combined, neither the distributed total nor the swept-to-treasury total individually
+// exceeds the 9M legacy pool. (The TIGHT bound `distributed + recovered <= pool` holds in
+// the contract — claims require an open window and the sweep a closed one, so they never
+// overlap — but is not a storage-only invariant: it needs the temporal claim/sweep
+// exclusivity, which CVL cannot express without multi-tx/time modeling. Left deferred.)
+invariant legacyDistributedWithinPool()
+    to_mathint(legacyContributorDistributed()) <= to_mathint(LEGACY_CONTRIBUTOR_POOL_AMOUNT())
+    {
+        preserved {
+            requireInvariant legacyAllocationTotalBounded();
+            requireInvariant legacyDistributedWithinAllocation();
+        }
+    }
