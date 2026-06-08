@@ -1691,30 +1691,17 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           </span>
                         </label>
 
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                          <label className="form-control">
-                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                              Category
-                            </span>
-                            <input
-                              className="input input-bordered mt-1 w-full"
-                              disabled={!canEditDraft}
-                              value={question.categoryId}
-                              onChange={event => updateDraftQuestion(index, { categoryId: event.target.value })}
-                            />
-                          </label>
-                          <label className="form-control">
-                            <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
-                              Template
-                            </span>
-                            <input
-                              className="input input-bordered mt-1 w-full"
-                              disabled={!canEditDraft}
-                              value={question.templateId}
-                              onChange={event => updateDraftQuestion(index, { templateId: event.target.value })}
-                            />
-                          </label>
-                        </div>
+                        <label className="form-control mt-4">
+                          <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
+                            Category
+                          </span>
+                          <input
+                            className="input input-bordered mt-1 w-full"
+                            disabled={!canEditDraft}
+                            value={question.categoryId}
+                            onChange={event => updateDraftQuestion(index, { categoryId: event.target.value })}
+                          />
+                        </label>
 
                         <label className="form-control mt-4">
                           <span className="label-text flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-base-content/45">
