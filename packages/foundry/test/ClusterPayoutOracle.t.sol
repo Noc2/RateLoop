@@ -2049,11 +2049,11 @@ contract ClusterPayoutOracleProposerBondTest is Test {
         oracle.finalizeRoundPayoutSnapshot(snapshotKey);
     }
 
-    /// @dev Writes pendingBondWithdrawals[account] directly. The mapping sits at slot 10
+    /// @dev Writes pendingBondWithdrawals[account] directly. The mapping sits at slot 11
     ///      (challengeBondToken is immutable so does not consume a slot — see comment in
     ///      TestableClusterPayoutOracle._proposerBondSlot for the layout walk).
     function _seedPendingBondWithdrawal(address account, uint256 amount) internal {
-        uint256 BASE_SLOT_PENDING_BOND_WITHDRAWALS = 10;
+        uint256 BASE_SLOT_PENDING_BOND_WITHDRAWALS = 11;
         bytes32 slot = keccak256(abi.encode(account, BASE_SLOT_PENDING_BOND_WITHDRAWALS));
         vm.store(address(oracle), slot, bytes32(amount));
         assertEq(oracle.pendingBondWithdrawals(account), amount, "pendingBondWithdrawals seed sanity");
