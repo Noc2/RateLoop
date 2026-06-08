@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MagnifyingGlassPlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 const FOCUSABLE_SELECTOR = [
@@ -97,6 +98,37 @@ export function ContentImageLightbox({
     };
   }, [isOpen]);
 
+  const lightboxDialog = isOpen ? (
+    <div
+      id={dialogId}
+      ref={dialogRef}
+      className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
+      aria-label={modalLabel}
+      tabIndex={-1}
+      onClick={() => setIsOpen(false)}
+    >
+      <button
+        ref={closeButtonRef}
+        type="button"
+        onClick={() => setIsOpen(false)}
+        className="absolute right-4 top-4 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-base-200/90 text-base-content shadow-lg transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80"
+        aria-label="Close image preview"
+      >
+        <XMarkIcon className="h-6 w-6" />
+      </button>
+
+      <div className="flex h-full w-full items-center justify-center" onClick={event => event.stopPropagation()}>
+        <img
+          src={src}
+          alt={alt}
+          className={`max-h-full max-w-full rounded-lg border border-white/10 bg-black object-contain shadow-[0_24px_80px_rgba(0,0,0,0.64)] ${modalImageClassName}`.trim()}
+        />
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       <button
@@ -117,39 +149,7 @@ export function ContentImageLightbox({
         </span>
       </button>
 
-      {isOpen ? (
-        <div
-          id={dialogId}
-          ref={dialogRef}
-          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-md"
-          role="dialog"
-          aria-modal="true"
-          aria-label={modalLabel}
-          tabIndex={-1}
-          onClick={() => setIsOpen(false)}
-        >
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="absolute right-4 top-4 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-base-200/90 text-base-content shadow-lg transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/80"
-            aria-label="Close image preview"
-          >
-            <XMarkIcon className="h-6 w-6" />
-          </button>
-
-          <div
-            className="flex max-h-full w-full items-center justify-center"
-            onClick={event => event.stopPropagation()}
-          >
-            <img
-              src={src}
-              alt={alt}
-              className={`h-auto max-h-[86svh] w-auto max-w-[calc(100vw-2rem)] rounded-lg border border-white/10 bg-black object-contain shadow-[0_24px_80px_rgba(0,0,0,0.64)] ${modalImageClassName}`.trim()}
-            />
-          </div>
-        </div>
-      ) : null}
+      {lightboxDialog ? createPortal(lightboxDialog, document.body) : null}
     </>
   );
 }
