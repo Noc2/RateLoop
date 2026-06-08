@@ -10,6 +10,38 @@ vulnerability. Every property that was scoped to a clean, provable slice was pro
 items that could not be proved are **modeling/tooling limitations**, not known bugs —
 they are listed below in full so the gap is explicit rather than hidden.
 
+## Round 2 (Tracks B–G of `certora-next-steps.md`)
+
+A second implementation pass added LoopReputation, ProtocolConfig, the
+LaunchDistributionPool cap lemmas + pool conservation, and a QuestionRewardPoolEscrow
+claim-flag proof. **No exploitable vulnerability was found** in this pass either. Two
+properties resisted proof; both are most likely tooling/solver limits rather than bugs,
+but both are worth a quick manual confirmation:
+
+1. **LaunchDistributionPool `raterLaunchPaid <= raterLaunchCap`** — the last missing
+   lemma is `raterLaunchCap <= raterFullLaunchCap`, which at assignment reduces to
+   `fullCap * bps / 10000 <= fullCap` (given `bps <= 10000`). This is a nonlinear
+   multiply-then-divide inequality that the SMT backend cannot discharge precisely. By
+   inspection the clamp is correct (`unverifiedEarnedRaterCapBps` is validated `<= 10000`
+   by `_validateLaunchRewardPolicy`, and `_assignLaunchCap` divides by `BPS_DENOMINATOR`),
+   so this is a solver-completeness gap, not a defect. **Manual check:** confirm no payout
+   path raises `raterLaunchPaid` above the active cap.
+
+2. **LaunchDistributionPool legacy-pool conservation
+   (`distributed + treasuryRecovered <= LEGACY_CONTRIBUTOR_POOL_AMOUNT`)** — proved for
+   the earned-rater and verified-referral pools, but resisted on
+   `sweepExpiredLegacyContributorAllocationToTreasury`. The sweep sets
+   `legacyContributorTreasuryRecovered = recovered + sweptAmount`; the invariant holds
+   iff `sweptAmount` is bounded by the remaining pool (`POOL - distributed - recovered`).
+   The proof needs an auxiliary invariant tying the sweep's allocation accounting to that
+   remainder. **Manual check (low confidence):** confirm the expired-allocation sweep
+   cannot recover more than the pool's unclaimed remainder — i.e. that
+   `distributed + treasuryRecovered` can never exceed the 9M LREP legacy pool.
+
+Neither is a confirmed bug. The proved properties (supply cap, role gates, earned/verified
+pool conservation, cap-assignment + bps-bound lemmas, claim-flag integrity) provide
+positive assurance over the value-handling paths.
+
 ## Proved properties
 
 | Phase | Conf | Property proved | Status |
