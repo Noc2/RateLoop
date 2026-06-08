@@ -6,6 +6,15 @@ landed and green; see [`certora.md`](./certora.md) for that plan and
 [`../../packages/foundry/certora/README.md`](../../packages/foundry/certora/README.md)
 for how to run what exists today.
 
+> **Implementation status (2026-06-08):** Phases 3b–7 below have been implemented as
+> verified slices (Phase 5 verified-bonus single-use, Phase 6 stake conservation, Phase 7
+> bonus conservation, Phase 3b refund gates, Phase 4 refunded-pool gate). The full
+> property lists per phase are partially delivered — the deferred remainders (aggregate
+> ghost-sums, single-use refund, internal-resolution no-double-claim, the non-inductive
+> cap invariant) and the concrete tooling reasons are recorded in
+> [`certora-security-findings.md`](./certora-security-findings.md). The CI matrix, the
+> certora-cli pin, and the path-filtered PR trigger (cross-cutting section) are landed.
+
 This document picks up where that left off: it inventories exactly what is
 proven vs. deferred, then lays out a prioritized set of follow-up phases to
 extend coverage to the rest of the value-handling surface — ordered by

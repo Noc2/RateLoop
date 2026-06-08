@@ -1,20 +1,27 @@
 name: Certora
 
-# Formal verification lane. Intentionally NOT a PR gate yet: it runs on demand and
-# on a weekly schedule until prover runtimes and false-positive rates are understood
-# (see docs/testing/certora.md "CI Plan"). Promote to path-filtered PR runs later.
+# Formal verification lane. Runs on demand, on a weekly schedule, and on PRs that touch
+# contracts or the Certora workspace. NOT a required PR gate yet (no branch protection):
+# it stays informational until prover runtimes and false-positive rates are understood
+# across the full matrix (see docs/testing/certora-followup.md "CI maturation").
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  pull_request:
+    paths:
+      - "packages/foundry/contracts/**"
+      - "packages/foundry/certora/**"
+      - ".github/workflows/certora.yaml"
 
 permissions:
   contents: read
 
 env:
-  # Pin once a known-good version is established (e.g. "==7.x.y"). Empty = latest.
-  CERTORA_CLI_VERSION: ""
+  # Pinned to the version the specs were authored and verified against. Bump deliberately
+  # after re-running the matrix; a floating "latest" can silently break the lane.
+  CERTORA_CLI_VERSION: "==8.13.1"
   SOLC_VERSION: "0.8.35"
 
 jobs:
@@ -29,6 +36,10 @@ jobs:
           - certora/confs/round-voting-engine.conf
           - certora/confs/round-reward-distributor.conf
           - certora/confs/no-double-claim.conf
+          - certora/confs/round-voting-engine-lifecycle.conf
+          - certora/confs/launch-distribution-pool.conf
+          - certora/confs/frontend-registry.conf
+          - certora/confs/feedback-bonus-escrow.conf
     name: ${{ matrix.conf }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
