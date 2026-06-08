@@ -59,8 +59,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     // period)` triples. `quicknet` (mainnet) and `quicknet-t` (testnet) are independent drand
     // chains with different BLS G1 public keys — encrypting with one and validating against the
     // other silently fails, so every chain must commit to its own values at deploy time.
-    // Mainnet values mirror `ProtocolConfig.MAINNET_DRAND_*` constants; duplicated here because
-    // they're referenced at deploy time before the contract is constructed. Source:
+    // Source:
     // https://docs.drand.love/blog/2023/10/16/quicknet-is-live/
     bytes32 internal constant MAINNET_DRAND_CHAIN_HASH =
         0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;

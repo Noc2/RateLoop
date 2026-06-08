@@ -84,6 +84,10 @@ contract UpgradeTest is Test {
     address public governance = address(2);
     address public attacker = address(999);
     bytes32 internal constant ERC1967_ADMIN_SLOT = bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1);
+    bytes32 internal constant QUICKNET_CHAIN_HASH =
+        0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
+    uint64 internal constant QUICKNET_TEST_GENESIS_TIME = 1;
+    uint64 internal constant QUICKNET_TEST_PERIOD = 3;
 
     function setUp() public {
         vm.startPrank(admin);
@@ -106,7 +110,19 @@ contract UpgradeTest is Test {
         // --- ProtocolConfig ---
         ProtocolConfig pcImpl = new ProtocolConfig();
         TransparentUpgradeableProxy pcProxy = new TransparentUpgradeableProxy(
-            address(pcImpl), governance, abi.encodeCall(ProtocolConfig.initialize, (admin, governance))
+            address(pcImpl),
+            governance,
+            abi.encodeCall(
+                ProtocolConfig.initializeWithDrandConfig,
+                (
+                    admin,
+                    governance,
+                    governance,
+                    QUICKNET_CHAIN_HASH,
+                    QUICKNET_TEST_GENESIS_TIME,
+                    QUICKNET_TEST_PERIOD
+                )
+            )
         );
         protocolConfig = ProtocolConfig(address(pcProxy));
         protocolConfigAdmin = _proxyAdmin(address(pcProxy));
@@ -301,7 +317,9 @@ contract UpgradeTest is Test {
     function test_ProtocolConfig_CannotReinitialize() public {
         vm.prank(admin);
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        protocolConfig.initialize(admin, governance);
+        protocolConfig.initializeWithDrandConfig(
+            admin, governance, governance, QUICKNET_CHAIN_HASH, QUICKNET_TEST_GENESIS_TIME, QUICKNET_TEST_PERIOD
+        );
     }
 
     function test_ProtocolConfig_StatePreservedAfterUpgrade() public {
@@ -766,7 +784,9 @@ contract UpgradeTest is Test {
 
         ProtocolConfig pcImpl = new ProtocolConfig();
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        pcImpl.initialize(admin, governance);
+        pcImpl.initializeWithDrandConfig(
+            admin, governance, governance, QUICKNET_CHAIN_HASH, QUICKNET_TEST_GENESIS_TIME, QUICKNET_TEST_PERIOD
+        );
 
         QuestionRewardPoolEscrow qrpImpl = new QuestionRewardPoolEscrow();
         vm.expectRevert(Initializable.InvalidInitialization.selector);

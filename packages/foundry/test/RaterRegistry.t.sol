@@ -651,15 +651,8 @@ contract RaterRegistryTest is Test {
     function test_WorldIdV4NullifierUsesV4OwnerSlotAndLaunchFamilyKey() public {
         uint256[5] memory v4Proof;
 
-        bytes32 legacyKey = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH);
         bytes32 v4Key = _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
         bytes32 seededKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, NULLIFIER_HASH);
-        assertEq(
-            legacyKey,
-            keccak256(
-                abi.encode("rateloop.human-identity-v1", RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
-            )
-        );
         assertEq(
             v4Key,
             keccak256(
@@ -668,11 +661,10 @@ contract RaterRegistryTest is Test {
                 )
             )
         );
-        assertTrue(legacyKey != v4Key);
         assertTrue(seededKey != v4Key);
         assertEq(
-            registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
-            registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
+            registry.launchHumanIdentityKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH),
+            keccak256(abi.encode("rateloop.launch-world-id-human-v1", NULLIFIER_HASH))
         );
 
         vm.prank(rater);
@@ -696,23 +688,11 @@ contract RaterRegistryTest is Test {
         assertEq(resolved.identityKey, v4Key);
         assertEq(resolved.humanNullifier, NULLIFIER_HASH);
         assertEq(
-            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
-            address(0)
-        );
-        assertEq(
             registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH),
             rater
         );
 
         LaunchRaterRewardLibHarness launchHarness = new LaunchRaterRewardLibHarness();
-        assertTrue(
-            launchHarness.launchRewardCredentialAnchorId(
-                    RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH
-                )
-                != launchHarness.launchRewardCredentialAnchorId(
-                        RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH
-                    )
-        );
         assertEq(
             launchHarness.launchRewardCredentialAnchorId(
                 RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH
@@ -1035,9 +1015,6 @@ contract RaterRegistryTest is Test {
             registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH),
             address(0)
         );
-        assertFalse(
-            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
-        );
         assertTrue(
             registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
         );
@@ -1093,15 +1070,8 @@ contract RaterRegistryTest is Test {
         assertFalse(registry.hasActiveHumanCredential(rater));
         assertTrue(registry.getHumanCredential(rater).revoked);
         assertEq(
-            registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH),
-            address(0)
-        );
-        assertEq(
             registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH),
             address(0)
-        );
-        assertFalse(
-            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
         );
         assertTrue(
             registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
@@ -1134,9 +1104,6 @@ contract RaterRegistryTest is Test {
         vm.prank(admin);
         registry.revokeHumanCredential(rater);
 
-        assertFalse(
-            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
-        );
         assertTrue(
             registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
         );
@@ -1144,9 +1111,6 @@ contract RaterRegistryTest is Test {
         vm.prank(admin);
         registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH);
 
-        assertFalse(
-            registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldId, NULLIFIER_HASH)
-        );
         assertFalse(
             registry.revokedHumanNullifierByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH)
         );

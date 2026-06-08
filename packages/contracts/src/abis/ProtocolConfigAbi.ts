@@ -45,45 +45,6 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
-    "name": "MAINNET_DRAND_CHAIN_HASH",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAINNET_DRAND_GENESIS_TIME",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAINNET_DRAND_PERIOD",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "MIN_SUBMISSION_LREP_POOL_FLOOR",
     "inputs": [],
     "outputs": [
@@ -499,24 +460,6 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
-    "name": "initialize",
-    "inputs": [
-      {
-        "name": "admin",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "governance",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "initializeWithDrandConfig",
     "inputs": [
       {
@@ -548,29 +491,6 @@ export const ProtocolConfigAbi = [
         "name": "drandPeriod_",
         "type": "uint64",
         "internalType": "uint64"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "initializeWithTreasury",
-    "inputs": [
-      {
-        "name": "admin",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "governance",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "treasuryAuthority",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "outputs": [],
