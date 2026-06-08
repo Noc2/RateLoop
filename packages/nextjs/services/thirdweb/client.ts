@@ -4,15 +4,19 @@ import { createThirdwebClient, defineChain } from "thirdweb";
 import type { AutoConnectProps } from "thirdweb/react";
 import type { UseConnectModalOptions } from "thirdweb/react";
 import { createWallet, inAppWallet } from "thirdweb/wallets";
-import type { Wallet } from "thirdweb/wallets";
+import type { SmartWalletOptions, Wallet } from "thirdweb/wallets";
 import { getThirdwebWalletAuthConfig } from "~~/services/thirdweb/auth";
 import { getAvailableThirdwebExternalWalletIds } from "~~/services/web3/injectedWalletProviders";
 import { publicEnv } from "~~/utils/env/public";
 
 const THIRDWEB_CONNECT_CHAIN_IDS = new Set([31337, 480, 4801]);
 const THIRDWEB_EXECUTION_CHAIN_IDS = new Set([480, 4801]);
-// thirdweb's EIP-7702 executor currently rejects World Chain Sepolia (4801).
-const THIRDWEB_IN_APP_EXECUTION_CHAIN_IDS = new Set([480]);
+const THIRDWEB_IN_APP_EIP7702_CHAIN_IDS = new Set([480]);
+const THIRDWEB_IN_APP_EIP4337_CHAIN_IDS = new Set([4801]);
+const THIRDWEB_IN_APP_EXECUTION_CHAIN_IDS = new Set([
+  ...THIRDWEB_IN_APP_EIP7702_CHAIN_IDS,
+  ...THIRDWEB_IN_APP_EIP4337_CHAIN_IDS,
+]);
 const THIRDWEB_ACTIVE_CHAIN_KEY = "thirdweb:active-chain";
 const THIRDWEB_SPONSORSHIP_MODE_KEY = "thirdweb:sponsorship-mode";
 const RATELOOP_THIRDWEB_ICON = "/rateloop-logo.svg";
@@ -21,6 +25,10 @@ const RATELOOP_THIRDWEB_LOGIN_HERO = "/thirdweb-login-hero.svg";
 type ThirdwebWalletExecutionMode =
   | {
       mode: "EOA";
+    }
+  | {
+      mode: "EIP4337";
+      smartAccount: SmartWalletOptions;
     }
   | {
       mode: "EIP7702";
@@ -49,6 +57,14 @@ export function supportsThirdwebExecutionCapabilities(chainId: number | null | u
 
 export function supportsThirdwebInAppExecutionCapabilities(chainId: number | null | undefined): boolean {
   return typeof chainId === "number" && THIRDWEB_IN_APP_EXECUTION_CHAIN_IDS.has(chainId);
+}
+
+export function usesThirdwebInAppEip7702Execution(chainId: number | null | undefined): boolean {
+  return typeof chainId === "number" && THIRDWEB_IN_APP_EIP7702_CHAIN_IDS.has(chainId);
+}
+
+function usesThirdwebInAppEip4337Execution(chainId: number | null | undefined): chainId is number {
+  return typeof chainId === "number" && THIRDWEB_IN_APP_EIP4337_CHAIN_IDS.has(chainId);
 }
 
 export const thirdwebClient = publicEnv.thirdwebClientId
@@ -147,11 +163,22 @@ export function getThirdwebWalletExecutionMode(
     };
   }
 
-  if (supportsThirdwebInAppExecutionCapabilities(chainId)) {
+  if (usesThirdwebInAppEip7702Execution(chainId)) {
     const sponsorshipMode = options?.sponsorshipMode ?? getStoredThirdwebSponsorshipMode() ?? "sponsored";
     return {
       mode: "EIP7702" as const,
       ...(sponsorshipMode === "sponsored" ? { sponsorGas: true } : {}),
+    };
+  }
+
+  if (usesThirdwebInAppEip4337Execution(chainId)) {
+    const sponsorshipMode = options?.sponsorshipMode ?? getStoredThirdwebSponsorshipMode() ?? "sponsored";
+    return {
+      mode: "EIP4337" as const,
+      smartAccount: {
+        chain: defineChain(chainId),
+        sponsorGas: sponsorshipMode === "sponsored",
+      },
     };
   }
 
@@ -160,25 +187,53 @@ export function getThirdwebWalletExecutionMode(
   };
 }
 
+export function getThirdwebWalletSmartAccountOptions(
+  chainId: number,
+  options?: { forceEoa?: boolean; sponsorshipMode?: ThirdwebSponsorshipMode | null },
+): SmartWalletOptions | undefined {
+  const executionMode = getThirdwebWalletExecutionMode(chainId, options);
+  return executionMode.mode === "EIP4337" ? executionMode.smartAccount : undefined;
+}
+
 export function getThirdwebWalletSponsorshipMode(wallet: Wallet | null | undefined): ThirdwebSponsorshipMode | null {
   if (!wallet || !isThirdwebInAppWalletId(wallet.id)) {
     return null;
   }
 
-  const walletConfig = wallet.getConfig() as { executionMode?: { mode?: string; sponsorGas?: boolean } } | undefined;
+  const walletConfig = wallet.getConfig() as
+    | {
+        executionMode?: {
+          mode?: string;
+          smartAccount?: { sponsorGas?: boolean };
+          sponsorGas?: boolean;
+        };
+        smartAccount?: { sponsorGas?: boolean };
+      }
+    | undefined;
   if (walletConfig?.executionMode?.mode === "EIP7702") {
     return walletConfig.executionMode.sponsorGas ? "sponsored" : "self-funded";
+  }
+
+  if (walletConfig?.executionMode?.mode === "EIP4337" && walletConfig.executionMode.smartAccount) {
+    return walletConfig.executionMode.smartAccount.sponsorGas ? "sponsored" : "self-funded";
+  }
+
+  if (walletConfig?.smartAccount) {
+    return walletConfig.smartAccount.sponsorGas ? "sponsored" : "self-funded";
   }
 
   return null;
 }
 
 export function createThirdwebInAppWallet(chainId: number, options?: CreateThirdwebInAppWalletOptions) {
+  const executionMode = getThirdwebWalletExecutionMode(chainId, options);
+  const smartAccount = executionMode.mode === "EIP4337" ? executionMode.smartAccount : undefined;
+
   return inAppWallet({
     auth: getThirdwebWalletAuthConfig({
       includeWalletOption: options?.includeWalletAuthOption,
     }),
-    executionMode: getThirdwebWalletExecutionMode(chainId, options),
+    executionMode,
     metadata: {
       image: {
         alt: "Level Up Your Agent",
@@ -188,6 +243,7 @@ export function createThirdwebInAppWallet(chainId: number, options?: CreateThird
       },
       name: "RateLoop Wallet",
     },
+    ...(smartAccount ? { smartAccount } : {}),
   });
 }
 

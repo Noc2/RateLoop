@@ -30,6 +30,7 @@ import {
   supportsThirdwebExecutionCapabilities,
   supportsThirdwebInAppExecutionCapabilities,
   thirdwebClient,
+  usesThirdwebInAppEip7702Execution,
 } from "~~/services/thirdweb/client";
 
 type ThirdwebContractCall = {
@@ -198,6 +199,7 @@ export function useThirdwebSponsoredSubmitCalls() {
   const { executionMode, hasSendCalls, isThirdwebInApp, supportsAtomicBatchCalls } = useWalletExecutionCapabilities();
   const chainId = resolveWalletExecutionChainId(wagmiChainId, activeWalletChain?.id);
   const publicClient = usePublicClient({ chainId });
+  const usesInAppEip7702Execution = usesThirdwebInAppEip7702Execution(chainId);
 
   const expectsSponsoredBatchCalls = useMemo(
     () =>
@@ -236,6 +238,7 @@ export function useThirdwebSponsoredSubmitCalls() {
 
   const shouldInspectSponsoredDelegation = Boolean(
     expectsSponsoredBatchCalls &&
+      usesInAppEip7702Execution &&
       executionMode === "sponsored_7702" &&
       publicClient &&
       typeof address === "string" &&

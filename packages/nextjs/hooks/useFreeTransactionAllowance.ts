@@ -18,6 +18,7 @@ import {
   setStoredThirdwebSponsorshipMode,
   supportsThirdwebInAppExecutionCapabilities,
   thirdwebClient,
+  usesThirdwebInAppEip7702Execution,
 } from "~~/services/thirdweb/client";
 import { notification } from "~~/utils/scaffold-eth";
 
@@ -180,6 +181,7 @@ export function useFreeTransactionAllowance() {
   const sponsorshipSyncAttemptRef = useRef<string | null>(null);
   const resolvedChainId = resolveWalletExecutionChainId(chain?.id, activeWalletChain?.id);
   const supportsInAppExecution = supportsThirdwebInAppExecutionCapabilities(resolvedChainId);
+  const usesInAppEip7702Execution = usesThirdwebInAppEip7702Execution(resolvedChainId);
   const publicClient = usePublicClient({ chainId: resolvedChainId });
   const currentSponsorshipMode = getThirdwebWalletSponsorshipMode(activeWallet);
 
@@ -214,7 +216,7 @@ export function useFreeTransactionAllowance() {
   );
 
   const shouldInspectInAppDelegation = Boolean(
-    supportsInAppExecution &&
+    usesInAppEip7702Execution &&
       publicClient &&
       address &&
       activeWallet &&
