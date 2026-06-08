@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import React, { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import { type TooltipPlacement, type TooltipPosition, computeTooltipPlacement } from "~~/lib/ui/tooltipPosition";

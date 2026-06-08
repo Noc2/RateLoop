@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { getFreeTransactionAllowanceDisplayState } from "./freeTransactionAllowanceDisplay";
 import { useActiveWalletChain } from "thirdweb/react";
@@ -86,6 +86,46 @@ function WalletAddressCopyRow({ address, displayName }: { address: string; displ
   );
 }
 
+type FreeTransactionAllowanceDisplayState = ReturnType<typeof getFreeTransactionAllowanceDisplayState>;
+
+export function FreeTransactionAllowanceDisplay({
+  className,
+  displayState,
+}: {
+  className?: string;
+  displayState: FreeTransactionAllowanceDisplayState;
+}) {
+  if (displayState.kind === "hidden") {
+    return null;
+  }
+
+  if (displayState.kind === "verify") {
+    return (
+      <Link
+        href="/settings#identity"
+        className={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium leading-5 text-base-content/62 hover:text-base-content ${
+          className ?? ""
+        }`}
+      >
+        <span>Verify for {displayState.limit}</span>
+        <InfoTooltip text="Verify your identity to unlock sponsored RateLoop Wallet transactions." />
+      </Link>
+    );
+  }
+
+  return (
+    <div className={`flex items-center gap-1.5 text-sm font-medium leading-5 text-base-content/62 ${className ?? ""}`}>
+      <span className="tabular-nums">
+        {displayState.remaining}/{displayState.limit}
+      </span>
+      <span className="text-base-content/60">free tx</span>
+      <InfoTooltip
+        text={`RateLoop Wallet gets ${displayState.limit} sponsored app transactions after ID verification.`}
+      />
+    </div>
+  );
+}
+
 function FreeTransactionAllowanceText({ className }: { className?: string }) {
   const { chain, connector } = useAccount();
   const activeWalletChain = useActiveWalletChain();
@@ -106,36 +146,7 @@ function FreeTransactionAllowanceText({ className }: { className?: string }) {
     verified,
   });
 
-  if (displayState.kind === "hidden") {
-    return null;
-  }
-
-  if (displayState.kind === "verify") {
-    return (
-      <Link
-        href="/settings#identity"
-        className={`flex items-center gap-1.5 text-sm font-medium leading-5 text-base-content/62 hover:text-base-content ${
-          className ?? ""
-        }`}
-      >
-        <span>Verify for {displayState.limit}</span>
-        <span className="text-base-content/60">free tx</span>
-        <InfoTooltip text="Verify your identity to unlock sponsored RateLoop Wallet transactions." />
-      </Link>
-    );
-  }
-
-  return (
-    <div className={`flex items-center gap-1.5 text-sm font-medium leading-5 text-base-content/62 ${className ?? ""}`}>
-      <span className="tabular-nums">
-        {displayState.remaining}/{displayState.limit}
-      </span>
-      <span className="text-base-content/60">free tx</span>
-      <InfoTooltip
-        text={`RateLoop Wallet gets ${displayState.limit} sponsored app transactions after ID verification.`}
-      />
-    </div>
-  );
+  return <FreeTransactionAllowanceDisplay className={className} displayState={displayState} />;
 }
 
 function WinRateSummaryText({ address, className }: { address: Address; className?: string }) {
