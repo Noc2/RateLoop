@@ -87,6 +87,32 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "CORRELATION_EPOCH_REJECTED_ROOT_DOMAIN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "CORRELATION_EPOCH_SOURCE_SET_DOMAIN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "DEFAULT_ADMIN_ROLE",
     "inputs": [],
     "outputs": [
@@ -350,6 +376,49 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "correlationEpochProposalDigest",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "correlationEpochRootKey",
+    "inputs": [
+      {
+        "name": "sourceSetDigest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "clusterRoot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "correlationEpochSnapshot",
     "inputs": [
       {
@@ -452,6 +521,25 @@ export const ClusterPayoutOracleAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "correlationEpochSourceSetDigest",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
@@ -994,7 +1082,43 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "rejectCorrelationEpochRoot",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "reasonHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "rejectFinalizedCorrelationEpoch",
+    "inputs": [
+      {
+        "name": "epochId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "reasonHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "rejectFinalizedCorrelationEpochRoot",
     "inputs": [
       {
         "name": "epochId",
@@ -1084,7 +1208,50 @@ export const ClusterPayoutOracleAbi = [
   },
   {
     "type": "function",
+    "name": "rejectedCorrelationEpochRootKeys",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "rejectedCorrelationEpochRoots",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "rejectedCorrelationEpochSnapshotDigests",
     "inputs": [
       {
         "name": "",

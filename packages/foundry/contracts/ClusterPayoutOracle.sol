@@ -123,6 +123,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     ///         metadata around a deterministic weightRoot without burning the root itself.
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotDigests;
     mapping(bytes32 => mapping(bytes32 => bool)) public rejectedRoundPayoutSnapshotRoots;
+    /// @notice Exact rejected correlation-epoch proposal payloads. Used when the arbiter rejects
+    ///         bad metadata around a deterministic clusterRoot without burning the root itself.
+    mapping(uint256 => mapping(bytes32 => bool)) public rejectedCorrelationEpochSnapshotDigests;
     /// @notice Tracks rejected correlation-epoch clusterRoots so an identical re-proposal
     ///         is blocked at proposeCorrelationEpoch — mirrors rejectedRoundPayoutSnapshotRoots
     ///         for the correlation-epoch path (L-Oracle-4).
@@ -256,6 +259,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         (bytes32 coverageDigest, bytes32 sourceSetDigest) =
             _requireCorrelationEpochSourcesReady(epochId, fromRoundId, toRoundId, sourceRefs);
+        bytes32 proposalDigest = _correlationEpochDigest(
+            epochId, fromRoundId, toRoundId, clusterRoot, parameterHash, artifactHash, coverageDigest
+        );
+        if (rejectedCorrelationEpochSnapshotDigests[epochId][proposalDigest]) revert InvalidSnapshot();
         // L-Oracle-4: block identical re-proposal of a previously rejected clusterRoot.
         if (
             rejectedCorrelationEpochRoots[epochId][clusterRoot]
@@ -345,17 +352,26 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     }
 
     function rejectCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
+        _rejectCorrelationEpoch(epochId, reasonHash, false);
+    }
+
+    /// @notice Reject a pre-finalized correlation epoch and explicitly blacklist its clusterRoot.
+    /// @dev Use only when the root itself is invalid. Metadata-only rejections should use
+    ///      `rejectCorrelationEpoch` so the deterministic root can be re-proposed with corrected
+    ///      surrounding fields.
+    function rejectCorrelationEpochRoot(uint64 epochId, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
+        _rejectCorrelationEpoch(epochId, reasonHash, true);
+    }
+
+    function _rejectCorrelationEpoch(uint64 epochId, bytes32 reasonHash, bool rejectRoot) private {
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status == SnapshotStatus.Finalized) revert SnapshotFinalized();
-        bool wasChallenged = snapshot.status == SnapshotStatus.Challenged;
         snapshot.status = SnapshotStatus.Rejected;
-        // L-Oracle-A: only blacklist the clusterRoot when the rejection comes from a `Challenged`
-        // state. Pre-challenge slot-squat proposals (M-Oracle-1 family on the correlation-epoch
-        // path) can be cleared by the arbiter without permanently banning the honest correct
-        // root from re-proposal — the deterministic scorer pipeline cannot produce a different
-        // root for the same epoch, so blacklisting would otherwise strand the epoch.
-        if (wasChallenged) {
+        rejectedCorrelationEpochSnapshotDigests[epochId][_correlationEpochDigest(snapshot)] = true;
+        // Metadata-only rejection clears bad surrounding fields without burning the deterministic
+        // root. The explicit root path is reserved for invalid scorer output.
+        if (rejectRoot) {
             _rejectCorrelationEpochRoot(snapshot);
         }
         address challenger = snapshot.challenger;
@@ -366,6 +382,18 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     }
 
     function rejectFinalizedCorrelationEpoch(uint64 epochId, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
+        _rejectFinalizedCorrelationEpoch(epochId, reasonHash, false);
+    }
+
+    /// @notice Reject a finalized correlation epoch and explicitly blacklist its clusterRoot.
+    /// @dev Use only when the finalized root itself is invalid. Metadata-only rejections should use
+    ///      `rejectFinalizedCorrelationEpoch` so the deterministic root can be re-proposed with
+    ///      corrected surrounding fields.
+    function rejectFinalizedCorrelationEpochRoot(uint64 epochId, bytes32 reasonHash) external onlyRole(ARBITER_ROLE) {
+        _rejectFinalizedCorrelationEpoch(epochId, reasonHash, true);
+    }
+
+    function _rejectFinalizedCorrelationEpoch(uint64 epochId, bytes32 reasonHash, bool rejectRoot) private {
         CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
         if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
         if (snapshot.status != SnapshotStatus.Finalized) revert SnapshotNotFinalizable();
@@ -374,7 +402,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
 
         snapshot.status = SnapshotStatus.Rejected;
-        _rejectCorrelationEpochRoot(snapshot);
+        rejectedCorrelationEpochSnapshotDigests[epochId][_correlationEpochDigest(snapshot)] = true;
+        if (rejectRoot) {
+            _rejectCorrelationEpochRoot(snapshot);
+        }
         emit CorrelationEpochRejected(epochId, msg.sender, reasonHash);
     }
 
@@ -706,6 +737,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         return correlationEpochSnapshots[epochId];
     }
 
+    function correlationEpochProposalDigest(uint64 epochId) external view returns (bytes32) {
+        CorrelationEpochSnapshot storage snapshot = correlationEpochSnapshots[epochId];
+        if (snapshot.status == SnapshotStatus.None) revert SnapshotNotFound();
+        return _correlationEpochDigest(snapshot);
+    }
+
     function roundPayoutSnapshotKey(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         public
         pure
@@ -1029,16 +1066,36 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     }
 
     function _correlationEpochDigest(CorrelationEpochSnapshot storage snapshot) private view returns (bytes32) {
+        return _correlationEpochDigest(
+            snapshot.epochId,
+            snapshot.fromRoundId,
+            snapshot.toRoundId,
+            snapshot.clusterRoot,
+            snapshot.parameterHash,
+            snapshot.artifactHash,
+            correlationEpochCoverageDigest[snapshot.epochId]
+        );
+    }
+
+    function _correlationEpochDigest(
+        uint64 epochId,
+        uint64 fromRoundId,
+        uint64 toRoundId,
+        bytes32 clusterRoot,
+        bytes32 parameterHash,
+        bytes32 artifactHash,
+        bytes32 coverageDigest
+    ) private pure returns (bytes32) {
         return keccak256(
             abi.encode(
                 CORRELATION_EPOCH_DOMAIN,
-                snapshot.epochId,
-                snapshot.fromRoundId,
-                snapshot.toRoundId,
-                snapshot.clusterRoot,
-                snapshot.parameterHash,
-                snapshot.artifactHash,
-                correlationEpochCoverageDigest[snapshot.epochId]
+                epochId,
+                fromRoundId,
+                toRoundId,
+                clusterRoot,
+                parameterHash,
+                artifactHash,
+                coverageDigest
             )
         );
     }

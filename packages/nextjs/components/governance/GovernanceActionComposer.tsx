@@ -403,11 +403,11 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
   {
     id: "oracle-reject-correlation-epoch",
     group: "Cluster Payout Oracle",
-    label: "Reject epoch root",
+    label: "Reject epoch metadata",
     mode: "proposal",
     contractName: "ClusterPayoutOracle",
     functionName: "rejectCorrelationEpoch",
-    description: "Create a proposal to reject a challenged or invalid correlation epoch root.",
+    description: "Create a proposal to reject an exact correlation epoch payload without blacklisting its root.",
     fields: [
       { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
       {
@@ -422,7 +422,81 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
       parser.uint("epochId", "Correlation epoch ID"),
       parser.bytes32("reasonHash", "Reason hash"),
     ],
-    buildDescription: values => `Reject correlation epoch ${values.epochId || "0"} payout root`,
+    buildDescription: values => `Reject correlation epoch ${values.epochId || "0"} metadata`,
+  },
+  {
+    id: "oracle-reject-correlation-epoch-root",
+    group: "Cluster Payout Oracle",
+    label: "Reject epoch root",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "rejectCorrelationEpochRoot",
+    description: "Create a proposal to reject a correlation epoch and blacklist its cluster root.",
+    fields: [
+      { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.uint("epochId", "Correlation epoch ID"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Reject correlation epoch ${values.epochId || "0"} root`,
+  },
+  {
+    id: "oracle-reject-finalized-correlation-epoch",
+    group: "Cluster Payout Oracle",
+    label: "Reject finalized epoch metadata",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "rejectFinalizedCorrelationEpoch",
+    description: "Create a proposal to reject a finalized correlation epoch payload without blacklisting its root.",
+    advanced: true,
+    fields: [
+      { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.uint("epochId", "Correlation epoch ID"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Reject finalized correlation epoch ${values.epochId || "0"} metadata`,
+  },
+  {
+    id: "oracle-reject-finalized-correlation-epoch-root",
+    group: "Cluster Payout Oracle",
+    label: "Reject finalized epoch root",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "rejectFinalizedCorrelationEpochRoot",
+    description: "Create a proposal to reject a finalized correlation epoch and blacklist its cluster root.",
+    advanced: true,
+    fields: [
+      { key: "epochId", label: "Correlation epoch ID", type: "uint", required: true },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.uint("epochId", "Correlation epoch ID"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Reject finalized correlation epoch ${values.epochId || "0"} root`,
   },
   {
     id: "oracle-finalize-challenged-round-payout",
@@ -451,11 +525,35 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
   {
     id: "oracle-reject-round-payout",
     group: "Cluster Payout Oracle",
-    label: "Reject payout root",
+    label: "Reject payout metadata",
     mode: "proposal",
     contractName: "ClusterPayoutOracle",
     functionName: "rejectRoundPayoutSnapshot",
-    description: "Create a proposal to reject a challenged or invalid round payout root.",
+    description: "Create a proposal to reject an exact round payout payload without blacklisting its root.",
+    fields: [
+      { key: "snapshotKey", label: "Snapshot key", type: "bytes32", required: true },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.bytes32("snapshotKey", "Snapshot key"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Reject round payout metadata ${values.snapshotKey || "snapshot"}`,
+  },
+  {
+    id: "oracle-reject-round-payout-root",
+    group: "Cluster Payout Oracle",
+    label: "Reject payout root",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "rejectRoundPayoutSnapshotRoot",
+    description: "Create a proposal to reject a round payout snapshot and blacklist its weight root.",
     fields: [
       { key: "snapshotKey", label: "Snapshot key", type: "bytes32", required: true },
       {
@@ -475,22 +573,14 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
   {
     id: "oracle-reject-finalized-round-payout",
     group: "Cluster Payout Oracle",
-    label: "Recover finalized payout root",
+    label: "Reject finalized payout metadata",
     mode: "proposal",
     contractName: "ClusterPayoutOracle",
     functionName: "rejectFinalizedRoundPayoutSnapshot",
-    description:
-      "Create a proposal to reject a finalized round payout root that has not yet been applied by its consumer.",
+    description: "Create a proposal to reject a finalized round payout payload without blacklisting its root.",
     advanced: true,
     fields: [
       { key: "snapshotKey", label: "Snapshot key", type: "bytes32", required: true },
-      {
-        key: "consumer",
-        label: "Consumer contract",
-        type: "address",
-        required: true,
-        helperText: "Question bounties use the QuestionRewardPoolEscrow address for this check.",
-      },
       {
         key: "reasonHash",
         label: "Reason hash",
@@ -501,10 +591,34 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
     ],
     buildArgs: (_, parser) => [
       parser.bytes32("snapshotKey", "Snapshot key"),
-      parser.address("consumer", "Consumer contract"),
       parser.bytes32("reasonHash", "Reason hash"),
     ],
-    buildDescription: values => `Recover finalized round payout root ${values.snapshotKey || "snapshot"}`,
+    buildDescription: values => `Reject finalized round payout metadata ${values.snapshotKey || "snapshot"}`,
+  },
+  {
+    id: "oracle-reject-finalized-round-payout-root",
+    group: "Cluster Payout Oracle",
+    label: "Reject finalized payout root",
+    mode: "proposal",
+    contractName: "ClusterPayoutOracle",
+    functionName: "rejectFinalizedRoundPayoutSnapshotRoot",
+    description: "Create a proposal to reject a finalized round payout snapshot and blacklist its weight root.",
+    advanced: true,
+    fields: [
+      { key: "snapshotKey", label: "Snapshot key", type: "bytes32", required: true },
+      {
+        key: "reasonHash",
+        label: "Reason hash",
+        type: "bytes32",
+        required: true,
+        helperText: "Hash of the public arbitration note voters can inspect off-chain.",
+      },
+    ],
+    buildArgs: (_, parser) => [
+      parser.bytes32("snapshotKey", "Snapshot key"),
+      parser.bytes32("reasonHash", "Reason hash"),
+    ],
+    buildDescription: values => `Reject finalized round payout root ${values.snapshotKey || "snapshot"}`,
   },
   {
     id: "content-mark-dormant",

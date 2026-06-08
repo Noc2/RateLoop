@@ -650,11 +650,9 @@ contract ClusterPayoutOracleTest is Test {
         vm.expectRevert(ClusterPayoutOracle.SnapshotChallenged.selector);
         oracle.finalizeCorrelationEpoch(1);
 
-        oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
+        oracle.rejectCorrelationEpochRoot(1, keccak256("bad-root"));
         ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
         assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
-        // L-Oracle-A: a challenge-then-reject DOES still blacklist the root so identical
-        // re-proposal is blocked. Only pre-challenge (Proposed-state) rejections skip blacklisting.
         assertTrue(oracle.rejectedCorrelationEpochRoots(1, keccak256("cluster-root")));
     }
 
@@ -671,7 +669,7 @@ contract ClusterPayoutOracleTest is Test {
             _defaultEpochSources()
         );
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
-        oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
+        oracle.rejectCorrelationEpochRoot(1, keccak256("bad-root"));
 
         bytes32 sourceSetDigest = oracle.correlationEpochSourceSetDigest(1);
         bytes32 rootKey = oracle.correlationEpochRootKey(sourceSetDigest, clusterRoot);
@@ -703,7 +701,7 @@ contract ClusterPayoutOracleTest is Test {
             _defaultEpochSources()
         );
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
-        oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
+        oracle.rejectCorrelationEpochRoot(1, keccak256("bad-root"));
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeCorrelationEpoch(
@@ -731,7 +729,7 @@ contract ClusterPayoutOracleTest is Test {
             _twoQuestionEpochSources(3, 4)
         );
         _challengeCorrelationEpoch(1, keccak256("bad-root"));
-        oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
+        oracle.rejectCorrelationEpochRoot(1, keccak256("bad-root"));
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeCorrelationEpoch(
@@ -761,7 +759,7 @@ contract ClusterPayoutOracleTest is Test {
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
 
-        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("late-bad-root"));
+        oracle.rejectFinalizedCorrelationEpochRoot(1, keccak256("late-bad-root"));
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
         assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Rejected));
@@ -1057,7 +1055,7 @@ contract ClusterPayoutOracleTest is Test {
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
-        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-root"));
+        oracle.rejectFinalizedCorrelationEpochRoot(1, keccak256("bad-root"));
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeCorrelationEpoch(
@@ -1082,11 +1080,59 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(snapshot.clusterRoot, keccak256("replacement-cluster-root"));
     }
 
-    // L-Oracle-A: the arbiter rejecting a Proposed (pre-challenge) correlation epoch must NOT
-    // blacklist the clusterRoot — otherwise an M-Oracle-1 style slot-squat followed by an arbiter
-    // reject would permanently strand the correct root (the deterministic scorer can't produce a
-    // different root for the same epoch).
-    function test_ProposedCorrelationEpochRejectionDoesNotBlacklistRoot() public {
+    function test_MetadataOnlyFinalizedCorrelationEpochRejectionAllowsCorrectedSameRoot() public {
+        bytes32 clusterRoot = keccak256("cluster-root");
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("bad-epoch-artifact"),
+            "ipfs://bad-epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        bytes32 rejectedDigest = oracle.correlationEpochProposalDigest(1);
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-metadata"));
+
+        assertTrue(oracle.rejectedCorrelationEpochSnapshotDigests(1, rejectedDigest));
+        assertFalse(oracle.rejectedCorrelationEpochRoots(1, clusterRoot));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("bad-epoch-artifact"),
+            "ipfs://bad-epoch",
+            _defaultEpochSources()
+        );
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("corrected-epoch-artifact"),
+            "ipfs://corrected-epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(block.timestamp + 1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(snapshot.clusterRoot, clusterRoot);
+        assertEq(snapshot.artifactHash, keccak256("corrected-epoch-artifact"));
+    }
+
+    function test_MetadataOnlyCorrelationEpochRejectionAllowsCorrectedSameRoot() public {
         address squatter = address(0xBAD);
         frontendRegistry.setEligible(squatter, true);
 
@@ -1099,24 +1145,42 @@ contract ClusterPayoutOracleTest is Test {
             20,
             honestRoot,
             keccak256("params"),
-            keccak256("epoch-artifact"),
-            "ipfs://epoch",
+            keccak256("bad-epoch-artifact"),
+            "ipfs://bad-epoch",
             _defaultEpochSources()
         );
 
-        // Arbiter clears the squatted slot without going through the challenge cycle.
-        oracle.rejectCorrelationEpoch(1, keccak256("squat-cleanup"));
+        bytes32 rejectedDigest = oracle.correlationEpochProposalDigest(1);
+        oracle.rejectCorrelationEpoch(1, keccak256("bad-metadata"));
 
-        // The clusterRoot is NOT blacklisted, so an honest proposer can re-submit it.
+        assertTrue(oracle.rejectedCorrelationEpochSnapshotDigests(1, rejectedDigest));
         assertFalse(oracle.rejectedCorrelationEpochRoots(1, honestRoot));
+        assertFalse(
+            oracle.rejectedCorrelationEpochRootKeys(
+                oracle.correlationEpochRootKey(oracle.correlationEpochSourceSetDigest(1), honestRoot)
+            )
+        );
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeCorrelationEpoch(
             1,
             1,
             20,
             honestRoot,
             keccak256("params"),
-            keccak256("epoch-artifact"),
-            "ipfs://epoch",
+            keccak256("bad-epoch-artifact"),
+            "ipfs://bad-epoch",
+            _defaultEpochSources()
+        );
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            honestRoot,
+            keccak256("params"),
+            keccak256("corrected-epoch-artifact"),
+            "ipfs://corrected-epoch",
             _defaultEpochSources()
         );
 

@@ -19257,6 +19257,32 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "CORRELATION_EPOCH_REJECTED_ROOT_DOMAIN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "CORRELATION_EPOCH_SOURCE_SET_DOMAIN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "DEFAULT_ADMIN_ROLE",
           inputs: [],
           outputs: [
@@ -19520,6 +19546,49 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "correlationEpochProposalDigest",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "correlationEpochRootKey",
+          inputs: [
+            {
+              name: "sourceSetDigest",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "clusterRoot",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "correlationEpochSnapshot",
           inputs: [
             {
@@ -19623,6 +19692,25 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "correlationEpochSourceSetDigest",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           outputs: [
@@ -20167,7 +20255,43 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectCorrelationEpochRoot",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "rejectFinalizedCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectFinalizedCorrelationEpochRoot",
           inputs: [
             {
               name: "epochId",
@@ -20257,7 +20381,50 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectedCorrelationEpochRootKeys",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "rejectedCorrelationEpochRoots",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rejectedCorrelationEpochSnapshotDigests",
           inputs: [
             {
               name: "",
@@ -29652,7 +29819,7 @@ const deployedContracts: GenericContractsDeclaration = {
   },
   31337: {
     LoopReputation: {
-      address: "0x6379ebd504941f50d5bfde9348b37593bd29c835",
+      address: "0x6379ebD504941f50D5BfDE9348B37593bd29C835",
       abi: [
         {
           type: "constructor",
@@ -31079,7 +31246,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 19,
     },
     ContentRegistry: {
-      address: "0x5b3120d0da5fdcba7aef87a9c3c64829c1c0d76b",
+      address: "0x2c4b93b614DdbfAF0807e8F4Ca982e9f9c2e2Aa4",
       abi: [
         {
           type: "constructor",
@@ -33420,10 +33587,10 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
-      deployedOnBlock: 20,
+      deployedOnBlock: 31,
     },
     RoundVotingEngine: {
-      address: "0x33b1b5aa9aa4da83a332f0bc5cac6a903fde5d92",
+      address: "0xF1078fD568Ad76E49E6F88D1fF485402a086976b",
       abi: [
         {
           type: "constructor",
@@ -35637,10 +35804,10 @@ const deployedContracts: GenericContractsDeclaration = {
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
       },
-      deployedOnBlock: 21,
+      deployedOnBlock: 33,
     },
     RoundRewardDistributor: {
-      address: "0x19a1c09fe3399c4daaa2c98b936a8e460fc5eaa4",
+      address: "0xe8F76a822B57b973c7a89006092364fFF8f69040",
       abi: [
         {
           type: "constructor",
@@ -37176,10 +37343,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 22,
+      deployedOnBlock: 34,
     },
     FrontendRegistry: {
-      address: "0x49b8e3b089d4ebf9f37b1da9b839ec013c2cd8c9",
+      address: "0x6d014319E0F36651997697C98Da594c7Cf235fa4",
       abi: [
         {
           type: "constructor",
@@ -38457,10 +38624,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 23,
+      deployedOnBlock: 29,
     },
     ProfileRegistry: {
-      address: "0x067c804bb006836469379d4a2a69a81803bd1f45",
+      address: "0x5621d0B4D8043524Ac5837918D6a95b1050eF228",
       abi: [
         {
           type: "constructor",
@@ -39190,10 +39357,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 24,
+      deployedOnBlock: 30,
     },
     ProtocolConfig: {
-      address: "0x45009dd3abbe29db54fc5d893ceaa98a624882df",
+      address: "0x04fc820176617A99AE134904935Bc854b2e51628",
       abi: [
         {
           type: "constructor",
@@ -41043,10 +41210,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 25,
+      deployedOnBlock: 32,
     },
     QuestionRewardPoolEscrow: {
-      address: "0xf56aa3aceddf88ab12e494d0b96da3c09a5d264e",
+      address: "0xE8ecF644D9a3432Dab3A0725308f265990eEDca9",
       abi: [
         {
           type: "constructor",
@@ -43676,10 +43843,10 @@ const deployedContracts: GenericContractsDeclaration = {
         roundPayoutSnapshotSourceReadyAt:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
       },
-      deployedOnBlock: 26,
+      deployedOnBlock: 40,
     },
     FeedbackBonusEscrow: {
-      address: "0xdbd296711ec8ef9aacb623ee3f1c0922dce0d7b2",
+      address: "0x4C073a92B1C8Fb55313102Ab412fb7F1704bcBdD",
       abi: [
         {
           type: "constructor",
@@ -45130,10 +45297,10 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
-      deployedOnBlock: 27,
+      deployedOnBlock: 43,
     },
     FeedbackRegistry: {
-      address: "0xdfd787c807dea8d7e53311b779bc0c6a4704d286",
+      address: "0xb1527802E7800034D6887b0a99a5Ad2683184b95",
       abi: [
         {
           type: "constructor",
@@ -45805,10 +45972,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 28,
+      deployedOnBlock: 42,
     },
     MockWorldIDVerifier: {
-      address: "0x4e85dc48a70da1298489d5b6fc2492767d98f384",
+      address: "0x4e85DC48a70DA1298489d5B6FC2492767d98f384",
       abi: [
         {
           type: "function",
@@ -46083,7 +46250,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 35,
     },
     MockERC20: {
-      address: "0x4d8e02bbfcf205828a8352af4376b165e123d7b0",
+      address: "0x4d8E02BBfCf205828A8352Af4376b165E123D7b0",
       abi: [
         {
           type: "constructor",
@@ -46753,7 +46920,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 36,
     },
     CategoryRegistry: {
-      address: "0xeab25969e5285df34a3b245324d0b2b91e31cad4",
+      address: "0xEAb25969e5285dF34a3B245324d0B2B91E31cAD4",
       abi: [
         {
           type: "constructor",
@@ -47292,7 +47459,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 37,
     },
     RaterRegistry: {
-      address: "0x150890d6984e98f408162ee65684779804bff858",
+      address: "0xc525e1beD21174d5615252a16eE2b283B894A318",
       abi: [
         {
           type: "constructor",
@@ -50019,10 +50186,10 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/IRaterIdentityRegistry.sol",
         resolveRater: "contracts/interfaces/IRaterIdentityRegistry.sol",
       },
-      deployedOnBlock: 38,
+      deployedOnBlock: 39,
     },
     X402QuestionSubmitter: {
-      address: "0x3a1d75769758705cab1385377d4d88b8193a5f37",
+      address: "0x3A1D75769758705caB1385377d4D88b8193A5f37",
       abi: [
         {
           type: "constructor",
@@ -50674,7 +50841,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 41,
     },
     LaunchDistributionPool: {
-      address: "0x9db9797733fe5f734724aa05d29fa39563563af5",
+      address: "0x9DB9797733FE5F734724Aa05D29Fa39563563Af5",
       abi: [
         {
           type: "constructor",
@@ -53746,7 +53913,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 68,
     },
     ClusterPayoutOracle: {
-      address: "0xa7328deaa1b585a494f055fc9bd99ea56d52cd3d",
+      address: "0xa7328DEAa1B585a494f055Fc9Bd99ea56d52CD3d",
       abi: [
         {
           type: "constructor",
@@ -53824,6 +53991,32 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "CORRELATION_EPOCH_DOMAIN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "CORRELATION_EPOCH_REJECTED_ROOT_DOMAIN",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "CORRELATION_EPOCH_SOURCE_SET_DOMAIN",
           inputs: [],
           outputs: [
             {
@@ -54099,6 +54292,49 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "correlationEpochProposalDigest",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "correlationEpochRootKey",
+          inputs: [
+            {
+              name: "sourceSetDigest",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "clusterRoot",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "pure",
+        },
+        {
+          type: "function",
           name: "correlationEpochSnapshot",
           inputs: [
             {
@@ -54202,6 +54438,25 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "correlationEpochSourceSetDigest",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           outputs: [
@@ -54746,7 +55001,43 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectCorrelationEpochRoot",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "rejectFinalizedCorrelationEpoch",
+          inputs: [
+            {
+              name: "epochId",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reasonHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "rejectFinalizedCorrelationEpochRoot",
           inputs: [
             {
               name: "epochId",
@@ -54836,7 +55127,50 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "rejectedCorrelationEpochRootKeys",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "rejectedCorrelationEpochRoots",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "rejectedCorrelationEpochSnapshotDigests",
           inputs: [
             {
               name: "",
@@ -56160,7 +56494,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 70,
     },
     AdvisoryVoteRecorder: {
-      address: "0x741050c1d044e23d3ebd2e85ad8b6ce5c17555c7",
+      address: "0x741050c1d044e23d3eBd2e85ad8b6cE5c17555c7",
       abi: [
         {
           type: "constructor",
