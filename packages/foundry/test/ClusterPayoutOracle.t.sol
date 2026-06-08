@@ -1192,6 +1192,109 @@ contract ClusterPayoutOracleTest is Test {
         oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("self-challenge"));
     }
 
+    function test_FrontendCannotChallengeKeeperCorrelationEpoch() public {
+        address frontendOperator = address(0xFEE);
+        address keeper = address(0xCAFE);
+
+        frontendRegistry.setEligible(frontendOperator, true);
+        frontendRegistry.setAuthorizedSnapshotFrontend(keeper, frontendOperator);
+
+        vm.prank(keeper);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+
+        usdc.mint(frontendOperator, CHALLENGE_BOND);
+        vm.startPrank(frontendOperator);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.challengeCorrelationEpoch(1, keccak256("self-frontend-challenge"));
+        vm.stopPrank();
+    }
+
+    function test_AuthorizedKeeperCannotChallengeFrontendRoundPayoutSnapshot() public {
+        address frontendOperator = address(0xFEE);
+        address keeper = address(0xCAFE);
+
+        frontendRegistry.setEligible(frontendOperator, true);
+        frontendRegistry.setAuthorizedSnapshotFrontend(keeper, frontendOperator);
+
+        vm.prank(frontendOperator);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        vm.prank(frontendOperator);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+
+        usdc.mint(keeper, CHALLENGE_BOND);
+        vm.startPrank(keeper);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("authorized-keeper-challenge"));
+        vm.stopPrank();
+    }
+
+    function test_RotatedKeeperCannotChallengePriorKeeperCorrelationEpochButUnrelatedChallengerCan() public {
+        address frontendOperator = address(0xFEE);
+        address firstKeeper = address(0xCAFE);
+        address secondKeeper = address(0xBEEF);
+        address unrelatedChallenger = address(0xCA11CE);
+
+        frontendRegistry.setEligible(frontendOperator, true);
+        frontendRegistry.setAuthorizedSnapshotFrontend(firstKeeper, frontendOperator);
+
+        vm.prank(firstKeeper);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+
+        frontendRegistry.setAuthorizedSnapshotFrontend(secondKeeper, frontendOperator);
+
+        usdc.mint(secondKeeper, CHALLENGE_BOND);
+        vm.startPrank(secondKeeper);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.challengeCorrelationEpoch(1, keccak256("rotated-keeper-challenge"));
+        vm.stopPrank();
+
+        usdc.mint(unrelatedChallenger, CHALLENGE_BOND);
+        vm.startPrank(unrelatedChallenger);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        oracle.challengeCorrelationEpoch(1, keccak256("independent-challenge"));
+        vm.stopPrank();
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
+        assertEq(snapshot.challenger, unrelatedChallenger);
+    }
+
     function test_ChallengesRequireUsdcApprovalAndRejectNativeToken() public {
         address challenger = address(0xCA11);
         usdc.mint(challenger, CHALLENGE_BOND);
@@ -1934,6 +2037,12 @@ contract MockFrontendRegistry {
         if (eligible[proposer]) return proposer;
         frontend = snapshotFrontend[proposer];
         if (!eligible[frontend]) return address(0);
+    }
+
+    function isAuthorizedSnapshotProposer(address frontend, address proposer) external view returns (bool) {
+        if (!eligible[frontend] || proposer == address(0)) return false;
+        if (frontend == proposer) return true;
+        return snapshotFrontend[proposer] == frontend;
     }
 }
 

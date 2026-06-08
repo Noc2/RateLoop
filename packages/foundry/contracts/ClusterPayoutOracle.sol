@@ -304,7 +304,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (block.timestamp >= uint256(snapshot.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
-        if (msg.sender == snapshot.proposer) revert InvalidSnapshot();
+        _requireDisinterestedChallenger(msg.sender, snapshot.proposer, snapshot.frontendOperator);
         uint256 bond = challengeBond;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
@@ -492,7 +492,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (block.timestamp >= uint256(proposal.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
-        if (msg.sender == proposal.proposer) revert InvalidSnapshot();
+        _requireDisinterestedChallenger(msg.sender, proposal.proposer, proposal.frontendOperator);
         uint256 bond = challengeBond;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
@@ -1050,6 +1050,16 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         ] = true;
     }
 
+    function _requireDisinterestedChallenger(address challenger, address proposer, address frontendOperator)
+        private
+        view
+    {
+        if (challenger == proposer || challenger == frontendOperator) revert InvalidSnapshot();
+        try frontendRegistry.isAuthorizedSnapshotProposer(frontendOperator, challenger) returns (bool authorized) {
+            if (authorized) revert InvalidSnapshot();
+        } catch {}
+    }
+
     function _creditBond(address to, uint256 amount) private {
         if (amount == 0) return;
         pendingBondWithdrawals[to] += amount;
@@ -1069,6 +1079,12 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             revert InvalidAddress();
         }
         try IFrontendRegistry(newFrontendRegistry).authorizedSnapshotFrontend(address(0)) returns (address) {}
+        catch {
+            revert InvalidAddress();
+        }
+        try IFrontendRegistry(newFrontendRegistry).isAuthorizedSnapshotProposer(address(0), address(0)) returns (
+            bool
+        ) {}
         catch {
             revert InvalidAddress();
         }
