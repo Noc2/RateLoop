@@ -26,6 +26,7 @@ import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRateLoopSwitchNetwork } from "~~/hooks/useRateLoopSwitchNetwork";
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
+import { buildCleanHandoffLocationPath, readHandoffTokenFromLocation } from "~~/lib/agent/handoffLocation";
 import {
   MAX_QUESTION_DETAILS_TEXT_LENGTH,
   getQuestionDetailsTextSizeBytes,
@@ -222,15 +223,7 @@ function delay(ms: number) {
 }
 
 function readToken() {
-  if (typeof window !== "undefined") {
-    const hash = window.location.hash;
-    if (hash) {
-      const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
-      const fromHash = hashParams.get("token");
-      if (fromHash) return fromHash;
-    }
-  }
-  return "";
+  return typeof window === "undefined" ? "" : readHandoffTokenFromLocation(window.location);
 }
 
 function isJsonRecord(value: unknown): value is JsonRecord {
@@ -992,9 +985,9 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const hasTokenInHash = window.location.hash.includes("token=");
-    if (!hasTokenInHash) return;
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    const cleanPath = buildCleanHandoffLocationPath(window.location);
+    if (!cleanPath) return;
+    window.history.replaceState(null, "", cleanPath);
   }, []);
 
   const loadHandoff = useCallback(async () => {
