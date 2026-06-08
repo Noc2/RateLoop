@@ -2,7 +2,7 @@
   "skills": [
     {
       "name": "rateloop-human-evaluation",
-      "url": "https://www.rateloop.xyz/skill.md",
+      "url": "https://www.rateloop.ai/skill.md",
       "description": "Ask verified humans for public, paid feedback through RateLoop MCP or JSON APIs."
     }
   ]
