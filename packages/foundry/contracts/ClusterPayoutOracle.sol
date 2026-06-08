@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
-import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
-import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
+import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
+import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
@@ -27,6 +27,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
 
     bytes32 public constant CORRELATION_EPOCH_DOMAIN = keccak256("rateloop.correlation.epoch.v1");
     bytes32 public constant CORRELATION_EPOCH_COVERAGE_DOMAIN = keccak256("rateloop.correlation.epoch.coverage.v1");
+    bytes32 public constant CORRELATION_EPOCH_SOURCE_SET_DOMAIN = keccak256("rateloop.correlation.epoch.source-set.v1");
+    bytes32 public constant CORRELATION_EPOCH_REJECTED_ROOT_DOMAIN =
+        keccak256("rateloop.correlation.epoch.rejected-root.v1");
     bytes32 public constant ROUND_SNAPSHOT_DOMAIN = keccak256("rateloop.correlation.round-payout.v1");
     bytes32 public constant PAYOUT_WEIGHT_DOMAIN = keccak256("rateloop.correlation.payout-weight.v1");
 
@@ -112,6 +115,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     mapping(bytes32 => RoundPayoutProposal) private roundPayoutProposals;
     mapping(uint8 => address) public roundPayoutSnapshotConsumer;
     mapping(uint256 => bytes32) public correlationEpochCoverageDigest;
+    mapping(uint256 => bytes32) public correlationEpochSourceSetDigest;
     mapping(uint256 => mapping(bytes32 => bytes32)) public correlationEpochSnapshotCoverageDigest;
     mapping(address => uint256) public pendingBondWithdrawals;
     mapping(bytes32 => bool) public rejectedRoundPayoutSnapshotConsumed;
@@ -123,6 +127,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
     ///         is blocked at proposeCorrelationEpoch — mirrors rejectedRoundPayoutSnapshotRoots
     ///         for the correlation-epoch path (L-Oracle-4).
     mapping(uint256 => mapping(bytes32 => bool)) public rejectedCorrelationEpochRoots;
+    /// @notice Canonical rejected correlation roots keyed by range/source set/root, independent
+    ///         of caller-chosen epochId.
+    mapping(bytes32 => bool) public rejectedCorrelationEpochRootKeys;
 
     event OracleConfigUpdated(uint64 challengeWindow, uint256 challengeBond, address bondRecipient);
     event FrontendRegistryUpdated(address indexed frontendRegistry);
@@ -247,11 +254,17 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (existing.status != SnapshotStatus.None && existing.status != SnapshotStatus.Rejected) {
             revert SnapshotExists();
         }
+        (bytes32 coverageDigest, bytes32 sourceSetDigest) =
+            _requireCorrelationEpochSourcesReady(epochId, fromRoundId, toRoundId, sourceRefs);
         // L-Oracle-4: block identical re-proposal of a previously rejected clusterRoot.
-        if (rejectedCorrelationEpochRoots[epochId][clusterRoot]) revert InvalidSnapshot();
-
-        bytes32 coverageDigest = _requireCorrelationEpochSourcesReady(epochId, fromRoundId, toRoundId, sourceRefs);
+        if (
+            rejectedCorrelationEpochRoots[epochId][clusterRoot]
+                || rejectedCorrelationEpochRootKeys[correlationEpochRootKey(sourceSetDigest, clusterRoot)]
+        ) {
+            revert InvalidSnapshot();
+        }
         correlationEpochCoverageDigest[epochId] = coverageDigest;
+        correlationEpochSourceSetDigest[epochId] = sourceSetDigest;
 
         correlationEpochSnapshots[epochId] = CorrelationEpochSnapshot({
             epochId: epochId,
@@ -343,7 +356,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // root from re-proposal — the deterministic scorer pipeline cannot produce a different
         // root for the same epoch, so blacklisting would otherwise strand the epoch.
         if (wasChallenged) {
-            rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
+            _rejectCorrelationEpochRoot(snapshot);
         }
         address challenger = snapshot.challenger;
         uint256 bond = snapshot.bond;
@@ -361,7 +374,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
 
         snapshot.status = SnapshotStatus.Rejected;
-        rejectedCorrelationEpochRoots[epochId][snapshot.clusterRoot] = true;
+        _rejectCorrelationEpochRoot(snapshot);
         emit CorrelationEpochRejected(epochId, msg.sender, reasonHash);
     }
 
@@ -701,6 +714,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         return keccak256(abi.encode(ROUND_SNAPSHOT_DOMAIN, domain, rewardPoolId, contentId, roundId));
     }
 
+    function correlationEpochRootKey(bytes32 sourceSetDigest, bytes32 clusterRoot) public pure returns (bytes32) {
+        return keccak256(abi.encode(CORRELATION_EPOCH_REJECTED_ROOT_DOMAIN, sourceSetDigest, clusterRoot));
+    }
+
     function isRoundPayoutSnapshotFinalized(uint8 domain, uint256 rewardPoolId, uint256 contentId, uint256 roundId)
         external
         view
@@ -922,13 +939,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         uint64 fromRoundId,
         uint64 toRoundId,
         CorrelationEpochSourceRef[] calldata sourceRefs
-    ) private returns (bytes32 coverageDigest) {
+    ) private returns (bytes32 coverageDigest, bytes32 sourceSetDigest) {
         uint256 sourceCount = sourceRefs.length;
         if (sourceCount == 0 || sourceCount > MAX_CORRELATION_EPOCH_SOURCES) revert InvalidSnapshot();
 
         bytes32[] memory snapshotKeys = new bytes32[](sourceCount);
-        coverageDigest =
-            keccak256(abi.encode(CORRELATION_EPOCH_COVERAGE_DOMAIN, epochId, fromRoundId, toRoundId, sourceCount));
 
         for (uint256 i; i < sourceCount;) {
             CorrelationEpochSourceRef calldata sourceRef = sourceRefs[i];
@@ -938,13 +953,6 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             bytes32 snapshotKey = roundPayoutSnapshotKey(
                 sourceRef.domain, sourceRef.rewardPoolId, sourceRef.contentId, sourceRef.roundId
             );
-            for (uint256 j; j < i;) {
-                if (snapshotKeys[j] == snapshotKey) revert InvalidSnapshot();
-                unchecked {
-                    ++j;
-                }
-            }
-
             address consumer = roundPayoutSnapshotConsumer[sourceRef.domain];
             if (consumer == address(0)) revert InvalidAddress();
             try IRoundPayoutSnapshotConsumer(consumer)
@@ -958,19 +966,45 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                 revert SourceNotReady();
             }
 
-            snapshotKeys[i] = snapshotKey;
-            coverageDigest = keccak256(abi.encode(coverageDigest, snapshotKey));
+            _insertSortedUniqueSnapshotKey(snapshotKeys, i, snapshotKey);
             unchecked {
                 ++i;
             }
         }
 
+        coverageDigest =
+            keccak256(abi.encode(CORRELATION_EPOCH_COVERAGE_DOMAIN, epochId, fromRoundId, toRoundId, sourceCount));
+        sourceSetDigest = keccak256(abi.encode(CORRELATION_EPOCH_SOURCE_SET_DOMAIN, sourceCount));
+        for (uint256 i; i < sourceCount;) {
+            bytes32 snapshotKey = snapshotKeys[i];
+            coverageDigest = keccak256(abi.encode(coverageDigest, snapshotKey));
+            sourceSetDigest = keccak256(abi.encode(sourceSetDigest, snapshotKey));
+            unchecked {
+                ++i;
+            }
+        }
         for (uint256 i; i < sourceCount;) {
             correlationEpochSnapshotCoverageDigest[epochId][snapshotKeys[i]] = coverageDigest;
             unchecked {
                 ++i;
             }
         }
+    }
+
+    function _insertSortedUniqueSnapshotKey(bytes32[] memory snapshotKeys, uint256 length, bytes32 snapshotKey)
+        private
+        pure
+    {
+        uint256 insertAt = length;
+        while (insertAt > 0 && uint256(snapshotKeys[insertAt - 1]) > uint256(snapshotKey)) {
+            snapshotKeys[insertAt] = snapshotKeys[insertAt - 1];
+            unchecked {
+                --insertAt;
+            }
+        }
+        if (insertAt > 0 && snapshotKeys[insertAt - 1] == snapshotKey) revert InvalidSnapshot();
+        if (insertAt < length && snapshotKeys[insertAt] == snapshotKey) revert InvalidSnapshot();
+        snapshotKeys[insertAt] = snapshotKey;
     }
 
     function _validateCorrelationEpochSourceShape(CorrelationEpochSourceRef calldata sourceRef) private pure {
@@ -1009,6 +1043,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         );
     }
 
+    function _rejectCorrelationEpochRoot(CorrelationEpochSnapshot storage snapshot) private {
+        rejectedCorrelationEpochRoots[snapshot.epochId][snapshot.clusterRoot] = true;
+        rejectedCorrelationEpochRootKeys[
+            correlationEpochRootKey(correlationEpochSourceSetDigest[snapshot.epochId], snapshot.clusterRoot)
+        ] = true;
+    }
+
     function _creditBond(address to, uint256 amount) private {
         if (amount == 0) return;
         pendingBondWithdrawals[to] += amount;
@@ -1023,11 +1064,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         } catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) { }
+        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) {}
         catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).authorizedSnapshotFrontend(address(0)) returns (address) { }
+        try IFrontendRegistry(newFrontendRegistry).authorizedSnapshotFrontend(address(0)) returns (address) {}
         catch {
             revert InvalidAddress();
         }

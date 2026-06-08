@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import { Test } from "forge-std/Test.sol";
-import { ClusterPayoutOracle } from "../contracts/ClusterPayoutOracle.sol";
-import { IClusterPayoutOracle } from "../contracts/interfaces/IClusterPayoutOracle.sol";
-import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
+import {Test} from "forge-std/Test.sol";
+import {ClusterPayoutOracle} from "../contracts/ClusterPayoutOracle.sol";
+import {IClusterPayoutOracle} from "../contracts/interfaces/IClusterPayoutOracle.sol";
+import {MockERC20} from "../contracts/mocks/MockERC20.sol";
 
 function _questionEpochSources(uint256 rewardPoolId, uint256 contentId, uint256 roundId)
     pure
@@ -43,7 +43,7 @@ contract ClusterPayoutOracleTest is Test {
     MockRoundPayoutSnapshotConsumer internal launchConsumer;
     MockERC20 internal usdc;
 
-    receive() external payable { }
+    receive() external payable {}
 
     function setUp() public {
         usdc = new MockERC20("USD Coin", "USDC", 6);
@@ -179,7 +179,7 @@ contract ClusterPayoutOracleTest is Test {
 
     function test_ProposalsDoNotAcceptEthBonds() public {
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
-        oracle.proposeCorrelationEpoch{ value: 1 }(
+        oracle.proposeCorrelationEpoch{value: 1}(
             1,
             1,
             20,
@@ -658,6 +658,94 @@ contract ClusterPayoutOracleTest is Test {
         assertTrue(oracle.rejectedCorrelationEpochRoots(1, keccak256("cluster-root")));
     }
 
+    function test_RejectedCorrelationEpochRootCannotReplayUnderDifferentEpochId() public {
+        bytes32 clusterRoot = keccak256("cluster-root");
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        _challengeCorrelationEpoch(1, keccak256("bad-root"));
+        oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
+
+        bytes32 sourceSetDigest = oracle.correlationEpochSourceSetDigest(1);
+        bytes32 rootKey = oracle.correlationEpochRootKey(sourceSetDigest, clusterRoot);
+        assertTrue(oracle.rejectedCorrelationEpochRootKeys(rootKey));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            2,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+    }
+
+    function test_RejectedCorrelationEpochRootCannotReplayWithAlteredRange() public {
+        bytes32 clusterRoot = keccak256("cluster-root");
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        _challengeCorrelationEpoch(1, keccak256("bad-root"));
+        oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            2,
+            1,
+            21,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+    }
+
+    function test_RejectedCorrelationEpochRootCannotReplayWithReorderedSources() public {
+        bytes32 clusterRoot = keccak256("cluster-root");
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _twoQuestionEpochSources(3, 4)
+        );
+        _challengeCorrelationEpoch(1, keccak256("bad-root"));
+        oracle.rejectCorrelationEpoch(1, keccak256("bad-root"));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            2,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _twoQuestionEpochSources(4, 3)
+        );
+    }
+
     function test_FinalizedCorrelationEpochCanBeVetoedBeforeFutureChildProposals() public {
         bytes32 clusterRoot = keccak256("cluster-root");
         oracle.proposeCorrelationEpoch(
@@ -1126,7 +1214,7 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.prank(challenger);
         vm.expectRevert(ClusterPayoutOracle.InvalidBond.selector);
-        oracle.challengeCorrelationEpoch{ value: 1 }(1, keccak256("bad-root"));
+        oracle.challengeCorrelationEpoch{value: 1}(1, keccak256("bad-root"));
     }
 
     function test_ArbiterCanFinalizeChallengedSnapshots() public {
@@ -1674,7 +1762,7 @@ contract ClusterPayoutOracleProposerBondTest is Test {
 
     event ProposerBondUnrecoverable(bytes32 indexed snapshotKey, address indexed proposer, uint256 missingAmount);
 
-    receive() external payable { }
+    receive() external payable {}
 
     function setUp() public {
         arbiter = address(this);
@@ -1876,7 +1964,7 @@ contract MockRoundPayoutSnapshotConsumer {
 contract TestableClusterPayoutOracle is ClusterPayoutOracle {
     constructor(address admin, address frontendRegistry, address challengeBondToken)
         ClusterPayoutOracle(admin, frontendRegistry, challengeBondToken)
-    { }
+    {}
 
     /// @dev Sets proposerBond directly via the inherited (private) mapping. Because the storage
     ///      mapping is `private`, we re-declare an internal shim that maps onto the same slot by
