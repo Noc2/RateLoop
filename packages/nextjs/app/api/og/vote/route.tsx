@@ -26,6 +26,77 @@ const fallbackResponseHeaders = {
   "Cache-Control": "no-store, max-age=0",
 };
 
+function RateLoopMark({ size = 46 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 128 128" aria-hidden="true" style={{ display: "flex" }}>
+      <defs>
+        <linearGradient id="og-logo-seg-0" x1="64" y1="21" x2="85.5" y2="26.761" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFC43D" />
+          <stop offset="1" stopColor="#FFC43D" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-1" x1="85.5" y1="26.761" x2="101.239" y2="42.5" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFC43D" />
+          <stop offset="1" stopColor="#FFC43D" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-2" x1="101.239" y1="42.5" x2="107" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFC43D" />
+          <stop offset="1" stopColor="#FFC43D" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-3" x1="107" y1="64" x2="101.239" y2="85.5" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#FFC43D" />
+          <stop offset="1" stopColor="#EF476F" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-4" x1="101.239" y1="85.5" x2="85.5" y2="101.239" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#EF476F" />
+          <stop offset="1" stopColor="#EF476F" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-5" x1="85.5" y1="101.239" x2="64" y2="107" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#EF476F" />
+          <stop offset="1" stopColor="#EF476F" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-6" x1="64" y1="107" x2="42.5" y2="101.239" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#EF476F" />
+          <stop offset="1" stopColor="#EF476F" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-7" x1="42.5" y1="101.239" x2="26.761" y2="85.5" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#EF476F" />
+          <stop offset="1" stopColor="#359EEE" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-8" x1="26.761" y1="85.5" x2="21" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#359EEE" />
+          <stop offset="1" stopColor="#359EEE" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-9" x1="21" y1="64" x2="26.761" y2="42.5" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#359EEE" />
+          <stop offset="1" stopColor="#359EEE" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-10" x1="26.761" y1="42.5" x2="42.5" y2="26.761" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#359EEE" />
+          <stop offset="1" stopColor="#03CEA4" />
+        </linearGradient>
+        <linearGradient id="og-logo-seg-11" x1="42.5" y1="26.761" x2="64" y2="21" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#03CEA4" />
+          <stop offset="1" stopColor="#FFC43D" />
+        </linearGradient>
+      </defs>
+      <g fill="none" strokeWidth="10" strokeLinecap="butt" strokeLinejoin="round">
+        <path d="M64 21 A43 43 0 0 1 85.5 26.761" stroke="url(#og-logo-seg-0)" />
+        <path d="M85.5 26.761 A43 43 0 0 1 101.239 42.5" stroke="url(#og-logo-seg-1)" />
+        <path d="M101.239 42.5 A43 43 0 0 1 107 64" stroke="url(#og-logo-seg-2)" />
+        <path d="M107 64 A43 43 0 0 1 101.239 85.5" stroke="url(#og-logo-seg-3)" />
+        <path d="M101.239 85.5 A43 43 0 0 1 85.5 101.239" stroke="url(#og-logo-seg-4)" />
+        <path d="M85.5 101.239 A43 43 0 0 1 64 107" stroke="url(#og-logo-seg-5)" />
+        <path d="M64 107 A43 43 0 0 1 42.5 101.239" stroke="url(#og-logo-seg-6)" />
+        <path d="M42.5 101.239 A43 43 0 0 1 26.761 85.5" stroke="url(#og-logo-seg-7)" />
+        <path d="M26.761 85.5 A43 43 0 0 1 21 64" stroke="url(#og-logo-seg-8)" />
+        <path d="M21 64 A43 43 0 0 1 26.761 42.5" stroke="url(#og-logo-seg-9)" />
+        <path d="M26.761 42.5 A43 43 0 0 1 42.5 26.761" stroke="url(#og-logo-seg-10)" />
+        <path d="M42.5 26.761 A43 43 0 0 1 64 21" stroke="url(#og-logo-seg-11)" />
+      </g>
+    </svg>
+  );
+}
+
 function Metric({ label, value, valueFontSize = 38 }: { label: string; value: string; valueFontSize?: number }) {
   return (
     <div
@@ -76,15 +147,7 @@ function RatingShareImage({ shareData }: { shareData: ContentShareData }) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 8,
-              background: "#50f29a",
-              border: "2px solid #f7fff5",
-            }}
-          />
+          <RateLoopMark />
           <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: 0 }}>RateLoop</div>
         </div>
         <div
