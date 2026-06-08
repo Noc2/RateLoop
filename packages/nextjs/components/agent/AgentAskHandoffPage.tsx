@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress } from "viem";
 import { useAccount, useConfig } from "wagmi";
-import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
+import { getPublicClient, sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
 import {
   ArrowPathIcon,
   ChatBubbleLeftRightIcon,
@@ -42,6 +42,7 @@ import {
   getQuestionRoundMaxDurationForEpoch,
   isQuestionRoundMaxDurationValidForEpoch,
 } from "~~/lib/questionRoundConfig";
+import { assertContentRegistryQuestionSubmissionSelector } from "~~/lib/questionSubmissionSelectorSupport";
 import { notification } from "~~/utils/scaffold-eth";
 
 const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(module => module.ShareModal), {
@@ -172,6 +173,8 @@ type SubmittedContentModalState = {
 };
 
 const SECONDS_PER_MINUTE = 60;
+const SINGLE_QUESTION_SUBMISSION_SELECTOR = "0x339aaa84";
+const BUNDLE_QUESTION_SUBMISSION_SELECTOR = "0x4bef7869";
 
 const BOUNTY_AMOUNT_TOOLTIP =
   "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
@@ -723,6 +726,21 @@ function assertZeroValue(value: unknown, field: string) {
   throw new Error(`${field} must be zero.`);
 }
 
+function findHandoffQuestionSubmissionCall(calls: HandoffTransactionPlan["calls"]) {
+  for (const [index, call] of (calls ?? []).entries()) {
+    const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
+    const selector = data.slice(0, 10).toLowerCase();
+    if (selector === SINGLE_QUESTION_SUBMISSION_SELECTOR || selector === BUNDLE_QUESTION_SUBMISSION_SELECTOR) {
+      return {
+        kind: selector === BUNDLE_QUESTION_SUBMISSION_SELECTOR ? "bundle" : "single",
+        to: normalizeAddress(call.to, `transactionPlan.calls[${index}].to`) as `0x${string}`,
+      } as const;
+    }
+  }
+
+  return null;
+}
+
 function readResponseError(value: unknown, fallback: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
   const record = value as { error?: unknown; message?: unknown };
@@ -1179,6 +1197,19 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         }
 
         const handoffChainId = targetHandoff.chainId ?? undefined;
+        const questionSubmissionCall = findHandoffQuestionSubmissionCall(calls);
+        if (questionSubmissionCall) {
+          const publicClient = getPublicClient(
+            wagmiConfig,
+            handoffChainId === undefined ? undefined : { chainId: handoffChainId },
+          );
+          await assertContentRegistryQuestionSubmissionSelector(
+            publicClient,
+            questionSubmissionCall.to,
+            questionSubmissionCall.kind,
+          );
+        }
+
         for (const [index, call] of calls.entries()) {
           const to = normalizeAddress(call.to, `transactionPlan.calls[${index}].to`);
           const data = normalizeHex(call.data ?? "0x", `transactionPlan.calls[${index}].data`);
