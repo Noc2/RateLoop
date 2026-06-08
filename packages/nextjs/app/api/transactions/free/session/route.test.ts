@@ -77,7 +77,6 @@ test("builds a self-funded fallback summary when the free transaction store is u
     exhausted: false,
     walletAddress: "0xfa9605A2c38a0B4f16f689FDD07B63F295b86d1C",
     raterIdentityKey: null,
-    voterIdTokenId: null,
   });
 });
 

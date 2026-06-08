@@ -49,6 +49,5 @@ export function buildUnavailableFreeTransactionSummary(params: { address: string
     exhausted: false,
     walletAddress: normalizeWalletAddress(params.address),
     raterIdentityKey: null,
-    voterIdTokenId: null,
   };
 }

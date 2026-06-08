@@ -98,8 +98,6 @@ export type FreeTransactionAllowanceSummary = {
   exhausted: boolean;
   walletAddress: `0x${string}` | null;
   raterIdentityKey: string | null;
-  /** @deprecated use raterIdentityKey */
-  voterIdTokenId: string | null;
 };
 
 export type FreeTransactionAllowanceDecision =
@@ -466,7 +464,7 @@ async function ensureQuotaRow(
     .insert(freeTransactionQuotas)
     .values({
       identityKey,
-      voterIdTokenId: params.raterIdentityKey,
+      raterIdentityKey: params.raterIdentityKey,
       chainId: params.chainId,
       environment: params.environment,
       lastWalletAddress: params.walletAddress,
@@ -501,7 +499,6 @@ function buildQuotaSummary(params: {
     exhausted: used >= params.freeTxLimit,
     walletAddress: params.walletAddress,
     raterIdentityKey: params.raterIdentityKey,
-    voterIdTokenId: params.raterIdentityKey,
   } satisfies FreeTransactionAllowanceSummary;
 }
 
@@ -519,8 +516,8 @@ function normalizeQuotaRow(
         free_tx_used?: number | string | null;
         freetxused?: number | string | null;
         raterIdentityKey?: string | null;
-        voter_id_token_id?: string | null;
-        voteridtokenid?: string | null;
+        rater_identity_key?: string | null;
+        rateridentitykey?: string | null;
       }
     | null
     | undefined,
@@ -534,7 +531,7 @@ function normalizeQuotaRow(
     environment: row.environment ?? "",
     freeTxLimit: Number(row.freeTxLimit ?? row.free_tx_limit ?? row.freetxlimit),
     freeTxUsed: Number(row.freeTxUsed ?? row.free_tx_used ?? row.freetxused),
-    raterIdentityKey: row.raterIdentityKey ?? row.voter_id_token_id ?? row.voteridtokenid ?? "",
+    raterIdentityKey: row.raterIdentityKey ?? row.rater_identity_key ?? row.rateridentitykey ?? "",
   };
 }
 
@@ -626,7 +623,6 @@ function buildUnverifiedSummary(params: { chainId: number; walletAddress: `0x${s
     exhausted: false,
     walletAddress: params.walletAddress,
     raterIdentityKey: null,
-    voterIdTokenId: null,
   } satisfies FreeTransactionAllowanceSummary;
 }
 
@@ -1350,7 +1346,7 @@ export async function evaluateFreeTransactionAllowance(
           .update(freeTransactionReservations)
           .set({
             identityKey,
-            voterIdTokenId: raterIdentityKey,
+            raterIdentityKey,
             chainId: body.chainId!,
             environment,
             walletAddress,
@@ -1367,7 +1363,7 @@ export async function evaluateFreeTransactionAllowance(
         await tx.insert(freeTransactionReservations).values({
           operationKey,
           identityKey,
-          voterIdTokenId: raterIdentityKey,
+          raterIdentityKey,
           chainId: body.chainId!,
           environment,
           walletAddress,
