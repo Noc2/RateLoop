@@ -37,15 +37,6 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
     uint8 internal constant PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
     bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
 
-    /// @notice drand `quicknet` (mainnet) chain hash. Used by the legacy `initialize` / `initializeWithTreasury`
-    ///         paths for back-compat with existing tests and mainnet (chainId 480) deployments.
-    /// @dev Testnet (e.g. World Chain Sepolia, chainId 4801) MUST use `initializeWithDrandConfig` with the
-    ///      testnet `quicknet-t` values; otherwise every tlock reveal validates against the wrong public key.
-    bytes32 public constant MAINNET_DRAND_CHAIN_HASH =
-        0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
-    uint64 public constant MAINNET_DRAND_GENESIS_TIME = 1_692_803_367;
-    uint64 public constant MAINNET_DRAND_PERIOD = 3;
-
     error InvalidAddress();
     error InvalidConfig();
 
@@ -135,36 +126,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         _disableInitializers();
     }
 
-    /// @notice Legacy initializer. Defaults drand config to mainnet `quicknet`. Suitable for the mainnet
-    ///         deploy (chainId 480) and for unit tests where the drand chain choice doesn't matter.
-    /// @dev Testnet / non-mainnet deploys MUST use `initializeWithDrandConfig` to provide testnet drand values,
-    ///      otherwise every reveal will fail signature validation against the wrong drand public key.
-    function initialize(address admin, address governance) external initializer {
-        _initialize(
-            admin,
-            governance,
-            governance,
-            MAINNET_DRAND_CHAIN_HASH,
-            MAINNET_DRAND_GENESIS_TIME,
-            MAINNET_DRAND_PERIOD,
-            false
-        );
-    }
-
-    /// @notice Legacy initializer with explicit treasury. Same mainnet drand defaults as `initialize`.
-    function initializeWithTreasury(address admin, address governance, address treasuryAuthority) external initializer {
-        _initialize(
-            admin,
-            governance,
-            treasuryAuthority,
-            MAINNET_DRAND_CHAIN_HASH,
-            MAINNET_DRAND_GENESIS_TIME,
-            MAINNET_DRAND_PERIOD,
-            false
-        );
-    }
-
-    /// @notice Production-grade initializer: caller MUST pass per-chain drand config. Required for testnet
+    /// @notice Initializer: caller MUST pass per-chain drand config. Required for testnet
     ///         (World Chain Sepolia uses drand `quicknet-t` with a different G1 public key and chain hash).
     function initializeWithDrandConfig(
         address admin,
@@ -174,7 +136,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         uint64 drandGenesisTime_,
         uint64 drandPeriod_
     ) external initializer {
-        _initialize(admin, governance, treasuryAuthority, drandChainHash_, drandGenesisTime_, drandPeriod_, true);
+        _initialize(admin, governance, treasuryAuthority, drandChainHash_, drandGenesisTime_, drandPeriod_);
     }
 
     function _initialize(
@@ -183,8 +145,7 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         address treasuryAuthority,
         bytes32 drandChainHash_,
         uint64 drandGenesisTime_,
-        uint64 drandPeriod_,
-        bool validateDrandBounds
+        uint64 drandPeriod_
     ) internal {
         if (admin == address(0)) revert InvalidAddress();
         if (governance == address(0)) revert InvalidAddress();
@@ -223,10 +184,8 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
         if (drandChainHash_ == bytes32(0)) revert InvalidConfig();
         if (drandGenesisTime_ == 0) revert InvalidConfig();
         if (drandPeriod_ == 0) revert InvalidConfig();
-        if (validateDrandBounds) {
-            if (drandGenesisTime_ > block.timestamp) revert InvalidConfig();
-            if (drandPeriod_ > roundConfigBounds.minEpochDuration) revert InvalidConfig();
-        }
+        if (drandGenesisTime_ > block.timestamp) revert InvalidConfig();
+        if (drandPeriod_ > roundConfigBounds.minEpochDuration) revert InvalidConfig();
         drandChainHash = drandChainHash_;
         drandGenesisTime = drandGenesisTime_;
         drandPeriod = drandPeriod_;

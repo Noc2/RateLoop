@@ -29,6 +29,32 @@ test("holds the visible feed while a missing requested item is still loading", (
   );
 });
 
+test("holds the visible feed while a requested item is outside the rendered slice", () => {
+  assert.equal(
+    shouldHoldVoteFeedForRequestedContent({
+      activeSourceIndex: 8,
+      isFeedLoading: false,
+      isRequestedContentLoading: false,
+      requestedActiveId: 9n,
+      visibleCount: 6,
+    }),
+    true,
+  );
+});
+
+test("shows the visible feed once a requested item is inside the rendered slice", () => {
+  assert.equal(
+    shouldHoldVoteFeedForRequestedContent({
+      activeSourceIndex: 5,
+      isFeedLoading: false,
+      isRequestedContentLoading: false,
+      requestedActiveId: 9n,
+      visibleCount: 6,
+    }),
+    false,
+  );
+});
+
 test("releases the visible feed after a missing requested item finishes loading", () => {
   assert.equal(
     shouldHoldVoteFeedForRequestedContent({

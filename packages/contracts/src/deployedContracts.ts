@@ -12736,45 +12736,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "MAINNET_DRAND_CHAIN_HASH",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MAINNET_DRAND_GENESIS_TIME",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MAINNET_DRAND_PERIOD",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "MIN_SUBMISSION_LREP_POOL_FLOOR",
           inputs: [],
           outputs: [
@@ -13190,24 +13151,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "initialize",
-          inputs: [
-            {
-              name: "admin",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "governance",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "initializeWithDrandConfig",
           inputs: [
             {
@@ -13239,29 +13182,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "drandPeriod_",
               type: "uint64",
               internalType: "uint64",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "initializeWithTreasury",
-          inputs: [
-            {
-              name: "admin",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "governance",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "treasuryAuthority",
-              type: "address",
-              internalType: "address",
             },
           ],
           outputs: [],
@@ -29732,7 +29652,7 @@ const deployedContracts: GenericContractsDeclaration = {
   },
   31337: {
     LoopReputation: {
-      address: "0x6379ebD504941f50D5BfDE9348B37593bd29C835",
+      address: "0x6379ebd504941f50d5bfde9348b37593bd29c835",
       abi: [
         {
           type: "constructor",
@@ -31159,7 +31079,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 19,
     },
     ContentRegistry: {
-      address: "0x2c4b93b614DdbfAF0807e8F4Ca982e9f9c2e2Aa4",
+      address: "0x5b3120d0da5fdcba7aef87a9c3c64829c1c0d76b",
       abi: [
         {
           type: "constructor",
@@ -33500,10 +33420,10 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
-      deployedOnBlock: 31,
+      deployedOnBlock: 20,
     },
     RoundVotingEngine: {
-      address: "0xF1078fD568Ad76E49E6F88D1fF485402a086976b",
+      address: "0x33b1b5aa9aa4da83a332f0bc5cac6a903fde5d92",
       abi: [
         {
           type: "constructor",
@@ -35717,10 +35637,10 @@ const deployedContracts: GenericContractsDeclaration = {
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
       },
-      deployedOnBlock: 33,
+      deployedOnBlock: 21,
     },
     RoundRewardDistributor: {
-      address: "0xe8F76a822B57b973c7a89006092364fFF8f69040",
+      address: "0x19a1c09fe3399c4daaa2c98b936a8e460fc5eaa4",
       abi: [
         {
           type: "constructor",
@@ -37256,10 +37176,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 34,
+      deployedOnBlock: 22,
     },
     FrontendRegistry: {
-      address: "0x6d014319E0F36651997697C98Da594c7Cf235fa4",
+      address: "0x49b8e3b089d4ebf9f37b1da9b839ec013c2cd8c9",
       abi: [
         {
           type: "constructor",
@@ -38537,10 +38457,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 29,
+      deployedOnBlock: 23,
     },
     ProfileRegistry: {
-      address: "0x5621d0B4D8043524Ac5837918D6a95b1050eF228",
+      address: "0x067c804bb006836469379d4a2a69a81803bd1f45",
       abi: [
         {
           type: "constructor",
@@ -39270,10 +39190,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 30,
+      deployedOnBlock: 24,
     },
     ProtocolConfig: {
-      address: "0x04fc820176617A99AE134904935Bc854b2e51628",
+      address: "0x45009dd3abbe29db54fc5d893ceaa98a624882df",
       abi: [
         {
           type: "constructor",
@@ -39315,45 +39235,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "bytes32",
               internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MAINNET_DRAND_CHAIN_HASH",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MAINNET_DRAND_GENESIS_TIME",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MAINNET_DRAND_PERIOD",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint64",
-              internalType: "uint64",
             },
           ],
           stateMutability: "view",
@@ -39775,24 +39656,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "initialize",
-          inputs: [
-            {
-              name: "admin",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "governance",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "initializeWithDrandConfig",
           inputs: [
             {
@@ -39824,29 +39687,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "drandPeriod_",
               type: "uint64",
               internalType: "uint64",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "initializeWithTreasury",
-          inputs: [
-            {
-              name: "admin",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "governance",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "treasuryAuthority",
-              type: "address",
-              internalType: "address",
             },
           ],
           outputs: [],
@@ -41203,10 +41043,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 32,
+      deployedOnBlock: 25,
     },
     QuestionRewardPoolEscrow: {
-      address: "0xE8ecF644D9a3432Dab3A0725308f265990eEDca9",
+      address: "0xf56aa3aceddf88ab12e494d0b96da3c09a5d264e",
       abi: [
         {
           type: "constructor",
@@ -43836,10 +43676,10 @@ const deployedContracts: GenericContractsDeclaration = {
         roundPayoutSnapshotSourceReadyAt:
           "contracts/interfaces/IRoundPayoutSnapshotConsumer.sol",
       },
-      deployedOnBlock: 40,
+      deployedOnBlock: 26,
     },
     FeedbackBonusEscrow: {
-      address: "0x4C073a92B1C8Fb55313102Ab412fb7F1704bcBdD",
+      address: "0xdbd296711ec8ef9aacb623ee3f1c0922dce0d7b2",
       abi: [
         {
           type: "constructor",
@@ -45290,10 +45130,10 @@ const deployedContracts: GenericContractsDeclaration = {
         paused:
           "lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol",
       },
-      deployedOnBlock: 43,
+      deployedOnBlock: 27,
     },
     FeedbackRegistry: {
-      address: "0xb1527802E7800034D6887b0a99a5Ad2683184b95",
+      address: "0xdfd787c807dea8d7e53311b779bc0c6a4704d286",
       abi: [
         {
           type: "constructor",
@@ -45965,10 +45805,10 @@ const deployedContracts: GenericContractsDeclaration = {
         supportsInterface:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
       },
-      deployedOnBlock: 42,
+      deployedOnBlock: 28,
     },
     MockWorldIDVerifier: {
-      address: "0x4e85DC48a70DA1298489d5B6FC2492767d98f384",
+      address: "0x4e85dc48a70da1298489d5b6fc2492767d98f384",
       abi: [
         {
           type: "function",
@@ -46243,7 +46083,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 35,
     },
     MockERC20: {
-      address: "0x4d8E02BBfCf205828A8352Af4376b165E123D7b0",
+      address: "0x4d8e02bbfcf205828a8352af4376b165e123d7b0",
       abi: [
         {
           type: "constructor",
@@ -46913,7 +46753,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 36,
     },
     CategoryRegistry: {
-      address: "0xEAb25969e5285dF34a3B245324d0B2B91E31cAD4",
+      address: "0xeab25969e5285df34a3b245324d0b2b91e31cad4",
       abi: [
         {
           type: "constructor",
@@ -47452,7 +47292,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 37,
     },
     RaterRegistry: {
-      address: "0xc525e1beD21174d5615252a16eE2b283B894A318",
+      address: "0x150890d6984e98f408162ee65684779804bff858",
       abi: [
         {
           type: "constructor",
@@ -50179,10 +50019,10 @@ const deployedContracts: GenericContractsDeclaration = {
           "contracts/interfaces/IRaterIdentityRegistry.sol",
         resolveRater: "contracts/interfaces/IRaterIdentityRegistry.sol",
       },
-      deployedOnBlock: 39,
+      deployedOnBlock: 38,
     },
     X402QuestionSubmitter: {
-      address: "0x3A1D75769758705caB1385377d4D88b8193A5f37",
+      address: "0x3a1d75769758705cab1385377d4d88b8193a5f37",
       abi: [
         {
           type: "constructor",
@@ -50834,7 +50674,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 41,
     },
     LaunchDistributionPool: {
-      address: "0x9DB9797733FE5F734724Aa05D29Fa39563563Af5",
+      address: "0x9db9797733fe5f734724aa05d29fa39563563af5",
       abi: [
         {
           type: "constructor",
@@ -53906,7 +53746,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 68,
     },
     ClusterPayoutOracle: {
-      address: "0xa7328DEAa1B585a494f055Fc9Bd99ea56d52CD3d",
+      address: "0xa7328deaa1b585a494f055fc9bd99ea56d52cd3d",
       abi: [
         {
           type: "constructor",
@@ -56320,7 +56160,7 @@ const deployedContracts: GenericContractsDeclaration = {
       deployedOnBlock: 70,
     },
     AdvisoryVoteRecorder: {
-      address: "0x741050c1d044e23d3eBd2e85ad8b6cE5c17555c7",
+      address: "0x741050c1d044e23d3ebd2e85ad8b6ce5c17555c7",
       abi: [
         {
           type: "constructor",

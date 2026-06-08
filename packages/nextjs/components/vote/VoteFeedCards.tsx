@@ -321,7 +321,6 @@ export const FeedVoteCard = memo(function FeedVoteCard({
               compact={useCompactEmbed}
               isActive={isActive}
               interactionMode={contentIntentEnabled ? "vote" : "default"}
-              onSourceOpen={onSourceOpen}
             />
           </div>
           <FeedContentMetaCard
@@ -404,13 +403,11 @@ function ContentMediaCarousel({
   compact,
   isActive,
   interactionMode,
-  onSourceOpen,
 }: {
   item: ContentItem;
   compact: boolean;
   isActive: boolean;
   interactionMode: "default" | "vote";
-  onSourceOpen?: (item: ContentItem) => void;
 }) {
   const mediaItems = getCardMediaItems(item);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -418,7 +415,7 @@ function ContentMediaCarousel({
   const hasCarouselControls = mediaItems.length > 1;
   const contextUrl = item.url.trim();
   const embedUrl = activeMedia?.url.trim() || contextUrl;
-  const imageLinkUrl = activeMedia && getMediaPlatformType(activeMedia) === "image" ? contextUrl : null;
+  const activeMediaIsImage = activeMedia && getMediaPlatformType(activeMedia) === "image";
 
   useEffect(() => {
     setActiveIndex(0);
@@ -448,8 +445,9 @@ function ContentMediaCarousel({
         isActive={isActive}
         interactionMode={interactionMode}
         imageFit="contain"
-        imageLinkUrl={imageLinkUrl}
-        onImageLinkClick={() => onSourceOpen?.(item)}
+        enableImageLightbox={Boolean(activeMediaIsImage)}
+        imageLightboxTriggerLabel="Open question image"
+        imageLightboxModalLabel={item.title ? `Image for ${item.title}` : "Question image"}
       />
       {hasCarouselControls ? (
         <>

@@ -1,20 +1,81 @@
 import { E2E_BASE_URL } from "./helpers/service-urls";
 import { defineConfig, devices } from "@playwright/test";
 
-const specFile = (name: string) => new RegExp(`(^|[/\\\\])${name}\\.spec\\.[cm]?[jt]sx?$`);
-const specFiles = (...names: string[]) => new RegExp(`(^|[/\\\\])(?:${names.join("|")})\\.spec\\.[cm]?[jt]sx?$`);
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const specFile = (name: string) => new RegExp(`(^|[/\\\\])${escapeRegex(name)}\\.spec\\.[cm]?[jt]sx?$`);
+const specFiles = (...names: string[]) =>
+  new RegExp(`(^|[/\\\\])(?:${names.map(escapeRegex).join("|")})\\.spec\\.[cm]?[jt]sx?$`);
 
 const BROWSER_COMPAT_TESTS = specFile("browser-compat");
 const RESPONSIVE_LAYOUT_TESTS = specFile("responsive-layout");
 const ACCESSIBILITY_AXE_TESTS = specFile("accessibility-axe");
 const MOBILE_TESTS = specFile("mobile");
+const MOBILE_TABLET_TESTS = specFile("mobile-tablet");
 const WORLD_ID_MOCK_TESTS = specFile("world-id-mock");
 const CI_SMOKE_TESTS = specFiles("smoke", "pages-smoke", "docs-pages");
 const CI_API_TESTS = specFiles("nextjs-api", "watchlist-api", "faucet", "contract-boundaries", "ponder-api");
-const CHROMIUM_SPECIAL_TESTS =
-  /round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|correlation-bounty-payout|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe|world-id-mock/;
-const CI_APP_IGNORED_TESTS =
-  /smoke|pages-smoke|docs-pages|nextjs-api|watchlist-api|faucet|contract-boundaries|ponder-api|round-cancellation|content-dormancy|settlement-lifecycle|reward-claim|correlation-bounty-payout|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal|keeper-settlement|mobile|browser-compat|responsive-layout|accessibility-axe|world-id-mock/;
+const SETTLEMENT_TESTS = specFiles(
+  "settlement-lifecycle",
+  "reward-claim",
+  "correlation-bounty-payout",
+  "tied-round",
+  "zz-multi-round",
+  "unanimous-settlement",
+  "frontend-fee-claim",
+  "reveal-failed",
+  "manual-reveal",
+);
+const KEEPER_SETTLEMENT_TESTS = specFile("keeper-settlement");
+const ROUND_CANCELLATION_TESTS = specFile("round-cancellation");
+const CONTENT_DORMANCY_TESTS = specFile("content-dormancy");
+const CHROMIUM_SPECIAL_TESTS = specFiles(
+  "round-cancellation",
+  "content-dormancy",
+  "settlement-lifecycle",
+  "reward-claim",
+  "correlation-bounty-payout",
+  "tied-round",
+  "zz-multi-round",
+  "unanimous-settlement",
+  "frontend-fee-claim",
+  "reveal-failed",
+  "manual-reveal",
+  "keeper-settlement",
+  "mobile",
+  "mobile-tablet",
+  "browser-compat",
+  "responsive-layout",
+  "accessibility-axe",
+  "world-id-mock",
+);
+const CI_APP_IGNORED_TESTS = specFiles(
+  "smoke",
+  "pages-smoke",
+  "docs-pages",
+  "nextjs-api",
+  "watchlist-api",
+  "faucet",
+  "contract-boundaries",
+  "ponder-api",
+  "round-cancellation",
+  "content-dormancy",
+  "settlement-lifecycle",
+  "reward-claim",
+  "correlation-bounty-payout",
+  "tied-round",
+  "zz-multi-round",
+  "unanimous-settlement",
+  "frontend-fee-claim",
+  "reveal-failed",
+  "manual-reveal",
+  "keeper-settlement",
+  "mobile",
+  "mobile-tablet",
+  "browser-compat",
+  "responsive-layout",
+  "accessibility-axe",
+  "world-id-mock",
+);
 
 export default defineConfig({
   globalSetup: "./global-setup.cts",
@@ -98,8 +159,7 @@ export default defineConfig({
       // Run with: yarn e2e:settlement
       name: "settlement",
       use: { ...devices["Desktop Chrome"] },
-      testMatch:
-        /settlement-lifecycle|reward-claim|correlation-bounty-payout|tied-round|zz-multi-round|unanimous-settlement|frontend-fee-claim|reveal-failed|manual-reveal/,
+      testMatch: SETTLEMENT_TESTS,
       dependencies: ["chromium"],
     },
     {
@@ -107,20 +167,20 @@ export default defineConfig({
       // should avoid direct reveal/settle helper calls.
       name: "settlement-keeper",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: /keeper-settlement/,
+      testMatch: KEEPER_SETTLEMENT_TESTS,
     },
     {
       // Round cancellation fast-forwards 7+ days — runs after settlement tests.
       name: "round-cancellation",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: /round-cancellation/,
+      testMatch: ROUND_CANCELLATION_TESTS,
       dependencies: ["settlement"],
     },
     {
       // Content dormancy fast-forwards 30+ days — runs after round-cancellation.
       name: "content-dormancy",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: /content-dormancy/,
+      testMatch: CONTENT_DORMANCY_TESTS,
       dependencies: ["round-cancellation"],
     },
     // Mobile: opt-in via --project=mobile-phone or --project=mobile-tablet
@@ -138,7 +198,7 @@ export default defineConfig({
     {
       name: "mobile-tablet",
       use: { ...devices["iPad Mini"] },
-      testMatch: MOBILE_TESTS,
+      testMatch: MOBILE_TABLET_TESTS,
     },
   ],
 

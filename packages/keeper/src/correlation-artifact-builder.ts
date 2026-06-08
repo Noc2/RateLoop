@@ -43,7 +43,7 @@ export interface CorrelationRoundCandidate {
   roundId: bigint;
 }
 
-export interface BuiltConfiguredCorrelationSnapshotArtifact {
+interface BuiltConfiguredCorrelationSnapshotArtifact {
   artifact: CorrelationSnapshotArtifactFile;
   artifactHash?: `0x${string}`;
   artifactURI?: string;
@@ -100,7 +100,7 @@ export async function buildConfiguredCorrelationSnapshotArtifact(
   return (await buildConfiguredCorrelationSnapshotArtifactDetails(logger)).artifact;
 }
 
-export async function buildConfiguredCorrelationSnapshotArtifactDetails(
+async function buildConfiguredCorrelationSnapshotArtifactDetails(
   logger: Logger,
 ): Promise<BuiltConfiguredCorrelationSnapshotArtifact> {
   const candidates = await loadConfiguredCorrelationSnapshotCandidates(logger);

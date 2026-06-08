@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { type Address, type Hex, isAddress } from "viem";
 import { useAccount, useConfig, useSignTypedData } from "wagmi";
 import { sendTransaction, waitForTransactionReceipt } from "wagmi/actions";
@@ -74,11 +73,9 @@ function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function readToken(searchParams: URLSearchParams) {
-  // C-1 (2026-05-22 audit): new signing links carry the token in the URL fragment
-  // (#token=...) so it cannot leak via Referer or proxy logs. Fall back to the legacy
-  // query parameter (?token=) so any links still in flight when the server-side
-  // emitter changed continue to work until they expire (typically <= 15 minutes).
+function readToken() {
+  // C-1 (2026-05-22 audit): signing links carry the token in the URL fragment
+  // (#token=...) so it cannot leak via Referer or proxy logs.
   if (typeof window !== "undefined") {
     const hash = window.location.hash;
     if (hash) {
@@ -87,7 +84,7 @@ function readToken(searchParams: URLSearchParams) {
       if (fromHash) return fromHash;
     }
   }
-  return searchParams.get("token") ?? "";
+  return "";
 }
 
 function readQuestionTitle(intent: SigningIntent | null) {
@@ -188,7 +185,6 @@ function readResponseError(value: unknown, fallback: string) {
 }
 
 export function BrowserSigningPage({ intentId }: { intentId: string }) {
-  const searchParams = useSearchParams();
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { signTypedDataAsync, isPending: isSigningTypedData } = useSignTypedData();
@@ -198,20 +194,17 @@ export function BrowserSigningPage({ intentId }: { intentId: string }) {
   // cross-origin navigation, server access logs, and any analytics script allowed by CSP.
   //
   // Capture the token into stable component state on the first render *before* mutating the
-  // URL, so subsequent re-renders that would re-read `useSearchParams()` (which in App Router
-  // can resolve to the post-strip empty value) don't reset the in-memory copy that the
-  // prepare/complete API calls depend on. `useState(initialFn)` runs `initialFn` exactly once
-  // on mount and ignores future `searchParams` changes.
-  const [token] = useState(() => readToken(searchParams));
+  // URL, so subsequent re-renders don't reset the in-memory copy that the prepare/complete
+  // API calls depend on. `useState(initialFn)` runs `initialFn` exactly once
+  // on mount and ignores future URL changes.
+  const [token] = useState(readToken);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // Strip the token from BOTH the query string (legacy links) and the fragment
-    // (new format) so a returning user sharing their screen doesn't expose it, and
-    // so that browser back/forward navigation lands on a clean URL.
-    const hasTokenInQuery = window.location.search.includes("token=");
+    // Strip the token fragment so a returning user sharing their screen doesn't expose it,
+    // and so browser back/forward navigation lands on a clean URL.
     const hasTokenInHash = window.location.hash.includes("token=");
-    if (!hasTokenInQuery && !hasTokenInHash) return;
-    window.history.replaceState(null, "", window.location.pathname);
+    if (!hasTokenInHash) return;
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
   }, []);
   const [intent, setIntent] = useState<SigningIntent | null>(null);
   const [isLoading, setIsLoading] = useState(true);

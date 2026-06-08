@@ -98,8 +98,6 @@ export type FreeTransactionAllowanceSummary = {
   exhausted: boolean;
   walletAddress: `0x${string}` | null;
   raterIdentityKey: string | null;
-  /** @deprecated use raterIdentityKey */
-  voterIdTokenId: string | null;
 };
 
 export type FreeTransactionAllowanceDecision =
@@ -466,7 +464,7 @@ async function ensureQuotaRow(
     .insert(freeTransactionQuotas)
     .values({
       identityKey,
-      voterIdTokenId: params.raterIdentityKey,
+      raterIdentityKey: params.raterIdentityKey,
       chainId: params.chainId,
       environment: params.environment,
       lastWalletAddress: params.walletAddress,
@@ -486,11 +484,10 @@ function buildQuotaSummary(params: {
   environment: string;
   freeTxLimit: number;
   freeTxUsed: number;
-  pendingReservations?: number;
   raterIdentityKey: string;
   walletAddress: `0x${string}`;
 }) {
-  const used = params.freeTxUsed + (params.pendingReservations ?? 0);
+  const used = params.freeTxUsed;
 
   return {
     chainId: params.chainId,
@@ -502,7 +499,6 @@ function buildQuotaSummary(params: {
     exhausted: used >= params.freeTxLimit,
     walletAddress: params.walletAddress,
     raterIdentityKey: params.raterIdentityKey,
-    voterIdTokenId: params.raterIdentityKey,
   } satisfies FreeTransactionAllowanceSummary;
 }
 
@@ -520,8 +516,8 @@ function normalizeQuotaRow(
         free_tx_used?: number | string | null;
         freetxused?: number | string | null;
         raterIdentityKey?: string | null;
-        voter_id_token_id?: string | null;
-        voteridtokenid?: string | null;
+        rater_identity_key?: string | null;
+        rateridentitykey?: string | null;
       }
     | null
     | undefined,
@@ -535,7 +531,7 @@ function normalizeQuotaRow(
     environment: row.environment ?? "",
     freeTxLimit: Number(row.freeTxLimit ?? row.free_tx_limit ?? row.freetxlimit),
     freeTxUsed: Number(row.freeTxUsed ?? row.free_tx_used ?? row.freetxused),
-    raterIdentityKey: row.raterIdentityKey ?? row.voter_id_token_id ?? row.voteridtokenid ?? "",
+    raterIdentityKey: row.raterIdentityKey ?? row.rater_identity_key ?? row.rateridentitykey ?? "",
   };
 }
 
@@ -579,7 +575,6 @@ async function readQuotaSummary(params: {
   walletAddress: `0x${string}`;
 }) {
   const identityKey = await ensureQuotaRow(db, params);
-  const now = new Date();
   const [row] = await db
     .select()
     .from(freeTransactionQuotas)
@@ -595,17 +590,11 @@ async function readQuotaSummary(params: {
     return null;
   }
 
-  const pendingReservations = await getActivePendingReservationCount(db, {
-    identityKey,
-    now,
-  });
-
   return buildQuotaSummary({
     chainId: quotaRow.chainId,
     environment: quotaRow.environment,
     freeTxLimit: quotaRow.freeTxLimit,
     freeTxUsed: quotaRow.freeTxUsed,
-    pendingReservations,
     raterIdentityKey: quotaRow.raterIdentityKey,
     walletAddress: params.walletAddress,
   });
@@ -634,7 +623,6 @@ function buildUnverifiedSummary(params: { chainId: number; walletAddress: `0x${s
     exhausted: false,
     walletAddress: params.walletAddress,
     raterIdentityKey: null,
-    voterIdTokenId: null,
   } satisfies FreeTransactionAllowanceSummary;
 }
 
@@ -1038,27 +1026,6 @@ async function validateSponsoredCalls(
   return { ok: true };
 }
 
-async function getActivePendingReservationCount(
-  database: FreeTransactionDbWrite,
-  params: { identityKey: string; now: Date },
-) {
-  const [row] = await database
-    .select({
-      pendingCount: sql<number>`count(*)`,
-    })
-    .from(freeTransactionReservations)
-    .where(
-      and(
-        eq(freeTransactionReservations.identityKey, params.identityKey),
-        eq(freeTransactionReservations.status, "pending"),
-        sql`${freeTransactionReservations.expiresAt} > ${params.now}`,
-      ),
-    )
-    .limit(1);
-
-  return Number(row?.pendingCount ?? 0);
-}
-
 function logsIncludeWalletUserOperationSender(params: {
   logs: readonly TransactionVerificationLog[];
   walletAddress: `0x${string}`;
@@ -1303,11 +1270,6 @@ export async function evaluateFreeTransactionAllowance(
         throw new Error("Failed to read free transaction quota.");
       }
 
-      const activePendingReservations = await getActivePendingReservationCount(tx, {
-        identityKey,
-        now,
-      });
-
       const [existingReservation] = await tx
         .select()
         .from(freeTransactionReservations)
@@ -1332,7 +1294,6 @@ export async function evaluateFreeTransactionAllowance(
             environment: normalizedQuotaRow.environment,
             freeTxLimit: normalizedQuotaRow.freeTxLimit,
             freeTxUsed: normalizedQuotaRow.freeTxUsed,
-            pendingReservations: activePendingReservations,
             raterIdentityKey: normalizedQuotaRow.raterIdentityKey,
             walletAddress,
           }),
@@ -1347,14 +1308,13 @@ export async function evaluateFreeTransactionAllowance(
             environment: normalizedQuotaRow.environment,
             freeTxLimit: normalizedQuotaRow.freeTxLimit,
             freeTxUsed: normalizedQuotaRow.freeTxUsed,
-            pendingReservations: activePendingReservations,
             raterIdentityKey: normalizedQuotaRow.raterIdentityKey,
             walletAddress,
           }),
         };
       }
 
-      if (normalizedQuotaRow.freeTxUsed + activePendingReservations >= normalizedQuotaRow.freeTxLimit) {
+      if (normalizedQuotaRow.freeTxUsed >= normalizedQuotaRow.freeTxLimit) {
         const [latestQuotaRow] = await tx
           .select()
           .from(freeTransactionQuotas)
@@ -1375,7 +1335,6 @@ export async function evaluateFreeTransactionAllowance(
             environment: normalizedLatestQuotaRow.environment,
             freeTxLimit: normalizedLatestQuotaRow.freeTxLimit,
             freeTxUsed: normalizedLatestQuotaRow.freeTxUsed,
-            pendingReservations: activePendingReservations,
             raterIdentityKey: normalizedLatestQuotaRow.raterIdentityKey,
             walletAddress,
           }),
@@ -1387,7 +1346,7 @@ export async function evaluateFreeTransactionAllowance(
           .update(freeTransactionReservations)
           .set({
             identityKey,
-            voterIdTokenId: raterIdentityKey,
+            raterIdentityKey,
             chainId: body.chainId!,
             environment,
             walletAddress,
@@ -1404,7 +1363,7 @@ export async function evaluateFreeTransactionAllowance(
         await tx.insert(freeTransactionReservations).values({
           operationKey,
           identityKey,
-          voterIdTokenId: raterIdentityKey,
+          raterIdentityKey,
           chainId: body.chainId!,
           environment,
           walletAddress,
@@ -1418,15 +1377,35 @@ export async function evaluateFreeTransactionAllowance(
         });
       }
 
+      const [updatedQuotaRow] = await tx
+        .update(freeTransactionQuotas)
+        .set({
+          lastWalletAddress: walletAddress,
+          freeTxUsed: sql`${freeTransactionQuotas.freeTxUsed} + 1`,
+          exhaustedAt: sql`
+            CASE
+              WHEN ${freeTransactionQuotas.freeTxUsed} + 1 >= ${freeTransactionQuotas.freeTxLimit}
+              THEN ${now}
+              ELSE ${freeTransactionQuotas.exhaustedAt}
+            END
+          `,
+          updatedAt: now,
+        })
+        .where(eq(freeTransactionQuotas.identityKey, identityKey))
+        .returning();
+      const normalizedUpdatedQuotaRow = normalizeQuotaRow(updatedQuotaRow);
+      if (!normalizedUpdatedQuotaRow) {
+        throw new Error("Failed to update free transaction quota.");
+      }
+
       return {
         isAllowed: true,
         summary: buildQuotaSummary({
-          chainId: normalizedQuotaRow.chainId,
-          environment: normalizedQuotaRow.environment,
-          freeTxLimit: normalizedQuotaRow.freeTxLimit,
-          freeTxUsed: normalizedQuotaRow.freeTxUsed,
-          pendingReservations: activePendingReservations + 1,
-          raterIdentityKey: normalizedQuotaRow.raterIdentityKey,
+          chainId: normalizedUpdatedQuotaRow.chainId,
+          environment: normalizedUpdatedQuotaRow.environment,
+          freeTxLimit: normalizedUpdatedQuotaRow.freeTxLimit,
+          freeTxUsed: normalizedUpdatedQuotaRow.freeTxUsed,
+          raterIdentityKey: normalizedUpdatedQuotaRow.raterIdentityKey,
           walletAddress,
         }),
       };
@@ -1523,37 +1502,11 @@ export async function confirmFreeTransactionReservation(params: {
             eq(freeTransactionReservations.status, "pending"),
           ),
         )
-        .returning({
-          identityKey: freeTransactionReservations.identityKey,
-        });
+        .returning({ operationKey: freeTransactionReservations.operationKey });
 
       if (updatedReservations.length === 0) {
         return;
       }
-
-      const updatedIdentityKey =
-        updatedReservations[0]?.identityKey ??
-        (updatedReservations[0] as { identity_key?: string; identitykey?: string } | undefined)?.identity_key ??
-        (updatedReservations[0] as { identity_key?: string; identitykey?: string } | undefined)?.identitykey;
-      if (!updatedIdentityKey) {
-        return;
-      }
-
-      await tx
-        .update(freeTransactionQuotas)
-        .set({
-          lastWalletAddress: walletAddress,
-          freeTxUsed: sql`${freeTransactionQuotas.freeTxUsed} + 1`,
-          exhaustedAt: sql`
-            CASE
-              WHEN ${freeTransactionQuotas.freeTxUsed} + 1 >= ${freeTransactionQuotas.freeTxLimit}
-              THEN ${now}
-              ELSE ${freeTransactionQuotas.exhaustedAt}
-            END
-          `,
-          updatedAt: now,
-        })
-        .where(eq(freeTransactionQuotas.identityKey, updatedIdentityKey));
     });
   } catch (error) {
     if (isFreeTransactionStoreUnavailableError(error)) {

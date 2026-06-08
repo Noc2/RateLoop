@@ -45,7 +45,7 @@ export function buildVoteLocation(currentUrl: string, update: VoteLocationUpdate
 export function buildVoteContentPinKey(pathname: string, searchParams: VoteSearchParamsLike) {
   const params = new URLSearchParams(Array.from(searchParams.entries()));
   if (!params.has("content")) return null;
-  params.delete(VOTE_SHARE_RATING_VERSION_PARAM);
+  // Keep share-version params so shared URLs are not mistaken for internal scroll-sync pins.
 
   const query = normalizeSearchParams(params);
   return query ? `${pathname}?${query}` : pathname;

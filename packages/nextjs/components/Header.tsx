@@ -224,7 +224,7 @@ export const HeaderBrand = ({
   className?: string;
   compact?: boolean;
 }) => (
-  <Link href={EXPLICIT_LANDING_HREF} className={`flex min-w-0 items-center gap-2 ${className ?? ""}`}>
+  <Link href={EXPLICIT_LANDING_HREF} prefetch={false} className={`flex min-w-0 items-center gap-2 ${className ?? ""}`}>
     <RateLoopLogo className={compact ? "h-8 w-8 shrink-0" : "h-9 w-9 shrink-0"} idPrefix={brandIdPrefix} />
     <div className={`flex min-w-0 flex-col gap-0.5 ${compact ? "" : "items-start"}`}>
       <span

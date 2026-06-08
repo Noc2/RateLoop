@@ -1134,8 +1134,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "voter_id_token_id": {
-          "name": "voter_id_token_id",
+        "rater_identity_key": {
+          "name": "rater_identity_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -1190,11 +1190,11 @@
         }
       },
       "indexes": {
-        "free_transaction_quotas_token_chain_env_unique": {
-          "name": "free_transaction_quotas_token_chain_env_unique",
+        "free_transaction_quotas_identity_chain_env_unique": {
+          "name": "free_transaction_quotas_identity_chain_env_unique",
           "columns": [
             {
-              "expression": "voter_id_token_id",
+              "expression": "rater_identity_key",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1262,8 +1262,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "voter_id_token_id": {
-          "name": "voter_id_token_id",
+        "rater_identity_key": {
+          "name": "rater_identity_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true

@@ -3,6 +3,8 @@ import { encodeFunctionData } from "viem";
 
 type SelectorProbePublicClient = {
   call: (args: { to: `0x${string}`; data: `0x${string}` }) => Promise<unknown>;
+  getBytecode?: (args: { address: `0x${string}` }) => Promise<`0x${string}` | undefined>;
+  getStorageAt?: (args: { address: `0x${string}`; slot: `0x${string}` }) => Promise<`0x${string}` | undefined>;
 };
 
 type QuestionSubmissionSelectorKind = "single" | "bundle";
@@ -11,6 +13,8 @@ export const UNSUPPORTED_QUESTION_SUBMISSION_DEPLOYMENT_ERROR =
   "This ContentRegistry deployment does not support question submissions. Ask the operator to upgrade it or point the app at a compatible deployment.";
 
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as `0x${string}`;
+const EIP1967_IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc" as const;
+const ZERO_ADDRESS = `0x${"0".repeat(40)}` as `0x${string}`;
 
 export function getSubmissionErrorMessage(error: unknown): string {
   return (
@@ -97,6 +101,48 @@ function isExpectedSelectorProbeRevert(kind: QuestionSubmissionSelectorKind, mes
   return message.includes("Context or media required");
 }
 
+function bytecodeContainsSelector(bytecode: `0x${string}` | undefined, selector: `0x${string}`): boolean {
+  return Boolean(bytecode && bytecode.toLowerCase().includes(selector.slice(2).toLowerCase()));
+}
+
+function selectorFromData(data: `0x${string}`): `0x${string}` {
+  return data.slice(0, 10) as `0x${string}`;
+}
+
+function addressFromEip1967Slot(value: `0x${string}` | undefined): `0x${string}` | null {
+  if (!value || value.length < 42) return null;
+
+  const address = `0x${value.slice(-40)}`.toLowerCase() as `0x${string}`;
+  return address === ZERO_ADDRESS ? null : address;
+}
+
+async function registryOrImplementationContainsSelector(
+  publicClient: SelectorProbePublicClient,
+  registryAddress: `0x${string}`,
+  selector: `0x${string}`,
+): Promise<boolean | null> {
+  if (!publicClient.getBytecode) return null;
+
+  try {
+    const registryBytecode = await publicClient.getBytecode({ address: registryAddress });
+    if (bytecodeContainsSelector(registryBytecode, selector)) return true;
+
+    if (!publicClient.getStorageAt) return false;
+
+    const implementationSlot = await publicClient.getStorageAt({
+      address: registryAddress,
+      slot: EIP1967_IMPLEMENTATION_SLOT,
+    });
+    const implementationAddress = addressFromEip1967Slot(implementationSlot);
+    if (!implementationAddress) return false;
+
+    const implementationBytecode = await publicClient.getBytecode({ address: implementationAddress });
+    return bytecodeContainsSelector(implementationBytecode, selector);
+  } catch {
+    return null;
+  }
+}
+
 export async function assertContentRegistryQuestionSubmissionSelector(
   publicClient: SelectorProbePublicClient | undefined,
   registryAddress: `0x${string}`,
@@ -104,15 +150,23 @@ export async function assertContentRegistryQuestionSubmissionSelector(
 ) {
   if (!publicClient) return;
 
+  const probeData = buildQuestionSubmissionSelectorProbeData(kind);
   try {
     await publicClient.call({
       to: registryAddress,
-      data: buildQuestionSubmissionSelectorProbeData(kind),
+      data: probeData,
     });
   } catch (error) {
     const message = getSubmissionErrorMessage(error);
     if (isExpectedSelectorProbeRevert(kind, message)) return;
     if (isUnknownEmptyRevertError(error)) {
+      const selectorSupport = await registryOrImplementationContainsSelector(
+        publicClient,
+        registryAddress,
+        selectorFromData(probeData),
+      );
+      if (selectorSupport !== false) return;
+
       throw new Error(UNSUPPORTED_QUESTION_SUBMISSION_DEPLOYMENT_ERROR);
     }
   }

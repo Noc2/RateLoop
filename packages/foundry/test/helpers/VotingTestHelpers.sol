@@ -17,6 +17,11 @@ import { MockWorldIDVerifier } from "../../contracts/mocks/MockWorldIDVerifier.s
 import { MockQuestionRewardPoolEscrow } from "../mocks/MockQuestionRewardPoolEscrow.sol";
 import { RoundEngineReadHelpers } from "./RoundEngineReadHelpers.sol";
 
+bytes32 constant TEST_PROTOCOL_CONFIG_DRAND_CHAIN_HASH =
+    0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
+uint64 constant TEST_PROTOCOL_CONFIG_DRAND_GENESIS_TIME = 1;
+uint64 constant TEST_PROTOCOL_CONFIG_DRAND_PERIOD = 3;
+
 function deployInitializedProtocolConfig(address admin) returns (ProtocolConfig protocolConfig) {
     return deployInitializedProtocolConfig(admin, admin);
 }
@@ -25,7 +30,20 @@ function deployInitializedProtocolConfig(address admin, address governance) retu
     ProtocolConfig implementation = new ProtocolConfig();
     protocolConfig = ProtocolConfig(
         address(
-            new ERC1967Proxy(address(implementation), abi.encodeCall(ProtocolConfig.initialize, (admin, governance)))
+            new ERC1967Proxy(
+                address(implementation),
+                abi.encodeCall(
+                    ProtocolConfig.initializeWithDrandConfig,
+                    (
+                        admin,
+                        governance,
+                        governance,
+                        TEST_PROTOCOL_CONFIG_DRAND_CHAIN_HASH,
+                        TEST_PROTOCOL_CONFIG_DRAND_GENESIS_TIME,
+                        TEST_PROTOCOL_CONFIG_DRAND_PERIOD
+                    )
+                )
+            )
         )
     );
 }
@@ -684,9 +702,9 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
     mapping(bytes32 => TestRevealPayload) internal testRevealPayloads;
 
     bytes32 internal constant DEFAULT_DRAND_CHAIN_HASH =
-        0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
-    uint64 internal constant DEFAULT_DRAND_GENESIS_TIME = 1;
-    uint64 internal constant DEFAULT_DRAND_PERIOD = 3;
+        TEST_PROTOCOL_CONFIG_DRAND_CHAIN_HASH;
+    uint64 internal constant DEFAULT_DRAND_GENESIS_TIME = TEST_PROTOCOL_CONFIG_DRAND_GENESIS_TIME;
+    uint64 internal constant DEFAULT_DRAND_PERIOD = TEST_PROTOCOL_CONFIG_DRAND_PERIOD;
     uint256 internal constant DEFAULT_TLOCK_EPOCH_DURATION = 20 minutes;
     bytes internal constant TEST_AGE_HEADER_RAW = "-----BEGIN AGE ENCRYPTED FILE-----";
     bytes internal constant TEST_AGE_HEADER = "-----BEGIN AGE ENCRYPTED FILE-----\n";
@@ -824,11 +842,6 @@ abstract contract VotingTestBase is Test, ContentSubmissionTestBase {
         protocolConfig = deployInitializedProtocolConfig(admin, governance);
         activeTlockProtocolConfig = protocolConfig;
         activeTlockEpochDuration = DEFAULT_TLOCK_EPOCH_DURATION;
-        (VmSafe.CallerMode mode, address msgSender,) = HEVM.readCallers();
-        if (mode == VmSafe.CallerMode.None && msgSender != governance) {
-            vm.prank(governance);
-        }
-        _setTlockDrandConfig(protocolConfig, DEFAULT_DRAND_CHAIN_HASH, DEFAULT_DRAND_GENESIS_TIME, DEFAULT_DRAND_PERIOD);
     }
 
     function _deployRaterRegistry(address admin) internal returns (RaterRegistry raterRegistry) {

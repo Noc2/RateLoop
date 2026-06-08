@@ -11,9 +11,9 @@ import {
   rewardClaim,
 } from "ponder:schema";
 
-export type EarningsAssetFilter = "all" | "lrep" | "usdc";
-export type EarningsSourceFilter = "all" | "bounty" | "feedback" | "round";
-export type EarningsSource = "question_reward" | "question_bundle_reward" | "feedback_bonus" | "round_reward";
+type EarningsAssetFilter = "all" | "lrep" | "usdc";
+type EarningsSourceFilter = "all" | "bounty" | "feedback" | "round";
+type EarningsSource = "question_reward" | "question_bundle_reward" | "feedback_bonus" | "round_reward";
 
 interface WindowBounds {
   startsAt: bigint | null;
@@ -32,7 +32,7 @@ interface EarningsContributionRow extends EarningsAggregateRow {
   profileName: string | null;
 }
 
-export interface ProfileEarningsSummary {
+interface ProfileEarningsSummary {
   totalUsdcEarned: bigint;
   totalLrepEarned: bigint;
   bountyUsdcEarned: bigint;
@@ -44,7 +44,7 @@ export interface ProfileEarningsSummary {
   latestPaidAt: bigint | null;
 }
 
-export interface ProfileEarningItem {
+interface ProfileEarningItem {
   id: string;
   source: EarningsSource;
   asset: number;
@@ -62,7 +62,7 @@ export interface ProfileEarningItem {
   paidAt: bigint;
 }
 
-export interface EarningsLeaderboardItem extends ProfileEarningsSummary {
+interface EarningsLeaderboardItem extends ProfileEarningsSummary {
   voter: `0x${string}`;
   profileName: string | null;
 }

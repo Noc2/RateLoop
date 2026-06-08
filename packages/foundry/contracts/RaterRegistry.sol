@@ -40,7 +40,6 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     enum HumanCredentialProvider {
         None,
-        WorldId,
         SeededHuman,
         WorldIdV4
     }
@@ -1202,10 +1201,8 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     }
 
     /// @notice Returns the address that owns a nullifier hash within a credential provider namespace.
-    /// @dev Each provider has its own owner slot. `WorldIdV4` shares the launch-family identity
-    ///      anchor with legacy `WorldId`, but owner-slot storage remains provider-namespaced so
-    ///      preview and legacy nullifiers cannot collide with one another or with `SeededHuman`
-    ///      anchors of the same bytes (L-Identity-1).
+    /// @dev Each provider has its own owner slot so World ID v4 and `SeededHuman`
+    ///      anchors of the same bytes cannot collide (L-Identity-1).
     function humanNullifierOwnerByProvider(HumanCredentialProvider provider, bytes32 nullifierHash)
         external
         view
@@ -1284,7 +1281,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         returns (bytes32)
     {
         if (provider == HumanCredentialProvider.None || nullifierHash == bytes32(0)) return bytes32(0);
-        if (provider == HumanCredentialProvider.WorldId || provider == HumanCredentialProvider.WorldIdV4) {
+        if (provider == HumanCredentialProvider.WorldIdV4) {
             return _worldIdLaunchIdentityKey(nullifierHash);
         }
         return keccak256(abi.encode(provider, nullifierHash));

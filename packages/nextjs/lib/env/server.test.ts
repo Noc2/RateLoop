@@ -2,6 +2,7 @@ import {
   getDatabaseConfig,
   getServerRpcOverrides,
   resolveAppUrl,
+  resolveOptionalAppUrl,
   resolveServerPonderUrl,
   resolveServerTargetNetworks,
 } from "./server";
@@ -43,6 +44,53 @@ test("resolveAppUrl rejects localhost in production", () => {
 
 test("resolveAppUrl normalizes valid public app URLs", () => {
   assert.equal(resolveAppUrl("https://rateloop.ai/", true), "https://rateloop.ai");
+});
+
+test("resolveOptionalAppUrl prefers configured app URLs over Vercel system URLs", () => {
+  assert.equal(
+    resolveOptionalAppUrl({
+      rawAppUrl: "https://www.rateloop.ai",
+      rawVercelEnv: "production",
+      rawVercelProjectProductionUrl: "rate-loop-nextjs.vercel.app",
+      production: true,
+    }),
+    "https://www.rateloop.ai",
+  );
+});
+
+test("resolveOptionalAppUrl uses the Vercel production URL in production deployments", () => {
+  assert.equal(
+    resolveOptionalAppUrl({
+      rawVercelEnv: "production",
+      rawVercelProjectProductionUrl: "www.rateloop.ai",
+      rawVercelUrl: "rate-loop-nextjs-abc123.vercel.app",
+      production: true,
+    }),
+    "https://www.rateloop.ai",
+  );
+});
+
+test("resolveOptionalAppUrl uses the Vercel deployment URL outside production deployments", () => {
+  assert.equal(
+    resolveOptionalAppUrl({
+      rawVercelEnv: "preview",
+      rawVercelProjectProductionUrl: "www.rateloop.ai",
+      rawVercelUrl: "rate-loop-nextjs-abc123.vercel.app",
+      production: true,
+    }),
+    "https://rate-loop-nextjs-abc123.vercel.app",
+  );
+});
+
+test("resolveOptionalAppUrl rejects localhost Vercel-style hosts in production", () => {
+  assert.equal(
+    resolveOptionalAppUrl({
+      rawVercelEnv: "production",
+      rawVercelProjectProductionUrl: "localhost:3000",
+      production: true,
+    }),
+    undefined,
+  );
 });
 
 test("resolveServerPonderUrl keeps the local default outside production", () => {

@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { buildRateContentHref } from "~~/constants/routes";
 import { MAX_QUESTION_DETAILS_TEXT_BYTES } from "~~/lib/attachments/questionDetails.shared";
+import { resolveQuestionDetailsFetchUrl } from "~~/lib/attachments/questionDetailsUrls";
 import { parseQuestionReferences } from "~~/lib/questionReferences";
 
 export type QuestionReferenceContentSummary = {
@@ -115,7 +116,7 @@ export function QuestionDescription({
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), DETAILS_FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(detailsUrl, { signal: controller.signal });
+      const response = await fetch(resolveQuestionDetailsFetchUrl(detailsUrl), { signal: controller.signal });
       if (!response.ok) throw new Error("Details are not available.");
       const text = await readQuestionDetailsResponseText(response);
       if (detailsHash) {

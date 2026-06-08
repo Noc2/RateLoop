@@ -48,6 +48,12 @@ test("browser-scoped Playwright projects only match their intended spec files", 
       nonMatchingSpec: "browser-compat.spec.ts",
     },
     {
+      project: "mobile-tablet",
+      workspaceSegment: "mobile-preview",
+      matchingSpec: "mobile-tablet.spec.ts",
+      nonMatchingSpec: "mobile.spec.ts",
+    },
+    {
       project: "world-id-mock",
       workspaceSegment: "world-id-mock",
       matchingSpec: "world-id-mock.spec.ts",
@@ -89,6 +95,11 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
   const worldIdMockSpec = "/tmp/rateloop/packages/nextjs/e2e/tests/world-id-mock.spec.ts";
 
   assert.equal(testIgnore.test(broadSpec), false, "ci-app should include broad app specs");
+  assert.equal(
+    testIgnore.test("/tmp/mobile-preview/packages/nextjs/e2e/tests/vote.spec.ts"),
+    false,
+    "ci-app ignores should not match workspace path segments",
+  );
   assert.equal(testIgnore.test(smokeSpec), true, "ci-app should leave smoke specs to ci-smoke");
   assert.equal(testIgnore.test(apiSpec), true, "ci-app should leave API-only specs to ci-api");
   assert.equal(testIgnore.test(lifecycleSpec), true, "ci-app should leave lifecycle specs to lifecycle projects");
@@ -98,6 +109,55 @@ test("CI app project covers broad Chromium specs without rerunning scoped suites
     "ci-app should leave browser compat specs to scheduled compat projects",
   );
   assert.equal(testIgnore.test(worldIdMockSpec), true, "ci-app should leave World ID mock specs to the mock project");
+});
+
+test("broad Chromium ignores and lifecycle matches only target spec basenames", () => {
+  const chromiumIgnore = getProjectTestIgnore("chromium");
+  const settlementMatch = getProjectTestMatch("settlement");
+  const keeperMatch = getProjectTestMatch("settlement-keeper");
+  const cancellationMatch = getProjectTestMatch("round-cancellation");
+  const dormancyMatch = getProjectTestMatch("content-dormancy");
+  const broadSpec = "/tmp/mobile-preview/packages/nextjs/e2e/tests/vote.spec.ts";
+
+  assert.equal(chromiumIgnore.test(broadSpec), false, "chromium ignores should not match workspace path segments");
+  assert.equal(
+    chromiumIgnore.test("/tmp/rateloop/packages/nextjs/e2e/tests/mobile-tablet.spec.ts"),
+    true,
+    "chromium should ignore tablet mobile specs",
+  );
+  assert.equal(
+    settlementMatch.test("/tmp/settlement-lifecycle-worktree/packages/nextjs/e2e/tests/vote.spec.ts"),
+    false,
+    "settlement project should not match workspace path segments",
+  );
+  assert.equal(
+    settlementMatch.test("/tmp/rateloop/packages/nextjs/e2e/tests/settlement-lifecycle.spec.ts"),
+    true,
+    "settlement project should match lifecycle specs by basename",
+  );
+  assert.equal(
+    keeperMatch.test("/tmp/keeper-settlement-worktree/packages/nextjs/e2e/tests/vote.spec.ts"),
+    false,
+    "keeper project should not match workspace path segments",
+  );
+  assert.equal(
+    cancellationMatch.test("/tmp/round-cancellation-worktree/packages/nextjs/e2e/tests/vote.spec.ts"),
+    false,
+    "round-cancellation project should not match workspace path segments",
+  );
+  assert.equal(
+    dormancyMatch.test("/tmp/content-dormancy-worktree/packages/nextjs/e2e/tests/vote.spec.ts"),
+    false,
+    "content-dormancy project should not match workspace path segments",
+  );
+});
+
+test("mobile specs avoid runtime project skips", () => {
+  const phoneSpec = readFileSync("e2e/tests/mobile.spec.ts", "utf8");
+  const tabletSpec = readFileSync("e2e/tests/mobile-tablet.spec.ts", "utf8");
+
+  assert.doesNotMatch(phoneSpec, /\btest\.skip\b/, "phone mobile spec should be selected by project config");
+  assert.doesNotMatch(tabletSpec, /\btest\.skip\b/, "tablet mobile spec should be selected by project config");
 });
 
 test("CI smoke and API projects keep browser smoke separate from fetch-only specs", () => {

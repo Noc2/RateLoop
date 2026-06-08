@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ReputationAvatarPayload } from "~~/lib/avatar/avatarPayload";
 import { buildLogoRingAvatarModel, renderLogoRingAvatarSvg } from "~~/lib/avatar/logoRingAvatar";
-import { buildSignalDiscAvatarModel, renderSignalDiscAvatarSvg } from "~~/lib/avatar/signalDiscAvatar";
 
 const NOW_SECONDS = 1_900_000_000;
 
@@ -333,13 +332,4 @@ test("renderer returns svg markup for the logo-ring avatar", () => {
   assert.match(svg, /<svg[^>]+width="64"/);
   assert.doesNotMatch(svg, /signal-disc-avatar/);
   assert.doesNotMatch(svg, /fill="#05070B"/);
-});
-
-test("legacy signal-disc exports render the logo-ring avatar", () => {
-  const model = buildSignalDiscAvatarModel(buildPayload(), { nowSeconds: NOW_SECONDS });
-  const svg = renderSignalDiscAvatarSvg(buildPayload(), { nowSeconds: NOW_SECONDS, size: 64 });
-
-  assert.ok(model.progress);
-  assert.match(svg, /logo-ring-avatar-progress/);
-  assert.doesNotMatch(svg, /signal-disc-avatar/);
 });

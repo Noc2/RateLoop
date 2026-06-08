@@ -231,6 +231,8 @@ contract MockBrokenAdvisoryVoteRecorderForConfig {
 
 contract ProtocolConfigBranchesTest is Test {
     bytes32 internal constant QUICKNET_CHAIN_HASH = 0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971;
+    uint64 internal constant QUICKNET_TEST_GENESIS_TIME = 1;
+    uint64 internal constant QUICKNET_TEST_PERIOD = 3;
     address internal constant MOCK_LREP = address(0xA11CE);
 
     event DrandConfigUpdated(bytes32 drandChainHash, uint64 genesisTime, uint64 period);
@@ -274,12 +276,12 @@ contract ProtocolConfigBranchesTest is Test {
         return address(new MockVotingEngineForConfig(address(config), address(this), MOCK_LREP));
     }
 
-    function test_DefaultDrandConfig_UsesQuicknetValues() public {
+    function test_DrandConfig_UsesInitializerValues() public {
         ProtocolConfig config = deployInitializedProtocolConfig(address(this));
 
         assertEq(config.drandChainHash(), QUICKNET_CHAIN_HASH);
-        assertEq(config.drandGenesisTime(), 1_692_803_367);
-        assertEq(config.drandPeriod(), 3);
+        assertEq(config.drandGenesisTime(), QUICKNET_TEST_GENESIS_TIME);
+        assertEq(config.drandPeriod(), QUICKNET_TEST_PERIOD);
     }
 
     function test_DefaultSubmissionRewardMinimums_UseHardFloors() public {
@@ -512,7 +514,7 @@ contract ProtocolConfigBranchesTest is Test {
         config.setAdvisoryVoteRecorder(advisoryVoteRecorder);
     }
 
-    function test_InitializeWithTreasury_GovernanceCanRecoverTreasuryRoles() public {
+    function test_InitializeWithDrandConfig_GovernanceCanRecoverTreasuryRoles() public {
         address admin = address(0xA11CE);
         address governance = address(0xB0B);
         address treasuryAuthority = address(0xCAFE);
@@ -523,7 +525,17 @@ contract ProtocolConfigBranchesTest is Test {
             address(
                 new ERC1967Proxy(
                     address(configImpl),
-                    abi.encodeCall(ProtocolConfig.initializeWithTreasury, (admin, governance, treasuryAuthority))
+                    abi.encodeCall(
+                        ProtocolConfig.initializeWithDrandConfig,
+                        (
+                            admin,
+                            governance,
+                            treasuryAuthority,
+                            QUICKNET_CHAIN_HASH,
+                            QUICKNET_TEST_GENESIS_TIME,
+                            QUICKNET_TEST_PERIOD
+                        )
+                    )
                 )
             )
         );

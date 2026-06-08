@@ -117,7 +117,7 @@ CREATE TABLE "content_feedback" (
 --> statement-breakpoint
 CREATE TABLE "free_transaction_quotas" (
 	"identity_key" text PRIMARY KEY NOT NULL,
-	"voter_id_token_id" text NOT NULL,
+	"rater_identity_key" text NOT NULL,
 	"chain_id" integer NOT NULL,
 	"environment" text NOT NULL,
 	"last_wallet_address" text NOT NULL,
@@ -131,7 +131,7 @@ CREATE TABLE "free_transaction_quotas" (
 CREATE TABLE "free_transaction_reservations" (
 	"operation_key" text PRIMARY KEY NOT NULL,
 	"identity_key" text NOT NULL,
-	"voter_id_token_id" text NOT NULL,
+	"rater_identity_key" text NOT NULL,
 	"chain_id" integer NOT NULL,
 	"environment" text NOT NULL,
 	"wallet_address" text NOT NULL,
@@ -335,7 +335,7 @@ CREATE INDEX "content_feedback_author_created_at_idx" ON "content_feedback" USIN
 CREATE INDEX "content_feedback_commit_key_idx" ON "content_feedback" USING btree ("commit_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "content_feedback_feedback_hash_unique" ON "content_feedback" USING btree ("feedback_hash");--> statement-breakpoint
 CREATE UNIQUE INDEX "content_feedback_active_author_round_unique" ON "content_feedback" USING btree ("content_id","round_id","author_address") WHERE "content_feedback"."deleted_at" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "free_transaction_quotas_token_chain_env_unique" ON "free_transaction_quotas" USING btree ("voter_id_token_id","chain_id","environment");--> statement-breakpoint
+CREATE UNIQUE INDEX "free_transaction_quotas_identity_chain_env_unique" ON "free_transaction_quotas" USING btree ("rater_identity_key","chain_id","environment");--> statement-breakpoint
 CREATE INDEX "free_transaction_quotas_chain_updated_at_idx" ON "free_transaction_quotas" USING btree ("chain_id","updated_at");--> statement-breakpoint
 CREATE INDEX "free_transaction_reservations_identity_status_expires_idx" ON "free_transaction_reservations" USING btree ("identity_key","status","expires_at");--> statement-breakpoint
 CREATE INDEX "free_transaction_reservations_wallet_status_updated_idx" ON "free_transaction_reservations" USING btree ("wallet_address","status","updated_at");--> statement-breakpoint

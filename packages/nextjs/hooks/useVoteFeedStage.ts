@@ -74,18 +74,23 @@ export function shouldHoldVoteFeedForRequestedContent({
   isFeedLoading,
   isRequestedContentLoading,
   requestedActiveId,
+  visibleCount,
 }: {
   activeSourceIndex: number;
   isFeedLoading: boolean;
   isRequestedContentLoading: boolean;
   requestedActiveId?: bigint | null;
+  visibleCount?: number;
 }) {
-  return (
-    requestedActiveId !== undefined &&
-    requestedActiveId !== null &&
-    activeSourceIndex < 0 &&
-    (isFeedLoading || isRequestedContentLoading)
-  );
+  if (requestedActiveId === undefined || requestedActiveId === null) {
+    return false;
+  }
+
+  if (visibleCount !== undefined && activeSourceIndex >= Math.max(0, visibleCount)) {
+    return true;
+  }
+
+  return activeSourceIndex < 0 && (isFeedLoading || isRequestedContentLoading);
 }
 
 export function useVoteFeedStage(items: ContentItem[], options: UseVoteFeedStageOptions) {

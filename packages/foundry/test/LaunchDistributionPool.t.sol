@@ -1515,7 +1515,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterLaunchCapNullifier(alice), bytes32("alice-human"));
         assertEq(
             pool.launchFullCapNullifierRater(
-                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("alice-human"))
+                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, bytes32("alice-human"))
             ),
             alice
         );
@@ -1590,7 +1590,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(pool.raterLaunchCapNullifier(alice), bytes32("alice-human"));
         assertEq(
             pool.launchFullCapNullifierRater(
-                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("alice-human"))
+                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, bytes32("alice-human"))
             ),
             alice
         );
@@ -2390,7 +2390,7 @@ contract LaunchDistributionPoolTest is Test {
         assertEq(bobPayout, 250e6);
         assertTrue(
             pool.verifiedCredentialClaimed(
-                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldId, bytes32("shared-human"))
+                _credentialKey(RaterRegistry.HumanCredentialProvider.WorldIdV4, bytes32("shared-human"))
             )
         );
         assertTrue(
@@ -2661,10 +2661,7 @@ contract LaunchDistributionPoolTest is Test {
         pure
         returns (bytes32)
     {
-        if (
-            provider == RaterRegistry.HumanCredentialProvider.WorldId
-                || provider == RaterRegistry.HumanCredentialProvider.WorldIdV4
-        ) {
+        if (provider == RaterRegistry.HumanCredentialProvider.WorldIdV4) {
             return keccak256(abi.encode("rateloop.launch-world-id-human-v1", nullifier));
         }
         return keccak256(abi.encode(provider, nullifier));
