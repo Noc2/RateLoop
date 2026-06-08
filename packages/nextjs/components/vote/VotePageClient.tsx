@@ -1016,6 +1016,13 @@ const HomeInner = () => {
     visibleCount,
     requestedActiveId: effectiveRequestedActiveId,
   });
+  useEffect(() => {
+    if (effectiveRequestedActiveId === null || activeSourceIndex < visibleCount) {
+      return;
+    }
+
+    setVisibleCount(current => Math.max(current, activeSourceIndex + 1));
+  }, [activeSourceIndex, effectiveRequestedActiveId, visibleCount]);
   const loadedContentById = useMemo(() => {
     const map = new Map<string, ContentItem>();
     for (const item of loadedItems) {
@@ -1891,9 +1898,11 @@ const HomeInner = () => {
     isFeedLoading: isLoading,
     isRequestedContentLoading: requestedContentLoading,
     requestedActiveId: effectiveRequestedActiveId,
+    visibleCount,
   });
   const showRequestedContentUnavailable =
     effectiveRequestedActiveId !== null && activeSourceIndex < 0 && !showRequestedContentLoading;
+  const mobileVoteDockItem = !showRequestedContentLoading && !showRequestedContentUnavailable ? primaryItem : null;
   return (
     <AppPageShell
       horizontalPaddingClassName="px-0 xl:px-4"
@@ -1998,7 +2007,7 @@ const HomeInner = () => {
         </div>
       </div>
 
-      {primaryItem ? (
+      {mobileVoteDockItem ? (
         <div
           ref={mobileDockContainerRef}
           data-testid="vote-mobile-dock"
@@ -2007,27 +2016,27 @@ const HomeInner = () => {
           <div className="w-full">
             <div className="overflow-visible">
               <VotingQuestionCard
-                contentId={primaryItem.id}
-                categoryId={primaryItem.categoryId}
-                questionTitle={primaryItem.question || primaryItem.title}
-                currentRating={getVisibleContentRating(primaryItem)}
-                openRound={primaryItem.openRound}
-                roundConfig={primaryItem.roundConfig}
-                onVote={isUp => handleButtonVote(primaryItem, isUp)}
+                contentId={mobileVoteDockItem.id}
+                categoryId={mobileVoteDockItem.categoryId}
+                questionTitle={mobileVoteDockItem.question || mobileVoteDockItem.title}
+                currentRating={getVisibleContentRating(mobileVoteDockItem)}
+                openRound={mobileVoteDockItem.openRound}
+                roundConfig={mobileVoteDockItem.roundConfig}
+                onVote={isUp => handleButtonVote(mobileVoteDockItem, isUp)}
                 isCommitting={isCommitting}
                 address={address}
                 error={voteError}
                 cooldownSecondsRemaining={primaryItemCooldownSeconds}
                 isVoteEligibilityPending={primaryVoteEligibilityPending}
                 voteUnavailableStatus={primaryVoteUnavailableStatus}
-                isContentActive={isContentItemActive(primaryItem)}
-                isOwnContent={primaryItem.isOwnContent}
+                isContentActive={isContentItemActive(mobileVoteDockItem)}
+                isOwnContent={mobileVoteDockItem.isOwnContent}
                 embedded
                 compact
                 variant="dock"
                 attentionToken={primaryAttentionToken}
-                onShareContent={() => handleShareContent(primaryItem)}
-                onOpenFeedback={() => handleOpenFeedback(primaryItem)}
+                onShareContent={() => handleShareContent(mobileVoteDockItem)}
+                onOpenFeedback={() => handleOpenFeedback(mobileVoteDockItem)}
               />
             </div>
           </div>

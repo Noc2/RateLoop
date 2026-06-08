@@ -65,10 +65,10 @@ test("content pin keys normalize query order and ignore hash changes", () => {
   );
 });
 
-test("content pin keys ignore social rating version params", () => {
+test("content pin keys preserve social rating version params", () => {
   assert.equal(
     buildVoteContentPinKeyFromUrl("https://www.rateloop.ai/rate?rv=r-6-5000-1-0&q=openlaw&content=6#youtube"),
-    "/rate?content=6&q=openlaw",
+    "/rate?content=6&q=openlaw&rv=r-6-5000-1-0",
   );
 });
 
