@@ -122,6 +122,39 @@ test("MCP image uploads cannot rotate attachment ids around the agent daily quot
   }
 });
 
+test("duplicate image attachment ids do not consume upload quota", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "rateloop-upload-route-"));
+
+  try {
+    env.RATELOOP_LOCAL_IMAGE_ATTACHMENT_DIR = tempDir;
+
+    const first = await POST(uploadRequest("att_routeduplicate01"));
+    assert.equal(first.status, 200);
+    assert.equal((await first.json()).status, "approved");
+
+    const duplicate = await POST(uploadRequest("att_routeduplicate01"));
+    assert.equal(duplicate.status, 400);
+    assert.deepEqual(await duplicate.json(), { error: "Image attachment already exists." });
+
+    const rows = await dbClient.execute(
+      "SELECT subject_kind, subject_id, image_count FROM image_upload_daily_quotas ORDER BY subject_kind",
+    );
+    assert.deepEqual(
+      rows.rows.map(row => ({
+        imageCount: Number(row.image_count),
+        subjectId: row.subject_id,
+        subjectKind: row.subject_kind,
+      })),
+      [
+        { imageCount: 1, subjectId: "upload-agent", subjectKind: "agent" },
+        { imageCount: 1, subjectId: "0x00000000000000000000000000000000000000aa", subjectKind: "wallet" },
+      ],
+    );
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("image upload route rejects oversized multipart bodies before parsing", async () => {
   const response = await POST(
     new NextRequest("https://rateloop.ai/api/attachments/images/upload", {

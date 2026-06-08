@@ -440,6 +440,12 @@ export async function createPendingImageAttachment(params: CreatePendingImageAtt
   }
 }
 
+export async function deleteUploadingImageAttachment(attachmentId: string) {
+  await db
+    .delete(questionImageAttachments)
+    .where(and(eq(questionImageAttachments.id, attachmentId), eq(questionImageAttachments.status, "uploading")));
+}
+
 async function readBlobBuffer(pathname: string) {
   const { getBlob: readBlob } = getImageAttachmentBlobDependencies();
   const result = await readBlob(pathname, { access: "private", useCache: false });
@@ -879,10 +885,6 @@ export async function createImageAttachmentFromBuffer(
     throw new Error("Uploaded image does not match the signed upload metadata.");
   }
 
-  await reserveImageUploadDailyQuotas({
-    sizeBytes: params.sizeBytes,
-    subjects: getImageAttachmentQuotaSubjects(params.uploader),
-  });
   await createPendingImageAttachment({
     attachmentId: params.attachmentId,
     clientRequestId: params.clientRequestId,
@@ -892,6 +894,15 @@ export async function createImageAttachmentFromBuffer(
     sizeBytes: params.sizeBytes,
     uploader: params.uploader,
   });
+  try {
+    await reserveImageUploadDailyQuotas({
+      sizeBytes: params.sizeBytes,
+      subjects: getImageAttachmentQuotaSubjects(params.uploader),
+    });
+  } catch (error) {
+    await deleteUploadingImageAttachment(params.attachmentId).catch(() => undefined);
+    throw error;
+  }
 
   const originalBlobPathname = getDirectImageAttachmentPathname(params.attachmentId);
   const attachment = await markImageAttachmentProcessing({

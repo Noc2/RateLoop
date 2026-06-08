@@ -3,6 +3,7 @@ import { type HandleUploadBody, handleUpload } from "@vercel/blob/client";
 import {
   ImageUploadQuotaError,
   createPendingImageAttachment,
+  deleteUploadingImageAttachment,
   getAttachmentImageUrl,
   getImageAttachment,
   getImageAttachmentUploadMode,
@@ -208,7 +209,6 @@ async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
       throw new Error("Uploaded image does not match the signed upload metadata.");
     }
 
-    await reserveAuthorizedUploadQuota(authorization);
     await createPendingImageAttachment({
       attachmentId: normalized.attachmentId,
       clientRequestId: typeof payload.clientRequestId === "string" ? payload.clientRequestId : null,
@@ -218,6 +218,12 @@ async function handleLocalUpload(request: NextRequest): Promise<NextResponse> {
       sizeBytes: normalized.sizeBytes,
       uploader: authorization.identity,
     });
+    try {
+      await reserveAuthorizedUploadQuota(authorization);
+    } catch (error) {
+      await deleteUploadingImageAttachment(normalized.attachmentId).catch(() => undefined);
+      throw error;
+    }
 
     await processCompletedLocalImageUpload({
       attachmentId: normalized.attachmentId,
@@ -278,7 +284,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           throw new Error("Upload rate limit exceeded.");
         }
 
-        await reserveAuthorizedUploadQuota(authorization);
         await createPendingImageAttachment({
           attachmentId: authorization.normalized.payload.attachmentId,
           clientRequestId: typeof payload.clientRequestId === "string" ? payload.clientRequestId : null,
@@ -288,6 +293,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           sizeBytes: authorization.normalized.payload.sizeBytes,
           uploader: authorization.identity,
         });
+        try {
+          await reserveAuthorizedUploadQuota(authorization);
+        } catch (error) {
+          await deleteUploadingImageAttachment(authorization.normalized.payload.attachmentId).catch(() => undefined);
+          throw error;
+        }
 
         return {
           allowedContentTypes: ALLOWED_CONTENT_TYPES,
