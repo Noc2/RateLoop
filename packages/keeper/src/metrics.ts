@@ -259,6 +259,21 @@ function makeHandler(authToken: string | null, options: MetricsServerOptions = {
     // this below the auth check.
     if (await serveCorrelationArtifact(req, res, options.artifactDirectory)) return;
 
+    if (req.url === "/live") {
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        res.writeHead(405, { Allow: "GET, HEAD" });
+        res.end("Method Not Allowed\n");
+        return;
+      }
+      const body = JSON.stringify({ status: "ok" });
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Content-Length": String(Buffer.byteLength(body)),
+      });
+      res.end(req.method === "HEAD" ? undefined : body);
+      return;
+    }
+
     if (authToken !== null && !timingSafeBearerMatch(req.headers.authorization, authToken)) {
       res.writeHead(401, { "Content-Type": "text/plain" });
       res.end("Unauthorized\n");

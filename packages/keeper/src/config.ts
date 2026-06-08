@@ -17,6 +17,7 @@ const isProduction = process.env.NODE_ENV === "production";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const CORRELATION_SNAPSHOT_MODES = ["file", "auto"] as const;
 const CORRELATION_ARTIFACT_STORAGE_MODES = ["file", "data-uri"] as const;
+const LOOPBACK_BIND_ADDRESSES = new Set(["127.0.0.1", "::1", "localhost"]);
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -150,6 +151,23 @@ function readPositiveIntEnv(
   return parseIntegerEnv(name, value, "positive", Number(fallback), errors);
 }
 
+function readPositiveIntEnvWithOptionalEnvFallback(
+  name: string,
+  fallbackEnvName: string,
+  fallback: string,
+  errors: string[],
+): number {
+  const value = readEnv(name);
+  if (value) return parseIntegerEnv(name, value, "positive", Number(fallback), errors);
+
+  const fallbackEnvValue = readEnv(fallbackEnvName);
+  if (fallbackEnvValue) {
+    return parseIntegerEnv(fallbackEnvName, fallbackEnvValue, "positive", Number(fallback), errors);
+  }
+
+  return parseIntegerEnv(name, fallback, "positive", Number(fallback), errors);
+}
+
 function readNonNegativeIntEnv(
   name: string,
   fallback: string,
@@ -244,6 +262,10 @@ function readOptionalAddressEnv(
   }
 
   return value as `0x${string}`;
+}
+
+function isLoopbackBindAddress(value: string): boolean {
+  return LOOPBACK_BIND_ADDRESSES.has(value) || value.startsWith("127.");
 }
 
 function resolveOptionalContractAddress(params: {
@@ -378,6 +400,22 @@ function loadConfig() {
     "KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL",
     errors,
   );
+  const hostedPort = readEnv("PORT");
+  const metricsPort = readPositiveIntEnvWithOptionalEnvFallback(
+    "METRICS_PORT",
+    "PORT",
+    "9090",
+    errors,
+  );
+  const shouldExposeFileArtifacts =
+    Boolean(hostedPort) &&
+    correlationSnapshotsEnabled &&
+    correlationSnapshotMode === "auto" &&
+    correlationSnapshotArtifactStorageMode === "file" &&
+    Boolean(correlationSnapshotArtifactPublicBaseUrl);
+  const metricsBindAddress =
+    readEnv("METRICS_BIND_ADDRESS") || (shouldExposeFileArtifacts ? "0.0.0.0" : "127.0.0.1");
+  const metricsAuthToken = readEnv("METRICS_AUTH_TOKEN") || null;
   const keeperDatabaseUrl = readOptionalPostgresUrlEnv(
     "KEEPER_DATABASE_URL",
     errors,
@@ -507,11 +545,11 @@ function loadConfig() {
     maxGasPerTx: readPositiveIntEnv("MAX_GAS_PER_TX", "2000000", errors),
 
     // Monitoring
-    metricsPort: readPositiveIntEnv("METRICS_PORT", "9090", errors),
-    metricsBindAddress: readEnv("METRICS_BIND_ADDRESS") || "127.0.0.1",
+    metricsPort,
+    metricsBindAddress,
     // KEEPER-2 (2026-05-21 repo audit): required when METRICS_BIND_ADDRESS is non-loopback.
     // Bearer-checked on every /metrics and /health request.
-    metricsAuthToken: readEnv("METRICS_AUTH_TOKEN") || null,
+    metricsAuthToken,
     metricsEnabled: parseBooleanEnv(
       readEnv("METRICS_ENABLED"),
       true,
@@ -621,6 +659,15 @@ function loadConfig() {
         "CLUSTER_PAYOUT_ORACLE_ADDRESS or a shared ClusterPayoutOracle deployment artifact is required when KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true",
       );
     }
+  }
+  if (
+    loadedConfig.metricsEnabled &&
+    !isLoopbackBindAddress(loadedConfig.metricsBindAddress) &&
+    (!loadedConfig.metricsAuthToken || loadedConfig.metricsAuthToken.length < 16)
+  ) {
+    errors.push(
+      "METRICS_AUTH_TOKEN (>= 16 chars) is required when METRICS_BIND_ADDRESS is non-loopback",
+    );
   }
 
   if (errors.length > 0) {

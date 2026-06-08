@@ -76,7 +76,7 @@ async function main() {
     logger.info("Metrics server started", {
       port: config.metricsPort,
       bindAddress: config.metricsBindAddress,
-      endpoints: ["/metrics", "/health", "/correlation-artifacts/:artifactHash.json"],
+      endpoints: ["/live", "/metrics", "/health", "/correlation-artifacts/:artifactHash.json"],
     });
   }
 

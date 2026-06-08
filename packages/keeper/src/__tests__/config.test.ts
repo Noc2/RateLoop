@@ -25,6 +25,10 @@ const VALID_ENV = {
   KEYSTORE_PASSWORD: "secret",
   KEEPER_FRONTEND_FEE_ENABLED: "false",
   KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "false",
+  METRICS_BIND_ADDRESS: "",
+  METRICS_PORT: "",
+  METRICS_AUTH_TOKEN: "",
+  PORT: "",
 };
 const LOCAL_VOTING_ENGINE = chain31337?.RoundVotingEngine?.address ?? "0x0000000000000000000000000000000000000000";
 const LOCAL_CONTENT_REGISTRY = chain31337?.ContentRegistry?.address ?? "0x0000000000000000000000000000000000000000";
@@ -252,6 +256,55 @@ describe("keeper config", () => {
         METRICS_ENABLED: "disabled",
       }),
     ).rejects.toThrow("METRICS_ENABLED must be a boolean-like value");
+  });
+
+  it("uses PORT as the hosted metrics port fallback", async () => {
+    const { config } = await loadKeeperConfig({
+      PORT: "8080",
+    });
+
+    expect(config.metricsPort).toBe(8080);
+  });
+
+  it("lets METRICS_PORT override PORT", async () => {
+    const { config } = await loadKeeperConfig({
+      PORT: "8080",
+      METRICS_PORT: "9091",
+    });
+
+    expect(config.metricsPort).toBe(9091);
+  });
+
+  it("rejects invalid hosted PORT fallbacks", async () => {
+    await expect(
+      loadKeeperConfig({
+        PORT: "http",
+      }),
+    ).rejects.toThrow("PORT must be a positive integer");
+  });
+
+  it("defaults hosted file artifact publication to an external metrics bind", async () => {
+    const { config } = await loadKeeperConfig({
+      PORT: "8080",
+      METRICS_AUTH_TOKEN: "0123456789abcdef",
+      KEEPER_CORRELATION_SNAPSHOTS_ENABLED: "true",
+      KEEPER_CORRELATION_SNAPSHOTS_MODE: "auto",
+      KEEPER_CORRELATION_ARTIFACT_STORAGE: "file",
+      KEEPER_CORRELATION_SNAPSHOT_PUBLIC_BASE_URL: "https://artifacts.example.com/rateloop/",
+      PONDER_BASE_URL: "https://ponder.example.com",
+      CLUSTER_PAYOUT_ORACLE_ADDRESS: "0x6666666666666666666666666666666666666666",
+    });
+
+    expect(config.metricsBindAddress).toBe("0.0.0.0");
+    expect(config.metricsAuthToken).toBe("0123456789abcdef");
+  });
+
+  it("requires a metrics auth token for non-loopback binds", async () => {
+    await expect(
+      loadKeeperConfig({
+        METRICS_BIND_ADDRESS: "0.0.0.0",
+      }),
+    ).rejects.toThrow("METRICS_AUTH_TOKEN (>= 16 chars) is required when METRICS_BIND_ADDRESS is non-loopback");
   });
 
   it("derives local contract addresses from shared deployment artifacts", async () => {

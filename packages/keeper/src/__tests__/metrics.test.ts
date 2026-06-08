@@ -1,4 +1,6 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { once } from "node:events";
+import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
@@ -11,6 +13,7 @@ import {
   recordError,
   getConsecutiveErrors,
   resolveCorrelationArtifactResponse,
+  startMetricsServer,
 } from "../metrics.js";
 import type { KeeperResult } from "../keeper.js";
 
@@ -26,6 +29,23 @@ function makeResult(overrides: Partial<KeeperResult> = {}): KeeperResult {
     contentMarkedDormant: 0,
     ...overrides,
   };
+}
+
+function requestLocalhost(port: number, path: string): Promise<{ statusCode: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = request({ host: "127.0.0.1", port, path, method: "GET" }, res => {
+      const chunks: Buffer[] = [];
+      res.on("data", chunk => chunks.push(Buffer.from(chunk)));
+      res.on("end", () =>
+        resolve({
+          statusCode: res.statusCode ?? 0,
+          body: Buffer.concat(chunks).toString("utf8"),
+        }),
+      );
+    });
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 describe("metrics", () => {
@@ -129,6 +149,26 @@ describe("metrics", () => {
       ).resolves.toBeNull();
     } finally {
       await rm(artifactDir, { recursive: true, force: true });
+    }
+  });
+
+  it("serves unauthenticated liveness while protecting detailed health", async () => {
+    const server = startMetricsServer(0, "127.0.0.1", "0123456789abcdef");
+    try {
+      await once(server, "listening");
+      const address = server.address();
+      if (typeof address !== "object" || address === null) {
+        throw new Error("Expected TCP server address");
+      }
+
+      const live = await requestLocalhost(address.port, "/live");
+      expect(live.statusCode).toBe(200);
+      expect(JSON.parse(live.body)).toEqual({ status: "ok" });
+
+      const health = await requestLocalhost(address.port, "/health");
+      expect(health.statusCode).toBe(401);
+    } finally {
+      server.close();
     }
   });
 });
