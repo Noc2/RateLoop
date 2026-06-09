@@ -1,5 +1,14 @@
 "use client";
 
+import { type ReactNode } from "react";
+import {
+  CheckIcon,
+  ExclamationTriangleIcon,
+  EyeIcon,
+  LockClosedIcon,
+  MinusIcon,
+  XMarkIcon,
+} from "@heroicons/react/20/solid";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import type { RoundSnapshot } from "~~/hooks/useRoundSnapshot";
 import { getRoundProgressMessaging } from "~~/lib/vote/voteIncentives";
@@ -17,6 +26,49 @@ const TERMINAL_ROUND_TOOLTIPS = {
   revealFailed:
     "Commit quorum was reached, but not enough signals were revealed before the final reveal grace deadline. Revealed raters can claim refunds; unrevealed signals forfeit.",
 } as const;
+
+type RoundStatusChipTone = "success" | "warning" | "primary" | "muted";
+
+const COLORED_STATUS_INFO_ICON_CLASS_NAME = "[&>svg]:text-[#050505]/70 [&>svg]:hover:text-[#050505]";
+const MUTED_STATUS_INFO_ICON_CLASS_NAME = "[&>svg]:text-base-content/50 [&>svg]:hover:text-base-content/75";
+
+function getRoundStatusChipClassName(tone: RoundStatusChipTone) {
+  switch (tone) {
+    case "success":
+      return "reward-chip-brand-green";
+    case "warning":
+      return "reward-chip-brand-yellow";
+    case "primary":
+      return "reward-chip-brand-blue";
+    case "muted":
+    default:
+      return "reward-chip-muted";
+  }
+}
+
+function getRoundStatusInfoIconClassName(tone: RoundStatusChipTone) {
+  return tone === "muted" ? MUTED_STATUS_INFO_ICON_CLASS_NAME : COLORED_STATUS_INFO_ICON_CLASS_NAME;
+}
+
+function RoundStatusChip({
+  label,
+  tooltip,
+  tone,
+  icon,
+}: {
+  label: string;
+  tooltip: string;
+  tone: RoundStatusChipTone;
+  icon: ReactNode;
+}) {
+  return (
+    <span className={`reward-chip reward-chip-label ${getRoundStatusChipClassName(tone)}`}>
+      {icon}
+      <span className="inline-flex max-w-full flex-wrap items-center gap-x-1 gap-y-0.5">{label}</span>
+      <InfoTooltip text={tooltip} position="bottom" className={getRoundStatusInfoIconClassName(tone)} />
+    </span>
+  );
+}
 
 /**
  * Displays compact round progress for a content item.
@@ -46,69 +98,45 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
 
   if (phase === "settled") {
     return (
-      <div className="flex items-center gap-2">
-        <span className="badge badge-success badge-sm gap-1">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Resolved
-        </span>
-        <InfoTooltip text={TERMINAL_ROUND_TOOLTIPS.settled} position="bottom" />
-      </div>
+      <RoundStatusChip
+        label="Resolved"
+        tooltip={TERMINAL_ROUND_TOOLTIPS.settled}
+        tone="success"
+        icon={<CheckIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+      />
     );
   }
 
   if (phase === "cancelled") {
     return (
-      <div className="flex items-center gap-2">
-        <span className="badge badge-warning badge-sm gap-1">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Cancelled
-        </span>
-        <InfoTooltip text={TERMINAL_ROUND_TOOLTIPS.cancelled} position="bottom" />
-      </div>
+      <RoundStatusChip
+        label="Cancelled"
+        tooltip={TERMINAL_ROUND_TOOLTIPS.cancelled}
+        tone="warning"
+        icon={<XMarkIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+      />
     );
   }
 
   if (phase === "tied") {
     return (
-      <div className="flex items-center gap-2">
-        <span className="badge badge-neutral badge-sm gap-1">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-          </svg>
-          Tied
-        </span>
-        <InfoTooltip text={TERMINAL_ROUND_TOOLTIPS.tied} position="bottom" />
-      </div>
+      <RoundStatusChip
+        label="Tied"
+        tooltip={TERMINAL_ROUND_TOOLTIPS.tied}
+        tone="muted"
+        icon={<MinusIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+      />
     );
   }
 
   if (phase === "revealFailed") {
     return (
-      <div className="flex items-center gap-2">
-        <span className="badge badge-warning badge-sm gap-1">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M8.257 3.099c.765-1.36 2.72-1.36 3.485 0l5.58 9.92c.75 1.334-.213 2.981-1.742 2.981H4.42c-1.53 0-2.492-1.647-1.742-2.98l5.58-9.92zM11 13a1 1 0 10-2 0 1 1 0 002 0zm-1-6a1 1 0 00-1 1v3a1 1 0 102 0V8a1 1 0 00-1-1z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Reveal failed
-        </span>
-        <InfoTooltip text={TERMINAL_ROUND_TOOLTIPS.revealFailed} position="bottom" />
-      </div>
+      <RoundStatusChip
+        label="Reveal failed"
+        tooltip={TERMINAL_ROUND_TOOLTIPS.revealFailed}
+        tone="warning"
+        icon={<ExclamationTriangleIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+      />
     );
   }
 
@@ -116,32 +144,18 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
     <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap text-base text-base-content/75">
       {progressMessaging ? (
         <div className="flex items-center gap-1.5">
-          <span
-            className={`badge badge-sm gap-1 text-base ${
-              progressMessaging.badgeTone === "primary" ? "badge-primary" : "badge-warning"
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-              {progressMessaging.badgeTone === "primary" ? (
-                <path
-                  fillRule="evenodd"
-                  d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                  clipRule="evenodd"
-                />
+          <RoundStatusChip
+            label={progressMessaging.badgeLabel}
+            tooltip={progressMessaging.tooltip}
+            tone={progressMessaging.badgeTone === "primary" ? "primary" : "warning"}
+            icon={
+              progressMessaging.badgeTone === "primary" ? (
+                <LockClosedIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               ) : (
-                <>
-                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                  <path
-                    fillRule="evenodd"
-                    d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                    clipRule="evenodd"
-                  />
-                </>
-              )}
-            </svg>
-            {progressMessaging.badgeLabel}
-          </span>
-          <InfoTooltip text={progressMessaging.tooltip} position="bottom" />
+                <EyeIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              )
+            }
+          />
           {progressMessaging.detailLabel ? (
             <span
               className={`tabular-nums text-base ${
@@ -161,25 +175,19 @@ export function RoundProgress({ snapshot }: RoundProgressProps) {
       ) : null}
 
       {readyToSettle || thresholdReachedAt > 0 ? (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1">
-            Ready to resolve
-            <InfoTooltip
-              text="Enough signals are revealed. Settlement is available once past-epoch reveal checks are satisfied."
-              position="bottom"
-            />
-          </span>
-        </div>
+        <RoundStatusChip
+          label="Ready to resolve"
+          tooltip="Enough signals are revealed. Settlement is available once past-epoch reveal checks are satisfied."
+          tone="warning"
+          icon={<CheckIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+        />
       ) : voteCount >= minVoters ? (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1">
-            Waiting for reveals
-            <InfoTooltip
-              text="Enough signals are committed. Settlement follows once enough signals are revealed and past-epoch checks clear."
-              position="bottom"
-            />
-          </span>
-        </div>
+        <RoundStatusChip
+          label="Waiting for reveals"
+          tooltip="Enough signals are committed. Settlement follows once enough signals are revealed and past-epoch checks clear."
+          tone="muted"
+          icon={<EyeIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+        />
       ) : null}
     </div>
   );

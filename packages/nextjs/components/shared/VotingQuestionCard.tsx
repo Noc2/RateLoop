@@ -257,7 +257,7 @@ function RewardAmountDisplay({
 
   return (
     <div
-      className={`reward-chip reward-chip-brand-${tone} inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 text-sm font-semibold leading-none`}
+      className={`reward-chip reward-chip-label reward-chip-brand-${tone}`}
       aria-label={`${displayAmountLabel} ${ariaLabel}`}
     >
       <span>

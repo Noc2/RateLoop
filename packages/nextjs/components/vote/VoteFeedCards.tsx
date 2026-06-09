@@ -564,9 +564,7 @@ function FeedContentMetaCard({
               {rewardDeadlineChips.map(chip => (
                 <div
                   key={chip.label}
-                  className={`reward-chip inline-flex max-w-full items-center gap-1.5 px-3 py-1.5 text-sm font-semibold leading-none ${getDeadlineChipClassName(
-                    chip.tone,
-                  )}`}
+                  className={`reward-chip reward-chip-label ${getDeadlineChipClassName(chip.tone)}`}
                 >
                   <span className="inline-flex max-w-full flex-wrap items-center gap-x-1 gap-y-0.5">{chip.label}</span>
                   {chip.tooltip ? (
