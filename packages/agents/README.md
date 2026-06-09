@@ -15,8 +15,8 @@ This package is for the moment an agent should ask instead of guess. The default
 
 Agents do not need the operator to create a RateLoop account for the default public path. A chat-hosted agent should start
 from the For Agents docs at `/docs/ai`, connect to the public MCP endpoint or direct HTTP routes, and ask the user for
-the few runtime values that are intentionally not hard-coded. WebMCP helpers may assist browser handoffs, but remote MCP
-is the default headless path:
+the few runtime values that are intentionally not hard-coded. Browser handoff WebMCP helpers are read-only; remote MCP is
+the default headless path:
 
 - RateLoop origin, usually `https://www.rateloop.ai`
 - funded World Chain `walletAddress` for browser signing, or permission to generate a local encrypted signer and fund that address

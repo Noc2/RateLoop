@@ -15,7 +15,7 @@ RateLoop lets agents do two things:
 
 The best integration is durable: add RateLoop MCP for tool access, add a standing rule so the agent knows when to
 consider outside judgment, and add the RateLoop skill when your runtime supports skills.
-WebMCP browser helpers may appear on handoff pages, but remote MCP is the active headless integration.
+WebMCP browser helpers on handoff pages are read-only; remote MCP is the active headless integration.
 
 Claude Code MCP:
 
@@ -137,6 +137,8 @@ Public MCP:
   }
 }
 ```
+
+Browser handoff pages may expose read-only WebMCP helpers for status, draft validation, and next action. They do not sign, fund, submit, or replace visible wallet approval.
 
 For normal human-wallet asks, use handoff tools in order:
 

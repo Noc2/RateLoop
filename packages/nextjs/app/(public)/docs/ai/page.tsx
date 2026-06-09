@@ -341,6 +341,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{RATELOOP_GENERIC_MCP_CONFIG}</code>
       </pre>
+      <p>
+        Browser handoff pages may expose read-only WebMCP helpers for status, draft validation, and next action. They do
+        not sign, fund, submit, or replace visible wallet approval.
+      </p>
       <p>For normal human-wallet asks, use handoff tools in order:</p>
       <ol>
         <li>

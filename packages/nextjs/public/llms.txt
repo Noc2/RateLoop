@@ -26,7 +26,7 @@ Do not use RateLoop for private secrets, emergency decisions, medical or legal a
 - [Public MCP endpoint](https://www.rateloop.ai/api/mcp/public): Streamable HTTP MCP endpoint for browser handoff asks, raw wallet-direct asks, and result polling.
 - [Agent setup screen](https://www.rateloop.ai/ask?tab=agent): Browser surface for funding, image upload, copied config, managed policies, and signing handoff.
 - Browser ask handoff links: call `rateloop_create_ask_handoff_link`, then give the user the returned `/agent/handoff/{handoffId}#token=...` URL. Do not ask users to paste raw wallet signatures in normal chat flows.
-- WebMCP: planned browser-handoff helpers only; use remote MCP for headless tool calls.
+- WebMCP: browser handoff helpers are read-only; use remote MCP for headless tool calls.
 
 ## Permanent Agent Setup
 

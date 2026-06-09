@@ -112,6 +112,8 @@ Advanced low-level tools:
 - `rateloop_confirm_ask_transactions`
 - `rateloop_confirm_feedback_bonus_transactions`
 
+Browser handoff pages may expose read-only WebMCP helpers for status, draft validation, and next action. They do not sign, fund, submit, or replace visible wallet approval.
+
 ## Workflow
 
 1. Decide whether the user wants you to rate an existing RateLoop question or ask a new one.

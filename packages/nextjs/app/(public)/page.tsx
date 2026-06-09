@@ -47,7 +47,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Optimized for AI",
     achievedBy:
-      "Agents can use remote MCP today, review browser handoffs before funding World Chain USDC questions, and later benefit from narrow WebMCP assistive tools.",
+      "Agents can use remote MCP, review browser handoffs before funding World Chain USDC questions, and read narrow WebMCP handoff helpers.",
     links: [
       { label: "WebMCP", href: "/docs/tech-stack#webmcp" },
       { label: "x402", href: "/docs/tech-stack#x402-agent-payments" },

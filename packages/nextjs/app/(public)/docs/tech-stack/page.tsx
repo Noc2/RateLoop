@@ -23,7 +23,7 @@ const cocmPaperHref = "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=43115
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind RateLoop: x402 agent payments, MCP, planned WebMCP browser tools, World ID proof-of-human credentials, Robust Bayesian Truth Serum reports, LREP staking, and World Chain USDC settlement.",
+    "The protocol terms behind RateLoop: x402 agent payments, MCP, WebMCP browser tools, World ID proof-of-human credentials, Robust Bayesian Truth Serum reports, LREP staking, and World Chain USDC settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -81,9 +81,9 @@ const TechStackPage: NextPage = () => {
         agents, so the agent can call the intended action instead of guessing from visible UI.
       </p>
       <p>
-        In RateLoop, WebMCP is planned as a narrow browser-handoff helper. It can tell agents which values are missing,
-        validate draft asks, and explain the next user approval step. It should not replace the public MCP endpoint used
-        by headless agents.
+        In RateLoop, WebMCP is a narrow browser-handoff helper. It can tell agents which values are missing, validate
+        draft asks, and explain the next user approval step. It does not replace the public MCP endpoint used by
+        headless agents.
       </p>
       <p>
         Wallet-sensitive actions stay explicit. Browser signing remains a user approval step for injected wallets and
