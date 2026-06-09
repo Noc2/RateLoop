@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import posixpath
 import re
 import subprocess
 import sys
@@ -60,19 +61,57 @@ def strip_jsonc(text: str) -> str:
     return "\n".join(out)
 
 
-def harness_contract_deps(harness_rel: str) -> list[str]:
-    """contracts/ files imported by a harness, as FOUNDRY-relative paths."""
-    harness_path = Path(FOUNDRY) / harness_rel
-    deps: list[str] = []
-    if not harness_path.exists():
-        return deps
-    text = harness_path.read_text()
-    for m in re.finditer(r'import\s*\{[^}]*\}\s*from\s*"([^"]+)"', text):
-        target = m.group(1)
-        # Harnesses live in certora/harnesses/, so ../../contracts/X.sol -> contracts/X.sol
-        if "contracts/" in target:
-            normalized = "contracts/" + target.split("contracts/", 1)[1]
-            deps.append(normalized)
+def _is_library(rel: str) -> bool:
+    return rel.startswith("contracts/libraries/")
+
+
+def _resolve_imports(file_rel: str) -> list[str]:
+    """FOUNDRY-relative contracts/ files imported by file_rel (relative imports only).
+
+    Remapped imports (@openzeppelin/..., etc.) resolve outside contracts/ and are dropped.
+    """
+    path = Path(FOUNDRY) / file_rel
+    if not path.exists():
+        return []
+    base = posixpath.dirname(file_rel)
+    out: list[str] = []
+    # Matches `import "X";`, `import {a,b} from "X";`, `import * as N from "X";`.
+    for m in re.finditer(r'import\s+(?:[^"\';]*?\sfrom\s+)?"([^"]+)"', path.read_text()):
+        resolved = posixpath.normpath(posixpath.join(base, m.group(1)))
+        if resolved.startswith("contracts/") and (Path(FOUNDRY) / resolved).exists():
+            out.append(resolved)
+    return out
+
+
+def contract_deps(target_rel: str) -> set[str]:
+    """The contracts/ files whose code is compiled INTO a conf target's verification.
+
+    Starts from the target (a contracts/ file or a certora/harnesses/ harness) and walks
+    imports transitively, but only follows into LIBRARIES (contracts/libraries/**) — and,
+    from a harness, into the one full contract it wraps. Sibling full contracts reached
+    through an import are NOT included: the specs summarize those as external NONDET calls,
+    so a change to them cannot alter what is proved here. Libraries, by contrast, are linked
+    in and ARE part of the verified behavior (e.g. FrontendFeeDustLib in the distributor's
+    dust path), so a change to one must re-trip the freshness guard.
+    """
+    deps: set[str] = set()
+    seen: set[str] = set()
+    # A harness is not itself a contracts/ file, so it is a walk root but never a dep.
+    stack = [target_rel]
+    if target_rel.startswith("contracts/"):
+        deps.add(target_rel)
+    while stack:
+        node = stack.pop()
+        if node in seen:
+            continue
+        seen.add(node)
+        node_is_harness = not node.startswith("contracts/")
+        for imp in _resolve_imports(node):
+            follow = _is_library(imp) or node_is_harness  # harness -> its wrapped contract
+            if not follow:
+                continue  # sibling full contract: summarized, out of scope
+            deps.add(imp)
+            stack.append(imp)
     return deps
 
 
@@ -87,13 +126,10 @@ def build_map() -> dict[str, set[str]]:
         if ":" not in verify:
             continue
         spec = verify.split(":", 1)[1]
-        targets = data.get("files", [])
         deps: set[str] = set()
-        for target in targets:
-            if target.startswith("contracts/"):
-                deps.add(target)
-            elif "harnesses/" in target:
-                deps.update(harness_contract_deps(target))
+        for target in data.get("files", []):
+            if target.startswith("contracts/") or "harnesses/" in target:
+                deps.update(contract_deps(target))
         for dep in deps:
             mapping.setdefault(dep, set()).add(spec)
     return mapping
