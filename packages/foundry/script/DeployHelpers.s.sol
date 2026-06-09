@@ -105,6 +105,9 @@ contract ScaffoldETHDeploy is Script {
         }
         jsonWrite = vm.serializeString(jsonKey, "networkName", chainName);
         jsonWrite = vm.serializeString(jsonKey, "deploymentComplete", complete ? "true" : "false");
+        jsonWrite = vm.serializeString(
+            jsonKey, "deploymentProfile", vm.envOr("RATELOOP_DEPLOYMENT_PROFILE", string("default"))
+        );
         jsonWrite = vm.serializeUint(jsonKey, "deploymentBlockNumber", block.number);
         vm.writeJson(jsonWrite, path);
     }

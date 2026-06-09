@@ -1,9 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  DEFAULT_DEPLOYMENT_PROFILE,
+  MAINNET_CANARY_DEPLOYMENT_PROFILE,
+  PRODUCTION_DEPLOYMENT_PROFILE,
+  RATELOOP_DEPLOYMENT_PROFILE_ENV,
   RATELOOP_MAINNET_CANARY_ENV,
   WORLD_ID_STAGING_VERIFIER_ADDRESS,
   WORLD_ID_V4_VERIFIER_ADDRESS_ENV,
+  buildDeploymentProfileEnv,
   buildDeployFlowFlags,
   buildWorldIdStagingCanaryEnv,
   isSlowBroadcastNetwork,
@@ -165,5 +170,69 @@ test("buildWorldIdStagingCanaryEnv rejects conflicting verifier override", () =>
           "0x00000000009E00F9FE82CfeeBB4556686da094d7",
       }),
     /--world-id-staging-canary requires WORLD_ID_V4_VERIFIER_ADDRESS/
+  );
+});
+
+test("buildDeploymentProfileEnv defaults worldchain to production", () => {
+  assert.deepEqual(
+    buildDeploymentProfileEnv({
+      network: "worldchain",
+      worldIdStagingCanary: false,
+    }),
+    {
+      [RATELOOP_DEPLOYMENT_PROFILE_ENV]: PRODUCTION_DEPLOYMENT_PROFILE,
+    }
+  );
+});
+
+test("buildDeploymentProfileEnv defaults non-mainnet deployments to default", () => {
+  assert.deepEqual(
+    buildDeploymentProfileEnv({
+      network: "worldchainSepolia",
+      worldIdStagingCanary: false,
+    }),
+    {
+      [RATELOOP_DEPLOYMENT_PROFILE_ENV]: DEFAULT_DEPLOYMENT_PROFILE,
+    }
+  );
+});
+
+test("buildDeploymentProfileEnv stamps worldchain staging canary", () => {
+  assert.deepEqual(
+    buildDeploymentProfileEnv({
+      network: "worldchain",
+      worldIdStagingCanary: true,
+    }),
+    {
+      [RATELOOP_DEPLOYMENT_PROFILE_ENV]: MAINNET_CANARY_DEPLOYMENT_PROFILE,
+    }
+  );
+});
+
+test("buildDeploymentProfileEnv rejects production profile for canary flag", () => {
+  assert.throws(
+    () =>
+      buildDeploymentProfileEnv(
+        {
+          network: "worldchain",
+          worldIdStagingCanary: true,
+        },
+        { [RATELOOP_DEPLOYMENT_PROFILE_ENV]: PRODUCTION_DEPLOYMENT_PROFILE }
+      ),
+    /--world-id-staging-canary requires RATELOOP_DEPLOYMENT_PROFILE/
+  );
+});
+
+test("buildDeploymentProfileEnv rejects canary profile without canary flag", () => {
+  assert.throws(
+    () =>
+      buildDeploymentProfileEnv(
+        {
+          network: "worldchain",
+          worldIdStagingCanary: false,
+        },
+        { [RATELOOP_DEPLOYMENT_PROFILE_ENV]: MAINNET_CANARY_DEPLOYMENT_PROFILE }
+      ),
+    /RATELOOP_DEPLOYMENT_PROFILE=mainnet-canary requires --world-id-staging-canary/
   );
 });

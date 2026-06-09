@@ -9,6 +9,11 @@ const DEPLOY_TARGET_TO_CHAIN = {
   worldchain: { chainId: 480, networkName: "worldchain" },
   worldchainSepolia: { chainId: 4801, networkName: "worldchainSepolia" },
 };
+const DEFAULT_DEPLOYMENT_PROFILE_BY_NETWORK = {
+  worldchain: "production",
+};
+const DEFAULT_DEPLOYMENT_PROFILE = "default";
+const RATELOOP_DEPLOYMENT_PROFILE_ENV = "RATELOOP_DEPLOYMENT_PROFILE";
 
 const PROXY_DEPLOYMENT_NAMES = [
   "FrontendRegistry",
@@ -1045,7 +1050,8 @@ function assertRequiredCompletionCalls(
 
 export function reconstructDeploymentExportFromBroadcast(
   broadcastData,
-  networkName
+  networkName,
+  { deploymentProfile = resolveDeploymentProfile(networkName) } = {}
 ) {
   const transactions = broadcastData.transactions || [];
   const receipts = broadcastData.receipts || [];
@@ -1110,8 +1116,18 @@ export function reconstructDeploymentExportFromBroadcast(
 
   deployments.deploymentBlockNumber = latestBlockNumber;
   deployments.deploymentComplete = "true";
+  deployments.deploymentProfile = deploymentProfile;
   deployments.networkName = networkName;
   return sortDeploymentExport(deployments);
+}
+
+export function resolveDeploymentProfile(networkName, env = process.env) {
+  const value = env[RATELOOP_DEPLOYMENT_PROFILE_ENV]?.trim();
+  return (
+    value ||
+    DEFAULT_DEPLOYMENT_PROFILE_BY_NETWORK[networkName] ||
+    DEFAULT_DEPLOYMENT_PROFILE
+  );
 }
 
 function sortDeploymentExport(deployments) {
@@ -1127,6 +1143,7 @@ function sortDeploymentExport(deployments) {
 
   sorted.deploymentBlockNumber = deployments.deploymentBlockNumber;
   sorted.deploymentComplete = deployments.deploymentComplete;
+  sorted.deploymentProfile = deployments.deploymentProfile;
   sorted.networkName = deployments.networkName;
   return sorted;
 }

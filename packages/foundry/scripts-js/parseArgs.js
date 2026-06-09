@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import {
   DEPLOY_HELP_TEXT,
   WORLD_ID_STAGING_VERIFIER_ADDRESS,
+  buildDeploymentProfileEnv,
   buildDeployFlowFlags,
   buildWorldIdStagingCanaryEnv,
   isSlowBroadcastNetwork,
@@ -94,6 +95,18 @@ function configureWorldIdStagingCanary() {
   }
 }
 
+function configureDeploymentProfile() {
+  try {
+    Object.assign(
+      process.env,
+      buildDeploymentProfileEnv({ network, worldIdStagingCanary }, process.env)
+    );
+  } catch (error) {
+    console.error(`\n❌ Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
 // Check if the network exists in rpc_endpoints
 try {
   const foundryTomlPath = join(__dirname, "..", "foundry.toml");
@@ -165,6 +178,7 @@ if (network === "localhost") {
   process.env.ETH_KEYSTORE_ACCOUNT = selectedKeystore;
 }
 configureWorldIdStagingCanary();
+configureDeploymentProfile();
 process.env.RESUME_FLAG = resume ? "--resume" : "";
 
 // World Chain explorer support can vary by provider. Skip auto-verification here;

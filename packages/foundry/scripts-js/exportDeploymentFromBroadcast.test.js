@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { encodeFunctionData, parseAbi } from "viem";
 
-import { reconstructDeploymentExportFromBroadcast } from "./exportDeploymentFromBroadcast.js";
+import {
+  reconstructDeploymentExportFromBroadcast,
+  resolveDeploymentProfile,
+} from "./exportDeploymentFromBroadcast.js";
 
 const directNames = [
   "TimelockController",
@@ -740,6 +743,7 @@ test("reconstructDeploymentExportFromBroadcast maps proxies and proxy admins", (
 
   assert.equal(deploymentExport.deploymentBlockNumber, 200);
   assert.equal(deploymentExport.deploymentComplete, "true");
+  assert.equal(deploymentExport.deploymentProfile, "default");
   assert.equal(deploymentExport.networkName, "worldchainSepolia");
   assert.equal(deploymentAt(deploymentExport, address(9)), "FrontendRegistry");
   assert.equal(
@@ -768,7 +772,36 @@ test("reconstructDeploymentExportFromBroadcast accepts full treasury mint on wor
   );
 
   assert.equal(deploymentExport.deploymentComplete, "true");
+  assert.equal(deploymentExport.deploymentProfile, "production");
   assert.equal(deploymentExport.networkName, "worldchain");
+});
+
+test("reconstructDeploymentExportFromBroadcast preserves explicit deployment profile", () => {
+  const { transactions, receipts } = completeBroadcast({
+    treasuryMint: treasuryMintAmount,
+    includeWorldChainSepoliaTestMints: false,
+  });
+
+  const deploymentExport = reconstructDeploymentExportFromBroadcast(
+    { transactions, receipts },
+    "worldchain",
+    { deploymentProfile: "mainnet-canary" }
+  );
+
+  assert.equal(deploymentExport.deploymentComplete, "true");
+  assert.equal(deploymentExport.deploymentProfile, "mainnet-canary");
+  assert.equal(deploymentExport.networkName, "worldchain");
+});
+
+test("resolveDeploymentProfile uses env override then network defaults", () => {
+  assert.equal(
+    resolveDeploymentProfile("worldchain", {
+      RATELOOP_DEPLOYMENT_PROFILE: "mainnet-canary",
+    }),
+    "mainnet-canary"
+  );
+  assert.equal(resolveDeploymentProfile("worldchain", {}), "production");
+  assert.equal(resolveDeploymentProfile("worldchainSepolia", {}), "default");
 });
 
 test("reconstructDeploymentExportFromBroadcast requires Sepolia test-account mints", () => {

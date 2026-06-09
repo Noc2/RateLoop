@@ -29,6 +29,10 @@ export const WORLD_ID_STAGING_VERIFIER_ADDRESS =
   "0x703a6316c975DEabF30b637c155edD53e24657DB";
 export const RATELOOP_MAINNET_CANARY_ENV = "RATELOOP_MAINNET_CANARY";
 export const WORLD_ID_V4_VERIFIER_ADDRESS_ENV = "WORLD_ID_V4_VERIFIER_ADDRESS";
+export const RATELOOP_DEPLOYMENT_PROFILE_ENV = "RATELOOP_DEPLOYMENT_PROFILE";
+export const MAINNET_CANARY_DEPLOYMENT_PROFILE = "mainnet-canary";
+export const PRODUCTION_DEPLOYMENT_PROFILE = "production";
+export const DEFAULT_DEPLOYMENT_PROFILE = "default";
 
 function readOptionValue(args, index, optionName) {
   const value = args[index + 1];
@@ -171,5 +175,40 @@ export function buildWorldIdStagingCanaryEnv(env = process.env) {
   return {
     [RATELOOP_MAINNET_CANARY_ENV]: "true",
     [WORLD_ID_V4_VERIFIER_ADDRESS_ENV]: WORLD_ID_STAGING_VERIFIER_ADDRESS,
+  };
+}
+
+export function buildDeploymentProfileEnv(
+  { network, worldIdStagingCanary },
+  env = process.env
+) {
+  const expectedProfile = worldIdStagingCanary
+    ? MAINNET_CANARY_DEPLOYMENT_PROFILE
+    : network === "worldchain"
+    ? PRODUCTION_DEPLOYMENT_PROFILE
+    : DEFAULT_DEPLOYMENT_PROFILE;
+  const existingProfile = env[RATELOOP_DEPLOYMENT_PROFILE_ENV]?.trim();
+
+  if (
+    worldIdStagingCanary &&
+    existingProfile &&
+    existingProfile !== expectedProfile
+  ) {
+    throw new Error(
+      `--world-id-staging-canary requires ${RATELOOP_DEPLOYMENT_PROFILE_ENV} to be unset or ${expectedProfile}. Received: ${existingProfile}`
+    );
+  }
+
+  if (
+    !worldIdStagingCanary &&
+    existingProfile === MAINNET_CANARY_DEPLOYMENT_PROFILE
+  ) {
+    throw new Error(
+      `${RATELOOP_DEPLOYMENT_PROFILE_ENV}=${MAINNET_CANARY_DEPLOYMENT_PROFILE} requires --world-id-staging-canary.`
+    );
+  }
+
+  return {
+    [RATELOOP_DEPLOYMENT_PROFILE_ENV]: existingProfile || expectedProfile,
   };
 }
