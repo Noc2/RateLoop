@@ -151,13 +151,12 @@ export function OPTIONS(request: NextRequest) {
 export function GET(request: NextRequest) {
   return NextResponse.json(
     {
-      instructions:
-        "POST JSON-RPC requests to this endpoint. This public MCP endpoint exposes tokenless wallet-call asks only; managed budgets and callbacks use /api/mcp.",
-      public: true,
-      supportedProtocolVersions: Array.from(SUPPORTED_MCP_PROTOCOL_VERSIONS),
-      transport: "streamable-http",
+      allowedMethods: ["POST", "OPTIONS"],
+      error:
+        "SSE streams are not enabled for this RateLoop public MCP release. Use POST JSON-RPC calls over streamable HTTP.",
+      supportedTransports: ["streamable-http"],
     },
-    { headers: corsHeaders(request) },
+    { headers: { ...corsHeaders(request), Allow: "POST, OPTIONS" }, status: 405 },
   );
 }
 

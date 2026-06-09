@@ -94,6 +94,13 @@ function makeGet(headers: Record<string, string> = {}) {
   });
 }
 
+function makePublicGet(headers: Record<string, string> = {}) {
+  return new NextRequest("https://rateloop.ai/api/mcp/public", {
+    headers: new Headers(headers),
+    method: "GET",
+  });
+}
+
 before(async () => {
   env.NODE_ENV = "development";
   configureAgent();
@@ -453,6 +460,15 @@ test("notifications with MCP-Protocol-Version receive accepted status", async ()
 
 test("GET documents supported transport and disabled SSE", async () => {
   const response = await route.GET(makeGet());
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get("allow"), "POST, OPTIONS");
+  assert.deepEqual(body.supportedTransports, ["streamable-http"]);
+});
+
+test("public GET documents supported transport and disabled SSE", async () => {
+  const response = publicRoute.GET(makePublicGet());
   const body = (await response.json()) as Record<string, unknown>;
 
   assert.equal(response.status, 405);
