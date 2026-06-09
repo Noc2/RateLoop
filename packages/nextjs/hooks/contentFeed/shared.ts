@@ -118,6 +118,8 @@ export interface ContentItem {
     decimals?: number;
     totalFunded: bigint;
     totalAvailable: bigint;
+    activeUnallocated?: bigint;
+    claimableAllocated?: bigint;
     totalClaimed?: bigint;
     totalVoterClaimed?: bigint;
     totalFrontendClaimed?: bigint;
@@ -466,6 +468,8 @@ export function mapContentItem(
       totalFundedAmount?: string | number | bigint | null;
       totalAvailable?: string | number | bigint | null;
       currentRewardPoolAmount?: string | number | bigint | null;
+      activeUnallocatedAmount?: string | number | bigint | null;
+      claimableAllocatedAmount?: string | number | bigint | null;
       totalClaimedAmount?: string | number | bigint | null;
       totalVoterClaimedAmount?: string | number | bigint | null;
       totalFrontendClaimedAmount?: string | number | bigint | null;
@@ -648,6 +652,16 @@ export function mapContentItem(
           totalAvailable: BigInt(
             item.rewardPoolSummary.totalAvailable ?? item.rewardPoolSummary.currentRewardPoolAmount ?? 0,
           ),
+          activeUnallocated:
+            item.rewardPoolSummary.activeUnallocatedAmount === undefined ||
+            item.rewardPoolSummary.activeUnallocatedAmount === null
+              ? undefined
+              : BigInt(item.rewardPoolSummary.activeUnallocatedAmount),
+          claimableAllocated:
+            item.rewardPoolSummary.claimableAllocatedAmount === undefined ||
+            item.rewardPoolSummary.claimableAllocatedAmount === null
+              ? undefined
+              : BigInt(item.rewardPoolSummary.claimableAllocatedAmount),
           totalClaimed: BigInt(item.rewardPoolSummary.totalClaimedAmount ?? 0),
           totalVoterClaimed: BigInt(item.rewardPoolSummary.totalVoterClaimedAmount ?? 0),
           totalFrontendClaimed: BigInt(item.rewardPoolSummary.totalFrontendClaimedAmount ?? 0),
@@ -775,7 +789,11 @@ export function filterModeratedContentItems(feed: ContentItem[]): ContentItem[] 
 }
 
 function getRewardPoolAmount(item: ContentItem) {
-  const rewardAmount = item.rewardPoolSummary?.totalAvailable ?? item.rewardPoolSummary?.totalFunded ?? 0n;
+  const rewardAmount =
+    item.rewardPoolSummary?.activeUnallocated ??
+    item.rewardPoolSummary?.totalAvailable ??
+    item.rewardPoolSummary?.totalFunded ??
+    0n;
   const feedbackAmount = item.feedbackBonusSummary?.totalRemaining ?? 0n;
   if (rewardAmount <= 0n) return feedbackAmount;
   if (feedbackAmount <= 0n) return rewardAmount;

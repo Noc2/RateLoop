@@ -91,11 +91,6 @@ function getRewardAvailableAmount() {
   return sql<bigint>`coalesce((
     select sum(
       case
-        when ${questionRewardPool.allocatedAmount} > ${questionRewardPool.claimedAmount}
-          then ${questionRewardPool.allocatedAmount} - ${questionRewardPool.claimedAmount}
-        else 0
-      end
-      + case
         when ${questionRewardPool.refunded} = false
           and ${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}
           and (
@@ -112,11 +107,6 @@ function getRewardAvailableAmount() {
   ), 0) + coalesce((
     select sum(
       case
-        when ${questionBundleReward.allocatedAmount} > ${questionBundleReward.claimedAmount}
-          then ${questionBundleReward.allocatedAmount} - ${questionBundleReward.claimedAmount}
-        else 0
-      end
-      + case
         when ${questionBundleReward.completedRoundSetCount} < ${questionBundleReward.requiredSettledRounds}
           and (
             ${questionBundleReward.bountyWindowSeconds} = 0

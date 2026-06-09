@@ -340,6 +340,8 @@ test("mapContentItem supports text-only questions and Ponder bounty summaries", 
       decimals: 6,
       totalFundedAmount: "25000000",
       currentRewardPoolAmount: "18000000",
+      activeUnallocatedAmount: "12000000",
+      claimableAllocatedAmount: "6000000",
       totalClaimedAmount: "7000000",
       totalVoterClaimedAmount: "6790000",
       totalFrontendClaimedAmount: "210000",
@@ -378,6 +380,8 @@ test("mapContentItem supports text-only questions and Ponder bounty summaries", 
   assert.equal(item.rewardPoolSummary?.decimals, 6);
   assert.equal(item.rewardPoolSummary?.totalFunded, 25_000_000n);
   assert.equal(item.rewardPoolSummary?.totalAvailable, 18_000_000n);
+  assert.equal(item.rewardPoolSummary?.activeUnallocated, 12_000_000n);
+  assert.equal(item.rewardPoolSummary?.claimableAllocated, 6_000_000n);
   assert.equal(item.rewardPoolSummary?.totalClaimed, 7_000_000n);
   assert.equal(item.rewardPoolSummary?.totalVoterClaimed, 6_790_000n);
   assert.equal(item.rewardPoolSummary?.totalFrontendClaimed, 210_000n);

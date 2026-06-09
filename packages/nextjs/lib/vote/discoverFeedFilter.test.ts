@@ -274,6 +274,64 @@ test("pending start-by bounty stays visible until it activates or misses the dea
   assert.equal(shouldShowBountyExpiredStatus(item, 12_001), true);
 });
 
+test("active unallocated bounty remains visible after an earlier round settled", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/next-round-bounty",
+    title: "Next round bounty",
+    ratingSettledRounds: 1,
+    latestRound: {
+      roundId: 1n,
+      state: 1,
+      voteCount: 3,
+      revealedCount: 3,
+      totalStake: 19_000_000n,
+      upPool: 19_000_000n,
+      downPool: 0n,
+      startTime: 9_000n,
+      estimatedSettlementTime: null,
+    },
+    rewardPoolSummary: {
+      totalFunded: 5_000_000n,
+      totalAvailable: 5_000_000n,
+      activeUnallocated: 5_000_000n,
+      claimableAllocated: 0n,
+      activeRewardPoolCount: 1,
+      expiredRewardPoolCount: 0,
+      hasActiveBounty: true,
+      nextBountyStartBy: 12_000n,
+      nextBountyClosesAt: null,
+    },
+  });
+
+  assert.equal(getPendingBountyStartBy(item, 10_000), 12_000n);
+  assert.equal(getVisibleRewardPoolAmount(item, 10_000), 5_000_000n);
+  assert.equal(shouldShowBountyExpiredStatus(item, 10_000), false);
+});
+
+test("claimable allocated payout is not shown as a new bounty opportunity", () => {
+  const item = makeContentItem({
+    id: 1n,
+    url: "https://example.com/claimable-payout",
+    title: "Claimable old payout",
+    rewardPoolSummary: {
+      totalFunded: 5_000_000n,
+      totalAvailable: 5_000_000n,
+      activeUnallocated: 0n,
+      claimableAllocated: 5_000_000n,
+      activeRewardPoolCount: 0,
+      expiredRewardPoolCount: 0,
+      hasActiveBounty: false,
+      nextBountyClosesAt: null,
+    },
+  });
+
+  assert.equal(getActiveBountyClosesAt(item, 10_000), null);
+  assert.equal(getPendingBountyStartBy(item, 10_000), null);
+  assert.equal(getVisibleRewardPoolAmount(item, 10_000), 0n);
+  assert.equal(getVisibleRewardOpportunityAmount(item, 10_000), 0n);
+});
+
 test("stale active bounty deadlines are ignored when no bounty remains", () => {
   const feed = [
     makeContentItem({

@@ -6,10 +6,14 @@ export const DISCOVER_ALL_FILTER = "All";
 export const DISCOVER_BROKEN_FILTER = "Broken";
 export const DISCOVER_EXPIRED_BOUNTY_FILTER = "Expired";
 
+function getRewardPoolOpportunityAmount(item: ContentItem) {
+  return item.rewardPoolSummary?.activeUnallocated ?? item.rewardPoolSummary?.totalAvailable ?? 0n;
+}
+
 function hasActiveBounty(item: ContentItem, nowSeconds: number) {
   const rewardSummary = item.rewardPoolSummary;
   const now = BigInt(nowSeconds);
-  if (rewardSummary && rewardSummary.totalAvailable > 0n) {
+  if (rewardSummary && getRewardPoolOpportunityAmount(item) > 0n) {
     const closesAt = rewardSummary.nextBountyClosesAt ?? 0n;
     if (closesAt > 0n) return closesAt >= now;
 
@@ -42,7 +46,7 @@ export function getActiveBountyClosesAt(item: ContentItem, nowSeconds = Math.flo
   const now = BigInt(nowSeconds);
   if (
     rewardSummary &&
-    rewardSummary.totalAvailable > 0n &&
+    getRewardPoolOpportunityAmount(item) > 0n &&
     rewardSummary.nextBountyClosesAt &&
     rewardSummary.nextBountyClosesAt >= now
   ) {
@@ -66,7 +70,7 @@ export function getPendingBountyStartBy(item: ContentItem, nowSeconds = Math.flo
   const rewardSummary = item.rewardPoolSummary;
   if (
     rewardSummary &&
-    rewardSummary.totalAvailable > 0n &&
+    getRewardPoolOpportunityAmount(item) > 0n &&
     (!rewardSummary.nextBountyClosesAt || rewardSummary.nextBountyClosesAt <= 0n) &&
     rewardSummary.nextBountyStartBy &&
     rewardSummary.nextBountyStartBy >= now
@@ -97,10 +101,10 @@ export function isExpiredBountyItem(item: ContentItem, nowSeconds = Math.floor(D
   );
   const hasExpiredRewardPool = Boolean(
     rewardSummary &&
-      (rewardSummary.totalFunded > 0n || rewardSummary.totalAvailable > 0n) &&
+      (rewardSummary.totalFunded > 0n || getRewardPoolOpportunityAmount(item) > 0n) &&
       !hasActiveBounty(item, nowSeconds) &&
       ((rewardSummary.expiredRewardPoolCount ?? 0) > 0 ||
-        rewardSummary.totalAvailable <= 0n ||
+        getRewardPoolOpportunityAmount(item) <= 0n ||
         missedRewardPoolStartBy),
   );
   const bundle = item.bundle;
@@ -142,7 +146,7 @@ export function shouldShowBountyExpiredStatus(item: ContentItem, nowSeconds = Ma
       bundle.completedRoundSetCount < bundle.requiredSettledRounds &&
       bundle.fundedAmount > 0n &&
       !hasActiveBounty(item, nowSeconds) &&
-      (item.rewardPoolSummary?.totalAvailable ?? 0n) <= 0n,
+      getRewardPoolOpportunityAmount(item) <= 0n,
   );
 }
 
@@ -189,7 +193,7 @@ export function getVisibleRewardPoolAmount(item: ContentItem, nowSeconds = Math.
     return 0n;
   }
 
-  return item.rewardPoolSummary?.totalAvailable ?? 0n;
+  return getRewardPoolOpportunityAmount(item);
 }
 
 export function getVisibleFeedbackBonusAmount(item: ContentItem, nowSeconds = Math.floor(Date.now() / 1000)) {
