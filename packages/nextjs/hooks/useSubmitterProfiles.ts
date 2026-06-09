@@ -8,8 +8,6 @@ import { ponderApi } from "~~/services/ponder/client";
 
 export interface SubmitterProfile {
   username: string | null;
-  winRate?: number;
-  totalSettledVotes?: number;
 }
 
 /**

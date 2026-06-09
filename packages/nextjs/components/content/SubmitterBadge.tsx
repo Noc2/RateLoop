@@ -9,8 +9,6 @@ interface SubmitterBadgeProps {
   username?: string | null;
   size?: "sm" | "md";
   addressMode?: "hidden" | "stacked" | "inline";
-  winRate?: number;
-  totalSettledVotes?: number;
   action?: React.ReactNode;
 }
 
@@ -22,8 +20,6 @@ export function SubmitterBadge({
   username,
   size = "sm",
   addressMode = "hidden",
-  winRate,
-  totalSettledVotes,
   action,
 }: SubmitterBadgeProps) {
   const { targetNetwork } = useTargetNetwork();
@@ -35,18 +31,6 @@ export function SubmitterBadge({
   const inlineAddress = addressMode === "inline" && username ? truncatedAddress : null;
   const profileHref = `/profiles/${address.toLowerCase()}`;
   const avatarSrc = getReputationAvatarUrl(address, avatarSize, null, targetNetwork.id) || "";
-
-  const showAccuracy = winRate !== undefined && totalSettledVotes !== undefined && totalSettledVotes >= 3;
-  const winPct = showAccuracy ? Math.round(winRate! * 100) : 0;
-  const wins = showAccuracy ? Math.round(winRate! * totalSettledVotes!) : 0;
-  const losses = showAccuracy ? totalSettledVotes! - wins : 0;
-  const accuracyColor = showAccuracy
-    ? winRate! >= 0.6
-      ? "text-success"
-      : winRate! <= 0.4
-        ? "text-error"
-        : "text-base-content/50"
-    : "";
 
   const stopPropagation = (event: React.SyntheticEvent) => {
     event.stopPropagation();
@@ -84,14 +68,6 @@ export function SubmitterBadge({
                   {inlineAddress}
                 </span>
               ) : null}
-              {showAccuracy && (
-                <span
-                  className={`text-xs font-semibold px-1.5 py-0.5 rounded-full bg-base-200 ${accuracyColor}`}
-                  title={`${winPct}% win rate (${wins}W/${losses}L)`}
-                >
-                  {winPct}%
-                </span>
-              )}
             </div>
             {addressMode === "stacked" && username && (
               <span className="text-base text-base-content/50 font-mono transition-colors group-hover:text-base-content/70">

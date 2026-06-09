@@ -606,13 +606,7 @@ function FeedContentMetaCard({
 
         <div className={actionRowClassName}>
           <div className="min-w-0 flex-1">
-            <SubmitterBadge
-              address={item.submitter}
-              username={submitterProfile?.username}
-              winRate={submitterProfile?.winRate}
-              totalSettledVotes={submitterProfile?.totalSettledVotes}
-              size="sm"
-            />
+            <SubmitterBadge address={item.submitter} username={submitterProfile?.username} size="sm" />
           </div>
           {hasContextLink ? (
             <SafeExternalLink

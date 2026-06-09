@@ -38,12 +38,11 @@ import { useOnboarding } from "~~/hooks/useOnboarding";
 import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
 import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundVote } from "~~/hooks/useRoundVote";
-import { SubmitterProfile, useSubmitterProfiles } from "~~/hooks/useSubmitterProfiles";
+import { useSubmitterProfiles } from "~~/hooks/useSubmitterProfiles";
 import { useUnixTime } from "~~/hooks/useUnixTime";
 import { useVoteCooldowns } from "~~/hooks/useVoteCooldowns";
 import { shouldHoldVoteFeedForRequestedContent, useVoteFeedStage } from "~~/hooks/useVoteFeedStage";
 import { useVoteHistoryQuery } from "~~/hooks/useVoteHistoryQuery";
-import { useVoterAccuracyBatch } from "~~/hooks/useVoterAccuracyBatch";
 import { useWatchedContent } from "~~/hooks/useWatchedContent";
 import { mergeVoteHistoryItems } from "~~/hooks/voteHistory/shared";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
@@ -1162,22 +1161,6 @@ const HomeInner = () => {
 
   const { profiles: submitterProfiles } = useSubmitterProfiles(submitterAddresses);
 
-  // Fetch voter accuracy stats and merge into profiles
-  const { statsMap: accuracyMap } = useVoterAccuracyBatch(submitterAddresses);
-
-  const enrichedProfiles = useMemo(() => {
-    const result: Record<string, SubmitterProfile> = {};
-    for (const [addr, profile] of Object.entries(submitterProfiles)) {
-      const stats = accuracyMap[addr];
-      result[addr] = {
-        ...profile,
-        winRate: stats?.winRate,
-        totalSettledVotes: stats?.totalSettledVotes,
-      };
-    }
-    return result;
-  }, [submitterProfiles, accuracyMap]);
-
   const canLoadMore = visibleCount < displayFeed.length || hasMoreFeed;
   const getContentCooldownSeconds = useCallback(
     (contentId: bigint) => {
@@ -1552,7 +1535,7 @@ const HomeInner = () => {
         markPrimaryInteraction(item.id);
         recordRecommendationSignal(item, "follow_toggle", { selected: result.following });
       }
-      const curatorName = enrichedProfiles[targetAddress.toLowerCase()]?.username || "curator";
+      const curatorName = submitterProfiles[targetAddress.toLowerCase()]?.username || "curator";
       const followMessage = result.following ? `Following ${curatorName}` : `Unfollowed ${curatorName}`;
       notification.success(followMessage, {
         id: FOLLOWED_CURATOR_TOAST_ID,
@@ -1560,11 +1543,11 @@ const HomeInner = () => {
     },
     [
       displayFeed,
-      enrichedProfiles,
       markPrimaryInteraction,
       openConnectModal,
       primaryItem,
       recordRecommendationSignal,
+      submitterProfiles,
       toggleFollow,
     ],
   );
@@ -1955,7 +1938,7 @@ const HomeInner = () => {
                           mobileTopChromeHeight={mobileHeaderHeight}
                           mobileTopChromeVisible={isMobileHeaderVisible}
                           canLoadMore={canLoadMore}
-                          enrichedProfiles={enrichedProfiles}
+                          enrichedProfiles={submitterProfiles}
                           watchedContentIds={watchedContentIds}
                           followedWallets={followedWallets}
                           normalizedAddress={normalizedAddress}
