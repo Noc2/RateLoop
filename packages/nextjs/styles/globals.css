@@ -416,9 +416,10 @@ body {
 .rateloop-gradient-action[data-size="sm"][data-claim-layout="compact"] .rateloop-gradient-action-inner {
   min-height: 3.05rem;
   flex-direction: column;
+  align-items: flex-start;
   gap: 0.16rem;
   padding: 0.48rem 0.62rem;
-  text-align: center;
+  text-align: left;
   line-height: 1.05;
   white-space: normal;
 }

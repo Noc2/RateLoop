@@ -81,7 +81,7 @@ export function ClaimRewardsButton({ className, layout = "default", showTokenSym
     `Claim ${progress.current}/${progress.total}`
   ) : useCompactMixedRewardLabel ? (
     <>
-      <span>Claim Rewards</span>
+      <span>Claim</span>
       <span className="text-sm font-semibold text-base-content/78">{claimParts.join(" + ")}</span>
     </>
   ) : (
