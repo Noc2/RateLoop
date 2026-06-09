@@ -27,6 +27,15 @@ contract DeployRateLoopHarness is DeployRateLoop {
         return _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride);
     }
 
+    function resolveWorldIdVerifierAddressForChain(
+        bool isLocalDev,
+        bool hasOverride,
+        address verifierOverride,
+        bool mainnetCanary
+    ) external view returns (address) {
+        return _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride, mainnetCanary);
+    }
+
     function shouldDeployWorldIdMockVerifier(bool isLocalDev, address resolvedVerifier) external pure returns (bool) {
         return _shouldDeployWorldIdMockVerifier(isLocalDev, resolvedVerifier);
     }
@@ -49,6 +58,10 @@ contract DeployRateLoopHarness is DeployRateLoop {
 
     function worldChainWorldIdV4Verifier() external pure returns (address) {
         return WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
+    }
+
+    function worldChainWorldIdV4StagingVerifier() external pure returns (address) {
+        return WORLD_CHAIN_WORLD_ID_V4_STAGING_VERIFIER;
     }
 
     function resolveWorldIdDeployConfig(address verifier)
@@ -320,7 +333,20 @@ contract DeployRateLoopAllocationsTest is Test {
         deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0));
     }
 
-    function test_WorldChainMainnetRejectsVerifierOverride() public {
+    function test_WorldChainMainnetUsesBundledVerifierWhenCodeExists() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        address bundledVerifier = deployScript.worldChainWorldIdV4Verifier();
+        vm.etch(bundledVerifier, address(verifier).code);
+        vm.chainId(480);
+
+        assertEq(
+            deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), false),
+            bundledVerifier
+        );
+    }
+
+    function test_WorldChainMainnetRejectsVerifierOverrideWithoutCanary() public {
         DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
         MockWorldIDVerifier verifier = new MockWorldIDVerifier();
         vm.chainId(480);
@@ -329,6 +355,63 @@ contract DeployRateLoopAllocationsTest is Test {
             abi.encodeWithSelector(DeployRateLoop.MainnetWorldIdVerifierOverrideNotAllowed.selector, address(verifier))
         );
         deployScript.resolveWorldIdVerifierAddressForChain(false, true, address(verifier));
+    }
+
+    function test_WorldChainMainnetRejectsStagingVerifierOverrideWithoutCanary() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        address stagingVerifier = deployScript.worldChainWorldIdV4StagingVerifier();
+        vm.chainId(480);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployRateLoop.MainnetWorldIdVerifierOverrideNotAllowed.selector, stagingVerifier)
+        );
+        deployScript.resolveWorldIdVerifierAddressForChain(false, true, stagingVerifier, false);
+    }
+
+    function test_WorldChainMainnetCanaryUsesStagingVerifierWhenCodeExists() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        address stagingVerifier = deployScript.worldChainWorldIdV4StagingVerifier();
+        vm.etch(stagingVerifier, address(verifier).code);
+        vm.chainId(480);
+
+        assertEq(
+            deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), true),
+            stagingVerifier
+        );
+    }
+
+    function test_WorldChainMainnetCanaryAcceptsStagingVerifierOverride() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        address stagingVerifier = deployScript.worldChainWorldIdV4StagingVerifier();
+        vm.etch(stagingVerifier, address(verifier).code);
+        vm.chainId(480);
+
+        assertEq(
+            deployScript.resolveWorldIdVerifierAddressForChain(false, true, stagingVerifier, true),
+            stagingVerifier
+        );
+    }
+
+    function test_WorldChainMainnetCanaryRejectsNonStagingVerifierOverride() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        MockWorldIDVerifier verifier = new MockWorldIDVerifier();
+        vm.chainId(480);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployRateLoop.MainnetWorldIdVerifierOverrideNotAllowed.selector, address(verifier))
+        );
+        deployScript.resolveWorldIdVerifierAddressForChain(false, true, address(verifier), true);
+    }
+
+    function test_WorldChainMainnetCanaryRequiresStagingVerifierCode() public {
+        DeployRateLoopHarness deployScript = new DeployRateLoopHarness();
+        address stagingVerifier = deployScript.worldChainWorldIdV4StagingVerifier();
+        vm.chainId(480);
+
+        vm.expectRevert(abi.encodeWithSelector(DeployRateLoop.WorldIdVerifierHasNoCode.selector, stagingVerifier));
+        deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), true);
     }
 
     function test_WorldChainMainnetNeverDeploysMockVerifier() public {

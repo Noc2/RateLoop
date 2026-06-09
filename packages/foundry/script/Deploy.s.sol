@@ -47,7 +47,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     address internal constant WORLD_CHAIN_MAINNET_USDC = 0x79A02482A880bCE3F13e09Da970dC34db4CD24d1;
     address internal constant WORLD_CHAIN_SEPOLIA_USDC = 0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88;
     address internal constant WORLD_CHAIN_WORLD_ID_V4_VERIFIER = 0x00000000009E00F9FE82CfeeBB4556686da094d7;
+    address internal constant WORLD_CHAIN_WORLD_ID_V4_STAGING_VERIFIER =
+        0x703a6316c975DEabF30b637c155edD53e24657DB;
     string internal constant WORLD_ID_V4_VERIFIER_ADDRESS_ENV = "WORLD_ID_V4_VERIFIER_ADDRESS";
+    string internal constant RATELOOP_MAINNET_CANARY_ENV = "RATELOOP_MAINNET_CANARY";
     uint64 internal constant WORLD_ID_CREDENTIAL_TTL_SECONDS = 365 days;
     uint64 internal constant WORLD_ID_PRESENCE_TTL_SECONDS = 15 minutes;
     uint64 internal constant DEFAULT_WORLD_ID_V4_RP_ID = 1;
@@ -527,7 +530,9 @@ contract DeployRateLoop is ScaffoldETHDeploy {
     function _resolveWorldIdVerifierAddress(bool isLocalDev) internal view returns (address) {
         bool hasOverride = vm.envExists(WORLD_ID_V4_VERIFIER_ADDRESS_ENV);
         address verifierOverride = hasOverride ? vm.envOr(WORLD_ID_V4_VERIFIER_ADDRESS_ENV, address(0)) : address(0);
-        return _resolveWorldIdVerifierAddressForChain(isLocalDev, hasOverride, verifierOverride);
+        return _resolveWorldIdVerifierAddressForChain(
+            isLocalDev, hasOverride, verifierOverride, _isMainnetCanaryEnabled()
+        );
     }
 
     function _resolveWorldIdVerifierAddressForChain(bool isLocalDev, bool hasOverride, address verifierOverride)
@@ -535,18 +540,35 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         view
         returns (address)
     {
+        return _resolveWorldIdVerifierAddressForChain(
+            isLocalDev, hasOverride, verifierOverride, _isMainnetCanaryEnabled()
+        );
+    }
+
+    function _resolveWorldIdVerifierAddressForChain(
+        bool isLocalDev,
+        bool hasOverride,
+        address verifierOverride,
+        bool mainnetCanary
+    ) internal view returns (address) {
         if (isLocalDev) return address(0);
         if (block.chainid == 480) {
-            if (hasOverride && verifierOverride != WORLD_CHAIN_WORLD_ID_V4_VERIFIER) {
+            address expectedVerifier =
+                mainnetCanary ? WORLD_CHAIN_WORLD_ID_V4_STAGING_VERIFIER : WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
+            if (hasOverride && verifierOverride != expectedVerifier) {
                 revert MainnetWorldIdVerifierOverrideNotAllowed(verifierOverride);
             }
-            return _resolveWorldIdVerifierCandidate(WORLD_CHAIN_WORLD_ID_V4_VERIFIER, true);
+            return _resolveWorldIdVerifierCandidate(expectedVerifier, true);
         }
         if (block.chainid == 4801) {
             address verifier = hasOverride ? verifierOverride : WORLD_CHAIN_WORLD_ID_V4_VERIFIER;
             return _resolveWorldIdVerifierCandidate(verifier, hasOverride);
         }
         revert UnsupportedWorldChain(block.chainid);
+    }
+
+    function _isMainnetCanaryEnabled() internal view returns (bool) {
+        return vm.envOr(RATELOOP_MAINNET_CANARY_ENV, false);
     }
 
     function _resolveWorldIdVerifierCandidate(address verifier, bool requireLiveCode) internal view returns (address) {
