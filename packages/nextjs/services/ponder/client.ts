@@ -1078,6 +1078,23 @@ export interface PonderVoteCooldownsResponse {
   items: PonderVoteCooldownItem[];
 }
 
+export interface PonderViewerRewardStatusItem {
+  contentId: string;
+  pendingBountyCount: number;
+  claimableBountyCount: number;
+  awaitingBountyAllocationCount: number;
+  awaitingBountyPayoutCount: number;
+  latestBountyRoundId: string | null;
+  pendingFeedbackBonusCount: number;
+  latestFeedbackBonusRoundId: string | null;
+  hasPendingBounty: boolean;
+  hasPendingFeedbackBonus: boolean;
+}
+
+export interface PonderViewerRewardStatusesResponse {
+  items: PonderViewerRewardStatusItem[];
+}
+
 export interface PonderProfileDetailResponse {
   profile: PonderProfile | null;
   summary: PonderProfileSummary;
@@ -1533,6 +1550,10 @@ export const ponderApi = {
 
   getVoteCooldowns(params?: { voters?: string; contentIds?: string }) {
     return ponderGet<PonderVoteCooldownsResponse>("/vote-cooldowns", params);
+  },
+
+  getViewerRewardStatuses(params: { voters: string; contentIds?: string }) {
+    return ponderGet<PonderViewerRewardStatusesResponse>("/viewer-reward-statuses", params);
   },
 
   getQuestionRewardClaimCandidates(voter: string, params?: { limit?: string; offset?: string }) {

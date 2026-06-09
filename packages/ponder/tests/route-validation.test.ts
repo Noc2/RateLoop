@@ -98,6 +98,15 @@ function mockPonderModules<T>(result: T) {
       url: "content.url",
       urlHost: "content.urlHost",
     },
+    contentFeedback: {
+      author: "contentFeedback.author",
+      committedAt: "contentFeedback.committedAt",
+      contentId: "contentFeedback.contentId",
+      feedbackHash: "contentFeedback.feedbackHash",
+      id: "contentFeedback.id",
+      revealed: "contentFeedback.revealed",
+      roundId: "contentFeedback.roundId",
+    },
     contentMedia: {
       canonicalUrl: "contentMedia.canonicalUrl",
       contentId: "contentMedia.contentId",
@@ -1742,6 +1751,95 @@ describe("registerDataRoutes", () => {
       ],
     });
     expect(queryBuilder.groupBy).toHaveBeenCalledWith("vote.contentId");
+  });
+
+  it("rejects viewer reward status requests without valid voters or content ids", async () => {
+    const { db } = mockPonderModules([]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const missingResponse = await app.request(
+      "http://localhost/viewer-reward-statuses?contentIds=1,2",
+    );
+    const invalidVoterResponse = await app.request(
+      "http://localhost/viewer-reward-statuses?voters=not-an-address&contentIds=1,2",
+    );
+    const invalidContentResponse = await app.request(
+      "http://localhost/viewer-reward-statuses?voters=0x0000000000000000000000000000000000000001&contentIds=not-a-number",
+    );
+
+    expect(missingResponse.status).toBe(400);
+    expect(await missingResponse.json()).toEqual({
+      error: "voters parameter required",
+    });
+    expect(invalidVoterResponse.status).toBe(400);
+    expect(await invalidVoterResponse.json()).toEqual({
+      error: "Invalid voter address",
+    });
+    expect(invalidContentResponse.status).toBe(400);
+    expect(await invalidContentResponse.json()).toEqual({
+      error: "Invalid contentIds",
+    });
+    expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("summarizes pending viewer bounty and feedback bonus statuses by content", async () => {
+    const { queryBuilder } = mockPonderModules([
+      {
+        contentId: 2n,
+        pendingBountyCount: 1,
+        claimableBountyCount: 0,
+        awaitingBountyAllocationCount: 0,
+        awaitingBountyPayoutCount: 1,
+        latestBountyRoundId: 3n,
+        pendingFeedbackBonusCount: 1,
+        latestFeedbackBonusRoundId: 4n,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/viewer-reward-statuses?voters=0x0000000000000000000000000000000000000001&contentIds=2",
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      items: [
+        {
+          contentId: "2",
+          pendingBountyCount: 1,
+          claimableBountyCount: 0,
+          awaitingBountyAllocationCount: 0,
+          awaitingBountyPayoutCount: 1,
+          latestBountyRoundId: "3",
+          pendingFeedbackBonusCount: 1,
+          latestFeedbackBonusRoundId: "4",
+          hasPendingBounty: true,
+          hasPendingFeedbackBonus: true,
+        },
+      ],
+    });
+    expect(queryBuilder.where).toHaveBeenCalledTimes(2);
+    const whereExpressions = queryBuilder.where.mock.calls.map(([value]) =>
+      serializeExpression(value),
+    );
+    expect(whereExpressions[0]).toContain("vote.revealed");
+    expect(whereExpressions[0]).toContain("questionRewardPoolClaim.id");
+    expect(whereExpressions[1]).toContain("contentFeedback.author");
+    expect(whereExpressions[1]).toContain("feedbackBonusPool.awardDeadline");
+    expect(queryBuilder.groupBy).toHaveBeenCalledWith("vote.contentId");
+    expect(queryBuilder.groupBy).toHaveBeenCalledWith(
+      "contentFeedback.contentId",
+    );
   });
 
   it("rejects bounty claim candidate requests without a valid voter", async () => {

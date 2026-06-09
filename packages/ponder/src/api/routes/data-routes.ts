@@ -57,6 +57,7 @@ const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
 const SNAPSHOT_STATUS_FINALIZED = 3;
 const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 const HEX_BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
+const ZERO_BYTES32 = `0x${"0".repeat(64)}`;
 const PAYOUT_PROOF_ENRICHMENT_CONCURRENCY = 8;
 const WORLD_CREDENTIAL_SELFIE = 1;
 const WORLD_CREDENTIAL_PASSPORT = 2;
@@ -1169,6 +1170,209 @@ export function registerDataRoutes(app: ApiApp) {
         ...item,
         cooldownEndsAt: item.latestCommittedAt + BigInt(VOTE_COOLDOWN_SECONDS),
       })),
+    });
+  });
+
+  app.get("/viewer-reward-statuses", async (c) => {
+    const votersRaw = c.req.query("voters") ?? c.req.query("voter");
+    const contentIdsRaw = c.req.query("contentIds");
+    const contentIds = parseBigIntList(contentIdsRaw, 200);
+    if (contentIdsRaw && contentIds.length === 0) {
+      return c.json({ error: "Invalid contentIds" }, 400);
+    }
+
+    if (!votersRaw) {
+      return c.json({ error: "voters parameter required" }, 400);
+    }
+    const voterAddrs = parseAddressList(votersRaw);
+    if (voterAddrs.length === 0) {
+      return c.json({ error: "Invalid voter address" }, 400);
+    }
+
+    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const bountyConditions = [
+      voteMatchesAnyVoter(voterAddrs),
+      eq(vote.revealed, true),
+      eq(round.state, ROUND_STATE.Settled),
+      sql`${vote.roundId} >= ${questionRewardPool.startRoundId}`,
+      sql`${questionRewardPoolClaim.id} is null`,
+      sql`(
+        ${questionRewardPool.bountyWindowSeconds} = 0
+        or (
+          ${questionRewardPool.bountyClosesAt} != 0
+          and ${questionRewardPool.bountyOpensAt} <= ${questionRewardPool.bountyClosesAt}
+          and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${questionRewardPool.bountyOpensAt}
+          and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${questionRewardPool.bountyClosesAt}
+        )
+        or (
+          ${questionRewardPool.bountyClosesAt} = 0
+          and ${round.startTime} is not null
+          and ${round.startTime} <= ${questionRewardPool.bountyStartBy}
+          and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) >= ${round.startTime}
+          and coalesce(${vote.committedAt}, ${vote.revealedAt}, 0) <= ${round.startTime} + ${questionRewardPool.bountyWindowSeconds}
+        )
+      )`,
+      or(
+        sql`${questionRewardPoolRound.rewardPoolId} is not null`,
+        and(
+          eq(questionRewardPool.refunded, false),
+          sql`${questionRewardPool.qualifiedRounds} < ${questionRewardPool.requiredSettledRounds}`,
+          sql`${round.revealedCount} >= ${questionRewardPool.requiredVoters}`,
+        ),
+      ),
+    ];
+    if (contentIds.length > 0) bountyConditions.push(inArray(vote.contentId, contentIds));
+
+    const feedbackConditions = [
+      inArray(contentFeedback.author, voterAddrs),
+      eq(contentFeedback.revealed, true),
+      inArray(round.state, [ROUND_STATE.Settled, ROUND_STATE.Tied, ROUND_STATE.RevealFailed]),
+      eq(feedbackBonusPool.forfeited, false),
+      sql`${feedbackBonusPool.remainingAmount} > 0`,
+      sql`${feedbackBonusPool.awardDeadline} >= ${nowSeconds}`,
+      sql`${contentFeedback.feedbackHash} != ${ZERO_BYTES32}`,
+      sql`${contentFeedback.committedAt} <= ${feedbackBonusPool.feedbackClosesAt}`,
+      sql`${feedbackBonusAward.id} is null`,
+    ];
+    if (contentIds.length > 0) feedbackConditions.push(inArray(contentFeedback.contentId, contentIds));
+
+    const bountyRows = await db
+      .select({
+        contentId: vote.contentId,
+        pendingBountyCount: sql<number>`count(*)`,
+        claimableBountyCount: sql<number>`sum(case when ${questionRewardPoolRound.rewardPoolId} is not null then 1 else 0 end)`,
+        awaitingBountyAllocationCount: sql<number>`sum(case when ${questionRewardPoolRound.rewardPoolId} is null then 1 else 0 end)`,
+        awaitingBountyPayoutCount: sql<number>`sum(case when ${questionRewardPool.asset} != 0 and ${questionRewardPoolRound.rewardPoolId} is not null and (${roundPayoutSnapshot.weightRoot} is null or ${roundPayoutSnapshot.artifactUri} is null) then 1 else 0 end)`,
+        latestBountyRoundId: sql<bigint | null>`max(${vote.roundId})`,
+      })
+      .from(vote)
+      .innerJoin(
+        round,
+        and(
+          eq(vote.contentId, round.contentId),
+          eq(vote.roundId, round.roundId),
+        ),
+      )
+      .innerJoin(
+        questionRewardPool,
+        eq(vote.contentId, questionRewardPool.contentId),
+      )
+      .leftJoin(
+        questionRewardPoolRound,
+        and(
+          eq(questionRewardPoolRound.rewardPoolId, questionRewardPool.id),
+          eq(questionRewardPoolRound.roundId, vote.roundId),
+        ),
+      )
+      .leftJoin(
+        roundPayoutSnapshot,
+        and(
+          eq(roundPayoutSnapshot.domain, PAYOUT_DOMAIN_QUESTION_REWARD),
+          eq(roundPayoutSnapshot.rewardPoolId, questionRewardPool.id),
+          eq(roundPayoutSnapshot.contentId, questionRewardPool.contentId),
+          eq(roundPayoutSnapshot.roundId, vote.roundId),
+          eq(roundPayoutSnapshot.status, SNAPSHOT_STATUS_FINALIZED),
+        ),
+      )
+      .leftJoin(
+        questionRewardPoolClaim,
+        and(
+          eq(questionRewardPoolClaim.rewardPoolId, questionRewardPool.id),
+          eq(questionRewardPoolClaim.roundId, vote.roundId),
+          eq(questionRewardPoolClaim.identityKey, vote.identityKey),
+        ),
+      )
+      .where(
+        and(...bountyConditions),
+      )
+      .groupBy(vote.contentId);
+
+    const feedbackRows = await db
+      .select({
+        contentId: contentFeedback.contentId,
+        pendingFeedbackBonusCount: sql<number>`count(*)`,
+        latestFeedbackBonusRoundId: sql<bigint | null>`max(${contentFeedback.roundId})`,
+      })
+      .from(contentFeedback)
+      .innerJoin(
+        feedbackBonusPool,
+        and(
+          eq(contentFeedback.contentId, feedbackBonusPool.contentId),
+          eq(contentFeedback.roundId, feedbackBonusPool.roundId),
+        ),
+      )
+      .innerJoin(
+        round,
+        and(
+          eq(contentFeedback.contentId, round.contentId),
+          eq(contentFeedback.roundId, round.roundId),
+        ),
+      )
+      .leftJoin(
+        feedbackBonusAward,
+        and(
+          eq(feedbackBonusAward.poolId, feedbackBonusPool.id),
+          eq(feedbackBonusAward.feedbackHash, contentFeedback.feedbackHash),
+        ),
+      )
+      .where(
+        and(...feedbackConditions),
+      )
+      .groupBy(contentFeedback.contentId);
+
+    const statusByContentId = new Map<
+      bigint,
+      {
+        contentId: bigint;
+        pendingBountyCount: number;
+        claimableBountyCount: number;
+        awaitingBountyAllocationCount: number;
+        awaitingBountyPayoutCount: number;
+        latestBountyRoundId: bigint | null;
+        pendingFeedbackBonusCount: number;
+        latestFeedbackBonusRoundId: bigint | null;
+      }
+    >();
+    const ensureStatus = (contentId: bigint) => {
+      const existing = statusByContentId.get(contentId);
+      if (existing) return existing;
+      const next = {
+        contentId,
+        pendingBountyCount: 0,
+        claimableBountyCount: 0,
+        awaitingBountyAllocationCount: 0,
+        awaitingBountyPayoutCount: 0,
+        latestBountyRoundId: null,
+        pendingFeedbackBonusCount: 0,
+        latestFeedbackBonusRoundId: null,
+      };
+      statusByContentId.set(contentId, next);
+      return next;
+    };
+
+    for (const row of bountyRows) {
+      const status = ensureStatus(row.contentId);
+      status.pendingBountyCount = Number(row.pendingBountyCount ?? 0);
+      status.claimableBountyCount = Number(row.claimableBountyCount ?? 0);
+      status.awaitingBountyAllocationCount = Number(row.awaitingBountyAllocationCount ?? 0);
+      status.awaitingBountyPayoutCount = Number(row.awaitingBountyPayoutCount ?? 0);
+      status.latestBountyRoundId = row.latestBountyRoundId ?? null;
+    }
+
+    for (const row of feedbackRows) {
+      const status = ensureStatus(row.contentId);
+      status.pendingFeedbackBonusCount = Number(row.pendingFeedbackBonusCount ?? 0);
+      status.latestFeedbackBonusRoundId = row.latestFeedbackBonusRoundId ?? null;
+    }
+
+    return jsonBig(c, {
+      items: Array.from(statusByContentId.values())
+        .filter(item => item.pendingBountyCount > 0 || item.pendingFeedbackBonusCount > 0)
+        .map(item => ({
+          ...item,
+          hasPendingBounty: item.pendingBountyCount > 0,
+          hasPendingFeedbackBonus: item.pendingFeedbackBonusCount > 0,
+        })),
     });
   });
 
