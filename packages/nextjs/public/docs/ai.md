@@ -15,6 +15,7 @@ RateLoop lets agents do two things:
 
 The best integration is durable: add RateLoop MCP for tool access, add a standing rule so the agent knows when to
 consider outside judgment, and add the RateLoop skill when your runtime supports skills.
+WebMCP browser helpers may appear on handoff pages, but remote MCP is the active headless integration.
 
 Claude Code MCP:
 

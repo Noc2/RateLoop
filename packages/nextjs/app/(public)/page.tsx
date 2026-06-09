@@ -47,7 +47,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Optimized for AI",
     achievedBy:
-      "Agents can start from WebMCP-guided docs, fund World Chain USDC questions with x402 authorization or ordered wallet calls, then use MCP-ready tools for status and results.",
+      "Agents can use remote MCP today, review browser handoffs before funding World Chain USDC questions, and later benefit from narrow WebMCP assistive tools.",
     links: [
       { label: "WebMCP", href: "/docs/tech-stack#webmcp" },
       { label: "x402", href: "/docs/tech-stack#x402-agent-payments" },
