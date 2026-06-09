@@ -31,26 +31,41 @@ On World Chain mainnet and World Chain Sepolia, deploys use a Foundry keystore s
 auto-verification flow. Verify those contracts manually with
 `make verify-blockscout NETWORK=<worldchain|worldchainSepolia> CONTRACT_ADDRESS=0x... CONTRACT_NAME=MyContract`.
 
+For a temporary World Chain mainnet canary that uses World ID staging on chain `480`, run:
+
+```bash
+yarn deploy --network worldchain --world-id-staging-canary --keystore <name>
+```
+
+That wrapper sets `RATELOOP_MAINNET_CANARY=true`, stamps generated deployment JSON with
+`RATELOOP_DEPLOYMENT_PROFILE=mainnet-canary`, and selects the World ID staging verifier
+`0x703a6316c975DEabF30b637c155edD53e24657DB`. The default
+`yarn deploy --network worldchain --keystore <name>` path remains production-only and uses
+`0x00000000009E00F9FE82CfeeBB4556686da094d7`.
+
 ## Configuration
 
 Create a `.env` file (see `.env.example`):
 
-| Variable                                              | Description                                                            |
-| ----------------------------------------------------- | ---------------------------------------------------------------------- |
-| `ALCHEMY_API_KEY`                                     | Optional RPC provider key for testnet/mainnet deploys                  |
-| `WORLDCHAIN_RPC_URL`                                  | Optional World Chain mainnet RPC override for live deploys             |
-| `WORLDCHAIN_SEPOLIA_RPC_URL`                          | Optional World Chain Sepolia RPC override for live deploys             |
-| `NEXT_PUBLIC_WORLD_ID_APP_ID`                         | World ID app ID used by RaterRegistry deploys                         |
-| `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`              | World ID v4 credential action; defaults to `rateloop-human-credential-v1` |
-| `NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION`                | World ID v4 fresh-presence/recheck action; defaults to `rateloop-human-presence-v1` |
-| `WORLD_ID_V4_VERIFIER_ADDRESS`                        | Optional explicit World Chain Sepolia v4 verifier override; nonzero overrides must have code. Mainnet rejects overrides other than the bundled production verifier |
-| `WORLD_ID_V4_RP_ID`                                   | Numeric World ID relying-party ID from the Developer Portal            |
-| `WORLD_ID_V4_ISSUER_SCHEMA_ID`                        | World ID v4 issuer schema ID accepted by the deployment                |
-| `WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN`        | Optional v4 credential genesis issuance lower bound; defaults to `0`   |
-| `ETHERSCAN_API_KEY`                                   | Optional explorer API key for Etherscan-compatible networks            |
+| Variable                                       | Description                                                                                                                                                                 |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ALCHEMY_API_KEY`                              | Optional RPC provider key for testnet/mainnet deploys                                                                                                                       |
+| `WORLDCHAIN_RPC_URL`                           | Optional World Chain mainnet RPC override for live deploys                                                                                                                  |
+| `WORLDCHAIN_SEPOLIA_RPC_URL`                   | Optional World Chain Sepolia RPC override for live deploys                                                                                                                  |
+| `NEXT_PUBLIC_WORLD_ID_APP_ID`                  | World ID app ID used by RaterRegistry deploys                                                                                                                               |
+| `NEXT_PUBLIC_WORLD_ID_CREDENTIAL_ACTION`       | World ID v4 credential action; defaults to `rateloop-human-credential-v1`                                                                                                   |
+| `NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION`         | World ID v4 fresh-presence/recheck action; defaults to `rateloop-human-presence-v1`                                                                                         |
+| `WORLD_ID_V4_VERIFIER_ADDRESS`                 | Optional explicit World Chain Sepolia v4 verifier override; nonzero overrides must have code. Mainnet rejects overrides other than the verifier selected by the deploy mode |
+| `RATELOOP_MAINNET_CANARY`                      | Internal deploy-script guard for the World Chain mainnet canary staging verifier; prefer `--world-id-staging-canary` instead of setting manually                            |
+| `RATELOOP_DEPLOYMENT_PROFILE`                  | Deployment artifact profile stamp; the deploy wrapper sets `production` for normal World Chain mainnet and `mainnet-canary` for the canary flag                             |
+| `WORLD_ID_V4_RP_ID`                            | Numeric World ID relying-party ID from the Developer Portal                                                                                                                 |
+| `WORLD_ID_V4_ISSUER_SCHEMA_ID`                 | World ID v4 issuer schema ID accepted by the deployment                                                                                                                     |
+| `WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN` | Optional v4 credential genesis issuance lower bound; defaults to `0`                                                                                                        |
+| `ETHERSCAN_API_KEY`                            | Optional explorer API key for Etherscan-compatible networks                                                                                                                 |
 
-World Chain mainnet (`480`) always resolves the bundled production World ID v4 verifier and fails pre-broadcast if
-that verifier has no code. World Chain Sepolia (`4801`) tries an explicit live override first, then the bundled address;
+World Chain mainnet (`480`) resolves the bundled production World ID v4 verifier by default and fails pre-broadcast if
+that verifier has no code. With `--world-id-staging-canary`, mainnet resolves the World ID staging verifier instead and
+fails pre-broadcast if that verifier has no code. World Chain Sepolia (`4801`) tries an explicit live override first, then the bundled address;
 if neither has code, `yarn deploy --network worldchainSepolia` automatically deploys `MockWorldIDVerifier`, wires it
 into `RaterRegistry`, and exports it in `deployments/4801.json`.
 

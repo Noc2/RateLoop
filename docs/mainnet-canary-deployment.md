@@ -12,17 +12,17 @@ keeper state, and artifact storage do not reset automatically.
 
 ## Current Constraint
 
-The current World Chain mainnet deploy path always uses the bundled production
+The normal World Chain mainnet deploy path always uses the bundled production
 World ID v4 verifier:
 
 ```text
 0x00000000009E00F9FE82CfeeBB4556686da094d7
 ```
 
-Mainnet currently rejects `WORLD_ID_V4_VERIFIER_ADDRESS` overrides unless the
-override is that production verifier. A canary that uses the World ID staging
-verifier on chain `480` therefore needs a small, explicit, guarded code change
-before deployment. The staging verifier is:
+Mainnet rejects `WORLD_ID_V4_VERIFIER_ADDRESS` overrides unless the override
+matches the selected deploy mode. A canary that uses the World ID staging
+verifier on chain `480` must use the explicit staging canary deploy flag. The
+staging verifier is:
 
 ```text
 0x703a6316c975DEabF30b637c155edD53e24657DB
@@ -51,21 +51,11 @@ at production contracts while Ponder or the keeper still has canary data.
 ## Phase 1: Prepare The Canary Branch
 
 1. Create a canary branch from current `main`.
-2. Add an intentionally loud mainnet-canary opt-in, for example:
-
-   ```text
-   RATELOOP_MAINNET_CANARY=true
-   ```
-
-3. Allow the staging verifier override on World Chain mainnet only when that flag
-   is set.
-4. Add or update tests proving:
-   - mainnet still defaults to the production verifier;
-   - mainnet still rejects staging verifier overrides without the canary flag;
-   - mainnet accepts the staging verifier only with the canary flag;
-   - World Chain Sepolia behavior is unchanged.
-5. Keep the generated chain `480` deployment artifacts canary-only on this branch
+2. Keep the generated chain `480` deployment artifacts canary-only on this branch
    until the final production deployment replaces them.
+3. Confirm Vercel/Railway staging World ID values are ready before deploy. The
+   deploy command can select the staging verifier, but it cannot infer the World
+   Developer Portal app, RP, issuer schema, or signing key values.
 
 ## Phase 2: Deploy Canary Contracts
 
@@ -81,18 +71,31 @@ NEXT_PUBLIC_WORLD_ID_PRESENCE_ACTION=rateloop-human-presence-v1
 WORLD_ID_V4_RP_ID=<staging numeric on-chain rp id>
 WORLD_ID_V4_ISSUER_SCHEMA_ID=<staging issuer schema id>
 WORLD_ID_V4_CREDENTIAL_GENESIS_ISSUED_AT_MIN=0
-WORLD_ID_V4_VERIFIER_ADDRESS=0x703a6316c975DEabF30b637c155edD53e24657DB
-RATELOOP_MAINNET_CANARY=true
 ```
 
 Deploy:
 
 ```sh
-yarn deploy --network worldchain --keystore <foundry keystore name>
+yarn deploy --network worldchain --world-id-staging-canary --keystore <foundry keystore name>
+```
+
+The deploy wrapper automatically sets:
+
+```sh
+RATELOOP_MAINNET_CANARY=true
+RATELOOP_DEPLOYMENT_PROFILE=mainnet-canary
+WORLD_ID_V4_VERIFIER_ADDRESS=0x703a6316c975DEabF30b637c155edD53e24657DB
 ```
 
 After deployment, confirm the generated chain `480` artifacts contain the canary
-contract addresses and deployed start blocks.
+contract addresses, deployed start blocks, and `deploymentProfile` set to
+`mainnet-canary`.
+
+Run the offline readiness check:
+
+```sh
+yarn worldchain:check --canary
+```
 
 ## Phase 3: Point Hosted Services At Canary
 
@@ -208,7 +211,8 @@ Treat cutover as a maintenance window.
    ```
 
 8. Replace the generated chain `480` artifacts with production addresses and
-   deployed start blocks.
+   deployed start blocks. The production deploy should stamp
+   `deploymentProfile: "production"`.
 9. Rebuild and redeploy Vercel/Railway from the production commit.
 10. Reset persistent state:
     - App database: switch to a fresh production database/schema or wipe the
@@ -225,6 +229,21 @@ Treat cutover as a maintenance window.
     deployment block.
 12. Start the keeper.
 13. Re-enable the web app.
+
+Before re-enabling public traffic, run:
+
+```sh
+yarn worldchain:check --production
+```
+
+When live URLs are configured:
+
+```sh
+WORLDCHAIN_RPC_URL=https://... \
+WORLDCHAIN_PONDER_URL=https://... \
+WORLDCHAIN_APP_URL=https://... \
+yarn worldchain:check --production --live --require-live-targets
+```
 
 ## Phase 6: Production Verification
 
@@ -246,11 +265,8 @@ Treat cutover as a maintenance window.
 
 Before the actual canary window, the repo can be prepared with:
 
-- a guarded `RATELOOP_MAINNET_CANARY` deploy-path change;
-- Foundry tests for production-verifier safety and canary-only staging verifier
-  acceptance;
-- a deploy/readiness script for World Chain mainnet similar to the Sepolia
-  readiness check;
+- a dry run of the guarded `--world-id-staging-canary` deploy command against a
+  mainnet fork, once RPC credentials are ready;
 - a Vercel/Railway environment inventory checklist;
 - reset scripts or SQL snippets for app, Ponder, and keeper state;
 - a post-deploy verifier script that checks bytecode, verifier address, Ponder

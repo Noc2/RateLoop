@@ -67,6 +67,7 @@
     "world-id:test:contracts": "yarn workspace @rateloop/foundry test:world-id",
     "world-id:test:next": "yarn workspace @rateloop/nextjs test:world-id",
     "world-id:e2e:local": "yarn workspace @rateloop/nextjs e2e:world-id:local",
+    "worldchain:check": "node scripts/check-worldchain-mainnet-readiness.mjs",
     "worldchain-sepolia:check": "node scripts/check-worldchain-sepolia-readiness.mjs",
     "yeet": "node scripts/yeet-pr.mjs",
     "ponder:dev": "yarn workspace @rateloop/ponder dev",
