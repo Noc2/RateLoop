@@ -199,6 +199,10 @@ test("parseX402QuestionRequest ignores legacy description input", () => {
 test("parseX402QuestionRequest accepts ordered question bundles", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      requiredVoters: "5",
+    },
     question: undefined,
     questions: [
       VALID_REQUEST.question,
@@ -221,6 +225,8 @@ test("parseX402QuestionRequest accepts ordered question bundles", () => {
   assert.equal(payload.questions.length, 2);
   assert.equal(payload.questions[1].title, "Would you pay for this?");
   assert.equal(payload.questions[1].tags, "Market,Research");
+  assert.equal(payload.bounty.requiredVoters, 5n);
+  assert.equal(payload.roundConfig.minVoters, 5n);
   assert.equal(payload.roundConfig.maxVoters, 50n);
 });
 
@@ -347,6 +353,10 @@ test("parseX402QuestionRequest rejects unknown or unsupported template versions"
 test("parseX402QuestionRequest accepts explicit governed round config", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      requiredVoters: "5",
+    },
     question: {
       ...VALID_REQUEST.question,
       roundConfig: {
@@ -364,11 +374,49 @@ test("parseX402QuestionRequest accepts explicit governed round config", () => {
   assert.equal(payload.roundConfig.maxVoters, 50n);
 });
 
+test("parseX402QuestionRequest defaults settlement voters to bounty voters", () => {
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      requiredVoters: "5",
+    },
+  });
+
+  assert.equal(payload.bounty.requiredVoters, 5n);
+  assert.equal(payload.roundConfig.minVoters, 5n);
+  assert.equal(payload.roundConfig.maxVoters, 100n);
+});
+
+test("parseX402QuestionRequest rejects bounty and round voter mismatches", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          requiredVoters: "5",
+        },
+        roundConfig: {
+          epochDuration: "600",
+          maxDuration: "7200",
+          minVoters: "3",
+          maxVoters: "50",
+        },
+      }),
+    /minVoters must match bounty.requiredVoters/,
+  );
+});
+
 test("buildX402QuestionOperation binds round config into the payload hash", () => {
   const first = buildX402QuestionOperation(parseX402QuestionRequest(VALID_REQUEST));
   const second = buildX402QuestionOperation(
     parseX402QuestionRequest({
       ...VALID_REQUEST,
+      bounty: {
+        ...VALID_REQUEST.bounty,
+        requiredVoters: "5",
+      },
       question: {
         ...VALID_REQUEST.question,
         roundConfig: {

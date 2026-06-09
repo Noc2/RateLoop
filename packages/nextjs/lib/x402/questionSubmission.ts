@@ -964,6 +964,10 @@ async function assertBountyMeetsProtocolMinimum(params: {
     );
   }
 
+  if (params.payload.bounty.requiredVoters !== params.payload.roundConfig.minVoters) {
+    throw new X402QuestionConflictError("Bounty voter requirement must match the selected round settlement voters.");
+  }
+
   if (params.payload.bounty.requiredVoters > params.payload.roundConfig.maxVoters) {
     throw new X402QuestionConflictError("Bounty voter requirement exceeds the selected question voter cap.");
   }

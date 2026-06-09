@@ -171,7 +171,7 @@ const agentBountyInputSchema = {
       type: ["integer", "string"],
     },
     requiredVoters: {
-      description: "Minimum eligible voters required by the bounty.",
+      description: "Minimum eligible voters required by the bounty. Must match roundConfig.minVoters when provided.",
       type: ["integer", "string"],
     },
   },
@@ -231,7 +231,10 @@ const agentRoundConfigInputSchema = {
       type: ["integer", "string"],
     },
     maxVoters: { description: "Maximum voters accepted by the private round.", type: ["integer", "string"] },
-    minVoters: { description: "Minimum voters required before settlement.", type: ["integer", "string"] },
+    minVoters: {
+      description: "Minimum voters required before settlement. Must match bounty.requiredVoters.",
+      type: ["integer", "string"],
+    },
   },
   type: "object",
 } satisfies JsonSchema;

@@ -939,6 +939,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
     bounty: {
       ...originalRequest.bounty,
       amount: "2500000",
+      requiredVoters: "4",
     },
     maxPaymentAmount: "2500000",
     question: {
@@ -1004,7 +1005,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   );
   const prepareBody = (await prepareResponse.json()) as Record<string, unknown>;
   const payload = preparedPayload as {
-    bounty: { amount: bigint };
+    bounty: { amount: bigint; requiredVoters: bigint };
     questions: Array<{ detailsHash: string; detailsUrl: string; tagList: string[]; title: string }>;
     roundConfig: { epochDuration: bigint; maxDuration: bigint; maxVoters: bigint; minVoters: bigint };
   };
@@ -1018,6 +1019,7 @@ test("agent ask handoff route saves edited drafts before prepare", async () => {
   assert.equal(payload.questions[0]?.detailsHash, `0x${"a".repeat(64)}`);
   assert.deepEqual(payload.questions[0]?.tagList, ["agents", "running"]);
   assert.equal(payload.bounty.amount, 2_500_000n);
+  assert.equal(payload.bounty.requiredVoters, 4n);
   assert.equal(payload.roundConfig.epochDuration, 600n);
   assert.equal(payload.roundConfig.maxDuration, 7200n);
   assert.equal(payload.roundConfig.minVoters, 4n);

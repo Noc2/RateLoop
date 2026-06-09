@@ -409,9 +409,16 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
   };
 }
 
-function normalizeRoundConfig(value: unknown): QuestionRoundConfig {
+function normalizeRoundConfig(value: unknown, requiredVoters: bigint): QuestionRoundConfig {
   if (value === undefined || value === null) {
-    return DEFAULT_QUESTION_ROUND_CONFIG;
+    return {
+      ...DEFAULT_QUESTION_ROUND_CONFIG,
+      minVoters: requiredVoters,
+      maxVoters:
+        DEFAULT_QUESTION_ROUND_CONFIG.maxVoters < requiredVoters
+          ? requiredVoters
+          : DEFAULT_QUESTION_ROUND_CONFIG.maxVoters,
+    };
   }
   if (!isObject(value)) {
     throw new X402QuestionInputError("question.roundConfig must be an object.");
@@ -436,6 +443,9 @@ function normalizeRoundConfig(value: unknown): QuestionRoundConfig {
   }
   if (minVoters <= 0n || maxVoters <= 0n || maxVoters < minVoters) {
     throw new X402QuestionInputError("question.roundConfig voter values are invalid.");
+  }
+  if (minVoters !== requiredVoters) {
+    throw new X402QuestionInputError("question.roundConfig.minVoters must match bounty.requiredVoters.");
   }
 
   return { epochDuration, maxDuration, minVoters, maxVoters };
@@ -579,8 +589,8 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
   }
 
   const firstQuestion = isObject(rawQuestions[0]) ? rawQuestions[0] : {};
-  const roundConfig = normalizeRoundConfig(value.roundConfig ?? firstQuestion.roundConfig);
   const bounty = normalizeBounty(value.bounty);
+  const roundConfig = normalizeRoundConfig(value.roundConfig ?? firstQuestion.roundConfig, bounty.requiredVoters);
   const topLevelTemplateInputs = normalizeTemplateInputs(value.templateInputs, "templateInputs");
   const topLevelTemplateVersion =
     value.templateVersion === undefined || value.templateVersion === null
