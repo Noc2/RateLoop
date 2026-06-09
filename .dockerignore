@@ -1,0 +1,50 @@
+# VCS and local editor metadata
+.git
+.github
+.vscode
+.idea
+.cursor
+.DS_Store
+
+# Local dependency installs and Yarn runtime cache
+node_modules
+**/node_modules
+.yarn/cache
+.yarn/install-state.gz
+.yarn/unplugged
+.yarn/build-state.yml
+
+# Local environment and logs
+.env
+.env.*
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build, test, and framework output
+dist
+**/dist
+coverage
+**/coverage
+.next
+**/.next
+.turbo
+**/.turbo
+playwright-report
+**/playwright-report
+test-results
+**/test-results
+*.tsbuildinfo
+.eslintcache
+
+# Foundry output that is not needed by the keeper image
+packages/foundry/out
+packages/foundry/cache
+packages/foundry/broadcast
+
+# Deployment and local temp state
+.vercel
+tmp
+temp
+.local
