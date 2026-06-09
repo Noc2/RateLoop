@@ -1,6 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1500" height="500" viewBox="0 0 1500 500" role="img" aria-labelledby="title desc">
   <title id="title">RateLoop X profile banner</title>
-  <desc id="desc">The RateLoop README image cropped to the X profile banner aspect ratio with the text area removed.</desc>
-  <image href="../og-image.jpg" x="0" y="0" width="1500" height="500" preserveAspectRatio="xMidYMid slice" />
-  <rect x="0" y="0" width="760" height="500" fill="#000000" />
+  <desc id="desc">A text-free X banner using a reduced crop of the RateLoop README hero animation image.</desc>
+  <rect width="1500" height="500" fill="#000000" />
+  <defs>
+    <clipPath id="hero-orb-crop">
+      <rect x="910" y="10" width="441.905" height="480" />
+    </clipPath>
+  </defs>
+  <image
+    href="../og-image.jpg"
+    x="437.619"
+    y="10"
+    width="914.286"
+    height="480"
+    preserveAspectRatio="none"
+    clip-path="url(#hero-orb-crop)"
+  />
 </svg>
