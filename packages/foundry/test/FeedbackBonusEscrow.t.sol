@@ -43,6 +43,10 @@ contract SlashedFrontendRegistryMock is IFrontendRegistry {
         return frontend_ == frontend && proposer == frontend;
     }
 
+    function snapshotProposerForFrontend(address) external pure returns (address proposer) {
+        return address(0);
+    }
+
     function creditFees(address, uint256) external { }
 
     function feeCreditorForEngine(address) external pure returns (address) {

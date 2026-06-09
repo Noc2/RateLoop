@@ -23,6 +23,9 @@ interface IFrontendRegistry {
     /// @notice Check whether `proposer` can publish payout snapshots on behalf of `frontend`.
     function isAuthorizedSnapshotProposer(address frontend, address proposer) external view returns (bool);
 
+    /// @notice Currently delegated snapshot proposer for a frontend, or address(0) if unset.
+    function snapshotProposerForFrontend(address frontend) external view returns (address proposer);
+
     /// @notice Credit LREP fees to a frontend operator (called by RoundVotingEngine)
     /// @param frontend The frontend address to credit
     /// @param lrepAmount Amount of LREP fees

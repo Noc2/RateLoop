@@ -83,6 +83,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         string artifactURI;
         SnapshotStatus status;
         uint256 bond;
+        address proposalTimeSnapshotProposer;
     }
 
     struct RoundPayoutProposal {
@@ -103,6 +104,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         // L-Integrations-1 from 2026-05-16 audit.
         uint256 proposerBond;
         bytes32 correlationEpochDigest;
+        address proposalTimeSnapshotProposer;
     }
 
     uint64 public challengeWindow;
@@ -277,6 +279,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         ) {
             revert InvalidSnapshot();
         }
+        address proposalTimeSnapshotProposer = frontendRegistry.snapshotProposerForFrontend(frontendOperator);
         correlationEpochCoverageDigest[epochId] = coverageDigest;
         correlationEpochSourceSetDigest[epochId] = sourceSetDigest;
 
@@ -294,7 +297,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             artifactHash: artifactHash,
             artifactURI: artifactURI,
             status: SnapshotStatus.Proposed,
-            bond: 0
+            bond: 0,
+            proposalTimeSnapshotProposer: proposalTimeSnapshotProposer
         });
 
         emit CorrelationEpochProposed(
@@ -318,7 +322,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (block.timestamp >= uint256(snapshot.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
-        _requireDisinterestedChallenger(msg.sender, snapshot.proposer, snapshot.frontendOperator);
+        _requireDisinterestedChallenger(
+            msg.sender, snapshot.proposer, snapshot.frontendOperator, snapshot.proposalTimeSnapshotProposer
+        );
         uint256 bond = challengeBond;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
@@ -458,6 +464,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         address consumer = roundPayoutSnapshotConsumer[input.domain];
         if (consumer == address(0)) revert InvalidAddress();
+        address proposalTimeSnapshotProposer = frontendRegistry.snapshotProposerForFrontend(frontendOperator);
 
         // M-Oracle-1: require the consumer to signal source readiness before accepting the
         // proposal. Without this gate any eligible frontend can squat the snapshot slot for a
@@ -500,7 +507,8 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             artifactURI: input.artifactURI,
             bond: 0,
             proposerBond: 0,
-            correlationEpochDigest: correlationEpochDigest
+            correlationEpochDigest: correlationEpochDigest,
+            proposalTimeSnapshotProposer: proposalTimeSnapshotProposer
         });
 
         emit RoundPayoutSnapshotProposed(
@@ -530,7 +538,9 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (block.timestamp >= uint256(proposal.proposedAt) + uint256(challengeWindow)) {
             revert SnapshotNotFinalizable();
         }
-        _requireDisinterestedChallenger(msg.sender, proposal.proposer, proposal.frontendOperator);
+        _requireDisinterestedChallenger(
+            msg.sender, proposal.proposer, proposal.frontendOperator, proposal.proposalTimeSnapshotProposer
+        );
         uint256 bond = challengeBond;
         // CEI: write state before pulling the bond so a malicious bond token cannot
         // observe a half-applied challenge mid-call.
@@ -1117,11 +1127,18 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         ] = true;
     }
 
-    function _requireDisinterestedChallenger(address challenger, address proposer, address frontendOperator)
-        private
-        view
-    {
-        if (challenger == proposer || challenger == frontendOperator) revert InvalidSnapshot();
+    function _requireDisinterestedChallenger(
+        address challenger,
+        address proposer,
+        address frontendOperator,
+        address proposalTimeSnapshotProposer
+    ) private view {
+        if (
+            challenger == proposer || challenger == frontendOperator
+                || (proposalTimeSnapshotProposer != address(0) && challenger == proposalTimeSnapshotProposer)
+        ) {
+            revert InvalidSnapshot();
+        }
         try frontendRegistry.isAuthorizedSnapshotProposer(frontendOperator, challenger) returns (bool authorized) {
             if (authorized) revert InvalidSnapshot();
         } catch {}
@@ -1146,6 +1163,10 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             revert InvalidAddress();
         }
         try IFrontendRegistry(newFrontendRegistry).authorizedSnapshotFrontend(address(0)) returns (address) {}
+        catch {
+            revert InvalidAddress();
+        }
+        try IFrontendRegistry(newFrontendRegistry).snapshotProposerForFrontend(address(0)) returns (address) {}
         catch {
             revert InvalidAddress();
         }

@@ -1431,6 +1431,94 @@ contract ClusterPayoutOracleTest is Test {
         vm.stopPrank();
     }
 
+    function test_FormerKeeperCannotChallengeFrontendCorrelationEpochAfterRotationButUnrelatedCan() public {
+        address frontendOperator = address(0xFEE);
+        address keeper = address(0xCAFE);
+        address replacementKeeper = address(0xBEEF);
+        address unrelatedChallenger = address(0xCA11CE);
+
+        frontendRegistry.setEligible(frontendOperator, true);
+        frontendRegistry.setAuthorizedSnapshotFrontend(keeper, frontendOperator);
+
+        vm.prank(frontendOperator);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        assertEq(oracle.correlationEpochSnapshot(1).proposalTimeSnapshotProposer, keeper);
+
+        frontendRegistry.setAuthorizedSnapshotFrontend(replacementKeeper, frontendOperator);
+        assertFalse(frontendRegistry.isAuthorizedSnapshotProposer(frontendOperator, keeper));
+
+        usdc.mint(keeper, CHALLENGE_BOND);
+        vm.startPrank(keeper);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.challengeCorrelationEpoch(1, keccak256("former-keeper-challenge"));
+        vm.stopPrank();
+
+        usdc.mint(unrelatedChallenger, CHALLENGE_BOND);
+        vm.startPrank(unrelatedChallenger);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        oracle.challengeCorrelationEpoch(1, keccak256("independent-challenge"));
+        vm.stopPrank();
+
+        assertEq(oracle.correlationEpochSnapshot(1).challenger, unrelatedChallenger);
+    }
+
+    function test_FormerKeeperCannotChallengeFrontendRoundPayoutAfterClearButUnrelatedCan() public {
+        address frontendOperator = address(0xFEE);
+        address keeper = address(0xCAFE);
+        address unrelatedChallenger = address(0xCA11CE);
+
+        frontendRegistry.setEligible(frontendOperator, true);
+        frontendRegistry.setAuthorizedSnapshotFrontend(keeper, frontendOperator);
+
+        vm.prank(frontendOperator);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        vm.prank(frontendOperator);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+        assertEq(oracle.roundPayoutProposal(snapshotKey).proposalTimeSnapshotProposer, keeper);
+
+        frontendRegistry.clearAuthorizedSnapshotFrontend(frontendOperator);
+
+        usdc.mint(keeper, CHALLENGE_BOND);
+        vm.startPrank(keeper);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("former-keeper-challenge"));
+        vm.stopPrank();
+
+        usdc.mint(unrelatedChallenger, CHALLENGE_BOND);
+        vm.startPrank(unrelatedChallenger);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("independent-challenge"));
+        vm.stopPrank();
+
+        assertEq(oracle.roundPayoutProposal(snapshotKey).challenger, unrelatedChallenger);
+    }
+
     function test_RotatedKeeperCannotChallengePriorKeeperCorrelationEpochButUnrelatedChallengerCan() public {
         address frontendOperator = address(0xFEE);
         address firstKeeper = address(0xCAFE);
@@ -2197,13 +2285,31 @@ contract MockFrontendRegistry {
 
     mapping(address => bool) internal eligible;
     mapping(address => address) internal snapshotFrontend;
+    mapping(address => address) public snapshotProposerForFrontend;
 
     function setEligible(address frontend, bool value) external {
         eligible[frontend] = value;
     }
 
     function setAuthorizedSnapshotFrontend(address proposer, address frontend) external {
+        address previousProposer = snapshotProposerForFrontend[frontend];
+        if (previousProposer != address(0)) {
+            delete snapshotFrontend[previousProposer];
+        }
+        address previousFrontend = snapshotFrontend[proposer];
+        if (previousFrontend != address(0) && previousFrontend != frontend) {
+            delete snapshotProposerForFrontend[previousFrontend];
+        }
         snapshotFrontend[proposer] = frontend;
+        snapshotProposerForFrontend[frontend] = proposer;
+    }
+
+    function clearAuthorizedSnapshotFrontend(address frontend) external {
+        address previousProposer = snapshotProposerForFrontend[frontend];
+        if (previousProposer != address(0)) {
+            delete snapshotFrontend[previousProposer];
+        }
+        delete snapshotProposerForFrontend[frontend];
     }
 
     function isEligible(address frontend) external view returns (bool) {
@@ -2219,7 +2325,7 @@ contract MockFrontendRegistry {
     function isAuthorizedSnapshotProposer(address frontend, address proposer) external view returns (bool) {
         if (!eligible[frontend] || proposer == address(0)) return false;
         if (frontend == proposer) return true;
-        return snapshotFrontend[proposer] == frontend;
+        return snapshotFrontend[proposer] == frontend && snapshotProposerForFrontend[frontend] == proposer;
     }
 }
 
