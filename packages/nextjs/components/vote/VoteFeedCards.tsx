@@ -13,28 +13,18 @@ import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { QuestionDescription, type QuestionReferenceContentSummary } from "~~/components/content/QuestionDescription";
 import { SubmitterBadge } from "~~/components/content/SubmitterBadge";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
-import type { RoundStatMetric } from "~~/components/shared/RoundStats";
 import { SafeExternalLink } from "~~/components/shared/SafeExternalLink";
 import {
+  FeedbackBonusAmountDisplay,
+  RewardPoolAmountDisplay,
   VotingQuestionContextDetails,
-  getFeedbackBonusDisplay,
-  getRewardPoolDisplay,
 } from "~~/components/shared/VotingQuestionCard";
 import { WatchContentButton } from "~~/components/shared/WatchContentButton";
-import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
 import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } from "~~/lib/contentMedia";
-import {
-  getActiveBountyClosesAt,
-  getActiveFeedbackClosesAt,
-  getVisibleFeedbackBonusAmount,
-  getVisibleRewardPoolAmount,
-  hasActiveFeedbackBonus,
-  shouldShowBountyExpiredStatus,
-  shouldShowFeedbackClosedStatus,
-} from "~~/lib/vote/discoverFeedFilter";
+import { getVisibleFeedbackBonusAmount, getVisibleRewardPoolAmount } from "~~/lib/vote/discoverFeedFilter";
 import { detectPlatform } from "~~/utils/platforms";
 
 const ShareContentModal = dynamic(
@@ -45,12 +35,6 @@ const LAPTOP_VOTE_CARD_MEDIA_QUERY = "(min-width: 1024px) and (max-width: 1535px
 const MOBILE_VOTE_CARD_MEDIA_QUERY = "(max-width: 767px)";
 const CONTENT_INTENT_INTERACTIVE_SELECTOR =
   "a[href],button,input,select,textarea,summary,iframe,[role='button'],[role='link']";
-const BOUNTY_DEADLINE_TOOLTIP_TEXT =
-  "Bounty eligibility ends at this time. Expired bounties move to the Expired filter.";
-const BOUNTY_EXPIRED_TOOLTIP_TEXT =
-  "This bounty eligibility window has closed. The question remains visible while Feedback Bonus awards are still open.";
-const FEEDBACK_DEADLINE_TOOLTIP_TEXT =
-  "Feedback Bonus awards remain available until this deadline. The question remains visible after awards close.";
 
 function getSourceLabel(url: string) {
   if (!url) return "";
@@ -59,90 +43,6 @@ function getSourceLabel(url: string) {
   } catch {
     return url;
   }
-}
-
-type DeadlineDisplay =
-  | { kind: "now"; label: "now" }
-  | { kind: "relative"; label: string }
-  | { kind: "date"; label: string };
-
-function formatDeadlineDisplay(deadline: bigint): DeadlineDisplay {
-  const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
-  const seconds = Number(deadline - nowSeconds);
-  if (seconds <= 0) return { kind: "now", label: "now" };
-  if (seconds < 60 * 60) return { kind: "relative", label: `${Math.max(1, Math.ceil(seconds / 60))}m` };
-  if (seconds < 24 * 60 * 60) return { kind: "relative", label: `${Math.ceil(seconds / (60 * 60))}h` };
-  if (seconds < 7 * 24 * 60 * 60) return { kind: "relative", label: `${Math.ceil(seconds / (24 * 60 * 60))}d` };
-
-  return {
-    kind: "date",
-    label: new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(
-      new Date(Number(deadline) * 1000),
-    ),
-  };
-}
-
-function formatDeadlineLabel(action: string, deadline: bigint) {
-  const display = formatDeadlineDisplay(deadline);
-  if (display.kind === "now") return `${action} now`;
-  if (display.kind === "date") return `${action} on ${display.label}`;
-  return `${action} in ${display.label}`;
-}
-
-type DeadlineChipTone = "active" | "ended" | "expired";
-
-function getDeadlineChipClassName(tone: DeadlineChipTone) {
-  if (tone === "active") return "reward-chip-brand-yellow";
-  if (tone === "expired") return "reward-chip-brand-red";
-  return "reward-chip-muted";
-}
-
-function getDeadlineTooltipClassName(tone: DeadlineChipTone) {
-  return tone === "active" || tone === "expired"
-    ? "[&>svg]:text-[#050505]/70 [&>svg]:hover:text-[#050505]"
-    : "[&>svg]:text-base-content/50 [&>svg]:hover:text-base-content/75";
-}
-
-function getRewardDeadlineChips(item: ContentItem) {
-  const chips: Array<{ label: string; tone: DeadlineChipTone; tooltip?: string }> = [];
-  const rewardSummary = item.rewardPoolSummary;
-  const feedbackSummary = item.feedbackBonusSummary;
-
-  const activeBountyClosesAt = getActiveBountyClosesAt(item);
-  const activeFeedbackClosesAt = getActiveFeedbackClosesAt(item);
-  const hasActiveBounty = Boolean(
-    rewardSummary?.hasActiveBounty || (rewardSummary?.activeRewardPoolCount ?? 0) > 0 || activeBountyClosesAt,
-  );
-  const hasActiveFeedback = hasActiveFeedbackBonus(item);
-  const isFeedbackClosed = shouldShowFeedbackClosedStatus(item);
-
-  if (!isFeedbackClosed && shouldShowBountyExpiredStatus(item)) {
-    chips.push({
-      label: "Bounty Expired",
-      tone: "expired",
-      tooltip: BOUNTY_EXPIRED_TOOLTIP_TEXT,
-    });
-  } else if (!isFeedbackClosed && hasActiveBounty) {
-    if (activeBountyClosesAt) {
-      chips.push({
-        label: formatDeadlineLabel("Eligibility closes", activeBountyClosesAt),
-        tone: "active",
-        tooltip: BOUNTY_DEADLINE_TOOLTIP_TEXT,
-      });
-    }
-  }
-
-  if (feedbackSummary && hasActiveFeedback) {
-    chips.push({
-      label: activeFeedbackClosesAt ? formatDeadlineLabel("Award by", activeFeedbackClosesAt) : "Feedback Bonus active",
-      tone: "active",
-      tooltip: FEEDBACK_DEADLINE_TOOLTIP_TEXT,
-    });
-  } else if (isFeedbackClosed) {
-    chips.push({ label: "Feedback Bonus closed", tone: "ended" });
-  }
-
-  return chips;
 }
 
 function isInteractiveTarget(target: EventTarget | null) {
@@ -516,16 +416,6 @@ function FeedContentMetaCard({
   const rewardPoolCurrency = item.rewardPoolSummary?.currency;
   const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item);
   const feedbackBonusCurrency = item.feedbackBonusSummary?.currency;
-  const rewardDeadlineChips = getRewardDeadlineChips(item);
-  const rewardStats: RoundStatMetric[] = [];
-  if (rewardPoolTotal > 0n) {
-    const { amountLabel, tooltip } = getRewardPoolDisplay(rewardPoolTotal, rewardPoolCurrency);
-    rewardStats.push({ label: "Bounty", value: amountLabel, tooltip });
-  }
-  if (feedbackBonusTotal > 0n) {
-    const { amountLabel, tooltip } = getFeedbackBonusDisplay(feedbackBonusTotal, feedbackBonusCurrency);
-    rewardStats.push({ label: "Feedback Bonus", value: amountLabel, tooltip });
-  }
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;
   const wrapperClassName = embedded
@@ -565,14 +455,14 @@ function FeedContentMetaCard({
       ) : null}
     </div>
   );
-  const rewardStatusChips = rewardDeadlineChips.map(chip => (
-    <div key={chip.label} className={`reward-chip reward-chip-label ${getDeadlineChipClassName(chip.tone)}`}>
-      <span className="inline-flex max-w-full flex-wrap items-center gap-x-1 gap-y-0.5">{chip.label}</span>
-      {chip.tooltip ? (
-        <InfoTooltip text={chip.tooltip} position="bottom" className={getDeadlineTooltipClassName(chip.tone)} />
+  const rewardStatusChips = (
+    <>
+      {rewardPoolTotal > 0n ? <RewardPoolAmountDisplay amount={rewardPoolTotal} currency={rewardPoolCurrency} /> : null}
+      {feedbackBonusTotal > 0n ? (
+        <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} currency={feedbackBonusCurrency} />
       ) : null}
-    </div>
-  ));
+    </>
+  );
 
   return (
     <>
@@ -586,7 +476,6 @@ function FeedContentMetaCard({
             roundConfig={item.roundConfig}
             compact={compact}
             active={isActive}
-            rewardStats={rewardStats}
             statusChips={rewardStatusChips}
             statusActions={actionButtons}
           />
