@@ -16,4 +16,13 @@ contract LaunchDistributionPoolHarness is LaunchDistributionPool {
     function unverifiedCapBps_() external view returns (uint256) {
         return uint256(launchRewardPolicy.unverifiedEarnedRaterCapBps);
     }
+
+    /// @notice Exposes the internal cap-assignment so the spec can machine-check the
+    ///         clamp `activeCap <= fullCap` directly at the point it is computed
+    ///         (`activeCap = (fullCap * bps) / BPS_DENOMINATOR`, or `fullCap` when the
+    ///         full cap is unlocked). Uses the live policy, so `unverifiedCapBps_()`
+    ///         is the bps the spec constrains <= 10000. See LaunchDistributionPoolCap.spec.
+    function assignLaunchCap_(address rater, uint256 fullCap) external returns (uint256 activeCap) {
+        (activeCap,) = _assignLaunchCap(rater, fullCap, launchRewardPolicy);
+    }
 }
