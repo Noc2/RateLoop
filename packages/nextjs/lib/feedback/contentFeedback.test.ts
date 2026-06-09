@@ -324,6 +324,65 @@ test("keeps ponder open round ahead of on-chain fallback", async () => {
   assert.equal(fallbackCalled, false);
 });
 
+test("uses indexed rounds when content detail context is unavailable", async () => {
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => {
+      throw new Error("content detail unavailable");
+    },
+    getAllRounds: async () => [buildRoundItem({ contentId: "19", roundId: "2", state: ROUND_STATE.Open })],
+    resolveOnchainOpenRoundId: async () => null,
+  });
+
+  const context = await contentFeedback.resolveContentFeedbackRoundContext("19", CHAIN_ID);
+
+  assert.equal(context.openRoundId, "2");
+  assert.equal(context.currentRoundId, "2");
+  assert.equal(context.settlementComplete, false);
+});
+
+test("uses content detail rounds when all-rounds context is unavailable", async () => {
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () =>
+      ({
+        content: { openRound: { roundId: "2" } },
+        rounds: [buildRoundItem({ contentId: "19", roundId: "2", state: ROUND_STATE.Open })],
+      }) as any,
+    getAllRounds: async () => {
+      throw new Error("rounds unavailable");
+    },
+    resolveOnchainOpenRoundId: async () => null,
+  });
+
+  const context = await contentFeedback.resolveContentFeedbackRoundContext("19", CHAIN_ID);
+
+  assert.equal(context.openRoundId, "2");
+  assert.equal(context.currentRoundId, "2");
+  assert.equal(context.settlementComplete, false);
+});
+
+test("falls back to empty feedback context when ponder context is unavailable", async () => {
+  let fallbackCalled = false;
+  contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
+    getContentById: async () => {
+      throw new Error("content detail unavailable");
+    },
+    getAllRounds: async () => {
+      throw new Error("rounds unavailable");
+    },
+    resolveOnchainOpenRoundId: async () => {
+      fallbackCalled = true;
+      return null;
+    },
+  });
+
+  const context = await contentFeedback.resolveContentFeedbackRoundContext("19", CHAIN_ID);
+
+  assert.equal(context.openRoundId, null);
+  assert.equal(context.currentRoundId, null);
+  assert.equal(context.settlementComplete, false);
+  assert.equal(fallbackCalled, true);
+});
+
 test("preserves stale ponder context when no on-chain open round exists", async () => {
   contentFeedback.__setContentFeedbackVoteEligibilityTestOverridesForTests({
     getContentById: async () => ({ content: { openRound: null } }) as any,

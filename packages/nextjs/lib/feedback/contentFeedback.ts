@@ -414,12 +414,28 @@ export async function resolveContentFeedbackRoundContext(
   contentId: string,
   chainId?: number,
 ): Promise<ContentFeedbackRoundContext> {
-  const [contentResponse, rounds] = await Promise.all([
+  const [contentResult, roundsResult] = await Promise.allSettled([
     (feedbackVoteEligibilityTestOverrides?.getContentById ?? ponderApi.getContentById)(contentId),
     (feedbackVoteEligibilityTestOverrides?.getAllRounds ?? ponderApi.getAllRounds)({ contentId }),
   ]);
+  const contentResponse = contentResult.status === "fulfilled" ? contentResult.value : null;
+  const rounds =
+    roundsResult.status === "fulfilled"
+      ? roundsResult.value
+      : Array.isArray(contentResponse?.rounds)
+        ? contentResponse.rounds
+        : [];
 
-  const context = buildContentFeedbackRoundContext(rounds, contentResponse.content.openRound?.roundId ?? null);
+  if (contentResult.status === "rejected" || roundsResult.status === "rejected") {
+    console.warn("[content-feedback] Unable to resolve complete round context from ponder.", {
+      chainId,
+      contentId,
+      contentError: contentResult.status === "rejected" ? contentResult.reason : undefined,
+      roundsError: roundsResult.status === "rejected" ? roundsResult.reason : undefined,
+    });
+  }
+
+  const context = buildContentFeedbackRoundContext(rounds, contentResponse?.content?.openRound?.roundId ?? null);
   if (context.openRoundId) {
     return context;
   }
