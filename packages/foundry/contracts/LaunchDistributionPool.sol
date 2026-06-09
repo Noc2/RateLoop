@@ -757,8 +757,13 @@ contract LaunchDistributionPool is
         if (!raterLaunchCapAssigned[rater]) {
             uint256 fullCap = currentRaterLaunchCap();
             (cap,) = _assignLaunchCap(rater, fullCap, policy);
-            eligibleRaterCount += 1;
-            emit RaterLaunchCapAssigned(rater, cap, eligibleRaterCount);
+            if (cap > 0) {
+                eligibleRaterCount += 1;
+                emit RaterLaunchCapAssigned(rater, cap, eligibleRaterCount);
+            }
+        }
+        if (!raterFullLaunchCapUnlocked[rater] && _activeLaunchCredentialClaimedByOther(rater)) {
+            return 0;
         }
 
         uint32 rewardedCount = rewardedRatingCount[rater];
@@ -1047,6 +1052,7 @@ contract LaunchDistributionPool is
     {
         (bytes32 nullifierHash, bytes32 credentialKey, RaterRegistry.HumanCredentialProvider provider) =
             _activeHumanCredential(rater);
+        bool credentialClaimedByOther;
         if (nullifierHash != bytes32(0)) {
             address claimedBy = launchFullCapNullifierRater[credentialKey];
             if (claimedBy == address(0) || claimedBy == rater) {
@@ -1055,11 +1061,14 @@ contract LaunchDistributionPool is
                 raterFullLaunchCapUnlocked[rater] = true;
                 raterLaunchCapNullifier[rater] = nullifierHash;
                 launchFullCapNullifierRater[credentialKey] = rater;
+            } else {
+                credentialClaimedByOther = true;
             }
         }
 
-        activeCap =
-            fullCapUnlocked ? fullCap : (fullCap * uint256(policy.unverifiedEarnedRaterCapBps)) / BPS_DENOMINATOR;
+        activeCap = credentialClaimedByOther
+            ? 0
+            : fullCapUnlocked ? fullCap : (fullCap * uint256(policy.unverifiedEarnedRaterCapBps)) / BPS_DENOMINATOR;
         raterLaunchCapAssigned[rater] = true;
         raterFullLaunchCap[rater] = fullCap;
         raterLaunchCap[rater] = activeCap;
@@ -1110,6 +1119,13 @@ contract LaunchDistributionPool is
         raterLaunchPaid[rater] += catchUpPaid;
         earnedRaterDistributed += catchUpPaid;
         _pay(rater, catchUpPaid);
+    }
+
+    function _activeLaunchCredentialClaimedByOther(address rater) internal view returns (bool) {
+        (bytes32 nullifierHash, bytes32 credentialKey,) = _activeHumanCredential(rater);
+        if (nullifierHash == bytes32(0)) return false;
+        address claimedBy = launchFullCapNullifierRater[credentialKey];
+        return claimedBy != address(0) && claimedBy != rater;
     }
 
     function _earnedRewardSlotCount(uint32 qualifyingCount, LaunchRewardPolicy memory policy)

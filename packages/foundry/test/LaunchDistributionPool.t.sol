@@ -1602,15 +1602,16 @@ contract LaunchDistributionPoolTest is Test {
         pool.setLaunchRewardPolicy(policy);
 
         _verify(alice, bytes32("shared-human"));
-        _recordFiveEligibleCredits(alice);
+        assertEq(_recordFiveEligibleCredits(alice), FIRST_COHORT_FULL_SLOT);
         assertTrue(pool.raterFullLaunchCapUnlocked(alice));
 
         registry.revokeHumanCredential(alice);
         registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.WorldIdV4, bytes32("shared-human"));
         _verify(bob, bytes32("shared-human"));
+        uint256 bobPaid;
         for (uint256 i = 0; i < 5; i++) {
             bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
-            pool.recordEarnedRaterRewardWithSourceReady(
+            bobPaid += pool.recordEarnedRaterRewardWithSourceReady(
                 bob,
                 2,
                 i + 1,
@@ -1624,8 +1625,72 @@ contract LaunchDistributionPoolTest is Test {
             );
         }
 
-        assertEq(pool.raterLaunchCap(bob), FIRST_COHORT_UNVERIFIED_CAP);
+        assertEq(bobPaid, 0);
+        assertEq(pool.raterLaunchCap(bob), 0);
+        assertEq(pool.raterLaunchPaid(bob), 0);
+        assertEq(lrep.balanceOf(bob), 0);
+        assertEq(pool.eligibleRaterCount(), 1);
         assertFalse(pool.raterFullLaunchCapUnlocked(bob));
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.unlockFullEarnedRaterCap(bob);
+    }
+
+    function test_MigratedUsedCredentialStopsPreviouslyUnverifiedRaterPayouts() public {
+        ILaunchDistributionPool.LaunchRewardPolicy memory policy = _defaultPolicy();
+        policy.unverifiedEarnedRaterCapBps = 2_500;
+        pool.setLaunchRewardPolicy(policy);
+
+        bytes32 sharedNullifier = bytes32("shared-human");
+        _verify(alice, sharedNullifier);
+        assertEq(_recordFiveEligibleCredits(alice), FIRST_COHORT_FULL_SLOT);
+
+        uint256 bobPaid;
+        for (uint256 i = 0; i < 5; i++) {
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
+            bobPaid += pool.recordEarnedRaterRewardWithSourceReady(
+                bob,
+                2,
+                i + 1,
+                keccak256(abi.encode("bob-before-migration", i)),
+                8_000,
+                3,
+                true,
+                pool.MIN_LAUNCH_CREDIT_STAKE(),
+                _singleAnchor(anchorId),
+                uint64(block.timestamp)
+            );
+        }
+        assertEq(bobPaid, FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(pool.raterLaunchPaid(bob), FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(pool.rewardedRatingCount(bob), 1);
+
+        registry.revokeHumanCredential(alice);
+        registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.WorldIdV4, sharedNullifier);
+        _verify(bob, sharedNullifier);
+
+        for (uint256 i = 0; i < 5; i++) {
+            bytes32 anchorId = i % 2 == 0 ? bytes32("anchor-a") : bytes32("anchor-b");
+            assertEq(
+                pool.recordEarnedRaterRewardWithSourceReady(
+                    bob,
+                    2,
+                    i + 6,
+                    keccak256(abi.encode("bob-after-migration", i)),
+                    8_000,
+                    3,
+                    true,
+                    pool.MIN_LAUNCH_CREDIT_STAKE(),
+                    _singleAnchor(anchorId),
+                    uint64(block.timestamp)
+                ),
+                0
+            );
+        }
+
+        assertEq(pool.raterLaunchPaid(bob), FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(lrep.balanceOf(bob), FIRST_COHORT_UNVERIFIED_SLOT);
+        assertEq(pool.rewardedRatingCount(bob), 1);
+
         vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
         pool.unlockFullEarnedRaterCap(bob);
     }
