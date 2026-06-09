@@ -199,6 +199,8 @@ const BOUNTY_AMOUNT_TOOLTIP =
   "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
 const FEEDBACK_BONUS_AMOUNT_TOOLTIP =
   "Optional pool reserved for useful public feedback after settlement. Use up to 6 decimal places.";
+const REQUIRED_VOTERS_TOOLTIP =
+  "Eligible revealed voters required before the bounty can qualify for payout and the round can settle.";
 
 type QuestionDetailsReference = {
   detailsHash: Hex;
@@ -434,6 +436,12 @@ function readBountyAmountAtomic(handoff: Handoff | null) {
   }
 }
 
+function readBountyRequiredVoters(handoff: Handoff | null) {
+  const bounty = handoff?.requestBody?.bounty;
+  if (!isJsonRecord(bounty)) return null;
+  return readPositiveBigInt(bounty.requiredVoters);
+}
+
 function readFeedbackBonusUsdcAmountAtomic(requestBody: JsonRecord) {
   if (!isJsonRecord(requestBody.feedbackBonus)) return 0n;
   if (readFeedbackBonusAsset(requestBody.feedbackBonus) !== "usdc") return 0n;
@@ -475,6 +483,10 @@ function readRoundSettings(handoff: Handoff | null): RoundSettings {
     : isJsonRecord(firstQuestion?.roundConfig)
       ? firstQuestion.roundConfig
       : null;
+  const requiredVoters = readBountyRequiredVoters(handoff);
+  const minVoters =
+    requiredVoters ?? readFirstPositiveBigInt(source, ["minVoters"], DEFAULT_QUESTION_ROUND_CONFIG.minVoters);
+  const maxVoters = readFirstPositiveBigInt(source, ["maxVoters"], DEFAULT_QUESTION_ROUND_CONFIG.maxVoters);
 
   return {
     epochDuration: readFirstPositiveBigInt(
@@ -487,8 +499,8 @@ function readRoundSettings(handoff: Handoff | null): RoundSettings {
       ["maxDuration", "maxDurationSeconds", "deadlineSeconds"],
       DEFAULT_QUESTION_ROUND_CONFIG.maxDuration,
     ),
-    maxVoters: readFirstPositiveBigInt(source, ["maxVoters"], DEFAULT_QUESTION_ROUND_CONFIG.maxVoters),
-    minVoters: readFirstPositiveBigInt(source, ["minVoters"], DEFAULT_QUESTION_ROUND_CONFIG.minVoters),
+    maxVoters: maxVoters < minVoters ? minVoters : maxVoters,
+    minVoters,
   };
 }
 
@@ -656,7 +668,7 @@ function getMaxMinutesTooltip(bounds: QuestionRoundConfigBounds): string {
 }
 
 function getMinVotersTooltip(bounds: QuestionRoundConfigBounds): string {
-  return `Eligible revealed voters required before a round can settle. Must be ${bounds.minSettlementVoters}-${bounds.maxSettlementVoters}.`;
+  return `${REQUIRED_VOTERS_TOOLTIP} Must be ${bounds.minSettlementVoters}-${bounds.maxSettlementVoters}.`;
 }
 
 function getMaxVotersTooltip(bounds: QuestionRoundConfigBounds): string {
@@ -795,6 +807,7 @@ async function buildDraftRequestBody(
     ...(isJsonRecord(requestBody.bounty) ? requestBody.bounty : {}),
     amount: bountyAmount.toString(),
     asset: "USDC",
+    requiredVoters: minVoters.toString(),
   };
   let feedbackBonusUsdcAmount = readFeedbackBonusUsdcAmountAtomic(requestBody);
   if (form.feedbackBonusAmount !== null && isJsonRecord(requestBody.feedbackBonus)) {
@@ -1964,7 +1977,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                   </div>
                   <div className="form-control">
                     <DraftFieldLabel htmlFor="agent-ask-round-min-voters" tooltip={minVotersTooltip}>
-                      Min voters
+                      Required voters
                     </DraftFieldLabel>
                     <input
                       id="agent-ask-round-min-voters"

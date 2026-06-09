@@ -43,17 +43,40 @@ import { notification } from "~~/utils/scaffold-eth";
 
 type FundQuestionModalProps = {
   contentId: bigint;
+  roundConfig?: ContentRoundConfigLike | null;
   title: string;
   onClose: () => void;
   onCreated?: () => void;
 };
 
+type ContentRoundConfigLike =
+  | {
+      maxVoters?: unknown;
+      minVoters?: unknown;
+    }
+  | readonly unknown[];
+
 const FRONTEND_FEE_PERCENT = DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS / 100;
 const BOUNTY_AMOUNT_TOOLTIP = `Paid in USDC on World Chain. Qualified claims reserve ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to eligible revealed voters after payout roots finalize.`;
 const REQUIRED_VOTERS_TOOLTIP =
-  "How many eligible revealed voters a round needs before that round can count toward this bounty. This cannot exceed the question's selected voter cap.";
+  "Matches the question's settlement voters so every qualifying round can count toward this bounty.";
 const SETTLED_ROUNDS_TOOLTIP = `How many qualifying settled rounds must complete before the bounty is filled. USDC payouts then wait on finalized payout roots: ${protocolDocFacts.usdcBountyPayoutMinimumDelayLabel} minimum, normally up to ${protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel} on the happy path.`;
 const BOUNTY_WINDOW_TOOLTIP = `Bounty eligibility opens with the first private round and uses this window duration. The quick fund flow uses the same duration as the start-by deadline. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
+
+function readPositiveInteger(value: unknown): number | null {
+  const rawValue =
+    typeof value === "string" || typeof value === "number" || typeof value === "bigint" ? String(value).trim() : "";
+  if (!/^\d+$/.test(rawValue)) return null;
+  const parsed = Number(rawValue);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function readRoundConfigMinVoters(value: ContentRoundConfigLike | null | undefined): number | null {
+  if (!value) return null;
+  const source = value as Record<string, unknown>;
+  const minVoters = readPositiveInteger(Array.isArray(value) ? value[2] : source.minVoters);
+  return minVoters && minVoters >= MIN_REWARD_POOL_REQUIRED_VOTERS ? minVoters : null;
+}
 
 function BountyFieldLabel({ htmlFor, children, tooltip }: { htmlFor: string; children: ReactNode; tooltip?: string }) {
   return (
@@ -66,7 +89,7 @@ function BountyFieldLabel({ htmlFor, children, tooltip }: { htmlFor: string; chi
   );
 }
 
-export function FundQuestionModal({ contentId, title, onClose, onCreated }: FundQuestionModalProps) {
+export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCreated }: FundQuestionModalProps) {
   const wagmiConfig = useConfig();
   const { address, chain } = useAccount();
   const { writeContractAsync } = useWriteContract();
@@ -76,7 +99,9 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
   const requiredVotersInputId = useId();
   const requiredRoundsInputId = useId();
   const [amount, setAmount] = useState("10");
-  const [requiredVoters, setRequiredVoters] = useState("5");
+  const [contentRequiredVoters, setContentRequiredVoters] = useState<number | null>(() =>
+    readRoundConfigMinVoters(roundConfig),
+  );
   const [requiredRounds, setRequiredRounds] = useState("2");
   const [bountyWindowPreset, setBountyWindowPreset] = useState<BountyWindowPreset>(DEFAULT_BOUNTY_WINDOW_PRESET);
   const [customBountyWindowAmount, setCustomBountyWindowAmount] = useState(DEFAULT_CUSTOM_BOUNTY_WINDOW_AMOUNT);
@@ -90,7 +115,7 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
   const escrowAddress = useMemo(() => getConfiguredQuestionRewardPoolEscrowAddress(chainId), [chainId]);
   const fallbackUsdcAddress = useMemo(() => getDefaultUsdcAddress(chainId), [chainId]);
   const parsedAmount = useMemo(() => parseUsdRewardPoolAmount(amount), [amount]);
-  const voterCount = Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, Math.floor(Number(requiredVoters) || 0));
+  const voterCount = contentRequiredVoters ?? 0;
   const settledRounds = Math.max(MIN_REWARD_POOL_SETTLED_ROUNDS, Math.floor(Number(requiredRounds) || 0));
   const bountyWindowSeconds = getBountyWindowSeconds(
     bountyWindowPreset,
@@ -105,10 +130,45 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
       contentRegistryAddress &&
       escrowAddress &&
       parsedAmount &&
+      contentRequiredVoters !== null &&
       voterCount >= MIN_REWARD_POOL_REQUIRED_VOTERS &&
       settledRounds >= MIN_REWARD_POOL_SETTLED_ROUNDS &&
       hasValidBountyWindow,
   );
+
+  useEffect(() => {
+    const propMinVoters = readRoundConfigMinVoters(roundConfig);
+    if (propMinVoters !== null) {
+      setContentRequiredVoters(propMinVoters);
+      return;
+    }
+
+    if (!contentRegistryAddress) {
+      setContentRequiredVoters(null);
+      return;
+    }
+    let cancelled = false;
+    void readContract(wagmiConfig, {
+      address: contentRegistryAddress,
+      abi: QUESTION_SUBMISSION_ABI,
+      functionName: "getContentRoundConfig",
+      args: [contentId],
+    })
+      .then(value => {
+        if (cancelled) return;
+        setContentRequiredVoters(readRoundConfigMinVoters(value as ContentRoundConfigLike));
+      })
+      .catch(error => {
+        if (!cancelled) {
+          console.warn("Could not load content round config for bounty funding.", error);
+          setContentRequiredVoters(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contentId, contentRegistryAddress, roundConfig, wagmiConfig]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -140,6 +200,10 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
     }
     if (!hasValidBountyWindow) {
       notification.warning("Choose a bounty window.");
+      return;
+    }
+    if (contentRequiredVoters === null) {
+      notification.warning("Could not load the question's required voter count.");
       return;
     }
 
@@ -366,8 +430,9 @@ export function FundQuestionModal({ contentId, title, onClose, onCreated }: Fund
                 type="number"
                 min={MIN_REWARD_POOL_REQUIRED_VOTERS}
                 step={1}
-                value={requiredVoters}
-                onChange={event => setRequiredVoters(event.target.value)}
+                value={contentRequiredVoters?.toString() ?? ""}
+                readOnly
+                placeholder="Loading"
                 className="input input-bordered bg-base-100"
               />
             </div>

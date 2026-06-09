@@ -938,6 +938,7 @@ export function VotingQuestionCard({
         {showFundQuestionModal ? (
           <FundQuestionModal
             contentId={contentId}
+            roundConfig={roundConfig}
             title={fundQuestionTitle}
             onClose={() => setShowFundQuestionModal(false)}
           />
@@ -1042,6 +1043,7 @@ export function VotingQuestionCard({
       {showFundQuestionModal ? (
         <FundQuestionModal
           contentId={contentId}
+          roundConfig={roundConfig}
           title={fundQuestionTitle}
           onClose={() => setShowFundQuestionModal(false)}
         />

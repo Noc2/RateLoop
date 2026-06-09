@@ -466,7 +466,6 @@ export function ContentSubmissionSection() {
   const [roundMaxVoters, setRoundMaxVoters] = useState(String(DEFAULT_SUBMISSION_ROUND_MAX_VOTERS));
   const [roundConfigTouched, setRoundConfigTouched] = useState(false);
   const [roundMaxDurationOverridden, setRoundMaxDurationOverridden] = useState(false);
-  const [settlementVotersOverridden, setSettlementVotersOverridden] = useState(false);
   const [showAdvancedRoundSettings, setShowAdvancedRoundSettings] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionStepAttempted, setQuestionStepAttempted] = useState(false);
@@ -935,10 +934,6 @@ export function ContentSubmissionSection() {
     roundConfigBounds.maxSettlementVoters,
   );
   const syncSettlementVotersToPaidCompleters = (paidCompleters: string) => {
-    if (settlementVotersOverridden) {
-      return;
-    }
-
     setRoundMinVoters(
       getSyncedSettlementVotersForPaidCompleters(
         paidCompleters,
@@ -965,6 +960,10 @@ export function ContentSubmissionSection() {
   const parsedRoundMaxDurationMinutes = parseWholeNumberInput(roundMaxDurationMinutes);
   const parsedRoundMinVoters = parseWholeNumberInput(roundMinVoters);
   const parsedRoundMaxVoters = parseWholeNumberInput(roundMaxVoters);
+  const parsedRewardRequiredVoters = parseWholeNumberInput(rewardRequiredVoters);
+  const parsedRewardRequiredRounds = parseWholeNumberInput(rewardRequiredRounds);
+  const selectedRequiredVoters = BigInt(Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, parsedRewardRequiredVoters));
+  const selectedRequiredSettledRounds = BigInt(Math.max(MIN_REWARD_POOL_SETTLED_ROUNDS, parsedRewardRequiredRounds));
   const selectedRoundResponseWindowPreset =
     ROUND_RESPONSE_WINDOW_PRESETS.find(option => option.minutes === parsedRoundBlindMinutes)?.id ?? "custom";
   const effectiveBlindMinutesForDurationCap =
@@ -1063,6 +1062,9 @@ export function ContentSubmissionSection() {
     if (minVoters < roundConfigBounds.minSettlementVoters || minVoters > roundConfigBounds.maxSettlementVoters) {
       return `Settlement voters must be ${roundConfigBounds.minSettlementVoters}-${roundConfigBounds.maxSettlementVoters}.`;
     }
+    if (BigInt(minVoters) !== selectedRequiredVoters) {
+      return "Settlement voters must match required bounty voters.";
+    }
     if (maxVoters < roundMaxVoterBounds.min || maxVoters > roundMaxVoterBounds.max) {
       return questionCount > 1
         ? `Max voters per round must be ${roundMaxVoterBounds.min}-${roundMaxVoterBounds.max} for question bundles.`
@@ -1073,17 +1075,13 @@ export function ContentSubmissionSection() {
     }
     return null;
   })();
-  const parsedRewardRequiredVoters = parseWholeNumberInput(rewardRequiredVoters);
-  const parsedRewardRequiredRounds = parseWholeNumberInput(rewardRequiredRounds);
   const rewardRequiredVotersBounds = {
     min: MIN_REWARD_POOL_REQUIRED_VOTERS,
     max: Math.max(
       MIN_REWARD_POOL_REQUIRED_VOTERS,
-      Math.min(Number(selectedRoundConfig.maxVoters), roundMaxVoterBounds.max),
+      Math.min(Number(selectedRoundConfig.maxVoters), roundConfigBounds.maxSettlementVoters, roundMaxVoterBounds.max),
     ),
   };
-  const selectedRequiredVoters = BigInt(Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, parsedRewardRequiredVoters));
-  const selectedRequiredSettledRounds = BigInt(Math.max(MIN_REWARD_POOL_SETTLED_ROUNDS, parsedRewardRequiredRounds));
   const bountyMinimumCoverageAmount = getSubmissionRewardCoverageMinimum({
     maxVoters: selectedRoundConfig.maxVoters,
     requiredSettledRounds: selectedRequiredSettledRounds,
@@ -1125,9 +1123,11 @@ export function ContentSubmissionSection() {
   const rewardRequiredVotersValidationError =
     parsedRewardRequiredVoters < MIN_REWARD_POOL_REQUIRED_VOTERS
       ? `Minimum is ${MIN_REWARD_POOL_REQUIRED_VOTERS} voters.`
-      : selectedRequiredVoters > selectedRoundConfig.maxVoters
-        ? "Min voters per round cannot exceed max voters per round."
-        : null;
+      : selectedRequiredVoters > BigInt(roundConfigBounds.maxSettlementVoters)
+        ? `Maximum is ${roundConfigBounds.maxSettlementVoters} voters.`
+        : selectedRequiredVoters > selectedRoundConfig.maxVoters
+          ? "Min voters per round cannot exceed max voters per round."
+          : null;
   const rewardRequiredVotersError = bountyStepAttempted ? rewardRequiredVotersValidationError : null;
   const rewardRequiredRoundsValidationError =
     parsedRewardRequiredRounds < MIN_REWARD_POOL_SETTLED_ROUNDS
@@ -1709,7 +1709,7 @@ export function ContentSubmissionSection() {
     const clampedPaidCompleters = clampWholeNumberInput(
       rewardRequiredVoters,
       MIN_REWARD_POOL_REQUIRED_VOTERS,
-      Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, nextVoterCapMax),
+      Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, Math.min(nextVoterCapMax, roundConfigBounds.maxSettlementVoters)),
     );
     setRewardRequiredVoters(clampedPaidCompleters);
     syncSettlementVotersToPaidCompleters(clampedPaidCompleters);
@@ -2509,7 +2509,6 @@ export function ContentSubmissionSection() {
       setRoundMaxVoters(defaultRoundMaxVoters);
       setRoundConfigTouched(false);
       setRoundMaxDurationOverridden(false);
-      setSettlementVotersOverridden(false);
       setShowAdvancedRoundSettings(false);
       setQuestionStepAttempted(false);
       setBountyStepAttempted(false);
@@ -2851,7 +2850,7 @@ export function ContentSubmissionSection() {
         <div className="space-y-3">
           <div className="form-control">
             <span className="label-text flex items-center gap-1.5">
-              Min voters per round
+              Required voters
               <InfoTooltip text={requiredVotersTooltipText} />
             </span>
             <input
@@ -2910,7 +2909,10 @@ export function ContentSubmissionSection() {
                 const clampedPaidCompleters = clampWholeNumberInput(
                   rewardRequiredVoters,
                   MIN_REWARD_POOL_REQUIRED_VOTERS,
-                  Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, Number(clampedMaxVoters)),
+                  Math.max(
+                    MIN_REWARD_POOL_REQUIRED_VOTERS,
+                    Math.min(Number(clampedMaxVoters), roundConfigBounds.maxSettlementVoters),
+                  ),
                 );
 
                 setRoundMaxVoters(clampedMaxVoters);
@@ -3326,20 +3328,29 @@ export function ContentSubmissionSection() {
                     const normalizedValue = normalizeWholeNumberInput(e.target.value);
                     if (normalizedValue !== null) {
                       setRoundConfigTouched(true);
-                      setSettlementVotersOverridden(true);
                       setRoundMinVoters(normalizedValue);
+                      setRewardRequiredVoters(normalizedValue);
                     }
                   }}
                   onBlur={() => {
                     setRoundConfigTouched(true);
-                    setSettlementVotersOverridden(true);
-                    setRoundMinVoters(current =>
-                      clampWholeNumberInput(
+                    setRoundMinVoters(current => {
+                      const parsedRoundMaxVotersCap = parseWholeNumberInput(roundMaxVoters);
+                      const maxSettlementVoters = Math.max(
+                        roundConfigBounds.minSettlementVoters,
+                        Math.min(
+                          roundConfigBounds.maxSettlementVoters,
+                          parsedRoundMaxVotersCap > 0 ? parsedRoundMaxVotersCap : roundConfigBounds.maxSettlementVoters,
+                        ),
+                      );
+                      const clampedSettlementVoters = clampWholeNumberInput(
                         current,
                         roundConfigBounds.minSettlementVoters,
-                        roundConfigBounds.maxSettlementVoters,
-                      ),
-                    );
+                        maxSettlementVoters,
+                      );
+                      setRewardRequiredVoters(clampedSettlementVoters);
+                      return clampedSettlementVoters;
+                    });
                   }}
                   className={`input input-bordered bg-base-100 ${
                     bountyStepAttempted && roundConfigValidationError ? "input-error" : ""
