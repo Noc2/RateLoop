@@ -490,6 +490,13 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "initializeSubmissionMediaValidator",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "initializeWithTreasury",
     "inputs": [
       {

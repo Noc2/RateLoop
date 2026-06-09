@@ -5067,6 +5067,13 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "initializeSubmissionMediaValidator",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "initializeWithTreasury",
           inputs: [
             {
@@ -11937,6 +11944,8 @@ const deployedContracts: GenericContractsDeclaration = {
         isAuthorizedSnapshotProposer:
           "contracts/interfaces/IFrontendRegistry.sol",
         isEligible: "contracts/interfaces/IFrontendRegistry.sol",
+        snapshotProposerForFrontend:
+          "contracts/interfaces/IFrontendRegistry.sol",
         DEFAULT_ADMIN_ROLE:
           "lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol",
         getRoleAdmin:
@@ -19674,6 +19683,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   type: "uint256",
                   internalType: "uint256",
                 },
+                {
+                  name: "proposalTimeSnapshotProposer",
+                  type: "address",
+                  internalType: "address",
+                },
               ],
             },
           ],
@@ -20687,6 +20701,11 @@ const deployedContracts: GenericContractsDeclaration = {
                   name: "correlationEpochDigest",
                   type: "bytes32",
                   internalType: "bytes32",
+                },
+                {
+                  name: "proposalTimeSnapshotProposer",
+                  type: "address",
+                  internalType: "address",
                 },
               ],
             },

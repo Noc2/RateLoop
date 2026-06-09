@@ -502,6 +502,11 @@ export const ClusterPayoutOracleAbi = [
             "name": "bond",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "proposalTimeSnapshotProposer",
+            "type": "address",
+            "internalType": "address"
           }
         ]
       }
@@ -1513,6 +1518,11 @@ export const ClusterPayoutOracleAbi = [
             "name": "correlationEpochDigest",
             "type": "bytes32",
             "internalType": "bytes32"
+          },
+          {
+            "name": "proposalTimeSnapshotProposer",
+            "type": "address",
+            "internalType": "address"
           }
         ]
       }
