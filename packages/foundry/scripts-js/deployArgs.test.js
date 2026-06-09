@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  RATELOOP_MAINNET_CANARY_ENV,
+  WORLD_ID_STAGING_VERIFIER_ADDRESS,
+  WORLD_ID_V4_VERIFIER_ADDRESS_ENV,
   buildDeployFlowFlags,
+  buildWorldIdStagingCanaryEnv,
   isSlowBroadcastNetwork,
   parseDeployArgs,
 } from "./deployArgs.js";
@@ -12,6 +16,7 @@ test("parseDeployArgs returns defaults with no options", () => {
     network: "localhost",
     keystoreArg: null,
     resume: false,
+    worldIdStagingCanary: false,
   });
 });
 
@@ -28,6 +33,7 @@ test("parseDeployArgs reads supported options", () => {
       network: "worldchainSepolia",
       keystoreArg: "deployer",
       resume: false,
+      worldIdStagingCanary: false,
     }
   );
 });
@@ -38,7 +44,27 @@ test("parseDeployArgs reads resume", () => {
     network: "localhost",
     keystoreArg: null,
     resume: true,
+    worldIdStagingCanary: false,
   });
+});
+
+test("parseDeployArgs reads worldchain staging canary flag", () => {
+  assert.deepEqual(
+    parseDeployArgs([
+      "--network",
+      "worldchain",
+      "--world-id-staging-canary",
+      "--keystore",
+      "deployer",
+    ]),
+    {
+      showHelp: false,
+      network: "worldchain",
+      keystoreArg: "deployer",
+      resume: false,
+      worldIdStagingCanary: true,
+    }
+  );
 });
 
 test("parseDeployArgs handles help", () => {
@@ -47,6 +73,7 @@ test("parseDeployArgs handles help", () => {
     network: "localhost",
     keystoreArg: null,
     resume: false,
+    worldIdStagingCanary: false,
   });
 });
 
@@ -75,6 +102,18 @@ test("parseDeployArgs rejects networks unsupported by the deploy script", () => 
   );
 });
 
+test("parseDeployArgs rejects worldchain staging canary outside mainnet", () => {
+  assert.throws(
+    () =>
+      parseDeployArgs([
+        "--network",
+        "worldchainSepolia",
+        "--world-id-staging-canary",
+      ]),
+    /--world-id-staging-canary is only supported with --network worldchain/
+  );
+});
+
 test("buildDeployFlowFlags leaves non-World Chain deploys unchanged", () => {
   assert.equal(buildDeployFlowFlags("localhost", {}), "");
 });
@@ -95,5 +134,36 @@ test("buildDeployFlowFlags accepts World Chain throttle overrides", () => {
       WORLDCHAIN_DEPLOY_BROADCAST_TIMEOUT_SECONDS: "600",
     }),
     "--slow --compute-units-per-second 10 --rpc-timeout 180 --timeout 600"
+  );
+});
+
+test("buildWorldIdStagingCanaryEnv sets canary and staging verifier env", () => {
+  assert.deepEqual(buildWorldIdStagingCanaryEnv({}), {
+    [RATELOOP_MAINNET_CANARY_ENV]: "true",
+    [WORLD_ID_V4_VERIFIER_ADDRESS_ENV]: WORLD_ID_STAGING_VERIFIER_ADDRESS,
+  });
+});
+
+test("buildWorldIdStagingCanaryEnv accepts existing staging verifier casing", () => {
+  assert.deepEqual(
+    buildWorldIdStagingCanaryEnv({
+      [WORLD_ID_V4_VERIFIER_ADDRESS_ENV]:
+        WORLD_ID_STAGING_VERIFIER_ADDRESS.toLowerCase(),
+    }),
+    {
+      [RATELOOP_MAINNET_CANARY_ENV]: "true",
+      [WORLD_ID_V4_VERIFIER_ADDRESS_ENV]: WORLD_ID_STAGING_VERIFIER_ADDRESS,
+    }
+  );
+});
+
+test("buildWorldIdStagingCanaryEnv rejects conflicting verifier override", () => {
+  assert.throws(
+    () =>
+      buildWorldIdStagingCanaryEnv({
+        [WORLD_ID_V4_VERIFIER_ADDRESS_ENV]:
+          "0x00000000009E00F9FE82CfeeBB4556686da094d7",
+      }),
+    /--world-id-staging-canary requires WORLD_ID_V4_VERIFIER_ADDRESS/
   );
 });

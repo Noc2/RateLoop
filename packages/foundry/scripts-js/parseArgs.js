@@ -6,7 +6,9 @@ import { parse } from "toml";
 import { fileURLToPath } from "url";
 import {
   DEPLOY_HELP_TEXT,
+  WORLD_ID_STAGING_VERIFIER_ADDRESS,
   buildDeployFlowFlags,
+  buildWorldIdStagingCanaryEnv,
   isSlowBroadcastNetwork,
   parseDeployArgs,
 } from "./deployArgs.js";
@@ -29,6 +31,7 @@ const args = process.argv.slice(2);
 let network;
 let keystoreArg;
 let resume;
+let worldIdStagingCanary;
 
 try {
   const parsedArgs = parseDeployArgs(args);
@@ -39,6 +42,7 @@ try {
   network = parsedArgs.network;
   keystoreArg = parsedArgs.keystoreArg;
   resume = parsedArgs.resume;
+  worldIdStagingCanary = parsedArgs.worldIdStagingCanary;
 } catch (error) {
   console.error(`\n❌ Error: ${error.message}`);
   process.exit(1);
@@ -77,6 +81,17 @@ function clearKeystoreEnvForLocalDeploy() {
   delete process.env.ETH_KEYSTORE_ACCOUNT;
   delete process.env.ETH_KEYSTORE;
   delete process.env.ETH_PASSWORD;
+}
+
+function configureWorldIdStagingCanary() {
+  if (!worldIdStagingCanary) return;
+
+  try {
+    Object.assign(process.env, buildWorldIdStagingCanaryEnv(process.env));
+  } catch (error) {
+    console.error(`\n❌ Error: ${error.message}`);
+    process.exit(1);
+  }
 }
 
 // Check if the network exists in rpc_endpoints
@@ -149,6 +164,7 @@ if (network === "localhost") {
 } else {
   process.env.ETH_KEYSTORE_ACCOUNT = selectedKeystore;
 }
+configureWorldIdStagingCanary();
 process.env.RESUME_FLAG = resume ? "--resume" : "";
 
 // World Chain explorer support can vary by provider. Skip auto-verification here;
@@ -164,6 +180,12 @@ if (isSlowBroadcastNetwork(network)) {
   console.log(
     `\n🐢 Using throttled slow broadcast mode for ${network} to avoid sequencer nonce and RPC rate-limit issues`
   );
+}
+
+if (worldIdStagingCanary) {
+  console.log("\n🧪 MAINNET CANARY: using World ID staging verifier");
+  console.log(`   ${WORLD_ID_STAGING_VERIFIER_ADDRESS}`);
+  console.log("   Do not treat generated chain 480 artifacts as production.");
 }
 
 if (overrideEnvKey) {
