@@ -1017,6 +1017,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         uint256 requiredVoters = 5;
         uint256 requiredSettledRounds = 2;
         uint256 rewardPoolExpiresAt = block.timestamp + 14 days;
+        RoundLib.RoundConfig memory roundConfig =
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 5, maxVoters: 100 });
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _submissionRewardTerms(
             DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             rewardAmount,
@@ -1027,21 +1029,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardAmount);
-        _reserveQuestionSubmissionWithRewardTerms(
-            contextUrl,
-            imageUrls,
-            "",
-            title,
-            description,
-            tags,
-            categoryId,
-            salt,
-            submitter,
-            DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            rewardAmount,
-            requiredVoters,
-            requiredSettledRounds,
-            rewardPoolExpiresAt
+        _reserveQuestionSubmissionWithRewardTermsAndRoundConfig(
+            contextUrl, imageUrls, "", title, description, tags, categoryId, salt, submitter, rewardTerms, roundConfig
         );
         vm.warp(block.timestamp + 1);
         uint256 id = registry.submitQuestionWithRewardAndRoundConfig(
@@ -1054,7 +1043,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _emptySubmissionDetails(),
             salt,
             rewardTerms,
-            _defaultContentRoundConfig(),
+            roundConfig,
             _defaultQuestionSpec()
         );
         vm.stopPrank();
@@ -1158,7 +1147,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 4, maxVoters: 5 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 5, maxVoters: 5 });
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1197,10 +1186,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(snapshottedConfig.maxVoters, roundConfig.maxVoters);
     }
 
-    function test_SubmitQuestionWithRewardAndRoundConfig_RejectsRequiredVotersAboveMaxVoters() public {
+    function test_SubmitQuestionWithRewardAndRoundConfig_RejectsRequiredVotersAboveSettlementVoters() public {
         string memory contextUrl = "https://example.com/impossible-round";
         string memory title = "Can this bounty ever qualify?";
-        string memory description = "The requested reward voter count exceeds the round cap.";
+        string memory description = "The requested reward voter count exceeds the settlement threshold.";
         string memory tags = "Products,Bounty";
         uint256 categoryId = 1;
         bytes32 salt = keccak256("impossible-round-config");
@@ -1216,7 +1205,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             bountyEligibility: 0
         });
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 3, maxVoters: 100 });
 
         vm.startPrank(submitter);
         lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
@@ -1224,7 +1213,51 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             contextUrl, imageUrls, "", title, description, tags, categoryId, salt, submitter, rewardTerms, roundConfig
         );
         vm.warp(block.timestamp + 1);
-        vm.expectRevert("Voters exceed max");
+        vm.expectRevert("Voters mismatch");
+        registry.submitQuestionWithRewardAndRoundConfig(
+            contextUrl,
+            imageUrls,
+            "",
+            title,
+            tags,
+            categoryId,
+            _emptySubmissionDetails(),
+            salt,
+            rewardTerms,
+            roundConfig,
+            _defaultQuestionSpec()
+        );
+        vm.stopPrank();
+    }
+
+    function test_SubmitQuestionWithRewardAndRoundConfig_RejectsRequiredVotersBelowSettlementVoters() public {
+        string memory contextUrl = "https://example.com/underpaid-round";
+        string memory title = "Can this bounty underpay a settled result?";
+        string memory description = "The settlement threshold exceeds the reward voter count.";
+        string memory tags = "Products,Bounty";
+        uint256 categoryId = 1;
+        bytes32 salt = keccak256("underpaid-round-config");
+        string[] memory imageUrls = _emptyImageUrls();
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
+            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
+            amount: 100e6,
+            requiredVoters: 3,
+            requiredSettledRounds: 1,
+            bountyStartBy: block.timestamp + 14 days,
+            bountyWindowSeconds: 14 days,
+            feedbackWindowSeconds: 14 days,
+            bountyEligibility: 0
+        });
+        RoundLib.RoundConfig memory roundConfig =
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 2 hours, minVoters: 5, maxVoters: 100 });
+
+        vm.startPrank(submitter);
+        lrepToken.approve(address(mockQuestionRewardPoolEscrow), rewardTerms.amount);
+        _reserveQuestionSubmissionWithRewardTermsAndRoundConfig(
+            contextUrl, imageUrls, "", title, description, tags, categoryId, salt, submitter, rewardTerms, roundConfig
+        );
+        vm.warp(block.timestamp + 1);
+        vm.expectRevert("Voters mismatch");
         registry.submitQuestionWithRewardAndRoundConfig(
             contextUrl,
             imageUrls,
@@ -1512,7 +1545,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    function test_SubmitQuestionBundleWithReward_RejectsCompletersAboveRoundVoterCap() public {
+    function test_SubmitQuestionBundleWithReward_RejectsCompletersAboveSettlementVoters() public {
         ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
         questions[0] = ContentRegistry.BundleQuestionInput({
             contextUrl: "https://example.com/bundle-completers-a",
@@ -1544,10 +1577,10 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             block.timestamp + 30 days
         );
         RoundLib.RoundConfig memory roundConfig =
-            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 4 });
+            RoundLib.RoundConfig({ epochDuration: 1 hours, maxDuration: 7 days, minVoters: 3, maxVoters: 100 });
 
         vm.startPrank(submitter);
-        vm.expectRevert();
+        vm.expectRevert("Voters mismatch");
         registry.submitQuestionBundleWithRewardAndRoundConfig(questions, rewardTerms, roundConfig);
         vm.stopPrank();
     }
@@ -1774,8 +1807,8 @@ contract ContentRegistryBranchesTest is VotingTestBase {
             _submissionRewardTerms(
                 DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
                 rewardAmount,
-                DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS + 1,
-                DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
+                DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+                DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS + 1,
                 DEFAULT_SUBMISSION_REWARD_EXPIRES_AT
             ),
             _defaultContentRoundConfig(),

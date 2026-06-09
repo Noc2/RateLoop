@@ -234,28 +234,18 @@ abstract contract ContentSubmissionTestBase {
             reservation.categoryId,
             reservation.details
         );
-        uint256 rewardAmount = _defaultSubmissionRewardAmount(reservation.registry);
-        bytes32 revealCommitment = _questionReservationRevealCommitment(reservation, submissionKey, rewardAmount);
-        IERC20(reservation.registry.lrepToken()).approve(rewardEscrow, rewardAmount);
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(reservation.registry);
+        bytes32 revealCommitment = _questionReservationRevealCommitment(reservation, submissionKey, rewardTerms);
+        IERC20(reservation.registry.lrepToken()).approve(rewardEscrow, rewardTerms.amount);
         reservation.registry.reserveSubmission(revealCommitment);
     }
 
     function _questionReservationRevealCommitment(
         MediaQuestionReservation memory reservation,
         bytes32 submissionKey,
-        uint256 rewardAmount
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms
     ) internal view returns (bytes32) {
-        ContentRegistry.SubmissionRewardTerms memory rewardTerms =
-            ContentRegistry.SubmissionRewardTerms({
-                asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-                amount: rewardAmount,
-                requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-                requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-                bountyStartBy: DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY,
-                bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_BOUNTY_WINDOW_SECONDS,
-                feedbackWindowSeconds: DEFAULT_SUBMISSION_REWARD_FEEDBACK_WINDOW_SECONDS,
-                bountyEligibility: 0
-            });
+        RoundLib.RoundConfig memory roundConfig = _defaultQuestionRoundConfig(reservation.registry);
         return _questionRevealCommitment(
             submissionKey,
             _submissionMediaHash(reservation.imageUrls, reservation.videoUrl),
@@ -266,7 +256,7 @@ abstract contract ContentSubmissionTestBase {
             reservation.salt,
             reservation.submitter,
             rewardTerms,
-            _defaultQuestionRoundConfig(reservation.registry),
+            roundConfig,
             _defaultQuestionSpec()
         );
     }
@@ -299,17 +289,8 @@ abstract contract ContentSubmissionTestBase {
         bytes32 salt,
         address submitter
     ) internal view returns (bytes32) {
-        uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
-        ContentRegistry.SubmissionRewardTerms memory rewardTerms = ContentRegistry.SubmissionRewardTerms({
-            asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
-            amount: rewardAmount,
-            requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
-            requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
-            bountyStartBy: DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY,
-            bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_BOUNTY_WINDOW_SECONDS,
-            feedbackWindowSeconds: DEFAULT_SUBMISSION_REWARD_FEEDBACK_WINDOW_SECONDS,
-            bountyEligibility: 0
-        });
+        RoundLib.RoundConfig memory roundConfig = _defaultQuestionRoundConfig(registry);
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
         return _questionRevealCommitment(
             submissionKey,
             _submissionMediaHash(imageUrls, videoUrl),
@@ -320,7 +301,7 @@ abstract contract ContentSubmissionTestBase {
             salt,
             submitter,
             rewardTerms,
-            _defaultQuestionRoundConfig(registry),
+            roundConfig,
             _defaultQuestionSpec()
         );
     }
@@ -569,10 +550,11 @@ abstract contract ContentSubmissionTestBase {
         returns (ContentRegistry.SubmissionRewardTerms memory)
     {
         uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
+        RoundLib.RoundConfig memory roundConfig = _defaultQuestionRoundConfig(registry);
         return ContentRegistry.SubmissionRewardTerms({
             asset: DEFAULT_SUBMISSION_REWARD_ASSET_LREP,
             amount: rewardAmount,
-            requiredVoters: DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            requiredVoters: roundConfig.minVoters,
             requiredSettledRounds: DEFAULT_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyStartBy: DEFAULT_SUBMISSION_REWARD_BOUNTY_START_BY,
             bountyWindowSeconds: DEFAULT_SUBMISSION_REWARD_BOUNTY_WINDOW_SECONDS,

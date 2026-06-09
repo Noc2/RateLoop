@@ -128,6 +128,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
         require(params.amount >= params.requiredCompleters * params.requiredSettledRounds, "Amount too small");
         require(QuestionRewardPoolEscrowEligibilityLib.isValidPolicy(params.bountyEligibility), "Invalid eligibility");
+        _requireCompletersMatchSettlementVoters(registry, params.contentIds, params.requiredCompleters);
         QuestionRewardPoolEscrowBundleLib.requireFundingCoversMaxCompleters(
             registry, params.contentIds, params.amount, params.requiredSettledRounds
         );
@@ -179,6 +180,20 @@ library QuestionRewardPoolEscrowBundleActionsLib {
         );
         emit QuestionBundleEligibilitySet(params.bundleId, params.bountyEligibility);
         rewardPoolId = params.bundleId;
+    }
+
+    function _requireCompletersMatchSettlementVoters(
+        ContentRegistry registry,
+        uint256[] memory contentIds,
+        uint256 requiredCompleters
+    ) private view {
+        for (uint256 i = 0; i < contentIds.length;) {
+            RoundLib.RoundConfig memory contentCfg = registry.getContentRoundConfig(contentIds[i]);
+            require(requiredCompleters == contentCfg.minVoters, "Voters mismatch");
+            unchecked {
+                i++;
+            }
+        }
     }
 
     function _writeBundleRecord(

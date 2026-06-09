@@ -534,7 +534,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
         RoundLib.RoundConfig memory validatedRoundConfig = _validatedRoundConfig(roundConfig);
         require(validatedRoundConfig.maxVoters <= MAX_QUESTION_BUNDLE_ROUND_VOTERS);
-        require(rewardTerms.requiredVoters <= validatedRoundConfig.maxVoters);
+        require(rewardTerms.requiredVoters == validatedRoundConfig.minVoters, "Voters mismatch");
         _validateSubmissionReward(rewardTerms);
         require(rewardTerms.bountyWindowSeconds != 0, "Bundle bounty window required");
 
@@ -666,10 +666,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         QuestionSpecCommitment memory spec
     ) public nonReentrant whenNotPaused returns (uint256) {
         _validateSubmissionDetails(details);
+        RoundLib.RoundConfig memory defaultRoundConfig = _defaultRoundConfig();
         SubmissionRewardTerms memory rewardTerms = SubmissionRewardTerms({
             asset: SUBMISSION_REWARD_ASSET_LREP,
             amount: _minimumSubmissionReward(SUBMISSION_REWARD_ASSET_LREP),
-            requiredVoters: MIN_SUBMISSION_REWARD_REQUIRED_VOTERS,
+            requiredVoters: defaultRoundConfig.minVoters,
             requiredSettledRounds: MIN_SUBMISSION_REWARD_SETTLED_ROUNDS,
             bountyStartBy: 0,
             bountyWindowSeconds: 0,
@@ -680,7 +681,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, tags, categoryId);
 
         return _submitValidatedQuestionWithMedia(
-            metadata, imageUrls, videoUrl, details, salt, rewardTerms, _defaultRoundConfig(), 0, spec
+            metadata, imageUrls, videoUrl, details, salt, rewardTerms, defaultRoundConfig, 0, spec
         );
     }
 
@@ -838,7 +839,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         // reveal hash carries caller-supplied randomness.
         require(salt != bytes32(0), "Salt required");
         _validateSubmissionReward(rewardTerms);
-        require(rewardTerms.requiredVoters <= roundConfig.maxVoters, "Voters exceed max");
+        require(rewardTerms.requiredVoters == roundConfig.minVoters, "Voters mismatch");
 
         bytes32 revealCommitment = _computeRevealCommitment(
             submissionKey,

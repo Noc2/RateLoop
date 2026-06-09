@@ -277,6 +277,7 @@ library QuestionRewardPoolEscrowPoolActionsLib {
         require(params.requiredSettledRounds <= MAX_REQUIRED_SETTLED_ROUNDS, "Too many rounds");
         require(fundedAmount >= params.requiredSettledRounds * params.requiredVoters * BPS_SCALE, "Amount too small");
         RoundLib.RoundConfig memory contentCfg = registry.getContentRoundConfig(params.contentId);
+        require(params.requiredVoters == contentCfg.minVoters, "Voters mismatch");
         require(params.requiredVoters <= contentCfg.maxVoters, "Voters exceed max");
         require(contentCfg.maxVoters <= MAX_REWARD_POOL_ROUND_VOTERS, "Voters exceed max");
         require(
