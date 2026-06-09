@@ -229,10 +229,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Slash policy frozen at content creation so governance cannot retroactively rewrite stake terms.
     mapping(uint256 => RatingLib.SlashConfig) internal contentSlashConfigSnapshot;
 
-    SubmissionMediaValidator public immutable submissionMediaValidator;
+    SubmissionMediaValidator public submissionMediaValidator;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[42] private __gap;
+    uint256[41] private __gap;
 
     // --- Events ---
     event ContentSubmitted(
@@ -309,9 +309,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     );
     event VotingEngineRevoked(address indexed engine);
 
-    /// @custom:oz-upgrades-unsafe-allow constructor state-variable-immutable
     constructor() {
-        submissionMediaValidator = new SubmissionMediaValidator();
         _disableInitializers();
     }
 
@@ -330,7 +328,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(_governance != address(0), "Invalid governance");
         require(_treasuryAuthority != address(0), "Bad treasury");
         require(_lrepToken != address(0), "Invalid LREP token");
-        submissionMediaValidator.initializeEmitter(address(this));
+        _initializeSubmissionMediaValidator();
 
         // Governance gets all permanent roles
         _grantRole(DEFAULT_ADMIN_ROLE, _governance);
@@ -357,6 +355,20 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         nextQuestionBundleId = 1;
         treasury = _treasuryAuthority;
         bonusPool = _treasuryAuthority;
+    }
+
+    /// @notice One-time migration hook for pre-storage-validator proxies.
+    /// @dev Safe to call through `upgradeAndCall`: the helper is always owned by this proxy.
+    function initializeSubmissionMediaValidator() external reinitializer(2) {
+        require(address(submissionMediaValidator) == address(0), "Validator exists");
+        _initializeSubmissionMediaValidator();
+    }
+
+    function _initializeSubmissionMediaValidator() private {
+        if (address(submissionMediaValidator) != address(0)) return;
+        SubmissionMediaValidator validator = new SubmissionMediaValidator();
+        submissionMediaValidator = validator;
+        validator.initializeEmitter(address(this));
     }
 
     /// @notice Set the VotingEngine address (can only be called by CONFIG_ROLE).

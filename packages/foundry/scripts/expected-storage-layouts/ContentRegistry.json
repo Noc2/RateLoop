@@ -153,6 +153,12 @@
     {
       "slot": 25,
       "offset": 0,
+      "label": "submissionMediaValidator",
+      "type": "t_contract(SubmissionMediaValidator)"
+    },
+    {
+      "slot": 26,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -167,8 +173,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[42]",
-      "numberOfBytes": "1344",
+      "label": "uint256[41]",
+      "numberOfBytes": "1312",
       "base": "t_uint256"
     },
     {
@@ -199,6 +205,12 @@
       "id": "t_contract(ProtocolConfig)",
       "encoding": "inplace",
       "label": "contract ProtocolConfig",
+      "numberOfBytes": "20"
+    },
+    {
+      "id": "t_contract(SubmissionMediaValidator)",
+      "encoding": "inplace",
+      "label": "contract SubmissionMediaValidator",
       "numberOfBytes": "20"
     },
     {
