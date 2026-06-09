@@ -1446,6 +1446,11 @@ body {
   color: #050505;
 }
 
+.reward-chip-brand-red {
+  background: var(--rateloop-pink);
+  color: #050505;
+}
+
 .reward-chip-muted {
   background: var(--rateloop-control-idle-muted);
   color: rgb(245 245 245 / 0.72);

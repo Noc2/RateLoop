@@ -46,6 +46,8 @@ const CONTENT_INTENT_INTERACTIVE_SELECTOR =
   "a[href],button,input,select,textarea,summary,iframe,[role='button'],[role='link']";
 const BOUNTY_DEADLINE_TOOLTIP_TEXT =
   "Bounty eligibility ends at this time. Expired bounties move to the Expired filter.";
+const BOUNTY_EXPIRED_TOOLTIP_TEXT =
+  "This bounty eligibility window has closed. The question remains visible while Feedback Bonus awards are still open.";
 const FEEDBACK_DEADLINE_TOOLTIP_TEXT =
   "Feedback Bonus awards remain available until this deadline. The question remains visible after awards close.";
 
@@ -86,18 +88,22 @@ function formatDeadlineLabel(action: string, deadline: bigint) {
   return `${action} in ${display.label}`;
 }
 
-function getDeadlineChipClassName(tone: "active" | "ended") {
-  return tone === "active" ? "reward-chip-brand-yellow" : "reward-chip-muted";
+type DeadlineChipTone = "active" | "ended" | "expired";
+
+function getDeadlineChipClassName(tone: DeadlineChipTone) {
+  if (tone === "active") return "reward-chip-brand-yellow";
+  if (tone === "expired") return "reward-chip-brand-red";
+  return "reward-chip-muted";
 }
 
-function getDeadlineTooltipClassName(tone: "active" | "ended") {
-  return tone === "active"
+function getDeadlineTooltipClassName(tone: DeadlineChipTone) {
+  return tone === "active" || tone === "expired"
     ? "[&>svg]:text-[#050505]/70 [&>svg]:hover:text-[#050505]"
     : "[&>svg]:text-base-content/50 [&>svg]:hover:text-base-content/75";
 }
 
 function getRewardDeadlineChips(item: ContentItem) {
-  const chips: Array<{ label: string; tone: "active" | "ended"; tooltip?: string }> = [];
+  const chips: Array<{ label: string; tone: DeadlineChipTone; tooltip?: string }> = [];
   const rewardSummary = item.rewardPoolSummary;
   const feedbackSummary = item.feedbackBonusSummary;
 
@@ -112,7 +118,8 @@ function getRewardDeadlineChips(item: ContentItem) {
   if (!isFeedbackClosed && shouldShowBountyExpiredStatus(item)) {
     chips.push({
       label: "Bounty Expired",
-      tone: "ended",
+      tone: "expired",
+      tooltip: BOUNTY_EXPIRED_TOOLTIP_TEXT,
     });
   } else if (!isFeedbackClosed && hasActiveBounty) {
     if (activeBountyClosesAt) {
