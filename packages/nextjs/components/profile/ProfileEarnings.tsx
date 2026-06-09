@@ -1,7 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { BanknotesIcon } from "@heroicons/react/24/outline";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
 import { buildRateContentHref } from "~~/constants/routes";
@@ -79,10 +79,12 @@ function EarningsMetric({ detail, label, value }: { detail?: string; label: stri
 }
 
 export function ProfileEarnings({
+  headerAction,
   isLoading,
   items,
   summary,
 }: {
+  headerAction?: ReactNode;
   isLoading?: boolean;
   items: PonderProfileEarningItem[];
   summary: PonderProfileEarningsSummary | null | undefined;
@@ -106,12 +108,7 @@ export function ProfileEarnings({
             <InfoTooltip text="Public paid-out rewards only. Bounty and Feedback Bonus totals use the net amount sent to the rater, excluding frontend fees. Pending claimable rewards are shown only to the connected wallet through the claim button." />
           </div>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-full bg-base-content/[0.05] px-4 py-2 text-sm font-medium text-base-content/70">
-          <BanknotesIcon className="h-4 w-4" aria-hidden="true" />
-          <span>
-            {resolvedSummary.paidEventCount} paid event{resolvedSummary.paidEventCount === 1 ? "" : "s"}
-          </span>
-        </div>
+        {headerAction ? <div className="flex shrink-0 justify-start sm:justify-end">{headerAction}</div> : null}
       </div>
 
       {isLoading ? (

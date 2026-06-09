@@ -33,6 +33,7 @@ import { CategoryBars } from "~~/components/leaderboard/CategoryBars";
 import { StakeBreakdown } from "~~/components/leaderboard/StakeBreakdown";
 import { WinRateRing } from "~~/components/leaderboard/WinRateRing";
 import { ProfileEarnings } from "~~/components/profile/ProfileEarnings";
+import { ClaimRewardsButton } from "~~/components/shared/ClaimRewardsButton";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
 import { GradientActionButton, getGradientActionMotion } from "~~/components/shared/GradientAction";
 import { ProfileImageLightbox } from "~~/components/shared/ProfileImageLightbox";
@@ -1580,6 +1581,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
         </div>
 
         <ProfileEarnings
+          headerAction={ownProfile ? <ClaimRewardsButton className="w-fit" /> : undefined}
           isLoading={profileLoading}
           items={profileDetail?.recentEarnings ?? []}
           summary={profileDetail?.earningsSummary}

@@ -1,7 +1,6 @@
 "use client";
 
 import { useAccount } from "wagmi";
-import { ClaimRewardsButton } from "~~/components/shared/ClaimRewardsButton";
 import { surfaceSectionHeadingClassName } from "~~/components/shared/sectionHeading";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useActiveVotesWithDeadlines } from "~~/hooks/useActiveVotesWithDeadlines";
@@ -83,7 +82,6 @@ export function StakeBreakdown({
           No active stakes
         </div>
       )}
-      <ClaimRewardsButton className="border-t border-base-content/10 pt-2" />
     </div>
   );
 }
