@@ -44,9 +44,15 @@ function formatLrepAmount(value: bigint | null | undefined) {
   return (Number(value) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
-function formatUsdcAmount(value: bigint | null | undefined) {
+export function formatUsdcAmount(value: bigint | null | undefined) {
   if (value == null) return "—";
-  return (Number(value) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 });
+  const roundedCents = (value + 5_000n) / 10_000n;
+  const whole = roundedCents / 100n;
+  const cents = roundedCents % 100n;
+  const groupedWhole = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const hasFractionalMicroUsdc = value % 1_000_000n > 0n;
+
+  return hasFractionalMicroUsdc ? `${groupedWhole}.${cents.toString().padStart(2, "0")}` : groupedWhole;
 }
 
 function formatWinRate(value: number) {

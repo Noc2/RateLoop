@@ -1,5 +1,5 @@
 import React from "react";
-import { FreeTransactionAllowanceDisplay } from "./AddressInfoDropdown";
+import { FreeTransactionAllowanceDisplay, formatUsdcAmount } from "./AddressInfoDropdown";
 import { getFreeTransactionAllowanceDisplayState } from "./freeTransactionAllowanceDisplay";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -24,6 +24,14 @@ test("free transaction display shows verification prompt for unverified eligible
       limit: 25,
     },
   );
+});
+
+test("navbar USDC balance rounds to cents", () => {
+  assert.equal(formatUsdcAmount(24_666_666n), "24.67");
+  assert.equal(formatUsdcAmount(24_664_999n), "24.66");
+  assert.equal(formatUsdcAmount(999_999n), "1.00");
+  assert.equal(formatUsdcAmount(25_000_000n), "25");
+  assert.equal(formatUsdcAmount(null), "—");
 });
 
 test("free transaction verification prompt omits the free tx suffix", () => {
