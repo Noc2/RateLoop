@@ -1,14 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { Bars3Icon } from "@heroicons/react/24/outline";
+import { BetaNoticeBanner } from "~~/components/BetaNoticeBanner";
 import { FooterLinks } from "~~/components/FooterLinks";
 import { HeaderBrand, HeaderMenuLinks, HeaderSearchBar } from "~~/components/Header";
-import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
 import { HumanSignInButton } from "~~/components/shared/HumanSignInButton";
 import { ASK_ROUTE, GOVERNANCE_ROUTE, RATE_ROUTE } from "~~/constants/routes";
 import { HUMAN_SIGN_IN_DISCOVER_ROUTE, HUMAN_SIGN_IN_LABEL } from "~~/lib/home/humanSignInRoute";
-import scaffoldConfig from "~~/scaffold.config";
 
 const publicNavLinks = [
   { href: RATE_ROUTE, label: "Discover", heavy: true },
@@ -90,12 +89,10 @@ function PublicDesktopSidebar() {
 }
 
 export function PublicShell({ children }: { children: React.ReactNode }) {
-  const publicTargetChainId = scaffoldConfig.targetNetworks[0].id;
-
   return (
     <div className="flex min-h-screen flex-col bg-base-100 text-base-content">
       <div className="xl:pl-52">
-        <TestnetNoticeBanner targetChainId={publicTargetChainId} />
+        <BetaNoticeBanner />
       </div>
       <PublicMobileHeader />
       <PublicDesktopSidebar />

@@ -1,6 +1,7 @@
 import type { NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 import { OracleChallengeFlowDiagram } from "~~/components/docs/OracleChallengeFlowDiagram";
+import { PROTOCOL_RELEASE_CANDIDATE_LABEL } from "~~/constants/protocolRelease";
 import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const GovernanceDocs: NextPage = () => {
@@ -9,6 +10,25 @@ const GovernanceDocs: NextPage = () => {
       <DocsTitle gradientText="Governance" />
       <p className="lead text-base-content/60 text-lg">
         LREP governance controls protocol settings, upgrades, treasury routing, and optional identity policy.
+      </p>
+
+      <h2 id="mainnet-beta-release-candidates">Mainnet Beta and Release Candidates</h2>
+      <p>
+        The first mainnet deployment is intended to launch as {PROTOCOL_RELEASE_CANDIDATE_LABEL}, and the protocol will
+        remain in beta while that deployment is observed in production. If the release candidate works as expected and
+        no serious protocol issue appears, it can become the main RateLoop protocol and the public beta label can be
+        removed.
+      </p>
+      <p>
+        If a material issue appears during beta, RateLoop may publish a new release candidate instead of treating the
+        first deployment as final. Before that redeployment, the community can take a public snapshot of the current
+        allocation so balances, earned reputation, and relevant protocol state can be carried forward into the updated
+        contracts.
+      </p>
+      <p>
+        Once the protocol leaves beta, the deployed smart-contract system is considered final. New release-candidate
+        redeployments stop, and protocol evolution moves through the normal governance process: proposals, voting,
+        timelock review, and execution through the deployed governance system.
       </p>
 
       <h2>What Governance Does</h2>
@@ -192,17 +212,15 @@ const GovernanceDocs: NextPage = () => {
       </p>
       <h2>Protocol Evolution</h2>
       <p>
-        RateLoop is expected to evolve over time. The protocol operates in a fast-changing environment, especially as AI
-        systems become more capable and as new smart-contract, wallet, identity, and coordination vulnerabilities are
-        discovered. Governance was integrated from the start so the community can adapt protocol parameters, contracts,
-        treasury routing, and safety rules without treating the first deployment as the final design forever.
+        RateLoop is expected to evolve over time, especially as AI systems become more capable and as new
+        smart-contract, wallet, identity, and coordination vulnerabilities are discovered. Governance was integrated
+        from the start so the community can adapt protocol parameters, treasury routing, and safety rules without
+        relying on informal operator discretion.
       </p>
       <p>
-        In early protocol phases, some changes may be better handled through a transparent migration instead of an
-        in-place upgrade. When that is necessary, the community can take a public snapshot of the current token
-        allocation and redeploy updated contracts so balances, earned reputation, and protocol state can be carried
-        forward while the implementation stays current. Any such migration should be documented, reviewable, and aligned
-        with the same governance principles that control upgrades and configuration changes.
+        After the beta release-candidate phase, protocol changes should use the deployed governance path rather than a
+        new release-candidate redeployment. Material changes should be documented, reviewable, and aligned with the same
+        proposal, voting, and timelock principles that control upgrades and configuration changes.
       </p>
     </article>
   );

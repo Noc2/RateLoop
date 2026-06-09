@@ -1,37 +1,38 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  PROTOCOL_BETA_GOVERNANCE_HREF,
+  PROTOCOL_IS_BETA,
+  PROTOCOL_RELEASE_CANDIDATE_LABEL,
+} from "~~/constants/protocolRelease";
 
-const TESTNET_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:testnet-notice-dismissed";
+const BETA_NOTICE_DISMISSED_STORAGE_KEY = "rateloop:beta-notice-dismissed";
 
-// MAINNET-1 (2026-05-21 testnet-readiness audit): keep the mutable-contract beta notice off
-// the mainnet target. Local dev (31337) and testnet (4801) keep showing the notice.
-const NON_MAINNET_TARGET_CHAIN_IDS = new Set<number>([31337, 4801]);
-
-export function TestnetNoticeBanner({ targetChainId }: { targetChainId: number }) {
-  const isMainnetTarget = !NON_MAINNET_TARGET_CHAIN_IDS.has(targetChainId);
+export function BetaNoticeBanner() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     try {
-      setIsVisible(window.localStorage.getItem(TESTNET_NOTICE_DISMISSED_STORAGE_KEY) !== "true");
+      setIsVisible(window.localStorage.getItem(BETA_NOTICE_DISMISSED_STORAGE_KEY) !== "true");
     } catch {
       setIsVisible(true);
     }
   }, []);
 
-  const dismissNotice = useCallback(() => {
+  const dismissNotice = () => {
     setIsVisible(false);
 
     try {
-      window.localStorage.setItem(TESTNET_NOTICE_DISMISSED_STORAGE_KEY, "true");
+      window.localStorage.setItem(BETA_NOTICE_DISMISSED_STORAGE_KEY, "true");
     } catch {
       // Dismiss for this page view even when browser storage is unavailable.
     }
-  }, []);
+  };
 
-  if (isMainnetTarget || !isVisible) {
+  if (!PROTOCOL_IS_BETA || !isVisible) {
     return null;
   }
 
@@ -40,21 +41,21 @@ export function TestnetNoticeBanner({ targetChainId }: { targetChainId: number }
       <div className="mx-auto flex max-w-6xl items-start gap-3 xl:max-w-none">
         <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-500" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-sm font-medium leading-5 text-base-content">
-          RateLoop is in Beta right now, and the smart contracts might be redeployed. Feel free to contribute:{" "}
-          <a
-            href="https://github.com/Noc2/RateLoop"
-            target="_blank"
-            rel="noreferrer"
+          RateLoop is currently in beta. This is {PROTOCOL_RELEASE_CANDIDATE_LABEL}; smart contracts may be redeployed
+          before the protocol is finalized.{" "}
+          <Link
+            href={PROTOCOL_BETA_GOVERNANCE_HREF}
             className="font-semibold text-base-content underline decoration-base-content/40 underline-offset-4 transition-colors hover:text-white hover:decoration-white"
           >
-            Noc2/RateLoop
-          </a>
+            Read the governance plan
+          </Link>
+          .
         </p>
         <button
           type="button"
           onClick={dismissNotice}
           className="btn btn-ghost btn-xs h-7 min-h-0 w-7 shrink-0 rounded-full p-0 text-base-content/75 hover:bg-base-content/10 hover:text-base-content"
-          aria-label="Dismiss testnet notice"
+          aria-label="Dismiss beta notice"
         >
           <XMarkIcon className="h-4 w-4" aria-hidden="true" />
         </button>

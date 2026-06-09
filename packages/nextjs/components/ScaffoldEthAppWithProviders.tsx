@@ -6,12 +6,12 @@ import { usePathname } from "next/navigation";
 import { AppProgressBar as ProgressBar } from "next-nprogress-bar";
 import { hardhat } from "viem/chains";
 import type { State } from "wagmi";
+import { BetaNoticeBanner } from "~~/components/BetaNoticeBanner";
 import { Footer } from "~~/components/Footer";
 import { Header } from "~~/components/Header";
 import { NavigationProgressDiagnostics } from "~~/components/NavigationProgressDiagnostics";
 import { RateLoopWalletProviders } from "~~/components/RateLoopWalletProviders";
 import { RouteScopedNotifiers } from "~~/components/RouteScopedNotifiers";
-import { TestnetNoticeBanner } from "~~/components/TestnetNoticeBanner";
 import { ReferralAttributionCapture } from "~~/components/referrals/ReferralAttributionCapture";
 import { FaucetTrigger } from "~~/components/scaffold-eth/FaucetTrigger";
 import { RATE_ROUTE } from "~~/constants/routes";
@@ -40,7 +40,7 @@ const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
     <MobileHeaderVisibilityProvider>
       <div className={`flex min-h-screen flex-col ${isVoteFeedRoute ? "xl:h-screen xl:overflow-hidden" : ""}`.trim()}>
         <div className="xl:pl-52">
-          <TestnetNoticeBanner targetChainId={targetNetwork.id} />
+          <BetaNoticeBanner />
         </div>
         <Header />
         {/* Main content: offset by left sidebar on desktop (208px at xl and up) */}
