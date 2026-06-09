@@ -260,7 +260,14 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         (bytes32 coverageDigest, bytes32 sourceSetDigest) =
             _requireCorrelationEpochSourcesReady(epochId, fromRoundId, toRoundId, sourceRefs);
         bytes32 proposalDigest = _correlationEpochDigest(
-            epochId, fromRoundId, toRoundId, clusterRoot, parameterHash, artifactHash, coverageDigest
+            epochId,
+            fromRoundId,
+            toRoundId,
+            clusterRoot,
+            parameterHash,
+            artifactHash,
+            keccak256(bytes(artifactURI)),
+            coverageDigest
         );
         if (rejectedCorrelationEpochSnapshotDigests[epochId][proposalDigest]) revert InvalidSnapshot();
         // L-Oracle-4: block identical re-proposal of a previously rejected clusterRoot.
@@ -1073,6 +1080,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
             snapshot.clusterRoot,
             snapshot.parameterHash,
             snapshot.artifactHash,
+            keccak256(bytes(snapshot.artifactURI)),
             correlationEpochCoverageDigest[snapshot.epochId]
         );
     }
@@ -1084,6 +1092,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         bytes32 clusterRoot,
         bytes32 parameterHash,
         bytes32 artifactHash,
+        bytes32 artifactUriHash,
         bytes32 coverageDigest
     ) private pure returns (bytes32) {
         return keccak256(
@@ -1095,6 +1104,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
                 clusterRoot,
                 parameterHash,
                 artifactHash,
+                artifactUriHash,
                 coverageDigest
             )
         );

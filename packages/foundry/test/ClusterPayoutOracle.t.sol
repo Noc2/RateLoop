@@ -1132,6 +1132,61 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(snapshot.artifactHash, keccak256("corrected-epoch-artifact"));
     }
 
+    function test_MetadataOnlyFinalizedCorrelationEpochRejectionAllowsCorrectedUriSameRootAndHash() public {
+        bytes32 clusterRoot = keccak256("cluster-root");
+        bytes32 artifactHash = keccak256("epoch-artifact");
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            artifactHash,
+            "ipfs://bad-epoch-uri",
+            _defaultEpochSources()
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        bytes32 rejectedDigest = oracle.correlationEpochProposalDigest(1);
+        oracle.rejectFinalizedCorrelationEpoch(1, keccak256("bad-uri"));
+
+        assertTrue(oracle.rejectedCorrelationEpochSnapshotDigests(1, rejectedDigest));
+        assertFalse(oracle.rejectedCorrelationEpochRoots(1, clusterRoot));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            artifactHash,
+            "ipfs://bad-epoch-uri",
+            _defaultEpochSources()
+        );
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            artifactHash,
+            "ipfs://corrected-epoch-uri",
+            _defaultEpochSources()
+        );
+        assertTrue(oracle.correlationEpochProposalDigest(1) != rejectedDigest);
+        vm.warp(block.timestamp + 1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(snapshot.clusterRoot, clusterRoot);
+        assertEq(snapshot.artifactHash, artifactHash);
+        assertEq(snapshot.artifactURI, "ipfs://corrected-epoch-uri");
+    }
+
     function test_MetadataOnlyCorrelationEpochRejectionAllowsCorrectedSameRoot() public {
         address squatter = address(0xBAD);
         frontendRegistry.setEligible(squatter, true);
@@ -1188,6 +1243,64 @@ contract ClusterPayoutOracleTest is Test {
         oracle.finalizeCorrelationEpoch(1);
         ClusterPayoutOracle.CorrelationEpochSnapshot memory finalSnapshot = oracle.correlationEpochSnapshot(1);
         assertEq(uint8(finalSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+    }
+
+    function test_MetadataOnlyCorrelationEpochRejectionAllowsCorrectedUriSameRootAndHash() public {
+        address squatter = address(0xBAD);
+        frontendRegistry.setEligible(squatter, true);
+
+        bytes32 clusterRoot = keccak256("honest-cluster-root");
+        bytes32 artifactHash = keccak256("epoch-artifact");
+
+        vm.prank(squatter);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            artifactHash,
+            "ipfs://bad-epoch-uri",
+            _defaultEpochSources()
+        );
+
+        bytes32 rejectedDigest = oracle.correlationEpochProposalDigest(1);
+        oracle.rejectCorrelationEpoch(1, keccak256("bad-uri"));
+
+        assertTrue(oracle.rejectedCorrelationEpochSnapshotDigests(1, rejectedDigest));
+        assertFalse(oracle.rejectedCorrelationEpochRoots(1, clusterRoot));
+
+        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            artifactHash,
+            "ipfs://bad-epoch-uri",
+            _defaultEpochSources()
+        );
+
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            clusterRoot,
+            keccak256("params"),
+            artifactHash,
+            "ipfs://corrected-epoch-uri",
+            _defaultEpochSources()
+        );
+        assertTrue(oracle.correlationEpochProposalDigest(1) != rejectedDigest);
+
+        vm.warp(block.timestamp + 1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory finalSnapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(finalSnapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Finalized));
+        assertEq(finalSnapshot.clusterRoot, clusterRoot);
+        assertEq(finalSnapshot.artifactHash, artifactHash);
+        assertEq(finalSnapshot.artifactURI, "ipfs://corrected-epoch-uri");
     }
 
     function test_ChallengesPullConfiguredUsdcBond() public {
