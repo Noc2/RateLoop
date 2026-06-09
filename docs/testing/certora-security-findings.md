@@ -10,6 +10,27 @@ vulnerability. Every property that was scoped to a clean, provable slice was pro
 items that could not be proved are **modeling/tooling limitations**, not known bugs —
 they are listed below in full so the gap is explicit rather than hidden.
 
+## Round 3 (`certora-round3-plan.md`)
+
+A third pass (branch `certora-followup-research-3`) refreshed drifted specs and added the
+tooling-independent conservation pieces. **No exploitable vulnerability was found.** New
+machine-checked (cloud-prover) properties: the correlation-epoch rejected-root replay block
+(`cannotReproposeRejectedCorrelationEpochRoot`), the reusable mul-div bound `(a*b)/c <= a`
+(`MulDivLemma.spec`), the launch cap-assignment clamp under `-smt_useNIA`
+(`assignedCapWithinFullCap`), and RoundRewardDistributor accumulator monotonicity. Three
+findings refine the earlier deferral framing:
+
+1. **Oracle spec had drifted** behind three contract commits (new correlation-epoch
+   rejection branches). Not a bug — the existing proofs stayed sound (no signature drift) —
+   but coverage lagged. Closed for the replay branch; a CI `spec-freshness` guard now makes
+   future drift fail the PR instead of going silent.
+2. **QRPE no-double-claim is NOT unblockable by send-only** as the round-2 plan hoped:
+   `_resolveQuestionRewardClaim` is *internal*, so it hits the same via_ir/internal-summary
+   wall as the engine (now escalated — see
+   [`certora-escalation-internal-summary-via-ir.md`](./certora-escalation-internal-summary-via-ir.md)).
+3. **certora-cli 8.13.1 is the latest release**, so the via_ir blockers have no upgrade
+   path today; the escalation is filed and revisited on each cli bump.
+
 ## Round 2 (Tracks B–G of `certora-next-steps.md`)
 
 A second implementation pass added LoopReputation, ProtocolConfig, the

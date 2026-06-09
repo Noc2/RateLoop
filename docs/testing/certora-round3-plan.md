@@ -7,6 +7,24 @@ verified slices, with the blocked remainder recorded in
 question **"is it worth continuing, and if so on what?"** after a fresh research pass, and
 narrows the work to what is actually unblocked and high-value today.
 
+> **Implementation status (2026-06-09).** All seven items below were implemented on branch
+> `certora-followup-research-3`, each as its own commit. Every spec/conf compiles and CVL
+> type-checks under certora-cli 8.13.1 (`make certora-check`); full proofs run on the cloud
+> prover via CI (no `CERTORAKEY` locally). Summary:
+>
+> | Item | Outcome |
+> |---|---|
+> | 1. Oracle spec refresh | ✅ added `cannotReproposeRejectedCorrelationEpochRoot` (covers the L-Oracle-4 replay branch), fixed the stale line ref, documented the still-deferred new surface |
+> | 2. Track C aggregate conservation | ◑ landed the tooling-independent pieces: `MulDivLemma.spec` (the reusable `(a*b)/c<=a` bound) + distributor accumulator monotonicity. The full inductive `claimed<=pool` upper bound stays deferred (needs the score-weight summation / engine model) — documented precisely |
+> | 3. Track G CI | ✅ secret-free `certora-check` type-check gate + `spec-freshness` PR guard (+ script, tested) + new confs wired into the cloud matrix |
+> | 4. Gambit | ✅ three mutation confs (FrontendRegistry, FeedbackBonusEscrow, RewardMath) + `make certora-mutate` + how-to README |
+> | 5. Track B cap | ◑ `assignedCapWithinFullCap` machine-checks the cap-assignment clamp under `-smt_useNIA` (was by-inspection only); end-to-end global invariant stays the documented residual |
+> | 6. Track D QRPE | ◑ `nondet_difficult_funcs` load-cut applied; **corrected the premise** — QRPE's resolver is internal, so per-commit no-double-claim is blocked by the same wall as Track A, not unblockable by send-only |
+> | 7. Track A | ✅ escalation write-up filed in-repo (`certora-escalation-internal-summary-via-ir.md`); no engineering, revisit on cli bump |
+>
+> ◑ = partial by design (the tooling-independent slice landed; the residual is a documented
+> solver/tooling limit, not a contract defect).
+
 ## Should we continue? — yes, with a narrowed scope
 
 The effort is mature and the docs are excellent. Two research findings reshape the plan:
