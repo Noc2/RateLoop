@@ -8,7 +8,7 @@ import { MoreToggleButton } from "~~/components/shared/MoreToggleButton";
 import { RateLoopVoteButton } from "~~/components/shared/RateLoopVoteButton";
 import { RatingOrb } from "~~/components/shared/RatingOrb";
 import { RoundProgress } from "~~/components/shared/RoundProgress";
-import { RoundRevealedBreakdown, type RoundStatMetric, RoundStats } from "~~/components/shared/RoundStats";
+import { RoundRevealedBreakdown, RoundStats } from "~~/components/shared/RoundStats";
 import { HoverTooltip, InfoTooltip, TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import type { ContentOpenRoundSummary, RewardPoolCurrency } from "~~/hooks/contentFeed/shared";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -400,38 +400,32 @@ export function VotingQuestionContextDetails({
   contentId,
   categoryId,
   openRound,
-  latestRound,
   roundConfig,
   compact = false,
   active = true,
-  rewardStats,
   statusChips,
   statusActions,
 }: {
   contentId: bigint;
   categoryId: bigint;
   openRound?: ContentOpenRoundSummary | null;
-  latestRound?: ContentOpenRoundSummary | null;
   roundConfig?: VotingConfig | null;
   compact?: boolean;
   active?: boolean;
-  rewardStats?: RoundStatMetric[];
   statusChips?: ReactNode;
   statusActions?: ReactNode;
 }) {
-  const roundSummary = openRound ?? latestRound;
   const roundSnapshot = useRoundSnapshot(
     active ? contentId : undefined,
-    active ? (roundSummary ?? undefined) : undefined,
+    active ? (openRound ?? undefined) : undefined,
     active ? (roundConfig ?? undefined) : undefined,
-    { preferCurrentRound: true },
   );
-  const showInlineVotingSummary = roundSnapshot.phase === "voting" || roundSnapshot.round.revealedCount > 0;
+  const showInlineVotingSummary = roundSnapshot.phase === "voting";
   const progressMessaging = getRoundProgressMessaging(roundSnapshot);
   const showInlineProgress = showInlineVotingSummary && Boolean(progressMessaging);
   const showInlineRevealedBreakdown = showInlineVotingSummary && roundSnapshot.round.revealedCount > 0;
   const showRoundProgress =
-    !showInlineProgress && (roundSnapshot.phase !== "none" || (!roundSnapshot.isReady && !roundSnapshot.hasRound));
+    !showInlineProgress && (roundSnapshot.phase === "voting" || (!roundSnapshot.isReady && !roundSnapshot.hasRound));
   const hasStatusChips = Array.isArray(statusChips) ? statusChips.length > 0 : Boolean(statusChips);
   const showStatusRow = showRoundProgress || hasStatusChips || Boolean(statusActions);
 
@@ -448,7 +442,7 @@ export function VotingQuestionContextDetails({
         </div>
       ) : null}
       {!showInlineRevealedBreakdown ? <RoundRevealedBreakdown snapshot={roundSnapshot} stacked={compact} /> : null}
-      <RoundStats categoryId={categoryId} snapshot={roundSnapshot} rewardStats={rewardStats} />
+      <RoundStats categoryId={categoryId} snapshot={roundSnapshot} />
     </div>
   );
 }

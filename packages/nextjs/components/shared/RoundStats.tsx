@@ -9,7 +9,6 @@ import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
 interface RoundStatsProps {
   categoryId?: bigint;
   snapshot: RoundSnapshot;
-  rewardStats?: RoundStatMetric[];
 }
 
 interface RoundRevealedBreakdownProps {
@@ -73,6 +72,12 @@ export function formatRaterProgress(voteCount: number, minimumRaters: number): s
   return `${voteCount}/${minimumRaters}`;
 }
 
+export function shouldShowStartNewRoundHint(
+  snapshot: Pick<RoundSnapshot, "hasRound" | "phase" | "voteCount" | "willStartNewRound">,
+) {
+  return snapshot.willStartNewRound || !snapshot.hasRound || (snapshot.phase === "voting" && snapshot.voteCount === 0);
+}
+
 export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevealedBreakdownProps) {
   const { round, isLoading } = snapshot;
 
@@ -133,7 +138,7 @@ export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevea
  * - During blind phase: signals are encrypted and hidden. Only totalStake and voteCount are shown.
  * - After blind phase: the system reveals signals. Revealed pool breakdown is shown.
  */
-export function RoundStats({ categoryId, snapshot, rewardStats = [] }: RoundStatsProps) {
+export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
   const contentLabel = useContentLabel(categoryId);
   const { round, hasRound, isLoading, maxVoters, isRoundFull, phase } = snapshot;
 
@@ -149,6 +154,20 @@ export function RoundStats({ categoryId, snapshot, rewardStats = [] }: RoundStat
     );
   }
 
+  if (shouldShowStartNewRoundHint(snapshot)) {
+    return (
+      <div className="flex flex-col gap-1.5 text-base text-base-content/60">
+        <div className="flex items-center gap-x-2 gap-y-1.5 flex-wrap">
+          <span className="font-medium text-base-content/70">Vote to start a new round</span>
+          <InfoTooltip
+            text="The first staked signal opens a fresh private round. Stake and rater counts reset for each round."
+            position="bottom"
+          />
+        </div>
+      </div>
+    );
+  }
+
   const voteCount = Number(round.voteCount);
   const minimumRaters = snapshot.minVoters;
   const privateRoundHint = formatPrivateRoundHint(snapshot);
@@ -158,7 +177,6 @@ export function RoundStats({ categoryId, snapshot, rewardStats = [] }: RoundStat
       ? `${voteCount} of ${minimumRaters} minimum staked raters have committed. ${votesNeeded} more staked private or revealed signal${votesNeeded === 1 ? "" : "s"} needed.`
       : `${voteCount} staked raters have committed, meeting the ${minimumRaters}-rater minimum.`;
   const statItems: RoundStatMetric[] = [
-    ...rewardStats,
     {
       label: "Staked",
       value: formatLrepAmount(round.totalStake),

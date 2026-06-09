@@ -1,5 +1,10 @@
 import React from "react";
-import { RoundRevealedBreakdown, formatPrivateRoundHint, formatRaterProgress } from "./RoundStats";
+import {
+  RoundRevealedBreakdown,
+  formatPrivateRoundHint,
+  formatRaterProgress,
+  shouldShowStartNewRoundHint,
+} from "./RoundStats";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -78,4 +83,34 @@ test("formatPrivateRoundHint hides after the round deadline", () => {
 
 test("formatRaterProgress shows committed raters against the settlement minimum", () => {
   assert.equal(formatRaterProgress(1, 3), "1/3");
+});
+
+test("shouldShowStartNewRoundHint covers empty and rollover rounds", () => {
+  assert.equal(
+    shouldShowStartNewRoundHint({
+      hasRound: false,
+      phase: "none",
+      voteCount: 0,
+      willStartNewRound: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowStartNewRoundHint({
+      hasRound: true,
+      phase: "voting",
+      voteCount: 0,
+      willStartNewRound: false,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowStartNewRoundHint({
+      hasRound: true,
+      phase: "voting",
+      voteCount: 1,
+      willStartNewRound: false,
+    }),
+    false,
+  );
 });
