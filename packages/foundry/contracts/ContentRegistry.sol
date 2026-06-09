@@ -229,6 +229,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Slash policy frozen at content creation so governance cannot retroactively rewrite stake terms.
     mapping(uint256 => RatingLib.SlashConfig) internal contentSlashConfigSnapshot;
 
+    SubmissionMediaValidator private immutable _defaultSubmissionMediaValidator;
     SubmissionMediaValidator public submissionMediaValidator;
 
     /// @dev Reserved storage gap for future upgrades
@@ -309,7 +310,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     );
     event VotingEngineRevoked(address indexed engine);
 
+    /// @custom:oz-upgrades-unsafe-allow constructor state-variable-immutable
     constructor() {
+        _defaultSubmissionMediaValidator = new SubmissionMediaValidator();
         _disableInitializers();
     }
 
@@ -366,7 +369,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     function _initializeSubmissionMediaValidator() private {
         if (address(submissionMediaValidator) != address(0)) return;
-        SubmissionMediaValidator validator = new SubmissionMediaValidator();
+        SubmissionMediaValidator validator = _defaultSubmissionMediaValidator;
         submissionMediaValidator = validator;
         validator.initializeEmitter(address(this));
     }
