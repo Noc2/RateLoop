@@ -13,6 +13,7 @@ import { HoverTooltip, InfoTooltip, TooltipAnchor } from "~~/components/ui/InfoT
 import type { ContentOpenRoundSummary, RewardPoolCurrency } from "~~/hooks/contentFeed/shared";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { useRoundSnapshot } from "~~/hooks/useRoundSnapshot";
+import type { ViewerRewardStatus } from "~~/hooks/useViewerRewardStatuses";
 import {
   COMMIT_AVAILABILITY_STATUS,
   type VotingConfig,
@@ -41,6 +42,7 @@ interface VotingQuestionCardProps {
   } | null;
   isContentActive?: boolean;
   isOwnContent?: boolean;
+  pendingRewardStatus?: ViewerRewardStatus | null;
   openRound?: ContentOpenRoundSummary | null;
   roundConfig?: VotingConfig | null;
   /** When true, removes card background/rounding (parent provides it). */
@@ -69,7 +71,8 @@ const USDC_FEEDBACK_BONUS_TOOLTIP_TEXT =
 const MIXED_FEEDBACK_BONUS_TOOLTIP_TEXT =
   "This question has Feedback Bonus pools in multiple assets. The awarder pays selected revealed feedback after settlement, with 3% reserved for the eligible frontend operator.";
 export const VOTING_SURFACE_BACKGROUND = "var(--rateloop-surface-elevated)";
-const STATUS_PILL_CLASS_NAME = "reward-chip reward-chip-muted inline-flex items-center gap-2 px-4 py-2";
+const STATUS_PILL_CLASS_NAME =
+  "reward-chip reward-chip-muted inline-flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-4 py-2";
 const DOCK_STATUS_TEXT_CLASS_NAME =
   "inline-flex max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 py-0.5 text-left leading-none";
 const DOCK_CONTROL_SIZE_PX = 44;
@@ -106,6 +109,32 @@ function getActivityDetailToneClassName(tone: ActivityTone) {
     default:
       return "text-base-content/75";
   }
+}
+
+function getPendingRewardStatusCopy(status?: ViewerRewardStatus | null) {
+  const hasBounty = Boolean(status?.hasPendingBounty);
+  const hasFeedbackBonus = Boolean(status?.hasPendingFeedbackBonus);
+  if (!hasBounty && !hasFeedbackBonus) return null;
+
+  if (hasBounty && hasFeedbackBonus) {
+    return {
+      label: "Bounty + bonus pending",
+      tooltip:
+        "A bounty claim or payout and a Feedback Bonus review or payment from an earlier round are still pending for this wallet.",
+    };
+  }
+
+  if (hasBounty) {
+    return {
+      label: "Bounty pending",
+      tooltip: "A bounty claim or payout from an earlier round is still pending for this wallet.",
+    };
+  }
+
+  return {
+    label: "Bonus pending",
+    tooltip: "A Feedback Bonus review or payment from an earlier round is still pending for this wallet.",
+  };
 }
 
 function LiveRoundActivity({
@@ -463,6 +492,7 @@ export function VotingQuestionCard({
   voteUnavailableStatus = null,
   isContentActive = true,
   isOwnContent,
+  pendingRewardStatus = null,
   openRound,
   roundConfig,
   embedded,
@@ -521,6 +551,25 @@ export function VotingQuestionCard({
       : commitAvailabilityStatus === COMMIT_AVAILABILITY_STATUS.WaitingForRevealGrace
         ? "Resolving"
         : null;
+  const pendingRewardStatusCopy = getPendingRewardStatusCopy(pendingRewardStatus);
+  const renderPendingRewardStatus = (dock: boolean) =>
+    pendingRewardStatusCopy ? (
+      <span
+        className={
+          dock
+            ? "text-[0.78rem] font-medium leading-none text-base-content/52"
+            : "text-sm font-medium leading-tight text-base-content/52"
+        }
+      >
+        {pendingRewardStatusCopy.label}
+      </span>
+    ) : null;
+  const submittedStatusTooltip = pendingRewardStatusCopy
+    ? `You submitted a private thumbs-up/down signal and crowd forecast. After the epoch, eligible signals are normally revealed automatically, and you can self-reveal if needed. ${pendingRewardStatusCopy.tooltip}`
+    : "You submitted a private thumbs-up/down signal and crowd forecast. After the epoch, eligible signals are normally revealed automatically, and you can self-reveal if needed.";
+  const cooldownStatusTooltip = pendingRewardStatusCopy
+    ? `You already voted on this content within the last 24 hours. Try again in ${cooldownLabel}. ${pendingRewardStatusCopy.tooltip}`
+    : `You already voted on this content within the last 24 hours. Try again in ${cooldownLabel}.`;
 
   const centerStatusContent = contentInactive ? (
     <HoverTooltip text="This content is no longer active for voting." position="bottom">
@@ -536,19 +585,18 @@ export function VotingQuestionCard({
     </HoverTooltip>
   ) : address ? (
     hasMyVote ? (
-      <HoverTooltip
-        text="You submitted a private thumbs-up/down signal and crowd forecast. After the epoch, eligible signals are normally revealed automatically, and you can self-reveal if needed."
-        position="bottom"
-      >
+      <HoverTooltip text={submittedStatusTooltip} position="bottom">
         {usesDockStatusText ? (
           <span className={DOCK_STATUS_TEXT_CLASS_NAME}>
             <span className="text-[0.95rem] font-semibold leading-none text-primary">Submitted</span>
             <span className="text-[0.95rem] leading-none text-base-content/62">hidden</span>
+            {renderPendingRewardStatus(true)}
           </span>
         ) : (
           <span className={STATUS_PILL_CLASS_NAME}>
             <span className="text-base font-semibold text-primary">Submitted</span>
             <span className="text-base text-base-content/70">hidden</span>
+            {renderPendingRewardStatus(false)}
           </span>
         )}
       </HoverTooltip>
@@ -581,19 +629,18 @@ export function VotingQuestionCard({
         )}
       </HoverTooltip>
     ) : cooldownActive ? (
-      <HoverTooltip
-        text={`You already voted on this content within the last 24 hours. Try again in ${cooldownLabel}.`}
-        position="bottom"
-      >
+      <HoverTooltip text={cooldownStatusTooltip} position="bottom">
         {usesDockStatusText ? (
           <span className={DOCK_STATUS_TEXT_CLASS_NAME}>
             <span className="text-[0.95rem] font-medium leading-none text-base-content/75">Cooldown</span>
             <span className="text-[0.95rem] leading-none text-base-content/60">{cooldownLabel}</span>
+            {renderPendingRewardStatus(true)}
           </span>
         ) : (
           <span className={STATUS_PILL_CLASS_NAME}>
             <span className="text-base font-medium text-base-content/75">Cooldown</span>
             <span className="text-base text-base-content/60">{cooldownLabel}</span>
+            {renderPendingRewardStatus(false)}
           </span>
         )}
       </HoverTooltip>

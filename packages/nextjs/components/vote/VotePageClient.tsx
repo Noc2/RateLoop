@@ -40,6 +40,7 @@ import { useRaterRegistryIdentity } from "~~/hooks/useRaterRegistryIdentity";
 import { useRoundVote } from "~~/hooks/useRoundVote";
 import { useSubmitterProfiles } from "~~/hooks/useSubmitterProfiles";
 import { useUnixTime } from "~~/hooks/useUnixTime";
+import { useViewerRewardStatuses } from "~~/hooks/useViewerRewardStatuses";
 import { useVoteCooldowns } from "~~/hooks/useVoteCooldowns";
 import { shouldHoldVoteFeedForRequestedContent, useVoteFeedStage } from "~~/hooks/useVoteFeedStage";
 import { useVoteHistoryQuery } from "~~/hooks/useVoteHistoryQuery";
@@ -1077,6 +1078,10 @@ const HomeInner = () => {
       nowSeconds,
       enabled: voteCooldownAddresses.length > 0,
     });
+  const { statusByContentId: viewerRewardStatusByContentId } = useViewerRewardStatuses(
+    voteCooldownContentIds,
+    Boolean(address),
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1175,6 +1180,9 @@ const HomeInner = () => {
   );
 
   const primaryItemCooldownSeconds = primaryItem ? getContentCooldownSeconds(primaryItem.id) : 0;
+  const primaryPendingRewardStatus = primaryItem
+    ? (viewerRewardStatusByContentId.get(primaryItem.id.toString()) ?? null)
+    : null;
   const primaryHasOptimisticCurrentRoundVote = primaryItem
     ? optimisticVotedContentIds.has(primaryItem.id.toString())
     : false;
@@ -1982,6 +1990,7 @@ const HomeInner = () => {
                 hasOptimisticCurrentRoundVote={primaryHasOptimisticCurrentRoundVote}
                 isVoteEligibilityPending={primaryVoteEligibilityPending}
                 voteUnavailableStatus={primaryVoteUnavailableStatus}
+                pendingRewardStatus={primaryPendingRewardStatus}
                 attentionToken={primaryAttentionToken}
                 onVote={handleButtonVote}
               />
@@ -2014,6 +2023,7 @@ const HomeInner = () => {
                 voteUnavailableStatus={primaryVoteUnavailableStatus}
                 isContentActive={isContentItemActive(mobileVoteDockItem)}
                 isOwnContent={mobileVoteDockItem.isOwnContent}
+                pendingRewardStatus={primaryPendingRewardStatus}
                 embedded
                 compact
                 variant="dock"

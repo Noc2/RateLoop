@@ -7,6 +7,7 @@ import { VOTING_SURFACE_BACKGROUND, VotingQuestionCard } from "~~/components/sha
 import { getVisibleContentRating, isContentItemActive } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import { useRateLoopConnectModal } from "~~/hooks/useRateLoopConnectModal";
+import type { ViewerRewardStatus } from "~~/hooks/useViewerRewardStatuses";
 import { shouldShowBountyExpiredStatus } from "~~/lib/vote/discoverFeedFilter";
 
 interface VoteSignalRailProps {
@@ -22,6 +23,7 @@ interface VoteSignalRailProps {
     label: string;
     detail: string;
   } | null;
+  pendingRewardStatus?: ViewerRewardStatus | null;
   attentionToken?: number | null;
   onVote: (item: ContentItem, isUp: boolean) => void;
 }
@@ -34,6 +36,7 @@ export function VoteSignalRail({
   hasOptimisticCurrentRoundVote = false,
   isVoteEligibilityPending = false,
   voteUnavailableStatus = null,
+  pendingRewardStatus = null,
   attentionToken,
   onVote,
 }: VoteSignalRailProps) {
@@ -81,6 +84,7 @@ export function VoteSignalRail({
             voteUnavailableStatus={voteUnavailableStatus}
             isContentActive={isContentItemActive(primaryItem)}
             isOwnContent={primaryItem.isOwnContent}
+            pendingRewardStatus={pendingRewardStatus}
             embedded
             compact
             variant="signal"
