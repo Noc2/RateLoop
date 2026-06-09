@@ -50,6 +50,12 @@ import {
   isQuestionRoundMaxDurationValidForEpoch,
 } from "~~/lib/questionRoundConfig";
 import { assertContentRegistryQuestionSubmissionSelector } from "~~/lib/questionSubmissionSelectorSupport";
+import {
+  type HandoffWebMcpQuestion,
+  type HandoffWebMcpState,
+  createHandoffWebMcpTools,
+} from "~~/lib/webmcp/handoffTools";
+import { registerWebMcpTools } from "~~/lib/webmcp/registerTools";
 import { notification } from "~~/utils/scaffold-eth";
 
 const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(module => module.ShareModal), {
@@ -1072,6 +1078,86 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       (!hasUnsavedDraft || canSaveDraftBeforeSubmit) &&
       (hasTransactionPlan || (connectedChainId && canPrepareHandoffStatus(handoff.status))),
   );
+  const questionSummaries = useMemo(() => readQuestionSummaries(handoff), [handoff]);
+  const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
+  const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
+  const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
+  const showMissingFeedbackBonusNotice = Boolean(
+    handoff && !hasQuestionBundle && !feedbackBonusSummary && !isFeedbackBonusStep && !isTerminalStatus,
+  );
+  const hasImageContext = Boolean(handoff?.assets?.length);
+  const webMcpQuestions = useMemo<HandoffWebMcpQuestion[]>(() => {
+    if (draftForm?.questions.length) {
+      return draftForm.questions.map(question => ({
+        categoryId: question.categoryId,
+        hasPublicContext: Boolean(
+          question.contextUrl.trim() || question.videoUrl.trim() || question.description.trim() || hasImageContext,
+        ),
+        tags: parseTagsInput(question.tags),
+        title: question.title,
+      }));
+    }
+
+    return questionSummaries.map(question => ({
+      categoryId: question.categoryId,
+      hasPublicContext: Boolean(question.contextUrl || question.videoUrl || question.description || hasImageContext),
+      tags: question.tags,
+      title: question.title,
+    }));
+  }, [draftForm?.questions, hasImageContext, questionSummaries]);
+  const webMcpState = useMemo<HandoffWebMcpState>(
+    () => ({
+      bountyLabel: readDraftBountyLabel(draftForm, handoff),
+      canPrepare: Boolean(connectedChainId && handoff && canPrepareHandoffStatus(handoff.status)),
+      canSaveDraft,
+      canSubmit,
+      chainId: handoff?.chainId ?? null,
+      connectedChainId,
+      connectedMismatch,
+      connectedWallet: address ?? null,
+      draftError,
+      error,
+      feedbackBonusLabel: feedbackBonusDraftLabel,
+      handoffId,
+      hasConnectedWallet: Boolean(address),
+      hasTransactionPlan,
+      hasUnsavedDraft,
+      isFeedbackBonusStep,
+      isLoaded: Boolean(!isLoading && handoff),
+      isTerminalStatus,
+      needsChainSwitch,
+      questions: webMcpQuestions,
+      status: handoff?.status ?? (isLoading ? "loading" : "missing"),
+      walletAddress: handoff?.walletAddress ?? null,
+    }),
+    [
+      address,
+      canSaveDraft,
+      canSubmit,
+      connectedChainId,
+      connectedMismatch,
+      draftError,
+      draftForm,
+      error,
+      feedbackBonusDraftLabel,
+      handoff,
+      handoffId,
+      hasTransactionPlan,
+      hasUnsavedDraft,
+      isFeedbackBonusStep,
+      isLoading,
+      isTerminalStatus,
+      needsChainSwitch,
+      webMcpQuestions,
+    ],
+  );
+
+  useEffect(() => {
+    const tools = createHandoffWebMcpTools(() => webMcpState);
+    return registerWebMcpTools(tools, {
+      onError: error => console.warn("[webmcp] handoff tools unavailable", error),
+    });
+  }, [webMcpState]);
 
   const postPrepare = useCallback(
     async (imageSignatures?: Array<{ assetId: string; challengeId: string; signature: Hex }>) => {
@@ -1569,14 +1655,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     if (isFeedbackBonusStep) return isExecuting ? "Funding..." : "Fund Bonus";
     return isExecuting ? "Submitting..." : "Submit";
   })();
-
-  const questionSummaries = readQuestionSummaries(handoff);
-  const hasQuestionBundle = (draftForm?.questions.length ?? questionSummaries.length) > 1;
-  const feedbackBonusSummary = readFeedbackBonusSummary(handoff);
-  const feedbackBonusDraftLabel = readDraftFeedbackBonusLabel(draftForm, handoff);
-  const showMissingFeedbackBonusNotice = Boolean(
-    handoff && !hasQuestionBundle && !feedbackBonusSummary && !isFeedbackBonusStep && !isTerminalStatus,
-  );
 
   return (
     <AppPageShell contentClassName="space-y-5" paddingTopClassName="pt-6">
