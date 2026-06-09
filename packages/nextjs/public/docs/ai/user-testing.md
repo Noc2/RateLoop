@@ -57,6 +57,12 @@ Use this ask shape in `rateloop_quote_question`, then pass the same shape to `ra
     "bountyWindowSeconds": "1200",
     "feedbackWindowSeconds": "1200"
   },
+  "roundConfig": {
+    "epochDuration": "1200",
+    "maxDuration": "7200",
+    "minVoters": "5",
+    "maxVoters": "50"
+  },
   "maxPaymentAmount": "2500000",
   "question": {
     "title": "Would this AI website feedback service be compelling enough to try?",

@@ -49,7 +49,7 @@ Public context:
 - `walletAddress`: optional expected user wallet for handoff flows, or a scoped agent wallet for managed/local-signer flows
 - one public context source: `question.contextUrl`, `question.videoUrl`, or generated/local image bytes supplied as `generatedImages`
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
-- `bounty.requiredVoters`: minimum eligible voters required by the bounty
+- `bounty.requiredVoters`: minimum eligible voters required by the bounty; when setting `roundConfig`, use the same value for `roundConfig.minVoters`
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
 - `bounty.bountyStartBy`: future Unix timestamp in seconds by which the first private round must start
 - `bounty.bountyWindowSeconds`: bounty eligibility duration after the first private round starts

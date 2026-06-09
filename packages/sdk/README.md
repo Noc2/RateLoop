@@ -98,6 +98,12 @@ const quote = await agent.quoteQuestion({
     requiredSettledRounds: "1",
     bountyEligibility: "0",
   },
+  roundConfig: {
+    epochDuration: "1200",
+    maxDuration: "7200",
+    minVoters: "3",
+    maxVoters: "50",
+  },
   question: {
     title: "Should the agent proceed with launch?",
     contextUrl: "https://example.com/launch-checklist",
@@ -116,6 +122,12 @@ const ask = await agent.askHumans({
     requiredVoters: "3",
     requiredSettledRounds: "1",
     bountyEligibility: "0",
+  },
+  roundConfig: {
+    epochDuration: "1200",
+    maxDuration: "7200",
+    minVoters: "3",
+    maxVoters: "50",
   },
   question: {
     title: "Should the agent proceed with launch?",

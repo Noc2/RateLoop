@@ -49,6 +49,7 @@ export interface RateLoopAgentQuestionItem {
 export interface RateLoopAgentBounty {
   asset?: "USDC" | string;
   amount: string | number | bigint;
+  /** Must match roundConfig.minVoters when a custom roundConfig is supplied. */
   requiredVoters?: string | number | bigint;
   requiredSettledRounds?: string | number | bigint;
   bountyStartBy?: string | number | bigint;
@@ -74,6 +75,7 @@ export interface RateLoopAgentRoundConfig {
   maxDuration?: string | number | bigint;
   maxDurationSeconds?: string | number | bigint;
   deadlineSeconds?: string | number | bigint;
+  /** Must match bounty.requiredVoters. */
   minVoters?: string | number | bigint;
   maxVoters?: string | number | bigint;
   [key: string]: unknown;

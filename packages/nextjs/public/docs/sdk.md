@@ -115,7 +115,7 @@ For public written context, provide the full text off-chain with `question.detai
 
 ## Minimal Ask Shape
 
-Use this shape after a successful quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet, set `bountyStartBy` to the latest acceptable first-round start timestamp, and set the bounty and feedback windows in seconds.
+Use this shape after a successful quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet, set `bountyStartBy` to the latest acceptable first-round start timestamp, and set the bounty and feedback windows in seconds. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`.
 
 ```json
 {
@@ -135,6 +135,12 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
   "feedbackBonus": {
     "amount": "2000000",
     "asset": "USDC"
+  },
+  "roundConfig": {
+    "epochDuration": "1200",
+    "maxDuration": "7200",
+    "minVoters": "5",
+    "maxVoters": "50"
   },
   "maxPaymentAmount": "4500000",
   "question": {

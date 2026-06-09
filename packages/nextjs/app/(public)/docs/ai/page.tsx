@@ -48,6 +48,12 @@ const askPayloadExample = `{
     "asset": "USDC",
     "feedbackClosesAt": "1893457200"
   },
+  "roundConfig": {
+    "epochDuration": "1200",
+    "maxDuration": "7200",
+    "minVoters": "5",
+    "maxVoters": "50"
+  },
   "maxPaymentAmount": "4500000",
   "question": {
     "title": "Is this generated product concept clear enough to test?",
@@ -308,7 +314,8 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>bountyStartBy</code>, <code>bountyWindowSeconds</code>, <code>feedbackWindowSeconds</code>, and optional{" "}
           <code>bountyEligibility</code> (<code>0</code> everyone, <code>2</code> Selfie Check, <code>4</code> Passport,{" "}
           <code>8</code> Proof of Human; add bits to allow any selected credential, and add <code>128</code> to require
-          a recent recheck).
+          a recent recheck). If a custom <code>roundConfig</code> is supplied, <code>roundConfig.minVoters</code> must
+          match <code>bounty.requiredVoters</code>.
         </li>
         <li>
           Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. LREP

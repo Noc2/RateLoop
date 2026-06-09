@@ -316,7 +316,8 @@ const SmartContracts: NextPage = () => {
           emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks use the same function after
           the user or scoped agent wallet executes the returned funding and submission calls. <code>rewardTerms</code>{" "}
           also commits to bounty eligibility: everyone, any selected mix of Selfie Check, Passport, and Proof of Human
-          credentials, optionally with a recent-recheck requirement.
+          credentials, optionally with a recent-recheck requirement. <code>rewardTerms.requiredVoters</code> must match{" "}
+          <code>roundConfig.minVoters</code> so a settled qualifying round is also bounty-qualifying.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a
@@ -400,7 +401,7 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono">minVoters</td>
               <td>{protocolDocFacts.minVotersLabel}</td>
-              <td>Default minimum revealed votes required before settlement is allowed.</td>
+              <td>Default minimum revealed votes required before settlement is allowed and bounty voter threshold.</td>
             </tr>
             <tr>
               <td className="font-mono">maxVotersPerRound</td>

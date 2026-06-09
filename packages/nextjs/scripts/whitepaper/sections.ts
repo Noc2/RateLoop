@@ -390,6 +390,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Every ask attaches a non-refundable bounty in LREP or USDC on World Chain.",
               "World Chain USDC agent asks can use x402 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
+              "The bounty voter requirement matches the question's selected settlement voter threshold, so a qualifying settled round is also payout-eligible.",
               "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators after correlation-capped payout weights finalize.",
               "Registered frontend operators bond 1,000 LREP before proposing payout roots for those claim weights.",
               "Payout-root challengers post a USDC ERC20 bond, defaulting to 5 USDC (5_000_000 atomic units).",
