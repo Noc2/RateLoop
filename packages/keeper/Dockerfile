@@ -25,7 +25,7 @@ COPY packages/node-utils/src ./packages/node-utils/src
 COPY packages/ponder/package.json ./packages/ponder/package.json
 COPY packages/sdk/package.json ./packages/sdk/package.json
 
-RUN yarn install --immutable --mode=skip-build
+RUN YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/keeper
 
 WORKDIR /app/packages/keeper
 
