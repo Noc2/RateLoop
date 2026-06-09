@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IClusterPayoutOracle} from "./interfaces/IClusterPayoutOracle.sol";
-import {IFrontendRegistry} from "./interfaces/IFrontendRegistry.sol";
-import {IRoundPayoutSnapshotConsumer} from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { MerkleProof } from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
+import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
+import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 
 /// @title ClusterPayoutOracle
 /// @notice Optimistic oracle for correlation epoch snapshots and per-round payout weights.
@@ -1141,7 +1141,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         try frontendRegistry.isAuthorizedSnapshotProposer(frontendOperator, challenger) returns (bool authorized) {
             if (authorized) revert InvalidSnapshot();
-        } catch {}
+        } catch { }
     }
 
     function _creditBond(address to, uint256 amount) private {
@@ -1158,11 +1158,11 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         } catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) {}
+        try IFrontendRegistry(newFrontendRegistry).isEligible(address(0)) returns (bool) { }
         catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).authorizedSnapshotFrontend(address(0)) returns (address) {}
+        try IFrontendRegistry(newFrontendRegistry).authorizedSnapshotFrontend(address(0)) returns (address) { }
         catch {
             revert InvalidAddress();
         }
@@ -1172,7 +1172,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         }
         try IFrontendRegistry(newFrontendRegistry).isAuthorizedSnapshotProposer(address(0), address(0)) returns (
             bool
-        ) {}
+        ) { }
         catch {
             revert InvalidAddress();
         }

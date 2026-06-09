@@ -1,9 +1,19 @@
 name: Certora
 
-# Formal verification lane. Runs on demand, on a weekly schedule, and on PRs that touch
-# contracts or the Certora workspace. NOT a required PR gate yet (no branch protection):
-# it stays informational until prover runtimes and false-positive rates are understood
-# across the full matrix (see docs/testing/certora-followup.md "CI maturation").
+# Formal verification lane. Three jobs with different gating intent:
+#
+#   certora-check   — compile + CVL type-check every conf. No CERTORAKEY, no cloud,
+#                     deterministic and fast. This is the lane's REQUIRED-gate candidate:
+#                     it catches spec/contract signature drift (the failure that left
+#                     ClusterPayoutOracle.spec stale behind three contract commits).
+#   spec-freshness  — on PRs, fail if a contract with Certora coverage changed without
+#                     its spec being reviewed (bypass with [spec-ok] in the PR title/body).
+#   certora         — the full cloud prover matrix. Needs the CERTORAKEY secret and runs
+#                     for minutes-to-hours, so it stays NON-gating (informational) until
+#                     runtimes/false-positive rates are understood; promote the fast confs
+#                     (math, cluster-payout-oracle, loop-reputation, protocol-config,
+#                     mul-div-lemma) to required cloud runs once stable. See
+#                     docs/testing/certora-round3-plan.md (Track G).
 
 on:
   workflow_dispatch:
@@ -25,6 +35,85 @@ env:
   SOLC_VERSION: "0.8.35"
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Required-gate candidate: compile + CVL type-check, no secret, no cloud run.
+  # ---------------------------------------------------------------------------
+  certora-check:
+    runs-on: ubuntu-latest
+    name: certora-check (compile + typecheck)
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+
+      - uses: ./.github/actions/setup-foundry
+
+      - name: Use preinstalled Java 21
+        # certora-cli's local CVL type-checker (used by --compilation_steps_only) needs
+        # Java >= 19; the runner's default java is older. Point at the GitHub-hosted
+        # runner's preinstalled JDK 21 rather than apt-installing one that is not the
+        # default on PATH.
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+      - name: Verify Java
+        run: java --version
+
+      - name: Install Certora CLI and solc
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install "certora-cli${CERTORA_CLI_VERSION}" solc-select
+          solc-select install "$SOLC_VERSION"
+          solc-select use "$SOLC_VERSION"
+          certoraRun --version
+          solc --version
+
+      - name: Compile + type-check every conf
+        working-directory: packages/foundry
+        run: |
+          set -uo pipefail
+          failed=()
+          for conf in certora/confs/*.conf; do
+            [ "$(basename "$conf")" = "base.conf" ] && continue
+            echo "::group::$conf"
+            if certoraRun "$conf" --compilation_steps_only; then
+              echo "OK: $conf"
+            else
+              echo "::error::compile/type-check failed: $conf"
+              failed+=("$conf")
+            fi
+            echo "::endgroup::"
+          done
+          if [ "${#failed[@]}" -ne 0 ]; then
+            echo "Type-check failed for: ${failed[*]}"
+            exit 1
+          fi
+          echo "All confs compiled and type-checked."
+
+  # ---------------------------------------------------------------------------
+  # PR guard: a covered contract may not change without its spec being reviewed.
+  # ---------------------------------------------------------------------------
+  spec-freshness:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    name: spec-freshness
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check spec freshness vs. contract changes
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          SPEC_FRESHNESS_OVERRIDE: "${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}"
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
+          git diff --name-only "origin/${BASE_REF}...HEAD" \
+            | python3 packages/foundry/certora/scripts/check_spec_freshness.py --changed-stdin
+
+  # ---------------------------------------------------------------------------
+  # Full cloud prover matrix (non-gating; needs the CERTORAKEY secret).
+  # ---------------------------------------------------------------------------
   certora:
     runs-on: ubuntu-latest
     strategy:
@@ -32,9 +121,11 @@ jobs:
       matrix:
         conf:
           - certora/confs/math.conf
+          - certora/confs/mul-div-lemma.conf
           - certora/confs/cluster-payout-oracle.conf
           - certora/confs/round-voting-engine.conf
           - certora/confs/round-reward-distributor.conf
+          - certora/confs/round-reward-distributor-conservation.conf
           - certora/confs/no-double-claim.conf
           - certora/confs/round-voting-engine-lifecycle.conf
           - certora/confs/launch-distribution-pool.conf
@@ -45,8 +136,10 @@ jobs:
           - certora/confs/launch-distribution-pool-cap.conf
           - certora/confs/launch-distribution-pool-conservation.conf
           # NOTE: question-reward-escrow.conf and question-reward-escrow-claim.conf are
-          # intentionally excluded — both exceed certora-cli's 15-minute output window on
-          # this 1,490-line + 11-library contract. Run them manually with a larger budget.
+          # intentionally excluded from the proof matrix — both exceed certora-cli's
+          # 15-minute output window on this 1,490-line + 11-library contract. Run them
+          # manually with a larger budget. (They are still compile/type-checked by the
+          # certora-check job above.)
     name: ${{ matrix.conf }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -55,11 +148,16 @@ jobs:
 
       - uses: ./.github/actions/setup-foundry
 
-      - name: Install Java 21
+      - name: Use preinstalled Java 21
+        # certora-cli's local CVL type-checker (used by --compilation_steps_only) needs
+        # Java >= 19; the runner's default java is older. Point at the GitHub-hosted
+        # runner's preinstalled JDK 21 rather than apt-installing one that is not the
+        # default on PATH.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends openjdk-21-jre-headless
-          java --version
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+      - name: Verify Java
+        run: java --version
 
       - name: Install Certora CLI and solc
         run: |

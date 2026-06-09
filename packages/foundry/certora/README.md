@@ -16,6 +16,8 @@ certora/
   confs/
     base.conf                   shared compiler + prover settings (no file targets)
     math.conf                   Phase 1: math-library harness + spec
+    mul-div-lemma.conf          Track B/C: reusable (a*b)/c <= a bound (NIA)
+    round-reward-distributor-conservation.conf  Track C: claimed-amount monotonicity
     cluster-payout-oracle.conf  Phase 2: ClusterPayoutOracle
     round-voting-engine.conf    Phase 3: RoundVotingEngine
     round-reward-distributor.conf  Phase 3: RoundRewardDistributor
@@ -167,6 +169,12 @@ yarn foundry:certora:check
   - Phase 4a (`question-reward-escrow-claim.conf`) — **authored, proof deferred**: the
     claim-flag-never-cleared rule type-checks but the solver exceeds the 15-min window on
     this large contract; not in CI. Run manually with a larger budget.
+  - Track B/C (`mul-div-lemma.conf`) — the reusable nonlinear bound `(a*b)/c <= a` for
+    `b <= c` (enables `-smt_useNIA`). Underpins the per-claimant reward bound and the launch
+    cap clamp.
+  - Track C (`round-reward-distributor-conservation.conf`) — the per-round claimed-amount
+    accumulators are monotone (no clawback/underflow). Full `claimed <= pool` upper bound
+    deferred (needs the engine score-weight model). See `certora-round3-plan.md`.
   - Verified under certora-cli 8.13.1 / solc 0.8.35 ("No errors found by Prover!").
   - See [`docs/testing/certora-followup.md`](../../../docs/testing/certora-followup.md)
     for the phase plan and [`certora-security-findings.md`](../../../docs/testing/certora-security-findings.md)

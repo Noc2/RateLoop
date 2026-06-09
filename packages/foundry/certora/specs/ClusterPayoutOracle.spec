@@ -10,6 +10,10 @@
  *     to imply every gate held (pure view properties over arbitrary state).
  *   - rejected-root non-reuse: a blacklisted (snapshotKey, weightRoot) can never be
  *     re-proposed (proposeRoundPayoutSnapshot reverts).
+ *   - rejected correlation-epoch root non-reuse (L-Oracle-4, commit 10ded66c): once an
+ *     epoch's clusterRoot is on the rejected-root blacklist, proposeCorrelationEpoch for
+ *     that exact (epochId, clusterRoot) always reverts. This covers the explicit-root
+ *     rejection path added by rejectCorrelationEpochRoot / rejectFinalizedCorrelationEpochRoot.
  *   - single-use bond-credit withdrawal: a withdrawal zeroes the caller's credit and
  *     an empty withdrawal reverts, so a credit is drawable at most once.
  *
@@ -18,6 +22,11 @@
  *   - rejected digest non-reuse and the consumed-slot permanent-death guard
  *   - challenge-window finalization timing
  *   - parent correlation-epoch rejection cascade
+ *   - the metadata-vs-root rejection split (rejectCorrelationEpoch keeps the deterministic
+ *     root re-proposable; only the *Root variants blacklist it) — proving the metadata path
+ *     does NOT blacklist needs a getter for the snapshot's stored clusterRoot (private struct)
+ *   - the disinterested-challenger guard (a proposer/frontend-operator cannot self-challenge,
+ *     commit 808570b3) — reads the private snapshot struct's proposer/frontendOperator fields
  * See docs/testing/certora.md (Phase 2).
  */
 
@@ -31,6 +40,8 @@ methods {
     function rejectedRoundPayoutSnapshotDigests(bytes32, bytes32) external returns (bool) envfree;
     function rejectedRoundPayoutSnapshotConsumed(bytes32) external returns (bool) envfree;
     function rejectedCorrelationEpochRoots(uint256, bytes32) external returns (bool) envfree;
+    function rejectedCorrelationEpochRootKeys(bytes32) external returns (bool) envfree;
+    function rejectedCorrelationEpochSnapshotDigests(uint256, bytes32) external returns (bool) envfree;
 
     // Summarize the external dependencies (frontend registry, snapshot consumer,
     // bond ERC20) as NONDET so a call to them cannot havoc THIS contract's storage.
@@ -48,7 +59,7 @@ methods {
 // ---------------------------------------------------------------------------
 // Rejected roots cannot be reused: once a (snapshotKey, weightRoot) pair is on
 // the rejected-root blacklist, proposeRoundPayoutSnapshot for that exact root
-// always reverts (guard at ClusterPayoutOracle.sol:385). The blacklists are only
+// always reverts (guard at ClusterPayoutOracle.sol:429). The blacklists are only
 // ever written `true` and never cleared, so a rejected root stays unproposable.
 // ---------------------------------------------------------------------------
 
@@ -56,6 +67,37 @@ rule cannotReproposeRejectedRoot(env e, IClusterPayoutOracle.RoundPayoutSnapshot
     bytes32 key = roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
     require rejectedRoundPayoutSnapshotRoots(key, input.weightRoot);
     proposeRoundPayoutSnapshot@withrevert(e, input);
+    assert lastReverted;
+}
+
+// ---------------------------------------------------------------------------
+// Same guarantee one level up, for correlation epochs (L-Oracle-4, commit
+// 10ded66c "Block replay of rejected correlation roots"): once an epoch's
+// clusterRoot is blacklisted via rejectCorrelationEpochRoot /
+// rejectFinalizedCorrelationEpochRoot, proposeCorrelationEpoch for that exact
+// (epochId, clusterRoot) always reverts at the guard on
+// ClusterPayoutOracle.sol:267-272. This is the contrapositive of that guard's
+// first disjunct; the blacklist is only ever written `true`, so the block is
+// permanent. (The second disjunct — the source-set-keyed rootKeys mapping — is
+// not asserted here because its key derives from the internally-computed
+// sourceSetDigest, which cannot be matched from calldata.)
+// ---------------------------------------------------------------------------
+
+rule cannotReproposeRejectedCorrelationEpochRoot(
+    env e,
+    uint64 epochId,
+    uint64 fromRoundId,
+    uint64 toRoundId,
+    bytes32 clusterRoot,
+    bytes32 parameterHash,
+    bytes32 artifactHash,
+    string artifactURI,
+    IClusterPayoutOracle.CorrelationEpochSourceRef[] sourceRefs
+) {
+    require rejectedCorrelationEpochRoots(require_uint256(epochId), clusterRoot);
+    proposeCorrelationEpoch@withrevert(
+        e, epochId, fromRoundId, toRoundId, clusterRoot, parameterHash, artifactHash, artifactURI, sourceRefs
+    );
     assert lastReverted;
 }
 

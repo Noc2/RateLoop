@@ -13,13 +13,20 @@
  *   capAssignedWhenPaid — any rater with a non-zero paid-out amount has an assigned cap
  *                         (every payout path assigns the cap before paying).
  *
- * The headline `raterLaunchPaid <= raterLaunchCap` itself remains deferred. Its last
- * missing lemma is `raterLaunchCap <= raterFullLaunchCap`, which at assignment reduces to
- * `fullCap * bps / 10000 <= fullCap` given `bps <= 10000`. That is a nonlinear
- * multiply-then-divide inequality, which the SMT backend cannot discharge precisely (a
- * solver-completeness limit, not a contract defect — by inspection the clamp is correct).
- * Proving it would need a manual nonlinear lemma or a mul-div abstraction. The two
- * invariants below are the sound, machine-checked part of the chain.
+ * The previously-deferred lemma `raterLaunchCap <= raterFullLaunchCap` reduces at
+ * assignment to `fullCap * bps / 10000 <= fullCap` given `bps <= 10000` — a nonlinear
+ * multiply-then-divide the *linear* SMT backend cannot discharge. This conf now enables
+ * the nonlinear-arithmetic backend (`-smt_useNIA`), under which the assignment clamp IS
+ * dischargeable (docs/testing/certora-security-findings.md confirmed NIA discharges the
+ * assignment multiply). `assignedCapWithinFullCap` below machine-checks exactly that clamp
+ * at the point it is computed, via the harness wrapper `assignLaunchCap_`.
+ *
+ * Still deferred (honest residual): the *global* invariant `raterLaunchPaid <= raterLaunchCap`
+ * over every method. Per the findings doc, even with NIA the catch-up paths
+ * (finalizeEarnedRaterRewardCredit / unlockFullEarnedRaterCap) — which contain further
+ * cap * count / rewardingCount mul-div sites — still resist as a standalone inductive
+ * invariant. So this slice proves the per-assignment clamp (the load-bearing step) rather
+ * than the end-to-end invariant. See docs/testing/certora-round3-plan.md (Track B).
  */
 
 methods {
@@ -44,3 +51,14 @@ invariant policyBpsBounded()
 // Any rater that has been paid has an assigned cap (every payout path assigns first).
 invariant capAssignedWhenPaid(address r)
     raterLaunchPaid(r) > 0 => raterLaunchCapAssigned(r);
+
+// The cap-assignment clamp: the active cap computed at assignment never exceeds the full
+// cap. This is the load-bearing mul-div step (activeCap = (fullCap * bps) / 10000 when the
+// full cap is locked, else fullCap), the real-contract instance of MulDivLemma.spec's
+// `(a*b)/c <= a`. Requires the nonlinear SMT backend enabled in this conf. The bps
+// precondition is `policyBpsBounded`, proved as an invariant above.
+rule assignedCapWithinFullCap(env e, address rater, uint256 fullCap) {
+    requireInvariant policyBpsBounded();
+    uint256 activeCap = assignLaunchCap_(e, rater, fullCap);
+    assert activeCap <= fullCap;
+}
