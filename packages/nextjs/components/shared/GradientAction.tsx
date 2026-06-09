@@ -21,6 +21,7 @@ export function GradientActionInner({ children, className }: { children: ReactNo
 
 type GradientActionButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   children: ReactNode;
+  fullWidth?: boolean;
   innerClassName?: string;
   motion?: GradientActionMotion;
   pill?: boolean;
@@ -31,6 +32,7 @@ export function GradientActionButton({
   children,
   className,
   disabled,
+  fullWidth = false,
   innerClassName,
   motion = "idle",
   pill = false,
@@ -42,7 +44,13 @@ export function GradientActionButton({
     <button
       {...buttonProps}
       type={type}
-      className={getGradientActionClassName(joinClassNames(pill && "rateloop-gradient-action-pill", className))}
+      className={getGradientActionClassName(
+        joinClassNames(
+          fullWidth && "rateloop-gradient-action-full",
+          pill && "rateloop-gradient-action-pill",
+          className,
+        ),
+      )}
       data-motion={motion}
       data-size={size}
       disabled={disabled}

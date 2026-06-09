@@ -377,6 +377,10 @@ body {
   min-height: 2.5rem;
 }
 
+.rateloop-gradient-action-full {
+  width: 100%;
+}
+
 .rateloop-gradient-action-pill {
   --rateloop-gradient-button-radius: var(--rateloop-radius-pill);
 }
@@ -407,6 +411,16 @@ body {
 .rateloop-gradient-action[data-size="sm"] .rateloop-gradient-action-inner {
   min-height: 2.25rem;
   padding: 0.56rem 0.9rem;
+}
+
+.rateloop-gradient-action[data-size="sm"][data-claim-layout="compact"] .rateloop-gradient-action-inner {
+  min-height: 3.05rem;
+  flex-direction: column;
+  gap: 0.16rem;
+  padding: 0.48rem 0.62rem;
+  text-align: center;
+  line-height: 1.05;
+  white-space: normal;
 }
 
 .rateloop-gradient-action-icon {

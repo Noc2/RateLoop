@@ -1,4 +1,4 @@
-import { buildClaimRewardsButtonLabel } from "./ClaimRewardsButton";
+import { buildClaimRewardsButtonLabel, buildClaimRewardsButtonParts } from "./ClaimRewardsButton";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -51,5 +51,16 @@ test("buildClaimRewardsButtonLabel includes both visible asset amounts", () => {
       totalUsdcClaimable: 1_000_000n,
     }),
     "Claim 1 LREP + $1",
+  );
+});
+
+test("buildClaimRewardsButtonParts returns compact sidebar amount parts", () => {
+  assert.deepEqual(
+    buildClaimRewardsButtonParts({
+      showTokenSymbol: false,
+      totalLrepClaimable: 13_400_000n,
+      totalUsdcClaimable: 1_670_000n,
+    }),
+    ["13.4", "$1.67"],
   );
 });

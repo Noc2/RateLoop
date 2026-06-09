@@ -11,10 +11,11 @@ const MIN_VISIBLE_USDC_AMOUNT = 5_000n;
 
 type ClaimRewardsButtonProps = {
   className?: string;
+  layout?: "default" | "compact";
   showTokenSymbol?: boolean;
 };
 
-export function buildClaimRewardsButtonLabel({
+export function buildClaimRewardsButtonParts({
   showTokenSymbol,
   totalLrepClaimable,
   totalUsdcClaimable,
@@ -32,10 +33,24 @@ export function buildClaimRewardsButtonLabel({
     claimParts.push(formatUsdAmount(totalUsdcClaimable));
   }
 
+  return claimParts;
+}
+
+export function buildClaimRewardsButtonLabel({
+  showTokenSymbol,
+  totalLrepClaimable,
+  totalUsdcClaimable,
+}: {
+  showTokenSymbol: boolean;
+  totalLrepClaimable: bigint;
+  totalUsdcClaimable: bigint;
+}) {
+  const claimParts = buildClaimRewardsButtonParts({ showTokenSymbol, totalLrepClaimable, totalUsdcClaimable });
+
   return claimParts.length > 0 ? `Claim ${claimParts.join(" + ")}` : null;
 }
 
-export function ClaimRewardsButton({ className, showTokenSymbol = true }: ClaimRewardsButtonProps) {
+export function ClaimRewardsButton({ className, layout = "default", showTokenSymbol = true }: ClaimRewardsButtonProps) {
   const {
     claimableItems,
     totalLrepClaimable,
@@ -51,26 +66,37 @@ export function ClaimRewardsButton({ className, showTokenSymbol = true }: ClaimR
   const handleClaimAll = () => {
     void claimAll(claimableItems, () => refetchClaimable());
   };
-  const claimLabel = buildClaimRewardsButtonLabel({ showTokenSymbol, totalLrepClaimable, totalUsdcClaimable });
+  const claimParts = buildClaimRewardsButtonParts({ showTokenSymbol, totalLrepClaimable, totalUsdcClaimable });
+  const claimLabel = claimParts.length > 0 ? `Claim ${claimParts.join(" + ")}` : null;
 
   if (!claimLabel && !isClaiming && !isPreparingClaim) {
     return null;
   }
 
-  const label = isPreparingClaim
-    ? "Preparing..."
-    : isClaiming
-      ? `Claim ${progress.current}/${progress.total}`
-      : claimLabel;
+  const isProcessing = isClaiming || isPreparingClaim;
+  const useCompactMixedRewardLabel = layout === "compact" && claimParts.length > 1 && !isProcessing;
+  const label = isPreparingClaim ? (
+    "Preparing..."
+  ) : isClaiming ? (
+    `Claim ${progress.current}/${progress.total}`
+  ) : useCompactMixedRewardLabel ? (
+    <>
+      <span>Claim Rewards</span>
+      <span className="text-sm font-semibold text-base-content/78">{claimParts.join(" + ")}</span>
+    </>
+  ) : (
+    claimLabel
+  );
 
   return (
     <div className={className}>
       <GradientActionButton
         onClick={handleClaimAll}
         disabled={isClaiming || isPreparingClaim}
-        className="w-full"
+        fullWidth
         size="sm"
-        motion={getGradientActionMotion(isClaiming || isPreparingClaim)}
+        data-claim-layout={useCompactMixedRewardLabel ? "compact" : undefined}
+        motion={getGradientActionMotion(isProcessing)}
       >
         {label}
       </GradientActionButton>

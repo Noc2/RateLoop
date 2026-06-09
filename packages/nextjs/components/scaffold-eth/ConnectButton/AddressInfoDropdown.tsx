@@ -296,7 +296,7 @@ export const AddressInfoDropdown = ({
           <div className="flex items-start gap-3">
             <BlockieAvatar address={checkSumAddress} size={24} ensImage={ensAvatar} />
             <div className="min-w-0 flex-1">
-              <ClaimRewardsButton className="mb-1" showTokenSymbol={false} />
+              <ClaimRewardsButton className="mb-1" layout="compact" showTokenSymbol={false} />
               <WalletAddressCopyRow address={checkSumAddress} displayName={displayName} />
               <WalletSummaryDetails
                 address={address}
@@ -318,7 +318,7 @@ export const AddressInfoDropdown = ({
       <div className="flex items-start gap-3">
         <BlockieAvatar address={checkSumAddress} size={24} ensImage={ensAvatar} />
         <div className="min-w-0 flex flex-1 flex-col gap-1">
-          <ClaimRewardsButton className="mb-1" showTokenSymbol={false} />
+          <ClaimRewardsButton className="mb-1" layout="compact" showTokenSymbol={false} />
           <WalletAddressCopyRow address={checkSumAddress} displayName={displayName} />
           <WalletSummaryDetails
             address={address}
