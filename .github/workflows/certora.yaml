@@ -48,11 +48,16 @@ jobs:
 
       - uses: ./.github/actions/setup-foundry
 
-      - name: Install Java 21
+      - name: Use preinstalled Java 21
+        # certora-cli's local CVL type-checker (used by --compilation_steps_only) needs
+        # Java >= 19; the runner's default java is older. Point at the GitHub-hosted
+        # runner's preinstalled JDK 21 rather than apt-installing one that is not the
+        # default on PATH.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends openjdk-21-jre-headless
-          java --version
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+      - name: Verify Java
+        run: java --version
 
       - name: Install Certora CLI and solc
         run: |
@@ -143,11 +148,16 @@ jobs:
 
       - uses: ./.github/actions/setup-foundry
 
-      - name: Install Java 21
+      - name: Use preinstalled Java 21
+        # certora-cli's local CVL type-checker (used by --compilation_steps_only) needs
+        # Java >= 19; the runner's default java is older. Point at the GitHub-hosted
+        # runner's preinstalled JDK 21 rather than apt-installing one that is not the
+        # default on PATH.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends openjdk-21-jre-headless
-          java --version
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+      - name: Verify Java
+        run: java --version
 
       - name: Install Certora CLI and solc
         run: |
