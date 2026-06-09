@@ -23,7 +23,11 @@ import {
   upsertEmailNotificationSettings,
 } from "~~/lib/notifications/emailSettings";
 import { resolveNotificationEmailAppUrl } from "~~/lib/notifications/emailUrls";
-import { isResendConfigured, sendNotificationVerificationEmail } from "~~/lib/notifications/resend";
+import {
+  isResendConfigured,
+  isResendDeliveryError,
+  sendNotificationVerificationEmail,
+} from "~~/lib/notifications/resend";
 import { checkRateLimit } from "~~/utils/rateLimit";
 
 const READ_RATE_LIMIT = { limit: 30, windowMs: 60_000 };
@@ -201,7 +205,8 @@ export async function PUT(request: NextRequest) {
       if (error.message === "EMAIL_IN_USE") {
         return NextResponse.json({ error: "Email address already belongs to another wallet" }, { status: 409 });
       }
-      if (error.message === "Resend is not configured") {
+      if (isResendDeliveryError(error)) {
+        console.error("Failed to send notification verification email:", error);
         return NextResponse.json(
           { error: "Email notifications are not configured on this deployment" },
           { status: 503 },
