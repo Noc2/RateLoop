@@ -13,11 +13,12 @@ import { ContentEmbed } from "~~/components/content/ContentEmbed";
 import { QuestionDescription, type QuestionReferenceContentSummary } from "~~/components/content/QuestionDescription";
 import { SubmitterBadge } from "~~/components/content/SubmitterBadge";
 import { FollowProfileButton } from "~~/components/shared/FollowProfileButton";
+import type { RoundStatMetric } from "~~/components/shared/RoundStats";
 import { SafeExternalLink } from "~~/components/shared/SafeExternalLink";
 import {
-  FeedbackBonusAmountDisplay,
-  RewardPoolAmountDisplay,
   VotingQuestionContextDetails,
+  getFeedbackBonusDisplay,
+  getRewardPoolDisplay,
 } from "~~/components/shared/VotingQuestionCard";
 import { WatchContentButton } from "~~/components/shared/WatchContentButton";
 import { InfoTooltip } from "~~/components/ui/InfoTooltip";
@@ -516,6 +517,15 @@ function FeedContentMetaCard({
   const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item);
   const feedbackBonusCurrency = item.feedbackBonusSummary?.currency;
   const rewardDeadlineChips = getRewardDeadlineChips(item);
+  const rewardStats: RoundStatMetric[] = [];
+  if (rewardPoolTotal > 0n) {
+    const { amountLabel, tooltip } = getRewardPoolDisplay(rewardPoolTotal, rewardPoolCurrency);
+    rewardStats.push({ label: "Bounty", value: amountLabel, tooltip });
+  }
+  if (feedbackBonusTotal > 0n) {
+    const { amountLabel, tooltip } = getFeedbackBonusDisplay(feedbackBonusTotal, feedbackBonusCurrency);
+    rewardStats.push({ label: "Feedback Bonus", value: amountLabel, tooltip });
+  }
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;
   const wrapperClassName = embedded
@@ -555,37 +565,19 @@ function FeedContentMetaCard({
       ) : null}
     </div>
   );
+  const rewardStatusChips = rewardDeadlineChips.map(chip => (
+    <div key={chip.label} className={`reward-chip reward-chip-label ${getDeadlineChipClassName(chip.tone)}`}>
+      <span className="inline-flex max-w-full flex-wrap items-center gap-x-1 gap-y-0.5">{chip.label}</span>
+      {chip.tooltip ? (
+        <InfoTooltip text={chip.tooltip} position="bottom" className={getDeadlineTooltipClassName(chip.tone)} />
+      ) : null}
+    </div>
+  ));
 
   return (
     <>
       <div className={wrapperClassName}>
         <div className={compact ? "space-y-2.5" : "space-y-3"}>
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              {rewardPoolTotal > 0n ? (
-                <RewardPoolAmountDisplay amount={rewardPoolTotal} currency={rewardPoolCurrency} />
-              ) : null}
-              {feedbackBonusTotal > 0n ? (
-                <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} currency={feedbackBonusCurrency} />
-              ) : null}
-              {rewardDeadlineChips.map(chip => (
-                <div
-                  key={chip.label}
-                  className={`reward-chip reward-chip-label ${getDeadlineChipClassName(chip.tone)}`}
-                >
-                  <span className="inline-flex max-w-full flex-wrap items-center gap-x-1 gap-y-0.5">{chip.label}</span>
-                  {chip.tooltip ? (
-                    <InfoTooltip
-                      text={chip.tooltip}
-                      position="bottom"
-                      className={getDeadlineTooltipClassName(chip.tone)}
-                    />
-                  ) : null}
-                </div>
-              ))}
-            </div>
-            {actionButtons}
-          </div>
           <VotingQuestionContextDetails
             contentId={item.id}
             categoryId={item.categoryId}
@@ -594,6 +586,9 @@ function FeedContentMetaCard({
             roundConfig={item.roundConfig}
             compact={compact}
             active={isActive}
+            rewardStats={rewardStats}
+            statusChips={rewardStatusChips}
+            statusActions={actionButtons}
           />
         </div>
 

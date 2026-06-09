@@ -9,11 +9,34 @@ import { formatLrepAmount } from "~~/lib/vote/voteIncentives";
 interface RoundStatsProps {
   categoryId?: bigint;
   snapshot: RoundSnapshot;
+  rewardStats?: RoundStatMetric[];
 }
 
 interface RoundRevealedBreakdownProps {
   snapshot: RoundSnapshot;
   stacked?: boolean;
+}
+
+export interface RoundStatMetric {
+  label: string;
+  value: string;
+  tooltip: string;
+}
+
+function RoundStatSeparator() {
+  return <div className="h-4 w-px bg-base-content/10" aria-hidden="true" />;
+}
+
+function RoundStatItem({ label, value, tooltip }: RoundStatMetric) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex items-center gap-1">
+        {label}
+        <InfoTooltip text={tooltip} position="bottom" />
+      </span>
+      <span className="font-semibold tabular-nums">{value}</span>
+    </div>
+  );
 }
 
 function formatRoundCountdown(seconds: number): string {
@@ -110,7 +133,7 @@ export function RoundRevealedBreakdown({ snapshot, stacked = false }: RoundRevea
  * - During blind phase: signals are encrypted and hidden. Only totalStake and voteCount are shown.
  * - After blind phase: the system reveals signals. Revealed pool breakdown is shown.
  */
-export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
+export function RoundStats({ categoryId, snapshot, rewardStats = [] }: RoundStatsProps) {
   const contentLabel = useContentLabel(categoryId);
   const { round, hasRound, isLoading, maxVoters, isRoundFull, phase } = snapshot;
 
@@ -134,31 +157,32 @@ export function RoundStats({ categoryId, snapshot }: RoundStatsProps) {
     votesNeeded > 0
       ? `${voteCount} of ${minimumRaters} minimum staked raters have committed. ${votesNeeded} more staked private or revealed signal${votesNeeded === 1 ? "" : "s"} needed.`
       : `${voteCount} staked raters have committed, meeting the ${minimumRaters}-rater minimum.`;
+  const statItems: RoundStatMetric[] = [
+    ...rewardStats,
+    {
+      label: "Staked",
+      value: formatLrepAmount(round.totalStake),
+      tooltip: "Total LREP committed in the current round.",
+    },
+    {
+      label: "Staked Raters",
+      value: formatRaterProgress(voteCount, minimumRaters),
+      tooltip: `${raterTooltip} Zero-LREP advisory votes do not count toward this settlement quorum on this ${contentLabel}.`,
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-1.5 text-base text-base-content/60">
       <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1">
-            Staked
-            <InfoTooltip text="Total LREP committed in the current round." position="bottom" />
-          </span>
-          <span className="font-semibold tabular-nums">{formatLrepAmount(round.totalStake)}</span>
-        </div>
-        <div className="h-4 w-px bg-base-content/10" />
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1">
-            Staked Raters
-            <InfoTooltip
-              text={`${raterTooltip} Zero-LREP advisory votes do not count toward this settlement quorum on this ${contentLabel}.`}
-              position="bottom"
-            />
-          </span>
-          <span className="font-semibold tabular-nums">{formatRaterProgress(voteCount, minimumRaters)}</span>
-        </div>
+        {statItems.map((item, index) => (
+          <React.Fragment key={item.label}>
+            {index > 0 ? <RoundStatSeparator /> : null}
+            <RoundStatItem {...item} />
+          </React.Fragment>
+        ))}
         {privateRoundHint ? (
           <>
-            <div className="h-4 w-px bg-base-content/10" />
+            <RoundStatSeparator />
             <span>{privateRoundHint}</span>
           </>
         ) : null}

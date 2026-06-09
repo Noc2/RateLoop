@@ -8,7 +8,7 @@ import { MoreToggleButton } from "~~/components/shared/MoreToggleButton";
 import { RateLoopVoteButton } from "~~/components/shared/RateLoopVoteButton";
 import { RatingOrb } from "~~/components/shared/RatingOrb";
 import { RoundProgress } from "~~/components/shared/RoundProgress";
-import { RoundRevealedBreakdown, RoundStats } from "~~/components/shared/RoundStats";
+import { RoundRevealedBreakdown, type RoundStatMetric, RoundStats } from "~~/components/shared/RoundStats";
 import { HoverTooltip, InfoTooltip, TooltipAnchor } from "~~/components/ui/InfoTooltip";
 import type { ContentOpenRoundSummary, RewardPoolCurrency } from "~~/hooks/contentFeed/shared";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -268,7 +268,7 @@ function RewardAmountDisplay({
   );
 }
 
-function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
+export function getRewardPoolDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
   if (currency === "LREP") {
     return {
       amountLabel: formatSubmissionRewardAmount(amount, "lrep"),
@@ -303,6 +303,20 @@ export function RewardPoolAmountDisplay({ amount, currency }: { amount: bigint; 
 }
 
 export function FeedbackBonusAmountDisplay({ amount, currency }: { amount: bigint; currency?: RewardPoolCurrency }) {
+  const { amountLabel, tooltip } = getFeedbackBonusDisplay(amount, currency);
+  return (
+    <RewardAmountDisplay
+      amount={amount}
+      amountLabel={amountLabel}
+      label="Feedback Bonus"
+      tooltip={tooltip}
+      ariaLabel="Feedback Bonus"
+      tone="green"
+    />
+  );
+}
+
+export function getFeedbackBonusDisplay(amount: bigint, currency: RewardPoolCurrency | undefined) {
   const amountLabel =
     currency === "LREP"
       ? formatSubmissionRewardAmount(amount, "lrep")
@@ -317,16 +331,8 @@ export function FeedbackBonusAmountDisplay({ amount, currency }: { amount: bigin
         : currency === "USDC"
           ? USDC_FEEDBACK_BONUS_TOOLTIP_TEXT
           : FEEDBACK_BONUS_TOOLTIP_TEXT;
-  return (
-    <RewardAmountDisplay
-      amount={amount}
-      amountLabel={amountLabel}
-      label="Feedback Bonus"
-      tooltip={tooltip}
-      ariaLabel="Feedback Bonus"
-      tone="green"
-    />
-  );
+
+  return { amountLabel, tooltip };
 }
 
 function DockCircleIconButton({
@@ -398,6 +404,9 @@ export function VotingQuestionContextDetails({
   roundConfig,
   compact = false,
   active = true,
+  rewardStats,
+  statusChips,
+  statusActions,
 }: {
   contentId: bigint;
   categoryId: bigint;
@@ -406,6 +415,9 @@ export function VotingQuestionContextDetails({
   roundConfig?: VotingConfig | null;
   compact?: boolean;
   active?: boolean;
+  rewardStats?: RoundStatMetric[];
+  statusChips?: ReactNode;
+  statusActions?: ReactNode;
 }) {
   const roundSummary = openRound ?? latestRound;
   const roundSnapshot = useRoundSnapshot(
@@ -418,13 +430,25 @@ export function VotingQuestionContextDetails({
   const progressMessaging = getRoundProgressMessaging(roundSnapshot);
   const showInlineProgress = showInlineVotingSummary && Boolean(progressMessaging);
   const showInlineRevealedBreakdown = showInlineVotingSummary && roundSnapshot.round.revealedCount > 0;
+  const showRoundProgress =
+    !showInlineProgress && (roundSnapshot.phase !== "none" || (!roundSnapshot.isReady && !roundSnapshot.hasRound));
+  const hasStatusChips = Array.isArray(statusChips) ? statusChips.length > 0 : Boolean(statusChips);
+  const showStatusRow = showRoundProgress || hasStatusChips || Boolean(statusActions);
 
   return (
     <div className={`flex min-w-0 flex-col ${compact ? "gap-1.5" : "gap-2"}`}>
       <LiveRoundActivity snapshot={roundSnapshot} compact={compact} condensed />
-      {!showInlineProgress ? <RoundProgress snapshot={roundSnapshot} /> : null}
+      {showStatusRow ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            {showRoundProgress ? <RoundProgress snapshot={roundSnapshot} /> : null}
+            {statusChips}
+          </div>
+          {statusActions}
+        </div>
+      ) : null}
       {!showInlineRevealedBreakdown ? <RoundRevealedBreakdown snapshot={roundSnapshot} stacked={compact} /> : null}
-      <RoundStats categoryId={categoryId} snapshot={roundSnapshot} />
+      <RoundStats categoryId={categoryId} snapshot={roundSnapshot} rewardStats={rewardStats} />
     </div>
   );
 }
