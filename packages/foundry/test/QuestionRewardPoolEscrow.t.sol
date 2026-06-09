@@ -6480,6 +6480,10 @@ contract MockQuestionRewardOracleFrontendRegistry {
     function isAuthorizedSnapshotProposer(address frontend, address proposer) external view returns (bool) {
         return proposer != address(0) && frontend == proposer && eligible[frontend];
     }
+
+    function snapshotProposerForFrontend(address) external pure returns (address proposer) {
+        return address(0);
+    }
 }
 
 contract MockBundleFrontendRegistry {
