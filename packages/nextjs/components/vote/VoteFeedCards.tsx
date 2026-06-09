@@ -80,6 +80,17 @@ function getMediaPlatformType(media: ContentMediaItem | null) {
   return detectPlatform(media.url).type;
 }
 
+function NoRewardChip() {
+  return (
+    <div
+      className="reward-chip reward-chip-label bg-error text-error-content"
+      aria-label="No active bounty or Feedback Bonus"
+    >
+      No bounty
+    </div>
+  );
+}
+
 interface FeedVoteCardProps {
   item: ContentItem;
   submitterProfile?: SubmitterProfile;
@@ -416,6 +427,7 @@ function FeedContentMetaCard({
   const rewardPoolCurrency = item.rewardPoolSummary?.currency;
   const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item);
   const feedbackBonusCurrency = item.feedbackBonusSummary?.currency;
+  const hasVisibleReward = rewardPoolTotal > 0n || feedbackBonusTotal > 0n;
   const hideDockedActionButtons = isMobileViewport;
   const actionRowClassName = `flex items-center justify-between gap-3 ${compact ? "mt-3" : "mt-4"}`;
   const wrapperClassName = embedded
@@ -461,6 +473,7 @@ function FeedContentMetaCard({
       {feedbackBonusTotal > 0n ? (
         <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} currency={feedbackBonusCurrency} />
       ) : null}
+      {!hasVisibleReward ? <NoRewardChip /> : null}
     </>
   );
 
