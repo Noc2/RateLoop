@@ -1,4 +1,4 @@
-.PHONY: build deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn certora certora-check coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
+.PHONY: build deploy deploy-and-generate-abis generate-abis get-address account chain compile compile-all flatten fork format lint test verify verify-blockscout slither aderyn certora certora-check certora-mutate coverage check-contract-sizes check-storage-layouts snapshot-storage-layouts
 
 TEST_ARGS ?=
 COVERAGE_ARGS ?=
@@ -126,12 +126,19 @@ aderyn:
 # "override_base_config" key; certoraRun takes a single conf file.
 CERTORA_CONF ?= certora/confs/math.conf
 CERTORA_ARGS ?=
+# Gambit mutation-testing target (spec strength). See certora/mutation/README.md.
+MUTATION_CONF ?= certora/mutation/frontend-registry.mutation.conf
 
 certora:
 	certoraRun $(CERTORA_CONF) $(CERTORA_ARGS)
 
 certora-check:
 	certoraRun $(CERTORA_CONF) --compilation_steps_only $(CERTORA_ARGS)
+
+# Mutation testing: inject contract mutants and re-verify each against the spec.
+# Needs CERTORAKEY (one prover job per mutant); run manually, not in CI.
+certora-mutate:
+	certoraMutate $(MUTATION_CONF) $(CERTORA_ARGS)
 
 coverage:
 	forge coverage --offline --ir-minimum $(COVERAGE_ARGS)
