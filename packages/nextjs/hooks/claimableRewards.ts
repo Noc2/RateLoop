@@ -37,6 +37,12 @@ export interface FrontendRegistryClaimableRewardItem {
   claimType: "frontend_registry_fee";
 }
 
+export interface FrontendRegistryWithdrawalClaimableRewardItem {
+  frontend: `0x${string}`;
+  reward: bigint;
+  claimType: "frontend_registry_withdrawal";
+}
+
 export interface QuestionRewardPayoutWeight {
   domain: number;
   rewardPoolId: bigint;
@@ -76,6 +82,7 @@ export type ClaimableRewardItem =
   | RoundClaimableRewardItem
   | FrontendRoundFeeClaimableRewardItem
   | FrontendRegistryClaimableRewardItem
+  | FrontendRegistryWithdrawalClaimableRewardItem
   | QuestionRewardPoolClaimableRewardItem
   | QuestionBundleRewardClaimableRewardItem;
 
@@ -168,8 +175,12 @@ function claimExecutionPriority(item: ClaimableRewardItem) {
       return 3;
     case "frontend_round_fee":
       return 4;
-    case "frontend_registry_fee":
+    // Complete a matured withdrawal before requesting the next one — the registry
+    // allows only one pending withdrawal per frontend.
+    case "frontend_registry_withdrawal":
       return 5;
+    case "frontend_registry_fee":
+      return 6;
   }
 }
 
