@@ -78,14 +78,20 @@ function createDb({
   existingVote = null,
   feedbackBonusPools = [],
   roundVotes = [],
+  voterStatsRow = null,
 }: {
   existingRound?: Record<string, unknown> | null;
   existingVote?: Record<string, unknown> | null;
   feedbackBonusPools?: Record<string, unknown>[];
   roundVotes?: Record<string, unknown>[];
+  voterStatsRow?: Record<string, unknown> | null;
 } = {}) {
   const insertCalls: Array<{ table: string; values: Record<string, unknown> }> =
     [];
+  const conflictUpdateCalls: Array<{
+    table: string;
+    values: Record<string, unknown>;
+  }> = [];
   const updateCalls: Array<{
     table: string;
     key: Record<string, unknown>;
@@ -133,6 +139,9 @@ function createDb({
       totalActiveDays: 0,
     },
   };
+  if (voterStatsRow) {
+    rowsByTable.voterStats = voterStatsRow;
+  }
   const resolveSetValues = (
     table: string,
     values:
@@ -142,6 +151,7 @@ function createDb({
     typeof values === "function" ? values(rowsByTable[table] ?? {}) : values;
 
   return {
+    conflictUpdateCalls,
     db: {
       find: vi.fn(async (table: string) => {
         if (table === "content") return contentRecord;
@@ -154,7 +164,24 @@ function createDb({
           insertCalls.push({ table, values });
           return {
             onConflictDoNothing: vi.fn(async () => undefined),
-            onConflictDoUpdate: vi.fn(async () => undefined),
+            // Resolve the conflict updater against a known row only when the
+            // test provided one; otherwise stay a no-op like before.
+            onConflictDoUpdate: vi.fn(
+              async (
+                updater?:
+                  | Record<string, unknown>
+                  | ((row: Record<string, any>) => Record<string, unknown>),
+              ) => {
+                if (updater === undefined || !(table in rowsByTable)) {
+                  return undefined;
+                }
+                conflictUpdateCalls.push({
+                  table,
+                  values: resolveSetValues(table, updater),
+                });
+                return undefined;
+              },
+            ),
           };
         }),
       })),
@@ -1422,5 +1449,148 @@ describe("RoundVotingEngine ponder handlers", () => {
       );
       expect(update?.values.rbtsScoreBps).toEqual(expect.any(Number));
     }
+  });
+
+  it("treats unscored RBTS reveals as neutral in voterStats", async () => {
+    const voter = "0x00000000000000000000000000000000000000a1";
+    const { db, insertCalls, conflictUpdateCalls } = createDb({
+      existingRound: { id: "7-2" },
+      roundVotes: [
+        // Degraded-round / post-threshold shape: full stake returned, never
+        // scored against — on-chain this voter is not penalized at all.
+        {
+          id: `7-2-${voter}`,
+          voter,
+          isUp: true,
+          stake: 100n,
+          revealed: true,
+          rbtsScoreBps: null,
+          rbtsRewardWeight: 0n,
+          rbtsStakeReturned: 100n,
+          rbtsForfeitedStake: 0n,
+        },
+      ],
+      voterStatsRow: {
+        totalSettledVotes: 4,
+        totalWins: 3,
+        totalLosses: 1,
+        totalStakeWon: 300n,
+        totalStakeLost: 50n,
+        currentStreak: 2,
+        bestWinStreak: 3,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:RoundSettled");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: { contentId: 7n, roundId: 2n, upWins: true, losingPool: 0n },
+        block: { number: 50n, timestamp: 2_200n },
+      },
+      context: { db },
+    });
+
+    // First-seen path: neither a win nor a loss, streak stays neutral.
+    expect(insertCalls).toContainEqual(
+      expect.objectContaining({
+        table: "voterStats",
+        values: expect.objectContaining({
+          totalWins: 0,
+          totalLosses: 0,
+          totalStakeWon: 100n,
+          totalStakeLost: 0n,
+          currentStreak: 0,
+          bestWinStreak: 0,
+        }),
+      }),
+    );
+
+    // Existing-row path: counters advance but win/loss totals and the active
+    // win streak are untouched.
+    const statsUpdate = conflictUpdateCalls.find(
+      (call) => call.table === "voterStats",
+    );
+    expect(statsUpdate?.values).toEqual(
+      expect.objectContaining({
+        totalSettledVotes: 5,
+        totalWins: 3,
+        totalLosses: 1,
+        totalStakeWon: 400n,
+        totalStakeLost: 50n,
+        currentStreak: 2,
+        bestWinStreak: 3,
+      }),
+    );
+  });
+
+  it("counts an RBTS reveal as a loss only when stake was forfeited", async () => {
+    const voter = "0x00000000000000000000000000000000000000a2";
+    const { db, insertCalls, conflictUpdateCalls } = createDb({
+      existingRound: { id: "7-2" },
+      roundVotes: [
+        // Scored below the round mean: part of the stake was forfeited.
+        {
+          id: `7-2-${voter}`,
+          voter,
+          isUp: false,
+          stake: 100n,
+          revealed: true,
+          rbtsScoreBps: -500,
+          rbtsRewardWeight: 0n,
+          rbtsStakeReturned: 60n,
+          rbtsForfeitedStake: 40n,
+        },
+      ],
+      voterStatsRow: {
+        totalSettledVotes: 4,
+        totalWins: 3,
+        totalLosses: 1,
+        totalStakeWon: 300n,
+        totalStakeLost: 50n,
+        currentStreak: 2,
+        bestWinStreak: 3,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:RoundSettled");
+
+    await handler!({
+      event: {
+        args: { contentId: 7n, roundId: 2n, upWins: true, losingPool: 40n },
+        block: { number: 50n, timestamp: 2_200n },
+      },
+      context: { db },
+    });
+
+    expect(insertCalls).toContainEqual(
+      expect.objectContaining({
+        table: "voterStats",
+        values: expect.objectContaining({
+          totalWins: 0,
+          totalLosses: 1,
+          totalStakeWon: 60n,
+          totalStakeLost: 40n,
+          currentStreak: -1,
+        }),
+      }),
+    );
+
+    const statsUpdate = conflictUpdateCalls.find(
+      (call) => call.table === "voterStats",
+    );
+    expect(statsUpdate?.values).toEqual(
+      expect.objectContaining({
+        totalSettledVotes: 5,
+        totalWins: 3,
+        totalLosses: 2,
+        totalStakeWon: 360n,
+        totalStakeLost: 90n,
+        currentStreak: -1,
+        bestWinStreak: 3,
+      }),
+    );
   });
 });

@@ -1231,6 +1231,17 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       : won
         ? 0n
         : v.stake;
+    // A revealed RBTS vote only counts as a loss when it was actually scored
+    // against. On-chain (RoundRevealLib RBTS scoring + RewardMath
+    // negativeSpreadForfeiture) the only penalty is forfeited stake: voters
+    // scoring below the round mean forfeit part of their stake, while voters
+    // at the mean, voters in degraded rounds (scoring set < 3 — full stake
+    // returned, weight 0), and post-threshold reveals that were never scored
+    // get their entire stake back. We mirror that by treating
+    // rbtsForfeitedStake > 0 as the loss criterion; unscored/unpenalized
+    // voters are neutral — neither a win nor a loss, and their streak is
+    // left untouched. Legacy (non-RBTS) rounds keep the binary outcome.
+    const lost = rbtsRound ? !won && stakeLost > 0n : !won;
 
     const identityHolder = voteIdentity(v);
 
@@ -1240,24 +1251,28 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
         voter: identityHolder,
         totalSettledVotes: 1,
         totalWins: won ? 1 : 0,
-        totalLosses: won ? 0 : 1,
+        totalLosses: lost ? 1 : 0,
         totalStakeWon: stakeWon,
         totalStakeLost: stakeLost,
-        currentStreak: won ? 1 : -1,
+        currentStreak: won ? 1 : lost ? -1 : 0,
         bestWinStreak: won ? 1 : 0,
       })
       .onConflictDoUpdate((row) => {
+        // Neutral outcomes (revealed but never scored against) leave the
+        // win/loss streak untouched.
         const newStreak = won
           ? row.currentStreak > 0
             ? row.currentStreak + 1
             : 1
-          : row.currentStreak < 0
-            ? row.currentStreak - 1
-            : -1;
+          : lost
+            ? row.currentStreak < 0
+              ? row.currentStreak - 1
+              : -1
+            : row.currentStreak;
         return {
           totalSettledVotes: row.totalSettledVotes + 1,
           totalWins: row.totalWins + (won ? 1 : 0),
-          totalLosses: row.totalLosses + (won ? 0 : 1),
+          totalLosses: row.totalLosses + (lost ? 1 : 0),
           totalStakeWon: row.totalStakeWon + stakeWon,
           totalStakeLost: row.totalStakeLost + stakeLost,
           currentStreak: newStreak,
@@ -1275,14 +1290,14 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
           categoryId,
           totalSettledVotes: 1,
           totalWins: won ? 1 : 0,
-          totalLosses: won ? 0 : 1,
+          totalLosses: lost ? 1 : 0,
           totalStakeWon: stakeWon,
           totalStakeLost: stakeLost,
         })
         .onConflictDoUpdate((row) => ({
           totalSettledVotes: row.totalSettledVotes + 1,
           totalWins: row.totalWins + (won ? 1 : 0),
-          totalLosses: row.totalLosses + (won ? 0 : 1),
+          totalLosses: row.totalLosses + (lost ? 1 : 0),
           totalStakeWon: row.totalStakeWon + stakeWon,
           totalStakeLost: row.totalStakeLost + stakeLost,
         }));
