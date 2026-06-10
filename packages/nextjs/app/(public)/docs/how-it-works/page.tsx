@@ -47,6 +47,8 @@ const HowItWorks: NextPage = () => {
         </li>
         <li>
           <strong>Settle:</strong> once reveal conditions and the selected rater threshold are met, the round resolves.
+          Three-rater rounds can still settle as sparse feedback, but LREP score-spread forfeits need a larger
+          score-eligible set before they turn on.
         </li>
       </ol>
 
@@ -85,7 +87,12 @@ const HowItWorks: NextPage = () => {
           <code>spread = score - mean</code>
         </li>
         <li>
-          Negative spreads forfeit <code>stake * intensity * abs(spread) / 100</code>.
+          Negative spreads forfeit <code>stake * intensity * abs(spread) / 100</code> only when at least{" "}
+          <strong>{protocolDocFacts.scoreSpreadForfeitMinRevealsLabel}</strong> score-eligible voters revealed.
+        </li>
+        <li>
+          Once active, score-spread forfeits are capped at{" "}
+          <strong>{protocolDocFacts.maxScoreSpreadForfeitPercentLabel}</strong> of each report&apos;s stake.
         </li>
         <li>
           <code>voter share = forfeited pool * 96%</code>
@@ -106,10 +113,11 @@ const HowItWorks: NextPage = () => {
       </ul>
       <RbtsScoreSpreadSettlementDiagram />
       <p>
-        Example: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and
-        scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP; 1.53 LREP is the
-        voter share, 0.0159375 LREP is the treasury share, and 0.0478125 LREP is the eligible front-end operator share.
-        Alice claims 11.188 LREP, Bob claims 5.342 LREP, and Carol claims 3.40625 LREP.
+        Example once the score-spread economic threshold is met: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP
+        and scores 90.0, and Carol stakes 5 LREP and scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity,
+        Carol forfeits 1.59375 LREP; 1.53 LREP is the voter share, 0.0159375 LREP is the treasury share, and 0.0478125
+        LREP is the eligible front-end operator share. Alice claims 11.188 LREP, Bob claims 5.342 LREP, and Carol claims
+        3.40625 LREP.
       </p>
 
       <h3 id="eligible-settled-rounds">Launch LREP Credits</h3>
@@ -142,6 +150,10 @@ const HowItWorks: NextPage = () => {
         equal-weight rounds use one unit per eligible revealed rater. An eligible commit-attributed frontend receives
         the default 3% frontend fee before rater payouts; if that frontend is not payable, the share stays with the
         rater claim.
+      </p>
+      <p>
+        Bounty size can raise the required rater floor: {protocolDocFacts.bountyParticipantFloorsLabel}. The goal is to
+        keep small asks usable while requiring broader participation for larger payout pools.
       </p>
       <p>
         Example: if a 30 USDC rater allocation is claimable and three eligible raters have effective correlation weights

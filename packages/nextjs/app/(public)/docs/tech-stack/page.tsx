@@ -157,7 +157,8 @@ const TechStackPage: NextPage = () => {
         LREP is the optional reputation stake used in rating and the governance token used for protocol control. Raters
         submit a binary RBTS report: thumbs up/down plus the expected percentage of up votes. They can stake 0-10 LREP
         on that report; staked reports above the stake-weighted mean score recover full stake and share forfeited
-        negative-spread stake, while below-mean reports forfeit and unrevealed staked reports can forfeit.
+        negative-spread stake, while below-mean reports can forfeit and unrevealed staked reports can forfeit.{" "}
+        {protocolDocFacts.scoreSpreadForfeitPolicyLabel}
       </p>
       <p>
         The reason to use staking is incentive alignment: a rater can put scarce reputation behind a prediction for
@@ -176,7 +177,8 @@ const TechStackPage: NextPage = () => {
         A bounty claim uses <code>round allocation * claim weight / total claim weight</code>. Equal-weight bounty
         rounds give one claim-weight unit to each eligible revealed rater. USDC bounty rounds can instead use the
         finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective correlation weight.
-        With the current oracle default, USDC bounty claims have a{" "}
+        Bounty size can raise the required rater floor: {protocolDocFacts.bountyParticipantFloorsLabel}. With the
+        current oracle default, USDC bounty claims have a{" "}
         <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum post-settlement delay when the
         correlation epoch is already finalized, or about{" "}
         <strong>{protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel}</strong> on the normal happy path when both

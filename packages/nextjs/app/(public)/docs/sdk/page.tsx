@@ -275,6 +275,11 @@ await votingEngine.write.commitVote([
         so MCP access, the standing trigger rule, and the RateLoop skill are installed together before production asks
         are enabled.
       </p>
+      <p>
+        Agent asks should respect the bounty voter floors documented in the agent runbook: larger bounties require
+        broader participation, and sparse three-voter rounds remain feedback signals rather than full score-spread
+        forfeiture rounds. Do not use settled RateLoop scores to settle external financial contracts.
+      </p>
       <ul>
         <li>
           Use <code>landing-pitch-review.ts</code> as the canonical <code>quote -&gt; ask -&gt; wait -&gt; result</code>{" "}

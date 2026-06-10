@@ -104,6 +104,7 @@ import {
   getQuestionRoundMaxDurationForEpoch,
   isQuestionRoundMaxDurationValidForEpoch,
   questionRoundConfigToAbi,
+  requiredQuestionRewardVotersForAmount,
 } from "~~/lib/questionRoundConfig";
 import {
   buildQuestionBundleSubmissionRevealCommitment,
@@ -964,6 +965,10 @@ export function ContentSubmissionSection() {
   const parsedRewardRequiredRounds = parseWholeNumberInput(rewardRequiredRounds);
   const selectedRequiredVoters = BigInt(Math.max(MIN_REWARD_POOL_REQUIRED_VOTERS, parsedRewardRequiredVoters));
   const selectedRequiredSettledRounds = BigInt(Math.max(MIN_REWARD_POOL_SETTLED_ROUNDS, parsedRewardRequiredRounds));
+  const selectedRequiredVoterFloor =
+    selectedRewardAmount === null
+      ? MIN_REWARD_POOL_REQUIRED_VOTERS
+      : Number(requiredQuestionRewardVotersForAmount(selectedRewardAmount));
   const selectedRoundResponseWindowPreset =
     ROUND_RESPONSE_WINDOW_PRESETS.find(option => option.minutes === parsedRoundBlindMinutes)?.id ?? "custom";
   const effectiveBlindMinutesForDurationCap =
@@ -1076,9 +1081,9 @@ export function ContentSubmissionSection() {
     return null;
   })();
   const rewardRequiredVotersBounds = {
-    min: MIN_REWARD_POOL_REQUIRED_VOTERS,
+    min: selectedRequiredVoterFloor,
     max: Math.max(
-      MIN_REWARD_POOL_REQUIRED_VOTERS,
+      selectedRequiredVoterFloor,
       Math.min(Number(selectedRoundConfig.maxVoters), roundConfigBounds.maxSettlementVoters, roundMaxVoterBounds.max),
     ),
   };
@@ -1121,8 +1126,8 @@ export function ContentSubmissionSection() {
     setRewardAmount(defaultBountyAmount);
   }, [defaultBountyAmount, rewardAmountTouched]);
   const rewardRequiredVotersValidationError =
-    parsedRewardRequiredVoters < MIN_REWARD_POOL_REQUIRED_VOTERS
-      ? `Minimum is ${MIN_REWARD_POOL_REQUIRED_VOTERS} voters.`
+    parsedRewardRequiredVoters < selectedRequiredVoterFloor
+      ? `Minimum is ${selectedRequiredVoterFloor} voters for this bounty amount.`
       : selectedRequiredVoters > BigInt(roundConfigBounds.maxSettlementVoters)
         ? `Maximum is ${roundConfigBounds.maxSettlementVoters} voters.`
         : selectedRequiredVoters > selectedRoundConfig.maxVoters
@@ -2676,8 +2681,8 @@ export function ContentSubmissionSection() {
   const bountyAmountTooltipText = `Every question needs a funded bounty. It discourages low-quality asks and rewards eligible voters. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
   const requiredVotersTooltipText =
     questionCount === 1
-      ? `Minimum eligible revealed voters required in a round before that round can receive the bounty payout. Counts do not roll over across rounds. Current min: ${MIN_REWARD_POOL_REQUIRED_VOTERS}.`
-      : `Minimum eligible completers required in a round set before that set can receive the bounty payout. Each completer must answer every question in the bundle. Current min: ${MIN_REWARD_POOL_REQUIRED_VOTERS}.`;
+      ? `Minimum eligible revealed voters required in a round before that round can receive the bounty payout. Counts do not roll over across rounds. Current min for this amount: ${selectedRequiredVoterFloor}. Bounty floors: ${protocolDocFacts.bountyParticipantFloorsLabel}.`
+      : `Minimum eligible completers required in a round set before that set can receive the bounty payout. Each completer must answer every question in the bundle. Current min for this amount: ${selectedRequiredVoterFloor}. Bounty floors: ${protocolDocFacts.bountyParticipantFloorsLabel}.`;
   const requiredRoundsTooltipText =
     "Each settlement round set requires every bundled question to settle once. Eligible completers can claim a reward for each completed set they fully answered.";
   const roundSettingsTooltipText =

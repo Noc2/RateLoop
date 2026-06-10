@@ -109,6 +109,7 @@ export const SECTIONS: Section[] = [
             type: "bullets",
             items: [
               "Not a truth oracle -- it returns public ratings with optional LREP-backed stake, visible disagreement, and limitations.",
+              "Not a settlement oracle for external financial contracts -- settled scores are public feedback signals, not payout instructions for unrelated markets.",
               "Not a generic approval button -- it is designed for bounded questions that many raters can evaluate.",
               "Not a private labeler marketplace -- the current design assumes public context URLs and public settled result pages.",
               "Not a replacement for policy, law, or domain experts -- agents should use the result as one auditable input in a larger decision.",
@@ -368,7 +369,10 @@ export const SECTIONS: Section[] = [
               headers: ["Recipient", "Share"],
               rows: [
                 ["Positive score-spread reports", "Full stake plus pro-rata share of the 96% voter share"],
-                ["Negative score-spread reports", "Forfeit according to distance below the stake-weighted mean score"],
+                [
+                  "Negative score-spread reports",
+                  `Forfeit according to distance below the stake-weighted mean score once ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal, capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake`,
+                ],
                 ["Frontend rail", "3% of forfeited stake when an eligible frontend exists"],
                 ["Treasury rail", "1% of forfeited stake with voter-pool fallback if unavailable"],
                 ["Unrevealed reports", "No RBTS payout; cleanup can forfeit after the reveal grace path"],
@@ -378,7 +382,7 @@ export const SECTIONS: Section[] = [
           },
           {
             type: "paragraph",
-            text: `RBTS settlement stores each revealed report's scoreBps, computes the stake-weighted mean score, and compares every staked report with that mean. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
+            text: `RBTS settlement stores each revealed report's scoreBps, computes the stake-weighted mean score, and compares every staked report with that mean. Positive spreads recover full stake plus a pro-rata share of the 96% voter share of forfeited negative-spread stake; negative spreads forfeit, with no revealed-loser rebate, only after ${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} score-eligible voters reveal. Per-report score-spread forfeiture is capped at ${protocolDocFacts.maxScoreSpreadForfeitPercentLabel} of stake. Tier-1 raters carry full blind-epoch weight and later raters carry ${protocolDocFacts.openPhaseWeightLabel} weight, so the same anti-herding logic shapes settlement. USDC bounty and launch LREP claims add a second step: a finalized correlation payout snapshot proposed by a registered frontend operator supplies effective claim weights before funds move, without changing the already-settled result.`,
           },
         ],
       },
@@ -390,7 +394,7 @@ export const SECTIONS: Section[] = [
             items: [
               "Every ask attaches a non-refundable bounty in LREP or USDC on World Chain.",
               "World Chain USDC agent asks can use EIP-3009 authorization or ordered wallet calls to fund protocol escrow directly from the approved wallet.",
-              "The bounty voter requirement matches the question's selected settlement voter threshold, so a qualifying settled round is also payout-eligible.",
+              `The bounty voter requirement matches the question's selected settlement voter threshold. Bounty size can raise the floor: ${protocolDocFacts.bountyParticipantFloorsLabel}.`,
               "Qualified bounty rounds pay eligible revealed raters and reserve 3% for eligible frontend operators after correlation-capped payout weights finalize.",
               "Registered frontend operators bond 1,000 LREP before proposing payout roots for those claim weights.",
               "Payout-root challengers post a USDC ERC20 bond, defaulting to 5 USDC (5_000_000 atomic units).",

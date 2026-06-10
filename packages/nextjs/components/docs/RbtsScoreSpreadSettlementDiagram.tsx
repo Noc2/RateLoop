@@ -1,4 +1,5 @@
 import { DocsDiagramFrame, MiniPill } from "~~/components/docs/DocsDiagramPrimitives";
+import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
 
 const raters = [
   {
@@ -32,7 +33,9 @@ const raters = [
 
 const settlementFacts = [
   ["Stake-weighted mean", "85.25"],
+  ["Economic threshold", `${protocolDocFacts.scoreSpreadForfeitMinRevealsLabel} revealed`],
   ["Intensity", "1.5"],
+  ["Max forfeit", protocolDocFacts.maxScoreSpreadForfeitPercentLabel],
   ["Forfeited pool", "1.59375 LREP"],
   ["Voter share", "1.53 LREP"],
   ["Rebate", "None"],
@@ -42,7 +45,7 @@ export function RbtsScoreSpreadSettlementDiagram() {
   return (
     <DocsDiagramFrame title="LREP Example">
       <div className="grid gap-4">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {settlementFacts.map(([label, value]) => (
             <div key={label} className="rounded-lg border border-base-content/10 bg-base-content/[0.05] px-3 py-2">
               <p className="text-xs font-semibold uppercase text-base-content/45">{label}</p>

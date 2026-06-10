@@ -4,6 +4,8 @@ import {
   DEFAULT_ROUND_CONFIG,
   EPOCH_WEIGHT_BPS,
   PLATFORM_REWARD_SPLIT_BPS,
+  QUESTION_REWARD_PARTICIPANT_FLOORS,
+  SCORE_SPREAD_POLICY,
 } from "@rateloop/contracts/protocol";
 
 function formatPercent(value: number): string {
@@ -31,6 +33,15 @@ function formatDurationLabel(seconds: number): string {
   }
 
   return `${seconds} seconds`;
+}
+
+function formatUsdcAmountLabel(value: number): string {
+  const raw = BigInt(value);
+  const whole = raw / 1_000_000n;
+  const fractional = raw % 1_000_000n;
+  const groupedWhole = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fractionalText = fractional.toString().padStart(6, "0").replace(/0+$/, "");
+  return `${fractionalText ? `${groupedWhole}.${fractionalText}` : groupedWhole} USDC`;
 }
 
 const ROUND_CONFIG_BOUNDS = {
@@ -83,6 +94,25 @@ export const protocolDocFacts = {
   blindPhaseWeightLabel: formatPercent(percentFromBps(EPOCH_WEIGHT_BPS.blind)),
   openPhaseWeightLabel: formatPercent(percentFromBps(EPOCH_WEIGHT_BPS.informed)),
   earlyVoterAdvantageLabel: `${EPOCH_WEIGHT_BPS.blind / EPOCH_WEIGHT_BPS.informed}:1`,
+  scoreSpreadForfeitMinRevealsLabel: String(SCORE_SPREAD_POLICY.forfeitMinReveals),
+  maxScoreSpreadForfeitPercentLabel: formatPercent(percentFromBps(SCORE_SPREAD_POLICY.maxForfeitBps)),
+  scoreSpreadForfeitPolicyLabel: `Score-spread LREP forfeits are disabled below ${
+    SCORE_SPREAD_POLICY.forfeitMinReveals
+  } score-eligible revealed voters and capped at ${formatPercent(
+    percentFromBps(SCORE_SPREAD_POLICY.maxForfeitBps),
+  )} of each report's stake once active.`,
+  bountyBaseVotersLabel: String(QUESTION_REWARD_PARTICIPANT_FLOORS.minParticipants),
+  bountyHighValueAmountLabel: formatUsdcAmountLabel(QUESTION_REWARD_PARTICIPANT_FLOORS.highValueAmount),
+  bountyHighValueVotersLabel: String(QUESTION_REWARD_PARTICIPANT_FLOORS.highValueMinParticipants),
+  bountyVeryHighValueAmountLabel: formatUsdcAmountLabel(QUESTION_REWARD_PARTICIPANT_FLOORS.veryHighValueAmount),
+  bountyVeryHighValueVotersLabel: String(QUESTION_REWARD_PARTICIPANT_FLOORS.veryHighValueMinParticipants),
+  bountyParticipantFloorsLabel: `${QUESTION_REWARD_PARTICIPANT_FLOORS.minParticipants} below ${formatUsdcAmountLabel(
+    QUESTION_REWARD_PARTICIPANT_FLOORS.highValueAmount,
+  )}, ${QUESTION_REWARD_PARTICIPANT_FLOORS.highValueMinParticipants} from ${formatUsdcAmountLabel(
+    QUESTION_REWARD_PARTICIPANT_FLOORS.highValueAmount,
+  )}, and ${QUESTION_REWARD_PARTICIPANT_FLOORS.veryHighValueMinParticipants} from ${formatUsdcAmountLabel(
+    QUESTION_REWARD_PARTICIPANT_FLOORS.veryHighValueAmount,
+  )}`,
   clusterPayoutChallengeWindowLabel: formatDurationLabel(CLUSTER_PAYOUT_CHALLENGE_WINDOW_SECONDS),
   usdcBountyPayoutMinimumDelayLabel: formatDurationLabel(USDC_BOUNTY_PAYOUT_MINIMUM_DELAY_SECONDS),
   usdcBountyPayoutHappyPathMaxDelayLabel: "24 hours",

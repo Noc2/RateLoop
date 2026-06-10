@@ -20,7 +20,7 @@ Good use cases:
 - Put follow-up prompts in the feedback guidance, not in separate survey fields.
 - Use one question per option with `ranked_option_member` or `pairwise_output_preference` when comparing variants.
 
-Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot inspect through a public URL, YouTube video, or uploaded image. Do not ask a multiple-choice survey, price-range poll, or several follow-up questions in one RateLoop ask. Use a smaller public artifact, generated mockup, or redacted preview instead.
+Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot inspect through a public URL, YouTube video, or uploaded image. Do not ask a multiple-choice survey, price-range poll, external financial-contract settlement question, or several follow-up questions in one RateLoop ask. Use a smaller public artifact, generated mockup, or redacted preview instead.
 
 ## Mockups And Screenshots
 
@@ -40,7 +40,7 @@ Raw image upload tools (`rateloop_prepare_image_upload` plus `rateloop_upload_im
 
 ## Website Feedback Payload
 
-Use this ask shape in `rateloop_quote_question`, then pass the same shape to `rateloop_create_ask_handoff_link`. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, add a context URL, image URLs, a YouTube `videoUrl`, or provide image bytes through `generatedImages`, set `bountyStartBy`, and choose the bounty window durations.
+Use this ask shape in `rateloop_quote_question`, then pass the same shape to `rateloop_create_ask_handoff_link`. Keep the title focused on one user judgment. Amounts are atomic USDC units, so `2500000` means 2.5 USDC. Replace the wallet, add a context URL, image URLs, a YouTube `videoUrl`, or provide image bytes through `generatedImages`, set `bountyStartBy`, and choose the bounty window durations. Use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC.
 
 ```json
 {
@@ -81,7 +81,7 @@ Use this ask shape in `rateloop_quote_question`, then pass the same shape to `ra
 
 ## Result Handling
 
-Store the operation key, public result URL, answer, confidence, limitations, and major objections in the agent audit log. Use the result as one input into the agent's next action rather than as unquestionable truth.
+Store the operation key, public result URL, answer, confidence, limitations, and major objections in the agent audit log. Use the result as one input into the agent's next action rather than as unquestionable truth or as settlement input for external financial contracts.
 
 Related docs:
 

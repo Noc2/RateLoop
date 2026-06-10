@@ -34,6 +34,7 @@ import {
   getDefaultUsdcAddress,
   parseUsdRewardPoolAmount,
 } from "~~/lib/questionRewardPools";
+import { requiredQuestionRewardVotersForAmount } from "~~/lib/questionRoundConfig";
 import {
   buildUsdcReceiveWithAuthorizationTypedData,
   getDefaultSignatureDeadline,
@@ -58,8 +59,7 @@ type ContentRoundConfigLike =
 
 const FRONTEND_FEE_PERCENT = DEFAULT_REWARD_POOL_FRONTEND_FEE_BPS / 100;
 const BOUNTY_AMOUNT_TOOLTIP = `Paid in USDC on World Chain. Qualified claims reserve ${FRONTEND_FEE_PERCENT}% for the eligible frontend operator; the rest goes to eligible revealed voters after payout roots finalize.`;
-const REQUIRED_VOTERS_TOOLTIP =
-  "Matches the question's settlement voters so every qualifying round can count toward this bounty.";
+const REQUIRED_VOTERS_TOOLTIP = `Matches the question's settlement voters so every qualifying round can count toward this bounty. Bounty floors: ${protocolDocFacts.bountyParticipantFloorsLabel}.`;
 const SETTLED_ROUNDS_TOOLTIP = `How many qualifying settled rounds must complete before the bounty is filled. USDC payouts then wait on finalized payout roots: ${protocolDocFacts.usdcBountyPayoutMinimumDelayLabel} minimum, normally up to ${protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel} on the happy path.`;
 const BOUNTY_WINDOW_TOOLTIP = `Bounty eligibility opens with the first private round and uses this window duration. The quick fund flow uses the same duration as the start-by deadline. ${protocolDocFacts.usdcBountyPayoutTimingTooltip}`;
 
@@ -115,6 +115,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
   const escrowAddress = useMemo(() => getConfiguredQuestionRewardPoolEscrowAddress(chainId), [chainId]);
   const fallbackUsdcAddress = useMemo(() => getDefaultUsdcAddress(chainId), [chainId]);
   const parsedAmount = useMemo(() => parseUsdRewardPoolAmount(amount), [amount]);
+  const requiredVoterFloor = parsedAmount ? Number(requiredQuestionRewardVotersForAmount(parsedAmount)) : null;
   const voterCount = contentRequiredVoters ?? 0;
   const settledRounds = Math.max(MIN_REWARD_POOL_SETTLED_ROUNDS, Math.floor(Number(requiredRounds) || 0));
   const bountyWindowSeconds = getBountyWindowSeconds(
@@ -132,6 +133,7 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
       parsedAmount &&
       contentRequiredVoters !== null &&
       voterCount >= MIN_REWARD_POOL_REQUIRED_VOTERS &&
+      (requiredVoterFloor === null || voterCount >= requiredVoterFloor) &&
       settledRounds >= MIN_REWARD_POOL_SETTLED_ROUNDS &&
       hasValidBountyWindow,
   );
@@ -204,6 +206,12 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
     }
     if (contentRequiredVoters === null) {
       notification.warning("Could not load the question's required voter count.");
+      return;
+    }
+    if (requiredVoterFloor !== null && voterCount < requiredVoterFloor) {
+      notification.warning(
+        `This bounty amount requires at least ${requiredVoterFloor} voters; this question settles at ${voterCount}. Choose a smaller amount or ask a new question with a higher voter threshold.`,
+      );
       return;
     }
 
@@ -509,6 +517,12 @@ export function FundQuestionModal({ contentId, roundConfig, title, onClose, onCr
           {!escrowAddress ? (
             <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
               Bounty funding is not available on this network yet.
+            </p>
+          ) : null}
+          {requiredVoterFloor !== null && contentRequiredVoters !== null && voterCount < requiredVoterFloor ? (
+            <p className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
+              This amount requires at least {requiredVoterFloor} required voters, but this question settles at{" "}
+              {voterCount}. Choose a smaller amount or ask a new question with a higher voter threshold.
             </p>
           ) : null}
         </div>

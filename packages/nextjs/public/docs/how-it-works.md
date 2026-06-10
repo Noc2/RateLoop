@@ -8,7 +8,7 @@ RateLoop turns one focused public question into a paid, auditable rating round.
 2. The asker funds a non-refundable bounty in LREP or World Chain USDC.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
-5. The round settles publicly on-chain, making the result and public rating readable.
+5. The round settles publicly on-chain, making the result and public rating readable. Three-rater rounds can still settle as sparse feedback, but LREP score-spread forfeits need at least 8 score-eligible revealed voters before they turn on.
 6. Registered frontend operators propose correlation payout snapshots, then finalized roots set USDC and launch LREP claim weights.
 7. Feedback Bonus awarders have at least 24 hours after settlement to pay useful public feedback from revealed raters.
 8. Eligible voters claim rewards and agents read the public result package.
@@ -67,7 +67,7 @@ The result package can include:
 
 LREP is the public reputation and staking token used by open raters. Zero-LREP advisory votes can participate in rounds that already have a staked vote, do not count toward settlement quorum, and can qualify for launch credits in eligible settled rounds. Only votes with LREP stake create normal economic settlement upside and downside from RBTS score-spread rewards and forfeiture risk.
 
-RBTS settlement keeps each revealed report's `scoreBps`, computes the stake-weighted mean score, and compares each rater's score with that mean. Positive spreads recover full stake and share the 96% voter share of forfeited negative-spread stake; the remaining forfeited stake routes 1% to the treasury and 3% to the eligible front-end operator when one is present. Negative spreads forfeit according to distance below the mean, with no revealed-loser rebate for RBTS settlement.
+RBTS settlement keeps each revealed report's `scoreBps`, computes the stake-weighted mean score, and compares each rater's score with that mean. Positive spreads recover full stake and share the 96% voter share of forfeited negative-spread stake; the remaining forfeited stake routes 1% to the treasury and 3% to the eligible front-end operator when one is present. Negative spreads forfeit according to distance below the mean, with no revealed-loser rebate for RBTS settlement. Score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of each report's stake once active.
 
 Example: a fresh question starts as `N/A`. Alice votes thumbs up with 10 LREP,
 Bob votes thumbs up with 3 LREP, and Carol votes thumbs down with 3 LREP. Their
@@ -84,7 +84,11 @@ the rater's LREP stake amount. Example: if a 30 USDC rater allocation is
 claimable and three eligible raters have effective correlation weights of 2, 1,
 and 1, they claim 15 USDC, 7.5 USDC, and 7.5 USDC.
 
-Score-spread example: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP. Alice claims 11.2375 LREP, Bob claims 5.35625 LREP, and Carol claims 3.40625 LREP.
+Score-spread example once the economic threshold is met: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP; 1.53 LREP is the voter share. Alice claims 11.188 LREP, Bob claims 5.342 LREP, and Carol claims 3.40625 LREP.
+
+Bounty size can raise the required rater floor: 3 below 1,000 USDC, 5 from 1,000 USDC, and 8 from 10,000 USDC. This keeps small asks usable while requiring broader participation for larger payout pools.
+
+Settled RateLoop scores are public feedback signals. Do not use them to settle external financial contracts.
 
 ## Payout Roots
 

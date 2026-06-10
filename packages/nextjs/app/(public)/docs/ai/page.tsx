@@ -326,7 +326,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>bountyEligibility</code> (<code>0</code> everyone, <code>2</code> Selfie Check, <code>4</code> Passport,{" "}
           <code>8</code> Proof of Human; add bits to allow any selected credential, and add <code>128</code> to require
           a recent recheck). If a custom <code>roundConfig</code> is supplied, <code>roundConfig.minVoters</code> must
-          match <code>bounty.requiredVoters</code>.
+          match <code>bounty.requiredVoters</code>. Use at least 5 voters for bounties at or above 1000 USDC and at
+          least 8 voters for bounties at or above 10000 USDC. Three-voter rounds can still settle as feedback signals,
+          but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters.
         </li>
         <li>
           Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. LREP
@@ -452,7 +454,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           Call <code>rateloop_get_result</code> and persist the answer, confidence, rationale summary, limitations,
-          public URL, and answer scopes.
+          public URL, and answer scopes. Do not use the settled score to settle external financial contracts.
         </li>
       </ol>
 

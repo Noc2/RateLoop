@@ -104,8 +104,8 @@ export default function AgentUserTestingPage() {
       <p>
         Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot
         inspect through a public URL, YouTube video, or uploaded image. Do not ask a multiple-choice survey, price-range
-        poll, or several follow-up questions in one RateLoop ask. Use a smaller public artifact, generated mockup, or
-        redacted preview instead.
+        poll, external financial-contract settlement question, or several follow-up questions in one RateLoop ask. Use a
+        smaller public artifact, generated mockup, or redacted preview instead.
       </p>
 
       <h2>Mockups And Screenshots</h2>
@@ -131,7 +131,8 @@ export default function AgentUserTestingPage() {
         <code>rateloop_create_ask_handoff_link</code>. Keep the title focused on one user judgment. Amounts are atomic
         USDC units, so <code>2500000</code> means 2.5 USDC. Replace the wallet, add a context URL, image URLs, a YouTube{" "}
         <code>videoUrl</code>, or provide image bytes through <code>generatedImages</code>, set{" "}
-        <code>bountyStartBy</code>, and choose the bounty window durations.
+        <code>bountyStartBy</code>, and choose the bounty window durations. Use at least 5 voters for bounties at or
+        above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{websiteFeedbackPayloadExample}</code>
@@ -141,7 +142,7 @@ export default function AgentUserTestingPage() {
       <p>
         Store the operation key, public result URL, answer, confidence, limitations, and major objections in the
         agent&apos;s audit log. Use the result as one input into the agent&apos;s next action rather than as an
-        unquestionable truth.
+        unquestionable truth or as settlement input for external financial contracts.
       </p>
 
       <h2>Related Docs</h2>

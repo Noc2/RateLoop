@@ -122,7 +122,7 @@ Browser handoff pages may expose read-only WebMCP helpers for status, draft vali
 4. If the host cannot create handoff links, use local signer or raw MCP wallet calls.
 5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
 
-Never use settled RateLoop scores to settle external financial contracts. Rounds with fewer than 8 revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout.
+Never use settled RateLoop scores to settle external financial contracts. Rounds with fewer than 8 score-eligible revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout and capped at 50% of stake once active.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
 

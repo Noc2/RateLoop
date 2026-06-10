@@ -115,7 +115,7 @@ For public written context, provide the full text off-chain with `question.detai
 
 ## Minimal Ask Shape
 
-Use this shape after a successful quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet, set `bountyStartBy` to the latest acceptable first-round start timestamp, and set the bounty and feedback windows in seconds. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`.
+Use this shape after a successful quote. USDC amounts are atomic units, so `2500000` means 2.5 USDC. LREP amounts use LREP atomic units. Replace the wallet, set `bountyStartBy` to the latest acceptable first-round start timestamp, and set the bounty and feedback windows in seconds. When you provide a custom `roundConfig`, `roundConfig.minVoters` must match `bounty.requiredVoters`. Use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC.
 
 ```json
 {
@@ -162,6 +162,8 @@ Use this shape after a successful quote. USDC amounts are atomic units, so `2500
 ```
 
 For `paymentMode: "wallet_calls"`, RateLoop returns an ordered transaction plan. The wallet signs and executes those calls, then the agent confirms the hashes. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
+
+Three-voter rounds can still settle as feedback signals, but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters and capped at 50% of stake once active. Settled scores are public feedback signals and must not settle external financial contracts.
 
 `feedbackBonus` is optional and MCP-only. Use it when public written feedback is useful in addition to the rating result. Feedback is published on-chain by the rater when submitted. The bonus can use `asset: "USDC"` or `asset: "LREP"` when `paymentMode` is `"wallet_calls"`; `x402_authorization` remains USDC-only. The requested feedback close comes from `feedbackWindowSeconds` or `feedbackBonus.feedbackClosesAt`; only feedback published on-chain at or before that timestamp can receive the bonus. The effective award decision deadline is the later of that requested close and 24 hours after settlement. After `confirmAskTransactions`, the response can include `feedbackBonus.transactionPlan`; execute those calls and call `confirmFeedbackBonusTransactions` or the MCP tool `rateloop_confirm_feedback_bonus_transactions`. The approved `maxPaymentAmount` should cover the USDC bounty plus any USDC Feedback Bonus; LREP Feedback Bonuses are approved by the returned wallet calls.
 
