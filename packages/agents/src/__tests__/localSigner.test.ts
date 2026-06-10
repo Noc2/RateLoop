@@ -49,7 +49,8 @@ const BOUNTY_START_BY = 1_893_456_000n;
 const BOUNTY_WINDOW_SECONDS = 1_200n;
 const FEEDBACK_WINDOW_SECONDS = 1_200n;
 const X402_VALID_AFTER = "0";
-const X402_VALID_BEFORE = "9999999999";
+// Must stay within the local signer's 24-hour validBefore sanity cap.
+const X402_VALID_BEFORE = String(Math.floor(Date.now() / 1000) + 3_600);
 const TEST_SIGNATURE = `0x${"1".repeat(64)}${"3".repeat(64)}1b` as const;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
 const EMPTY_DETAILS = { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH } as const;
@@ -736,6 +737,17 @@ describe("local signer", () => {
     await expect(
       signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS),
     ).rejects.toThrow(/validBefore must be greater than validAfter/);
+  });
+
+  it("rejects x402 authorizations whose validBefore exceeds the 24 hour cap", async () => {
+    const farFuture = String(Math.floor(Date.now() / 1000) + 25 * 60 * 60);
+    const request = x402AuthorizationRequest();
+    request.authorization.validBefore = farFuture;
+    request.typedData.message.validBefore = farFuture;
+
+    await expect(
+      signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS),
+    ).rejects.toThrow(/validBefore must be within 86400 seconds/);
   });
 
   it("rejects x402 authorizations whose nonce is not bound to the ask payload", async () => {

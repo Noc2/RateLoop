@@ -75,6 +75,13 @@ const X402_AUTHORIZATION_FIELDS = [
   { name: "validBefore", type: "uint256" },
   { name: "nonce", type: "bytes32" },
 ] as const;
+/**
+ * Sanity cap on EIP-3009 authorization lifetimes. The RateLoop server
+ * proposes validBefore, so without a cap a compromised or buggy server could
+ * obtain a transfer authorization that stays valid for years. Question
+ * submissions settle within minutes, so 24 hours is generous headroom.
+ */
+const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
@@ -898,15 +905,24 @@ function assertTrustedX402Authorization(
       "x402 authorization.value must equal the requested bounty amount.",
     );
   }
+  const validBefore = normalizeBigInt(
+    authorization.validBefore,
+    "paymentAuthorization.validBefore",
+  );
   if (
-    normalizeBigInt(
-      authorization.validBefore,
-      "paymentAuthorization.validBefore",
-    ) <=
+    validBefore <=
     normalizeBigInt(authorization.validAfter, "paymentAuthorization.validAfter")
   ) {
     throw new Error(
       "x402 authorization.validBefore must be greater than validAfter.",
+    );
+  }
+  const maxValidBefore =
+    BigInt(Math.floor(Date.now() / 1000)) +
+    MAX_X402_AUTHORIZATION_VALIDITY_SECONDS;
+  if (validBefore > maxValidBefore) {
+    throw new Error(
+      `x402 authorization.validBefore must be within ${MAX_X402_AUTHORIZATION_VALIDITY_SECONDS} seconds (24 hours) of now.`,
     );
   }
   if (
