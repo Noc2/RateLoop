@@ -1424,6 +1424,52 @@ test("buildWebhookVerifier validates timestamped HMAC signatures", async () => {
   );
 });
 
+test("buildWebhookVerifier canonicalizes parsed object bodies", async () => {
+  const body = {
+    z: 1,
+    a: { c: 3, b: 2 },
+    list: [{ y: 2, x: 1 }],
+  };
+  const canonicalBody =
+    '{"a":{"b":2,"c":3},"list":[{"x":1,"y":2}],"z":1}';
+  const eventId = "event-canonical";
+  const timestamp = "2026-04-23T12:00:00.000Z";
+  const { store } = memoryReplayStore();
+  const verifier = buildWebhookVerifier({
+    replayProtection: { store },
+    secret: "shared-secret",
+  });
+
+  const result = await verifier.handleOnce(
+    {
+      body,
+      headers: signedWebhookHeaders({
+        body: canonicalBody,
+        eventId,
+        timestamp,
+      }),
+      now: new Date("2026-04-23T12:01:00.000Z"),
+    },
+    async event => event.body,
+  );
+
+  if (result.status !== "processed") {
+    assert.fail(`expected processed event, got ${result.status}`);
+  }
+  assert.equal(result.value, canonicalBody);
+});
+
+test("buildWebhookVerifier rejects negative toleranceSeconds", () => {
+  assert.throws(
+    () =>
+      buildWebhookVerifier({
+        secret: "shared-secret",
+        toleranceSeconds: -1,
+      }),
+    /toleranceSeconds must be a non-negative finite number/,
+  );
+});
+
 test("buildWebhookVerifier handleOnce processes a signed event once", async () => {
   const body = JSON.stringify({ operationKey: `0x${"44".repeat(32)}` });
   const eventId = "event-once";

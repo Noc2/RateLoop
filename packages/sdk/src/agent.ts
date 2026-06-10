@@ -1262,10 +1262,15 @@ export function buildWebhookVerifier(
     options.timestampHeader ?? "x-rateloop-callback-timestamp"
   ).toLowerCase();
   const toleranceSeconds = options.toleranceSeconds ?? 300;
+  if (!Number.isFinite(toleranceSeconds) || toleranceSeconds < 0) {
+    throw new RateLoopSdkError(
+      "Webhook verifier toleranceSeconds must be a non-negative finite number",
+    );
+  }
   const replayProtection = options.replayProtection;
   const replayTtlSeconds = Math.max(
     replayProtection?.ttlSeconds ?? 24 * 60 * 60,
-    toleranceSeconds >= 0 ? toleranceSeconds : 0,
+    toleranceSeconds,
   );
 
   async function verifyEvent(
@@ -1280,8 +1285,7 @@ export function buildWebhookVerifier(
     const timestamp = getHeader(params.headers, timestampHeader);
     if (
       !timestamp ||
-      (toleranceSeconds >= 0 &&
-        !isTimestampFresh(timestamp, toleranceSeconds, params.now))
+      !isTimestampFresh(timestamp, toleranceSeconds, params.now)
     ) {
       return null;
     }
@@ -1842,9 +1846,35 @@ function parseJson(body: string): unknown {
 }
 
 function stringifyJson(value: unknown) {
-  return JSON.stringify(value, (_key, entry) =>
-    typeof entry === "bigint" ? entry.toString() : entry,
-  );
+  return JSON.stringify(value, jsonReplacer);
+}
+
+function canonicalJson(value: unknown) {
+  return JSON.stringify(sortJsonValue(value), jsonReplacer);
+}
+
+function jsonReplacer(_key: string, entry: unknown) {
+  return typeof entry === "bigint" ? entry.toString() : entry;
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+
+  if (
+    value &&
+    typeof value === "object" &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, sortJsonValue(nested)]),
+    );
+  }
+
+  return value;
 }
 
 function parseMaybeJson(value: unknown): unknown {
@@ -1904,7 +1934,7 @@ function bodyToString(body: VerifyWebhookParams["body"]): string {
   if (typeof body === "string") return body;
   if (body instanceof Uint8Array) return new TextDecoder().decode(body);
   if (body instanceof ArrayBuffer) return new TextDecoder().decode(body);
-  return stringifyJson(body);
+  return canonicalJson(body);
 }
 
 function isTimestampFresh(
