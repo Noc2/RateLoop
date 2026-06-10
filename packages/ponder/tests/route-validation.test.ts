@@ -76,6 +76,7 @@ function mockPonderModules<T>(result: T) {
     content: {
       canonicalUrl: "content.canonicalUrl",
       id: "content.id",
+      lastActivityAt: "content.lastActivityAt",
       bundleId: "content.bundleId",
       bundleIndex: "content.bundleIndex",
       categoryId: "content.categoryId",
@@ -2149,6 +2150,48 @@ describe("registerCorrelationRoutes", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
       error: "rewardPoolId, contentId, and roundId must be positive integers",
+    });
+  });
+});
+
+describe("registerKeeperRoutes", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  it("rejects malformed keeper work deadlines", async () => {
+    mockPonderModules([]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request("http://localhost/keeper/work?now=abc&dormancyPeriod=60");
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "now and dormancyPeriod must be non-negative integer seconds",
+    });
+  });
+
+  it("returns keeper work candidates as JSON-safe strings", async () => {
+    mockPonderModules([{ contentId: 9n, roundId: 2n, reason: "settle" }]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request("http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      source: "ponder",
+      openRounds: [{ contentId: "9", roundId: "2", reason: "settle" }],
+      cleanupRounds: [{ contentId: "9", roundId: "2", reason: "settle" }],
+      dormantContent: [{ contentId: "9", roundId: "2", reason: "settle" }],
     });
   });
 });

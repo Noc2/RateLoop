@@ -30,6 +30,11 @@ const {
       advisoryVoteRecorder: "0x5555555555555555555555555555555555555555",
     },
     ponderBaseUrl: "https://ponder.example.test",
+    keeperWorkDiscovery: {
+      enabled: false,
+      reconciliationEveryTicks: 120,
+      maxCandidates: 500,
+    },
     dormancyPeriod: 30n * 24n * 60n * 60n,
     cleanupBatchSize: 25,
   },
@@ -537,8 +542,63 @@ describe("resolveRounds", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    mockConfig.keeperWorkDiscovery.enabled = false;
+    mockConfig.keeperWorkDiscovery.reconciliationEveryTicks = 120;
+    mockConfig.keeperWorkDiscovery.maxCandidates = 500;
     mockConfig.cleanupBatchSize = 25;
     resetKeeperStateForTests();
+  });
+
+  it("uses Ponder keeper work candidates without scanning every content id", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      dormancyEligible: true,
+      now: 3_000_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [{ contentId: "1", reason: "dormant" }],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.contentMarkedDormant).toBe(1);
+    expect(publicClient.readContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "nextContentId" }),
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "markDormant",
+        args: [1n],
+      }),
+    );
   });
 
   it("finalizes reveal-failed rounds and cleans up unrevealed stake", async () => {

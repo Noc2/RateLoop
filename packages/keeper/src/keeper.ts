@@ -55,7 +55,7 @@ import {
 } from "./contract-reads.js";
 import { config } from "./config.js";
 import type { Logger } from "./logger.js";
-import { incrementCounter } from "./metrics.js";
+import { incrementCounter, setGauge } from "./metrics.js";
 import { getRevertReason, isExpectedRevert } from "./revert-utils.js";
 
 // --- Types ---
@@ -74,6 +74,22 @@ interface CleanupCursor {
   roundId: bigint;
   nextIndex: number;
 }
+interface KeeperWorkRoundCandidate {
+  contentId: bigint;
+  roundId: bigint;
+  reason?: string;
+}
+interface KeeperWorkContentCandidate {
+  contentId: bigint;
+  reason?: string;
+}
+interface KeeperWorkDiscovery {
+  source: "ponder" | "chain";
+  contentIds: bigint[];
+  openRounds: KeeperWorkRoundCandidate[];
+  cleanupRounds: KeeperWorkRoundCandidate[];
+  dormantContent: KeeperWorkContentCandidate[];
+}
 
 const MAX_CLEANUP_BATCHES_PER_TICK = 4;
 const MAX_CLEANUP_COMPLETED = 5000;
@@ -85,6 +101,7 @@ const cleanupQueue = new Map<string, CleanupCursor>();
 const cleanupCompletedRounds = new Set<string>();
 const cleanupDiscoveryRoundByContent = new Map<bigint, bigint>();
 const tlockClientCache = new Map<string, ChainClient>();
+let keeperWorkDiscoveryTick = 0;
 
 const MAINNET_QUICKNET_CHAIN_HASH =
   "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
@@ -178,6 +195,7 @@ export function resetKeeperStateForTests(): void {
   cleanupQueue.clear();
   cleanupCompletedRounds.clear();
   cleanupDiscoveryRoundByContent.clear();
+  keeperWorkDiscoveryTick = 0;
   decryptFailureCount.clear();
   tlockClientCache.clear();
 }
@@ -414,6 +432,240 @@ async function discoverCleanupCandidate(
   }
 }
 
+async function discoverKeeperWorkCandidates(
+  publicClient: Pick<PublicClient, "readContract">,
+  registryAddr: `0x${string}`,
+  now: bigint,
+  logger: Logger,
+): Promise<KeeperWorkDiscovery> {
+  const startedAt = Date.now();
+  const discoveryConfig = config.keeperWorkDiscovery ?? {
+    enabled: false,
+    reconciliationEveryTicks: 1,
+    maxCandidates: 500,
+  };
+
+  keeperWorkDiscoveryTick += 1;
+  const reconcileEvery = Math.max(
+    1,
+    Number(discoveryConfig.reconciliationEveryTicks ?? 1),
+  );
+  const reconciliationDue = keeperWorkDiscoveryTick % reconcileEvery === 0;
+
+  let discovery: KeeperWorkDiscovery | null = null;
+  if (discoveryConfig.enabled && !reconciliationDue) {
+    discovery = await fetchKeeperWorkFromPonder(
+      now,
+      BigInt(config.dormancyPeriod),
+      Number(discoveryConfig.maxCandidates ?? 500),
+      logger,
+    );
+  }
+
+  if (!discovery) {
+    discovery = await discoverKeeperWorkFromChain(publicClient, registryAddr);
+  }
+
+  setGauge(
+    "keeper_work_discovery_last_duration_seconds",
+    (Date.now() - startedAt) / 1000,
+  );
+  setGauge(
+    "keeper_work_discovery_last_source",
+    discovery.source === "ponder" ? 1 : 2,
+  );
+  setGauge(
+    "keeper_work_discovery_open_round_candidates",
+    discovery.openRounds.length,
+  );
+  setGauge(
+    "keeper_work_discovery_cleanup_round_candidates",
+    discovery.cleanupRounds.length,
+  );
+  setGauge(
+    "keeper_work_discovery_dormant_content_candidates",
+    discovery.dormantContent.length,
+  );
+
+  return discovery;
+}
+
+async function discoverKeeperWorkFromChain(
+  publicClient: Pick<PublicClient, "readContract">,
+  registryAddr: `0x${string}`,
+): Promise<KeeperWorkDiscovery> {
+  const nextContentId = (await publicClient.readContract({
+    address: registryAddr,
+    abi: ContentRegistryAbi,
+    functionName: "nextContentId",
+    args: [],
+  })) as bigint;
+
+  const contentIds: bigint[] = [];
+  for (let contentId = 1n; contentId < nextContentId; contentId++) {
+    contentIds.push(contentId);
+  }
+
+  return {
+    source: "chain",
+    contentIds,
+    openRounds: [],
+    cleanupRounds: [],
+    dormantContent: [],
+  };
+}
+
+async function fetchKeeperWorkFromPonder(
+  now: bigint,
+  dormancyPeriod: bigint,
+  limit: number,
+  logger: Logger,
+): Promise<KeeperWorkDiscovery | null> {
+  const baseUrl = config.ponderBaseUrl;
+  if (!baseUrl) return null;
+
+  const url = new URL("/keeper/work", baseUrl);
+  url.searchParams.set("now", now.toString());
+  url.searchParams.set("dormancyPeriod", dormancyPeriod.toString());
+  url.searchParams.set("limit", String(Math.max(1, limit)));
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PONDER_FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Ponder keeper work request failed: ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const discovery = parseKeeperWorkPayload(payload);
+    if (!discovery) {
+      throw new Error("Ponder keeper work response was malformed");
+    }
+
+    return discovery;
+  } catch (err: unknown) {
+    incrementCounter("keeper_work_discovery_ponder_failures_total");
+    logger.warn("Falling back to chain keeper work discovery", {
+      error: getRevertReason(err),
+    });
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  const openRounds = parseKeeperWorkRoundArray(record.openRounds);
+  const cleanupRounds = parseKeeperWorkRoundArray(record.cleanupRounds);
+  const dormantContent = parseKeeperWorkContentArray(record.dormantContent);
+
+  if (!openRounds || !cleanupRounds || !dormantContent) {
+    return null;
+  }
+
+  const contentIds = sortedUniqueBigInts([
+    ...openRounds.map((candidate) => candidate.contentId),
+    ...cleanupRounds.map((candidate) => candidate.contentId),
+    ...dormantContent.map((candidate) => candidate.contentId),
+  ]);
+
+  return {
+    source: "ponder",
+    contentIds,
+    openRounds,
+    cleanupRounds,
+    dormantContent,
+  };
+}
+
+function parseKeeperWorkRoundArray(
+  value: unknown,
+): KeeperWorkRoundCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+  const candidates: KeeperWorkRoundCandidate[] = [];
+  for (const item of value) {
+    const candidate = parseKeeperWorkRound(item);
+    if (!candidate) return null;
+    candidates.push(candidate);
+  }
+  return dedupeRoundCandidates(candidates);
+}
+
+function parseKeeperWorkContentArray(
+  value: unknown,
+): KeeperWorkContentCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+  const candidates: KeeperWorkContentCandidate[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const record = item as Record<string, unknown>;
+    const contentId = parsePositiveBigInt(record.contentId);
+    if (contentId === null) return null;
+    const key = contentId.toString();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      contentId,
+      reason: typeof record.reason === "string" ? record.reason : undefined,
+    });
+  }
+  return candidates.sort((a, b) => compareBigInt(a.contentId, b.contentId));
+}
+
+function parseKeeperWorkRound(value: unknown): KeeperWorkRoundCandidate | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const contentId = parsePositiveBigInt(record.contentId);
+  const roundId = parsePositiveBigInt(record.roundId);
+  if (contentId === null || roundId === null) return null;
+  return {
+    contentId,
+    roundId,
+    reason: typeof record.reason === "string" ? record.reason : undefined,
+  };
+}
+
+function dedupeRoundCandidates(
+  candidates: KeeperWorkRoundCandidate[],
+): KeeperWorkRoundCandidate[] {
+  const byKey = new Map<string, KeeperWorkRoundCandidate>();
+  for (const candidate of candidates) {
+    byKey.set(
+      cleanupRoundKey(candidate.contentId, candidate.roundId),
+      candidate,
+    );
+  }
+  return Array.from(byKey.values()).sort((a, b) => {
+    const contentOrder = compareBigInt(a.contentId, b.contentId);
+    return contentOrder !== 0 ? contentOrder : compareBigInt(a.roundId, b.roundId);
+  });
+}
+
+function sortedUniqueBigInts(values: bigint[]): bigint[] {
+  return Array.from(new Set(values.map((value) => value.toString())))
+    .map((value) => BigInt(value))
+    .sort(compareBigInt);
+}
+
+function parsePositiveBigInt(value: unknown): bigint | null {
+  try {
+    const parsed =
+      typeof value === "bigint" ? value : BigInt(String(value ?? ""));
+    return parsed > 0n ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function compareBigInt(a: bigint, b: bigint): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /**
  * Decrypt a tlock-encrypted ciphertext using the drand beacon.
  * Ciphertext on-chain is hex-encoded UTF-8 armored AGE string.
@@ -629,22 +881,26 @@ export async function resolveRounds(
 
   const result: KeeperResult = emptyResult();
 
-  // --- Get total content count ---
-  let nextContentId: bigint;
+  // --- Discover work candidates ---
+  let discovery: KeeperWorkDiscovery;
   try {
-    nextContentId = (await publicClient.readContract({
-      address: registryAddr,
-      abi: ContentRegistryAbi,
-      functionName: "nextContentId",
-      args: [],
-    })) as bigint;
+    discovery = await discoverKeeperWorkCandidates(
+      publicClient,
+      registryAddr,
+      now,
+      logger,
+    );
   } catch {
     logger.error("Could not connect to chain");
     return emptyResult();
   }
 
-  // --- Process each content item ---
-  for (let contentId = 1n; contentId < nextContentId; contentId++) {
+  for (const candidate of discovery.cleanupRounds) {
+    enqueueRoundForCleanup(candidate.contentId, candidate.roundId);
+  }
+
+  // --- Process discovered content items ---
+  for (const contentId of discovery.contentIds) {
     try {
       // Get the current round IDs for this content.
       let activeRoundId: bigint;
@@ -877,18 +1133,20 @@ export async function resolveRounds(
       }
 
       // --- 5. CLEANUP DISCOVERY: inspect at most one historical round per content ---
-      try {
-        await discoverCleanupCandidate(
-          publicClient,
-          engineAddr,
-          contentId,
-          latestRoundId,
-        );
-      } catch (err: unknown) {
-        logger.debug("Could not discover cleanup candidate", {
-          contentId: contentId.toString(),
-          error: getRevertReason(err),
-        });
+      if (discovery.source === "chain") {
+        try {
+          await discoverCleanupCandidate(
+            publicClient,
+            engineAddr,
+            contentId,
+            latestRoundId,
+          );
+        } catch (err: unknown) {
+          logger.debug("Could not discover cleanup candidate", {
+            contentId: contentId.toString(),
+            error: getRevertReason(err),
+          });
+        }
       }
 
       if (latestRoundId > 0n) {

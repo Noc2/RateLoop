@@ -49,6 +49,7 @@ export const content = onchainTable(
     canonicalUrlIdx: index().on(table.canonicalUrl),
     urlHostIdx: index().on(table.urlHost),
     statusIdx: index().on(table.status),
+    statusLastActivityIdx: index().on(table.status, table.lastActivityAt),
     ratingIdx: index().on(table.rating),
     createdAtIdx: index().on(table.createdAt),
     searchIdx: index("content_search_idx").using(
@@ -146,6 +147,7 @@ export const round = onchainTable(
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.roundId),
     stateIdx: index().on(table.state),
+    stateContentRoundIdx: index().on(table.state, table.contentId, table.roundId),
     settledAtIdx: index().on(table.settledAt),
   }),
 );
