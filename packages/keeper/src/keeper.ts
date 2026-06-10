@@ -140,6 +140,8 @@ export function resetKeeperStateForTests(): void {
   keeperWorkDiscoveryTick = 0;
   decryptFailureCount.clear();
   resetTlockClientCacheForTests();
+  lastBlockTimestampS = null;
+  lastBlockObservedAtMs = null;
 }
 
 // Track repeated decrypt failures per commitKey to stop retrying permanently bad ciphertexts
@@ -920,19 +922,27 @@ export async function resolveRounds(
   // from the last successful block timestamp (bounded). It throws if there's no cached value or
   // the cache is too stale, so the keeper short-circuits this iteration loudly rather than
   // continuing on a possibly-skewed system clock.
+  // A total RPC outage must surface as a FAILED tick: throwing here propagates to
+  // tick()'s error path (recordError -> consecutiveErrors / keeper_errors_total), so
+  // /health degrades instead of the outage looking like an endless successful empty run.
   let now: bigint;
   try {
     now = await resolveOnChainNowSeconds(publicClient);
   } catch (err) {
-    logger.error(
-      `[Keeper] Cannot resolve current block time: ${err instanceof Error ? err.message : String(err)}`,
+    throw new Error(
+      `Cannot resolve current block time: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return emptyResult();
   }
 
   const result: KeeperResult = emptyResult();
 
   // --- Discover work candidates ---
+  // Like the block-time read above, a total chain outage here is a fatal whole-tick
+  // failure: propagate it so recordRun is not called and the tick is counted as an
+  // error. Ponder-side discovery failures already fall back to chain enumeration
+  // inside discoverKeeperWorkCandidates (fetchKeeperWorkFromPonder returns null), so
+  // only the on-chain nextContentId read can throw here. Per-round failures further
+  // down keep their partial-failure semantics.
   let discovery: KeeperWorkDiscovery;
   try {
     discovery = await discoverKeeperWorkCandidates(
@@ -941,9 +951,10 @@ export async function resolveRounds(
       now,
       logger,
     );
-  } catch {
-    logger.error("Could not connect to chain");
-    return emptyResult();
+  } catch (err) {
+    throw new Error(
+      `Could not connect to chain: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   for (const candidate of discovery.cleanupRounds) {

@@ -8,6 +8,7 @@ type KeeperIndexOptions = {
   balance?: bigint;
   failBalanceRead?: boolean;
   frontendFeeEnabled?: boolean;
+  resolveRoundsError?: Error;
 };
 
 async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
@@ -31,16 +32,18 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     },
   );
 
-  const resolveRounds = vi.fn().mockResolvedValue({
-    roundsSettled: 0,
-    roundsCancelled: 0,
-    roundsRevealFailedFinalized: 0,
-    votesRevealed: 0,
-    advisoryVotesRevealed: 0,
-    advisoryLaunchCreditsClaimed: 0,
-    cleanupBatchesProcessed: 0,
-    contentMarkedDormant: 0,
-  });
+  const resolveRounds = options.resolveRoundsError
+    ? vi.fn().mockRejectedValue(options.resolveRoundsError)
+    : vi.fn().mockResolvedValue({
+        roundsSettled: 0,
+        roundsCancelled: 0,
+        roundsRevealFailedFinalized: 0,
+        votesRevealed: 0,
+        advisoryVotesRevealed: 0,
+        advisoryLaunchCreditsClaimed: 0,
+        cleanupBatchesProcessed: 0,
+        contentMarkedDormant: 0,
+      });
   const validateKeeperContracts = vi.fn().mockResolvedValue(undefined);
   const setGauge = vi.fn();
   const recordRun = vi.fn();
@@ -227,6 +230,21 @@ describe("keeper index", () => {
       50,
     );
     expect(keeper.resolveRounds).toHaveBeenCalledOnce();
+  });
+
+  it("records an error when resolveRounds fails entirely", async () => {
+    const keeper = await loadKeeperIndex({
+      resolveRoundsError: new Error("Cannot resolve current block time: rpc down"),
+    });
+
+    expect(keeper.recordError).toHaveBeenCalledOnce();
+    expect(keeper.recordRun).not.toHaveBeenCalled();
+    expect(keeper.logger.error).toHaveBeenCalledWith(
+      "Run failed",
+      expect.objectContaining({
+        error: "Cannot resolve current block time: rpc down",
+      }),
+    );
   });
 
   it("runs the hosted frontend fee sweep when enabled", async () => {

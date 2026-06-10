@@ -1894,4 +1894,49 @@ describe("resolveRounds", () => {
       expect.objectContaining({ error: "SomethingWentVeryWrong" }),
     );
   });
+
+  it("rejects when the current block time cannot be resolved", async () => {
+    const round = makeRound({ state: 0, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({ round });
+    publicClient.getBlock.mockRejectedValue(new Error("rpc down"));
+    const logger = makeLogger();
+
+    // Total RPC outage must propagate so tick() records an error and /health degrades,
+    // instead of looking like an endless successful empty run.
+    await expect(
+      resolveRounds(
+        publicClient as any,
+        walletClient as any,
+        {} as any,
+        { address: ACCOUNT } as any,
+        logger as any,
+      ),
+    ).rejects.toThrow(/Cannot resolve current block time/);
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the content registry cannot be read", async () => {
+    const round = makeRound({ state: 0, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({ round });
+    publicClient.readContract.mockImplementation(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "nextContentId") {
+          throw new Error("connection refused");
+        }
+        throw new Error(`Unexpected readContract(${functionName})`);
+      },
+    );
+    const logger = makeLogger();
+
+    await expect(
+      resolveRounds(
+        publicClient as any,
+        walletClient as any,
+        {} as any,
+        { address: ACCOUNT } as any,
+        logger as any,
+      ),
+    ).rejects.toThrow(/Could not connect to chain: connection refused/);
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+  });
 });
