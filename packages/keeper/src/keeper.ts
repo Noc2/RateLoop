@@ -747,6 +747,20 @@ async function fetchIndexedCiphertextsForRound(params: {
       if (items.length < INDEXED_CIPHERTEXT_PAGE_SIZE)
         return indexedCiphertexts;
     }
+    // Currently unreachable for protocol-capped rounds (max 200 voters), but a governance
+    // cap raise past MAX_INDEXED_CIPHERTEXT_PAGES * INDEXED_CIPHERTEXT_PAGE_SIZE commits
+    // would otherwise silently truncate the map. Commits beyond the limit are no longer
+    // permanently unrevealable — the eth_getLogs fallback recovers them — but every such
+    // round would silently lean on the slower on-chain log scan, so still warn loudly.
+    params.logger.warn(
+      "Indexed ciphertext page limit reached; commits beyond the limit fall back to on-chain logs",
+      {
+        kind: params.kind,
+        contentId: Number(params.contentId),
+        roundId: Number(params.roundId),
+        maxCommits: MAX_INDEXED_CIPHERTEXT_PAGES * INDEXED_CIPHERTEXT_PAGE_SIZE,
+      },
+    );
     return indexedCiphertexts;
   } catch (err: unknown) {
     incrementCounter("keeper_ponder_ciphertext_fetch_failures_total");
