@@ -219,7 +219,12 @@ library RoundRevealLib {
         }
         if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
 
-        if (params.settlementEntropy == bytes32(0)) revert RbtsSeedUnavailable();
+        if (params.settlementEntropy == bytes32(0)) {
+            _returnScoredStakes(
+                roundCommits, commitRbtsWeight, commitRbtsStakeReturned, revealedKeysMem, revealedBuildIdx
+            );
+            return result;
+        }
 
         // Seed combines delayed closure entropy with the settlement-closed scoring set.
         result.scoreSeed = _rbtsScoreSeed(
@@ -326,7 +331,7 @@ library RoundRevealLib {
         bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
         if (seedBlockhash == bytes32(0)) {
             emit RbtsSeedCaptured(contentId, roundId, bytes32(0));
-            revert RbtsSeedUnavailable();
+            return bytes32(0);
         }
         settlementEntropy = keccak256(
             abi.encode(

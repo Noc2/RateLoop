@@ -1015,11 +1015,6 @@ contract RoundVotingEngine is
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
             return;
         }
-        if (RoundRevealLib.refreshExpiredRbtsSeed(roundRbtsSeedEntropy, _roundRbtsSeedRefreshCount, contentId, roundId))
-        {
-            return;
-        }
-
         (weightedRewardStake, rbtsForfeitedPool, scoreSeed) =
             _scoreRbtsRewards(contentId, roundId, round.revealedCount, round.thresholdReachedAt);
         roundRbtsScored[contentId][roundId] = true;
