@@ -17,6 +17,9 @@ import { incrementCounter } from "./metrics.js";
 type DrandChain = ReturnType<ChainClient["chain"]>;
 
 const KEEPER_TLOCK_USER_AGENT = "rateloop-keeper";
+const ENABLE_LEGACY_TLOCK_JS_TESTNET_ENV =
+  "KEEPER_ENABLE_LEGACY_TLOCK_JS_TESTNET";
+const WORLDCHAIN_MAINNET_CHAIN_ID = 480;
 
 export const MAINNET_QUICKNET_CHAIN_HASH =
   "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
@@ -56,7 +59,8 @@ const QUICKNET_T: DrandChainSpec = {
   ],
 };
 
-// Default tlock-js testnet chain. Hash and group public key match `testnetClient()`.
+// Deprecated tlock-js testnet chain. Kept behind an explicit env gate only for
+// old local fixtures; production/default traffic must stay pinned to quicknet.
 const TLOCK_JS_TESTNET: DrandChainSpec = {
   chainHash: TLOCK_JS_TESTNET_CHAIN_HASH,
   publicKey:
@@ -70,8 +74,31 @@ const TLOCK_JS_TESTNET: DrandChainSpec = {
 const SUPPORTED_CHAINS: readonly DrandChainSpec[] = [
   MAINNET_QUICKNET,
   QUICKNET_T,
-  TLOCK_JS_TESTNET,
 ];
+
+function legacyTlockJsTestnetEnabled(): boolean {
+  const value =
+    process.env[ENABLE_LEGACY_TLOCK_JS_TESTNET_ENV]?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+function configuredChainId(): number | null {
+  const value = process.env.CHAIN_ID?.trim();
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function assertDeploymentDrandChain(normalized: string): void {
+  if (
+    configuredChainId() === WORLDCHAIN_MAINNET_CHAIN_ID &&
+    normalized !== MAINNET_QUICKNET_CHAIN_HASH
+  ) {
+    throw new Error(
+      `World Chain mainnet keeper requires drand quicknet chain hash 0x${MAINNET_QUICKNET_CHAIN_HASH}; got 0x${normalized}.`,
+    );
+  }
+}
 
 /** Thrown when every configured relay for a drand chain failed a request. */
 export class DrandUnavailableError extends Error {
@@ -189,7 +216,20 @@ export function resolveTlockClientForDrandChain(
 ): ChainClient {
   const normalized =
     normalizeDrandChainHash(drandChainHash) ?? MAINNET_QUICKNET_CHAIN_HASH;
-  const spec = SUPPORTED_CHAINS.find((chain) => chain.chainHash === normalized);
+  assertDeploymentDrandChain(normalized);
+  if (
+    normalized === TLOCK_JS_TESTNET_CHAIN_HASH &&
+    !legacyTlockJsTestnetEnabled()
+  ) {
+    throw new Error(
+      `Unsupported deprecated drand chain 0x${normalized}. Set ${ENABLE_LEGACY_TLOCK_JS_TESTNET_ENV}=true only for legacy local test fixtures.`,
+    );
+  }
+
+  const supportedChains = legacyTlockJsTestnetEnabled()
+    ? [...SUPPORTED_CHAINS, TLOCK_JS_TESTNET]
+    : SUPPORTED_CHAINS;
+  const spec = supportedChains.find((chain) => chain.chainHash === normalized);
   if (!spec) {
     throw new Error(
       `Unsupported drand chain 0x${normalized}. Update the keeper tlock client allowlist before revealing votes for this deployment.`,

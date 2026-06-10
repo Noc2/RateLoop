@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   DrandUnavailableError,
   FailoverChainClient,
+  MAINNET_QUICKNET_CHAIN_HASH,
+  QUICKNET_T_CHAIN_HASH,
+  TLOCK_JS_TESTNET_CHAIN_HASH,
   isDrandUnavailableError,
   resetTlockClientCacheForTests,
   resolveTlockClientForDrandChain,
@@ -105,6 +108,12 @@ describe("FailoverChainClient", () => {
 describe("resolveTlockClientForDrandChain", () => {
   beforeEach(() => {
     resetTlockClientCacheForTests();
+    vi.stubEnv("CHAIN_ID", "31337");
+    vi.stubEnv("KEEPER_ENABLE_LEGACY_TLOCK_JS_TESTNET", "");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("caches one failover client per chain", () => {
@@ -112,6 +121,9 @@ describe("resolveTlockClientForDrandChain", () => {
     const second = resolveTlockClientForDrandChain(undefined);
     expect(first).toBe(second);
     expect(first).toBeInstanceOf(FailoverChainClient);
+    expect(first.options.chainVerificationParams?.chainHash).toBe(
+      MAINNET_QUICKNET_CHAIN_HASH,
+    );
   });
 
   it("rejects unknown drand chains", () => {
@@ -124,5 +136,26 @@ describe("resolveTlockClientForDrandChain", () => {
     expect(() => resolveTlockClientForDrandChain("0x1234")).toThrow(
       "Invalid drand chain hash",
     );
+  });
+
+  it("gates the deprecated tlock-js testnet chain behind an explicit env opt-in", () => {
+    expect(() =>
+      resolveTlockClientForDrandChain(`0x${TLOCK_JS_TESTNET_CHAIN_HASH}`),
+    ).toThrow("Unsupported deprecated drand chain");
+
+    vi.stubEnv("KEEPER_ENABLE_LEGACY_TLOCK_JS_TESTNET", "true");
+    resetTlockClientCacheForTests();
+
+    expect(
+      resolveTlockClientForDrandChain(`0x${TLOCK_JS_TESTNET_CHAIN_HASH}`),
+    ).toBeInstanceOf(FailoverChainClient);
+  });
+
+  it("rejects non-quicknet hashes for World Chain mainnet", () => {
+    vi.stubEnv("CHAIN_ID", "480");
+
+    expect(() =>
+      resolveTlockClientForDrandChain(`0x${QUICKNET_T_CHAIN_HASH}`),
+    ).toThrow("World Chain mainnet keeper requires drand quicknet chain hash");
   });
 });
