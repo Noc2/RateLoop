@@ -65,7 +65,18 @@ interface PublicRoundPayoutSnapshot {
   totalClaimWeight: string;
   weightRoot: Hex;
   reasonRoot: Hex;
+  eligibleVotes: PublicCorrelationVoteInput[];
   payoutWeights: PublicPayoutWeight[];
+}
+
+interface PublicCorrelationVoteInput {
+  account: Address;
+  identityKey: Hex;
+  commitKey: Hex;
+  baseWeight: string;
+  verifiedHuman: boolean;
+  historicalVoteCount: number;
+  features: readonly string[];
 }
 
 interface PublicPayoutWeight {
@@ -170,6 +181,15 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
       totalClaimWeight: scored.totalClaimWeight.toString(),
       weightRoot: scored.weightRoot,
       reasonRoot: scored.reasonRoot,
+      eligibleVotes: votes.map((vote): PublicCorrelationVoteInput => ({
+        account: vote.account,
+        identityKey: vote.identityKey,
+        commitKey: vote.commitKey,
+        baseWeight: vote.baseWeight.toString(),
+        verifiedHuman: vote.verifiedHuman,
+        historicalVoteCount: vote.historicalVoteCount,
+        features: [...vote.features].sort(),
+      })),
       payoutWeights: scored.leaves.map((leaf): PublicPayoutWeight => ({
         domain: leaf.domain,
         rewardPoolId: leaf.rewardPoolId.toString(),
@@ -209,6 +229,9 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
     chainId: config.chainId,
     oracleAddress: config.contracts.clusterPayoutOracle,
     scorerVersion: params.scorerVersion,
+    eligibilitySpecVersion: params.eligibilitySpecVersion,
+    canonicalJsonVersion: params.canonicalJsonVersion,
+    featureSpecVersion: params.featureSpecVersion,
     parameters: params,
     correlationEpochs: publicEpochs,
     roundPayoutSnapshots: publicRounds,

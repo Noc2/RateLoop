@@ -517,6 +517,23 @@ function loadConfig() {
     // Keeper behavior
     intervalMs: readPositiveIntEnv("KEEPER_INTERVAL_MS", "30000", errors),
     ponderBaseUrl,
+    keeperWorkDiscovery: {
+      enabled: parseBooleanEnv(
+        readEnv("KEEPER_WORK_DISCOVERY_PONDER_ENABLED"),
+        true,
+        "KEEPER_WORK_DISCOVERY_PONDER_ENABLED",
+      ),
+      reconciliationEveryTicks: readPositiveIntEnv(
+        "KEEPER_WORK_DISCOVERY_RECONCILE_EVERY_TICKS",
+        "120",
+        errors,
+      ),
+      maxCandidates: readPositiveIntEnv(
+        "KEEPER_WORK_DISCOVERY_MAX_CANDIDATES",
+        "500",
+        errors,
+      ),
+    },
     persistence: {
       databaseUrl: keeperDatabaseUrl ?? null,
     },

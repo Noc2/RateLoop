@@ -19,15 +19,6 @@ import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.so
 ///         Validates that the epochUnrevealedCount counter + revealGracePeriod
 ///         prevents attackers from selectively revealing votes and settling.
 contract SelectiveRevelationTest is VotingTestBase {
-    struct CommitArtifacts {
-        bytes32 salt;
-        uint64 targetRound;
-        bytes32 drandChainHash;
-        bytes ciphertext;
-        bytes32 commitHash;
-        bytes32 commitKey;
-    }
-
     LoopReputation public lrepToken;
     ContentRegistry public registry;
     RoundVotingEngine public engine;
@@ -116,44 +107,23 @@ contract SelectiveRevelationTest is VotingTestBase {
     // HELPERS
     // =========================================================================
 
-    function _buildCommitArtifacts(address voter, uint256 contentId, bool isUp, bytes32 salt)
-        private
-        view
-        returns (CommitArtifacts memory artifacts)
-    {
-        artifacts.salt = salt;
-        artifacts.targetRound = _tlockCommitTargetRound(engine, contentId);
-        artifacts.drandChainHash = _tlockDrandChainHash();
-        artifacts.ciphertext = _testCiphertext(isUp, salt, contentId, artifacts.targetRound, artifacts.drandChainHash);
-        artifacts.commitHash = _commitHash(
-            isUp, salt, voter, contentId, artifacts.targetRound, artifacts.drandChainHash, artifacts.ciphertext
-        );
-        artifacts.commitKey = keccak256(abi.encodePacked(voter, artifacts.commitHash));
-    }
-
     function _commit(address voter, uint256 contentId, bool isUp, uint256 stake)
         internal
         returns (bytes32 commitKey, bytes32 salt)
     {
         salt = keccak256(abi.encodePacked(voter, block.timestamp));
-        CommitArtifacts memory artifacts = _buildCommitArtifacts(voter, contentId, isUp, salt);
-        _openRoundForTest(engine, contentId, voter);
-        vm.startPrank(voter);
-        lrepToken.approve(address(engine), stake);
-        uint256 cachedRoundContext1 =
-            _roundContext(_previewCommitRoundId(engine, contentId), _defaultRatingReferenceBps());
-        engine.commitVote(
-            contentId,
-            cachedRoundContext1,
-            artifacts.targetRound,
-            artifacts.drandChainHash,
-            artifacts.commitHash,
-            artifacts.ciphertext,
-            stake,
-            address(0)
+        commitKey = _commitTestVote(
+            DirectTestCommitRequest({
+                engine: engine,
+                lrepToken: lrepToken,
+                voter: voter,
+                contentId: contentId,
+                isUp: isUp,
+                stake: stake,
+                frontend: address(0),
+                salt: salt
+            })
         );
-        vm.stopPrank();
-        commitKey = artifacts.commitKey;
     }
 
     function _reveal(uint256 contentId, uint256 roundId, bytes32 commitKey, bool isUp, bytes32 salt) internal {

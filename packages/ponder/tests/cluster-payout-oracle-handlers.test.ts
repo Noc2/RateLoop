@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
 
 type RegisteredHandler = (args: {
   event: {
@@ -20,6 +21,7 @@ vi.mock("ponder:registry", () => ({
 
 vi.mock("ponder:schema", () => ({
   correlationEpochSnapshot: "correlationEpochSnapshot",
+  payoutArtifactCache: "payoutArtifactCache",
   roundPayoutSnapshot: "roundPayoutSnapshot",
 }));
 
@@ -137,6 +139,51 @@ describe("ClusterPayoutOracle ponder handlers", () => {
         id: `0x${"a".repeat(64)}`,
         proposer: "0x00000000000000000000000000000000000000f1",
         frontendOperator: "0x00000000000000000000000000000000000000f1",
+      }),
+    });
+  });
+
+  it("caches verified payout artifacts by artifact hash", async () => {
+    const publicArtifact = {
+      artifactVersion: "rateloop-correlation-artifact-v1",
+      roundPayoutSnapshots: [],
+    };
+    const artifactURI = `data:application/json;base64,${Buffer.from(JSON.stringify(publicArtifact), "utf8").toString("base64")}`;
+    const artifactHash = canonicalJsonHash(publicArtifact);
+    const { db, inserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get("ClusterPayoutOracle:RoundPayoutSnapshotProposed")!({
+      event: {
+        args: {
+          snapshotKey: `0x${"c".repeat(64)}`,
+          domain: 1n,
+          rewardPoolId: 7n,
+          contentId: 9n,
+          roundId: 2n,
+          correlationEpochId: 1n,
+          proposer: "0x00000000000000000000000000000000000000f1",
+          rawEligibleVoters: 0n,
+          effectiveParticipantUnits: 0n,
+          totalClaimWeight: 0n,
+          weightRoot: `0x${"0".repeat(64)}`,
+          reasonRoot: `0x${"0".repeat(64)}`,
+          artifactHash,
+          artifactURI,
+        },
+        block: { number: 11n, timestamp: 1_800n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual({
+      table: "payoutArtifactCache",
+      values: expect.objectContaining({
+        artifactHash,
+        artifactUri: artifactURI,
+        canonicalJson: expect.any(String),
+        firstSeenAt: 1_800n,
+        lastFetchedAt: 1_800n,
       }),
     });
   });

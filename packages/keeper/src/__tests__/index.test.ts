@@ -36,6 +36,8 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     roundsCancelled: 0,
     roundsRevealFailedFinalized: 0,
     votesRevealed: 0,
+    advisoryVotesRevealed: 0,
+    advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
     contentMarkedDormant: 0,
   });
@@ -43,6 +45,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
   const setGauge = vi.fn();
   const recordRun = vi.fn();
   const recordError = vi.fn();
+  const incrementCounter = vi.fn();
   const getConsecutiveErrors = vi.fn(() => 0);
   const getWalletClient = vi.fn(() => ({ kind: "wallet" }));
   const getAccount = vi.fn(() => ({ address: ACCOUNT }));
@@ -74,6 +77,9 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
       intervalMs: 30_000,
       metricsEnabled: false,
       metricsPort: 9090,
+      persistence: {
+        databaseUrl: null,
+      },
       startupJitterMs: 0,
       minGasBalanceWei: "100",
       logFormat: "text",
@@ -132,6 +138,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     recordRun,
     recordError,
     setGauge,
+    incrementCounter,
     getConsecutiveErrors,
   }));
 
@@ -147,6 +154,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     setGauge,
     recordRun,
     recordError,
+    incrementCounter,
     getWalletClient,
     getAccount,
     validateKeeperConnectivity,

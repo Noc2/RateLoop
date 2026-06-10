@@ -219,7 +219,12 @@ library RoundRevealLib {
         }
         if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
 
-        if (params.settlementEntropy == bytes32(0)) revert RbtsSeedUnavailable();
+        if (params.settlementEntropy == bytes32(0)) {
+            _returnScoredStakes(
+                roundCommits, commitRbtsWeight, commitRbtsStakeReturned, revealedKeysMem, revealedBuildIdx
+            );
+            return result;
+        }
 
         // Seed combines delayed closure entropy with the settlement-closed scoring set.
         result.scoreSeed = _rbtsScoreSeed(
@@ -285,33 +290,6 @@ library RoundRevealLib {
         return block.number > seedBlock && Blockhash.blockHash(seedBlock) == bytes32(0);
     }
 
-    function refreshExpiredRbtsSeed(
-        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
-        mapping(
-            uint256 => mapping(uint256 => uint8)
-        ) storage roundRbtsSeedRefreshCount,
-        uint256 contentId,
-        uint256 roundId
-    ) external returns (bool refreshed) {
-        bytes32 currentMarker = roundRbtsSeedEntropy[contentId][roundId];
-        uint256 seedWord = uint256(currentMarker);
-        if (seedWord < RBTS_SEED_BLOCK_FLAG) return false;
-
-        uint256 seedBlock = uint64(seedWord);
-        if (block.number <= seedBlock || Blockhash.blockHash(seedBlock) != bytes32(0)) return false;
-        uint8 refreshCount = roundRbtsSeedRefreshCount[contentId][roundId];
-
-        if (refreshCount < type(uint8).max) {
-            unchecked {
-                roundRbtsSeedRefreshCount[contentId][roundId] = refreshCount + 1;
-            }
-        }
-        bytes32 refreshedMarker = bytes32((seedWord & ~RBTS_SEED_BLOCK_MASK) | uint256(block.number.toUint64()));
-        roundRbtsSeedEntropy[contentId][roundId] = refreshedMarker;
-        emit RbtsSeedCaptured(contentId, roundId, refreshedMarker);
-        return true;
-    }
-
     function finalizeRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         uint256 contentId,
@@ -326,7 +304,7 @@ library RoundRevealLib {
         bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
         if (seedBlockhash == bytes32(0)) {
             emit RbtsSeedCaptured(contentId, roundId, bytes32(0));
-            revert RbtsSeedUnavailable();
+            return bytes32(0);
         }
         settlementEntropy = keccak256(
             abi.encode(

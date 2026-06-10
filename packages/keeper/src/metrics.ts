@@ -20,6 +20,8 @@ const counters: Record<string, number> = {
   keeper_runs_total: 0,
   keeper_errors_total: 0,
   keeper_decrypt_failures_total: 0,
+  keeper_work_discovery_ponder_failures_total: 0,
+  keeper_main_loop_lock_skips_total: 0,
 };
 
 // --- Gauges ---
@@ -28,6 +30,11 @@ const gauges: Record<string, number> = {
   keeper_last_successful_run_timestamp: 0,
   keeper_is_running: 0,
   keeper_wallet_balance_wei: 0,
+  keeper_work_discovery_last_duration_seconds: 0,
+  keeper_work_discovery_last_source: 0,
+  keeper_work_discovery_open_round_candidates: 0,
+  keeper_work_discovery_cleanup_round_candidates: 0,
+  keeper_work_discovery_dormant_content_candidates: 0,
 };
 
 const startTime = Date.now();
@@ -94,6 +101,8 @@ function renderMetrics(): string {
     keeper_runs_total: "Total keeper run cycles",
     keeper_errors_total: "Total keeper run errors",
     keeper_decrypt_failures_total: "Total tlock decryption failures",
+    keeper_work_discovery_ponder_failures_total: "Total Ponder keeper-work discovery failures",
+    keeper_main_loop_lock_skips_total: "Total keeper runs skipped because another keeper held the main loop lock",
   };
 
   for (const [name, value] of Object.entries(counters)) {
@@ -107,6 +116,11 @@ function renderMetrics(): string {
     keeper_last_successful_run_timestamp: "Unix timestamp of last successful run",
     keeper_is_running: "Whether a keeper run is currently in progress",
     keeper_wallet_balance_wei: "Keeper wallet native balance in wei",
+    keeper_work_discovery_last_duration_seconds: "Duration of the last keeper work discovery phase in seconds",
+    keeper_work_discovery_last_source: "Last keeper work discovery source: 1=Ponder, 2=chain reconciliation",
+    keeper_work_discovery_open_round_candidates: "Open round candidates returned by the last keeper work discovery phase",
+    keeper_work_discovery_cleanup_round_candidates: "Cleanup round candidates returned by the last keeper work discovery phase",
+    keeper_work_discovery_dormant_content_candidates: "Dormant content candidates returned by the last keeper work discovery phase",
   };
 
   for (const [name, value] of Object.entries(gauges)) {
@@ -140,6 +154,11 @@ function renderHealth(): { status: number; body: string } {
     roundsRevealFailedFinalized: counters.keeper_rounds_reveal_failed_finalized_total,
     cleanupBatchesProcessed: counters.keeper_unrevealed_cleanup_batches_total,
     decryptFailures: counters.keeper_decrypt_failures_total,
+    workDiscoveryDuration: gauges.keeper_work_discovery_last_duration_seconds,
+    workDiscoverySource: gauges.keeper_work_discovery_last_source,
+    openRoundCandidates: gauges.keeper_work_discovery_open_round_candidates,
+    cleanupRoundCandidates: gauges.keeper_work_discovery_cleanup_round_candidates,
+    dormantContentCandidates: gauges.keeper_work_discovery_dormant_content_candidates,
     walletBalanceWei: String(BigInt(Math.round(gauges.keeper_wallet_balance_wei))),
   });
   return { status: healthy ? 200 : 503, body };

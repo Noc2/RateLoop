@@ -4,6 +4,8 @@ import { concat, keccak256, type Address, type Hex } from "viem";
 import {
   BPS_DENOMINATOR,
   PAYOUT_DOMAIN_QUESTION_REWARD,
+  correlationParameterHash,
+  defaultCorrelationScoringParams,
   merkleProof,
   merkleRoot,
   payoutWeightLeaf,
@@ -163,6 +165,22 @@ test("merkleRoot and merkleProof handle odd leaf counts", () => {
   }
 
   assert.throws(() => merkleProof(leaves, hex("44")), /Leaf not found/);
+});
+
+test("correlationParameterHash pins spec versions and canonical params", () => {
+  const params = defaultCorrelationScoringParams();
+
+  assert.equal(
+    correlationParameterHash(params),
+    "0x08ecb089bf8ef590cf078ad9be9e4b312c79cf9b6bf59c8859317c564e718acb",
+  );
+  assert.notEqual(
+    correlationParameterHash({
+      ...params,
+      eligibilitySpecVersion: "rateloop-correlation-eligibility-v2",
+    }),
+    correlationParameterHash(params),
+  );
 });
 
 test("scoreRoundPayoutWeights rejects invalid parameters", () => {

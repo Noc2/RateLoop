@@ -47,7 +47,7 @@ type SqlCondition = ReturnType<typeof sql>;
 const CONTENT_STATUS_ACTIVE = 0;
 
 function voteMatchesVoter(address: `0x${string}`) {
-  return or(eq(vote.voter, address), eq(vote.identityHolder, address), eq(vote.identityVoter, address));
+  return or(eq(vote.voter, address), eq(vote.identityHolder, address));
 }
 
 function profileSelection() {
@@ -1056,7 +1056,6 @@ export function registerContentRoutes(app: ApiApp) {
         voter: vote.voter,
         identityKey: vote.identityKey,
         identityHolder: vote.identityHolder,
-        identityVoter: vote.identityVoter,
         voterId: sql<null>`null`,
         commitKey: vote.commitKey,
         commitHash: vote.commitHash,

@@ -5,6 +5,7 @@ import type { Logger } from "./logger.js";
 const { Pool } = pg;
 
 const CORRELATION_SNAPSHOT_LOCK_KEY = "773526208283402193";
+const MAIN_LOOP_LOCK_KEY = "773526208283402194";
 
 interface CachedCorrelationArtifactRow {
   artifact_hash: string;
@@ -134,6 +135,61 @@ export async function runWithCorrelationSnapshotPublishLock<T>(
             logger,
             "unlock",
             "Keeper persistence lock release failed",
+            error,
+          );
+        });
+    }
+  }
+}
+
+export async function runWithKeeperMainLoopLock<T>(
+  logger: Logger,
+  fallback: T,
+  run: () => Promise<T>,
+): Promise<T> {
+  let activePool: pg.Pool | null = null;
+  try {
+    activePool = await ensureSchema(logger);
+  } catch {
+    return fallback;
+  }
+
+  if (!activePool) {
+    return run();
+  }
+
+  let locked = false;
+  try {
+    const result = await activePool.query<{ locked: boolean }>(
+      "select pg_try_advisory_lock($1::bigint) as locked",
+      [MAIN_LOOP_LOCK_KEY],
+    );
+    locked = result.rows[0]?.locked === true;
+    if (!locked) {
+      logger.debug("Skipping keeper main loop because another keeper holds the persistence lock");
+      return fallback;
+    }
+
+    return await run();
+  } catch (error) {
+    warnPersistenceOnce(
+      logger,
+      "main-loop-lock",
+      "Keeper main loop lock unavailable; skipping this tick",
+      error,
+    );
+    return fallback;
+  } finally {
+    if (locked) {
+      await activePool
+        .query("select pg_advisory_unlock($1::bigint)", [
+          MAIN_LOOP_LOCK_KEY,
+        ])
+        .catch((error: unknown) => {
+          warnPersistenceOnce(
+            logger,
+            "main-loop-unlock",
+            "Keeper main loop lock release failed",
             error,
           );
         });
