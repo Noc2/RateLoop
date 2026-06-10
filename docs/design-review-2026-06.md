@@ -137,15 +137,17 @@ add a dispute/escalation path that re-runs contested rounds with a larger indepe
 (the Kleros appeal lesson); document explicitly that settled scores must not settle external
 financial contracts.
 
-#### 5. RBTS seed reroll via blockhash expiry (economic)
+#### 5. RBTS seed reroll via blockhash expiry (economic) - mitigated
 
-If `settleRound` isn't called within 256 blocks of seed capture, anyone may
-`refreshExpiredRbtsSeed` to a new block, unboundedly (`RoundRevealLib.sol:287-312`). The seed
-picks the reference/peer draws that determine who forfeits. With no settlement-caller incentive,
-an actor who out-waits other settlers (~8.5 min on 2s blocks) rerolls repeatedly and settles only
-on favorable draws. **Recommendation:** cap refreshes then fall back to a drand-derived seed, or
-add a small settlement caller rebate so the first capture is reliably consumed (this also
-addresses the keeper-altruism problem in finding 9).
+Original risk: if `settleRound` was not called within 256 blocks of seed capture, the old
+expired-seed refresh path let the next caller move the seed to a fresh block, repeat that
+unboundedly, and settle only on favorable reference/peer draws. Mitigation: expired captured
+seeds are now terminal and scoreless. When the captured blockhash is unavailable, settlement
+stores a zero RBTS score seed, returns revealed RBTS scoring stakes, pays no RBTS scoring
+rewards or forfeits, and still finalizes the binary round outcome. The unused refresh helper and
+refresh counter were removed. A bounded settlement caller rebate (1% of scored RBTS forfeits,
+capped at 1 LREP) gives the first post-capture caller a small incentive to consume fresh seeds
+without creating a payout on scoreless expiry.
 
 #### 6. Agent adoption blockers: unpublished SDK, no sandbox, "x402" naming (adoption)
 
@@ -249,7 +251,7 @@ delimiters, add injection warnings to the tool description and `limitations`, an
   the oracle holds a non-rejected finalized snapshot (the gating conditions are on-chain
   checkable).
 - **Untested paths:** `flushPendingTreasuryForfeit`, `replayBundleObserverNotify`,
-  `refreshExpiredRbtsSeed`/seed expiry have zero test references, and `GasBudget.t.sol` only
+  and similar recovery edges still need direct branch coverage. `GasBudget.t.sol` only
   exercises 3-voter rounds while settlement is O(N) multi-pass with maxVoters up to 200.
   *Recommendation:* add direct tests for the recovery paths and gas tests at 3/100/200 voters
   against the World Chain block gas limit; batch scoring if it doesn't fit.
@@ -293,7 +295,7 @@ French online-reputation-management firm** — a trademark/SEO collision to chec
 ## Suggested sequencing
 
 1. **Before mainnet value flows:** finding 1 (oracle bonds), finding 3 (RevealFailed refunds +
-   reveal fallbacks), finding 7 (prompt-injection delimiters — cheap), finding 5 (seed reroll cap).
+   reveal fallbacks), finding 7 (prompt-injection delimiters — cheap).
 2. **Before pushing agent adoption:** finding 6 (publish SDK, testnet+faucet, x402 naming),
    finding 11 (timeouts, structured errors).
 3. **Before significant LREP distribution:** finding 8 (vesting verified bonuses, quorum floor,
