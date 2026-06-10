@@ -7,6 +7,7 @@ import {
   getPonderDeploymentFingerprint,
   getPonderRpcPreflightPlan,
   getPonderRpcReadinessError,
+  getUnexpectedServiceExitCode,
 } from "./dev-stack.mjs";
 
 const localDatabaseConfig = {
@@ -296,4 +297,15 @@ test("does not warn when Keeper uses a remote Ponder API", () => {
     }),
     null,
   );
+});
+
+test("treats an unexpected clean service exit as a stack failure", () => {
+  assert.equal(getUnexpectedServiceExitCode(0), 1);
+  assert.equal(getUnexpectedServiceExitCode(null), 1);
+  assert.equal(getUnexpectedServiceExitCode(undefined), 1);
+});
+
+test("preserves non-zero service exit codes for the stack exit", () => {
+  assert.equal(getUnexpectedServiceExitCode(2), 2);
+  assert.equal(getUnexpectedServiceExitCode(137), 137);
 });
