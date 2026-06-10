@@ -4423,6 +4423,37 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(newRoundId, roundId + 1);
     }
 
+    function test_RbtsSeedExpiresAfterExplicitBlockWindow() public {
+        uint256 contentId = _submitContent();
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 7_000, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, 6_000, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, 3_000, STAKE);
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+        _revealPrediction(contentId, roundId, ck1, true, 7_000, s1);
+        _revealPrediction(contentId, roundId, ck2, true, 6_000, s2);
+        _revealPrediction(contentId, roundId, ck3, false, 3_000, s3);
+
+        uint256 seedBlock = block.number + 1;
+        vm.roll(seedBlock);
+        engine.settleRound(contentId, roundId);
+        assertFalse(_roundRbtsScored(engine, contentId, roundId), "first call only captures seed");
+
+        vm.roll(seedBlock + 257);
+        engine.settleRound(contentId, roundId);
+
+        RoundLib.Round memory settled = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(settled.state), uint256(RoundLib.RoundState.Settled));
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed still finalizes scoring");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "expired seed is scoreless");
+        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "scoreless seed pays no RBTS reward");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck1), STAKE, "revealed stake returned");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck2), STAKE, "revealed stake returned");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck3), STAKE, "revealed stake returned");
+    }
+
     function test_ThresholdReachedAt_SetOnMinVotersReveal() public {
         uint256 contentId = _submitContent();
 

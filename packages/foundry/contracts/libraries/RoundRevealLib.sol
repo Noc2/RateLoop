@@ -22,6 +22,7 @@ library RoundRevealLib {
     uint256 internal constant RBTS_SEED_TIMESTAMP_SHIFT = 64;
     uint256 internal constant RBTS_SEED_ORIGINAL_BLOCK_SHIFT = 112;
     uint256 internal constant RBTS_SEED_BLOCK_MASK = uint256(type(uint64).max);
+    uint256 internal constant RBTS_SEED_EXPIRY_BLOCKS = 256;
 
     error RoundNotOpen();
     error NoCommit();
@@ -287,7 +288,7 @@ library RoundRevealLib {
         uint256 seedWord = uint256(roundRbtsSeedEntropy[contentId][roundId]);
         if (seedWord < RBTS_SEED_BLOCK_FLAG) return false;
         uint256 seedBlock = uint64(seedWord);
-        return block.number > seedBlock && Blockhash.blockHash(seedBlock) == bytes32(0);
+        return block.number > seedBlock + RBTS_SEED_EXPIRY_BLOCKS;
     }
 
     function finalizeRbtsSeed(
@@ -301,11 +302,12 @@ library RoundRevealLib {
 
         uint256 seedBlock = uint64(seedWord);
         if (block.number <= seedBlock) revert RevealGraceActive();
-        bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
-        if (seedBlockhash == bytes32(0)) {
+        if (block.number > seedBlock + RBTS_SEED_EXPIRY_BLOCKS) {
             emit RbtsSeedCaptured(contentId, roundId, bytes32(0));
             return bytes32(0);
         }
+        bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
+        if (seedBlockhash == bytes32(0)) revert RevealGraceActive();
         settlementEntropy = keccak256(
             abi.encode(
                 "rateloop.rbts.delayed-seed.v1",
