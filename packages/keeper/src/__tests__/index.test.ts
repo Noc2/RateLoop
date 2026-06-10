@@ -9,6 +9,7 @@ type KeeperIndexOptions = {
   failBalanceRead?: boolean;
   frontendFeeEnabled?: boolean;
   resolveRoundsError?: Error;
+  resolveRoundsResult?: Record<string, number>;
 };
 
 async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
@@ -43,6 +44,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
         advisoryLaunchCreditsClaimed: 0,
         cleanupBatchesProcessed: 0,
         contentMarkedDormant: 0,
+        ...options.resolveRoundsResult,
       });
   const validateKeeperContracts = vi.fn().mockResolvedValue(undefined);
   const setGauge = vi.fn();
@@ -230,6 +232,32 @@ describe("keeper index", () => {
       50,
     );
     expect(keeper.resolveRounds).toHaveBeenCalledOnce();
+  });
+
+  it("logs a run summary for ticks that only finalize reveal-failed rounds or clean up", async () => {
+    const keeper = await loadKeeperIndex({
+      resolveRoundsResult: {
+        roundsRevealFailedFinalized: 1,
+        cleanupBatchesProcessed: 2,
+      },
+    });
+
+    expect(keeper.logger.info).toHaveBeenCalledWith(
+      "Run complete",
+      expect.objectContaining({
+        roundsRevealFailedFinalized: 1,
+        cleanupBatchesProcessed: 2,
+      }),
+    );
+  });
+
+  it("skips the run summary when nothing happened", async () => {
+    const keeper = await loadKeeperIndex();
+
+    expect(keeper.logger.info).not.toHaveBeenCalledWith(
+      "Run complete",
+      expect.anything(),
+    );
   });
 
   it("records an error when resolveRounds fails entirely", async () => {
