@@ -967,6 +967,12 @@ export const frontend = onchainTable("frontend", (t) => ({
   exitAvailableAt: t.bigint(),
   totalFeesCredited: t.bigint().notNull(),
   totalFeesClaimed: t.bigint().notNull(),
+  // Two-step fee withdrawals: the requested amount stays slashable in the registry
+  // until the release timestamp passes (FrontendRegistry.FEE_WITHDRAWAL_DELAY).
+  pendingFeeWithdrawal: t.bigint().notNull().default(0n),
+  pendingFeeWithdrawalReleaseAt: t.bigint(),
+  // LREP routed to successful oracle challengers out of this frontend's slashes.
+  totalChallengerBountiesPaid: t.bigint().notNull().default(0n),
   registeredAt: t.bigint().notNull(),
 }));
 

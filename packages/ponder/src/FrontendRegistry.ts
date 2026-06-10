@@ -53,6 +53,9 @@ ponder.on(
         slashed: true,
         eligible: false,
         stakedAmount: row.stakedAmount - amount,
+        // Slashing confiscates the pending fee-withdrawal bucket along with accrued fees.
+        pendingFeeWithdrawal: 0n,
+        pendingFeeWithdrawalReleaseAt: null,
       }));
   },
 );
@@ -106,13 +109,42 @@ ponder.on(
 );
 
 ponder.on(
+  "FrontendRegistry:FeeWithdrawalRequested",
+  async ({ event, context }) => {
+    const { frontend: addr, lrepAmount, releaseAt } = event.args;
+    await context.db
+      .update(frontend, { address: addr })
+      .set({
+        pendingFeeWithdrawal: lrepAmount,
+        pendingFeeWithdrawalReleaseAt: releaseAt,
+      });
+  },
+);
+
+ponder.on(
   "FrontendRegistry:FeesClaimed",
+  async ({ event, context }) => {
+    const { frontend: addr, lrepAmount } = event.args;
+    // Emitted by completeFeeWithdrawal and by the completeDeregister sweep —
+    // both drain the pending bucket.
+    await context.db
+      .update(frontend, { address: addr })
+      .set((row) => ({
+        totalFeesClaimed: row.totalFeesClaimed + lrepAmount,
+        pendingFeeWithdrawal: 0n,
+        pendingFeeWithdrawalReleaseAt: null,
+      }));
+  },
+);
+
+ponder.on(
+  "FrontendRegistry:ChallengerBountyPaid",
   async ({ event, context }) => {
     const { frontend: addr, lrepAmount } = event.args;
     await context.db
       .update(frontend, { address: addr })
       .set((row) => ({
-        totalFeesClaimed: row.totalFeesClaimed + lrepAmount,
+        totalChallengerBountiesPaid: row.totalChallengerBountiesPaid + lrepAmount,
       }));
   },
 );
