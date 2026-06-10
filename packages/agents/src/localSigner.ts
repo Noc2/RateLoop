@@ -1339,13 +1339,18 @@ function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
   };
 }
 
-function normalizeLocalRoundConfig(value: unknown): LocalQuestionRoundConfig {
+function normalizeLocalRoundConfig(
+  value: unknown,
+  requiredVoters: bigint,
+): LocalQuestionRoundConfig {
   if (value === undefined || value === null) {
+    const defaultMaxVoters = BigInt(DEFAULT_ROUND_CONFIG.maxVoters);
     return {
       epochDuration: BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
       maxDuration: BigInt(DEFAULT_ROUND_CONFIG.maxDurationSeconds),
-      minVoters: BigInt(DEFAULT_ROUND_CONFIG.minVoters),
-      maxVoters: BigInt(DEFAULT_ROUND_CONFIG.maxVoters),
+      minVoters: requiredVoters,
+      maxVoters:
+        defaultMaxVoters < requiredVoters ? requiredVoters : defaultMaxVoters,
     };
   }
   if (!isJsonRecord(value)) {
@@ -1381,6 +1386,11 @@ function normalizeLocalRoundConfig(value: unknown): LocalQuestionRoundConfig {
   }
   if (minVoters <= 0n || maxVoters <= 0n || maxVoters < minVoters) {
     throw new Error("question.roundConfig voter values are invalid.");
+  }
+  if (minVoters !== requiredVoters) {
+    throw new Error(
+      "question.roundConfig.minVoters must match bounty.requiredVoters.",
+    );
   }
 
   return { epochDuration, maxDuration, minVoters, maxVoters };
@@ -1533,10 +1543,11 @@ function parseLocalQuestionRequest(
   }
 
   const firstQuestion = isJsonRecord(rawQuestions[0]) ? rawQuestions[0] : {};
+  const bounty = normalizeLocalBounty(request.bounty);
   const roundConfig = normalizeLocalRoundConfig(
     request.roundConfig ?? firstQuestion.roundConfig,
+    bounty.requiredVoters,
   );
-  const bounty = normalizeLocalBounty(request.bounty);
   const topLevelTemplateInputs = cloneJsonObject<
     AgentQuestionSpecInput["templateInputs"]
   >(request.templateInputs, "templateInputs", null);
@@ -1612,6 +1623,22 @@ function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
     })),
     roundConfig: serializeLocalRoundConfig(payload.roundConfig),
   };
+}
+
+/**
+ * Parses a local ask payload and returns the canonical JSON payload the
+ * RateLoop server hashes for operationKey/payloadHash derivation. Exposed so
+ * agents and tests can verify the local signer normalization (including the
+ * bounty.requiredVoters / roundConfig.minVoters alignment) matches the server
+ * byte for byte.
+ */
+export function buildLocalQuestionCanonicalPayload(
+  payload: unknown,
+  fallbackChainId?: number,
+) {
+  return toCanonicalLocalQuestionPayload(
+    parseLocalQuestionRequest(payload, fallbackChainId),
+  );
 }
 
 function buildLocalQuestionOperation(payload: LocalQuestionPayload) {

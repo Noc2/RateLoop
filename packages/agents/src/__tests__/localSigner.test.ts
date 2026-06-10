@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   ContentRegistryAbi,
   X402QuestionSubmitterAbi,
@@ -18,6 +19,7 @@ import { buildQuestionSpecHashes } from "../questionSpecs.js";
 import { findAgentResultTemplate } from "../templates.js";
 import {
   askHumansWithLocalSigner,
+  buildLocalQuestionCanonicalPayload,
   signX402AuthorizationRequest,
   validateLocalSignerTransactionPlan,
   withLocalSignerWallet,
@@ -1046,5 +1048,104 @@ describe("local signer", () => {
         },
       }),
     ).rejects.toThrow(/chainId 4801 does not match local signer chain 480/);
+  });
+});
+
+function fiveVoterAskPayload(
+  overrides: Partial<AskHumansRequest> = {},
+): AskHumansRequest {
+  const base = askPayload();
+  return {
+    ...base,
+    bounty: { ...base.bounty, requiredVoters: "5" },
+    roundConfig: undefined,
+    ...overrides,
+  };
+}
+
+describe("local signer round config alignment", () => {
+  it("defaults roundConfig.minVoters to bounty.requiredVoters when omitted", () => {
+    const canonical = buildLocalQuestionCanonicalPayload(fiveVoterAskPayload(), 480);
+
+    expect(canonical.roundConfig).toEqual({
+      epochDuration: "1200",
+      maxDuration: "1200",
+      minVoters: "5",
+      maxVoters: "100",
+    });
+    expect(canonical.bounty.requiredVoters).toBe("5");
+  });
+
+  it("raises the default maxVoters when requiredVoters exceeds it", () => {
+    const payload = fiveVoterAskPayload();
+    payload.bounty.requiredVoters = "150";
+
+    const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+
+    expect(canonical.roundConfig).toEqual({
+      epochDuration: "1200",
+      maxDuration: "1200",
+      minVoters: "150",
+      maxVoters: "150",
+    });
+  });
+
+  it("accepts an explicit roundConfig that matches bounty.requiredVoters", () => {
+    const canonical = buildLocalQuestionCanonicalPayload(
+      fiveVoterAskPayload({
+        roundConfig: {
+          epochDuration: "1200",
+          maxDuration: "1200",
+          maxVoters: "100",
+          minVoters: "5",
+        },
+      }),
+      480,
+    );
+
+    expect(canonical.roundConfig).toEqual({
+      epochDuration: "1200",
+      maxDuration: "1200",
+      minVoters: "5",
+      maxVoters: "100",
+    });
+  });
+
+  it("rejects an explicit roundConfig.minVoters that mismatches bounty.requiredVoters", () => {
+    expect(() =>
+      buildLocalQuestionCanonicalPayload(
+        fiveVoterAskPayload({
+          roundConfig: {
+            epochDuration: "1200",
+            maxDuration: "1200",
+            maxVoters: "100",
+            minVoters: "3",
+          },
+        }),
+      ),
+    ).toThrow(/question\.roundConfig\.minVoters must match bounty\.requiredVoters/);
+  });
+
+  it("keeps the shipped five-voter examples aligned with the round quorum", () => {
+    const exampleFiles = [
+      "agent-trace-review.json",
+      "feature-acceptance-test.json",
+      "generated-mockup-feedback.json",
+      "ai-website-feedback-service.json",
+    ];
+
+    for (const fileName of exampleFiles) {
+      const example = JSON.parse(
+        readFileSync(
+          new URL(`../../examples/questions/${fileName}`, import.meta.url),
+          "utf8",
+        ),
+      );
+
+      const canonical = buildLocalQuestionCanonicalPayload(example);
+      expect(canonical.bounty.requiredVoters).toBe("5");
+      expect(canonical.roundConfig.minVoters).toBe("5");
+      expect(BigInt(canonical.roundConfig.maxVoters)).toBeGreaterThanOrEqual(5n);
+    }
   });
 });
