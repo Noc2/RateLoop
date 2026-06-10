@@ -24,6 +24,71 @@ const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 0x0e;
 const BOUNTY_ELIGIBILITY_PROOF_OF_HUMAN = 0x08;
 const ZERO_HASH = `0x${"0".repeat(64)}` as const;
 
+// Trailing base-rate window for surprise-weighted bounty claim weights: the most recent
+// settled rounds strictly preceding the requested round in lexicographic
+// (settledAt, contentId, roundId) order. See docs/surprise-weighted-bounty-weights.md.
+const BASE_RATE_WINDOW_ROUNDS = 100;
+const BASE_RATE_MIN_BPS = 500;
+const BASE_RATE_MAX_BPS = 9500;
+const BASE_RATE_NEUTRAL_BPS = 5000;
+
+async function getRoundContext(contentId: bigint, roundId: bigint) {
+  const [requestedRound] = await db
+    .select({ settledAt: round.settledAt })
+    .from(round)
+    .where(
+      and(
+        eq(round.contentId, contentId),
+        eq(round.roundId, roundId),
+        eq(round.state, ROUND_STATE.Settled),
+      ),
+    )
+    .limit(1);
+
+  const settledAt = requestedRound?.settledAt ?? null;
+  if (settledAt === null) {
+    return {
+      trailingBaseRateUpBps: BASE_RATE_NEUTRAL_BPS,
+      baseRateWindowRounds: BASE_RATE_WINDOW_ROUNDS,
+      settledRoundsInWindow: 0,
+    };
+  }
+
+  const windowRounds = await db
+    .select({ upPool: round.upPool, downPool: round.downPool })
+    .from(round)
+    .where(
+      and(
+        eq(round.state, ROUND_STATE.Settled),
+        sql`${round.settledAt} is not null`,
+        sql`(${round.settledAt}, ${round.contentId}, ${round.roundId}) < (${settledAt}, ${contentId}, ${roundId})`,
+      ),
+    )
+    .orderBy(desc(round.settledAt), desc(round.contentId), desc(round.roundId))
+    .limit(BASE_RATE_WINDOW_ROUNDS);
+
+  let windowUpPool = 0n;
+  let windowTotalPool = 0n;
+  for (const windowRound of windowRounds) {
+    const upPool = windowRound.upPool ?? 0n;
+    const downPool = windowRound.downPool ?? 0n;
+    windowUpPool += upPool;
+    windowTotalPool += upPool + downPool;
+  }
+
+  let trailingBaseRateUpBps = BASE_RATE_NEUTRAL_BPS;
+  if (windowRounds.length > 0 && windowTotalPool > 0n) {
+    const rawUpBps = Number((windowUpPool * 10000n) / windowTotalPool);
+    trailingBaseRateUpBps = Math.min(Math.max(rawUpBps, BASE_RATE_MIN_BPS), BASE_RATE_MAX_BPS);
+  }
+
+  return {
+    trailingBaseRateUpBps,
+    baseRateWindowRounds: BASE_RATE_WINDOW_ROUNDS,
+    settledRoundsInWindow: windowRounds.length,
+  };
+}
+
 function validPositiveBigIntParam(value: string | undefined): bigint | null {
   if (!value) return null;
   const parsed = safeBigInt(value);
@@ -123,6 +188,10 @@ export function registerCorrelationRoutes(app: ApiApp) {
         voter: vote.voter,
         identityKey: vote.identityKey,
         commitKey: vote.commitKey,
+        isUp: vote.isUp,
+        stake: vote.stake,
+        epochIndex: vote.epochIndex,
+        revealWeight: vote.rbtsWeight,
         baseWeight: sql<bigint>`10000`,
         verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
         historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
@@ -218,15 +287,20 @@ export function registerCorrelationRoutes(app: ApiApp) {
       .limit(limit)
       .offset(offset);
 
+    const roundContext = await getRoundContext(contentId, roundId);
+
     return jsonBig(c, {
       items: rows.map((row) => ({
         ...row,
         account: row.account ?? row.voter,
         identityKey: row.identityKey ?? ZERO_HASH,
+        isUp: row.isUp ?? null,
+        revealWeight: row.revealWeight ?? 0n,
         features: [
           row.identityKey ? `identity:${row.identityKey.toLowerCase()}` : null,
         ].filter((value): value is string => value !== null),
       })),
+      roundContext,
     });
   });
 
