@@ -69,3 +69,18 @@ test("assertSafeScryptParams rejects expensive or malformed costs", () => {
     /Invalid keystore scrypt parameters/,
   );
 });
+
+test("assertSafeScryptParams rejects dklen below the 32-byte V3 minimum", () => {
+  for (const dklen of [16, 31]) {
+    assert.throws(
+      () =>
+        assertSafeScryptParams({
+          dklen,
+          n: 262_144,
+          p: 1,
+          r: 8,
+        }),
+      /Invalid keystore scrypt parameters/,
+    );
+  }
+});
