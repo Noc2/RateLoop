@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { ProtocolConfigAbi, RaterRegistryAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import {
   buildCommitKey,
   decryptTlockVoteCiphertext,
@@ -44,9 +45,9 @@ export interface ManualRevealVote {
   isReady: boolean;
 }
 
-const BENIGN_REVEAL_ERRORS = ["AlreadyRevealed", "RoundNotOpen", "EpochNotEnded", "Transaction reverted"];
+const BENIGN_REVEAL_ERRORS = ["AlreadyRevealed", "RoundNotOpen", "EpochNotEnded"];
 
-function isBenignRevealError(message: string): boolean {
+export function isBenignRevealError(message: string): boolean {
   const lower = message.toLowerCase();
   return BENIGN_REVEAL_ERRORS.some(error => lower.includes(error.toLowerCase()));
 }
@@ -107,6 +108,50 @@ function normalizeCommitData(rawCommit: unknown): CommitData {
     revealed: true,
     stakeAmount: 0n,
   };
+}
+
+export type RevealReceiptRevertResolution = "already-revealed" | "round-closed" | "reverted";
+
+/**
+ * A receipt-level revert carries no revert reason, so it must not be assumed benign.
+ * Re-check on-chain state: only report the friendly "already revealed / round closed"
+ * outcome when it is actually verified; otherwise surface an honest failure.
+ */
+export async function resolveRevealReceiptRevert(params: {
+  publicClient: Pick<PublicClient, "readContract">;
+  engineAddress: Address;
+  contentId: bigint;
+  roundId: bigint;
+  commitKey: `0x${string}`;
+}): Promise<RevealReceiptRevertResolution> {
+  try {
+    const rawCommit = await params.publicClient.readContract({
+      address: params.engineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "commitRevealData",
+      args: [params.contentId, params.roundId, params.commitKey],
+    });
+    if (normalizeCommitData(rawCommit).revealed) return "already-revealed";
+  } catch {
+    // Fall through to the round-state check.
+  }
+
+  try {
+    const rawRoundCore = (await params.publicClient.readContract({
+      address: params.engineAddress,
+      abi: RoundVotingEngineAbi,
+      functionName: "roundCore",
+      args: [params.contentId, params.roundId],
+    })) as unknown;
+    const state = Array.isArray(rawRoundCore)
+      ? (rawRoundCore[1] as number | bigint | undefined)
+      : (rawRoundCore as { state?: number | bigint } | null)?.state;
+    if (state != null && Number(state) !== ROUND_STATE.Open) return "round-closed";
+  } catch {
+    // Could not verify a benign cause; report the revert honestly.
+  }
+
+  return "reverted";
 }
 
 async function readLiveDrandConfig(publicClient: PublicClient, engineAddress: Address): Promise<LiveDrandConfig> {
@@ -599,10 +644,25 @@ export function useManualRevealVotes(voter?: Address) {
         } as any);
 
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
-        if (receipt.status === "reverted") {
-          throw new Error("Transaction reverted");
-        }
         notification.remove(toastId);
+        toastId = undefined;
+        if (receipt.status === "reverted") {
+          const resolution = await resolveRevealReceiptRevert({
+            publicClient,
+            engineAddress: engineInfo.address,
+            contentId: vote.contentId,
+            roundId: vote.roundId,
+            commitKey: vote.commitKey,
+          });
+          if (resolution !== "reverted") {
+            notification.info("That vote was already revealed or the round already closed.");
+            await refresh();
+            return true;
+          }
+          notification.error("The reveal transaction reverted on-chain and the vote was not revealed. Try again.");
+          await refresh();
+          return false;
+        }
         notification.success("Vote revealed.");
         await refresh();
         return true;
