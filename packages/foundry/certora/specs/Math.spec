@@ -19,7 +19,7 @@ methods {
     function calculateRating(uint256, uint256) external returns (uint16) envfree;
     function calculateVoterReward(uint256, uint256, uint256) external returns (uint256) envfree;
     function calculatePositiveScoreSpreadWeight(uint256, uint16, uint16) external returns (uint256) envfree;
-    function calculateNegativeScoreSpreadForfeit(uint256, uint16, uint16) external returns (uint256) envfree;
+    function calculateNegativeScoreSpreadForfeit(uint256, uint16, uint16, uint256) external returns (uint256) envfree;
     function splitPoolVoter(uint256) external returns (uint256) envfree;
     function splitPoolPlatform(uint256) external returns (uint256) envfree;
     function splitPoolTreasury(uint256) external returns (uint256) envfree;
@@ -67,15 +67,20 @@ rule voterRewardZeroWhenNoWinners(uint256 effectiveStake, uint256 voterPool) {
 
 /// Below-mean forfeiture is capped by the raw stake: a voter can never forfeit
 /// more than they staked.
-rule negativeForfeitCappedByStake(uint256 stakeAmount, uint16 scoreBps, uint16 meanScoreBps) {
-    uint256 forfeit = calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps);
+rule negativeForfeitCappedByStake(uint256 stakeAmount, uint16 scoreBps, uint16 meanScoreBps, uint256 revealedCount) {
+    uint256 forfeit = calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps, revealedCount);
     assert forfeit <= stakeAmount;
 }
 
 /// No forfeiture when the score is at or above the round mean.
-rule negativeForfeitZeroAtOrAboveMean(uint256 stakeAmount, uint16 scoreBps, uint16 meanScoreBps) {
+rule negativeForfeitZeroAtOrAboveMean(
+    uint256 stakeAmount,
+    uint16 scoreBps,
+    uint16 meanScoreBps,
+    uint256 revealedCount
+) {
     require scoreBps >= meanScoreBps;
-    uint256 forfeit = calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps);
+    uint256 forfeit = calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps, revealedCount);
     assert forfeit == 0;
 }
 
