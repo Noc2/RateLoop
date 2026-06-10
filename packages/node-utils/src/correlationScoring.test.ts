@@ -42,6 +42,7 @@ function scoreQuestionRound(args: {
   votes: readonly CorrelationVoteInput[];
   trailingBaseRateUpBps?: number | null;
   domain?: number;
+  params?: Partial<ReturnType<typeof defaultCorrelationScoringParams>>;
 }) {
   return scoreRoundPayoutWeights({
     chainId: CHAIN_ID,
@@ -52,6 +53,7 @@ function scoreQuestionRound(args: {
     roundId: 3n,
     votes: args.votes,
     trailingBaseRateUpBps: args.trailingBaseRateUpBps,
+    params: args.params,
   });
 }
 
@@ -205,7 +207,11 @@ test("split rounds reward the side that beats the trailing base rate", () => {
     surpriseVote("c3", false, 10_000n),
   ];
 
-  const result = scoreQuestionRound({ votes, trailingBaseRateUpBps: 2_000 });
+  const result = scoreQuestionRound({
+    votes,
+    trailingBaseRateUpBps: 2_000,
+    params: { surpriseMinReveals: 3 },
+  });
 
   // Majority (UP): agreement = 10_000 * 10_000 / 20_000 = 5_000;
   // surprise = 5_000 * 10_000 / 2_000 = 25_000; base = 5_000 + 12_500.
@@ -230,7 +236,11 @@ test("manufactured surprise clamps at surpriseCapBps", () => {
 
   // baseRate(DOWN) = 10_000 - 9_500 = 500; raw surprise would be
   // 5_000 * 10_000 / 500 = 100_000, clamped to 30_000.
-  const result = scoreQuestionRound({ votes, trailingBaseRateUpBps: 9_500 });
+  const result = scoreQuestionRound({
+    votes,
+    trailingBaseRateUpBps: 9_500,
+    params: { surpriseMinReveals: 3 },
+  });
 
   assert.deepEqual(
     result.leaves.map((leaf) => leaf.surpriseBps),
@@ -250,7 +260,11 @@ test("missing surprise inputs fall back to the neutral multiplier", () => {
     surpriseVote("d4", false, null),
   ];
 
-  const result = scoreQuestionRound({ votes: fullVotes, trailingBaseRateUpBps: 2_000 });
+  const result = scoreQuestionRound({
+    votes: fullVotes,
+    trailingBaseRateUpBps: 2_000,
+    params: { surpriseMinReveals: 2 },
+  });
   // Votes without isUp or revealWeight are neutral and excluded from the
   // agreement pools; the remaining unanimous UP pair caps out.
   assert.deepEqual(
@@ -282,12 +296,35 @@ test("missing surprise inputs fall back to the neutral multiplier", () => {
   );
 });
 
+test("surprise bonuses stay neutral below the minimum reveal floor", () => {
+  const votes = [
+    surpriseVote("a1", true, 10_000n),
+    surpriseVote("b2", true, 10_000n),
+    surpriseVote("c3", false, 10_000n),
+    surpriseVote("d4", true, 10_000n),
+    surpriseVote("e5", true, 10_000n),
+    surpriseVote("f6", true, 10_000n),
+    surpriseVote("a7", false, 10_000n),
+  ];
+
+  const result = scoreQuestionRound({ votes, trailingBaseRateUpBps: 2_000 });
+
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.surpriseBps),
+    Array.from({ length: votes.length }, () => 10_000),
+  );
+  assert.deepEqual(
+    result.leaves.map((leaf) => leaf.baseWeight),
+    Array.from({ length: votes.length }, () => 10_000n),
+  );
+});
+
 test("correlationParameterHash commits to the surprise parameters", () => {
   const params = defaultCorrelationScoringParams();
   assert.equal(params.scorerVersion, "rateloop-correlation-epoch-v2");
   assert.equal(
     correlationParameterHash(params),
-    "0x5219338b1cc53f001ede1efcfc10b56fe79c2e66b7d2137c93877ab1e70d2db5",
+    "0xd70bff6a96793230e7bf1384cf7768aeec8387785672f4d5a34adc3bb5f1c2c8",
   );
 
   const defaultHash = correlationParameterHash(params);
@@ -313,6 +350,10 @@ test("correlationParameterHash commits to the surprise parameters", () => {
   );
   assert.notEqual(
     correlationParameterHash({ ...params, baseWeightBonusBps: 6_000 }),
+    defaultHash,
+  );
+  assert.notEqual(
+    correlationParameterHash({ ...params, surpriseMinReveals: 3 }),
     defaultHash,
   );
 });
@@ -419,7 +460,7 @@ test("correlationParameterHash pins spec versions and canonical params", () => {
 
   assert.equal(
     correlationParameterHash(params),
-    "0x5219338b1cc53f001ede1efcfc10b56fe79c2e66b7d2137c93877ab1e70d2db5",
+    "0xd70bff6a96793230e7bf1384cf7768aeec8387785672f4d5a34adc3bb5f1c2c8",
   );
   assert.notEqual(
     correlationParameterHash({
@@ -450,6 +491,7 @@ test("scoreRoundPayoutWeights rejects invalid parameters", () => {
     { surpriseCapBps: 9_999 },
     { baseWeightFloorBps: -1 },
     { baseWeightBonusBps: -1 },
+    { surpriseMinReveals: 0 },
     { baseRateWindowRounds: 0 },
     { baseRateMinBps: 0 },
     { baseRateMaxBps: 10_000 },

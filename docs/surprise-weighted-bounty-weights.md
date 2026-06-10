@@ -81,7 +81,8 @@ W_side(s)   = sum(w_j) over eligible votes j with side_j == s
 agreementBps_i = (W_side(side_i) - w_i) * 10_000 / (W_total - w_i)
 ```
 
-If `W_total - w_i == 0` (sole eligible voter) or `w_i` is unavailable, the voter's surprise
+If fewer than `surpriseMinReveals` eligible votes have both `side` and `w`, if
+`W_total - w_i == 0` (sole eligible voter), or if `w_i` is unavailable, the voter's surprise
 multiplier is neutral (`surpriseBps_i = 10_000`). Votes missing `side` or `w` are excluded from
 `W_total`/`W_side` entirely (and receive the neutral multiplier), so the agreement pools are
 always computed over the same well-defined vote set.
@@ -124,6 +125,7 @@ and the scorer version string:
 | `surpriseCapBps` | 30_000 | Maximum surprise multiplier (3.0x) |
 | `baseWeightFloorBps` | 5_000 | Flat participation component |
 | `baseWeightBonusBps` | 5_000 | Surprise-scaled component |
+| `surpriseMinReveals` | 8 | Minimum score-eligible reveals before surprise bonuses apply |
 | `scorerVersion` | `rateloop-correlation-epoch-v2` | Versions this spec |
 
 ## Contract surface
@@ -147,9 +149,11 @@ and the scorer version string:
   prior. Because shares normalize within a round, a uniform multiplier cancels: only
   *differences* in surprise within a round move money.
 - **Contrarian spam is neutral in expectation.** Voting the rare side earns the high multiplier
-  only when other raters agree; for an uninformed contrarian the expected agreement is the base
-  rate itself, so the expected multiplier is ~1x — while stake forfeiture still prices the
-  downside. Only a signal that genuinely predicts peers beats the floor.
+  only when at least 8 score-eligible raters reveal and other raters agree; below that threshold
+  the surprise component stays neutral, matching the score-spread forfeiture floor. For an
+  uninformed contrarian above the threshold, expected agreement is the base rate itself, so the
+  expected multiplier is ~1x while stake forfeiture still prices the downside. Only a signal that
+  genuinely predicts peers beats the floor.
 - **Manufactured surprise is bounded.** A coordinated cluster voting the rare side on a
   low-traffic round can hit the cap, which is why the cap is conservative (3x on half the
   weight, i.e. at most 2x total claim weight) and why the independence discount applies *after*

@@ -31,6 +31,7 @@ export interface CorrelationScoringParams {
   surpriseCapBps: number;
   baseWeightFloorBps: number;
   baseWeightBonusBps: number;
+  surpriseMinReveals: number;
   baseRateWindowRounds: number;
   baseRateMinBps: number;
   baseRateMaxBps: number;
@@ -136,6 +137,7 @@ export function defaultCorrelationScoringParams(): CorrelationScoringParams {
     surpriseCapBps: 30_000,
     baseWeightFloorBps: 5_000,
     baseWeightBonusBps: 5_000,
+    surpriseMinReveals: 8,
     baseRateWindowRounds: 100,
     baseRateMinBps: 500,
     baseRateMaxBps: 9_500,
@@ -161,6 +163,7 @@ export function correlationParameterHash(
     maxClusterSizeWithoutDiscount: params.maxClusterSizeWithoutDiscount,
     minUnverifiedMaturityVotes: params.minUnverifiedMaturityVotes,
     scorerVersion: params.scorerVersion,
+    surpriseMinReveals: params.surpriseMinReveals,
     surpriseCapBps: params.surpriseCapBps,
     unverifiedFloorBps: params.unverifiedFloorBps,
     verifiedFloorBps: params.verifiedFloorBps,
@@ -372,10 +375,15 @@ function surpriseBpsForVotes(
 
   let totalWeight = 0n;
   let upWeight = 0n;
+  let surpriseRevealCount = 0;
   for (const vote of votes) {
     if (!hasSurpriseInputs(vote)) continue;
+    surpriseRevealCount++;
     totalWeight += vote.revealWeight;
     if (vote.isUp) upWeight += vote.revealWeight;
+  }
+  if (surpriseRevealCount < params.surpriseMinReveals) {
+    return votes.map(() => NEUTRAL_SURPRISE_BPS);
   }
 
   return votes.map((vote) => {
@@ -493,6 +501,7 @@ function validateParams(params: CorrelationScoringParams): void {
     params.surpriseCapBps < NEUTRAL_SURPRISE_BPS ||
     params.baseWeightFloorBps < 0 ||
     params.baseWeightBonusBps < 0 ||
+    params.surpriseMinReveals <= 0 ||
     params.baseRateWindowRounds <= 0 ||
     params.baseRateMinBps <= 0 ||
     params.baseRateMaxBps >= 10_000 ||
