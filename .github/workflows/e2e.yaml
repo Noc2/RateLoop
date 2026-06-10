@@ -135,7 +135,7 @@ jobs:
         env:
           PONDER_NETWORK: hardhat
           PONDER_RPC_URL_31337: http://127.0.0.1:8545
-        run: yarn ponder:dev &
+        run: yarn workspace @rateloop/ponder dev:built-contracts &
 
       - name: Start Next.js (production)
         env:
@@ -295,7 +295,7 @@ jobs:
         env:
           PONDER_NETWORK: hardhat
           PONDER_RPC_URL_31337: http://127.0.0.1:8545
-        run: yarn ponder:dev &
+        run: yarn workspace @rateloop/ponder dev:built-contracts &
 
       - name: Start Next.js (production)
         env:

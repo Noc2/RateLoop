@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "build:contracts": "yarn workspace @rateloop/contracts build",
+    "ensure:contracts": "node ./scripts/ensureContractsArtifacts.mjs",
     "dev": "yarn build:contracts && node ./scripts/devWithRecovery.mjs",
+    "dev:built-contracts": "node ./scripts/devWithRecovery.mjs dev:raw:built-contracts",
     "dev:raw": "yarn build:contracts && ponder dev --disable-ui",
+    "dev:raw:built-contracts": "yarn ensure:contracts && ponder dev --disable-ui",
     "dev:ui": "yarn build:contracts && ponder dev",
     "start": "yarn build:contracts && node ./scripts/start.mjs",
     "codegen": "yarn build:contracts && ponder codegen",

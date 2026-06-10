@@ -3,11 +3,18 @@ import {
   outputIndicatesClosedPglite,
   outputIndicatesConfiguredPortFallback,
   outputIndicatesPonderServerTransition,
+  resolveDevRawScript,
   shouldRecover,
   shouldResetPglite,
 } from "./devWithRecovery.mjs";
 
 describe("devWithRecovery", () => {
+  test("uses dev:raw by default and accepts an alternate raw dev script", () => {
+    expect(resolveDevRawScript([])).toBe("dev:raw");
+    expect(resolveDevRawScript(["dev:raw:built-contracts"])).toBe("dev:raw:built-contracts");
+    expect(resolveDevRawScript([""])).toBe("dev:raw");
+  });
+
   test("recovers from PGlite corruption", () => {
     const output = "RuntimeError: Aborted()\n@electric-sql/pglite\nInitWalRecovery";
 
