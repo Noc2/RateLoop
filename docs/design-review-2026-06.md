@@ -7,6 +7,12 @@ landscape). Five independent review passes were run over the codebase and extern
 document is the synthesis. File references are to the repo at the time of review (commit
 `2843dbaa`).
 
+**Second pass:** after a wave of ~60 mitigation commits, five fresh independent review agents
+re-ran the full review on 2026-06-10 against commit `418e4202`, verifying every claimed fix
+against the code (not the commit messages) and adversarially reviewing the new code itself. The
+per-finding *Status* blocks, the [second-pass update](#second-pass-update-2026-06-10-commit-418e4202),
+and the [new findings](#new-findings-second-pass-2026-06-10) sections reflect that pass.
+
 ## TL;DR
 
 The design is unusually thoughtful and candid: the Robust BTS scoring is a faithful implementation
@@ -35,6 +41,31 @@ None of these are fatal, and all three have concrete fixes below. The agent inte
 genuinely good MCP design but is blocked on adoption basics: the SDK packages are unpublishable
 (`"private": true`) while all docs depend on them, there is no public testnet/sandbox, and the
 "x402" integration is not actually the x402 wire protocol.
+
+## Second-pass update (2026-06-10, commit 418e4202)
+
+The mitigation wave is real work, not status laundering: every claimed fix exists in code, the
+test-fixture changes are justified rather than assertion-gaming, and two of the three structural
+P0s are substantively closed. Updated statuses:
+
+| # | Finding | Second-pass status |
+| --- | --- | --- |
+| 1 | Oracle security budget | **Partially mitigated** — fee escrow + challenger bounty verified in code; `ClusterPayoutOracle.sol` itself byte-identical (bonds still zero, 12h window); new gaps: challenger-slot capture, 14-day escrow vs ~10-day governance latency |
+| 2 | Herding / participation-shaped income | **Partially mitigated** (downgraded from "mitigated") — surprise weights shipped and faithful to spec, but pooling is still a Nash equilibrium, the trailing base rate is gameable, and verification routes through finding 1's oracle |
+| 3 | Keeper liveness forfeits stake | **Mitigated** — RevealFailed now refunds, 24x grace, drand failover, getLogs fallback, health-gated finalization, self-reveal UI; residual: garbage-commit stalling is now gas-only |
+| 4 | Majority-stake collusion | **Partially mitigated** — 50% forfeit cap, 8-reveal forfeit floor, bounty-size participant floors, external-settlement disclaimer; no dispute/escalation re-run path |
+| 5 | RBTS seed reroll | **Mitigated on-chain** — but the Ponder mirror fabricates scores for the new scoreless path (release blocker R1c) |
+| 6 | Agent adoption blockers | **Partially mitigated** — packages publishable but 404 on npm, no publish CI; dry-run is real; Sepolia deployed but no hosted faucet; "x402" honestly renamed |
+| 7 | Prompt injection | **Mitigated** — delimiters with escape-proof markers, warnings, sourceUrl validation |
+| 8 | Launch distribution / token design | **Open** — zero diffs to launch/governor/token contracts since `2843dbaa` |
+| 9 | Off-chain operational design | **Partially mitigated** — discovery, locking, hashing, artifact cache done; verifier checks self-consistency not chain truth; challenged snapshots still stall |
+| 10 | Contract complexity | **Partially mitigated** — permit overload, permissionless reopen, 100/200-voter gas tests, recovery coverage; engine/bundle splits only staged |
+| 11 | Agent UX polish | **Largely mitigated** — timeouts, structured errors, signed webhooks (strong SSRF defense), tool tiers |
+
+The pass also found **three release blockers at HEAD** (stale storage-layout snapshots that fail
+the CI gate, a stale `FrontendRegistry` ABI that breaks the new fee-withdrawal UI and gasless
+path, and a Ponder handler that fabricates RBTS scores for scoreless settlements) plus a set of
+new economic findings — see [New findings](#new-findings-second-pass-2026-06-10).
 
 ## What the design gets right
 
@@ -102,6 +133,21 @@ Instead, accountability now scales through the fee stream and time:
   bounds what an exit-scamming proposer can extract before detection — the one case reputation and
   fee escrow cannot deter.
 
+**Second pass (418e4202): partially mitigated.** The implemented items check out exactly as
+described: `requestFeeWithdrawal`/`completeFeeWithdrawal` with `FEE_WITHDRAWAL_DELAY = 14 days`
+(`FrontendRegistry.sol:316-355`), pending buckets confiscated on slash (`:470-474`) and held
+through the unbonding window, `CHALLENGER_BOUNTY_BPS = 5000` with exact-split accounting
+(`:450-510`). But `ClusterPayoutOracle.sol` is byte-identical to `2843dbaa` — proposer bonds
+still always zero, 12h default window, 5 USDC challenge bond — and three new gaps weaken the
+escrow+bounty substitute (details in new findings E1/E2): the oracle records a single first-come
+challenger that `slashFrontendWithBounty` never reads, so a fraudulent proposer can self-challenge
+from a fresh wallet to capture 50% of its own slash *and* deny the honest watcher; the 14-day
+escrow only out-runs the ~10-day minimum governance slash latency (1d delay + 7d vote + 2d
+timelock) by ~4 days, with the attacker controlling when the clock starts; and the consent-free
+`setSnapshotProposer` (audit M-2, still unfixed) lets a slashee bind the recorded challenger as
+its "proposer" to make the bounty-routing slash revert. Value-tiered windows and the claim-rate
+ramp remain open.
+
 #### 2. Herding is the dominant strategy; bounties pay participation, not accuracy (economic)
 
 `QuestionRewardPoolEscrowClaimLib.sol:610` returns a flat `BASE_CLAIM_WEIGHT_BPS` — bounty share
@@ -121,11 +167,36 @@ reinforces this: agreeing with the expected majority maximizes qualification.
 - Consider restoring a "surprisingly common" information term (original BTS) to break
   predict-the-base-rate strategies.
 
-**Status (2026-06-10):** mitigated — bounty claim weights are now surprise-weighted (see
+**Status (2026-06-10):** bounty claim weights are now surprise-weighted (see
 `docs/surprise-weighted-bounty-weights.md`): snapshot rounds pay a participation floor plus a
 surprisingly-common bonus normalized by a trailing base rate, so conformist rounds pay flat while
 informative reporting earns up to 2x. Ground-truth audit rounds remain open as the long-term
 backstop.
+
+**Second pass (418e4202): partially mitigated** (downgraded from "mitigated"). The implementation
+is faithful to its spec — `clamp(agreement/baseRate, 1x, 3x)` surprise multiplier mapped to
+`baseWeight ∈ [10000, 20000]` (`correlationScoring.ts:352-423`), trailing 100-round base rate
+clamped to [500, 9500], contract-side range check and root-committed `totalClaimWeight`
+normalization so 2x weights can't oversubscribe a pool. But:
+
+- *Pooling is still a Nash equilibrium.* A unilateral honest deviator against a full herd gets
+  agreement 0 → floored at 1x — no bounty gain, while (above 8 reveals) still bearing forfeiture
+  variance. The mechanism makes the informative equilibrium payoff-dominant once a critical mass
+  deviates; it does not make deviating from a pool individually profitable. Known PTS limitation,
+  conceded by the spec's own citations.
+- *The trailing base rate is gameable* — see new finding E3: a bloc alternating its pooled answer
+  by round parity keeps the global base rate pinned near 5000 while harvesting ~2x surprise every
+  round, and at low volume the 100-round window can be flooded with cheap self-asked rounds to
+  drag the clamp.
+- *The fix routes 100% through finding 1's oracle.* On-chain verification is only the
+  [10000, 20000] range check + merkle proof against an optimistically finalized snapshot
+  (`QuestionRewardPoolEscrowClaimLib.sol:638-647`); the surprise math, agreement pools, and base
+  rate are all operator-computed. The accuracy-linked money now exists, but its integrity ceiling
+  is the oracle's.
+- *The launch rail is untouched*: `MIN_QUALIFYING_SCORE_BPS = 7000` and the required-flat launch
+  domain mean the largest LREP flow (24M earned pool) still pays pure conformity.
+
+Entropy dampening, ground-truth audit rounds, and on-chain score-linked shares remain open.
 
 #### 3. Keeper liveness failure forfeits honest stake (liveness/economic)
 
@@ -145,7 +216,28 @@ the failure is systemic.
 - Ship a standalone reveal-only fallback service anyone can run, surface self-reveal in the
   frontend, and alert on `keeper_rounds_reveal_failed_finalized_total`.
 
-### P1 — High
+**Second pass (418e4202): mitigated.** The original failure shape — a systemic outage billed to
+individual voters — is gone, with defense in depth at every link:
+
+- *On-chain:* RevealFailed rounds now refund unrevealed stakes instead of forfeiting them
+  (`RoundCleanupLib.sol:550-579`; forfeiture is `Settled`-only), with consistent accounting, and
+  the reveal-failed finalization deadline got a 24x grace multiplier (60min → 24h,
+  `RoundCleanupLib.sol:638`) that does not delay quorum-reached settlements.
+- *Keeper:* 4-relay drand failover with preserved BLS verification (`drand.ts:37-153`),
+  `eth_getLogs` ciphertext fallback hash-checked against on-chain commits (`keeper.ts:791-899`),
+  reveal-failed finalization skipped while the reveal pipeline is provably unhealthy
+  (`keeper.ts:1154-1169,1367-1378`) — and the health flag cannot be synthesized by an attacker,
+  since garbage ciphertexts hit the permanent-failure path instead. Grace/liveness metrics with
+  shipped Prometheus alert rules.
+- *Frontend:* a dedicated self-reveal page with full validation before decrypt
+  (`useManualRevealVotes.ts:556-599`), surfaced in vote-card copy and covered by e2e.
+
+Residuals: the getLogs lookback defaults to ~7 days, unenforced against configured round
+durations; the self-reveal hook fetches ciphertexts only from Ponder, so the human backstop fails
+during exactly the Ponder outage it backstops; no documented community reveal-only service
+(though the keeper now runs Ponder-free end to end, so a second keeper with just an RPC is
+viable); and the refund makes garbage-commit stalling a gas-only attack (new finding E5). The
+keeper README still says RevealFailed "forfeits unrevealed stake" — stale.
 
 #### 4. Majority-stake collusion inverts the forfeiture penalty (economic)
 
@@ -163,6 +255,18 @@ add a dispute/escalation path that re-runs contested rounds with a larger indepe
 (the Kleros appeal lesson); document explicitly that settled scores must not settle external
 financial contracts.
 
+**Second pass (418e4202): partially mitigated.** Three of four recommendations landed: forfeits
+are capped at 50% (`MAX_SCORE_SPREAD_FORFEIT_BPS = 5_000`, `RewardMath.sol:18,98-99`), forfeits
+are zeroed below 8 economic reveals (`SCORE_SPREAD_FORFEIT_MIN_REVEALS = 8`, `RewardMath.sol:17,94`,
+correctly counting RBTS-weighted reveals), bounty-size participant floors require 5 voters at
+≥1k USDC and 8 at ≥10k (`QuestionRewardParticipantFloorLib`), and the "not a settlement oracle"
+disclaimer is documented across MCP/SDK/skill surfaces. The thin-round "drag the mean, harvest the
+minority" attack now extracts zero forfeit, and worst-case confiscation at scale halved. Open: no
+dispute/escalation path re-runs a contested round with a larger rater set, and >50% collusion at
+≥8 reveals still recycles up to 50% of honest-minority stake to the attackers. New trade-off: the
+hard 8-reveal cliff turns 3–7-reveal rounds into zero-stake-risk territory, which interacts badly
+with the surprise bonus (new finding E4).
+
 #### 5. RBTS seed reroll via blockhash expiry (economic) - mitigated
 
 Original risk: if `settleRound` was not called within 256 blocks of seed capture, the old
@@ -174,6 +278,16 @@ rewards or forfeits, and still finalizes the binary round outcome. The unused re
 refresh counter were removed. A bounded settlement caller rebate (1% of scored RBTS forfeits,
 capped at 1 LREP) gives the first post-capture caller a small incentive to consume fresh seeds
 without creating a payout on scoreless expiry.
+
+**Second pass (418e4202): confirmed mitigated on-chain** — `refreshExpiredRbtsSeed` is deleted,
+expired seeds settle terminal and scoreless with all RBTS stakes returned
+(`RoundRevealLib.sol:222-227,305-308`), and the rebate pays only from scored forfeits via
+try/catch (`RoundVotingEngine.sol:1077-1098`). Two follow-ons: (a) the Ponder mirror does not
+handle the newly reachable `scoreSeed == 0` state and fabricates per-vote scores/forfeits that
+never existed on-chain — release blocker R1c below; (b) low-severity griefing: since the rebate is
+zero exactly when the seed expires, nothing economically pulls settlement forward when an attacker
+*wants* expiry (256 blocks ≈ 8.5 min), so scoring can be suppressed round-by-round at gas cost —
+no theft, just denial.
 
 #### 6. Agent adoption blockers: unpublished SDK, no sandbox, "x402" naming (adoption)
 
@@ -191,6 +305,26 @@ testnet with a hosted faucet plus a no-payment dry-run mode for `rateloop_ask_hu
 implement the 402-challenge wire flow or rename the scheme honestly ("EIP-3009 USDC
 authorization").
 
+**Second pass (418e4202): partially mitigated.**
+
+- *Packaging:* `private: true` removed, dual ESM/CJS build, full `exports` map, `prepack`,
+  provenance config — every code prerequisite exists. But `npm view @rateloop/sdk` →
+  **404**: the packages were made publishable, never published, and there is no publish workflow
+  in CI (which `provenance: true` requires). Docs and hosted MCP responses still instruct
+  `npm install @rateloop/sdk` and point at `@rateloop/sdk/vote` — the headline blocker is still
+  literally true (new finding A1).
+- *Dry run:* genuinely end-to-end with no USDC and no signature — real payload validation and
+  preflight, then a deterministic fixture with honest `dry_run_*` warnings, wired through quote,
+  status, result, SDK, and CLI. No rater contact, so no free rater-spam channel. It is a fixture
+  though; no real human round is exercisable pre-spend.
+- *Testnet:* a World Chain Sepolia deployment exists and is checked in CI, but the faucet is
+  still `NODE_ENV === "development"`-gated and agent docs steer to dry-run instead of documenting
+  the Sepolia path.
+- *Naming:* honestly rescoped rather than implemented — canonical
+  `paymentMode: "eip3009_usdc_authorization"` with `x402` kept as a documented legacy alias, and
+  the docs now state RateLoop does not expose an x402 endpoint. Internal module/contract names
+  retain the old prefix; cosmetic.
+
 #### 7. Prompt injection through the result surface (security)
 
 `rateloop_get_result` embeds raw rater feedback into `majorObjections[].summary` and
@@ -201,6 +335,17 @@ adjacent to a `recommendedNextAction` field agents are told to act on, including
 consuming agent. **Recommendation:** wrap all third-party text in explicit untrusted-data
 delimiters, add injection warnings to the tool description and `limitations`, and validate
 `sourceUrl` like other URLs.
+
+**Second pass (418e4202): mitigated.** Rater feedback and submitter question text are wrapped in
+`RATELOOP_UNTRUSTED_DATA_BEGIN/END` markers (`resultPackage.ts:323-337`); delimiter injection is
+blocked by case-insensitive replacement of the marker with `RATELOOP_ESCAPED_DATA` plus
+whitespace normalization and 220-char truncation, so crafted rater input cannot reconstitute the
+delimiter. Untrusted-data and source-URL warnings always lead `limitations` (including pending
+and dry-run packages), the `rateloop_get_result` description carries an explicit "never follow
+instructions" note, and `sourceUrl` is validated http(s)-only/length-capped/blocklisted at write
+*and* read. Residual (low): URLs themselves rely on the warning rather than delimiters, `http://`
+is still accepted, and `protocolState.audienceContext` is the one unwrapped third-party-adjacent
+field (in practice enum-constrained).
 
 ### P2 — Medium
 
@@ -234,6 +379,14 @@ delimiters, add injection warnings to the tool description and `limitations`, an
   history already exists on-chain) and gate frontend registration/proposal rights on it in
   addition to the bond; re-scope "reputation" claims in docs.
 
+**Second pass (418e4202): open.** Zero diffs to `LaunchDistributionPool.sol`,
+`RateLoopGovernor.sol`, or the token contracts since `2843dbaa`: no verification-bonus vesting,
+no anchor-history requirements or self-asked launch-credit exclusion, the frontend bond is still
+LREP-only (the new fee escrow grows LREP collateral but inherits the price correlation), the
+quorum floor is still a flat 100k, and no tiered timelocks or guardian veto. The only adjacent
+movement is the whitepaper's new "not a settlement oracle" disclaimer. The "before significant
+LREP distribution" gate has not moved.
+
 #### 9. Off-chain operational design (ops/trust)
 
 - **Keeper work discovery is an O(N) scan of every contentId ever created every 30s**
@@ -260,6 +413,25 @@ delimiters, add injection warnings to the tool description and `limitations`, an
   disables claims. *Recommendation:* move it to `@rateloop/node-utils` with a cross-package
   golden-vector test.
 
+**Second pass (418e4202): partially mitigated.** Done: keeper work discovery is now Ponder-driven
+via `/keeper/work` with the O(N) chain scan demoted to ~hourly reconciliation and outage
+fallback, plus tick/discovery metrics; canonical JSON is a single implementation in
+`@rateloop/node-utils` with a pinned-keccak golden vector (drift-by-duplication structurally
+impossible); Postgres advisory locks now cover the main loop; the settlement rebate pays the
+keeper in-band with zero keeper changes; and Ponder keeps a durable `payout_artifact_cache`
+hash-verified against the on-chain `artifactHash` before storing and serving, which kills the
+"keeper host dies → claims invisible" path *if* Ponder fetched the artifact while the host was
+alive. Open: the correlation verifier (versioned spec + CLI both exist) re-scores from the
+artifact's own embedded vote set rather than rebuilding from chain data, so a fabricated
+eligibility set verifies `ok: true` — the challenger burden is unchanged (new finding O2);
+challenged snapshots are still simply skipped, now as declared policy, stalling payouts until
+governance; there is no artifact mirroring or fetch-retry when the host is dead at proposal time;
+and no timeout fallback when no operator publishes. New ops issues: the keeper shares the public
+120 req/min Ponder rate limit and can self-throttle into a synthetic "outage" (O1), and
+`/keeper/work` has no urgency ordering plus an un-mirrored 1x grace predicate (O3). The
+`/keeper/work` route itself is read-only, parameterized, and treated as hints the keeper
+re-verifies on-chain — no poisoning vector.
+
 #### 10. Contract complexity and untested edges (complexity/testing)
 
 - `RoundVotingEngine` fights EIP-170 with hand-rolled assembly AccessControl at OZ storage slots,
@@ -285,6 +457,19 @@ delimiters, add injection warnings to the tool description and `limitations`, an
   a knife-edge where adding stake to your own side flips the outcome; document/test the boundary
   or use a conventional tie-break.
 
+**Second pass (418e4202): partially mitigated.** Fixed: the appended-permit assembly is replaced
+by an explicit `commitVoteWithPermit` overload with front-run-tolerant try/catch
+(`RoundVotingEngine.sol:485-512`), and the replacement is complete across ABIs, app, and
+sponsorship validator; rejected-snapshot recovery is permissionless with on-chain gating, and the
+rework also fixed a strand-the-round bug (recovery flags now clear only after requalification
+succeeds); `GasBudget.t.sol` asserts 100- and 200-voter settlement under the 30M block limit;
+`flushPendingTreasuryForfeit`/`replayBundleObserverNotify` have direct branch tests; the
+weighted-tie knife-edge is documented and boundary-tested (kept intentionally, not changed). Open:
+the engine split exists only as two new interfaces on the same contract, and the bundle escrow
+split is staged (an optional routing seam defaulting to the same escrow) — both structural splits
+remain to be done. The permit try/catch swallows all permit reverts, so malformed permits surface
+as opaque transfer failures (ergonomics only).
+
 #### 11. Agent UX polish (integration)
 
 - SDK `DEFAULT_TIMEOUT_MS = 10s` vs. server-side confirm waits up to 180s — confirm calls
@@ -299,6 +484,135 @@ delimiters, add injection warnings to the tool description and `limitations`, an
   wallet, or enable SSE status streams.
 - The happy path is 5–7 sequential tool calls across an 18-tool surface; collapse the common case
   into a single `ask → signed-authorization → result` path and mark the rest advanced.
+
+**Second pass (418e4202): largely mitigated.** `DEFAULT_CONFIRM_TIMEOUT_MS = 210s` now exceeds the
+server's 180s on all confirm calls (configurable); `quoteFetchImpl` is implemented and `mode` is
+narrowed to `"dry_run"` with a structured `mode_unsupported` rejection; `RateLoopApiError` carries
+the full structured object (`code`/`retryable`/`recoverWith`/`details`) from both HTTP and MCP
+paths; public webhooks are signature-gated to the paying wallet with single-use nonced challenges,
+HMAC-signed deliveries, and a genuinely strong SSRF defense (https-only, private-range DNS
+rejection with rebinding-pinned resolution, manual redirects, zero body read); browser-handoff
+helpers shipped; and all 18 tools carry `primary|advanced` tiers with the chat happy path
+collapsed to handoff → status → result. Residuals: `askHumans` itself still defaults to 10s,
+the tier fields are nonstandard top-level tool fields spec-strict MCP clients may strip, SSE
+remains disabled (webhooks are the sanctioned alternative), and the headless raw-wallet path is
+still 5–7 calls, now marked advanced rather than collapsed.
+
+## New findings (second pass, 2026-06-10)
+
+Issues introduced by the mitigation wave itself or newly found in it, deduplicated across the
+five review agents.
+
+### Release blockers at HEAD (fix before anything ships)
+
+- **R1a — Storage-layout snapshots not regenerated; the CI storage gate is red.** Deleting
+  `_roundRbtsSeedRefreshCount` mid-layout shifted every subsequent `RoundVotingEngine` slot
+  (`_pendingTreasuryForfeitLrep`, both commit-credential masks, the dormancy snapshot) without a
+  `__gap` adjustment, and the pinned snapshots for `RoundVotingEngine` and `FrontendRegistry`
+  (which gained two `pendingFeeWithdrawal*` mappings) were never regenerated —
+  `check-storage-layouts.sh` does an exact diff in CI. Harmless under the documented
+  fresh-redeploy assumption, but an upgrade across this delta would silently zero pending
+  treasury forfeits and erase in-flight credential masks. Regenerate the snapshots and either
+  restore a placeholder slot or annotate the intentional shift.
+- **R1b — The fee-withdrawal feature shipped against a stale `FrontendRegistry` ABI.**
+  `deployedContracts.ts` still exposes the deleted `claimFees` and lacks
+  `requestFeeWithdrawal`/`completeFeeWithdrawal`/`pendingFeeWithdrawal*`; the app's ABI-override
+  shim only patches `RoundVotingEngine`, so the new two-step withdrawal UI throws on every
+  call/read; the sponsored-transaction allowlist still names `claimFees`
+  (`freeTransactions.ts:959`) and omits both new functions, so even with a fresh ABI the gasless
+  path rejects them; the fee-claim e2e spec still tests `claimFees()`. Keeper and Ponder were
+  updated correctly — only the app layer was missed.
+- **R1c — Ponder fabricates RBTS scores for scoreless expired-seed settlements.** The
+  `RbtsRewardsScored` handler has no guard for the newly reachable `scoreSeed == 0` state and
+  proceeds to draw reference/peer indices from the zero seed, computing per-vote scores,
+  forfeits, and stake returns that never existed on-chain (`ponder/src/RoundVotingEngine.ts:902-1092`)
+  — feeding claimable-amount displays and leaderboards. Mark scoring-set votes
+  fully-returned/unscored when the seed is zero.
+
+### Economic (E)
+
+- **E1 (medium) — Challenger-slot capture and bounty veto.** The oracle records exactly one
+  first-come challenger per snapshot and later challenges revert; `slashFrontendWithBounty` never
+  reads it, taking a governance-supplied recipient checked only against the frontend and its
+  *current* proposer. A fraudulent proposer can (a) self-challenge from a fresh wallet, occupying
+  the only challenger slot — recovering 50% of its own confiscation and zeroing the honest
+  watcher's expected bounty — or (b) bind the known watcher as its "proposer" via the
+  consent-free `setSnapshotProposer` (audit M-2) so the bounty-routing slash reverts. Read the
+  recorded challenger from the oracle on-chain, snapshot the proposer binding at challenge time,
+  and land the M-2 consent fix.
+- **E2 (medium) — 14-day fee escrow vs ~10-day governance latency.** Minimum
+  proposal→execution latency for a slash is ~10 days (1d voting delay + 7d period + 2d
+  timelock) before any detection time, and the attacker controls when the clock starts by timing
+  `requestFeeWithdrawal` against its own fraudulent snapshot. ~4 days of slack is not collateral.
+  Lengthen `FEE_WITHDRAWAL_DELAY` to 21–30 days or add a guardian freeze on pending withdrawals
+  when a challenge is filed.
+- **E3 (medium-high) — Alternating-vote coordination defeats the surprise mechanism.** The
+  base-rate normalization only cancels pooling on a *constant* answer. A bloc using a round-parity
+  signal (UP on even rounds, DOWN on odd) keeps the single global trailing base rate pinned near
+  5000 while achieving ~100% intra-round agreement → ~2x weight every round, extracting share
+  from honest dissenters; at low volume the 100-round window can also be dragged with cheap
+  self-asked unanimous rounds and harvested on the rare side. Per-content/per-category base
+  rates, entropy dampening on near-unanimous rounds, and ground-truth audits are the fixes.
+- **E4 (medium) — Sub-8-reveal rounds are now zero-stake-risk convex lotteries.** Below
+  `SCORE_SPREAD_FORFEIT_MIN_REVEALS = 8` both forfeits and the settlement rebate are identically
+  zero, while the surprise bonus's 1x floor makes uninformed rare-side voting strictly positive-EV
+  (Jensen), and participant floors only force 8 voters at ≥10k USDC. The surprise spec's "stake
+  forfeiture already prices that risk" rationale is false exactly there, and finding 4's small-round
+  collusion is *sweetened*: 2–3 colluders are simultaneously the majority, each other's agreement
+  pool, and 2x weight earners. Align the bonus threshold with the forfeit floor or taper 3→8
+  instead of a cliff.
+- **E5 (low-medium) — Garbage-commit stalling is now gas-only.** The RevealFailed refund
+  (correct call, trade-off acknowledged in-code) plus the 24x grace window means a credentialed
+  attacker committing undecryptable ciphertext can cycle target content through ~day-long
+  RevealFailed loops at gas-plus-stake-lock cost, with no forfeiture. If observed: restore
+  forfeiture for provably undecryptable commits when other voters *did* reveal (targeted
+  withholding vs systemic outage is distinguishable), or price commits with a small
+  non-refundable fee.
+
+### Operational (O)
+
+- **O1 (medium) — The keeper self-throttles against Ponder's public rate limiter.** All keeper
+  reads share the public 120 req/min per-IP limit (loopback exemption is dev-only); a busy tick
+  429s into getLogs fallbacks and degraded discovery — a self-inflicted outage indistinguishable
+  from a real one in alerts. Add a shared-secret/allowlist bypass or internal listener.
+- **O2 (medium) — The correlation verifier proves self-consistency, not chain truth.** It
+  re-scores from the artifact's own embedded `eligibleVotes`, so a proposer who fabricates the
+  vote set (drops voters, invents commitKeys, flips `verifiedHuman`) still verifies `ok: true`;
+  eligibility is still *defined* as "whatever the Ponder route returns". The challenger burden
+  the first pass flagged is unchanged, and the oracle's economic backstop is doing all the work.
+- **O3 (low-medium) — `/keeper/work` ordering and gauge blind spots.** Candidates are
+  `contentId ASC` with a 500/2,000 cap, so >500 open rounds starve high-id rounds until hourly
+  reconciliation, and the reveal-grace gauge only reflects visited rounds — the RevealFailed
+  alert under-reports precisely under load. The route's deadline predicate also uses 1x grace
+  while chain/keeper use 24x. Order by deadline, compute the gauge in SQL, mirror the multiplier.
+- **O4 (low) — Hardening gaps:** the keeper parses `/keeper/work` responses with no byte/array
+  caps (unlike the correlation fetcher); the Ponder artifact cache stays silently empty if the
+  proposer host is dead at proposal time (no retry/alert); the frontend self-reveal hook has no
+  getLogs fallback; the keeper's own artifact cache hash check defends against corruption, not a
+  malicious DB writer.
+
+### Agent surface (A)
+
+- **A1 (medium) — Packages 404 on npm while every doc instructs installing them**, and
+  `provenance: true` plus no publish workflow means a plain `npm publish` will fail — the
+  publish gate hasn't actually been crossed. Add the CI publish workflow and ship 0.1.0.
+- **A2 (low) — Pre-payment webhook registration is a free signed-POST reflection primitive**
+  (subscription + `question.submitting` event enqueued before payment). Bounded by the SSRF gate
+  and HMAC bodies; defer activation to payment confirmation.
+- **A3 (low) — Polish:** unauthenticated dry-run/quote runs full chain-read preflight (free RPC
+  amplification at 120 req/min/IP); dry-run sentinel values (`"dry_run_complete"`,
+  `"integration_ready"`) aren't in the documented result enums; `http://` source URLs accepted
+  while every other outbound surface is https-only.
+
+### Documentation drift (D)
+
+- **D1 — The same-day audit report describes the deleted seed-refresh mechanism as a verified
+  control** (`audit-report-2026-06-10.md:106` praises `refreshExpiredRbtsSeed`, removed by the
+  later merge); the keeper README still says RevealFailed forfeits stake. Add addenda.
+- **D2 — Spec/implementation divergence on the consensus-critical path:** the correlation route
+  coerces missing reveal weight to `0n` and scores the vote, while the surprise spec mandates
+  "excluded, neutral" — a literal-spec challenger computes a different root and triggers a
+  spurious dispute. Pass `null` through or amend the spec.
 
 ## Prior-art lessons applied
 
@@ -320,11 +634,27 @@ French online-reputation-management firm** — a trademark/SEO collision to chec
 
 ## Suggested sequencing
 
+First-pass sequencing (historical):
+
 1. **Before mainnet value flows:** finding 1 (oracle bonds), finding 3 (RevealFailed refunds +
    reveal fallbacks), finding 7 (prompt-injection delimiters — cheap).
 2. **Before pushing agent adoption:** finding 6 (publish SDK, testnet+faucet, x402 naming),
    finding 11 (timeouts, structured errors).
 3. **Before significant LREP distribution:** finding 8 (vesting verified bonuses, quorum floor,
-   USDC-denominated bonds), finding 2 (accuracy-linked bounty shares — addressed 2026-06-10 via
-   surprise-weighted bounty claim weights, see `docs/surprise-weighted-bounty-weights.md`).
+   USDC-denominated bonds), finding 2 (accuracy-linked bounty shares).
 4. **Ongoing hardening:** findings 4, 9, 10.
+
+Updated after the second pass (2026-06-10):
+
+1. **Immediately (red at HEAD):** R1a (regenerate storage-layout snapshots), R1b (regenerate
+   FrontendRegistry ABI + gasless allowlist + e2e), R1c (guard `scoreSeed == 0` in Ponder),
+   D1/D2 (audit addendum, spec/route reveal-weight divergence).
+2. **Before mainnet value flows:** E1 (read the recorded challenger on-chain + M-2 consent fix),
+   E2 (escrow delay vs governance latency), E4 (align the surprise bonus with the forfeit
+   floor), plus finding 1's still-open value-tiered windows and claim-rate ramp.
+3. **Before pushing agent adoption:** A1 (actually publish — CI workflow + 0.1.0; everything
+   else is ready), hosted Sepolia faucet, A2/A3.
+4. **Before significant LREP distribution:** finding 8 (untouched), E3 (per-content base rates /
+   entropy dampening / audit rounds — the launch rail still pays conformity).
+5. **Ongoing hardening:** O1–O4, E5 (watch item), finding 10's engine/bundle splits, the
+   chain-truth correlation verifier (O2).
