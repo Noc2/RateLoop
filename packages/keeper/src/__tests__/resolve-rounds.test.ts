@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { keccak256 } from "viem";
+import { encodePacked, keccak256 } from "viem";
 
 const VOTER = "0x3333333333333333333333333333333333333333" as const;
 const ACCOUNT = "0x4444444444444444444444444444444444444444" as const;
@@ -32,6 +32,7 @@ const {
     ponderBaseUrl: "https://ponder.example.test",
     dormancyPeriod: 30n * 24n * 60n * 60n,
     cleanupBatchSize: 25,
+    logFallbackLookbackBlocks: 300_000,
   },
   timelockDecrypt: vi.fn(),
   mainnetClient: vi.fn(() => ({ kind: "mainnet" })),
@@ -294,9 +295,13 @@ function makeHarness(options: {
   questionRewardPoolEscrow?: `0x${string}`;
   advisoryCommitKeys?: readonly `0x${string}`[];
   advisoryCommitCores?: Record<string, unknown[]>;
+  advisoryCommits?: Record<string, CommitData>;
   revealGracePeriod?: bigint;
   lastCommitRevealableAfter?: bigint;
   roundHasHumanVerifiedCommit?: boolean;
+  ponderAvailable?: boolean;
+  ponderCommits?: Record<string, CommitData>;
+  onChainLogs?: { vote?: unknown[]; advisory?: unknown[] };
 }) {
   const roundConfig = options.roundConfig || {
     epochDuration: 1200n,
@@ -316,14 +321,20 @@ function makeHarness(options: {
   const commits = options.commits ?? {};
   const advisoryCommitKeys = options.advisoryCommitKeys ?? [];
   const advisoryCommitCores = options.advisoryCommitCores ?? {};
+  const advisoryCommits = options.advisoryCommits ?? {};
   const round = options.round;
 
   const fetchMock = vi.fn(async () => {
-    const items = Object.entries(commits).map(([commitKey, commit]) => ({
-      commitKey,
-      ciphertextHash: commit.ciphertextHash,
-      ciphertext: commit.ciphertext,
-    }));
+    if (options.ponderAvailable === false) {
+      throw new Error("fetch failed");
+    }
+    const items = Object.entries(options.ponderCommits ?? commits).map(
+      ([commitKey, commit]) => ({
+        commitKey,
+        ciphertextHash: commit.ciphertextHash,
+        ciphertext: commit.ciphertext,
+      }),
+    );
     return {
       ok: true,
       status: 200,
@@ -334,6 +345,16 @@ function makeHarness(options: {
 
   const publicClient = {
     getBlock: vi.fn().mockResolvedValue({ timestamp: now }),
+    getBlockNumber: vi.fn().mockResolvedValue(2_000_000n),
+    getLogs: vi.fn(async ({ event }: { event?: { name?: string } }) => {
+      if (event?.name === "VoteCommitted") {
+        return options.onChainLogs?.vote ?? [];
+      }
+      if (event?.name === "AdvisoryVoteRecorded") {
+        return options.onChainLogs?.advisory ?? [];
+      }
+      return [];
+    }),
     readContract: vi.fn(
       async ({
         functionName,
@@ -424,6 +445,11 @@ function makeHarness(options: {
             return BigInt(advisoryCommitKeys.length);
           case "getRoundAdvisoryCommitKey":
             return advisoryCommitKeys[Number(args[2])] ?? zeroHash;
+          case "advisoryCommitRevealData":
+            return (
+              advisoryCommits[String(args[0])] ??
+              makeCommit({ revealed: true, stakeAmount: 0n })
+            );
           case "advisoryCommitCore":
             return (
               advisoryCommitCores[String(args[0])] ?? [
@@ -505,6 +531,16 @@ function makeHarness(options: {
 
         if (functionName === "syncBundleQuestionTerminal") {
           return "0xsync";
+        }
+
+        if (functionName === "revealAdvisoryVote") {
+          const commitKey = String(args[0]);
+          const commit = advisoryCommits[commitKey];
+          if (!commit || commit.revealed) {
+            throw new Error("AlreadyRevealed");
+          }
+          commit.revealed = true;
+          return "0xadvisoryrevealed";
         }
 
         if (functionName === "claimAdvisoryLaunchCredit") {
@@ -1345,6 +1381,235 @@ describe("resolveRounds", () => {
     expect(result.roundsRevealFailedFinalized).toBe(0);
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
+    );
+  });
+
+  it("reveals votes from on-chain VoteCommitted logs when Ponder is unavailable", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const commitHash = `0x${"11".repeat(32)}` as const;
+    const commitKey = keccak256(
+      encodePacked(["address", "bytes32"], [VOTER, commitHash]),
+    );
+    const commit = makeCommit({ revealableAfter: 100n });
+    const round = makeRound({ state: 0, voteCount: 3n, revealedCount: 2n });
+    const { publicClient, walletClient, fetchMock } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [commitKey],
+      commits: { [commitKey]: commit },
+      ponderAvailable: false,
+      onChainLogs: {
+        vote: [
+          {
+            args: {
+              contentId: 1n,
+              roundId: 1n,
+              voter: VOTER,
+              commitHash,
+              ciphertextHash: commit.ciphertextHash,
+              ciphertext: commit.ciphertext,
+            },
+          },
+        ],
+      },
+      now: 10_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(publicClient.getLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: mockConfig.contracts.votingEngine,
+        args: { contentId: 1n, roundId: 1n },
+      }),
+    );
+    expect(result.votesRevealed).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "revealVoteByCommitKey",
+        args: expect.arrayContaining([commitKey]),
+      }),
+    );
+  });
+
+  it("falls back to on-chain logs for commits missing from the Ponder response", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const commitHash = `0x${"22".repeat(32)}` as const;
+    const commitKey = keccak256(
+      encodePacked(["address", "bytes32"], [VOTER, commitHash]),
+    );
+    const commit = makeCommit({ revealableAfter: 100n });
+    const round = makeRound({ state: 0, voteCount: 3n, revealedCount: 2n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [commitKey],
+      commits: { [commitKey]: commit },
+      // Ponder responds, but its index is lagging and is missing this commit.
+      ponderCommits: {},
+      onChainLogs: {
+        vote: [
+          {
+            args: {
+              contentId: 1n,
+              roundId: 1n,
+              voter: VOTER,
+              commitHash,
+              ciphertextHash: commit.ciphertextHash,
+              ciphertext: commit.ciphertext,
+            },
+          },
+        ],
+      },
+      now: 10_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.votesRevealed).toBe(1);
+    expect(publicClient.getLogs).toHaveBeenCalled();
+  });
+
+  it("rejects fallback ciphertexts whose bytes do not match the on-chain hash", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const commitHash = `0x${"33".repeat(32)}` as const;
+    const commitKey = keccak256(
+      encodePacked(["address", "bytes32"], [VOTER, commitHash]),
+    );
+    const commit = makeCommit({ revealableAfter: 100n });
+    const forged = makeTlockCiphertext({
+      isUp: false,
+      salt: `0x${"bb".repeat(32)}`,
+      targetRound: commit.targetRound!,
+      drandChainHash: commit.drandChainHash!,
+    });
+    const round = makeRound({ state: 0, voteCount: 3n, revealedCount: 2n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [commitKey],
+      commits: { [commitKey]: commit },
+      ponderAvailable: false,
+      onChainLogs: {
+        vote: [
+          {
+            args: {
+              contentId: 1n,
+              roundId: 1n,
+              voter: VOTER,
+              commitHash,
+              // Claims the expected hash but carries different bytes.
+              ciphertextHash: commit.ciphertextHash,
+              ciphertext: forged,
+            },
+          },
+        ],
+      },
+      now: 10_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.votesRevealed).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "Indexed ciphertext bytes do not hash to on-chain ciphertext hash",
+      expect.objectContaining({ commitKey }),
+    );
+  });
+
+  it("reveals advisory votes from on-chain logs when Ponder is unavailable", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const advisoryCommit = makeCommit({ revealableAfter: 100n });
+    const round = makeRound({ state: 0, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      ponderAvailable: false,
+      advisoryCommitKeys: [ADVISORY_COMMIT_KEY],
+      advisoryCommits: { [ADVISORY_COMMIT_KEY]: advisoryCommit },
+      advisoryCommitCores: {
+        [ADVISORY_COMMIT_KEY]: [
+          VOTER,
+          0n,
+          0n,
+          0n,
+          false,
+          true,
+          false,
+          false,
+          true,
+        ],
+      },
+      onChainLogs: {
+        advisory: [
+          {
+            args: {
+              contentId: 1n,
+              roundId: 1n,
+              voter: VOTER,
+              advisoryCommitKey: ADVISORY_COMMIT_KEY,
+              ciphertextHash: advisoryCommit.ciphertextHash,
+              ciphertext: advisoryCommit.ciphertext,
+            },
+          },
+        ],
+      },
+      now: 10_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.advisoryVotesRevealed).toBe(1);
+    expect(publicClient.getLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: mockConfig.contracts.advisoryVoteRecorder,
+      }),
+    );
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "revealAdvisoryVote",
+        args: expect.arrayContaining([ADVISORY_COMMIT_KEY]),
+      }),
     );
   });
 });

@@ -17,7 +17,10 @@
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
  */
 import {
+  encodePacked,
+  getAbiItem,
   keccak256,
+  type AbiEvent,
   type PublicClient,
   type WalletClient,
   type Chain,
@@ -555,6 +558,108 @@ async function fetchIndexedCiphertextsForRound(params: {
   }
 }
 
+// Reveal-liveness fallback (design review 2026-06, finding 3): Ponder is the primary
+// ciphertext source, but every commit's full ciphertext is also emitted on-chain in the
+// VoteCommitted / AdvisoryVoteRecorded events. When Ponder is down or its response is
+// missing a commit, rebuild the ciphertext map straight from `eth_getLogs` so a Ponder
+// outage alone can never stall reveals into a RevealFailed finalization.
+const LOG_FALLBACK_CHUNK_BLOCKS = 10_000n;
+
+const voteCommittedEvent = getAbiItem({
+  abi: RoundVotingEngineAbi,
+  name: "VoteCommitted",
+}) as AbiEvent;
+const advisoryVoteRecordedEvent = getAbiItem({
+  abi: AdvisoryVoteRecorderAbi,
+  name: "AdvisoryVoteRecorded",
+}) as AbiEvent;
+
+interface CommitEventArgs {
+  voter?: `0x${string}`;
+  commitHash?: `0x${string}`;
+  advisoryCommitKey?: `0x${string}`;
+  ciphertextHash?: `0x${string}`;
+  ciphertext?: `0x${string}`;
+}
+
+/** Vote commit keys are `keccak256(abi.encodePacked(voter, commitHash))` on-chain. */
+function voteCommitKeyFromEvent(args: CommitEventArgs): `0x${string}` | null {
+  if (!args.voter || !args.commitHash) return null;
+  return keccak256(
+    encodePacked(["address", "bytes32"], [args.voter, args.commitHash]),
+  );
+}
+
+async function fetchLogCiphertextsForRound(params: {
+  publicClient: Pick<PublicClient, "getBlockNumber" | "getLogs">;
+  kind: "vote" | "advisory";
+  contractAddress: `0x${string}`;
+  contentId: bigint;
+  roundId: bigint;
+  neededCommitKeys: ReadonlySet<string>;
+  logger: Logger;
+}): Promise<IndexedCiphertextMap | null> {
+  try {
+    const latestBlock = await params.publicClient.getBlockNumber();
+    const lookback = BigInt(config.logFallbackLookbackBlocks);
+    const minBlock = latestBlock > lookback ? latestBlock - lookback : 0n;
+    const event =
+      params.kind === "vote" ? voteCommittedEvent : advisoryVoteRecordedEvent;
+    const logCiphertexts: IndexedCiphertextMap = new Map();
+
+    // Scan backwards from the chain head in bounded chunks (RPC providers commonly cap
+    // getLogs ranges) and stop as soon as every commit key of the round is covered —
+    // commits cluster near the round window, so this normally takes a single request.
+    let toBlock = latestBlock;
+    while (toBlock >= minBlock) {
+      const fromBlock =
+        toBlock >= minBlock + LOG_FALLBACK_CHUNK_BLOCKS
+          ? toBlock - LOG_FALLBACK_CHUNK_BLOCKS + 1n
+          : minBlock;
+      const logs = await params.publicClient.getLogs({
+        address: params.contractAddress,
+        event,
+        args: { contentId: params.contentId, roundId: params.roundId },
+        fromBlock,
+        toBlock,
+      });
+      for (const log of logs) {
+        const args = (log as { args?: CommitEventArgs }).args ?? {};
+        const commitKey =
+          params.kind === "vote"
+            ? voteCommitKeyFromEvent(args)
+            : (args.advisoryCommitKey ?? null);
+        if (!commitKey || !args.ciphertextHash || !args.ciphertext) continue;
+        logCiphertexts.set(indexedCiphertextKey(commitKey), {
+          commitKey,
+          ciphertextHash: args.ciphertextHash,
+          ciphertext: args.ciphertext,
+        });
+      }
+
+      let allFound = true;
+      for (const needed of params.neededCommitKeys) {
+        if (!logCiphertexts.has(needed)) {
+          allFound = false;
+          break;
+        }
+      }
+      if (allFound) break;
+      toBlock = fromBlock - 1n;
+    }
+
+    return logCiphertexts;
+  } catch (err: unknown) {
+    params.logger.warn("Failed to fetch on-chain ciphertext logs", {
+      kind: params.kind,
+      contentId: params.contentId.toString(),
+      roundId: params.roundId.toString(),
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
 function getIndexedCiphertext(params: {
   indexedCiphertexts: IndexedCiphertextMap;
   kind: "vote" | "advisory";
@@ -1033,6 +1138,7 @@ async function _revealCommits(
   }
 
   let indexedCiphertexts: IndexedCiphertextMap | null | undefined;
+  let logCiphertexts: IndexedCiphertextMap | null | undefined;
   for (const commitKey of commitKeys) {
     try {
       // Read commit data
@@ -1060,15 +1166,44 @@ async function _revealCommits(
           logger,
         });
       }
-      if (!indexedCiphertexts) continue;
-
-      const ciphertext = getIndexedCiphertext({
-        indexedCiphertexts,
-        kind: "vote",
-        commitKey,
-        expectedCiphertextHash: commit.ciphertextHash,
-        logger,
-      });
+      let ciphertext = indexedCiphertexts
+        ? getIndexedCiphertext({
+            indexedCiphertexts,
+            kind: "vote",
+            commitKey,
+            expectedCiphertextHash: commit.ciphertextHash,
+            logger,
+          })
+        : null;
+      if (!ciphertext) {
+        if (logCiphertexts === undefined) {
+          logCiphertexts = await fetchLogCiphertextsForRound({
+            publicClient,
+            kind: "vote",
+            contractAddress: engineAddr,
+            contentId,
+            roundId,
+            neededCommitKeys: new Set(commitKeys.map(indexedCiphertextKey)),
+            logger,
+          });
+        }
+        if (logCiphertexts) {
+          ciphertext = getIndexedCiphertext({
+            indexedCiphertexts: logCiphertexts,
+            kind: "vote",
+            commitKey,
+            expectedCiphertextHash: commit.ciphertextHash,
+            logger,
+          });
+          if (ciphertext) {
+            logger.info("Resolved vote ciphertext from on-chain logs", {
+              contentId: contentId.toString(),
+              roundId: roundId.toString(),
+              commitKey,
+            });
+          }
+        }
+      }
       if (!ciphertext) continue;
 
       const metadataValidation = validateCiphertextMetadata(commit, ciphertext);
@@ -1256,6 +1391,7 @@ async function _revealAdvisoryCommits(
   }
 
   let indexedCiphertexts: IndexedCiphertextMap | null | undefined;
+  let logCiphertexts: IndexedCiphertextMap | null | undefined;
   for (const commitKey of commitKeys) {
     try {
       const rawCommit = await publicClient.readContract({
@@ -1279,15 +1415,44 @@ async function _revealAdvisoryCommits(
           logger,
         });
       }
-      if (!indexedCiphertexts) continue;
-
-      const ciphertext = getIndexedCiphertext({
-        indexedCiphertexts,
-        kind: "advisory",
-        commitKey,
-        expectedCiphertextHash: commit.ciphertextHash,
-        logger,
-      });
+      let ciphertext = indexedCiphertexts
+        ? getIndexedCiphertext({
+            indexedCiphertexts,
+            kind: "advisory",
+            commitKey,
+            expectedCiphertextHash: commit.ciphertextHash,
+            logger,
+          })
+        : null;
+      if (!ciphertext) {
+        if (logCiphertexts === undefined) {
+          logCiphertexts = await fetchLogCiphertextsForRound({
+            publicClient,
+            kind: "advisory",
+            contractAddress: advisoryAddr,
+            contentId,
+            roundId,
+            neededCommitKeys: new Set(commitKeys.map(indexedCiphertextKey)),
+            logger,
+          });
+        }
+        if (logCiphertexts) {
+          ciphertext = getIndexedCiphertext({
+            indexedCiphertexts: logCiphertexts,
+            kind: "advisory",
+            commitKey,
+            expectedCiphertextHash: commit.ciphertextHash,
+            logger,
+          });
+          if (ciphertext) {
+            logger.info("Resolved advisory ciphertext from on-chain logs", {
+              contentId: contentId.toString(),
+              roundId: roundId.toString(),
+              commitKey,
+            });
+          }
+        }
+      }
       if (!ciphertext) continue;
 
       const metadataValidation = validateCiphertextMetadata(commit, ciphertext);

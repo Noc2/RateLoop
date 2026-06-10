@@ -530,6 +530,14 @@ function loadConfig() {
       "25",
       errors,
     ),
+    // How far back (in blocks) the eth_getLogs ciphertext fallback may scan when Ponder
+    // is unavailable. Default covers ~7 days at 2s blocks; raise it for deployments that
+    // configure round durations longer than that.
+    logFallbackLookbackBlocks: readPositiveIntEnv(
+      "KEEPER_LOG_FALLBACK_LOOKBACK_BLOCKS",
+      "300000",
+      errors,
+    ),
 
     // Tuning
     dormancyPeriod: readPositiveBigIntEnv(
