@@ -133,9 +133,11 @@ jobs:
 
       - name: Start Ponder indexer
         env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
+          RATELOOP_PONDER_DATABASE_SCHEMA: rateloop_ponder_ci
           PONDER_NETWORK: hardhat
           PONDER_RPC_URL_31337: http://127.0.0.1:8545
-        run: yarn workspace @rateloop/ponder dev:built-contracts &
+        run: yarn workspace @rateloop/ponder start:built-contracts --port 42069 &
 
       - name: Start Next.js (production)
         env:
@@ -293,9 +295,11 @@ jobs:
 
       - name: Start Ponder indexer
         env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app
+          RATELOOP_PONDER_DATABASE_SCHEMA: rateloop_ponder_ci
           PONDER_NETWORK: hardhat
           PONDER_RPC_URL_31337: http://127.0.0.1:8545
-        run: yarn workspace @rateloop/ponder dev:built-contracts &
+        run: yarn workspace @rateloop/ponder start:built-contracts --port 42069 &
 
       - name: Start Next.js (production)
         env:

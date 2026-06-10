@@ -12,6 +12,7 @@
     "dev:raw:built-contracts": "yarn ensure:contracts && ponder dev --disable-ui",
     "dev:ui": "yarn build:contracts && ponder dev",
     "start": "yarn build:contracts && node ./scripts/start.mjs",
+    "start:built-contracts": "node ./scripts/start.mjs",
     "codegen": "yarn build:contracts && ponder codegen",
     "serve": "ponder serve",
     "check-types": "tsc --noEmit",
