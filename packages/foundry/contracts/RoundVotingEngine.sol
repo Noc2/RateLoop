@@ -1816,10 +1816,6 @@ contract RoundVotingEngine is
     /// @custom:oz-renamed-from roundDeferredCleanupBounty
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) internal roundClusterPayoutReadyAt;
 
-    /// @dev Counts expired delayed-seed refreshes for observability; settlement keeps refreshing
-    ///      permissionlessly until a live blockhash can seed RBTS scoring.
-    mapping(uint256 contentId => mapping(uint256 roundId => uint8)) internal _roundRbtsSeedRefreshCount;
-
     /// @notice L-Cleanup-1: accumulated LREP that `processUnrevealedVotes` tried to send to
     ///         treasury but couldn't (treasury unset or transfer reverted). Permissionless
     ///         `flushPendingTreasuryForfeit` retries the transfer; until then the amount stays
