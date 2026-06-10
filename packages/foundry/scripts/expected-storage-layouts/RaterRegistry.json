@@ -189,11 +189,17 @@
     {
       "slot": 28,
       "offset": 0,
-      "label": "_usedWorldPresenceProof",
+      "label": "_usedWorldCredentialProof",
       "type": "t_mapping(t_uint8,t_mapping(t_bytes32,t_bool))"
     },
     {
       "slot": 29,
+      "offset": 0,
+      "label": "_usedWorldPresenceProof",
+      "type": "t_mapping(t_uint8,t_mapping(t_bytes32,t_bool))"
+    },
+    {
+      "slot": 30,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
@@ -209,8 +215,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[30]",
-      "numberOfBytes": "960",
+      "label": "uint256[29]",
+      "numberOfBytes": "928",
       "base": "t_uint256"
     },
     {

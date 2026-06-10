@@ -986,6 +986,20 @@ contract RaterRegistryTest is Test {
         );
     }
 
+    function test_AttestHumanCredentialWithV4ProofRejectsSameProofReplayByOwner() public {
+        uint64 expiresAtMin = uint64(block.timestamp + 1 hours);
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), 1, expiresAtMin, _emptyV4Proof());
+
+        vm.prank(rater);
+        vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), 1, expiresAtMin, _emptyV4Proof());
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(uint256(NULLIFIER_HASH), 2, expiresAtMin, _emptyV4Proof());
+    }
+
     function test_AttestHumanCredentialWithV4ProofRejectsIdentitySwitchWhileActive() public {
         vm.startPrank(rater);
         registry.attestHumanCredentialWithV4Proof(

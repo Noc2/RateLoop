@@ -132,10 +132,11 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     uint256 public worldIdV4PresenceAction;
     uint64 public worldIdV4PresenceTtl;
     bool public worldIdV4PresenceConfigFrozen;
+    mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldCredentialProof;
     mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceProof;
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[30] private __gap;
+    uint256[29] private __gap;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -872,6 +873,24 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             if (_revokedWorldCredentialNullifier[kind][storedNullifier]) revert InvalidCredential();
         }
 
+        bytes32 proofReplayKey = keccak256(
+            abi.encode(
+                "world-id-v4-credential-proof",
+                kind,
+                block.chainid,
+                address(config.verifier),
+                config.rpId,
+                config.action,
+                config.issuerSchemaId,
+                config.credentialGenesisIssuedAtMin,
+                storedNullifier,
+                nonce,
+                signalHash,
+                expiresAtMin
+            )
+        );
+        if (_usedWorldCredentialProof[kind][proofReplayKey]) revert NullifierAlreadyAssigned();
+
         config.verifier
             .verify(
                 nullifier,
@@ -886,6 +905,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
             );
 
         if (expiresAtMin <= block.timestamp) revert InvalidCredential();
+        _usedWorldCredentialProof[kind][proofReplayKey] = true;
         uint256 ttlExpiresAt = block.timestamp + config.ttl;
         if (ttlExpiresAt > type(uint64).max) revert InvalidCredential();
         uint64 expiresAt = expiresAtMin < ttlExpiresAt ? expiresAtMin : uint64(ttlExpiresAt);
