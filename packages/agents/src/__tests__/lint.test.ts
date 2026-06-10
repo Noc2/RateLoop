@@ -381,3 +381,87 @@ describe("agent question linting", () => {
     });
   });
 });
+
+describe("round config voter alignment linting", () => {
+  it("accepts an explicit roundConfig.minVoters that matches bounty.requiredVoters", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: { ...VALID_REQUEST.bounty, requiredVoters: "5" },
+      roundConfig: {
+        epochDuration: "1200",
+        maxDuration: "1200",
+        maxVoters: "100",
+        minVoters: "5",
+      },
+    });
+
+    expect(summarizeLintFindings(findings)).toEqual({
+      errorCount: 0,
+      ok: true,
+      warningCount: 0,
+    });
+  });
+
+  it("flags an explicit roundConfig.minVoters that mismatches bounty.requiredVoters", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: { ...VALID_REQUEST.bounty, requiredVoters: "5" },
+      roundConfig: {
+        epochDuration: "1200",
+        maxDuration: "1200",
+        maxVoters: "100",
+        minVoters: "3",
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "roundConfig.minVoters",
+        }),
+      ]),
+    );
+    expect(summarizeLintFindings(findings).ok).toBe(false);
+  });
+
+  it("flags a question-level roundConfig.minVoters mismatch against the default quorum", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      bounty: { amount: "1000000" },
+      question: {
+        ...VALID_REQUEST.question,
+        roundConfig: { minVoters: "5" },
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "question.roundConfig.minVoters",
+        }),
+      ]),
+    );
+  });
+
+  it("ignores omitted roundConfig and non-numeric voter values", () => {
+    expect(
+      summarizeLintFindings(
+        lintAgentAskRequest({
+          ...VALID_REQUEST,
+          bounty: { ...VALID_REQUEST.bounty, requiredVoters: "5" },
+        }),
+      ).ok,
+    ).toBe(true);
+
+    expect(
+      summarizeLintFindings(
+        lintAgentAskRequest({
+          ...VALID_REQUEST,
+          roundConfig: { minVoters: "not-a-number" },
+        }),
+      ).ok,
+    ).toBe(true);
+  });
+});
