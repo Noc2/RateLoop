@@ -132,13 +132,18 @@ const GovernanceDocs: NextPage = () => {
         Governance controls oracle configuration, including the challenge window, challenger bond, frontend registry,
         and fallback bond recipient. It can also arbitrate challenged roots through proposals that either finalize a
         correct challenged root or reject an invalid one with a public reason hash, and can slash the proposing frontend
-        through the FrontendRegistry if the on-chain-data computation was wrong.
+        through the FrontendRegistry if the on-chain-data computation was wrong. When a slash follows a rejected root,
+        governance can use <code>slashFrontendWithBounty</code> to route a fixed 50% of everything confiscated — the
+        stake cut, accrued fees, and any pending fee withdrawal — to the recorded challenger, so a correct challenge is
+        directly profitable rather than just bond-neutral.
       </p>
       <p>
         The intended security model is optimistic rather than fully per-snapshot economically secured on-chain. Public
         artifacts, challenge windows, governance arbitration, and the globally bonded frontend-operator set are meant to
         make incorrect payout roots observable and punishable through frontend slashing, reputation loss, and future-fee
-        loss.
+        loss. Frontend fee withdrawals wait out a 14-day slashable review window, so an operator&apos;s undelivered
+        earnings act as collateral that grows with their usage — a misbehaving proposer forfeits the bond, weeks of fee
+        income, and the future fee stream together.
       </p>
 
       <h2 id="round-settings-bounds">Round Settings Bounds</h2>

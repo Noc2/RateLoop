@@ -114,10 +114,13 @@ const FrontendCodes: NextPage = () => {
         <li>
           <strong>Claim:</strong> First call{" "}
           <code>RoundRewardDistributor.claimFrontendFee(contentId, roundId, frontend)</code> from your operator address
-          on each settled round, then withdraw your accumulated LREP from <code>FrontendRegistry.claimFees()</code>{" "}
-          while active, or with <code>completeDeregister()</code> after exit. If governance slashes your frontend, you
-          must restore the full {protocolDocFacts.frontendOperatorStakeLabel} bond before fee claims can accrue to you
-          again. Reward-pool frontend shares are paid automatically when eligible voters claim.
+          on each settled round. Withdrawing accumulated LREP is a two-step flow:{" "}
+          <code>FrontendRegistry.requestFeeWithdrawal()</code> starts a 14-day review window during which the amount
+          stays slashable, then <code>completeFeeWithdrawal()</code> pays it out — or use{" "}
+          <code>completeDeregister()</code> after exit, which sweeps stake and all fees after its own review window. If
+          governance slashes your frontend, you must restore the full {protocolDocFacts.frontendOperatorStakeLabel} bond
+          before fee claims can accrue to you again. Reward-pool frontend shares are paid automatically when eligible
+          voters claim.
         </li>
         <li>
           <strong>Publish roots:</strong> If you operate the correlation scorer, propose deterministic
@@ -312,8 +315,16 @@ RoundVotingEngine.commitVote(
       <p>Frontend operators are subject to governance control:</p>
       <ul>
         <li>
-          <strong>Slashing</strong> - Governance can slash staked LREP for abuse and confiscate already accrued frontend
-          fees, including abuse of the payout-root publication process.
+          <strong>Slashing</strong> - Governance can slash staked LREP for abuse and confiscate accrued frontend fees
+          and any pending fee withdrawal, including abuse of the payout-root publication process. Because withdrawals
+          wait out a 14-day review window, the fee stream itself acts as collateral that grows with the operator&apos;s
+          usage.
+        </li>
+        <li>
+          <strong>Challenger bounty</strong> - When a slash follows a rejected payout root, governance can route a fixed
+          50% share of everything confiscated to the successful challenger via <code>slashFrontendWithBounty</code>,
+          making the oracle challenge path directly profitable. The recipient is expected to be the recorded on-chain
+          challenger of the rejected snapshot.
         </li>
         <li>
           <strong>Rebonding required</strong> - After a partial slash, operators must top back up to the full{" "}

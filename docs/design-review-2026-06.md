@@ -82,6 +82,26 @@ this failure shape.
 - Reward successful challengers explicitly so the challenge path is economically live, not just
   theoretically present (the Kleros lesson: challenge machinery that's unprofitable goes unused).
 
+**Status (2026-06-10):** partially mitigated, with a deliberate design revision. Value-scaled
+per-snapshot proposer bonds were rejected: they tax the honest operator's capital (the scarce
+resource) and force operators to track gated value per snapshot, so all stakes stay fixed.
+Instead, accountability now scales through the fee stream and time:
+
+- *Implemented — delayed slashable fee withdrawals:* `FrontendRegistry.claimFees()` is replaced by
+  `requestFeeWithdrawal()` → 14-day review window → `completeFeeWithdrawal()`. Requested amounts
+  stay fully slashable until release, and `slashFrontend` confiscates the pending bucket alongside
+  accrued fees. The operator's undelivered earnings are now collateral that grows automatically
+  with usage — no per-snapshot bonding, no extra capital.
+- *Implemented — challenger bounty:* `slashFrontendWithBounty` routes a fixed 50%
+  (`CHALLENGER_BOUNTY_BPS`) of everything confiscated (stake cut + accrued fees + pending
+  withdrawals) to the recorded challenger of the rejected snapshot, making a correct challenge
+  directly profitable. The share is deliberately below 100% so a proposer cannot rescue its own
+  collateral by self-challenging through a fresh wallet.
+- *Open:* value-tiered challenge windows (12h → 48-72h for high-value pools; `MAX_CHALLENGE_WINDOW`
+  already allows 3 days) and a per-snapshot claim-rate ramp during the 7-day veto window, which
+  bounds what an exit-scamming proposer can extract before detection — the one case reputation and
+  fee escrow cannot deter.
+
 #### 2. Herding is the dominant strategy; bounties pay participation, not accuracy (economic)
 
 `QuestionRewardPoolEscrowClaimLib.sol:610` returns a flat `BASE_CLAIM_WEIGHT_BPS` — bounty share

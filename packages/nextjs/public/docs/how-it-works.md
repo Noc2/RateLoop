@@ -103,10 +103,19 @@ recompute the artifact, challenge bad roots with a USDC ERC20 bond that defaults
 to 5 USDC (5_000_000 atomic units), and governance can arbitrate challenged
 roots with a public reason hash.
 
+Successful challenges are rewarded: when governance slashes a frontend over a
+rejected root, it can route a fixed 50% of everything confiscated — the stake
+cut, accrued fees, and any pending fee withdrawal — to the recorded challenger
+through `slashFrontendWithBounty`, so catching a bad root pays instead of just
+returning the challenge bond.
+
 The oracle is intentionally optimistic. The goal is not fully per-snapshot
 economic collateralization on-chain; it is public artifacts, challenge windows,
 governance arbitration, and frontend-operator accountability through possible
-slashing, reputation loss, and future-income loss.
+slashing, reputation loss, and future-income loss. Frontend fee withdrawals
+wait out a 14-day slashable review window in the FrontendRegistry, so an
+operator's undelivered earnings act as collateral that grows automatically with
+their usage.
 
 ## Rater Accountability
 

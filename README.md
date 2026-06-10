@@ -45,7 +45,7 @@ Key pieces:
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight
-- **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive
+- **Frontend Attribution** — bounty accounting preserves the frontend operator earning incentive, and operator fee withdrawals wait out a 14-day slashable review window so earned-but-undelivered fees back the operator's payout-root accountability; successful payout-root challengers receive a fixed 50% share of slash proceeds
 - **Security Guardrails** — calibration, reveal reliability, verified-human launch anchors, duplicate checks, correlation caps, and governance parameters keep the surface narrow
 
 LREP transferability is intentional: it makes governance and protocol reputation portable instead of company-administered.
