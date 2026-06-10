@@ -117,6 +117,11 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
     address public voter1 = address(3);
     address public voter2 = address(4);
     address public voter3 = address(5);
+    address public voter4 = address(6);
+    address public voter5 = address(7);
+    address public voter6 = address(8);
+    address public voter7 = address(10);
+    address public voter8 = address(11);
     address public keeper = address(9);
     address public treasury = address(100);
 
@@ -213,7 +218,7 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         lrepToken.mint(owner, 1_000_000e6);
         lrepToken.approve(address(votingEngine), 500_000e6);
 
-        address[5] memory users = [submitter, voter1, voter2, voter3, keeper];
+        address[10] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, voter7, voter8, keeper];
         for (uint256 i = 0; i < users.length; i++) {
             lrepToken.mint(users[i], 10_000e6);
         }
@@ -477,17 +482,21 @@ contract RoundRewardDistributorBranchesTest is VotingTestBase {
         vm.stopPrank();
         uint256 contentId = 1;
 
-        (bytes32 observerCommitKey, bytes32 observerSalt) =
-            _commitPrediction(address(observer), contentId, 8_000, STAKE);
-        (bytes32 voter2CommitKey, bytes32 voter2Salt) = _commitPrediction(voter2, contentId, 8_000, STAKE);
-        (bytes32 voter3CommitKey, bytes32 voter3Salt) = _commitPrediction(voter3, contentId, 2_000, STAKE);
+        address[8] memory voters = [address(observer), voter2, voter3, voter4, voter5, voter6, voter7, voter8];
+        bool[8] memory directions = [true, true, false, true, true, true, false, false];
+        uint16[8] memory ratings = [uint16(8_000), 8_000, 2_000, 8_000, 8_000, 8_000, 2_000, 2_000];
+        bytes32[8] memory commitKeys;
+        bytes32[8] memory salts;
+        for (uint256 i = 0; i < voters.length; i++) {
+            (commitKeys[i], salts[i]) = _commitPrediction(voters[i], contentId, ratings[i], STAKE);
+        }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, observerCommitKey, true, 8_000, observerSalt);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, voter2CommitKey, true, 8_000, voter2Salt);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, voter3CommitKey, false, 2_000, voter3Salt);
+        for (uint256 i = 0; i < voters.length; i++) {
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], ratings[i], salts[i]);
+        }
 
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 

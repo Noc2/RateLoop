@@ -1,6 +1,11 @@
 import { __setAgentLifecycleTestOverridesForTests, sweepAgentLifecycleCallbacks } from "./lifecycle";
+import { publicWebhookAgentId } from "./publicWebhooks";
+import { upsertAgentCallbackSubscription } from "./registry";
 import assert from "node:assert/strict";
-import test, { afterEach } from "node:test";
+import test, { afterEach, beforeEach } from "node:test";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
+import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
 
 const CANDIDATE = {
   agentId: "agent-a",
@@ -26,8 +31,18 @@ function contentResponse(overrides: Record<string, unknown> = {}) {
   };
 }
 
+beforeEach(() => {
+  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  __setUrlSafetyDnsResolversForTests({
+    resolve4: async () => ["93.184.216.34"],
+    resolve6: async () => [],
+  });
+});
+
 afterEach(() => {
   __setAgentLifecycleTestOverridesForTests(null);
+  __setDatabaseResourcesForTests(null);
+  __setUrlSafetyDnsResolversForTests(null);
 });
 
 test("sweepAgentLifecycleCallbacks emits open and settling for overdue open rounds", async () => {
@@ -276,4 +291,95 @@ test("sweepAgentLifecycleCallbacks emits bounty.low_response with live ask guida
     recommendedAction: "retry_later",
     suggestedTopUpAtomic: "500000",
   });
+});
+
+test("sweepAgentLifecycleCallbacks discovers public wallet webhook subscriptions", async () => {
+  const operationKey = `0x${"8".repeat(64)}` as const;
+  const walletAddress = "0x00000000000000000000000000000000000000aa";
+  const agentId = publicWebhookAgentId({ chainId: 480, walletAddress });
+  const submittedAt = new Date("2023-11-14T22:00:00.000Z");
+  const enqueued: Array<{ agentId: string; eventType: string; payload: Record<string, unknown> }> = [];
+
+  await dbClient.execute({
+    sql: `
+      INSERT INTO x402_question_submissions (
+        operation_key,
+        client_request_id,
+        payload_hash,
+        chain_id,
+        payer_address,
+        payment_asset,
+        payment_amount,
+        bounty_amount,
+        question_count,
+        status,
+        content_id,
+        payment_receipt,
+        created_at,
+        updated_at,
+        submitted_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      operationKey,
+      "wallet:hashed-public-id",
+      "payload-hash",
+      480,
+      walletAddress,
+      "0x0000000000000000000000000000000000000001",
+      "1000000",
+      "1000000",
+      1,
+      "submitted",
+      "42",
+      JSON.stringify({
+        mode: "permissionless-wallet-plan",
+        operationKey,
+        originalClientRequestId: "ask-public-lifecycle",
+        walletAddress,
+      }),
+      submittedAt,
+      submittedAt,
+      submittedAt,
+    ],
+  });
+  await upsertAgentCallbackSubscription({
+    agentId,
+    callbackUrl: "https://agent.example/rateloop",
+    eventTypes: ["question.open"],
+    secret: "webhook-secret",
+  });
+
+  __setAgentLifecycleTestOverridesForTests({
+    enqueueAgentCallbackEvent: async params => {
+      enqueued.push({
+        agentId: params.agentId,
+        eventType: params.eventType,
+        payload: params.payload as Record<string, unknown>,
+      });
+      return [];
+    },
+    getContentById: async () =>
+      contentResponse({
+        openRound: {
+          estimatedSettlementTime: "1700000600",
+          roundId: "7",
+        },
+      }) as never,
+    listContentFeedback: async () =>
+      ({
+        items: [],
+      }) as never,
+  });
+
+  const result = await sweepAgentLifecycleCallbacks({
+    now: new Date("2023-11-14T22:13:40.000Z"),
+  });
+
+  assert.equal(result.emitted.questionOpen, 1);
+  assert.equal(enqueued[0]?.agentId, agentId);
+  assert.equal(enqueued[0]?.eventType, "question.open");
+  assert.equal(enqueued[0]?.payload.clientRequestId, "ask-public-lifecycle");
+  assert.equal(enqueued[0]?.payload.operationKey, operationKey);
 });

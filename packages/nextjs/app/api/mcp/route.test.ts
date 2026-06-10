@@ -246,6 +246,9 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
       inputSchema?: unknown;
       name: string;
       outputSchema?: unknown;
+      rateLoopTier?: string;
+      rateLoopWorkflow?: string;
+      recommendedEntryPoint?: boolean;
     }>;
   };
   const toolByName = new Map(result.tools.map(tool => [tool.name, tool]));
@@ -263,6 +266,11 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   });
   assert.ok(toolByName.get("rateloop_quote_question")?.inputSchema);
   assert.ok(toolByName.get("rateloop_quote_question")?.outputSchema);
+  assert.equal(toolByName.get("rateloop_create_ask_handoff_link")?.rateLoopTier, "primary");
+  assert.equal(toolByName.get("rateloop_create_ask_handoff_link")?.rateLoopWorkflow, "ask");
+  assert.equal(toolByName.get("rateloop_create_ask_handoff_link")?.recommendedEntryPoint, true);
+  assert.equal(toolByName.get("rateloop_ask_humans")?.rateLoopTier, "advanced");
+  assert.equal(toolByName.get("rateloop_ask_humans")?.rateLoopWorkflow, "ask");
   assert.ok(toolByName.get("rateloop_prepare_image_upload")?.outputSchema);
   assert.ok(toolByName.get("rateloop_upload_image")?.inputSchema);
   assert.ok(toolByName.get("rateloop_get_image_upload_status")?.outputSchema);
@@ -281,6 +289,9 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   const quoteSchema = toolByName.get("rateloop_quote_question")?.inputSchema as {
     properties?: Record<string, unknown>;
   };
+  const askSchema = toolByName.get("rateloop_ask_humans")?.inputSchema as {
+    properties?: { mode?: { enum?: string[] } };
+  };
   const statusSchema = toolByName.get("rateloop_get_question_status")?.inputSchema as {
     properties?: Record<string, unknown>;
   };
@@ -296,6 +307,7 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
     required?: string[];
   };
   assert.ok(quoteSchema.properties?.walletAddress);
+  assert.deepEqual(askSchema.properties?.mode?.enum, ["dry_run"]);
   assert.ok(statusSchema.properties?.walletAddress);
   assert.ok(resultSchema.properties?.walletAddress);
   assert.ok(ratingContextSchema.properties?.walletAddress);
@@ -315,7 +327,14 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
     { "mcp-protocol-version": "2025-11-25" },
   );
 
-  const result = body.result as { tools: Array<{ description?: string; name: string }> };
+  const result = body.result as {
+    tools: Array<{
+      description?: string;
+      name: string;
+      rateLoopTier?: string;
+      recommendedEntryPoint?: boolean;
+    }>;
+  };
   const names = result.tools.map(tool => tool.name);
   const toolByName = new Map(result.tools.map(tool => [tool.name, tool]));
   assert.equal(response.status, 200);
@@ -324,6 +343,9 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
   assert.equal(names.includes("rateloop_ask_humans"), true);
   assert.equal(names.includes("rateloop_prepare_rating_transactions"), true);
   assert.equal(names.includes("rateloop_get_agent_balance"), false);
+  assert.equal(toolByName.get("rateloop_create_ask_handoff_link")?.rateLoopTier, "primary");
+  assert.equal(toolByName.get("rateloop_create_ask_handoff_link")?.recommendedEntryPoint, true);
+  assert.equal(toolByName.get("rateloop_ask_humans")?.rateLoopTier, "advanced");
   assert.match(toolByName.get("rateloop_get_result")?.description ?? "", /RATELOOP_UNTRUSTED_DATA/);
 });
 

@@ -153,6 +153,13 @@ const AIPage = async () => {
       </p>
       <ol>
         <li>
+          Install the published package helpers when your runtime can run Node:
+          <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+            <code>{`npm install @rateloop/sdk @rateloop/agents
+npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json`}</code>
+          </pre>
+        </li>
+        <li>
           Install the MCP server. For Claude Code:
           <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
             <code>{`${RATELOOP_CLAUDE_MCP_COMMAND}
@@ -276,7 +283,11 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           matter. Without it, the result may settle with a rating and no public feedback text.
         </li>
         <li>
-          Call <code>rateloop_quote_question</code> and show the cost plus <code>legalNotice</code>.
+          Call <code>rateloop_quote_question</code> with <code>{"dryRun: true"}</code> or run{" "}
+          <code>rateloop-agents sandbox</code> to validate the payload without payment.
+        </li>
+        <li>
+          Call <code>rateloop_quote_question</code> for the live ask and show the cost plus <code>legalNotice</code>.
         </li>
         <li>
           Call <code>rateloop_create_ask_handoff_link</code> with the same ask payload and optional{" "}
@@ -315,13 +326,15 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           <code>bountyEligibility</code> (<code>0</code> everyone, <code>2</code> Selfie Check, <code>4</code> Passport,{" "}
           <code>8</code> Proof of Human; add bits to allow any selected credential, and add <code>128</code> to require
           a recent recheck). If a custom <code>roundConfig</code> is supplied, <code>roundConfig.minVoters</code> must
-          match <code>bounty.requiredVoters</code>.
+          match <code>bounty.requiredVoters</code>. Use at least 5 voters for bounties at or above 1000 USDC and at
+          least 8 voters for bounties at or above 10000 USDC. Three-voter rounds can still settle as feedback signals,
+          but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters.
         </li>
         <li>
           Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. LREP
           bonuses are recommended for user testing, product-concept checks, bug reproduction, source-quality review, and
           go/no-go decisions where the human wants to know why. LREP bonuses require{" "}
-          <code>{'paymentMode: "wallet_calls"'}</code>; <code>x402_authorization</code> remains USDC-only.
+          <code>{'paymentMode: "wallet_calls"'}</code>; EIP-3009 USDC authorization remains USDC-only.
         </li>
         <li>
           Question fields: title, optional <code>detailsUrl</code>/<code>detailsHash</code>, category id, tags, and
@@ -352,6 +365,12 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         Browser handoff pages may expose read-only WebMCP helpers for status, draft validation, and next action. They do
         not sign, fund, submit, or replace visible wallet approval.
       </p>
+      <p>
+        For first-run testing without a testnet, pass <code>{"dryRun: true"}</code> or <code>{'mode: "dry_run"'}</code>{" "}
+        to <code>rateloop_quote_question</code> or <code>rateloop_ask_humans</code>. The response validates the ask and
+        returns a synthetic result with no wallet signature, USDC payment, transaction plan, callback registration, or
+        on-chain submission.
+      </p>
       <p>For normal human-wallet asks, use handoff tools in order:</p>
       <ol>
         <li>
@@ -377,6 +396,13 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <code>rateloop_confirm_feedback_bonus_transactions</code>, then poll status and result.
       </p>
       <p>
+        Public wallet-mode raw MCP asks can also include <code>webhookUrl</code>, <code>webhookSecret</code>, and
+        optional <code>webhookEvents</code>. If the response status is <code>webhook_signature_required</code>, sign the
+        returned <code>message</code> with the paying wallet, then repeat the same ask with{" "}
+        <code>webhookChallengeId</code> and <code>webhookSignature</code>. Callback deliveries are signed with{" "}
+        <code>x-rateloop-callback-signature</code>, and status responses include <code>callbackDeliveries</code>.
+      </p>
+      <p>
         Agents that do not use MCP can call the bounty ask, status, and result flow through JSON routes. Use MCP for the
         optional Feedback Bonus flow until direct JSON bonus support is documented.
       </p>
@@ -387,7 +413,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <h3 id="ask-submit">Quote And Submit</h3>
       <ol>
         <li>
-          Call <code>rateloop_quote_question</code> with the draft ask and optional <code>feedbackBonus</code>.
+          Run a no-payment dry run with <code>{"dryRun: true"}</code> or <code>{'mode: "dry_run"'}</code>.
+        </li>
+        <li>
+          Call <code>rateloop_quote_question</code> with the live draft ask and optional <code>feedbackBonus</code>.
         </li>
         <li>
           Show or log the returned <code>legalNotice</code> before spending.
@@ -399,8 +428,11 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <li>If using raw MCP instead, execute each returned wallet call, then confirm the transaction hashes.</li>
       </ol>
       <p>
-        Default to <code>{'paymentMode: "wallet_calls"'}</code>. Use <code>{'paymentMode: "x402_authorization"'}</code>{" "}
-        only when an agent wallet should sign a native USDC authorization before the transaction plan is prepared.
+        Default to <code>{'paymentMode: "wallet_calls"'}</code>. Use{" "}
+        <code>{'paymentMode: "eip3009_usdc_authorization"'}</code> only when an agent wallet should sign an EIP-3009
+        World Chain USDC authorization before the transaction plan is prepared.{" "}
+        <code>{'paymentMode: "x402_authorization"'}</code> is accepted as a legacy alias; RateLoop does not expose an
+        HTTP 402 <code>X-PAYMENT</code> challenge flow today.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>
@@ -422,7 +454,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         </li>
         <li>
           Call <code>rateloop_get_result</code> and persist the answer, confidence, rationale summary, limitations,
-          public URL, and answer scopes.
+          public URL, and answer scopes. Do not use the settled score to settle external financial contracts.
         </li>
       </ol>
 

@@ -7,9 +7,15 @@ import {
   type Address,
   type Hex,
 } from "viem";
+import { canonicalJsonHash } from "./json";
 
 export const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 export const PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
+export const CORRELATION_CANONICAL_JSON_VERSION = "rateloop-canonical-json-v1";
+export const CORRELATION_ELIGIBILITY_SPEC_VERSION =
+  "rateloop-correlation-eligibility-v1";
+export const CORRELATION_FEATURE_SPEC_VERSION =
+  "rateloop-correlation-features-v1";
 export const PAYOUT_WEIGHT_DOMAIN = keccak256(
   toBytes("rateloop.correlation.payout-weight.v1"),
 );
@@ -29,6 +35,9 @@ export interface CorrelationScoringParams {
   baseRateMinBps: number;
   baseRateMaxBps: number;
   scorerVersion: string;
+  eligibilitySpecVersion: string;
+  canonicalJsonVersion: string;
+  featureSpecVersion: string;
 }
 
 export interface CorrelationVoteInput {
@@ -131,29 +140,31 @@ export function defaultCorrelationScoringParams(): CorrelationScoringParams {
     baseRateMinBps: 500,
     baseRateMaxBps: 9_500,
     scorerVersion: "rateloop-correlation-epoch-v2",
+    eligibilitySpecVersion: CORRELATION_ELIGIBILITY_SPEC_VERSION,
+    canonicalJsonVersion: CORRELATION_CANONICAL_JSON_VERSION,
+    featureSpecVersion: CORRELATION_FEATURE_SPEC_VERSION,
   };
 }
 
 export function correlationParameterHash(
   params: CorrelationScoringParams,
 ): Hex {
-  return keccak256(
-    toBytes(
-      JSON.stringify({
-        baseRateMaxBps: params.baseRateMaxBps,
-        baseRateMinBps: params.baseRateMinBps,
-        baseRateWindowRounds: params.baseRateWindowRounds,
-        baseWeightBonusBps: params.baseWeightBonusBps,
-        baseWeightFloorBps: params.baseWeightFloorBps,
-        maxClusterSizeWithoutDiscount: params.maxClusterSizeWithoutDiscount,
-        minUnverifiedMaturityVotes: params.minUnverifiedMaturityVotes,
-        scorerVersion: params.scorerVersion,
-        surpriseCapBps: params.surpriseCapBps,
-        unverifiedFloorBps: params.unverifiedFloorBps,
-        verifiedFloorBps: params.verifiedFloorBps,
-      }),
-    ),
-  );
+  return canonicalJsonHash({
+    baseRateMaxBps: params.baseRateMaxBps,
+    baseRateMinBps: params.baseRateMinBps,
+    baseRateWindowRounds: params.baseRateWindowRounds,
+    baseWeightBonusBps: params.baseWeightBonusBps,
+    baseWeightFloorBps: params.baseWeightFloorBps,
+    canonicalJsonVersion: params.canonicalJsonVersion,
+    eligibilitySpecVersion: params.eligibilitySpecVersion,
+    featureSpecVersion: params.featureSpecVersion,
+    maxClusterSizeWithoutDiscount: params.maxClusterSizeWithoutDiscount,
+    minUnverifiedMaturityVotes: params.minUnverifiedMaturityVotes,
+    scorerVersion: params.scorerVersion,
+    surpriseCapBps: params.surpriseCapBps,
+    unverifiedFloorBps: params.unverifiedFloorBps,
+    verifiedFloorBps: params.verifiedFloorBps,
+  });
 }
 
 export function scoreRoundPayoutWeights(args: {
@@ -486,7 +497,10 @@ function validateParams(params: CorrelationScoringParams): void {
     params.baseRateMinBps <= 0 ||
     params.baseRateMaxBps >= 10_000 ||
     params.baseRateMinBps > params.baseRateMaxBps ||
-    !params.scorerVersion
+    !params.scorerVersion ||
+    !params.eligibilitySpecVersion ||
+    !params.canonicalJsonVersion ||
+    !params.featureSpecVersion
   ) {
     throw new Error("Invalid correlation scoring parameters");
   }

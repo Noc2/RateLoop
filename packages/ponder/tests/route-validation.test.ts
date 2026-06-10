@@ -85,6 +85,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
     content: {
       canonicalUrl: "content.canonicalUrl",
       id: "content.id",
+      lastActivityAt: "content.lastActivityAt",
       bundleId: "content.bundleId",
       bundleIndex: "content.bundleIndex",
       categoryId: "content.categoryId",
@@ -441,7 +442,6 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       freshCredentialMask: "vote.freshCredentialMask",
       identityHolder: "vote.identityHolder",
       identityKey: "vote.identityKey",
-      identityVoter: "vote.identityVoter",
       isUp: "vote.isUp",
       revealed: "vote.revealed",
       revealedAt: "vote.revealedAt",
@@ -2345,6 +2345,48 @@ describe("registerCorrelationRoutes", () => {
   });
 });
 
+describe("registerKeeperRoutes", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  it("rejects malformed keeper work deadlines", async () => {
+    mockPonderModules([]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request("http://localhost/keeper/work?now=abc&dormancyPeriod=60");
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "now and dormancyPeriod must be non-negative integer seconds",
+    });
+  });
+
+  it("returns keeper work candidates as JSON-safe strings", async () => {
+    mockPonderModules([{ contentId: 9n, roundId: 2n, reason: "settle" }]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request("http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      source: "ponder",
+      openRounds: [{ contentId: "9", roundId: "2", reason: "settle" }],
+      cleanupRounds: [{ contentId: "9", roundId: "2", reason: "settle" }],
+      dormantContent: [{ contentId: "9", roundId: "2", reason: "settle" }],
+    });
+  });
+});
+
 describe("registerDiscoveryRoutes", () => {
   it("adds moderation predicates to discover signals queries", async () => {
     const { queryBuilder } = mockPonderModules([]);
@@ -2408,8 +2450,7 @@ describe("registerDiscoveryRoutes", () => {
       serializedWhereCalls.some(
         (value) =>
           value.includes("vote.voter") &&
-          value.includes("vote.identityHolder") &&
-          value.includes("vote.identityVoter"),
+          value.includes("vote.identityHolder"),
       ),
     ).toBe(true);
   });

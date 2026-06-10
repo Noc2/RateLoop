@@ -1,23 +1,96 @@
 {
   "name": "@rateloop/contracts",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "abis": [
+        "dist/esm/abis/index.d.ts"
+      ],
+      "deployments": [
+        "dist/esm/deployments.d.ts"
+      ],
+      "deployedContracts": [
+        "dist/esm/deployedContracts.d.ts"
+      ],
+      "protocol": [
+        "dist/esm/protocol.d.ts"
+      ],
+      "types": [
+        "dist/esm/types.d.ts"
+      ],
+      "voting": [
+        "dist/esm/voting.d.ts"
+      ],
+      "votingCore": [
+        "dist/esm/votingCore.d.ts"
+      ],
+      "*": [
+        "dist/esm/index.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
-    ".": "./src/index.ts",
-    "./abis": "./src/abis/index.ts",
-    "./deployments": "./src/deployments.ts",
-    "./deployedContracts": "./src/deployedContracts.ts",
-    "./protocol": "./src/protocol.ts",
-    "./types": "./src/types.ts",
-    "./voting": "./src/voting.ts",
-    "./votingCore": "./src/votingCore.ts"
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./abis": {
+      "types": "./dist/esm/abis/index.d.ts",
+      "import": "./dist/esm/abis/index.js",
+      "require": "./dist/cjs/abis/index.js"
+    },
+    "./deployments": {
+      "types": "./dist/esm/deployments.d.ts",
+      "import": "./dist/esm/deployments.js",
+      "require": "./dist/cjs/deployments.js"
+    },
+    "./deployedContracts": {
+      "types": "./dist/esm/deployedContracts.d.ts",
+      "import": "./dist/esm/deployedContracts.js",
+      "require": "./dist/cjs/deployedContracts.js"
+    },
+    "./protocol": {
+      "types": "./dist/esm/protocol.d.ts",
+      "import": "./dist/esm/protocol.js",
+      "require": "./dist/cjs/protocol.js"
+    },
+    "./types": {
+      "types": "./dist/esm/types.d.ts",
+      "import": "./dist/esm/types.js",
+      "require": "./dist/cjs/types.js"
+    },
+    "./voting": {
+      "types": "./dist/esm/voting.d.ts",
+      "import": "./dist/esm/voting.js",
+      "require": "./dist/cjs/voting.js"
+    },
+    "./votingCore": {
+      "types": "./dist/esm/votingCore.d.ts",
+      "import": "./dist/esm/votingCore.js",
+      "require": "./dist/cjs/votingCore.js"
+    }
   },
   "scripts": {
+    "build": "node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
+    "prepack": "yarn build",
     "test": "node ../../scripts/run-node-tests.mjs src",
     "check-types": "tsc --noEmit"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
+    "buffer": "^6.0.3",
     "tlock-js": "^0.9.0",
     "viem": "2.39.0"
   },

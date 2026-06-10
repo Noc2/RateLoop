@@ -1,31 +1,104 @@
 {
   "name": "@rateloop/agents",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
+  "description": "Agent-facing CLI, templates, and question helpers for RateLoop integrations",
+  "homepage": "https://github.com/Noc2/RateLoop/tree/main/packages/agents",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:Noc2/RateLoop.git",
+    "directory": "packages/agents"
+  },
+  "bugs": {
+    "url": "https://github.com/Noc2/RateLoop/issues"
+  },
+  "keywords": [
+    "rateloop",
+    "agents",
+    "mcp",
+    "human-feedback"
+  ],
+  "bin": {
+    "rateloop-agents": "./dist/esm/cli.js"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "lint": [
+        "dist/esm/questions/lint.d.ts"
+      ],
+      "question-specs": [
+        "dist/esm/questionSpecs.d.ts"
+      ],
+      "questions": [
+        "dist/esm/questions/index.d.ts"
+      ],
+      "templates": [
+        "dist/esm/templates.d.ts"
+      ],
+      "*": [
+        "dist/esm/index.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "examples",
+    "README.md",
+    ".env.example"
+  ],
   "exports": {
-    ".": "./src/index.ts",
-    "./lint": "./src/questions/lint.ts",
-    "./question-specs": "./src/questionSpecs.ts",
-    "./questions": "./src/questions/index.ts",
-    "./templates": "./src/templates.ts"
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./lint": {
+      "types": "./dist/esm/questions/lint.d.ts",
+      "import": "./dist/esm/questions/lint.js",
+      "require": "./dist/cjs/questions/lint.js"
+    },
+    "./question-specs": {
+      "types": "./dist/esm/questionSpecs.d.ts",
+      "import": "./dist/esm/questionSpecs.js",
+      "require": "./dist/cjs/questionSpecs.js"
+    },
+    "./questions": {
+      "types": "./dist/esm/questions/index.d.ts",
+      "import": "./dist/esm/questions/index.js",
+      "require": "./dist/cjs/questions/index.js"
+    },
+    "./templates": {
+      "types": "./dist/esm/templates.d.ts",
+      "import": "./dist/esm/templates.js",
+      "require": "./dist/cjs/templates.js"
+    }
   },
   "scripts": {
     "ask": "tsx src/cli.ts ask",
+    "build": "node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
     "check-types": "tsc --noEmit",
     "lint:questions": "tsx src/cli.ts lint",
     "local-ask": "tsx src/cli.ts local-ask",
+    "prepack": "yarn build",
     "quote": "tsx src/cli.ts quote",
     "result": "tsx src/cli.ts result",
+    "sandbox": "tsx src/cli.ts sandbox",
     "status": "tsx src/cli.ts status",
     "templates": "tsx src/cli.ts templates",
     "wallet": "tsx src/cli.ts wallet",
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
-    "@rateloop/contracts": "workspace:*",
-    "@rateloop/sdk": "workspace:*",
+    "@rateloop/contracts": "0.0.1",
+    "@rateloop/sdk": "0.0.1",
     "dotenv": "^16.4.5",
     "viem": "2.39.0"
   },

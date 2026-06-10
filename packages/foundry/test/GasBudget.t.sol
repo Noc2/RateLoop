@@ -18,13 +18,16 @@ contract GasBudgetTest is RoundIntegrationTest {
     // while storing only compact hash/tlock metadata on-chain.
     uint256 internal constant MAX_COMMIT_VOTE_GAS = 2_700_000;
     uint256 internal constant MAX_REVEAL_VOTE_GAS = 320_000;
+    uint256 internal constant WORLD_CHAIN_BLOCK_GAS_LIMIT = 30_000_000;
     // Settlement records cluster-payout source readiness for clean rounds, adding one bounded SSTORE.
     uint256 internal constant MAX_SETTLE_ROUND_GAS = 775_000;
     uint256 internal constant MAX_SETTLE_ROUND_MAX_EPOCH_SCAN_GAS = 5_900_000;
-    uint256 internal constant MAX_PROCESS_UNREVEALED_GAS = 250_000;
+    // Cleanup now also accounts RBTS score-spread economics and bounded keeper/treasury routing.
+    uint256 internal constant MAX_PROCESS_UNREVEALED_GAS = 325_000;
     uint256 internal constant MAX_CANCEL_EXPIRED_ROUND_GAS = 60_000;
     uint256 internal constant MAX_CLAIM_REWARD_GAS = 270_000;
     uint256 internal constant MAX_CLAIM_FRONTEND_FEE_GAS = 250_000;
+    uint256 private gasRoundContentNonce;
 
     function _measureCall(address target, bytes memory callData) internal returns (uint256 gasUsed) {
         vm.resumeGasMetering();
@@ -45,6 +48,106 @@ contract GasBudgetTest is RoundIntegrationTest {
         vm.pauseGasMetering();
         vm.stopPrank();
         assertTrue(success, "measured pranked call reverted");
+    }
+
+    function _votersAndDirections(uint256 voterCount)
+        internal
+        returns (address[] memory voters, bool[] memory directions)
+    {
+        voters = new address[](voterCount);
+        directions = new bool[](voterCount);
+        uint256 upVoters = voterCount / 2 + 1;
+        for (uint256 i = 0; i < voterCount; i++) {
+            voters[i] = address(uint160(10_000 + i));
+            directions[i] = i < upVoters;
+            vm.startPrank(owner);
+            lrepToken.mint(voters[i], STAKE);
+            _seedRaterIdentity(raterRegistry, voters[i], bytes32(uint256(uint160(voters[i]))));
+            vm.stopPrank();
+        }
+    }
+
+    function _gasRoundConfig(uint16 maxVoters) internal pure returns (RoundLib.RoundConfig memory) {
+        return RoundLib.RoundConfig({
+            epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 3, maxVoters: maxVoters
+        });
+    }
+
+    function _gasRoundRevealCommitment(
+        string memory url,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig
+    ) internal view returns (bytes32) {
+        string[] memory imageUrls = _emptyImageUrls();
+        return _questionRevealCommitment(
+            _questionSubmissionKey(url, imageUrls, "", "test goal", "test", 1, _emptySubmissionDetails()),
+            _submissionMediaHash(imageUrls, ""),
+            "test goal",
+            "test",
+            _emptySubmissionDetails(),
+            1,
+            salt,
+            submitter,
+            rewardTerms,
+            roundConfig,
+            _defaultQuestionSpec()
+        );
+    }
+
+    function _submitGasRoundReveal(
+        string memory url,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig
+    ) internal returns (uint256 contentId) {
+        string[] memory imageUrls = _emptyImageUrls();
+        contentId = registry.submitQuestionWithRewardAndRoundConfig(
+            url,
+            imageUrls,
+            "",
+            "test goal",
+            "test",
+            1,
+            _emptySubmissionDetails(),
+            salt,
+            rewardTerms,
+            roundConfig,
+            _defaultQuestionSpec()
+        );
+    }
+
+    function _submitContentWithGasRoundConfig(uint16 maxVoters) internal returns (uint256 contentId) {
+        gasRoundContentNonce++;
+        string memory url =
+            string(abi.encodePacked("https://example.com/gas-round-", vm.toString(gasRoundContentNonce)));
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
+        RoundLib.RoundConfig memory roundConfig = _gasRoundConfig(maxVoters);
+
+        address rewardEscrow = _ensureDefaultQuestionRewardPoolEscrow(registry);
+        uint256 rewardAmount = _defaultSubmissionRewardAmount(registry);
+
+        vm.startPrank(submitter);
+        lrepToken.approve(rewardEscrow, rewardAmount);
+
+        bytes32 salt = _contentSubmissionSalt(url, submitter);
+
+        registry.reserveSubmission(_gasRoundRevealCommitment(url, salt, rewardTerms, roundConfig));
+        vm.warp(block.timestamp + 1);
+        contentId = _submitGasRoundReveal(url, salt, rewardTerms, roundConfig);
+        vm.stopPrank();
+    }
+
+    function _measureSettleRoundGas(uint16 voterCount) internal returns (uint256 gasUsed) {
+        uint256 contentId = voterCount > 100 ? _submitContentWithGasRoundConfig(voterCount) : _submitContent();
+        (address[] memory voters, bool[] memory directions) = _votersAndDirections(voterCount);
+
+        _commitAllThenReveal(voters, contentId, directions, STAKE);
+        uint256 roundId = _getActiveOrLatestRoundId(contentId);
+
+        vm.roll(block.number + 1);
+        gasUsed =
+            _measureCall(address(votingEngine), abi.encodeCall(RoundVotingEngine.settleRound, (contentId, roundId)));
     }
 
     function testGas_submitContent_underBudget() public {
@@ -164,25 +267,24 @@ contract GasBudgetTest is RoundIntegrationTest {
 
     function testGas_settleRound_underBudget() public {
         vm.pauseGasMetering();
-        uint256 contentId = _submitContent();
-
-        address[] memory voters = new address[](3);
-        voters[0] = voter1;
-        voters[1] = voter2;
-        voters[2] = voter3;
-        bool[] memory directions = new bool[](3);
-        directions[0] = true;
-        directions[1] = true;
-        directions[2] = false;
-
-        _commitAllThenReveal(voters, contentId, directions, STAKE);
-        uint256 roundId = _getActiveOrLatestRoundId(contentId);
-
-        vm.roll(block.number + 1);
-        uint256 gasUsed =
-            _measureCall(address(votingEngine), abi.encodeCall(RoundVotingEngine.settleRound, (contentId, roundId)));
+        uint256 gasUsed = _measureSettleRoundGas(3);
 
         assertLe(gasUsed, MAX_SETTLE_ROUND_GAS, "settleRound gas budget exceeded");
+        assertLe(gasUsed, WORLD_CHAIN_BLOCK_GAS_LIMIT, "settleRound 3-voter block gas limit exceeded");
+    }
+
+    function testGas_settleRound_100Voters_underWorldChainBlockLimit() public {
+        vm.pauseGasMetering();
+        uint256 gasUsed = _measureSettleRoundGas(100);
+
+        assertLe(gasUsed, WORLD_CHAIN_BLOCK_GAS_LIMIT, "settleRound 100-voter block gas limit exceeded");
+    }
+
+    function testGas_settleRound_200Voters_underWorldChainBlockLimit() public {
+        vm.pauseGasMetering();
+        uint256 gasUsed = _measureSettleRoundGas(200);
+
+        assertLe(gasUsed, WORLD_CHAIN_BLOCK_GAS_LIMIT, "settleRound 200-voter block gas limit exceeded");
     }
 
     function testGas_settleRound_maxEpochScan_underBudget() public {

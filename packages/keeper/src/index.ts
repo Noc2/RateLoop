@@ -17,20 +17,36 @@ import {
   chain,
   validateKeeperConnectivity,
 } from "./client.js";
-import { resolveRounds, validateKeeperContracts } from "./keeper.js";
+import { resolveRounds, validateKeeperContracts, type KeeperResult } from "./keeper.js";
 import { claimConfiguredFrontendFees } from "./frontend-fees.js";
 import { publishConfiguredCorrelationSnapshots } from "./correlation-snapshots.js";
-import { closeKeeperState } from "./keeper-state.js";
+import { closeKeeperState, runWithKeeperMainLoopLock } from "./keeper-state.js";
 import {
   startMetricsServer,
   setHealthThreshold,
   recordRun,
   recordError,
   setGauge,
+  incrementCounter,
   getConsecutiveErrors,
 } from "./metrics.js";
 
 const logger = createLogger(config.logFormat);
+
+function emptyKeeperResult(): KeeperResult {
+  return {
+    roundsSettled: 0,
+    roundsCancelled: 0,
+    roundsRevealFailedFinalized: 0,
+    votesRevealed: 0,
+    advisoryVotesRevealed: 0,
+    advisoryLaunchCreditsClaimed: 0,
+    cleanupBatchesProcessed: 0,
+    contentMarkedDormant: 0,
+    roundsAwaitingRevealQuorum: 0,
+    minRevealGraceSecondsRemaining: null,
+  };
+}
 
 async function main() {
   const account = getAccount();
@@ -124,22 +140,36 @@ async function main() {
     try {
       await updateOperationalGauges();
 
-      const result = await resolveRounds(
-        publicClient,
-        walletClient,
-        chain,
-        account,
+      let mainLoopRan = false;
+      const mainLoopResult = await runWithKeeperMainLoopLock(
         logger,
-      );
-      const frontendFeeResult = config.frontendFees.enabled
-        ? await claimConfiguredFrontendFees(
+        { result: emptyKeeperResult(), frontendFeeResult: null },
+        async () => {
+          mainLoopRan = true;
+          const result = await resolveRounds(
             publicClient,
             walletClient,
             chain,
             account,
             logger,
-          )
-        : null;
+          );
+          const frontendFeeResult = config.frontendFees.enabled
+            ? await claimConfiguredFrontendFees(
+                publicClient,
+                walletClient,
+                chain,
+                account,
+                logger,
+              )
+            : null;
+          return { result, frontendFeeResult };
+        },
+      );
+      if (!mainLoopRan) {
+        incrementCounter("keeper_main_loop_lock_skips_total");
+      }
+
+      const { result, frontendFeeResult } = mainLoopResult;
       const correlationSnapshotResult = config.correlationSnapshots.enabled
         ? await publishConfiguredCorrelationSnapshots(
             publicClient,

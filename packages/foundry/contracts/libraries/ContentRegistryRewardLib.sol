@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscrowEligibilityLib.sol";
+import { QuestionRewardParticipantFloorLib } from "./QuestionRewardParticipantFloorLib.sol";
 
 /// @title ContentRegistryRewardLib
 /// @notice Submission reward validation extracted from ContentRegistry to keep registry bytecode deployable.
@@ -27,6 +28,10 @@ library ContentRegistryRewardLib {
         require(asset == SUBMISSION_REWARD_ASSET_LREP || asset == SUBMISSION_REWARD_ASSET_USDC, "Invalid reward asset");
         require(amount >= minimumReward, "Reward below minimum");
         require(requiredVoters >= MIN_SUBMISSION_REWARD_REQUIRED_VOTERS, "Too few voters");
+        require(
+            requiredVoters >= QuestionRewardParticipantFloorLib.requiredParticipantFloorForAmount(amount),
+            "High-value floor"
+        );
         require(requiredSettledRounds >= MIN_SUBMISSION_REWARD_SETTLED_ROUNDS, "Too few rounds");
         require(requiredSettledRounds <= MAX_SUBMISSION_REWARD_SETTLED_ROUNDS, "Too many rounds");
         require(amount >= requiredSettledRounds * requiredVoters, "Reward too small");

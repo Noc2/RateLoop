@@ -1,4 +1,9 @@
-import { DEFAULT_REVEAL_GRACE_PERIOD_SECONDS, DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@rateloop/contracts/protocol";
+import {
+  DEFAULT_REVEAL_GRACE_PERIOD_SECONDS,
+  DEFAULT_ROUND_CONFIG,
+  ROUND_STATE,
+  SCORE_SPREAD_POLICY,
+} from "@rateloop/contracts/protocol";
 import type { Context, Hono } from "hono";
 import { and, desc, eq, inArray, replaceBigInts, sql } from "ponder";
 import { db } from "ponder:api";
@@ -316,6 +321,11 @@ function formatRoundSummary(row: {
     hasHumanVerifiedCommit: row.hasHumanVerifiedCommit,
     lastCommitRevealableAfter: row.lastCommitRevealableAfter,
     revealGracePeriod: row.revealGracePeriod,
+    scoreSpreadEconomics: {
+      forfeitMinReveals: SCORE_SPREAD_POLICY.forfeitMinReveals,
+      maxForfeitBps: SCORE_SPREAD_POLICY.maxForfeitBps,
+      forfeitsEnabled: row.revealedCount >= SCORE_SPREAD_POLICY.forfeitMinReveals,
+    },
     estimatedSettlementTime:
       row.state === ROUND_STATE.Open ? getEstimatedSettlementTime(row.startTime, row.epochDuration) : null,
   };

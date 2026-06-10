@@ -1,3 +1,5 @@
+import { protocolDocFacts } from "~~/lib/docs/protocolFacts";
+
 type LandingFaqItem = {
   question: string;
   answer: string;
@@ -37,7 +39,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "How Do Bounties and Agent Payments Work?",
     answer:
-      "Every question carries a non-refundable bounty. Browser submissions can fund protocol escrow in LREP or USDC, while public agent wallet flows and x402 authorization use World Chain USDC. There is no separate service fee.",
+      "Every question carries a non-refundable bounty. Browser submissions can fund protocol escrow in LREP or USDC, while public agent wallet flows and EIP-3009 authorization use World Chain USDC. There is no separate service fee.",
     learnMoreHref: "/docs/tech-stack#x402-agent-payments",
     learnMoreLabel: "Agent Wallet Payments",
   },
@@ -57,8 +59,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   },
   {
     question: "Can I Lose LREP by Rating?",
-    answer:
-      "Only if you stake LREP. Zero-LREP votes can participate and qualify for launch reputation without normal settlement downside. RBTS settlement compares each revealed staked report with the stake-weighted mean score: positive spreads recover full stake and share the 96% voter share of forfeited negative-spread stake, while negative spreads forfeit with no revealed-loser rebate.",
+    answer: `Only if you stake LREP and the score-spread economic threshold is met. Zero-LREP votes can participate and qualify for launch reputation without normal settlement downside. RBTS settlement compares each revealed staked report with the stake-weighted mean score: positive spreads recover full stake and share the 96% voter share of forfeited negative-spread stake, while negative spreads can forfeit with no revealed-loser rebate. ${protocolDocFacts.scoreSpreadForfeitPolicyLabel}`,
     learnMoreHref: "/docs/tokenomics",
     learnMoreLabel: "Rewards & Risk",
   },

@@ -35,13 +35,19 @@ category allowlists, callbacks, balance tooling, or audit exports enforced by Ra
 ## Quick Start
 
 ```bash
+# Install the agent SDK and CLI helpers in any Node runtime.
+npm install @rateloop/sdk @rateloop/agents
+
 # Show built-in result templates.
 yarn agents:templates
 
 # Validate a focused example ask.
 yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.json
 
-# Quote through MCP, then prefer a browser handoff link for user wallets.
+# First run without a funded wallet, signature, transaction, callback, or bounty.
+yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-review.json
+
+# Quote through MCP, then prefer a browser handoff link for funded user wallets.
 export RATELOOP_AGENT_WALLET_ADDRESS=0x...
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
 
@@ -56,19 +62,44 @@ yarn agents:status --operation-key 0x...
 yarn agents:result --operation-key 0x...
 ```
 
-The CLI reads `.env` from the current process environment. For the default wallet-direct path, set `RATELOOP_API_BASE_URL` and either set `RATELOOP_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in the ask payload. `RATELOOP_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps, balance tooling, callbacks, or audit exports.
+The CLI reads `.env` from the current process environment. `sandbox` and `ask --dry-run` validate the payload and return
+a deterministic synthetic result without requiring a funded wallet. For the default live wallet-direct path, set
+`RATELOOP_API_BASE_URL` and either set `RATELOOP_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in the ask
+payload. `RATELOOP_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps,
+balance tooling, callbacks, or audit exports.
+
+For published-package installs, the same commands are available through the `rateloop-agents` bin:
+
+```bash
+npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json
+npx rateloop-agents quote --file packages/agents/examples/questions/landing-pitch-review.json
+```
+
+## First No-Payment Run
+
+Before funding a wallet, run a dry run:
+
+```bash
+yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-review.json
+# or
+yarn agents:ask --dry-run --file packages/agents/examples/questions/landing-pitch-review.json
+```
+
+Dry runs use `dryRun: true` and `mode: "dry_run"` under the hood. They validate category, template, bounty, wallet shape,
+and budget fields, then return a synthetic settled result. They do not reserve managed budget, register callbacks, create
+image attachments, request a USDC authorization, return a transaction plan, or touch World Chain mainnet.
 
 ## First Funded Ask
 
 1. Fund the user wallet or local signer wallet with World Chain USDC.
 2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
-3. Quote with `rateloop_quote_question` before reserving spend.
+3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` before reserving spend.
 4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL.
 5. For an agent-controlled wallet, run `local-ask` with the encrypted local signer.
 6. Use raw MCP `rateloop_ask_humans` wallet calls only when the host can execute or present them cleanly.
 7. Poll `rateloop_get_handoff_status`, then `rateloop_get_question_status`, then read `rateloop_get_result` after settlement.
 
-Managed agents can also call `rateloop_get_agent_balance` and can attach signed callbacks, but those controls require a saved policy and bearer token.
+Public raw MCP asks can attach signed callbacks by passing `webhookUrl` and `webhookSecret`, signing the returned `webhook_signature_required` message with the paying wallet, then retrying with `webhookChallengeId` and `webhookSignature`. Managed agents can also call `rateloop_get_agent_balance`; balance caps and audit exports require a saved policy and bearer token.
 
 ## Rating Existing Content
 
@@ -97,7 +128,7 @@ context.
 ## Local Signer CLI
 
 `local-ask` is the narrow signer path for local agents. It loads the local wallet, sets `walletAddress`, calls
-`askHumans`, signs a returned x402 authorization request when needed, re-calls `askHumans` with
+`askHumans`, signs a returned EIP-3009 USDC authorization request when needed, re-calls `askHumans` with
 `paymentAuthorization`, sends every validated `transactionPlan.calls` item in order through viem, waits for receipts,
 and confirms the hashes with RateLoop.
 
@@ -130,8 +161,8 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_AGENT_WALLET_ADDRESS`                             | Funded wallet address for tokenless public asks                                                                          |
 | `RATELOOP_RPC_URL`                                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
 | `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
-| `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`                        | Optional trusted USDC override used to validate x402 typed-data before signing                                           |
-| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS`              | Optional trusted X402 submitter override used to validate x402 authorization recipients                                  |
+| `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`                        | Optional trusted USDC override used to validate EIP-3009 typed-data before signing                                       |
+| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS`              | Optional trusted submitter override used to validate EIP-3009 authorization recipients; the variable name is legacy      |
 | `RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS`            | Optional trusted ContentRegistry override used to validate wallet-call transaction plans                                 |
 | `RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional trusted QuestionRewardPoolEscrow override used to validate wallet-call approvals                                |
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`                       | Encrypted local signer keystore path                                                                                     |

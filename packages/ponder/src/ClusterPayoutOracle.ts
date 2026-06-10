@@ -1,5 +1,7 @@
+import { canonicalJson, canonicalJsonHash } from "@rateloop/node-utils/json";
 import { ponder } from "ponder:registry";
-import { correlationEpochSnapshot, roundPayoutSnapshot } from "ponder:schema";
+import { correlationEpochSnapshot, payoutArtifactCache, roundPayoutSnapshot } from "ponder:schema";
+import type { Hex } from "viem";
 
 const SNAPSHOT_STATUS = {
   Proposed: 1,
@@ -8,12 +10,179 @@ const SNAPSHOT_STATUS = {
   Rejected: 4,
 } as const;
 
+const ARTIFACT_FETCH_TIMEOUT_MS = 5_000;
+const ARTIFACT_MAX_BYTES = 10_000_000;
+const httpsArtifactAllowlist = parseHttpsArtifactAllowlist(
+  process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST ?? "",
+);
+
 function readFrontendOperator(args: Record<string, unknown>): `0x${string}` {
   return (args.frontendOperator ?? args.proposer) as `0x${string}`;
 }
 
 function readProposer(args: Record<string, unknown>): `0x${string}` {
   return (args.proposer ?? args.frontendOperator) as `0x${string}`;
+}
+
+async function cachePayoutArtifact(params: {
+  context: { db: any };
+  artifactHash: Hex;
+  artifactURI: string;
+  timestamp: bigint;
+}) {
+  try {
+    const canonical = await readVerifiedArtifactCanonicalJson(
+      params.artifactURI,
+      params.artifactHash,
+    );
+    if (!canonical) return;
+
+    await params.context.db
+      .insert(payoutArtifactCache)
+      .values({
+        artifactHash: params.artifactHash,
+        artifactUri: params.artifactURI,
+        canonicalJson: canonical,
+        byteLength: Buffer.byteLength(canonical),
+        firstSeenAt: params.timestamp,
+        lastFetchedAt: params.timestamp,
+        updatedAt: params.timestamp,
+      })
+      .onConflictDoUpdate({
+        artifactUri: params.artifactURI,
+        canonicalJson: canonical,
+        byteLength: Buffer.byteLength(canonical),
+        lastFetchedAt: params.timestamp,
+        updatedAt: params.timestamp,
+      });
+  } catch {
+    // Artifact availability should improve when the host is reachable, but indexing
+    // must not fail just because a proposer-hosted artifact cannot be fetched now.
+  }
+}
+
+async function readVerifiedArtifactCanonicalJson(
+  artifactURI: string,
+  artifactHash: Hex,
+): Promise<string | null> {
+  const artifact = await readArtifactJson(artifactURI);
+  if (!artifact) return null;
+  const actualHash = canonicalJsonHash(artifact);
+  if (actualHash.toLowerCase() !== artifactHash.toLowerCase()) {
+    return null;
+  }
+  return canonicalJson(artifact);
+}
+
+async function readArtifactJson(uri: string): Promise<unknown | null> {
+  const normalizedUri = normalizeArtifactUri(uri);
+  if (!normalizedUri) return null;
+  if (normalizedUri.startsWith("data:")) {
+    return JSON.parse(readDataUri(normalizedUri));
+  }
+
+  const response = await fetch(normalizedUri, {
+    signal: AbortSignal.timeout(ARTIFACT_FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) return null;
+  const contentLength = response.headers.get("content-length");
+  if (contentLength) {
+    const parsed = Number.parseInt(contentLength, 10);
+    if (Number.isFinite(parsed) && parsed > ARTIFACT_MAX_BYTES) return null;
+  }
+  if (!response.body) return response.json();
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  const reader = response.body.getReader();
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    totalBytes += value.byteLength;
+    if (totalBytes > ARTIFACT_MAX_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(combined));
+}
+
+function normalizeArtifactUri(uri: string): string | null {
+  const value = uri.trim();
+  if (!value) return null;
+  if (value.startsWith("data:")) return value;
+  if (value.startsWith("https://")) {
+    return isAllowedHttpsArtifactUrl(value) ? value : null;
+  }
+  if (value.startsWith("ipfs://")) {
+    const gatewayUri = `https://ipfs.io/ipfs/${value.slice("ipfs://".length)}`;
+    return isAllowedHttpsArtifactUrl(gatewayUri) ? gatewayUri : null;
+  }
+  if (value.startsWith("ar://")) {
+    const gatewayUri = `https://arweave.net/${value.slice("ar://".length)}`;
+    return isAllowedHttpsArtifactUrl(gatewayUri) ? gatewayUri : null;
+  }
+  return null;
+}
+
+function readDataUri(uri: string): string {
+  const commaIndex = uri.indexOf(",");
+  if (commaIndex < 0) return "";
+  const metadata = uri.slice("data:".length, commaIndex);
+  const payload = uri.slice(commaIndex + 1);
+  const metadataParts = metadata.split(";").filter(Boolean);
+  const mediaType = metadataParts[0]?.toLowerCase() ?? "";
+  const isBase64 = metadataParts.some((part) => part.toLowerCase() === "base64");
+  if (mediaType && mediaType !== "application/json" && !mediaType.endsWith("+json")) {
+    return "";
+  }
+  return isBase64
+    ? Buffer.from(payload, "base64").toString("utf8")
+    : decodeURIComponent(payload);
+}
+
+function parseHttpsArtifactAllowlist(value: string): URL[] {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .flatMap((entry) => {
+      try {
+        const url = new URL(entry);
+        return url.protocol === "https:" ? [url] : [];
+      } catch {
+        return [];
+      }
+    });
+}
+
+function isAllowedHttpsArtifactUrl(value: string): boolean {
+  let artifactUrl: URL;
+  try {
+    artifactUrl = new URL(value);
+  } catch {
+    return false;
+  }
+  if (artifactUrl.protocol !== "https:") return false;
+  return httpsArtifactAllowlist.some((allowedUrl) => {
+    if (artifactUrl.origin !== allowedUrl.origin) return false;
+    const allowedPath = stripTrailingSlash(allowedUrl.pathname);
+    if (allowedPath === "") return true;
+    const artifactPath = stripTrailingSlash(artifactUrl.pathname);
+    return artifactPath === allowedPath || artifactPath.startsWith(`${allowedPath}/`);
+  });
+}
+
+function stripTrailingSlash(value: string): string {
+  return value === "/" ? "" : value.replace(/\/+$/u, "");
 }
 
 ponder.on(
@@ -64,6 +233,12 @@ ponder.on(
         finalizedAt: null,
         updatedAt: event.block.timestamp,
       });
+    await cachePayoutArtifact({
+      context,
+      artifactHash,
+      artifactURI,
+      timestamp: event.block.timestamp,
+    });
   },
 );
 
@@ -171,6 +346,12 @@ ponder.on(
         finalizedAt: null,
         updatedAt: event.block.timestamp,
       });
+    await cachePayoutArtifact({
+      context,
+      artifactHash,
+      artifactURI,
+      timestamp: event.block.timestamp,
+    });
   },
 );
 

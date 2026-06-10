@@ -137,7 +137,7 @@ test("whitepaper surfaces the agent integration path", () => {
   assert.match(whitepaperText, /accountless by default/i);
   assert.match(whitepaperText, /Public MCP/i);
   assert.match(whitepaperText, /direct JSON routes/i);
-  assert.match(whitepaperText, /x402_authorization/i);
+  assert.match(whitepaperText, /eip3009_usdc_authorization/i);
   assert.match(whitepaperText, /browser signing/i);
   assert.match(whitepaperText, /local signer CLI/i);
   assert.match(whitepaperText, /rateloop_quote_question/i);

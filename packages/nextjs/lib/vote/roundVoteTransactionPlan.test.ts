@@ -1,7 +1,5 @@
-import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { type Abi, encodeFunctionData } from "viem";
 import { buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
 
 const addresses = {
@@ -85,15 +83,15 @@ test("buildRoundVoteTransactionPlan uses permit-backed commit when allowance is 
   assert.equal(plan.needsApproval, true);
   assert.equal(plan.calls.length, 1);
   assert.equal(plan.calls[0].kind, "commitVoteWithPermit");
-  assert.equal(plan.calls[0].functionName, "commitVote");
-  assert.deepEqual(plan.calls[0].args, plan.commitVoteArgs);
-  const commitVoteData = encodeFunctionData({
-    abi: RoundVotingEngineAbi as Abi,
-    args: plan.commitVoteArgs as never,
-    functionName: "commitVote",
-  });
-  assert.ok(plan.calls[0].data?.startsWith(commitVoteData));
-  assert.equal(plan.calls[0].data?.length, commitVoteData.length + 128 * 2);
+  assert.equal(plan.calls[0].functionName, "commitVoteWithPermit");
+  assert.deepEqual(plan.calls[0].args, [
+    ...plan.commitVoteArgs,
+    permitSignature.deadline,
+    permitSignature.v,
+    permitSignature.r,
+    permitSignature.s,
+  ]);
+  assert.equal(plan.calls[0].data, undefined);
 });
 
 test("buildRoundVoteTransactionPlan skips approval when allowance covers the stake", () => {

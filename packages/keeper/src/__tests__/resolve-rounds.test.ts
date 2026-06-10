@@ -30,6 +30,11 @@ const {
       advisoryVoteRecorder: "0x5555555555555555555555555555555555555555",
     },
     ponderBaseUrl: "https://ponder.example.test",
+    keeperWorkDiscovery: {
+      enabled: false,
+      reconciliationEveryTicks: 120,
+      maxCandidates: 500,
+    },
     dormancyPeriod: 30n * 24n * 60n * 60n,
     cleanupBatchSize: 25,
     logFallbackLookbackBlocks: 300_000,
@@ -303,6 +308,7 @@ function makeHarness(options: {
   ponderAvailable?: boolean;
   ponderCommits?: Record<string, CommitData>;
   onChainLogs?: { vote?: unknown[]; advisory?: unknown[] };
+  settleRoundResultState?: RoundStateValue;
 }) {
   const roundConfig = options.roundConfig || {
     epochDuration: 1200n,
@@ -525,8 +531,10 @@ function makeHarness(options: {
         }
 
         if (functionName === "settleRound") {
-          round.state = 1;
-          round.settledAt = now;
+          round.state = options.settleRoundResultState ?? 1;
+          if (round.state !== 0) {
+            round.settledAt = now;
+          }
           return "0xsettled";
         }
 
@@ -574,8 +582,63 @@ describe("resolveRounds", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    mockConfig.keeperWorkDiscovery.enabled = false;
+    mockConfig.keeperWorkDiscovery.reconciliationEveryTicks = 120;
+    mockConfig.keeperWorkDiscovery.maxCandidates = 500;
     mockConfig.cleanupBatchSize = 25;
     resetKeeperStateForTests();
+  });
+
+  it("uses Ponder keeper work candidates without scanning every content id", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      dormancyEligible: true,
+      now: 3_000_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [{ contentId: "1", reason: "dormant" }],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.contentMarkedDormant).toBe(1);
+    expect(publicClient.readContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "nextContentId" }),
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "markDormant",
+        args: [1n],
+      }),
+    );
   });
 
   it("finalizes reveal-failed rounds and cleans up unrevealed stake", async () => {
@@ -681,6 +744,51 @@ describe("resolveRounds", () => {
     expect(commits[COMMIT_KEY_2].revealed).toBe(true);
     expect(round.state).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not count RBTS seed capture as terminal settlement", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 3n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+      settleRoundResultState: 0,
+      now: 1_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result).toMatchObject({
+      roundsSettled: 0,
+      advisoryLaunchCreditsClaimed: 0,
+      cleanupBatchesProcessed: 0,
+    });
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "settleRound" }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "syncBundleQuestionTerminal" }),
+    );
+    expect(round.state).toBe(0);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Captured RBTS settlement seed",
+      expect.objectContaining({
+        contentId: "1",
+        roundId: 1,
+      }),
+    );
   });
 
   it("reveals a World Chain Sepolia quicknet-t commit with the quicknet-t client", async () => {

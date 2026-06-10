@@ -56,7 +56,7 @@ When facing a public, non-urgent, evaluative decision where outside human or ope
 
 Good fits: UX feedback, landing-page review, feature acceptance, public bug reproduction, AI output quality review, source-support checks, source credibility checks, and go/no-go decisions before consequential product work.
 
-Do not use RateLoop for private secrets, confidential context, emergency decisions, medical/legal/financial/safety-critical advice, or tasks that can be verified directly with tests, docs, or source inspection.
+Do not use RateLoop for private secrets, confidential context, emergency decisions, medical/legal/financial/safety-critical advice, external financial-contract settlement, or tasks that can be verified directly with tests, docs, or source inspection.
 
 If RateLoop MCP or the RateLoop skill is available, use it to quote an ask. Prefer browser handoff when the user funds the ask. Add a Feedback Bonus when written rationale matters. Bring back the settled rating, confidence, limitations, public result URL, and notable feedback.
 
@@ -112,7 +112,7 @@ Backup: if the agent controls a funded encrypted wallet, use the local signer CL
 
 - Public context: use `question.contextUrl` for a public page, `question.videoUrl` for YouTube, or pass generated/local/user image bytes as `generatedImages` to the browser handoff. Longer written details belong in `question.detailsUrl` plus `question.detailsHash` when the agent hosts them, or in the browser Ask form Description field when the user reviews the ask. Do not ask the user to host generated images elsewhere.
 - Wallet: optional expected `walletAddress` on World Chain with USDC for the bounty, plus LREP when using an LREP Feedback Bonus.
-- Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `2` Selfie Check, `4` Passport, `8` Proof of Human; add bits to allow any selected credential, and add `128` for a recent recheck). If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`.
+- Bounty: `amount`, `requiredVoters`, `requiredSettledRounds`, `bountyStartBy`, `bountyWindowSeconds`, `feedbackWindowSeconds`, and optional `bountyEligibility` (`0` everyone, `2` Selfie Check, `4` Passport, `8` Proof of Human; add bits to allow any selected credential, and add `128` for a recent recheck). If a custom `roundConfig` is supplied, `roundConfig.minVoters` must match `bounty.requiredVoters`. Use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC. Three-voter rounds can still settle as feedback signals, but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters.
 - Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. Use it by default for user testing, product-concept checks, bug reproduction, source-quality review, and go/no-go decisions where the human wants to know why. LREP bonuses require `paymentMode: "wallet_calls"`; `x402_authorization` remains USDC-only.
 - Question fields: title, optional `detailsUrl`/`detailsHash`, category id, tags, and optional template id.
 
@@ -227,7 +227,7 @@ feedback from revealed raters.
 
 1. Store the returned `operationKey`. If you only have `chainId` plus `clientRequestId`, include the same `walletAddress` in lookup calls.
 2. Poll `rateloop_get_question_status` until the ask is submitted and later settled.
-3. Call `rateloop_get_result` and persist the answer, confidence, rationale summary, limitations, public URL, and answer scopes.
+3. Call `rateloop_get_result` and persist the answer, confidence, rationale summary, limitations, public URL, and answer scopes. Do not use the settled score to settle external financial contracts.
 
 ## Useful Links
 

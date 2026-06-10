@@ -6,6 +6,7 @@ type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 type JsonRecord = Record<string, unknown>;
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_CONFIRM_TIMEOUT_MS = 210_000;
 const DEFAULT_MCP_PROTOCOL_VERSION = "2025-11-25";
 const DEFAULT_AGENT_API_PATH = "/api/agent";
 const DEFAULT_MCP_PATH = "/api/mcp";
@@ -31,6 +32,7 @@ export interface RateLoopAgentClientOptions {
   fetchImpl?: RateLoopFetch;
   quoteFetchImpl?: RateLoopFetch;
   timeoutMs?: number;
+  confirmTimeoutMs?: number;
   mcpProtocolVersion?: string;
 }
 
@@ -84,6 +86,8 @@ export interface RateLoopAgentRoundConfig {
 export interface RateLoopAgentQuestionRequest {
   clientRequestId: string;
   chainId?: number;
+  dryRun?: boolean;
+  executionMode?: "dry_run";
   question?: RateLoopAgentQuestionItem;
   questions?: RateLoopAgentQuestionItem[];
   bounty: RateLoopAgentBounty;
@@ -97,7 +101,7 @@ export interface QuoteQuestionRequest extends RateLoopAgentQuestionRequest {}
 
 export interface AskHumansRequest extends RateLoopAgentQuestionRequest {
   maxPaymentAmount?: string | number | bigint;
-  mode?: "sync" | "async";
+  mode?: "dry_run";
   paymentAuthorization?: {
     from?: `0x${string}` | string;
     nonce?: `0x${string}` | string;
@@ -108,9 +112,14 @@ export interface AskHumansRequest extends RateLoopAgentQuestionRequest {
     value?: string | number | bigint;
     [key: string]: unknown;
   };
-  paymentMode?: "wallet_calls" | "x402_authorization";
+  paymentMode?: "wallet_calls" | "eip3009_usdc_authorization" | "x402_authorization";
   signatureMode?: "agent_signs" | "browser_link";
   transport?: "http" | "mcp";
+  webhookChallengeId?: string;
+  webhookEvents?: string[];
+  webhookSecret?: string;
+  webhookSignature?: `0x${string}` | string;
+  webhookUrl?: string;
 }
 
 export interface PrepareImageUploadRequest {
@@ -229,6 +238,33 @@ export interface CreateSigningIntentRequest {
   ttlMs?: number;
 }
 
+export interface RateLoopAgentGeneratedImage {
+  dataUrl?: string;
+  filename?: string;
+  imageBase64?: string;
+  mimeType?: "image/jpeg" | "image/png" | "image/webp" | string;
+  sha256?: string;
+  sizeBytes?: number;
+  [key: string]: unknown;
+}
+
+export type CreateAskHandoffRequest =
+  | (AskHumansRequest & {
+      generatedImages?: RateLoopAgentGeneratedImage[];
+      request?: never;
+      ttlMs?: number;
+    })
+  | {
+      generatedImages?: RateLoopAgentGeneratedImage[];
+      request: AskHumansRequest;
+      ttlMs?: number;
+    };
+
+export interface AskHandoffLookup {
+  handoffId: string;
+  handoffToken: string;
+}
+
 export interface SigningIntentLookup {
   intentId: string;
   token: string;
@@ -284,7 +320,7 @@ export interface RateLoopAgentWalletTransactionPlan {
 
 export interface RateLoopAgentWalletInfo {
   address?: `0x${string}` | string;
-  fundingMode?: "agent_wallet" | "x402_authorization" | string;
+  fundingMode?: "agent_wallet" | "eip3009_usdc_authorization" | "x402_authorization" | string;
   note?: string;
   [key: string]: unknown;
 }
@@ -347,12 +383,15 @@ export interface RateLoopAgentLiveAskGuidance {
 export interface QuoteQuestionResponse {
   canSubmit?: boolean;
   clientRequestId?: string;
+  dryRun?: boolean;
+  executionMode?: "dry_run" | string;
   fastLane?: RateLoopAgentFastLaneGuidance;
   feedbackBonus?: RateLoopAgentFeedbackBonusState;
   feedbackBonusGuidance?: JsonRecord;
   operationKey?: `0x${string}` | string;
   payloadHash?: string;
   payment?: RateLoopAgentPayment;
+  paymentRequired?: boolean;
   questionCount?: number;
   resolvedCategoryIds?: string[];
   walletPolicyRequired?: boolean;
@@ -367,6 +406,8 @@ export interface AskHumansResponse {
   fastLane?: RateLoopAgentFastLaneGuidance;
   feedbackBonus?: RateLoopAgentFeedbackBonusState;
   feedbackBonusGuidance?: JsonRecord;
+  dryRun?: boolean;
+  executionMode?: "dry_run" | string;
   managedBudget?: JsonRecord | null;
   nextAction?: string | null;
   pollAfterMs?: number | null;
@@ -378,7 +419,9 @@ export interface AskHumansResponse {
   statusTool?: string;
   confirmTool?: string;
   payment?: RateLoopAgentPayment;
+  paymentRequired?: boolean;
   paymentMode?: "wallet_calls" | "x402_authorization" | string;
+  paymentScheme?: "wallet_calls" | "eip3009_usdc_authorization" | string;
   rewardPoolId?: string | null;
   transactionPlan?: RateLoopAgentWalletTransactionPlan;
   transactionHashes?: string[];
@@ -393,6 +436,14 @@ export interface SigningIntentResponse extends AskHumansResponse {
   id: string;
   signingUrl?: string;
   expiresAt: string;
+  requestBody?: JsonRecord;
+}
+
+export interface AskHandoffResponse extends AskHumansResponse {
+  handoffId?: string;
+  handoffToken?: string;
+  handoffUrl?: string;
+  id: string;
   requestBody?: JsonRecord;
 }
 
@@ -595,6 +646,10 @@ export interface RateLoopAgentClient {
   getImageUploadStatus(
     params: ImageUploadStatusLookup,
   ): Promise<ImageUploadResponse>;
+  createAskHandoff(
+    params: CreateAskHandoffRequest,
+  ): Promise<AskHandoffResponse>;
+  getAskHandoffStatus(params: AskHandoffLookup): Promise<AskHandoffResponse>;
   createSigningIntent(
     params: CreateSigningIntentRequest,
   ): Promise<SigningIntentResponse>;
@@ -698,7 +753,9 @@ interface NormalizedAgentConfig {
   mcpApiUrl?: string;
   mcpAccessToken?: string;
   fetchImpl: RateLoopFetch;
+  quoteFetchImpl: RateLoopFetch;
   timeoutMs: number;
+  confirmTimeoutMs: number;
   mcpProtocolVersion: string;
 }
 
@@ -713,6 +770,8 @@ export function createRateLoopAgentClient(
     prepareImageUpload: (params) => prepareImageUpload(params, config),
     uploadImage: (params) => uploadImage(params, config),
     getImageUploadStatus: (params) => getImageUploadStatus(params, config),
+    createAskHandoff: (params) => createAskHandoff(params, config),
+    getAskHandoffStatus: (params) => getAskHandoffStatus(params, config),
     createSigningIntent: (params) => createSigningIntent(params, config),
     getSigningIntent: (params) => getSigningIntent(params, config),
     prepareSigningIntent: (params) => prepareSigningIntent(params, config),
@@ -737,8 +796,9 @@ export function quoteQuestion(
   options: RateLoopAgentClientOptions = {},
 ): Promise<QuoteQuestionResponse> {
   const config = normalizeAgentConfig(options);
+  const requestConfig = quoteRequestConfig(config);
   if (hasDirectAgentHttp(config) && !hasFeedbackBonus(params)) {
-    return requestJson<QuoteQuestionResponse>(config, agentQuoteUrl(config), {
+    return requestJson<QuoteQuestionResponse>(requestConfig, agentQuoteUrl(config), {
       body: stringifyJson(params),
       headers: jsonAgentHeaders(config),
       method: "POST",
@@ -746,7 +806,7 @@ export function quoteQuestion(
   }
 
   return callMcpTool<QuoteQuestionResponse>(
-    config,
+    requestConfig,
     "rateloop_quote_question",
     params,
   );
@@ -823,6 +883,57 @@ export function getImageUploadStatus(
     "rateloop_get_image_upload_status",
     { ...params },
   );
+}
+
+export async function createAskHandoff(
+  params: CreateAskHandoffRequest,
+  options: RateLoopAgentClientOptions = {},
+): Promise<AskHandoffResponse> {
+  const config = normalizeAgentConfig(options);
+  if (hasDirectAgentHttp(config)) {
+    return requestJson<AskHandoffResponse>(config, agentHandoffsUrl(config), {
+      body: stringifyJson(params),
+      headers: jsonAgentHeaders(config),
+      method: "POST",
+    });
+  }
+
+  if (config.mcpApiUrl) {
+    return callMcpTool<AskHandoffResponse>(
+      config,
+      "rateloop_create_ask_handoff_link",
+      { ...params } as JsonRecord,
+    );
+  }
+
+  throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
+}
+
+export async function getAskHandoffStatus(
+  params: AskHandoffLookup,
+  options: RateLoopAgentClientOptions = {},
+): Promise<AskHandoffResponse> {
+  const config = normalizeAgentConfig(options);
+  if (hasDirectAgentHttp(config)) {
+    return requestJson<AskHandoffResponse>(
+      config,
+      agentHandoffUrl(config, params),
+      {
+        headers: handoffReadHeaders(config, params),
+        method: "GET",
+      },
+    );
+  }
+
+  if (config.mcpApiUrl) {
+    return callMcpTool<AskHandoffResponse>(
+      config,
+      "rateloop_get_handoff_status",
+      { ...params },
+    );
+  }
+
+  throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
 }
 
 export async function createSigningIntent(
@@ -924,9 +1035,10 @@ export async function confirmAskTransactions(
   options: RateLoopAgentClientOptions = {},
 ): Promise<QuestionStatusResponse> {
   const config = normalizeAgentConfig(options);
+  const requestConfig = confirmRequestConfig(config);
   if (hasDirectAgentHttp(config)) {
     return requestJson<QuestionStatusResponse>(
-      config,
+      requestConfig,
       agentConfirmAskUrl(config, params.operationKey),
       {
         body: stringifyJson({ transactionHashes: params.transactionHashes }),
@@ -938,7 +1050,7 @@ export async function confirmAskTransactions(
 
   if (config.mcpApiUrl) {
     return callMcpTool<QuestionStatusResponse>(
-      config,
+      requestConfig,
       "rateloop_confirm_ask_transactions",
       { ...params },
     );
@@ -952,9 +1064,10 @@ export async function confirmFeedbackBonusTransactions(
   options: RateLoopAgentClientOptions = {},
 ): Promise<QuestionStatusResponse> {
   const config = normalizeAgentConfig(options);
+  const requestConfig = confirmRequestConfig(config);
   if (config.mcpApiUrl) {
     return callMcpTool<QuestionStatusResponse>(
-      config,
+      requestConfig,
       "rateloop_confirm_feedback_bonus_transactions",
       { ...params },
     );
@@ -1005,8 +1118,9 @@ export async function confirmRatingTransactions(
   options: RateLoopAgentClientOptions = {},
 ): Promise<RatingStatusResponse> {
   const config = normalizeAgentConfig(options);
+  const requestConfig = confirmRequestConfig(config);
   return callMcpTool<RatingStatusResponse>(
-    config,
+    requestConfig,
     "rateloop_confirm_rating_transactions",
     {
       ...ratingLookupArgs(params),
@@ -1275,7 +1389,7 @@ async function callMcpTool<T>(
       typeof rpc.error.message === "string"
         ? rpc.error.message
         : "RateLoop MCP request failed";
-    throw new RateLoopApiError(message, 400);
+    throw structuredApiError(message, rpc.error.data, 400);
   }
 
   const result = isJsonRecord(rpc.result) ? rpc.result : null;
@@ -1287,7 +1401,7 @@ async function callMcpTool<T>(
       typeof toolResult.message === "string"
         ? toolResult.message
         : "RateLoop MCP tool failed";
-    throw new RateLoopApiError(message, 400);
+    throw structuredApiError(message, toolResult, 400);
   }
   if (result?.isError === true) {
     const structured = isJsonRecord(result.structuredContent)
@@ -1297,7 +1411,7 @@ async function callMcpTool<T>(
       typeof structured.message === "string"
         ? structured.message
         : "RateLoop MCP tool failed";
-    throw new RateLoopApiError(message, 400);
+    throw structuredApiError(message, structured, 400);
   }
 
   return (
@@ -1324,15 +1438,51 @@ async function requestJson<T>(
 
   if (!response.ok) {
     const message =
-      isJsonRecord(parsed) && typeof parsed.error === "string"
+      isJsonRecord(parsed) && isJsonRecord(parsed.error) && typeof parsed.error.message === "string"
+        ? parsed.error.message
+        : isJsonRecord(parsed) && typeof parsed.error === "string"
         ? parsed.error
         : isJsonRecord(parsed) && typeof parsed.message === "string"
           ? parsed.message
           : `RateLoop request failed with status ${response.status}`;
-    throw new RateLoopApiError(message, response.status);
+    throw structuredApiError(message, parsed, response.status);
   }
 
   return parsed as T;
+}
+
+function structuredApiError(
+  message: string,
+  body: unknown,
+  fallbackStatus: number,
+): RateLoopApiError {
+  const structured =
+    isJsonRecord(body) && isJsonRecord(body.error)
+      ? body.error
+      : isJsonRecord(body)
+        ? body
+        : {};
+  const status =
+    typeof structured.status === "number" && Number.isFinite(structured.status)
+      ? structured.status
+      : fallbackStatus;
+
+  return new RateLoopApiError(message, status, {
+    code: typeof structured.code === "string" ? structured.code : undefined,
+    details: structured,
+    originalCode:
+      typeof structured.originalCode === "string"
+        ? structured.originalCode
+        : undefined,
+    recoverWith:
+      typeof structured.recoverWith === "string"
+        ? structured.recoverWith
+        : undefined,
+    retryable:
+      typeof structured.retryable === "boolean"
+        ? structured.retryable
+        : undefined,
+  });
 }
 
 async function fetchWithTimeout(
@@ -1370,6 +1520,7 @@ function normalizeAgentConfig(
 ): NormalizedAgentConfig {
   const apiBaseUrl = normalizeUrl(options.apiBaseUrl);
   const fetchImpl = options.fetchImpl ?? fetch;
+  const quoteFetchImpl = options.quoteFetchImpl ?? fetchImpl;
   const defaultMcpPath = options.mcpAccessToken
     ? DEFAULT_MCP_PATH
     : DEFAULT_PUBLIC_MCP_PATH;
@@ -1386,12 +1537,22 @@ function normalizeAgentConfig(
     agentApiPath: options.agentApiPath ?? DEFAULT_AGENT_API_PATH,
     apiBaseUrl,
     fetchImpl,
+    quoteFetchImpl,
     mcpAccessToken: options.mcpAccessToken,
     mcpApiUrl,
     mcpProtocolVersion:
       options.mcpProtocolVersion ?? DEFAULT_MCP_PROTOCOL_VERSION,
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    confirmTimeoutMs: options.confirmTimeoutMs ?? DEFAULT_CONFIRM_TIMEOUT_MS,
   };
+}
+
+function quoteRequestConfig(config: NormalizedAgentConfig): NormalizedAgentConfig {
+  return { ...config, fetchImpl: config.quoteFetchImpl };
+}
+
+function confirmRequestConfig(config: NormalizedAgentConfig): NormalizedAgentConfig {
+  return { ...config, timeoutMs: config.confirmTimeoutMs };
 }
 
 function normalizeUrl(value?: string) {
@@ -1449,6 +1610,26 @@ function agentQuoteUrl(config: NormalizedAgentConfig) {
 
 function agentAsksUrl(config: NormalizedAgentConfig) {
   return new URL("./asks", `${agentBaseUrl(config)}/`).toString();
+}
+
+function agentHandoffsUrl(config: NormalizedAgentConfig) {
+  return new URL("./handoffs", `${agentBaseUrl(config)}/`).toString();
+}
+
+function agentHandoffUrl(
+  config: NormalizedAgentConfig,
+  params: AskHandoffLookup,
+) {
+  if (!params.handoffId.trim()) {
+    throw new RateLoopSdkError("handoffId is required");
+  }
+  if (!params.handoffToken.trim()) {
+    throw new RateLoopSdkError("handoffToken is required");
+  }
+  return new URL(
+    `./handoffs/${params.handoffId.trim()}`,
+    `${agentBaseUrl(config)}/`,
+  ).toString();
 }
 
 function agentSigningIntentsUrl(config: NormalizedAgentConfig) {
@@ -1631,6 +1812,16 @@ function signingIntentReadHeaders(
   return {
     ...agentHeaders(config),
     "x-rateloop-signing-intent-token": params.token.trim(),
+  };
+}
+
+function handoffReadHeaders(
+  config: NormalizedAgentConfig,
+  params: AskHandoffLookup,
+) {
+  return {
+    ...agentHeaders(config),
+    "x-rateloop-handoff-token": params.handoffToken.trim(),
   };
 }
 

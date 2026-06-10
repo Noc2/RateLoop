@@ -4,6 +4,7 @@ pragma solidity ^0.8.34;
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
@@ -17,11 +18,14 @@ import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundCreationLib } from "./libraries/RoundCreationLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
 import { RoundVotingReadLib } from "./libraries/RoundVotingReadLib.sol";
+import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
+import { IRoundVotingCommitReveal } from "./interfaces/IRoundVotingCommitReveal.sol";
+import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol";
 
 /// @title RoundVotingEngine
 /// @notice Per-content round-based parimutuel voting with keeper-assisted/self-reveal and epoch-weighted rewards.
@@ -38,7 +42,13 @@ import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 ///      and the final reveal grace deadline has passed.
 ///      Epoch-weighting: epoch-1 (blind) = 100% reward weight; epoch-2+ (informed) = 25%.
 ///      Win condition uses weighted pools, not raw stake, preventing late-voter herding.
-contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuardTransient {
+contract RoundVotingEngine is
+    IRoundVotingEngine,
+    IRoundVotingCommitReveal,
+    IRoundVotingSettlement,
+    Initializable,
+    ReentrancyGuardTransient
+{
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
@@ -89,6 +99,8 @@ contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuard
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+    uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_BPS = 100; // 1% of scored RBTS forfeits
+    uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_MAX = 1e6; // 1 LREP
     address internal constant DISABLED_ADVISORY_VOTE_RECORDER = address(1);
 
     // --- State ---
@@ -233,6 +245,10 @@ contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuard
         uint16 meanScoreBps
     );
     event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
+    event SettlementCallerIncentivePaid(
+        uint256 indexed contentId, uint256 indexed roundId, address indexed caller, uint256 amount
+    );
+    event SettlementCallerIncentiveSkipped(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event RoundSettled(uint256 indexed contentId, uint256 indexed roundId, bool upWins, uint256 losingPool);
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
     event RoundTied(uint256 indexed contentId, uint256 indexed roundId);
@@ -449,7 +465,39 @@ contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuard
         uint256 stakeAmount,
         address frontend
     ) external nonReentrant whenNotPaused {
-        _applyAppendedPermit(ciphertext, stakeAmount);
+        _commitVote(
+            msg.sender,
+            contentId,
+            roundContext,
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            stakeAmount,
+            frontend
+        );
+    }
+
+    /// @notice Commit a blind vote after attempting an EIP-2612 permit for the LREP stake.
+    /// @dev The permit call is front-run tolerant: if the signature was already consumed but
+    ///      allowance exists, the subsequent stake transfer succeeds; if allowance is absent,
+    ///      `_commitVote` fails closed on `safeTransferFrom`.
+    function commitVoteWithPermit(
+        uint256 contentId,
+        uint256 roundContext,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes32 commitHash,
+        bytes calldata ciphertext,
+        uint256 stakeAmount,
+        address frontend,
+        uint256 permitDeadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant whenNotPaused {
+        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) { }
+            catch { }
         _commitVote(
             msg.sender,
             contentId,
@@ -577,45 +625,6 @@ contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuard
             ciphertextHash,
             ciphertext
         );
-    }
-
-    function _applyAppendedPermit(bytes calldata ciphertext, uint256 stakeAmount) private {
-        bool hasPermit;
-        uint256 permitDeadline;
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-        assembly ("memory-safe") {
-            let permitOffset := add(ciphertext.offset, and(add(ciphertext.length, 31), not(31)))
-            hasPermit := gt(calldatasize(), permitOffset)
-            permitDeadline := calldataload(permitOffset)
-            v := calldataload(add(permitOffset, 32))
-            r := calldataload(add(permitOffset, 64))
-            s := calldataload(add(permitOffset, 96))
-        }
-        if (!hasPermit) return;
-
-        // Front-run-tolerant permit. The permit signature is public in the
-        // mempool, so an observer can replay it to consume the owner's nonce and
-        // make a bare permit() call revert -- which would brick the
-        // single-transaction permit-backed commit. Swallow the permit revert:
-        // the replay still grants the allowance we need, and if it didn't, the
-        // stake safeTransferFrom in _commitVote fails closed. (Kept inline
-        // rather than in a library to avoid embedding another library-address
-        // push in RoundVotingEngine's EIP-170-constrained bytecode.)
-        address token = address(lrepToken);
-        assembly ("memory-safe") {
-            let ptr := mload(0x40)
-            mstore(ptr, shl(224, 0xd505accf)) // permit(address,address,uint256,uint256,uint8,bytes32,bytes32)
-            mstore(add(ptr, 0x04), caller())
-            mstore(add(ptr, 0x24), address())
-            mstore(add(ptr, 0x44), stakeAmount)
-            mstore(add(ptr, 0x64), permitDeadline)
-            mstore(add(ptr, 0x84), v)
-            mstore(add(ptr, 0xa4), r)
-            mstore(add(ptr, 0xc4), s)
-            pop(call(gas(), token, 0, ptr, 0xe4, 0, 0))
-        }
     }
 
     function _computeCommitEpoch(RoundLib.Round storage round, RoundLib.RoundConfig memory roundCfg)
@@ -1013,14 +1022,10 @@ contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuard
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
             return;
         }
-        if (RoundRevealLib.refreshExpiredRbtsSeed(roundRbtsSeedEntropy, _roundRbtsSeedRefreshCount, contentId, roundId))
-        {
-            return;
-        }
-
         (weightedRewardStake, rbtsForfeitedPool, scoreSeed) =
             _scoreRbtsRewards(contentId, roundId, round.revealedCount, round.thresholdReachedAt);
         roundRbtsScored[contentId][roundId] = true;
+        rbtsForfeitedPool = _paySettlementCallerIncentive(contentId, roundId, rbtsForfeitedPool);
 
         round.upWins = upWins;
         round.state = RoundLib.RoundState.Settled;
@@ -1067,6 +1072,29 @@ contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuard
             roundRbtsMeanScoreBps[contentId][roundId]
         );
         emit RoundSettled(contentId, roundId, upWins, binaryLosingPool);
+    }
+
+    function _paySettlementCallerIncentive(uint256 contentId, uint256 roundId, uint256 forfeitedPool)
+        internal
+        returns (uint256 remainingForfeitedPool)
+    {
+        remainingForfeitedPool = forfeitedPool;
+        uint256 incentive = _settlementCallerIncentive(forfeitedPool);
+        if (incentive == 0) return remainingForfeitedPool;
+
+        try TokenTransferLib.safeTransfer(lrepToken, msg.sender, incentive) {
+            accountedLrepBalance -= incentive;
+            remainingForfeitedPool = forfeitedPool - incentive;
+            roundRbtsForfeitedPool[contentId][roundId] = remainingForfeitedPool;
+            emit SettlementCallerIncentivePaid(contentId, roundId, msg.sender, incentive);
+        } catch {
+            emit SettlementCallerIncentiveSkipped(contentId, roundId, incentive);
+        }
+    }
+
+    function _settlementCallerIncentive(uint256 forfeitedPool) internal pure returns (uint256 incentive) {
+        incentive = forfeitedPool * SETTLEMENT_CALLER_INCENTIVE_BPS / 10_000;
+        if (incentive > SETTLEMENT_CALLER_INCENTIVE_MAX) incentive = SETTLEMENT_CALLER_INCENTIVE_MAX;
     }
 
     // =========================================================================
@@ -1787,10 +1815,6 @@ contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuard
     ///      do not flag the storage layout change.
     /// @custom:oz-renamed-from roundDeferredCleanupBounty
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) internal roundClusterPayoutReadyAt;
-
-    /// @dev Counts expired delayed-seed refreshes for observability; settlement keeps refreshing
-    ///      permissionlessly until a live blockhash can seed RBTS scoring.
-    mapping(uint256 contentId => mapping(uint256 roundId => uint8)) internal _roundRbtsSeedRefreshCount;
 
     /// @notice L-Cleanup-1: accumulated LREP that `processUnrevealedVotes` tried to send to
     ///         treasury but couldn't (treasury unset or transfer reverted). Permissionless

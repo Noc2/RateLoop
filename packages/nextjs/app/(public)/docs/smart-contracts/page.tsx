@@ -317,7 +317,8 @@ const SmartContracts: NextPage = () => {
           the user or scoped agent wallet executes the returned funding and submission calls. <code>rewardTerms</code>{" "}
           also commits to bounty eligibility: everyone, any selected mix of Selfie Check, Passport, and Proof of Human
           credentials, optionally with a recent-recheck requirement. <code>rewardTerms.requiredVoters</code> must match{" "}
-          <code>roundConfig.minVoters</code> so a settled qualifying round is also bounty-qualifying.
+          <code>roundConfig.minVoters</code> so a settled qualifying round is also bounty-qualifying, and bounty size
+          can raise the required participant floor.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a
@@ -401,7 +402,20 @@ const SmartContracts: NextPage = () => {
             <tr>
               <td className="font-mono">minVoters</td>
               <td>{protocolDocFacts.minVotersLabel}</td>
-              <td>Default minimum revealed votes required before settlement is allowed and bounty voter threshold.</td>
+              <td>
+                Default minimum revealed votes required before settlement is allowed. Bounty voter floors can rise with
+                bounty size: {protocolDocFacts.bountyParticipantFloorsLabel}.
+              </td>
+            </tr>
+            <tr>
+              <td className="font-mono">SCORE_SPREAD_FORFEIT_MIN_REVEALS</td>
+              <td>{protocolDocFacts.scoreSpreadForfeitMinRevealsLabel}</td>
+              <td>Minimum score-eligible revealed voters before negative score-spread LREP forfeits can apply.</td>
+            </tr>
+            <tr>
+              <td className="font-mono">MAX_SCORE_SPREAD_FORFEIT_BPS</td>
+              <td>{protocolDocFacts.maxScoreSpreadForfeitPercentLabel}</td>
+              <td>Per-report cap on negative score-spread LREP forfeiture once the economic threshold is met.</td>
             </tr>
             <tr>
               <td className="font-mono">maxVotersPerRound</td>
@@ -554,7 +568,7 @@ const SmartContracts: NextPage = () => {
         <li>
           <code>claimReward(contentId, roundId)</code> &mdash; Claim settled-round voter payouts. Positive RBTS score
           spreads receive full stake plus their share of the 96% voter share of forfeited stake; negative spreads
-          forfeit without a revealed-loser rebate.
+          forfeit without a revealed-loser rebate once the score-spread economic threshold is met.
         </li>
         <li>
           <code>sweepStrandedLrepToTreasury()</code> &mdash; Governance-only recovery path for any LREP mistakenly sent
@@ -694,7 +708,7 @@ const SmartContracts: NextPage = () => {
         <li>
           RBTS score-spread settlement compares each revealed report&apos;s scoreBps with the stake-weighted mean score.
           Positive spreads receive full stake plus the 96% voter share of forfeited stake; negative spreads forfeit
-          without a revealed-loser rebate.
+          without a revealed-loser rebate. {protocolDocFacts.scoreSpreadForfeitPolicyLabel}
         </li>
         <li>
           <code>calculateVoterReward(shares, totalWinningShares, voterPool)</code> &mdash; Share-proportional reward

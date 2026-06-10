@@ -219,7 +219,12 @@ library RoundRevealLib {
         }
         if (revealedBuildIdx < params.minParticipants) revert NotEnoughVotes();
 
-        if (params.settlementEntropy == bytes32(0)) revert RbtsSeedUnavailable();
+        if (params.settlementEntropy == bytes32(0)) {
+            _returnScoredStakes(
+                roundCommits, commitRbtsWeight, commitRbtsStakeReturned, revealedKeysMem, revealedBuildIdx
+            );
+            return result;
+        }
 
         // Seed combines delayed closure entropy with the settlement-closed scoring set.
         result.scoreSeed = _rbtsScoreSeed(
@@ -253,6 +258,7 @@ library RoundRevealLib {
             commitRbtsForfeitedStake,
             revealedKeysMem,
             revealedBuildIdx,
+            economicCount,
             meanScoreBps
         );
 
@@ -284,33 +290,6 @@ library RoundRevealLib {
         return block.number > seedBlock && Blockhash.blockHash(seedBlock) == bytes32(0);
     }
 
-    function refreshExpiredRbtsSeed(
-        mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
-        mapping(
-            uint256 => mapping(uint256 => uint8)
-        ) storage roundRbtsSeedRefreshCount,
-        uint256 contentId,
-        uint256 roundId
-    ) external returns (bool refreshed) {
-        bytes32 currentMarker = roundRbtsSeedEntropy[contentId][roundId];
-        uint256 seedWord = uint256(currentMarker);
-        if (seedWord < RBTS_SEED_BLOCK_FLAG) return false;
-
-        uint256 seedBlock = uint64(seedWord);
-        if (block.number <= seedBlock || Blockhash.blockHash(seedBlock) != bytes32(0)) return false;
-        uint8 refreshCount = roundRbtsSeedRefreshCount[contentId][roundId];
-
-        if (refreshCount < type(uint8).max) {
-            unchecked {
-                roundRbtsSeedRefreshCount[contentId][roundId] = refreshCount + 1;
-            }
-        }
-        bytes32 refreshedMarker = bytes32((seedWord & ~RBTS_SEED_BLOCK_MASK) | uint256(block.number.toUint64()));
-        roundRbtsSeedEntropy[contentId][roundId] = refreshedMarker;
-        emit RbtsSeedCaptured(contentId, roundId, refreshedMarker);
-        return true;
-    }
-
     function finalizeRbtsSeed(
         mapping(uint256 => mapping(uint256 => bytes32)) storage roundRbtsSeedEntropy,
         uint256 contentId,
@@ -325,7 +304,7 @@ library RoundRevealLib {
         bytes32 seedBlockhash = Blockhash.blockHash(seedBlock);
         if (seedBlockhash == bytes32(0)) {
             emit RbtsSeedCaptured(contentId, roundId, bytes32(0));
-            revert RbtsSeedUnavailable();
+            return bytes32(0);
         }
         settlementEntropy = keccak256(
             abi.encode(
@@ -381,6 +360,7 @@ library RoundRevealLib {
         bytes32 commitKey,
         uint16 meanScoreBps,
         uint256 positiveSpreadWeight,
+        uint256 economicCount,
         RbtsRoundTotals memory totals
     ) private returns (RbtsRoundTotals memory) {
         uint16 scoreBps = commitRbtsScoreBps[commitKey];
@@ -389,7 +369,7 @@ library RoundRevealLib {
         uint256 stakeAmount = roundCommits[commitKey].stakeAmount;
         uint256 forfeitedStake = positiveSpreadWeight == 0
             ? 0
-            : RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps);
+            : RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps, economicCount);
         uint256 stakeReturned = stakeAmount - forfeitedStake;
 
         commitRbtsRewardWeight[commitKey] = scoreWeight;
@@ -460,6 +440,7 @@ library RoundRevealLib {
         mapping(bytes32 => uint256) storage commitRbtsForfeitedStake,
         bytes32[] memory revealedKeys,
         uint256 revealedCount,
+        uint256 economicCount,
         uint16 meanScoreBps
     ) private returns (RbtsRoundTotals memory totals) {
         uint256 positiveSpreadWeight;
@@ -484,6 +465,7 @@ library RoundRevealLib {
                 revealedKeys[r],
                 meanScoreBps,
                 positiveSpreadWeight,
+                economicCount,
                 totals
             );
             unchecked {

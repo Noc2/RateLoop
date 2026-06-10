@@ -1,6 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { keccak256, toBytes } from "viem";
+import {
+  canonicalJson,
+  canonicalJsonStringHash,
+} from "@rateloop/node-utils/json";
 import { config } from "./config.js";
 
 export interface StoredCorrelationArtifact {
@@ -9,11 +12,7 @@ export interface StoredCorrelationArtifact {
   canonicalJson: string;
 }
 
-export function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortJson(value), (_key, current) =>
-    typeof current === "bigint" ? current.toString() : current,
-  );
-}
+export { canonicalJson };
 
 export async function storeCorrelationArtifact(
   artifact: unknown,
@@ -25,7 +24,7 @@ export async function storeCorrelationArtifact(
 export async function materializeCorrelationArtifactCanonicalJson(
   canonical: string,
 ): Promise<StoredCorrelationArtifact> {
-  const artifactHash = keccak256(toBytes(canonical));
+  const artifactHash = canonicalJsonStringHash(canonical);
   const storage = config.correlationSnapshots.artifactStorage;
 
   if (storage.mode === "data-uri") {
@@ -45,20 +44,4 @@ export async function materializeCorrelationArtifactCanonicalJson(
     artifactURI: `${storage.publicBaseUrl.replace(/\/+$/, "")}/${filename}`,
     canonicalJson: canonical,
   };
-}
-
-function sortJson(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortJson);
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const record = value as Record<string, unknown>;
-  return Object.fromEntries(
-    Object.keys(record)
-      .sort()
-      .map((key) => [key, sortJson(record[key])]),
-  );
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { keccak256, toBytes } from "viem";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
 
 const proofParams = {
   domain: 1,
@@ -40,33 +40,38 @@ function artifactWithPayoutWeight(overrides: Record<string, unknown>) {
   };
 }
 
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortJson(value));
-}
-
-function sortJson(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortJson);
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const record = value as Record<string, unknown>;
-  return Object.fromEntries(
-    Object.keys(record)
-      .sort()
-      .map((key) => [key, sortJson(record[key])]),
-  );
-}
-
 function artifactHash(value: unknown) {
-  return keccak256(toBytes(canonicalJson(value)));
+  return canonicalJsonHash(value);
 }
 
-async function loadResolver(allowlist = "") {
+function createCachedArtifactQuery(cachedCanonicalJson: string | null) {
+  const rows = cachedCanonicalJson ? [{ canonicalJson: cachedCanonicalJson }] : [];
+  const builder = {
+    from: vi.fn(() => builder),
+    where: vi.fn(() => builder),
+    limit: vi.fn(() => Promise.resolve(rows)),
+  };
+  return builder;
+}
+
+async function loadResolver(allowlist = "", cachedCanonicalJson: string | null = null) {
   vi.resetModules();
   process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST = allowlist;
+  const queryBuilder = createCachedArtifactQuery(cachedCanonicalJson);
+  vi.doMock("ponder:api", () => ({
+    db: {
+      select: vi.fn(() => queryBuilder),
+    },
+  }));
+  vi.doMock("ponder", () => ({
+    eq: (...args: unknown[]) => ({ kind: "eq", args }),
+  }));
+  vi.doMock("ponder:schema", () => ({
+    payoutArtifactCache: {
+      artifactHash: "payoutArtifactCache.artifactHash",
+      canonicalJson: "payoutArtifactCache.canonicalJson",
+    },
+  }));
   return import("../src/payout-proofs.js");
 }
 
@@ -130,6 +135,23 @@ describe("payout artifact proof resolution", () => {
         artifactUri,
       }),
     ).resolves.toBeNull();
+  });
+
+  it("uses cached canonical artifacts by hash before fetching the URI", async () => {
+    const fetchMock = mockArtifactFetch();
+    const { resolveQuestionPayoutProof } = await loadResolver(
+      "https://artifacts.example.com/",
+      JSON.stringify(artifact),
+    );
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactHash: artifactHash(artifact),
+        artifactUri: "https://artifacts.example.com/rateloop/0xabc.json",
+      }),
+    ).resolves.toEqual(expect.objectContaining({ proof: [] }));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects payout weights with malformed ABI hex widths", async () => {

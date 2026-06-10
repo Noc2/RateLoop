@@ -24,6 +24,8 @@ const counters: Record<string, number> = {
   keeper_ciphertext_log_fallback_total: 0,
   keeper_drand_relay_failovers_total: 0,
   keeper_reveal_failed_finalize_skipped_total: 0,
+  keeper_work_discovery_ponder_failures_total: 0,
+  keeper_main_loop_lock_skips_total: 0,
 };
 
 // --- Gauges ---
@@ -35,6 +37,11 @@ const gauges: Record<string, number> = {
   keeper_rounds_awaiting_reveal_quorum: 0,
   // -1 means no round is currently at risk of RevealFailed finalization.
   keeper_reveal_grace_seconds_remaining_min: -1,
+  keeper_work_discovery_last_duration_seconds: 0,
+  keeper_work_discovery_last_source: 0,
+  keeper_work_discovery_open_round_candidates: 0,
+  keeper_work_discovery_cleanup_round_candidates: 0,
+  keeper_work_discovery_dormant_content_candidates: 0,
 };
 
 const startTime = Date.now();
@@ -112,6 +119,8 @@ function renderMetrics(): string {
       "Total drand relay failover events (a relay failed and the next one was tried)",
     keeper_reveal_failed_finalize_skipped_total:
       "Total reveal-failed finalizations skipped because the reveal pipeline was unhealthy",
+    keeper_work_discovery_ponder_failures_total: "Total Ponder keeper-work discovery failures",
+    keeper_main_loop_lock_skips_total: "Total keeper runs skipped because another keeper held the main loop lock",
   };
 
   for (const [name, value] of Object.entries(counters)) {
@@ -129,6 +138,11 @@ function renderMetrics(): string {
       "Open rounds with commit quorum whose reveal quorum is still unmet",
     keeper_reveal_grace_seconds_remaining_min:
       "Seconds until the most at-risk round becomes finalizable as RevealFailed (-1 = none)",
+    keeper_work_discovery_last_duration_seconds: "Duration of the last keeper work discovery phase in seconds",
+    keeper_work_discovery_last_source: "Last keeper work discovery source: 1=Ponder, 2=chain reconciliation",
+    keeper_work_discovery_open_round_candidates: "Open round candidates returned by the last keeper work discovery phase",
+    keeper_work_discovery_cleanup_round_candidates: "Cleanup round candidates returned by the last keeper work discovery phase",
+    keeper_work_discovery_dormant_content_candidates: "Dormant content candidates returned by the last keeper work discovery phase",
   };
 
   for (const [name, value] of Object.entries(gauges)) {
@@ -164,6 +178,11 @@ function renderHealth(): { status: number; body: string } {
     decryptFailures: counters.keeper_decrypt_failures_total,
     roundsAwaitingRevealQuorum: gauges.keeper_rounds_awaiting_reveal_quorum,
     revealGraceSecondsRemainingMin: gauges.keeper_reveal_grace_seconds_remaining_min,
+    workDiscoveryDuration: gauges.keeper_work_discovery_last_duration_seconds,
+    workDiscoverySource: gauges.keeper_work_discovery_last_source,
+    openRoundCandidates: gauges.keeper_work_discovery_open_round_candidates,
+    cleanupRoundCandidates: gauges.keeper_work_discovery_cleanup_round_candidates,
+    dormantContentCandidates: gauges.keeper_work_discovery_dormant_content_candidates,
     walletBalanceWei: String(BigInt(Math.round(gauges.keeper_wallet_balance_wei))),
   });
   return { status: healthy ? 200 : 503, body };

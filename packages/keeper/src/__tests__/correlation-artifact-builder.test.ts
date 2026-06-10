@@ -152,6 +152,7 @@ describe("automatic correlation artifact builder", () => {
     expect(publicArtifact.scorerVersion).toBe("rateloop-correlation-epoch-v2");
     expect(publicArtifact.roundPayoutSnapshots[0].trailingBaseRateUpBps).toBe(2_000);
     expect(publicArtifact.roundPayoutSnapshots[0].payoutWeights).toHaveLength(2);
+    expect(publicArtifact.roundPayoutSnapshots[0].eligibleVotes).toHaveLength(2);
     expect(publicArtifact.roundPayoutSnapshots[0].payoutWeights[0]).toMatchObject({
       proof: expect.any(Array),
       effectiveWeight: expect.any(String),
@@ -165,6 +166,23 @@ describe("automatic correlation artifact builder", () => {
         (payoutWeight: { baseWeight: string }) => payoutWeight.baseWeight,
       ),
     ).toEqual(["10000", "10000"]);
+    const { verifyCorrelationArtifact } = await import(
+      "../correlation-artifact-verifier.js"
+    );
+    expect(verifyCorrelationArtifact(publicArtifact)).toMatchObject({
+      ok: true,
+      roundSnapshotCount: 1,
+      epochCount: 1,
+      errors: [],
+    });
+    const tamperedArtifact = structuredClone(publicArtifact);
+    tamperedArtifact.roundPayoutSnapshots[0].payoutWeights[0].effectiveWeight = "1";
+    expect(verifyCorrelationArtifact(tamperedArtifact)).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([
+        expect.stringContaining("effectiveWeight"),
+      ]),
+    });
     expect(logger.info).toHaveBeenCalledWith(
       "Built automatic correlation snapshot artifact",
       expect.objectContaining({

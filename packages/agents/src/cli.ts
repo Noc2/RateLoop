@@ -1,3 +1,6 @@
+#!/usr/bin/env node
+
+import { existsSync, readFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,7 +18,32 @@ import { listAgentResultTemplates } from "./templates";
 import { lintAgentAskRequest, summarizeLintFindings } from "./questions/lint";
 
 type CliOptions = Record<string, string | boolean>;
-const packageRoot = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
+const DRY_RUN_WALLET_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+
+function findPackageRoot(startDir: string) {
+  let current = resolve(startDir);
+  for (let depth = 0; depth < 8; depth++) {
+    const packageJsonPath = resolve(current, "package.json");
+    if (existsSync(packageJsonPath)) {
+      try {
+        const manifest = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { name?: unknown };
+        if (manifest.name === "@rateloop/agents") {
+          return current;
+        }
+      } catch {
+        // Keep walking; a malformed package.json should surface through normal command failures.
+      }
+    }
+
+    const parent = resolve(current, "..");
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return resolve(startDir, "..");
+}
+
+const packageRoot = findPackageRoot(fileURLToPath(new URL(".", import.meta.url)));
 
 function printJson(value: unknown) {
   console.log(JSON.stringify(value, null, 2));
@@ -71,7 +99,8 @@ function readPaymentMode(options: CliOptions) {
   const value = options["payment-mode"];
   if (value === undefined) return undefined;
   if (value === "wallet_calls" || value === "x402_authorization") return value;
-  throw new Error("--payment-mode must be wallet_calls or x402_authorization");
+  if (value === "eip3009_usdc_authorization" || value === "eip3009_authorization") return "x402_authorization";
+  throw new Error("--payment-mode must be wallet_calls, eip3009_usdc_authorization, or x402_authorization");
 }
 
 function printLocalAskProgress(event: LocalAskProgress) {
@@ -80,10 +109,10 @@ function printLocalAskProgress(event: LocalAskProgress) {
       console.error(`RateLoop ask prepared: ${event.response.operationKey ?? "operation pending"}`);
       return;
     case "x402_signed":
-      console.error("Signed x402 authorization.");
+      console.error("Signed EIP-3009 USDC authorization.");
       return;
     case "x402_resubmitted":
-      console.error(`RateLoop x402 ask prepared: ${event.response.operationKey ?? "operation pending"}`);
+      console.error(`RateLoop EIP-3009 USDC ask prepared: ${event.response.operationKey ?? "operation pending"}`);
       return;
     case "transaction_sent":
       console.error(`Sent transactionPlan.calls[${event.index}]${event.phase ? ` (${event.phase})` : ""}: ${event.hash}`);
@@ -128,7 +157,9 @@ function usage() {
   return `Usage:
   yarn workspace @rateloop/agents templates
   yarn workspace @rateloop/agents lint:questions --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents quote --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents ask --dry-run --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents ask --file packages/agents/examples/questions/landing-pitch-review.json
   export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>
   yarn workspace @rateloop/agents wallet --generate --keystore ~/.rateloop/local-signer.json
@@ -167,6 +198,24 @@ function withConfiguredWalletAddress(payload: unknown, walletAddress: string | u
   return typeof record.walletAddress === "string" && record.walletAddress.trim()
     ? payload
     : { ...record, walletAddress };
+}
+
+function withDryRunOptions(payload: unknown, options: CliOptions, walletAddress: string | undefined) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return payload;
+  }
+
+  const configuredWallet = walletAddress ?? DRY_RUN_WALLET_ADDRESS;
+  const record = withConfiguredWalletAddress(payload, configuredWallet) as Record<string, unknown>;
+
+  return {
+    ...record,
+    dryRun: true,
+    mode: "dry_run",
+    walletAddress:
+      typeof record.walletAddress === "string" && record.walletAddress.trim() ? record.walletAddress : configuredWallet,
+    ...(typeof options["client-request-id"] === "string" ? { clientRequestId: options["client-request-id"] } : {}),
+  };
 }
 
 async function main() {
@@ -213,15 +262,23 @@ async function main() {
     case "quote": {
       const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
-      const payload = withConfiguredWalletAddress(await readJsonFile(requireString(options, "file")), config.agentWalletAddress);
+      const rawPayload = await readJsonFile(requireString(options, "file"));
+      const payload = options["dry-run"]
+        ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
+        : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
       printJson(await agent.quoteQuestion(payload as never));
       return;
     }
 
+    case "sandbox":
     case "ask": {
       const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
-      const payload = withConfiguredWalletAddress(await readJsonFile(requireString(options, "file")), config.agentWalletAddress);
+      const rawPayload = await readJsonFile(requireString(options, "file"));
+      const payload =
+        command === "sandbox" || options["dry-run"]
+          ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
+          : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
       const findings = lintAgentAskRequest(payload);
       if (findings.some(finding => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });

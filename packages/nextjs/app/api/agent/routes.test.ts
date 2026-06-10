@@ -377,6 +377,7 @@ function installAskOverrides(overrides: McpToolTestOverrides = {}) {
           tokenAddress: "0x0000000000000000000000000000000000000001",
         },
         paymentMode: "x402_authorization",
+        paymentScheme: "eip3009_usdc_authorization",
         status: "awaiting_wallet_signature",
         transactionPlan: null,
         wallet: { address: params.walletAddress, fundingMode: "x402_authorization" },
@@ -408,6 +409,7 @@ function installAskOverrides(overrides: McpToolTestOverrides = {}) {
           tokenAddress: "0x0000000000000000000000000000000000000001",
         },
         paymentMode: "x402_authorization",
+        paymentScheme: "eip3009_usdc_authorization",
         status: "awaiting_wallet_signature",
         transactionPlan: null,
         wallet: { address: params.walletAddress, fundingMode: "x402_authorization" },
@@ -600,6 +602,26 @@ test("agent quote route returns a tokenless wallet quote response", async () => 
   assert.equal((body.wallet as Record<string, unknown>).address, "0x00000000000000000000000000000000000000aa");
 });
 
+test("agent quote route marks dry-run quotes without requiring payment", async () => {
+  installQuoteOverrides();
+
+  const response = await quoteRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/quote", {
+      ...questionPayload("quote-public-dry-run"),
+      dryRun: true,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.clientRequestId, "quote-public-dry-run");
+  assert.equal(body.dryRun, true);
+  assert.equal(body.executionMode, "dry_run");
+  assert.equal(body.paymentRequired, false);
+  assert.equal(body.walletPolicyRequired, false);
+});
+
 test("agent quote route treats malformed authorization as managed auth", async () => {
   const response = await quoteRoute.POST(
     makePublicPost(
@@ -654,6 +676,41 @@ test("agent asks route returns a tokenless wallet transaction plan response", as
   assert.equal(body.walletPolicyRequired, false);
   assert.equal(body.managedBudget, null);
   assert.equal((body.transactionPlan as { calls: unknown[] }).calls.length, 1);
+});
+
+test("agent asks route returns dry-run response without preparing transactions", async () => {
+  const forbidden = async () => {
+    throw new Error("dry run should not create side effects");
+  };
+  installAskOverrides({
+    prepareAgentWalletQuestionSubmissionRequest: forbidden as never,
+    prepareNativeX402QuestionSubmissionRequest: forbidden as never,
+    reserveMcpAgentBudget: forbidden as never,
+    upsertAgentCallbackSubscription: forbidden as never,
+  });
+
+  const response = await asksRoute.POST(
+    makePost("https://rateloop.ai/api/agent/asks", {
+      ...questionPayload("ask-http-dry-run"),
+      dryRun: true,
+      maxPaymentAmount: "1500000",
+      webhookUrl: "https://example.com/callback",
+      webhookSecret: "secret",
+      webhookEvents: ["question.submitted"],
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.clientRequestId, "ask-http-dry-run");
+  assert.equal(body.status, "dry_run");
+  assert.equal(body.dryRun, true);
+  assert.equal(body.executionMode, "dry_run");
+  assert.equal(body.paymentRequired, false);
+  assert.equal(body.transactionPlan, null);
+  assert.equal(body.x402AuthorizationRequest, null);
+  assert.equal((body.wallet as Record<string, unknown>).fundingMode, "dry_run");
+  assert.equal((body.result as Record<string, unknown>).answer, "dry_run_complete");
 });
 
 test("agent asks route rejects oversized JSON bodies", async () => {
@@ -1279,7 +1336,7 @@ test("agent asks route requires walletAddress for tokenless asks", async () => {
   assert.match(String(body.message), /walletAddress is required/i);
 });
 
-test("agent asks route keeps callbacks managed-only for tokenless asks", async () => {
+test("agent asks route returns a public webhook signature challenge for tokenless asks", async () => {
   installAskOverrides();
 
   const response = await asksRoute.POST(
@@ -1293,18 +1350,37 @@ test("agent asks route keeps callbacks managed-only for tokenless asks", async (
   );
   const body = (await response.json()) as Record<string, unknown>;
 
-  assert.equal(response.status, 401);
-  assert.match(String(body.message), /managed agent token/i);
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "webhook_signature_required");
+  assert.equal(body.operationKey, OPERATION_KEY);
+  assert.equal(body.signatureRequired, true);
+  assert.match(String(body.message), /RateLoop public webhook/);
+  assert.deepEqual(body.webhook, {
+    delivery: "signed_hmac_sha256",
+    events: [
+      "bounty.low_response",
+      "feedback.unlocked",
+      "question.failed",
+      "question.open",
+      "question.settled",
+      "question.settling",
+      "question.submitted",
+      "question.submitting",
+    ],
+    registered: false,
+    signatureHeaders: ["x-rateloop-callback-id", "x-rateloop-callback-timestamp", "x-rateloop-callback-signature"],
+    signatureRequired: true,
+  });
 });
 
-test("agent asks route returns the native x402 authorization response", async () => {
+test("agent asks route returns the EIP-3009 USDC authorization response", async () => {
   installAskOverrides();
 
   const response = await asksRoute.POST(
     makePost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-http"),
       maxPaymentAmount: "1500000",
-      paymentMode: "x402_authorization",
+      paymentMode: "eip3009_usdc_authorization",
     }),
   );
   const body = (await response.json()) as Record<string, unknown>;
@@ -1313,6 +1389,7 @@ test("agent asks route returns the native x402 authorization response", async ()
   assert.equal(body.status, "awaiting_wallet_signature");
   assert.equal(body.operationKey, OPERATION_KEY);
   assert.equal(body.paymentMode, "x402_authorization");
+  assert.equal(body.paymentScheme, "eip3009_usdc_authorization");
   assert.equal(body.transactionPlan, null);
   assert.equal(
     ((body.x402AuthorizationRequest as Record<string, unknown>).typedData as Record<string, unknown>).primaryType,
@@ -1320,14 +1397,14 @@ test("agent asks route returns the native x402 authorization response", async ()
   );
 });
 
-test("agent asks route returns tokenless native x402 authorization response", async () => {
+test("agent asks route returns tokenless EIP-3009 USDC authorization response", async () => {
   installAskOverrides();
 
   const response = await asksRoute.POST(
     makePublicPost("https://rateloop.ai/api/agent/asks", {
       ...questionPayload("ask-public-x402"),
       maxPaymentAmount: "1500000",
-      paymentMode: "x402_authorization",
+      paymentMode: "eip3009_usdc_authorization",
       walletAddress: "0x00000000000000000000000000000000000000aa",
     }),
   );
@@ -1336,6 +1413,7 @@ test("agent asks route returns tokenless native x402 authorization response", as
   assert.equal(response.status, 200);
   assert.equal(body.clientRequestId, "ask-public-x402");
   assert.equal(body.paymentMode, "x402_authorization");
+  assert.equal(body.paymentScheme, "eip3009_usdc_authorization");
   assert.equal(body.transactionPlan, null);
   assert.equal(body.walletPolicyRequired, false);
 });

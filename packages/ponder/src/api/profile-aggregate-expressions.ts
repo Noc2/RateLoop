@@ -7,7 +7,6 @@ export function profileTotalVotesExpr(addressExpr: unknown) {
     from ${vote}
     where ${vote.voter} = ${addressExpr}
       or ${vote.identityHolder} = ${addressExpr}
-      or ${vote.identityVoter} = ${addressExpr}
   )`;
 }
 

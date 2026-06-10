@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { encodePacked, keccak256 } from "viem";
+import { SCORE_SPREAD_POLICY } from "@rateloop/contracts/protocol";
 
 type RegisteredHandler = (args: {
   event: {
@@ -59,6 +60,11 @@ vi.mock("@rateloop/contracts/protocol", () => ({
     Cancelled: 2,
     Tied: 3,
     RevealFailed: 4,
+  },
+  SCORE_SPREAD_POLICY: {
+    intensityBps: 15_000,
+    forfeitMinReveals: 8,
+    maxForfeitBps: 5_000,
   },
 }));
 
@@ -746,7 +752,6 @@ describe("RoundVotingEngine ponder handlers", () => {
         voter: delegate,
         identityKey,
         identityHolder: holder,
-        identityVoter: holder,
       }),
     });
     expect(readContract).toHaveBeenCalledWith(
@@ -1098,8 +1103,11 @@ describe("RoundVotingEngine ponder handlers", () => {
         expect(update.rbtsForfeitedStake).toBe(0n);
       } else {
         const rawForfeiture =
-          deltaBps < 0n ? (25n * 15_000n * -deltaBps) / 10_000n / 10_000n : 0n;
-        const forfeitedStake = rawForfeiture > 25n ? 25n : rawForfeiture;
+          deltaBps < 0n && economicUpdates.length >= SCORE_SPREAD_POLICY.forfeitMinReveals
+            ? (25n * BigInt(SCORE_SPREAD_POLICY.intensityBps) * -deltaBps) / 10_000n / 10_000n
+            : 0n;
+        const maxForfeit = (25n * BigInt(SCORE_SPREAD_POLICY.maxForfeitBps)) / 10_000n;
+        const forfeitedStake = rawForfeiture > maxForfeit ? maxForfeit : rawForfeiture;
         negativeSpreadCount += deltaBps < 0n ? 1 : 0;
         expect(update.rbtsRewardWeight).toBe(0n);
         expect(update.rbtsStakeReturned).toBe(25n - forfeitedStake);

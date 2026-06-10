@@ -58,10 +58,16 @@ function parsePaymentMode(value: unknown): "wallet_calls" | "x402_authorization"
   if (value === undefined || value === null || value === "" || value === "wallet_calls" || value === "agent_wallet") {
     return "wallet_calls";
   }
-  if (value === "x402_authorization" || value === "native_x402" || value === "x402") {
+  if (
+    value === "eip3009_usdc_authorization" ||
+    value === "eip3009_authorization" ||
+    value === "x402_authorization" ||
+    value === "native_x402" ||
+    value === "x402"
+  ) {
     return "x402_authorization";
   }
-  throw new McpToolError("paymentMode must be wallet_calls or x402_authorization.");
+  throw new McpToolError("paymentMode must be wallet_calls, eip3009_usdc_authorization, or x402_authorization.");
 }
 
 function parseOptionalAddress(value: unknown, fieldName: string): Address | null {

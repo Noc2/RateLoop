@@ -97,7 +97,7 @@ function sameAddress(left: string | undefined | null, right: string | undefined 
 function readTypedData(request: JsonRecord | null | undefined): BrowserX402TypedData {
   const typedData = request?.typedData ?? request?.eip712;
   if (!isRecord(typedData)) {
-    throw new Error("RateLoop did not return x402 typed data.");
+    throw new Error("RateLoop did not return EIP-3009 USDC typed data.");
   }
 
   const domain = typedData.domain;
@@ -121,19 +121,21 @@ function readTypedData(request: JsonRecord | null | undefined): BrowserX402Typed
   if (!isRecord(types)) {
     throw new Error("Signing intent is missing types.");
   }
-  assertExactKeys(types, [X402_PRIMARY_TYPE], "x402 typedData.types");
+  assertExactKeys(types, [X402_PRIMARY_TYPE], "EIP-3009 typedData.types");
   const fields = types[X402_PRIMARY_TYPE];
   if (!Array.isArray(fields) || fields.length !== X402_AUTHORIZATION_FIELDS.length) {
-    throw new Error(`x402 typedData.types.${X402_PRIMARY_TYPE} must contain the standard fields.`);
+    throw new Error(`EIP-3009 typedData.types.${X402_PRIMARY_TYPE} must contain the standard fields.`);
   }
   fields.forEach((field, index) => {
     const expected = X402_AUTHORIZATION_FIELDS[index];
     if (!isRecord(field) || field.name !== expected.name || field.type !== expected.type) {
-      throw new Error(`x402 typedData.types.${X402_PRIMARY_TYPE}[${index}] must be ${expected.name} ${expected.type}.`);
+      throw new Error(
+        `EIP-3009 typedData.types.${X402_PRIMARY_TYPE}[${index}] must be ${expected.name} ${expected.type}.`,
+      );
     }
   });
 
-  const message = normalizeAuthorizationRecord(typedData.message, "x402 typedData.message");
+  const message = normalizeAuthorizationRecord(typedData.message, "EIP-3009 typedData.message");
   return {
     domain: {
       chainId: normalizeChainId(domain.chainId, "EIP-712 domain.chainId"),
@@ -166,17 +168,17 @@ function normalizeAuthorizationRecord(value: unknown, fieldName: string): Browse
 
 function assertAuthorizationMatchesMessage(authorization: BrowserX402Authorization, message: BrowserX402Authorization) {
   if (!sameAddress(authorization.from, message.from)) {
-    throw new Error("x402 authorization.from must match typedData.message.from.");
+    throw new Error("EIP-3009 authorization.from must match typedData.message.from.");
   }
   if (!sameAddress(authorization.to, message.to)) {
-    throw new Error("x402 authorization.to must match typedData.message.to.");
+    throw new Error("EIP-3009 authorization.to must match typedData.message.to.");
   }
   if (authorization.nonce.toLowerCase() !== message.nonce.toLowerCase()) {
-    throw new Error("x402 authorization.nonce must match typedData.message.nonce.");
+    throw new Error("EIP-3009 authorization.nonce must match typedData.message.nonce.");
   }
   for (const field of ["value", "validAfter", "validBefore"] as const) {
     if (authorization[field] !== message[field]) {
-      throw new Error(`x402 authorization.${field} must match typedData.message.${field}.`);
+      throw new Error(`EIP-3009 authorization.${field} must match typedData.message.${field}.`);
     }
   }
 }
@@ -212,16 +214,16 @@ export function validateBrowserX402AuthorizationRequest(params: {
     throw new Error("EIP-712 domain.verifyingContract must be the configured USDC token.");
   }
   if (!sameAddress(authorization.from, params.expectedWalletAddress)) {
-    throw new Error("x402 authorization.from must match the connected wallet.");
+    throw new Error("EIP-3009 authorization.from must match the connected wallet.");
   }
   if (!sameAddress(authorization.to, params.expectedSubmitterAddress)) {
-    throw new Error("x402 authorization.to must be the configured RateLoop x402 submitter.");
+    throw new Error("EIP-3009 authorization.to must be the configured RateLoop submitter.");
   }
-  if (authorization.value !== normalizeUintString(params.expectedAmount, "expected x402 amount")) {
-    throw new Error("x402 authorization.value must equal the requested bounty amount.");
+  if (authorization.value !== normalizeUintString(params.expectedAmount, "expected EIP-3009 amount")) {
+    throw new Error("EIP-3009 authorization.value must equal the requested bounty amount.");
   }
   if (BigInt(authorization.validBefore) <= BigInt(authorization.validAfter)) {
-    throw new Error("x402 authorization.validBefore must be greater than validAfter.");
+    throw new Error("EIP-3009 authorization.validBefore must be greater than validAfter.");
   }
 
   return { authorization, typedData };

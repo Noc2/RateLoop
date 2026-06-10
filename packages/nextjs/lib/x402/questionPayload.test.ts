@@ -53,6 +53,18 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL]);
 });
 
+test("parseX402QuestionRequest accepts dry-run control fields", () => {
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    dryRun: true,
+    executionMode: "dry_run",
+    sandbox: true,
+  });
+
+  assert.equal(payload.clientRequestId, VALID_REQUEST.clientRequestId);
+  assert.equal(payload.questions.length, 1);
+});
+
 test("parseX402QuestionRequest accepts off-chain details URL and hash", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,
@@ -388,6 +400,45 @@ test("parseX402QuestionRequest defaults settlement voters to bounty voters", () 
   assert.equal(payload.roundConfig.maxVoters, 100n);
 });
 
+test("parseX402QuestionRequest enforces bounty-size voter floors", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          amount: "1000000000",
+          requiredVoters: "3",
+        },
+      }),
+    /requiredVoters must be at least 5/,
+  );
+
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          amount: "10000000000",
+          requiredVoters: "5",
+        },
+      }),
+    /requiredVoters must be at least 8/,
+  );
+
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      amount: "10000000000",
+      requiredVoters: "8",
+    },
+  });
+  assert.equal(payload.bounty.requiredVoters, 8n);
+  assert.equal(payload.roundConfig.minVoters, 8n);
+});
+
 test("parseX402QuestionRequest rejects bounty and round voter mismatches", () => {
   assert.throws(
     () =>
@@ -483,7 +534,7 @@ test("buildX402QuestionOperation is stable for equivalent payloads", () => {
   assert.equal(first.payloadHash, second.payloadHash);
 });
 
-test("parseX402QuestionRequest rejects non-USDC x402 bounties", () => {
+test("parseX402QuestionRequest rejects non-USDC agent bounties", () => {
   assert.throws(
     () =>
       parseX402QuestionRequest({

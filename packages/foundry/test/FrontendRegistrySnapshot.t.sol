@@ -29,6 +29,11 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
     address public voter1 = address(3);
     address public voter2 = address(4);
     address public voter3 = address(5);
+    address public voter4 = address(6);
+    address public voter5 = address(7);
+    address public voter6 = address(8);
+    address public voter7 = address(9);
+    address public voter8 = address(10);
     address public frontendOp = address(200);
     address public replacementOnlyFrontend = address(201);
 
@@ -112,6 +117,11 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         lrepToken.mint(voter1, 10_000e6);
         lrepToken.mint(voter2, 10_000e6);
         lrepToken.mint(voter3, 10_000e6);
+        lrepToken.mint(voter4, 10_000e6);
+        lrepToken.mint(voter5, 10_000e6);
+        lrepToken.mint(voter6, 10_000e6);
+        lrepToken.mint(voter7, 10_000e6);
+        lrepToken.mint(voter8, 10_000e6);
         lrepToken.mint(frontendOp, 5_000e6);
         lrepToken.mint(replacementOnlyFrontend, 5_000e6);
 
@@ -127,9 +137,13 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
         FrontendRegistry originalRegistry = FrontendRegistry(ProtocolConfig(address(protocolConfig)).frontendRegistry());
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 salt1) = _commit(voter1, contentId, true);
-        (bytes32 ck2, bytes32 salt2) = _commit(voter2, contentId, true);
-        (bytes32 ck3, bytes32 salt3) = _commit(voter3, contentId, false);
+        address[8] memory voters = [voter1, voter2, voter3, voter4, voter5, voter6, voter7, voter8];
+        bool[8] memory directions = [true, true, false, true, true, false, true, false];
+        bytes32[8] memory commitKeys;
+        bytes32[8] memory salts;
+        for (uint256 i = 0; i < voters.length; i++) {
+            (commitKeys[i], salts[i]) = _commit(voters[i], contentId, directions[i]);
+        }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         assertEq(votingEngine.roundFrontendRegistrySnapshot(contentId, roundId), address(originalRegistry));
@@ -148,9 +162,9 @@ contract FrontendRegistrySnapshotTest is VotingTestBase {
 
         RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(round.startTime) + DEFAULT_TLOCK_EPOCH_DURATION);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, salt1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, salt2);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, 5_000, salt3);
+        for (uint256 i = 0; i < voters.length; i++) {
+            votingEngine.revealVoteByCommitKey(contentId, roundId, commitKeys[i], directions[i], 5_000, salts[i]);
+        }
 
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 

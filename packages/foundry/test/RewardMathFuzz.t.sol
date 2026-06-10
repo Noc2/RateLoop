@@ -109,17 +109,19 @@ contract RewardMathFuzz is Test {
     function testFuzz_calculateNegativeScoreSpreadForfeit_CappedAtStake(
         uint256 stake,
         uint16 scoreBps,
-        uint16 meanScoreBps
+        uint16 meanScoreBps,
+        uint256 revealedCount
     ) public pure {
         stake = bound(stake, 0, type(uint128).max);
         scoreBps = uint16(bound(scoreBps, 0, 10_000));
         meanScoreBps = uint16(bound(meanScoreBps, 0, 10_000));
+        revealedCount = bound(revealedCount, 0, 256);
 
-        uint256 forfeited = RewardMath.calculateNegativeScoreSpreadForfeit(stake, scoreBps, meanScoreBps);
+        uint256 forfeited = RewardMath.calculateNegativeScoreSpreadForfeit(stake, scoreBps, meanScoreBps, revealedCount);
 
-        assertLe(forfeited, stake, "forfeit exceeds original stake");
-        if (scoreBps >= meanScoreBps) {
-            assertEq(forfeited, 0, "non-negative spread should not forfeit");
+        assertLe(forfeited, (stake * 5_000) / 10_000, "forfeit exceeds 50% cap");
+        if (revealedCount < 8 || scoreBps >= meanScoreBps) {
+            assertEq(forfeited, 0, "inactive or non-negative spread should not forfeit");
         }
     }
 }

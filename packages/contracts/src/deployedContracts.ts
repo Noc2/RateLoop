@@ -5193,6 +5193,57 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "questionBundleRewardPoolEscrow",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "questionBundleRewardPoolEscrowForBundle",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "questionBundleRoundObserver",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "bundleRewardPoolEscrow",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "questionRewardPoolEscrow",
           inputs: [],
           outputs: [
@@ -5337,6 +5388,19 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "_protocolConfig",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setQuestionBundleRewardPoolEscrow",
+          inputs: [
+            {
+              name: "_questionBundleRewardPoolEscrow",
               type: "address",
               internalType: "address",
             },
@@ -6359,6 +6423,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "QuestionBundleRewardPoolEscrowUpdated",
+          inputs: [
+            {
+              name: "rewardPoolEscrow",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "QuestionBundleSubmitted",
           inputs: [
             {
@@ -7279,6 +7356,74 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "frontend",
               type: "address",
               internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "commitVoteWithPermit",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundContext",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "targetRound",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "drandChainHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "commitHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "ciphertext",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "stakeAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "frontend",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "permitDeadline",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "v",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "r",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "s",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [],
@@ -8490,6 +8635,62 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "SettlementCallerIncentivePaid",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "caller",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "SettlementCallerIncentiveSkipped",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "RbtsVoteRevealed",
           inputs: [
             {
@@ -9138,6 +9339,24 @@ const deployedContracts: GenericContractsDeclaration = {
         isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
+        commitVote: "contracts/interfaces/IRoundVotingCommitReveal.sol",
+        commitVoteWithPermit:
+          "contracts/interfaces/IRoundVotingCommitReveal.sol",
+        openRound: "contracts/interfaces/IRoundVotingCommitReveal.sol",
+        revealVoteByCommitKey:
+          "contracts/interfaces/IRoundVotingCommitReveal.sol",
+        cancelExpiredRound: "contracts/interfaces/IRoundVotingSettlement.sol",
+        claimCancelledRoundRefund:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        finalizeRevealFailedRound:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        flushPendingTreasuryForfeit:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        processUnrevealedVotes:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        replayBundleObserverNotify:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        settleRound: "contracts/interfaces/IRoundVotingSettlement.sol",
       },
       deployedOnBlock: 30175501,
     },
@@ -31884,6 +32103,57 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "questionBundleRewardPoolEscrow",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "questionBundleRewardPoolEscrowForBundle",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "questionBundleRoundObserver",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "bundleRewardPoolEscrow",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "questionRewardPoolEscrow",
           inputs: [],
           outputs: [
@@ -32028,6 +32298,19 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "_protocolConfig",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setQuestionBundleRewardPoolEscrow",
+          inputs: [
+            {
+              name: "_questionBundleRewardPoolEscrow",
               type: "address",
               internalType: "address",
             },
@@ -33050,6 +33333,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "QuestionBundleRewardPoolEscrowUpdated",
+          inputs: [
+            {
+              name: "rewardPoolEscrow",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "QuestionBundleSubmitted",
           inputs: [
             {
@@ -33970,6 +34266,74 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "frontend",
               type: "address",
               internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "commitVoteWithPermit",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundContext",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "targetRound",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "drandChainHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "commitHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "ciphertext",
+              type: "bytes",
+              internalType: "bytes",
+            },
+            {
+              name: "stakeAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "frontend",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "permitDeadline",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "v",
+              type: "uint8",
+              internalType: "uint8",
+            },
+            {
+              name: "r",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "s",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [],
@@ -35181,6 +35545,62 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
+          name: "SettlementCallerIncentivePaid",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "caller",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "SettlementCallerIncentiveSkipped",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "RbtsVoteRevealed",
           inputs: [
             {
@@ -35829,6 +36249,24 @@ const deployedContracts: GenericContractsDeclaration = {
         isDormancyBlocked: "contracts/interfaces/IRoundVotingEngine.sol",
         roundCore: "contracts/interfaces/IRoundVotingEngine.sol",
         transferReward: "contracts/interfaces/IRoundVotingEngine.sol",
+        commitVote: "contracts/interfaces/IRoundVotingCommitReveal.sol",
+        commitVoteWithPermit:
+          "contracts/interfaces/IRoundVotingCommitReveal.sol",
+        openRound: "contracts/interfaces/IRoundVotingCommitReveal.sol",
+        revealVoteByCommitKey:
+          "contracts/interfaces/IRoundVotingCommitReveal.sol",
+        cancelExpiredRound: "contracts/interfaces/IRoundVotingSettlement.sol",
+        claimCancelledRoundRefund:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        finalizeRevealFailedRound:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        flushPendingTreasuryForfeit:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        processUnrevealedVotes:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        replayBundleObserverNotify:
+          "contracts/interfaces/IRoundVotingSettlement.sol",
+        settleRound: "contracts/interfaces/IRoundVotingSettlement.sol",
       },
       deployedOnBlock: 33,
     },

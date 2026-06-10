@@ -14,6 +14,7 @@ import { findBlockedContentTags } from "~~/lib/moderation/submissionValidation";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
   type QuestionRoundConfig,
+  requiredQuestionRewardVotersForAmount,
   serializeQuestionRoundConfig,
 } from "~~/lib/questionRoundConfig";
 
@@ -350,7 +351,7 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
 
   const asset = readOptionalString(value.asset).toUpperCase() || "USDC";
   if (asset !== "USDC") {
-    throw new X402QuestionInputError("Only USDC bounties are supported for x402 submissions.");
+    throw new X402QuestionInputError("Only USDC bounties are supported for agent question submissions.");
   }
 
   const amount = parsePositiveAtomicAmount(value.amount, "bounty.amount");
@@ -372,6 +373,12 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
 
   if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
     throw new X402QuestionInputError(`bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`);
+  }
+  const requiredVoterFloor = requiredQuestionRewardVotersForAmount(amount);
+  if (requiredVoters < requiredVoterFloor) {
+    throw new X402QuestionInputError(
+      `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
+    );
   }
   if (requiredSettledRounds < X402_MIN_REWARD_POOL_SETTLED_ROUNDS) {
     throw new X402QuestionInputError(
@@ -542,14 +549,19 @@ const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
   "walletAddress",
   "agentWalletAddress",
   // Used by lib/mcp/tools.ts when the same args object is also handed to
-  // parseAskHumansMode / parseWebhookOptions / x402-authorization orchestration. Each of
+  // parseAskHumansMode / parseWebhookOptions / EIP-3009 authorization orchestration. Each of
   // these has its own dedicated validator that runs after parseX402QuestionRequest; we keep
   // them in the allowlist so the strict gate does not pre-empt those error messages.
   "mode",
   "webhookUrl",
   "webhookSecret",
   "webhookEvents",
+  "webhookChallengeId",
+  "webhookSignature",
   "paymentAuthorization",
+  "dryRun",
+  "executionMode",
+  "sandbox",
   // Used by the public SDK's `AskHumansRequest` type (packages/sdk/src/agent.ts). The Next.js
   // signing-intents POST persists the request body as-is, and these fields are part of the
   // public contract — `signatureMode` selects browser-handoff vs agent_signs, `transport`

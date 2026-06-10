@@ -287,7 +287,7 @@ test("correlationParameterHash commits to the surprise parameters", () => {
   assert.equal(params.scorerVersion, "rateloop-correlation-epoch-v2");
   assert.equal(
     correlationParameterHash(params),
-    "0x2406f7ae1f210a14b5f82eb1b92e9b7bfc831b59cc14b661c41267040fccc712",
+    "0x5219338b1cc53f001ede1efcfc10b56fe79c2e66b7d2137c93877ab1e70d2db5",
   );
 
   const defaultHash = correlationParameterHash(params);
@@ -412,6 +412,22 @@ test("merkleRoot and merkleProof handle odd leaf counts", () => {
   }
 
   assert.throws(() => merkleProof(leaves, hex("44")), /Leaf not found/);
+});
+
+test("correlationParameterHash pins spec versions and canonical params", () => {
+  const params = defaultCorrelationScoringParams();
+
+  assert.equal(
+    correlationParameterHash(params),
+    "0x5219338b1cc53f001ede1efcfc10b56fe79c2e66b7d2137c93877ab1e70d2db5",
+  );
+  assert.notEqual(
+    correlationParameterHash({
+      ...params,
+      eligibilitySpecVersion: "rateloop-correlation-eligibility-v2",
+    }),
+    correlationParameterHash(params),
+  );
 });
 
 test("scoreRoundPayoutWeights rejects invalid parameters", () => {

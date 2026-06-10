@@ -34,7 +34,11 @@ import {
   getContentRegistrySubmissionRewardMinimum,
   getSubmissionRewardCoverageMinimum,
 } from "~~/lib/questionRewardMinimums";
-import { questionRoundConfigToAbi, serializeQuestionRoundConfig } from "~~/lib/questionRoundConfig";
+import {
+  questionRoundConfigToAbi,
+  requiredQuestionRewardVotersForAmount,
+  serializeQuestionRoundConfig,
+} from "~~/lib/questionRoundConfig";
 import {
   buildQuestionBundleSubmissionRevealCommitment,
   buildQuestionSubmissionKey,
@@ -964,6 +968,13 @@ async function assertBountyMeetsProtocolMinimum(params: {
     );
   }
 
+  const requiredVoterFloor = requiredQuestionRewardVotersForAmount(params.payload.bounty.amount);
+  if (params.payload.bounty.requiredVoters < requiredVoterFloor) {
+    throw new X402QuestionConflictError(
+      `Bounty requires at least ${requiredVoterFloor.toString()} voters for this amount.`,
+    );
+  }
+
   if (params.payload.bounty.requiredVoters !== params.payload.roundConfig.minVoters) {
     throw new X402QuestionConflictError("Bounty voter requirement must match the selected round settlement voters.");
   }
@@ -1396,10 +1407,10 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
   walletAddress: Address;
 }): Promise<NativeX402QuestionSubmissionPlan> {
   if (params.payload.questions.length !== 1) {
-    throw new X402QuestionConflictError("Native x402 authorization currently supports single-question asks only.");
+    throw new X402QuestionConflictError("EIP-3009 USDC authorization currently supports single-question asks only.");
   }
   if (!params.config.x402QuestionSubmitterAddress) {
-    throw new X402QuestionConfigError("Native x402 question submissions require the X402 submitter deployment.");
+    throw new X402QuestionConfigError("EIP-3009 USDC question submissions require the submitter deployment.");
   }
 
   const publicClient = createPublicQuestionClient(params.config);
@@ -1463,7 +1474,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     ],
   })) as Hex;
   if (inputAuthorization.nonce && inputAuthorization.nonce.toLowerCase() !== computedNonce.toLowerCase()) {
-    throw new X402QuestionConflictError("paymentAuthorization.nonce does not match the RateLoop x402 ask payload.");
+    throw new X402QuestionConflictError("paymentAuthorization.nonce does not match the RateLoop EIP-3009 ask payload.");
   }
   if (inputAuthorization.from && inputAuthorization.from.toLowerCase() !== params.walletAddress.toLowerCase()) {
     throw new X402QuestionConflictError("paymentAuthorization.from must match the agent wallet address.");
@@ -1472,7 +1483,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     inputAuthorization.to &&
     inputAuthorization.to.toLowerCase() !== params.config.x402QuestionSubmitterAddress.toLowerCase()
   ) {
-    throw new X402QuestionConflictError("paymentAuthorization.to must be the RateLoop x402 submitter.");
+    throw new X402QuestionConflictError("paymentAuthorization.to must be the RateLoop EIP-3009 submitter.");
   }
   if (inputAuthorization.value && BigInt(inputAuthorization.value) !== params.payload.bounty.amount) {
     throw new X402QuestionConflictError("paymentAuthorization.value must equal the bounty amount.");
@@ -1534,7 +1545,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
                 },
               ],
             }),
-            description: "Submit the question and fund protocol escrow with the signed x402 USDC authorization",
+            description: "Submit the question and fund protocol escrow with the signed EIP-3009 USDC authorization",
             functionName: "submitQuestionWithX402Payment",
             id: "submit-x402-question",
             phase: "submit_x402_question",
@@ -2539,6 +2550,7 @@ function nativeX402QuestionSubmissionPlanBody(params: {
     operationKey: params.plan.operationKey,
     payment: params.plan.payment,
     paymentMode: "x402_authorization",
+    paymentScheme: "eip3009_usdc_authorization",
     payloadHash: params.plan.payloadHash,
     questionCount: params.payload.questions.length,
     ready: false,
@@ -2554,10 +2566,11 @@ function nativeX402QuestionSubmissionPlanBody(params: {
     wallet: {
       address: params.plan.walletAddress,
       fundingMode: "x402_authorization",
-      note: "Sign the x402 USDC authorization with this wallet; RateLoop does not custody funds.",
+      note: "Sign the EIP-3009 USDC authorization with this wallet; RateLoop does not custody funds.",
     },
     x402AuthorizationRequest: {
       authorization: params.plan.authorization,
+      scheme: "eip3009_usdc_authorization",
       eip712: buildNativeX402TypedData({
         authorization: params.plan.authorization,
         chainId: params.plan.chainId,

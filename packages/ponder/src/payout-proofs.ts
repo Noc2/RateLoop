@@ -1,5 +1,9 @@
 import { merkleProof } from "@rateloop/node-utils/correlationScoring";
-import { keccak256, toBytes, type Hex } from "viem";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
+import { eq } from "ponder";
+import { db } from "ponder:api";
+import { payoutArtifactCache } from "ponder:schema";
+import type { Hex } from "viem";
 
 export interface PayoutWeightProof {
   payoutWeight: {
@@ -92,7 +96,7 @@ export async function resolveQuestionPayoutProof(
     return null;
   }
 
-  const artifact = await fetchArtifactJson(params.artifactUri);
+  const artifact = await fetchArtifactJson(params.artifactUri, params.artifactHash);
   if (!artifact) return null;
   if (!artifactHashMatches(artifact, params.artifactHash)) return null;
 
@@ -123,7 +127,13 @@ export async function resolveQuestionPayoutProof(
   }
 }
 
-async function fetchArtifactJson(uri: string): Promise<unknown | null> {
+async function fetchArtifactJson(
+  uri: string,
+  artifactHash?: Hex | null | undefined,
+): Promise<unknown | null> {
+  const cached = await readCachedArtifactJson(artifactHash);
+  if (cached !== null) return cached;
+
   const normalizedUri = normalizeArtifactUri(uri);
   if (!normalizedUri) return null;
 
@@ -137,6 +147,27 @@ async function fetchArtifactJson(uri: string): Promise<unknown | null> {
     return await promise;
   } catch {
     artifactCache.delete(normalizedUri);
+    return null;
+  }
+}
+
+async function readCachedArtifactJson(
+  artifactHash: Hex | null | undefined,
+): Promise<unknown | null> {
+  const normalizedArtifactHash = normalizeHex(artifactHash, 32);
+  if (!normalizedArtifactHash) return null;
+
+  try {
+    const rows = await db
+      .select({
+        canonicalJson: payoutArtifactCache.canonicalJson,
+      })
+      .from(payoutArtifactCache)
+      .where(eq(payoutArtifactCache.artifactHash, normalizedArtifactHash))
+      .limit(1);
+    const canonicalJson = rows[0]?.canonicalJson;
+    return canonicalJson ? JSON.parse(canonicalJson) : null;
+  } catch {
     return null;
   }
 }
@@ -275,30 +306,8 @@ function readDataUri(uri: string) {
 function artifactHashMatches(artifact: unknown, expectedHash: Hex | null | undefined) {
   const normalizedExpectedHash = normalizeHex(expectedHash, 32);
   if (!normalizedExpectedHash) return true;
-  const actualHash = keccak256(toBytes(canonicalJson(artifact)));
+  const actualHash = canonicalJsonHash(artifact);
   return actualHash.toLowerCase() === normalizedExpectedHash.toLowerCase();
-}
-
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortJson(value), (_key, current) =>
-    typeof current === "bigint" ? current.toString() : current,
-  );
-}
-
-function sortJson(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortJson);
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const record = value as Record<string, unknown>;
-  return Object.fromEntries(
-    Object.keys(record)
-      .sort()
-      .map((key) => [key, sortJson(record[key])]),
-  );
 }
 
 function collectPayoutWeights(artifact: unknown): CandidatePayoutWeight[] {

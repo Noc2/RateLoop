@@ -6,6 +6,7 @@
   "exports": {
     "./contentModeration": "./src/contentModeration.ts",
     "./correlationScoring": "./src/correlationScoring.ts",
+    "./json": "./src/json.ts",
     "./keystore": "./src/keystore.ts",
     "./profileSelfReport": "./src/profileSelfReport.ts"
   },
