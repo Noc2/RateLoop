@@ -35,13 +35,19 @@ category allowlists, callbacks, balance tooling, or audit exports enforced by Ra
 ## Quick Start
 
 ```bash
+# Install the agent SDK and CLI helpers in any Node runtime.
+npm install @rateloop/sdk @rateloop/agents
+
 # Show built-in result templates.
 yarn agents:templates
 
 # Validate a focused example ask.
 yarn agents:lint --file packages/agents/examples/questions/landing-pitch-review.json
 
-# Quote through MCP, then prefer a browser handoff link for user wallets.
+# First run without a funded wallet, signature, transaction, callback, or bounty.
+yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-review.json
+
+# Quote through MCP, then prefer a browser handoff link for funded user wallets.
 export RATELOOP_AGENT_WALLET_ADDRESS=0x...
 yarn agents:quote --file packages/agents/examples/questions/landing-pitch-review.json
 
@@ -56,13 +62,38 @@ yarn agents:status --operation-key 0x...
 yarn agents:result --operation-key 0x...
 ```
 
-The CLI reads `.env` from the current process environment. For the default wallet-direct path, set `RATELOOP_API_BASE_URL` and either set `RATELOOP_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in the ask payload. `RATELOOP_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps, balance tooling, callbacks, or audit exports.
+The CLI reads `.env` from the current process environment. `sandbox` and `ask --dry-run` validate the payload and return
+a deterministic synthetic result without requiring a funded wallet. For the default live wallet-direct path, set
+`RATELOOP_API_BASE_URL` and either set `RATELOOP_AGENT_WALLET_ADDRESS` or include a funded `walletAddress` in the ask
+payload. `RATELOOP_MCP_TOKEN` is optional and only needed when you want a saved managed policy, RateLoop-enforced caps,
+balance tooling, callbacks, or audit exports.
+
+For published-package installs, the same commands are available through the `rateloop-agents` bin:
+
+```bash
+npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json
+npx rateloop-agents quote --file packages/agents/examples/questions/landing-pitch-review.json
+```
+
+## First No-Payment Run
+
+Before funding a wallet, run a dry run:
+
+```bash
+yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-review.json
+# or
+yarn agents:ask --dry-run --file packages/agents/examples/questions/landing-pitch-review.json
+```
+
+Dry runs use `dryRun: true` and `mode: "dry_run"` under the hood. They validate category, template, bounty, wallet shape,
+and budget fields, then return a synthetic settled result. They do not reserve managed budget, register callbacks, create
+image attachments, request a USDC authorization, return a transaction plan, or touch World Chain mainnet.
 
 ## First Funded Ask
 
 1. Fund the user wallet or local signer wallet with World Chain USDC.
 2. Keep generated/local image bytes for `generatedImages` when browser handoff visual context is needed.
-3. Quote with `rateloop_quote_question` before reserving spend.
+3. Run `sandbox` or `ask --dry-run`, then quote with `rateloop_quote_question` before reserving spend.
 4. For a human wallet, call `rateloop_create_ask_handoff_link` with the same ask payload and optional `generatedImages`, then share the returned `/agent/handoff/{handoffId}#token=...` URL.
 5. For an agent-controlled wallet, run `local-ask` with the encrypted local signer.
 6. Use raw MCP `rateloop_ask_humans` wallet calls only when the host can execute or present them cleanly.

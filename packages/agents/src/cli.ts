@@ -18,6 +18,7 @@ import { listAgentResultTemplates } from "./templates";
 import { lintAgentAskRequest, summarizeLintFindings } from "./questions/lint";
 
 type CliOptions = Record<string, string | boolean>;
+const DRY_RUN_WALLET_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
 function findPackageRoot(startDir: string) {
   let current = resolve(startDir);
@@ -155,7 +156,9 @@ function usage() {
   return `Usage:
   yarn workspace @rateloop/agents templates
   yarn workspace @rateloop/agents lint:questions --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents quote --file packages/agents/examples/questions/landing-pitch-review.json
+  yarn workspace @rateloop/agents ask --dry-run --file packages/agents/examples/questions/landing-pitch-review.json
   yarn workspace @rateloop/agents ask --file packages/agents/examples/questions/landing-pitch-review.json
   export RATELOOP_LOCAL_SIGNER_KEYSTORE_PASSWORD=<load-from-secret-store>
   yarn workspace @rateloop/agents wallet --generate --keystore ~/.rateloop/local-signer.json
@@ -194,6 +197,24 @@ function withConfiguredWalletAddress(payload: unknown, walletAddress: string | u
   return typeof record.walletAddress === "string" && record.walletAddress.trim()
     ? payload
     : { ...record, walletAddress };
+}
+
+function withDryRunOptions(payload: unknown, options: CliOptions, walletAddress: string | undefined) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return payload;
+  }
+
+  const configuredWallet = walletAddress ?? DRY_RUN_WALLET_ADDRESS;
+  const record = withConfiguredWalletAddress(payload, configuredWallet) as Record<string, unknown>;
+
+  return {
+    ...record,
+    dryRun: true,
+    mode: "dry_run",
+    walletAddress:
+      typeof record.walletAddress === "string" && record.walletAddress.trim() ? record.walletAddress : configuredWallet,
+    ...(typeof options["client-request-id"] === "string" ? { clientRequestId: options["client-request-id"] } : {}),
+  };
 }
 
 async function main() {
@@ -240,15 +261,23 @@ async function main() {
     case "quote": {
       const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
-      const payload = withConfiguredWalletAddress(await readJsonFile(requireString(options, "file")), config.agentWalletAddress);
+      const rawPayload = await readJsonFile(requireString(options, "file"));
+      const payload = options["dry-run"]
+        ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
+        : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
       printJson(await agent.quoteQuestion(payload as never));
       return;
     }
 
+    case "sandbox":
     case "ask": {
       const config = loadAgentsRuntimeConfig();
       const agent = createAgentClient();
-      const payload = withConfiguredWalletAddress(await readJsonFile(requireString(options, "file")), config.agentWalletAddress);
+      const rawPayload = await readJsonFile(requireString(options, "file"));
+      const payload =
+        command === "sandbox" || options["dry-run"]
+          ? withDryRunOptions(rawPayload, options, config.agentWalletAddress)
+          : withConfiguredWalletAddress(rawPayload, config.agentWalletAddress);
       const findings = lintAgentAskRequest(payload);
       if (findings.some(finding => finding.level === "error")) {
         printJson({ findings, ...summarizeLintFindings(findings) });

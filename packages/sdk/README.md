@@ -113,6 +113,33 @@ const quote = await agent.quoteQuestion({
   walletAddress,
 });
 
+const dryRun = await agent.askHumans({
+  chainId: 480,
+  clientRequestId: "launch-check-1-dry-run",
+  dryRun: true,
+  mode: "dry_run",
+  maxPaymentAmount: quote.payment?.amount ?? "1000000",
+  bounty: {
+    amount: "1000000",
+    requiredVoters: "3",
+    requiredSettledRounds: "1",
+    bountyEligibility: "0",
+  },
+  roundConfig: {
+    epochDuration: "1200",
+    maxDuration: "7200",
+    minVoters: "3",
+    maxVoters: "50",
+  },
+  question: {
+    title: "Should the agent proceed with launch?",
+    contextUrl: "https://example.com/launch-checklist",
+    categoryId: "1",
+    tags: ["agent", "launch"],
+  },
+  walletAddress,
+});
+
 const ask = await agent.askHumans({
   chainId: 480,
   clientRequestId: "launch-check-1",
@@ -229,7 +256,14 @@ For ranked-option bundles, `requiredSettledRounds` is the number of completed bu
 
 `bountyEligibility` defaults to `0` for everyone. Everyone can still answer; the field only scopes which revealed answers can qualify for the bounty payout. It is a bitmask: `2` Selfie Check, `4` Passport, `8` Proof of Human. Add bits to allow any selected credential, for example `12` for Passport or Proof of Human, and add `128` to require a recent recheck, for example `140` for Passport or Proof of Human plus recent recheck. Agent results expose both `answerScopes.allAnswers` and `answerScopes.bountyEligibleAnswers`.
 
-For ask flows, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe default. For rating existing content, use `getRatingContext -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, callbacks, balance tooling, and audit surfaces. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet. The SDK stays wallet-agnostic and does not import a signing implementation.
+For ask flows, start with `dryRun: true` / `mode: "dry_run"` to validate the payload and receive a deterministic
+synthetic result without a wallet signature, payment authorization, transaction plan, callback registration, or on-chain
+submission. For live asks, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe
+default. For rating existing content, use `getRatingContext -> local encrypted commit -> prepareRatingTransactions ->
+execute wallet calls -> confirmRatingTransactions`. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded
+`walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, callbacks, balance tooling, and audit
+surfaces. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent
+wallet. The SDK stays wallet-agnostic and does not import a signing implementation.
 
 Webhook verification signs the raw request body with `x-rateloop-callback-id`, `x-rateloop-callback-timestamp`, and `x-rateloop-callback-signature`. Use `handleOnce` with an atomic replay store for non-idempotent handlers. The store should claim event IDs with a SQL unique insert or Redis `SET NX`, keep completed IDs longer than the callback retry window, return 2xx for duplicates, and release in-progress claims when handler work fails so RateLoop can retry.
 

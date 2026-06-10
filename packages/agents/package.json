@@ -85,6 +85,7 @@
     "prepack": "yarn build",
     "quote": "tsx src/cli.ts quote",
     "result": "tsx src/cli.ts result",
+    "sandbox": "tsx src/cli.ts sandbox",
     "status": "tsx src/cli.ts status",
     "templates": "tsx src/cli.ts templates",
     "wallet": "tsx src/cli.ts wallet",

@@ -2,12 +2,13 @@
 
 These examples keep one loop stable across runtimes:
 
-1. quote before spending
-2. use a stable `clientRequestId`
-3. prefer a browser handoff link for human wallets, or a local signer for agent-controlled wallets
-4. wait through a signed callback or poll handoff/question status
-5. fetch the structured result
-6. store `publicUrl`, `operationKey`, and the outcome in memory or logs
+1. dry-run before spending
+2. quote before a live ask
+3. use a stable `clientRequestId`
+4. prefer a browser handoff link for human wallets, or a local signer for agent-controlled wallets
+5. wait through a signed callback or poll handoff/question status
+6. fetch the structured result
+7. store `publicUrl`, `operationKey`, and the outcome in memory or logs
 
 ## Files
 
@@ -64,6 +65,17 @@ upload/signing UI instead of pasting raw challenges. See `generated-mockup-uploa
 `questions/generated-mockup-feedback.json`.
 
 ## First Funded Ask
+
+Start with a no-payment dry run:
+
+```bash
+yarn agents:sandbox --file packages/agents/examples/questions/landing-pitch-review.json
+# or, from a published-package install:
+npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json
+```
+
+Dry runs validate the ask shape and return a deterministic synthetic result. They do not require a funded wallet,
+signature, USDC authorization, transaction plan, callback registration, or mainnet submission.
 
 Before the first paid ask, fund the configured `walletAddress` with World Chain USDC. Quote with
 `rateloop_quote_question`, then prefer a browser handoff link for human wallets:

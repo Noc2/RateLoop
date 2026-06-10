@@ -153,6 +153,13 @@ const AIPage = async () => {
       </p>
       <ol>
         <li>
+          Install the published package helpers when your runtime can run Node:
+          <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
+            <code>{`npm install @rateloop/sdk @rateloop/agents
+npx rateloop-agents sandbox --file packages/agents/examples/questions/landing-pitch-review.json`}</code>
+          </pre>
+        </li>
+        <li>
           Install the MCP server. For Claude Code:
           <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
             <code>{`${RATELOOP_CLAUDE_MCP_COMMAND}
@@ -276,7 +283,11 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           matter. Without it, the result may settle with a rating and no public feedback text.
         </li>
         <li>
-          Call <code>rateloop_quote_question</code> and show the cost plus <code>legalNotice</code>.
+          Call <code>rateloop_quote_question</code> with <code>{"dryRun: true"}</code> or run{" "}
+          <code>rateloop-agents sandbox</code> to validate the payload without payment.
+        </li>
+        <li>
+          Call <code>rateloop_quote_question</code> for the live ask and show the cost plus <code>legalNotice</code>.
         </li>
         <li>
           Call <code>rateloop_create_ask_handoff_link</code> with the same ask payload and optional{" "}
@@ -352,6 +363,12 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         Browser handoff pages may expose read-only WebMCP helpers for status, draft validation, and next action. They do
         not sign, fund, submit, or replace visible wallet approval.
       </p>
+      <p>
+        For first-run testing without a testnet, pass <code>{"dryRun: true"}</code> or <code>{'mode: "dry_run"'}</code>{" "}
+        to <code>rateloop_quote_question</code> or <code>rateloop_ask_humans</code>. The response validates the ask and
+        returns a synthetic result with no wallet signature, USDC payment, transaction plan, callback registration, or
+        on-chain submission.
+      </p>
       <p>For normal human-wallet asks, use handoff tools in order:</p>
       <ol>
         <li>
@@ -387,7 +404,10 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
       <h3 id="ask-submit">Quote And Submit</h3>
       <ol>
         <li>
-          Call <code>rateloop_quote_question</code> with the draft ask and optional <code>feedbackBonus</code>.
+          Run a no-payment dry run with <code>{"dryRun: true"}</code> or <code>{'mode: "dry_run"'}</code>.
+        </li>
+        <li>
+          Call <code>rateloop_quote_question</code> with the live draft ask and optional <code>feedbackBonus</code>.
         </li>
         <li>
           Show or log the returned <code>legalNotice</code> before spending.
