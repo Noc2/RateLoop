@@ -1385,6 +1385,93 @@ describe("resolveRounds", () => {
     );
   });
 
+  it("does not finalize reveal-failed when ciphertexts are unavailable from all sources", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 2n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: makeCommit({ revealableAfter: 100n }),
+      },
+      // Ponder is down and the on-chain log fallback yields nothing.
+      ponderAvailable: false,
+      revealGracePeriod: 60n,
+      lastCommitRevealableAfter: 100n,
+      now: 605_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsRevealFailedFinalized).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skipping reveal-failed finalization; reveal pipeline was unhealthy this tick",
+      expect.objectContaining({ contentId: "1", roundId: 1 }),
+    );
+  });
+
+  it("does not finalize reveal-failed when every drand relay is unavailable", async () => {
+    const relayOutage = new Error(
+      "All drand relays failed fetching beacon round 123",
+    );
+    relayOutage.name = "DrandUnavailableError";
+    timelockDecrypt.mockRejectedValue(relayOutage);
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 2n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: makeCommit({ revealableAfter: 100n }),
+      },
+      revealGracePeriod: 60n,
+      lastCommitRevealableAfter: 100n,
+      now: 605_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsRevealFailedFinalized).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
+    );
+    // A relay outage must not burn the commit's permanent decrypt-failure budget.
+    expect(logger.warn).toHaveBeenCalledWith(
+      "All drand relays unavailable; retrying next tick",
+      expect.objectContaining({ commitKey: COMMIT_KEY_1 }),
+    );
+  });
+
   it("reveals votes from on-chain VoteCommitted logs when Ponder is unavailable", async () => {
     timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
 

@@ -709,7 +709,7 @@ export async function resolveRounds(
 
       if (activeRoundId > 0n) {
         // --- 1. REVEAL LOOP: Decrypt and reveal unrevealed commits ---
-        const revealedCount = await _revealCommits(
+        const revealOutcome = await _revealCommits(
           publicClient,
           walletClient,
           chain,
@@ -720,7 +720,7 @@ export async function resolveRounds(
           activeRoundId,
           now,
         );
-        result.votesRevealed += revealedCount;
+        result.votesRevealed += revealOutcome.revealed;
         result.advisoryVotesRevealed += await _revealAdvisoryCommits(
           publicClient,
           walletClient,
@@ -813,7 +813,26 @@ export async function resolveRounds(
         }
 
         // --- 3. REVEAL FAILED: commit quorum reached, reveal quorum never did ---
+        // Never finalize while this tick's reveal pipeline was blocked by
+        // infrastructure (ciphertexts unavailable, drand relays down, RPC reads
+        // failing): finalization forfeits unrevealed stakes, and a systemic outage
+        // must not be billed to voters. finalizeRevealFailedRound stays
+        // permissionless on-chain, so this only stops THIS keeper from finalizing
+        // rounds it failed to reveal itself.
         if (
+          round.state === RoundState.Open &&
+          round.voteCount >= rbtsRevealQuorum &&
+          round.revealedCount < rbtsRevealQuorum &&
+          revealOutcome.infrastructureFailure
+        ) {
+          logger.warn(
+            "Skipping reveal-failed finalization; reveal pipeline was unhealthy this tick",
+            {
+              contentId: contentId.toString(),
+              roundId: Number(activeRoundId),
+            },
+          );
+        } else if (
           round.state === RoundState.Open &&
           round.voteCount >= rbtsRevealQuorum &&
           round.revealedCount < rbtsRevealQuorum
@@ -1036,9 +1055,22 @@ export async function writeContractAndConfirm(
   return hash;
 }
 
+interface RevealCommitsOutcome {
+  revealed: number;
+  /**
+   * True when at least one pending reveal was blocked by infrastructure this tick:
+   * ciphertext bytes unavailable from both Ponder and the on-chain log fallback, every
+   * drand relay down, or the commit set unreadable over RPC. Distinct from legitimate
+   * skips (not yet revealable, permanently bad ciphertexts). While true, the keeper
+   * must not finalize the round as RevealFailed — that would convert the keeper's own
+   * outage into voter stake forfeitures (design review 2026-06, finding 3).
+   */
+  infrastructureFailure: boolean;
+}
+
 /**
  * Reveal all unrevealed commits for a round whose epoch has ended.
- * Returns the number of votes revealed in this call.
+ * Returns the number of votes revealed and whether infrastructure blocked any reveal.
  */
 async function _revealCommits(
   publicClient: PublicClient,
@@ -1050,8 +1082,9 @@ async function _revealCommits(
   contentId: bigint,
   roundId: bigint,
   now: bigint,
-): Promise<number> {
+): Promise<RevealCommitsOutcome> {
   let revealed = 0;
+  let infrastructureFailure = false;
 
   // Get all commit keys for this round
   let commitKeys: readonly `0x${string}`[];
@@ -1063,7 +1096,7 @@ async function _revealCommits(
       roundId,
     );
   } catch {
-    return 0;
+    return { revealed: 0, infrastructureFailure: true };
   }
 
   let indexedCiphertexts: IndexedCiphertextMap | null | undefined;
@@ -1133,7 +1166,12 @@ async function _revealCommits(
           }
         }
       }
-      if (!ciphertext) continue;
+      if (!ciphertext) {
+        // Neither Ponder nor the on-chain log fallback produced verifiable ciphertext
+        // bytes for a pending commit — data unavailability, not a voter problem.
+        infrastructureFailure = true;
+        continue;
+      }
 
       const metadataValidation = validateCiphertextMetadata(commit, ciphertext);
       if (!metadataValidation.ok) {
@@ -1162,6 +1200,17 @@ async function _revealCommits(
           commit.drandChainHash,
         );
       } catch (err: unknown) {
+        if (isDrandUnavailableError(err)) {
+          infrastructureFailure = true;
+          decryptFailureCount.delete(commitKey);
+          logger.warn("All drand relays unavailable; retrying next tick", {
+            contentId: contentId.toString(),
+            roundId: roundId.toString(),
+            commitKey,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          continue;
+        }
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
           decryptFailureCount.delete(commitKey);
@@ -1256,7 +1305,7 @@ async function _revealCommits(
     }
   }
 
-  return revealed;
+  return { revealed, infrastructureFailure };
 }
 
 async function readRoundAdvisoryCommitKeys(
