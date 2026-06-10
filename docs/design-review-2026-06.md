@@ -101,6 +101,12 @@ reinforces this: agreeing with the expected majority maximizes qualification.
 - Consider restoring a "surprisingly common" information term (original BTS) to break
   predict-the-base-rate strategies.
 
+**Status (2026-06-10):** mitigated — bounty claim weights are now surprise-weighted (see
+`docs/surprise-weighted-bounty-weights.md`): snapshot rounds pay a participation floor plus a
+surprisingly-common bonus normalized by a trailing base rate, so conformist rounds pay flat while
+informative reporting earns up to 2x. Ground-truth audit rounds remain open as the long-term
+backstop.
+
 #### 3. Keeper liveness failure forfeits honest stake (liveness/economic)
 
 Nothing reveals votes except the keeper (or voter self-reveal, which the frontend does not
@@ -297,5 +303,6 @@ French online-reputation-management firm** — a trademark/SEO collision to chec
 2. **Before pushing agent adoption:** finding 6 (publish SDK, testnet+faucet, x402 naming),
    finding 11 (timeouts, structured errors).
 3. **Before significant LREP distribution:** finding 8 (vesting verified bonuses, quorum floor,
-   USDC-denominated bonds), finding 2 (accuracy-linked bounty shares).
+   USDC-denominated bonds), finding 2 (accuracy-linked bounty shares — addressed 2026-06-10 via
+   surprise-weighted bounty claim weights, see `docs/surprise-weighted-bounty-weights.md`).
 4. **Ongoing hardening:** findings 4, 9, 10.
