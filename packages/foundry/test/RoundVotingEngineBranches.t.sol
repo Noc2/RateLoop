@@ -118,6 +118,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     address public voter4 = address(6);
     address public voter5 = address(7);
     address public voter6 = address(8);
+    address public voter7 = address(10);
+    address public voter8 = address(11);
     address public keeper = address(9);
     address public treasury = address(100);
     address public frontend1 = address(200);
@@ -233,7 +235,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         lrepToken.mint(owner, 2_000_000e6);
         lrepToken.approve(address(engine), 500_000e6);
 
-        address[9] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, frontend1, delegate1];
+        address[11] memory users =
+            [submitter, voter1, voter2, voter3, voter4, voter5, voter6, voter7, voter8, frontend1, delegate1];
         for (uint256 i = 0; i < users.length; i++) {
             lrepToken.mint(users[i], 10_000e6);
         }
@@ -790,6 +793,43 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _revealPrediction(contentId, roundId, commitKeys[2], v3Up, predictions[2], salts[2]);
     }
 
+    function _fiveUpThreeDownDirections() internal pure returns (bool[8] memory directions) {
+        directions = [true, true, false, true, true, false, true, false];
+    }
+
+    function _allUpDirections() internal pure returns (bool[8] memory directions) {
+        directions = [true, true, true, true, true, true, true, true];
+    }
+
+    function _setupEconomicPredictionRound(bool[8] memory directions, address frontend)
+        internal
+        returns (uint256 contentId, uint256 roundId, bytes32[8] memory commitKeys)
+    {
+        contentId = _submitContent();
+
+        address[8] memory voters = [voter1, voter2, voter3, voter4, voter5, voter6, voter7, voter8];
+        bytes32[8] memory salts;
+        uint16[8] memory predictions;
+        for (uint256 i = 0; i < voters.length; i++) {
+            predictions[i] = _predictionBps(i, directions[i]);
+            if (i == 0 && frontend != address(0)) {
+                (commitKeys[i], salts[i]) =
+                    _commitPredictionWithFrontend(voters[i], contentId, directions[i], predictions[i], STAKE, frontend);
+            } else {
+                (commitKeys[i], salts[i]) =
+                    _commitPrediction(voters[i], contentId, directions[i], predictions[i], STAKE);
+            }
+        }
+
+        roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            _revealPrediction(contentId, roundId, commitKeys[i], directions[i], predictions[i], salts[i]);
+        }
+    }
+
     // =========================================================================
     // 1. BASIC ROUND LIFECYCLE: commit -> reveal -> settle (3 voters, epoch 1)
     // =========================================================================
@@ -1044,24 +1084,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_RbtsLifecycle_SettlesBinaryRatingAndScoresRewards() public {
-        uint256 contentId = _submitContent();
-
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
-
-        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
-        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
-        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
-        assertEq(
-            _roundRatingUpEvidence(engine, contentId, roundId), 3_300_000, "rating uses bounded up signal evidence"
-        );
-        assertEq(
-            _roundRatingDownEvidence(engine, contentId, roundId), 1_300_000, "rating uses bounded down signal evidence"
+        uint256 contentId;
+        uint256 roundId;
+        bytes32[8] memory commitKeys;
+        (contentId, roundId, commitKeys) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+        assertGt(
+            _roundRatingUpEvidence(engine, contentId, roundId),
+            _roundRatingDownEvidence(engine, contentId, roundId),
+            "rating uses bounded signal evidence"
         );
 
         bool scored = _roundRbtsScored(engine, contentId, roundId);
@@ -1080,7 +1110,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertTrue(scored, "RBTS scored");
         assertGt(rewardWeight, 0, "positive RBTS reward weight");
         assertGt(forfeitedPool, 0, "imperfect scores forfeit some stake");
-        assertGt(_commitRbtsScoreBps(engine, contentId, roundId, ck1), 0, "ck1 scored");
+        assertGt(_commitRbtsScoreBps(engine, contentId, roundId, commitKeys[0]), 0, "first commit scored");
     }
 
     function test_RbtsSeedRequiresBlockAfterSettlementClosure() public {
@@ -1616,7 +1646,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_BasicLifecycle_VoterPoolAndWinningStake() public {
-        (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
+        (uint256 contentId, uint256 roundId,) =
+            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
@@ -2498,23 +2529,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_FrontendFee_EligibleFrontend_FeeAccumulated() public {
         _registerFrontend(frontend1);
-
-        uint256 contentId = _submitContent();
-
-        uint16 p1 = _predictionBps(0, true);
-        uint16 p2 = _predictionBps(1, true);
-        uint16 p3 = _predictionBps(2, false);
-        (bytes32 ck1, bytes32 s1) = _commitPredictionWithFrontend(voter1, contentId, true, p1, STAKE, frontend1);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, p2, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, p3, STAKE);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        // Reveal after epoch
-        _warpPastTlockRevealTime(block.timestamp + EPOCH);
-        _revealPrediction(contentId, roundId, ck1, true, p1, s1);
-        _revealPrediction(contentId, roundId, ck2, true, p2, s2);
-        _revealPrediction(contentId, roundId, ck3, false, p3, s3);
+        (uint256 contentId, uint256 roundId,) =
+            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), frontend1);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
         uint256 feesBefore = frontendRegistry.getAccumulatedFees(frontend1);
@@ -2527,22 +2543,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_FrontendFee_ClaimSucceeds() public {
         _registerFrontend(frontend1);
-
-        uint256 contentId = _submitContent();
-
-        uint16 p1 = _predictionBps(0, true);
-        uint16 p2 = _predictionBps(1, true);
-        uint16 p3 = _predictionBps(2, false);
-        (bytes32 ck1, bytes32 s1) = _commitPredictionWithFrontend(voter1, contentId, true, p1, STAKE, frontend1);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, p2, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, p3, STAKE);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        _warpPastTlockRevealTime(block.timestamp + EPOCH);
-        _revealPrediction(contentId, roundId, ck1, true, p1, s1);
-        _revealPrediction(contentId, roundId, ck2, true, p2, s2);
-        _revealPrediction(contentId, roundId, ck3, false, p3, s3);
+        (uint256 contentId, uint256 roundId,) =
+            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), frontend1);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
@@ -2556,22 +2558,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_FrontendFee_CannotClaimTwice() public {
         _registerFrontend(frontend1);
-
-        uint256 contentId = _submitContent();
-
-        uint16 p1 = _predictionBps(0, true);
-        uint16 p2 = _predictionBps(1, true);
-        uint16 p3 = _predictionBps(2, false);
-        (bytes32 ck1, bytes32 s1) = _commitPredictionWithFrontend(voter1, contentId, true, p1, STAKE, frontend1);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, p2, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, false, p3, STAKE);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        _warpPastTlockRevealTime(block.timestamp + EPOCH);
-        _revealPrediction(contentId, roundId, ck1, true, p1, s1);
-        _revealPrediction(contentId, roundId, ck2, true, p2, s2);
-        _revealPrediction(contentId, roundId, ck3, false, p3, s3);
+        (uint256 contentId, uint256 roundId,) =
+            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), frontend1);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
@@ -2640,20 +2628,31 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         // quorum settles and voter1's stake is cleaned into the reserve.
         _commit(voter1, contentId, true, STAKE);
 
-        // voter2, voter3, voter4 commit and reveal (3 = minVoters)
-        (bytes32 ck2, bytes32 s2) = _commitWithFrontend(voter2, contentId, true, STAKE, frontend1);
-        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
-        (bytes32 ck4, bytes32 s4) = _commit(voter4, contentId, true, STAKE);
+        address[8] memory voters = [voter2, voter3, voter4, voter5, voter6, voter7, voter8, delegate1];
+        bool[8] memory directions = [true, false, true, true, true, false, true, false];
+        bytes32[8] memory commitKeys;
+        bytes32[8] memory salts;
+        uint16[8] memory predictions;
+        for (uint256 i = 0; i < voters.length; i++) {
+            predictions[i] = _predictionBps(i, directions[i]);
+            if (i == 0) {
+                (commitKeys[i], salts[i]) =
+                    _commitPredictionWithFrontend(voters[i], contentId, directions[i], predictions[i], STAKE, frontend1);
+            } else {
+                (commitKeys[i], salts[i]) =
+                    _commitPrediction(voters[i], contentId, directions[i], predictions[i], STAKE);
+            }
+        }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         uint256 revealGracePeriod = ProtocolConfig(protocolConfigAddress).revealGracePeriod();
 
-        // Warp past the tlock-backed revealable timestamp + reveal grace period.
-        vm.warp(_lastCommitRevealableAfter(engine, contentId, roundId) + revealGracePeriod + 1);
-
-        _reveal(contentId, roundId, ck2, true, s2);
-        _reveal(contentId, roundId, ck3, false, s3);
-        _reveal(contentId, roundId, ck4, true, s4);
+        RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(openRound.startTime) + EPOCH);
+        for (uint256 i = 0; i < voters.length; i++) {
+            _revealPrediction(contentId, roundId, commitKeys[i], directions[i], predictions[i], salts[i]);
+        }
+        vm.warp(block.timestamp + revealGracePeriod + 1);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
@@ -4408,22 +4407,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_ConsensusSettlement_UnanimousUpWins() public {
-        uint256 contentId = _submitContent();
-
-        // All UP, no DOWN -> unanimous
-        uint16 p1 = _predictionBps(0, true);
-        uint16 p2 = _predictionBps(1, true);
-        uint16 p3 = _predictionBps(2, true);
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, p1, STAKE);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, true, p2, STAKE);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, p3, STAKE);
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-
-        _warpPastTlockRevealTime(block.timestamp + EPOCH);
-        _revealPrediction(contentId, roundId, ck1, true, p1, s1);
-        _revealPrediction(contentId, roundId, ck2, true, p2, s2);
-        _revealPrediction(contentId, roundId, ck3, true, p3, s3);
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_allUpDirections(), address(0));
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 

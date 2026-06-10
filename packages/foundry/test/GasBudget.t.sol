@@ -22,7 +22,8 @@ contract GasBudgetTest is RoundIntegrationTest {
     // Settlement records cluster-payout source readiness for clean rounds, adding one bounded SSTORE.
     uint256 internal constant MAX_SETTLE_ROUND_GAS = 775_000;
     uint256 internal constant MAX_SETTLE_ROUND_MAX_EPOCH_SCAN_GAS = 5_900_000;
-    uint256 internal constant MAX_PROCESS_UNREVEALED_GAS = 250_000;
+    // Cleanup now also accounts RBTS score-spread economics and bounded keeper/treasury routing.
+    uint256 internal constant MAX_PROCESS_UNREVEALED_GAS = 325_000;
     uint256 internal constant MAX_CANCEL_EXPIRED_ROUND_GAS = 60_000;
     uint256 internal constant MAX_CLAIM_REWARD_GAS = 270_000;
     uint256 internal constant MAX_CLAIM_FRONTEND_FEE_GAS = 250_000;
