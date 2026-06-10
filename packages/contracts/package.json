@@ -1,7 +1,24 @@
 {
   "name": "@rateloop/contracts",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
+  "description": "Generated ABIs, deployment metadata, and protocol constants for RateLoop integrations",
+  "homepage": "https://github.com/Noc2/RateLoop/tree/main/packages/contracts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Noc2/RateLoop.git",
+    "directory": "packages/contracts"
+  },
+  "bugs": {
+    "url": "https://github.com/Noc2/RateLoop/issues"
+  },
+  "keywords": [
+    "rateloop",
+    "contracts",
+    "abis",
+    "deployments",
+    "viem"
+  ],
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",

@@ -1,12 +1,12 @@
 {
   "name": "@rateloop/agents",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "description": "Agent-facing CLI, templates, and question helpers for RateLoop integrations",
   "homepage": "https://github.com/Noc2/RateLoop/tree/main/packages/agents",
   "repository": {
     "type": "git",
-    "url": "git@github.com:Noc2/RateLoop.git",
+    "url": "git+https://github.com/Noc2/RateLoop.git",
     "directory": "packages/agents"
   },
   "bugs": {
@@ -97,8 +97,8 @@
     "provenance": true
   },
   "dependencies": {
-    "@rateloop/contracts": "0.0.1",
-    "@rateloop/sdk": "0.0.1",
+    "@rateloop/contracts": "workspace:*",
+    "@rateloop/sdk": "workspace:*",
     "dotenv": "^16.4.5",
     "viem": "2.39.0"
   },

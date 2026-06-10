@@ -1,12 +1,12 @@
 {
   "name": "@rateloop/sdk",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "description": "Framework-agnostic frontend SDK foundations for RateLoop integrations",
   "homepage": "https://github.com/Noc2/RateLoop/tree/main/packages/sdk",
   "repository": {
     "type": "git",
-    "url": "git@github.com:Noc2/RateLoop.git",
+    "url": "git+https://github.com/Noc2/RateLoop.git",
     "directory": "packages/sdk"
   },
   "bugs": {
@@ -107,7 +107,7 @@
     "provenance": true
   },
   "dependencies": {
-    "@rateloop/contracts": "0.0.1",
+    "@rateloop/contracts": "workspace:*",
     "viem": "2.39.0"
   },
   "devDependencies": {

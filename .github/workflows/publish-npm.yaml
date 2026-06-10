@@ -1,0 +1,85 @@
+name: Publish npm Packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run the publish workflow without uploading packages"
+        required: true
+        default: true
+        type: boolean
+      npm_tag:
+        description: "npm dist-tag to apply when publishing"
+        required: true
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      NPM_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_tag || 'latest' }}
+      PUBLISH_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+
+      - name: Setup node env
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: yarn
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Check release metadata
+        run: node scripts/run-node-tests.mjs scripts/release-package-metadata.test.mjs
+
+      - name: Build packages
+        run: yarn build:workspace-deps
+
+      - name: Run package tests
+        run: |
+          yarn contracts:test
+          yarn sdk:test
+          yarn workspace @rateloop/agents test
+
+      - name: Pack packages
+        run: |
+          mkdir -p "$RUNNER_TEMP/rateloop-npm"
+          yarn workspace @rateloop/contracts pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz"
+          yarn workspace @rateloop/sdk pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz"
+          yarn workspace @rateloop/agents pack --out "$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz"
+
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          if [[ "$PUBLISH_DRY_RUN" != "true" && -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "NPM_TOKEN is required for a real npm publish."
+            exit 1
+          fi
+
+          publish_args=(--provenance --access public --tag "$NPM_TAG")
+          if [[ "$PUBLISH_DRY_RUN" == "true" ]]; then
+            publish_args+=(--dry-run)
+          fi
+
+          npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-contracts.tgz" "${publish_args[@]}"
+          npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-sdk.tgz" "${publish_args[@]}"
+          npm publish "$RUNNER_TEMP/rateloop-npm/rateloop-agents.tgz" "${publish_args[@]}"

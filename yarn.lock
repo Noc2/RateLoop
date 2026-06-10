@@ -3734,8 +3734,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@rateloop/agents@workspace:packages/agents"
   dependencies:
-    "@rateloop/contracts": 0.0.1
-    "@rateloop/sdk": 0.0.1
+    "@rateloop/contracts": "workspace:*"
+    "@rateloop/sdk": "workspace:*"
     "@types/node": ^20.10.7
     dotenv: ^16.4.5
     tsx: ^4.19.0
@@ -3747,7 +3747,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@rateloop/contracts@0.0.1, @rateloop/contracts@workspace:*, @rateloop/contracts@workspace:packages/contracts":
+"@rateloop/contracts@workspace:*, @rateloop/contracts@workspace:packages/contracts":
   version: 0.0.0-use.local
   resolution: "@rateloop/contracts@workspace:packages/contracts"
   dependencies:
@@ -3895,11 +3895,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@rateloop/sdk@0.0.1, @rateloop/sdk@workspace:*, @rateloop/sdk@workspace:packages/sdk":
+"@rateloop/sdk@workspace:*, @rateloop/sdk@workspace:packages/sdk":
   version: 0.0.0-use.local
   resolution: "@rateloop/sdk@workspace:packages/sdk"
   dependencies:
-    "@rateloop/contracts": 0.0.1
+    "@rateloop/contracts": "workspace:*"
     "@types/node": ^20.10.7
     tsx: ^4.21.0
     typescript: ~5.8.2
