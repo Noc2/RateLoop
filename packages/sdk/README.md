@@ -265,6 +265,15 @@ execute wallet calls -> confirmRatingTransactions`. A hosted direct HTTP client 
 surfaces. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent
 wallet. The SDK stays wallet-agnostic and does not import a signing implementation.
 
+Ask confirmations can wait for on-chain receipts. The SDK uses a longer `confirmTimeoutMs` for
+`confirmAskTransactions`, `confirmFeedbackBonusTransactions`, and `confirmRatingTransactions` while ordinary reads and
+writes use `timeoutMs`. If a confirm call times out locally, retry it with the same `operationKey` and transaction
+hashes, or poll status by `operationKey`; RateLoop treats the operation key as the idempotent recovery handle.
+
+`quoteFetchImpl` can route quote-only calls through separate infrastructure from mutating calls. Structured API errors
+are exposed on `RateLoopApiError` as `code`, `retryable`, `recoverWith`, `originalCode`, and `details` so agents can
+branch without parsing the message.
+
 When an agent wallet should sign USDC authorization typed data before RateLoop prepares the submit transaction, use
 `paymentMode: "eip3009_usdc_authorization"`. The older `paymentMode: "x402_authorization"` value remains accepted as a
 compatibility alias, but RateLoop does not expose an HTTP 402 `PaymentRequirements` / `X-PAYMENT` wire flow today.

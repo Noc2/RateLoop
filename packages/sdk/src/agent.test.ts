@@ -10,6 +10,7 @@ import {
   type QuestionStatusResponse,
   type WebhookReplayStore,
 } from "./agent";
+import { RateLoopApiError } from "./errors";
 
 const API_BASE_URL = "https://rateloop.example";
 
@@ -55,6 +56,26 @@ function memoryReplayStore() {
     },
   };
   return { calls, store };
+}
+
+async function captureNextRequestTimeout<T>(run: () => Promise<T>) {
+  const originalSetTimeout = globalThis.setTimeout;
+  let observedTimeoutMs: number | undefined;
+  (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout = ((
+    handler: TimerHandler,
+    timeout?: number,
+    ...args: unknown[]
+  ) => {
+    observedTimeoutMs = Number(timeout);
+    return originalSetTimeout(handler, 1_000, ...args);
+  }) as typeof setTimeout;
+  try {
+    const value = await run();
+    return { observedTimeoutMs, value };
+  } finally {
+    (globalThis as unknown as { setTimeout: typeof setTimeout }).setTimeout =
+      originalSetTimeout;
+  }
 }
 
 test("agent MCP helpers call tools/call with protocol and bearer headers", async () => {
@@ -147,6 +168,62 @@ test("agent config allows token-bearing localhost HTTP URLs", () => {
       }),
     );
   }
+});
+
+test("quoteFetchImpl is used only for quoteQuestion", async () => {
+  const requestedUrls: string[] = [];
+  const quoteFetchImpl = async (input: URL | RequestInfo) => {
+    requestedUrls.push(`quote:${String(input)}`);
+    return jsonResponse({
+      canSubmit: true,
+      clientRequestId: "ask-quote-fetch",
+      payment: { amount: "1000000", asset: "USDC" },
+    });
+  };
+  const fetchImpl = async (input: URL | RequestInfo) => {
+    requestedUrls.push(`default:${String(input)}`);
+    return jsonResponse({
+      clientRequestId: "ask-quote-fetch",
+      operationKey: `0x${"12".repeat(32)}`,
+      status: "awaiting_wallet_signature",
+    });
+  };
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl,
+    quoteFetchImpl,
+  });
+
+  const quote = await agent.quoteQuestion({
+    bounty: { amount: "1000000" },
+    chainId: 480,
+    clientRequestId: "ask-quote-fetch",
+    question: {
+      categoryId: "1",
+      tags: ["agent"],
+      title: "Proceed?",
+    },
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  });
+  const ask = await agent.askHumans({
+    bounty: { amount: "1000000" },
+    chainId: 480,
+    clientRequestId: "ask-quote-fetch",
+    maxPaymentAmount: "1000000",
+    question: {
+      categoryId: "1",
+      tags: ["agent"],
+      title: "Proceed?",
+    },
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  });
+
+  assert.deepEqual(requestedUrls, [
+    "quote:https://rateloop.example/api/agent/quote",
+    "default:https://rateloop.example/api/agent/asks",
+  ]);
+  assert.equal(quote.canSubmit, true);
+  assert.equal(ask.status, "awaiting_wallet_signature");
 });
 
 test("image upload SDK helpers call the MCP image tools", async () => {
@@ -760,6 +837,62 @@ test("confirmAskTransactions uses direct authenticated agent HTTP", async () => 
   assert.equal(response.contentId, "42");
 });
 
+test("confirm helpers use confirmTimeoutMs instead of the default request timeout", async () => {
+  const observed: Record<string, number | undefined> = {};
+  const agent = createRateLoopAgentClient({
+    confirmTimeoutMs: 123_456,
+    fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const name = body.params?.name ?? "direct";
+      return jsonResponse({
+        result: {
+          structuredContent: {
+            confirmed: true,
+            operationKey: `0x${"77".repeat(32)}`,
+            status: "submitted",
+          },
+        },
+        status: name,
+      });
+    },
+    mcpApiUrl: "https://rateloop.example/api/mcp",
+    timeoutMs: 10,
+  });
+
+  observed.ask = (
+    await captureNextRequestTimeout(() =>
+      agent.confirmAskTransactions({
+        operationKey: `0x${"77".repeat(32)}`,
+        transactionHashes: [`0x${"88".repeat(32)}`],
+      }),
+    )
+  ).observedTimeoutMs;
+  observed.feedbackBonus = (
+    await captureNextRequestTimeout(() =>
+      agent.confirmFeedbackBonusTransactions({
+        operationKey: `0x${"77".repeat(32)}`,
+        transactionHashes: [`0x${"89".repeat(32)}`],
+      }),
+    )
+  ).observedTimeoutMs;
+  observed.rating = (
+    await captureNextRequestTimeout(() =>
+      agent.confirmRatingTransactions({
+        chainId: 480,
+        contentId: "42",
+        transactionHashes: [`0x${"8a".repeat(32)}`],
+        walletAddress: "0x00000000000000000000000000000000000000aa",
+      }),
+    )
+  ).observedTimeoutMs;
+
+  assert.deepEqual(observed, {
+    ask: 123_456,
+    feedbackBonus: 123_456,
+    rating: 123_456,
+  });
+});
+
 test("confirmAskTransactions can use MCP framing", async () => {
   let requestedBody: any;
   const operationKey = `0x${"99".repeat(32)}`;
@@ -824,6 +957,90 @@ test("confirmFeedbackBonusTransactions uses MCP framing", async () => {
   ]);
   assert.equal(response.feedbackBonus?.status, "funded");
   assert.equal(response.feedbackBonus?.poolId, "7");
+});
+
+test("direct HTTP errors preserve structured recovery details", async () => {
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async () =>
+      jsonResponse(
+        {
+          code: "duplicate_ask",
+          message: "clientRequestId has already been used.",
+          recoverWith: "reuse_original_request_or_change_clientRequestId",
+          retryable: false,
+          status: 409,
+        },
+        409,
+      ),
+  });
+
+  await assert.rejects(
+    () =>
+      agent.getQuestionStatus({
+        operationKey: `0x${"44".repeat(32)}`,
+      }),
+    (error) => {
+      assert.ok(error instanceof RateLoopApiError);
+      assert.equal(error.status, 409);
+      assert.equal(error.code, "duplicate_ask");
+      assert.equal(error.retryable, false);
+      assert.equal(
+        error.recoverWith,
+        "reuse_original_request_or_change_clientRequestId",
+      );
+      assert.equal(error.message, "clientRequestId has already been used.");
+      return true;
+    },
+  );
+});
+
+test("MCP tool errors preserve structured recovery details", async () => {
+  const agent = createRateLoopAgentClient({
+    fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      return jsonResponse({
+        id: body.id,
+        jsonrpc: "2.0",
+        result: {
+          content: [],
+          isError: true,
+          structuredContent: {
+            code: "max_payment_exceeded",
+            message: "Quoted payment exceeds maxPaymentAmount.",
+            recoverWith: "increase_maxPaymentAmount_or_requote",
+            retryable: false,
+            status: 400,
+          },
+        },
+      });
+    },
+    mcpApiUrl: "https://rateloop.example/api/mcp/public",
+  });
+
+  await assert.rejects(
+    () =>
+      agent.askHumans({
+        bounty: { amount: "1000000" },
+        chainId: 480,
+        clientRequestId: "ask-too-low",
+        maxPaymentAmount: "1",
+        question: {
+          categoryId: "1",
+          tags: ["agent"],
+          title: "Proceed?",
+        },
+        walletAddress: "0x00000000000000000000000000000000000000aa",
+      }),
+    (error) => {
+      assert.ok(error instanceof RateLoopApiError);
+      assert.equal(error.status, 400);
+      assert.equal(error.code, "max_payment_exceeded");
+      assert.equal(error.retryable, false);
+      assert.equal(error.recoverWith, "increase_maxPaymentAmount_or_requote");
+      return true;
+    },
+  );
 });
 
 test("getQuestionStatus supports tokenless direct operation and wallet client lookups", async () => {

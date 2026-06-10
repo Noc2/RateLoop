@@ -6,6 +6,7 @@ type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 type JsonRecord = Record<string, unknown>;
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_CONFIRM_TIMEOUT_MS = 210_000;
 const DEFAULT_MCP_PROTOCOL_VERSION = "2025-11-25";
 const DEFAULT_AGENT_API_PATH = "/api/agent";
 const DEFAULT_MCP_PATH = "/api/mcp";
@@ -31,6 +32,7 @@ export interface RateLoopAgentClientOptions {
   fetchImpl?: RateLoopFetch;
   quoteFetchImpl?: RateLoopFetch;
   timeoutMs?: number;
+  confirmTimeoutMs?: number;
   mcpProtocolVersion?: string;
 }
 
@@ -707,7 +709,9 @@ interface NormalizedAgentConfig {
   mcpApiUrl?: string;
   mcpAccessToken?: string;
   fetchImpl: RateLoopFetch;
+  quoteFetchImpl: RateLoopFetch;
   timeoutMs: number;
+  confirmTimeoutMs: number;
   mcpProtocolVersion: string;
 }
 
@@ -746,8 +750,9 @@ export function quoteQuestion(
   options: RateLoopAgentClientOptions = {},
 ): Promise<QuoteQuestionResponse> {
   const config = normalizeAgentConfig(options);
+  const requestConfig = quoteRequestConfig(config);
   if (hasDirectAgentHttp(config) && !hasFeedbackBonus(params)) {
-    return requestJson<QuoteQuestionResponse>(config, agentQuoteUrl(config), {
+    return requestJson<QuoteQuestionResponse>(requestConfig, agentQuoteUrl(config), {
       body: stringifyJson(params),
       headers: jsonAgentHeaders(config),
       method: "POST",
@@ -755,7 +760,7 @@ export function quoteQuestion(
   }
 
   return callMcpTool<QuoteQuestionResponse>(
-    config,
+    requestConfig,
     "rateloop_quote_question",
     params,
   );
@@ -933,9 +938,10 @@ export async function confirmAskTransactions(
   options: RateLoopAgentClientOptions = {},
 ): Promise<QuestionStatusResponse> {
   const config = normalizeAgentConfig(options);
+  const requestConfig = confirmRequestConfig(config);
   if (hasDirectAgentHttp(config)) {
     return requestJson<QuestionStatusResponse>(
-      config,
+      requestConfig,
       agentConfirmAskUrl(config, params.operationKey),
       {
         body: stringifyJson({ transactionHashes: params.transactionHashes }),
@@ -947,7 +953,7 @@ export async function confirmAskTransactions(
 
   if (config.mcpApiUrl) {
     return callMcpTool<QuestionStatusResponse>(
-      config,
+      requestConfig,
       "rateloop_confirm_ask_transactions",
       { ...params },
     );
@@ -961,9 +967,10 @@ export async function confirmFeedbackBonusTransactions(
   options: RateLoopAgentClientOptions = {},
 ): Promise<QuestionStatusResponse> {
   const config = normalizeAgentConfig(options);
+  const requestConfig = confirmRequestConfig(config);
   if (config.mcpApiUrl) {
     return callMcpTool<QuestionStatusResponse>(
-      config,
+      requestConfig,
       "rateloop_confirm_feedback_bonus_transactions",
       { ...params },
     );
@@ -1014,8 +1021,9 @@ export async function confirmRatingTransactions(
   options: RateLoopAgentClientOptions = {},
 ): Promise<RatingStatusResponse> {
   const config = normalizeAgentConfig(options);
+  const requestConfig = confirmRequestConfig(config);
   return callMcpTool<RatingStatusResponse>(
-    config,
+    requestConfig,
     "rateloop_confirm_rating_transactions",
     {
       ...ratingLookupArgs(params),
@@ -1284,7 +1292,7 @@ async function callMcpTool<T>(
       typeof rpc.error.message === "string"
         ? rpc.error.message
         : "RateLoop MCP request failed";
-    throw new RateLoopApiError(message, 400);
+    throw structuredApiError(message, rpc.error.data, 400);
   }
 
   const result = isJsonRecord(rpc.result) ? rpc.result : null;
@@ -1296,7 +1304,7 @@ async function callMcpTool<T>(
       typeof toolResult.message === "string"
         ? toolResult.message
         : "RateLoop MCP tool failed";
-    throw new RateLoopApiError(message, 400);
+    throw structuredApiError(message, toolResult, 400);
   }
   if (result?.isError === true) {
     const structured = isJsonRecord(result.structuredContent)
@@ -1306,7 +1314,7 @@ async function callMcpTool<T>(
       typeof structured.message === "string"
         ? structured.message
         : "RateLoop MCP tool failed";
-    throw new RateLoopApiError(message, 400);
+    throw structuredApiError(message, structured, 400);
   }
 
   return (
@@ -1333,15 +1341,51 @@ async function requestJson<T>(
 
   if (!response.ok) {
     const message =
-      isJsonRecord(parsed) && typeof parsed.error === "string"
+      isJsonRecord(parsed) && isJsonRecord(parsed.error) && typeof parsed.error.message === "string"
+        ? parsed.error.message
+        : isJsonRecord(parsed) && typeof parsed.error === "string"
         ? parsed.error
         : isJsonRecord(parsed) && typeof parsed.message === "string"
           ? parsed.message
           : `RateLoop request failed with status ${response.status}`;
-    throw new RateLoopApiError(message, response.status);
+    throw structuredApiError(message, parsed, response.status);
   }
 
   return parsed as T;
+}
+
+function structuredApiError(
+  message: string,
+  body: unknown,
+  fallbackStatus: number,
+): RateLoopApiError {
+  const structured =
+    isJsonRecord(body) && isJsonRecord(body.error)
+      ? body.error
+      : isJsonRecord(body)
+        ? body
+        : {};
+  const status =
+    typeof structured.status === "number" && Number.isFinite(structured.status)
+      ? structured.status
+      : fallbackStatus;
+
+  return new RateLoopApiError(message, status, {
+    code: typeof structured.code === "string" ? structured.code : undefined,
+    details: structured,
+    originalCode:
+      typeof structured.originalCode === "string"
+        ? structured.originalCode
+        : undefined,
+    recoverWith:
+      typeof structured.recoverWith === "string"
+        ? structured.recoverWith
+        : undefined,
+    retryable:
+      typeof structured.retryable === "boolean"
+        ? structured.retryable
+        : undefined,
+  });
 }
 
 async function fetchWithTimeout(
@@ -1379,6 +1423,7 @@ function normalizeAgentConfig(
 ): NormalizedAgentConfig {
   const apiBaseUrl = normalizeUrl(options.apiBaseUrl);
   const fetchImpl = options.fetchImpl ?? fetch;
+  const quoteFetchImpl = options.quoteFetchImpl ?? fetchImpl;
   const defaultMcpPath = options.mcpAccessToken
     ? DEFAULT_MCP_PATH
     : DEFAULT_PUBLIC_MCP_PATH;
@@ -1395,12 +1440,22 @@ function normalizeAgentConfig(
     agentApiPath: options.agentApiPath ?? DEFAULT_AGENT_API_PATH,
     apiBaseUrl,
     fetchImpl,
+    quoteFetchImpl,
     mcpAccessToken: options.mcpAccessToken,
     mcpApiUrl,
     mcpProtocolVersion:
       options.mcpProtocolVersion ?? DEFAULT_MCP_PROTOCOL_VERSION,
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    confirmTimeoutMs: options.confirmTimeoutMs ?? DEFAULT_CONFIRM_TIMEOUT_MS,
   };
+}
+
+function quoteRequestConfig(config: NormalizedAgentConfig): NormalizedAgentConfig {
+  return { ...config, fetchImpl: config.quoteFetchImpl };
+}
+
+function confirmRequestConfig(config: NormalizedAgentConfig): NormalizedAgentConfig {
+  return { ...config, timeoutMs: config.confirmTimeoutMs };
 }
 
 function normalizeUrl(value?: string) {
