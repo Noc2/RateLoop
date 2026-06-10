@@ -1335,14 +1335,62 @@ export async function resolveRounds(
   return result;
 }
 
+// Small headroom over eth_estimateGas so minor state drift between estimation and
+// inclusion (e.g. another keeper's reveal landing first) does not OOG the transaction.
+const GAS_ESTIMATE_BUFFER_NUMERATOR = 12n;
+const GAS_ESTIMATE_BUFFER_DENOMINATOR = 10n;
+
 export async function writeContractAndConfirm(
   publicClient: Pick<PublicClient, "waitForTransactionReceipt">,
   walletClient: WalletClient,
   request: Parameters<WalletClient["writeContract"]>[0],
 ): Promise<`0x${string}`> {
-  // Enforce gas cap to prevent runaway transactions
-  if (!request.gas && config.maxGasPerTx > 0) {
-    request.gas = BigInt(config.maxGasPerTx);
+  // Estimate gas BEFORE broadcasting. Supplying an explicit `gas` makes viem skip
+  // eth_estimateGas — the keeper's only pre-broadcast simulation — so the old behavior
+  // of unconditionally setting `gas = maxGasPerTx` broadcast every transaction whose
+  // contract conditions were not met, mining a revert and burning gas on every benign
+  // race (AlreadyRevealed, UnrevealedPastEpochVotes, "Bundled content", redundant
+  // keeper instances, ...). Instead, estimate first: if estimation reverts, the error
+  // propagates to the caller's existing getRevertReason/isExpectedRevert classification
+  // and nothing is broadcast. maxGasPerTx acts purely as a CAP on the estimate.
+  if (!request.gas) {
+    const estimateContractGas = (
+      publicClient as Partial<Pick<PublicClient, "estimateContractGas">>
+    ).estimateContractGas;
+    if (estimateContractGas) {
+      const req = request as {
+        address: `0x${string}`;
+        abi: unknown;
+        functionName: string;
+        args?: readonly unknown[];
+        account?: unknown;
+        value?: bigint;
+      };
+      const estimate = await estimateContractGas.call(publicClient, {
+        address: req.address,
+        abi: req.abi,
+        functionName: req.functionName,
+        args: req.args,
+        account: req.account,
+        ...(req.value !== undefined ? { value: req.value } : {}),
+      } as Parameters<PublicClient["estimateContractGas"]>[0]);
+
+      const cap = config.maxGasPerTx > 0 ? BigInt(config.maxGasPerTx) : null;
+      if (cap !== null && estimate > cap) {
+        // Broadcasting with `gas = cap` would deterministically run out of gas on-chain
+        // and burn the entire cap. Refuse instead.
+        throw new Error(
+          `Estimated gas ${estimate} exceeds MAX_GAS_PER_TX ${config.maxGasPerTx}; not broadcasting`,
+        );
+      }
+      const buffered =
+        (estimate * GAS_ESTIMATE_BUFFER_NUMERATOR) /
+        GAS_ESTIMATE_BUFFER_DENOMINATOR;
+      request.gas = cap !== null && buffered > cap ? cap : buffered;
+    } else if (config.maxGasPerTx > 0) {
+      // Test doubles without estimateContractGas: keep the legacy hard cap.
+      request.gas = BigInt(config.maxGasPerTx);
+    }
   }
 
   const hash = await walletClient.writeContract(request);
