@@ -41,10 +41,10 @@ function safeBigInt(value: unknown): bigint {
   }
 }
 
-function getQuestionRewardAsset(candidate: { asset?: number | null; currency?: string | null }) {
-  return candidate.currency === "LREP" || candidate.currency === "LREP" || candidate.asset === 0
-    ? ("LREP" as const)
-    : ("USDC" as const);
+// The ponder API derives `currency` from `asset` (0 -> "LREP", otherwise "USDC"),
+// so exactly "LREP" is the only string form besides the numeric asset id.
+export function getQuestionRewardAsset(candidate: { asset?: number | null; currency?: string | null }) {
+  return candidate.currency === "LREP" || candidate.asset === 0 ? ("LREP" as const) : ("USDC" as const);
 }
 
 function buildPayoutWeight(
@@ -233,14 +233,8 @@ export function useClaimableQuestionRewards() {
     [bundleClaimableItems, claimableItems],
   );
 
-  const totalClaimable = useMemo(
-    () => allClaimableItems.reduce((sum, item) => sum + item.reward, 0n),
-    [allClaimableItems],
-  );
-
   return {
     claimableItems: allClaimableItems,
-    totalClaimable,
     isLoading:
       candidatesLoading || claimablesLoading || bundleCandidatesLoading || bundleClaimablesLoading || delegationLoading,
     refetch: () => {
