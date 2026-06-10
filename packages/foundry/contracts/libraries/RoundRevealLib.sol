@@ -253,6 +253,7 @@ library RoundRevealLib {
             commitRbtsForfeitedStake,
             revealedKeysMem,
             revealedBuildIdx,
+            economicCount,
             meanScoreBps
         );
 
@@ -381,6 +382,7 @@ library RoundRevealLib {
         bytes32 commitKey,
         uint16 meanScoreBps,
         uint256 positiveSpreadWeight,
+        uint256 economicCount,
         RbtsRoundTotals memory totals
     ) private returns (RbtsRoundTotals memory) {
         uint16 scoreBps = commitRbtsScoreBps[commitKey];
@@ -389,7 +391,7 @@ library RoundRevealLib {
         uint256 stakeAmount = roundCommits[commitKey].stakeAmount;
         uint256 forfeitedStake = positiveSpreadWeight == 0
             ? 0
-            : RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps);
+            : RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps, economicCount);
         uint256 stakeReturned = stakeAmount - forfeitedStake;
 
         commitRbtsRewardWeight[commitKey] = scoreWeight;
@@ -460,6 +462,7 @@ library RoundRevealLib {
         mapping(bytes32 => uint256) storage commitRbtsForfeitedStake,
         bytes32[] memory revealedKeys,
         uint256 revealedCount,
+        uint256 economicCount,
         uint16 meanScoreBps
     ) private returns (RbtsRoundTotals memory totals) {
         uint256 positiveSpreadWeight;
@@ -484,6 +487,7 @@ library RoundRevealLib {
                 revealedKeys[r],
                 meanScoreBps,
                 positiveSpreadWeight,
+                economicCount,
                 totals
             );
             unchecked {

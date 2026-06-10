@@ -31,12 +31,17 @@ contract RewardMathHarness {
         return RewardMath.calculatePositiveScoreSpreadWeight(rbtsWeight, scoreBps, meanScoreBps);
     }
 
-    function calculateNegativeScoreSpreadForfeit(uint256 stakeAmount, uint16 scoreBps, uint16 meanScoreBps)
+    function calculateNegativeScoreSpreadForfeit(
+        uint256 stakeAmount,
+        uint16 scoreBps,
+        uint16 meanScoreBps,
+        uint256 revealedCount
+    )
         external
         pure
         returns (uint256)
     {
-        return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps);
+        return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps, revealedCount);
     }
 
     function epochWeightBps(uint8 epochIndex) external pure returns (uint256) {
@@ -205,16 +210,26 @@ contract RewardMathTest is Test {
         );
     }
 
-    function test_CalculateNegativeScoreSpreadForfeit_AppliesIntensityAndCapsAtStake() public view {
-        uint256 forfeited = harness.calculateNegativeScoreSpreadForfeit(5e6, 6400, 8525);
+    function test_CalculateNegativeScoreSpreadForfeit_ZeroBelowEconomicThreshold() public view {
+        assertEq(
+            harness.calculateNegativeScoreSpreadForfeit(5e6, 6400, 8525, 7),
+            0,
+            "Low-turnout rounds do not apply score-spread forfeits"
+        );
+    }
+
+    function test_CalculateNegativeScoreSpreadForfeit_AppliesIntensityAndCapsAtHalfStake() public view {
+        uint256 forfeited = harness.calculateNegativeScoreSpreadForfeit(5e6, 6400, 8525, 8);
 
         assertEq(forfeited, 1_593_750, "Carol forfeits stake * 1.5 * 21.25%");
-        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 0, 10_000), 5e6, "Forfeit is capped at stake");
+        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 0, 10_000, 8), 2_500_000, "Forfeit is capped at 50%");
     }
 
     function test_CalculateNegativeScoreSpreadForfeit_ZeroAtOrAboveMean() public view {
-        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 8525, 8525), 0, "Mean score does not forfeit");
-        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 9350, 8525), 0, "Above-mean score does not forfeit");
+        assertEq(harness.calculateNegativeScoreSpreadForfeit(5e6, 8525, 8525, 8), 0, "Mean score does not forfeit");
+        assertEq(
+            harness.calculateNegativeScoreSpreadForfeit(5e6, 9350, 8525, 8), 0, "Above-mean score does not forfeit"
+        );
     }
 
     // ====================================================

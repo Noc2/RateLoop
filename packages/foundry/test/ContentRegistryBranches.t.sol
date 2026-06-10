@@ -159,6 +159,27 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(registry.questionRewardPoolEscrow(), address(replacementEscrow));
     }
 
+    function test_SetQuestionBundleRewardPoolEscrow_RotationRequiresPause() public {
+        MockQuestionRewardPoolEscrow firstEscrow = new MockQuestionRewardPoolEscrow();
+        MockQuestionRewardPoolEscrow replacementEscrow = new MockQuestionRewardPoolEscrow();
+
+        vm.prank(owner);
+        registry.setQuestionBundleRewardPoolEscrow(address(firstEscrow));
+
+        vm.prank(owner);
+        vm.expectRevert("Pause required");
+        registry.setQuestionBundleRewardPoolEscrow(address(replacementEscrow));
+
+        assertEq(registry.questionBundleRewardPoolEscrow(), address(firstEscrow));
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setQuestionBundleRewardPoolEscrow(address(replacementEscrow));
+        vm.stopPrank();
+
+        assertEq(registry.questionBundleRewardPoolEscrow(), address(replacementEscrow));
+    }
+
     function test_SetProtocolConfig_UpdatesIdentityRegistry() public {
         ProtocolConfig replacementConfig = _deployProtocolConfig(owner);
         RaterRegistry replacementRaterRegistry = _deployRaterRegistry(owner);
@@ -1503,6 +1524,31 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         }
 
         assertEq(matchedLinks, contentIds.length);
+    }
+
+    function test_SubmitQuestionBundleWithReward_FallsBackToQuestionRewardPoolEscrow() public {
+        uint256[] memory contentIds = _submitReservedQuestionBundleForDormancyTest();
+
+        assertEq(mockQuestionRewardPoolEscrow.lastContentId(), 1, "bundle id recorded on default escrow");
+        assertEq(mockQuestionRewardPoolEscrow.lastFunder(), submitter);
+        assertEq(mockQuestionRewardPoolEscrow.lastRequiredVoters(), DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS);
+        assertEq(registry.questionBundleRewardPoolEscrowForBundle(1), address(mockQuestionRewardPoolEscrow));
+        assertEq(registry.questionBundleRoundObserver(contentIds[0]), address(mockQuestionRewardPoolEscrow));
+    }
+
+    function test_SubmitQuestionBundleWithReward_UsesConfiguredBundleRewardPoolEscrow() public {
+        MockQuestionRewardPoolEscrow bundleEscrow = new MockQuestionRewardPoolEscrow();
+        vm.prank(owner);
+        registry.setQuestionBundleRewardPoolEscrow(address(bundleEscrow));
+
+        uint256[] memory contentIds = _submitReservedQuestionBundleForDormancyTest();
+
+        assertEq(mockQuestionRewardPoolEscrow.lastContentId(), 0, "default escrow not used for bundle");
+        assertEq(bundleEscrow.lastContentId(), 1, "bundle id recorded on bundle escrow");
+        assertEq(bundleEscrow.lastFunder(), submitter);
+        assertEq(bundleEscrow.lastRequiredVoters(), DEFAULT_SUBMISSION_REWARD_REQUIRED_VOTERS);
+        assertEq(registry.questionBundleRewardPoolEscrowForBundle(1), address(bundleEscrow));
+        assertEq(registry.questionBundleRoundObserver(contentIds[0]), address(bundleEscrow));
     }
 
     function test_SubmitQuestionBundleWithReward_RejectsHighRoundVoterCap() public {
