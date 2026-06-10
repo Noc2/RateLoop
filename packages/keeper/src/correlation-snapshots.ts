@@ -58,7 +58,8 @@ export interface CorrelationEpochSourceRefArtifact {
   roundId: string | number | bigint;
 }
 
-export interface RoundPayoutSnapshotArtifact extends CorrelationEpochSourceRefArtifact {
+export interface RoundPayoutSnapshotArtifact
+  extends CorrelationEpochSourceRefArtifact {
   correlationEpochId: string | number | bigint;
   rawEligibleVoters: number;
   effectiveParticipantUnits: number;
@@ -79,6 +80,13 @@ interface SnapshotProposerAuthorization {
   frontendOperator?: Address;
 }
 
+interface AutomaticCorrelationSnapshotPublishContext {
+  candidateFingerprint?: `0x${string}`;
+  rejectedEpochIds?: ReadonlySet<string>;
+}
+
+const rejectedAutomaticCorrelationCandidates = new Set<string>();
+
 function emptyResult(): CorrelationSnapshotPublisherResult {
   return {
     epochsProposed: 0,
@@ -86,6 +94,44 @@ function emptyResult(): CorrelationSnapshotPublisherResult {
     roundSnapshotsProposed: 0,
     roundSnapshotsFinalized: 0,
   };
+}
+
+function rejectedAutomaticCorrelationCandidateKey(
+  epochId: string,
+  candidateFingerprint: `0x${string}`,
+): string {
+  return `${epochId}:${candidateFingerprint.toLowerCase()}`;
+}
+
+function hasRejectedAutomaticCorrelationCandidate(
+  epochId: string,
+  candidateFingerprint: `0x${string}`,
+): boolean {
+  return rejectedAutomaticCorrelationCandidates.has(
+    rejectedAutomaticCorrelationCandidateKey(epochId, candidateFingerprint),
+  );
+}
+
+function rememberRejectedAutomaticCorrelationCandidate(
+  epochId: string,
+  candidateFingerprint: `0x${string}`,
+): void {
+  rejectedAutomaticCorrelationCandidates.add(
+    rejectedAutomaticCorrelationCandidateKey(epochId, candidateFingerprint),
+  );
+}
+
+function readCorrelationEpochClusterRoot(
+  snapshot: unknown,
+): `0x${string}` | null {
+  const clusterRoot = (snapshot as { clusterRoot?: unknown }).clusterRoot;
+  if (
+    typeof clusterRoot === "string" &&
+    /^0x[0-9a-f]{64}$/iu.test(clusterRoot)
+  ) {
+    return clusterRoot.toLowerCase() as `0x${string}`;
+  }
+  return null;
 }
 
 async function readSnapshotProposerAuthorization(
@@ -120,14 +166,20 @@ async function readSnapshotProposerAuthorization(
       eligible: authorized,
     };
     if (authorized) {
-      logger.debug("Correlation snapshot proposer authorization confirmed", data);
+      logger.debug(
+        "Correlation snapshot proposer authorization confirmed",
+        data,
+      );
     } else {
       logger.warn(
         "Skipping correlation snapshot proposals because keeper is not authorized by an eligible frontend",
         data,
       );
     }
-    return { authorized, frontendOperator: authorized ? frontendOperator : undefined };
+    return {
+      authorized,
+      frontendOperator: authorized ? frontendOperator : undefined,
+    };
   } catch (error: unknown) {
     logger.warn(
       "Skipping correlation snapshot proposals because frontend proposer authorization could not be read",
@@ -149,9 +201,14 @@ async function loadConfiguredCorrelationSnapshotArtifact(
   }
 
   if (config.correlationSnapshots.mode === "auto") {
-    const candidates = await loadConfiguredCorrelationSnapshotCandidates(logger);
-    return (await buildConfiguredCorrelationSnapshotArtifactForCandidates(candidates, logger))
-      .artifact;
+    const candidates =
+      await loadConfiguredCorrelationSnapshotCandidates(logger);
+    return (
+      await buildConfiguredCorrelationSnapshotArtifactForCandidates(
+        candidates,
+        logger,
+      )
+    ).artifact;
   }
 
   if (!config.correlationSnapshots.artifactPath) {
@@ -176,12 +233,15 @@ async function roundSnapshotSourceReady(
       args: [snapshot.domain],
     })) as Address;
     if (consumer === "0x0000000000000000000000000000000000000000") {
-      logger.warn("Skipping round payout snapshot because no consumer is configured", {
-        domain: snapshot.domain,
-        rewardPoolId: snapshot.rewardPoolId.toString(),
-        contentId: snapshot.contentId.toString(),
-        roundId: snapshot.roundId.toString(),
-      });
+      logger.warn(
+        "Skipping round payout snapshot because no consumer is configured",
+        {
+          domain: snapshot.domain,
+          rewardPoolId: snapshot.rewardPoolId.toString(),
+          contentId: snapshot.contentId.toString(),
+          roundId: snapshot.roundId.toString(),
+        },
+      );
       return false;
     }
 
@@ -208,26 +268,32 @@ async function roundSnapshotSourceReady(
 
     const block = await publicClient.getBlock();
     if (sourceReadyAt > block.timestamp) {
-      logger.debug("Skipping round payout snapshot until source timestamp is reached", {
-        domain: snapshot.domain,
-        rewardPoolId: snapshot.rewardPoolId.toString(),
-        contentId: snapshot.contentId.toString(),
-        roundId: snapshot.roundId.toString(),
-        sourceReadyAt: sourceReadyAt.toString(),
-        blockTimestamp: block.timestamp.toString(),
-      });
+      logger.debug(
+        "Skipping round payout snapshot until source timestamp is reached",
+        {
+          domain: snapshot.domain,
+          rewardPoolId: snapshot.rewardPoolId.toString(),
+          contentId: snapshot.contentId.toString(),
+          roundId: snapshot.roundId.toString(),
+          sourceReadyAt: sourceReadyAt.toString(),
+          blockTimestamp: block.timestamp.toString(),
+        },
+      );
       return false;
     }
 
     return true;
   } catch (error) {
-    logger.warn("Skipping round payout snapshot because source readiness could not be read", {
-      domain: snapshot.domain,
-      rewardPoolId: snapshot.rewardPoolId.toString(),
-      contentId: snapshot.contentId.toString(),
-      roundId: snapshot.roundId.toString(),
-      error: getRevertReason(error),
-    });
+    logger.warn(
+      "Skipping round payout snapshot because source readiness could not be read",
+      {
+        domain: snapshot.domain,
+        rewardPoolId: snapshot.rewardPoolId.toString(),
+        contentId: snapshot.contentId.toString(),
+        roundId: snapshot.roundId.toString(),
+        error: getRevertReason(error),
+      },
+    );
     return false;
   }
 }
@@ -245,9 +311,12 @@ async function readyCorrelationEpochSourceRefs(
       (snapshot) => BigInt(snapshot.correlationEpochId) === epochId,
     );
   if (configuredRefs.length === 0) {
-    logger.warn("Skipping correlation epoch snapshot because no covered sources are listed", {
-      epochId: epochId.toString(),
-    });
+    logger.warn(
+      "Skipping correlation epoch snapshot because no covered sources are listed",
+      {
+        epochId: epochId.toString(),
+      },
+    );
     return null;
   }
 
@@ -267,14 +336,19 @@ async function readyCorrelationEpochSourceRefs(
       })) as `0x${string}`,
     })),
   );
-  keyedRefs.sort((left, right) => left.snapshotKey.localeCompare(right.snapshotKey));
+  keyedRefs.sort((left, right) =>
+    left.snapshotKey.localeCompare(right.snapshotKey),
+  );
 
   for (let i = 1; i < keyedRefs.length; i += 1) {
     if (keyedRefs[i]!.snapshotKey === keyedRefs[i - 1]!.snapshotKey) {
-      logger.warn("Skipping correlation epoch snapshot because covered sources contain a duplicate", {
-        epochId: epochId.toString(),
-        snapshotKey: keyedRefs[i]!.snapshotKey,
-      });
+      logger.warn(
+        "Skipping correlation epoch snapshot because covered sources contain a duplicate",
+        {
+          epochId: epochId.toString(),
+          snapshotKey: keyedRefs[i]!.snapshotKey,
+        },
+      );
       return null;
     }
   }
@@ -308,7 +382,7 @@ export async function publishConfiguredCorrelationSnapshots(
       chain,
       account,
       logger,
-    )
+    ),
   );
 }
 
@@ -369,7 +443,26 @@ async function publishAutomaticCorrelationSnapshots(
   }
 
   const fingerprint = correlationSnapshotCandidateFingerprint(candidates);
-  const cachedArtifact = await readCachedCorrelationArtifact(fingerprint, logger);
+  const rejectedEpochIds = [...preflight.rejectedEpochIds];
+  if (
+    rejectedEpochIds.some((epochId) =>
+      hasRejectedAutomaticCorrelationCandidate(epochId, fingerprint),
+    )
+  ) {
+    logger.debug(
+      "Skipping automatic correlation snapshot build for previously rejected candidate fingerprint",
+      {
+        candidateFingerprint: fingerprint,
+        rejectedEpochIds,
+      },
+    );
+    return preflight.result;
+  }
+
+  const cachedArtifact = await readCachedCorrelationArtifact(
+    fingerprint,
+    logger,
+  );
   let built = cachedArtifact
     ? await restoreConfiguredCorrelationSnapshotArtifactFromCanonicalJson(
         cachedArtifact.canonicalJson,
@@ -380,11 +473,14 @@ async function publishAutomaticCorrelationSnapshots(
     built?.artifactHash &&
     built.artifactHash !== cachedArtifact.artifactHash
   ) {
-    logger.warn("Ignoring cached automatic correlation snapshot artifact with mismatched hash", {
-      candidateFingerprint: fingerprint,
-      cachedArtifactHash: cachedArtifact.artifactHash,
-      actualArtifactHash: built.artifactHash,
-    });
+    logger.warn(
+      "Ignoring cached automatic correlation snapshot artifact with mismatched hash",
+      {
+        candidateFingerprint: fingerprint,
+        cachedArtifactHash: cachedArtifact.artifactHash,
+        actualArtifactHash: built.artifactHash,
+      },
+    );
     built = null;
   }
   if (cachedArtifact && built) {
@@ -426,6 +522,10 @@ async function publishAutomaticCorrelationSnapshots(
     account,
     logger,
     preflight.result,
+    {
+      candidateFingerprint: fingerprint,
+      rejectedEpochIds: preflight.rejectedEpochIds,
+    },
   );
 }
 
@@ -439,9 +539,11 @@ async function preflightAutomaticCorrelationSnapshots(
 ): Promise<{
   result: CorrelationSnapshotPublisherResult;
   needsArtifactBuild: boolean;
+  rejectedEpochIds: Set<string>;
 }> {
   const result = emptyResult();
   let needsArtifactBuild = false;
+  const rejectedEpochIds = new Set<string>();
   const epochFinalizedById = new Map<string, boolean>();
 
   for (const candidate of candidates) {
@@ -460,6 +562,9 @@ async function preflightAutomaticCorrelationSnapshots(
       epochFinalized = epochStatus === STATUS.Finalized;
 
       if (epochStatus === STATUS.None || epochStatus === STATUS.Rejected) {
+        if (epochStatus === STATUS.Rejected) {
+          rejectedEpochIds.add(epochKey);
+        }
         needsArtifactBuild = true;
         epochFinalizedById.set(epochKey, false);
         continue;
@@ -558,11 +663,13 @@ async function preflightAutomaticCorrelationSnapshots(
         });
       }
     } else if (roundStatus === STATUS.Challenged) {
-      logger.debug("Skipping challenged round payout snapshot", { snapshotKey });
+      logger.debug("Skipping challenged round payout snapshot", {
+        snapshotKey,
+      });
     }
   }
 
-  return { result, needsArtifactBuild };
+  return { result, needsArtifactBuild, rejectedEpochIds };
 }
 
 async function publishCorrelationSnapshotArtifact(
@@ -573,6 +680,7 @@ async function publishCorrelationSnapshotArtifact(
   account: Account,
   logger: Logger,
   initialResult: CorrelationSnapshotPublisherResult = emptyResult(),
+  automaticContext: AutomaticCorrelationSnapshotPublishContext = {},
 ): Promise<CorrelationSnapshotPublisherResult> {
   if (!artifact) {
     return emptyResult();
@@ -586,7 +694,8 @@ async function publishCorrelationSnapshotArtifact(
     return result;
   }
 
-  let snapshotProposerAuthorization: SnapshotProposerAuthorization | null = null;
+  let snapshotProposerAuthorization: SnapshotProposerAuthorization | null =
+    null;
   async function getSnapshotProposerAuthorization() {
     snapshotProposerAuthorization ??= await readSnapshotProposerAuthorization(
       publicClient,
@@ -607,6 +716,29 @@ async function publishCorrelationSnapshotArtifact(
     });
     const status = Number(existing.status);
     if (status === STATUS.None || status === STATUS.Rejected) {
+      if (status === STATUS.Rejected && automaticContext.candidateFingerprint) {
+        const rejectedEpochId = epochId.toString();
+        const rejectedClusterRoot = readCorrelationEpochClusterRoot(existing);
+        if (
+          automaticContext.rejectedEpochIds?.has(rejectedEpochId) &&
+          rejectedClusterRoot === epoch.clusterRoot.toLowerCase()
+        ) {
+          rememberRejectedAutomaticCorrelationCandidate(
+            rejectedEpochId,
+            automaticContext.candidateFingerprint,
+          );
+          logger.debug(
+            "Skipping automatic correlation epoch proposal for rejected cluster root",
+            {
+              epochId: rejectedEpochId,
+              clusterRoot: epoch.clusterRoot,
+              candidateFingerprint: automaticContext.candidateFingerprint,
+            },
+          );
+          continue;
+        }
+      }
+
       const proposerAuthorization = await getSnapshotProposerAuthorization();
       if (!proposerAuthorization.authorized) {
         logger.debug(
@@ -691,12 +823,15 @@ async function publishCorrelationSnapshotArtifact(
   for (const snapshot of artifact.roundPayoutSnapshots ?? []) {
     const correlationEpochId = BigInt(snapshot.correlationEpochId);
     if (!finalizedEpochIds.has(correlationEpochId.toString())) {
-      logger.debug("Skipping round payout snapshot until correlation epoch is finalized", {
-        correlationEpochId: correlationEpochId.toString(),
-        rewardPoolId: snapshot.rewardPoolId.toString(),
-        contentId: snapshot.contentId.toString(),
-        roundId: snapshot.roundId.toString(),
-      });
+      logger.debug(
+        "Skipping round payout snapshot until correlation epoch is finalized",
+        {
+          correlationEpochId: correlationEpochId.toString(),
+          rewardPoolId: snapshot.rewardPoolId.toString(),
+          contentId: snapshot.contentId.toString(),
+          roundId: snapshot.roundId.toString(),
+        },
+      );
       continue;
     }
 
@@ -794,7 +929,9 @@ async function publishCorrelationSnapshotArtifact(
         });
       }
     } else if (status === STATUS.Challenged) {
-      logger.debug("Skipping challenged round payout snapshot", { snapshotKey });
+      logger.debug("Skipping challenged round payout snapshot", {
+        snapshotKey,
+      });
     }
   }
 
