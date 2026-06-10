@@ -51,7 +51,7 @@ import {
 } from "../reputation-utils.js";
 import { isValidAddress, safeBigInt, safeLimit, safeOffset } from "../utils.js";
 import { deriveEffectiveVoterStreak } from "../../streak-utils.js";
-import { resolveQuestionPayoutProof } from "../../payout-proofs.js";
+import { resolveQuestionPayoutProof } from "../payout-proofs.js";
 
 const VOTE_COOLDOWN_SECONDS = 24 * 60 * 60;
 const SNAPSHOT_STATUS_FINALIZED = 3;

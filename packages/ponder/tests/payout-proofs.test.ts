@@ -72,7 +72,7 @@ async function loadResolver(allowlist = "", cachedCanonicalJson: string | null =
       canonicalJson: "payoutArtifactCache.canonicalJson",
     },
   }));
-  return import("../src/payout-proofs.js");
+  return import("../src/api/payout-proofs.js");
 }
 
 function mockArtifactFetch() {
