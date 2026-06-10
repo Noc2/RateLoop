@@ -309,6 +309,7 @@ function makeHarness(options: {
   ponderCommits?: Record<string, CommitData>;
   onChainLogs?: { vote?: unknown[]; advisory?: unknown[] };
   settleRoundResultState?: RoundStateValue;
+  estimateContractGas?: (args: { functionName: string }) => Promise<bigint>;
 }) {
   const roundConfig = options.roundConfig || {
     epochDuration: 1200n,
@@ -362,6 +363,9 @@ function makeHarness(options: {
       }
       return [];
     }),
+    ...(options.estimateContractGas
+      ? { estimateContractGas: vi.fn(options.estimateContractGas) }
+      : {}),
     readContract: vi.fn(
       async ({
         functionName,
@@ -1812,6 +1816,82 @@ describe("resolveRounds", () => {
         functionName: "revealAdvisoryVote",
         args: expect.arrayContaining([ADVISORY_COMMIT_KEY]),
       }),
+    );
+  });
+
+  it("skips broadcasting silently when gas estimation reverts with an expected reason", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 3n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      now: 1_000n,
+      estimateContractGas: async ({ functionName }) => {
+        if (functionName === "settleRound") {
+          throw new Error("ThresholdReached");
+        }
+        return 100_000n;
+      },
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsSettled).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "settleRound" }),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Failed to settle round",
+      expect.anything(),
+    );
+  });
+
+  it("warns without broadcasting when gas estimation reverts unexpectedly", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 3n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      now: 1_000n,
+      estimateContractGas: async ({ functionName }) => {
+        if (functionName === "settleRound") {
+          throw new Error("SomethingWentVeryWrong");
+        }
+        return 100_000n;
+      },
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsSettled).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "settleRound" }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Failed to settle round",
+      expect.objectContaining({ error: "SomethingWentVeryWrong" }),
     );
   });
 });
