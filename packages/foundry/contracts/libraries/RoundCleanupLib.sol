@@ -532,19 +532,28 @@ library RoundCleanupLib {
                 uint256 amount = commit.stakeAmount;
                 commit.stakeAmount = 0;
 
-                // L-Vote-1: only forfeit past-epoch unrevealed stakes when the round Actually
-                // produced a winner (Settled) or definitively failed reveal (RevealFailed).
-                // In a Tied round there's no winner by symmetry; refunding past-epoch
-                // non-revealers preserves the no-punishment invariant for ties.
-                if (
-                    round.state == RoundLib.RoundState.RevealFailed
-                        || (round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= pastEpochCutoffAt)
-                ) {
+                // L-Vote-1: only forfeit past-epoch unrevealed stakes when the round actually
+                // produced a winner (Settled). Terminal states without a winner never punish:
+                // Cancelled and Tied refund by symmetry, and RevealFailed refunds because
+                // reveal liveness is a protocol responsibility (keeper/Ponder/drand) — a
+                // systemic reveal outage must not be billed to individual voters (design
+                // review 2026-06, finding 3). Trade-off, stated explicitly: this removes the
+                // stake penalty for committing undecryptable garbage that drags a round into
+                // RevealFailed. That stays acceptable because garbage commits in rounds that
+                // settle are still forfeited, forcing RevealFailed requires holding reveals
+                // below quorum (already constrained by the HRC gate in
+                // _canFinalizeRevealFailedRound), and the attacker gains nothing but delay
+                // while paying gas with stake locked.
+                if (round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= pastEpochCutoffAt) {
                     processedPastEpochCount++;
                     forfeitedToTreasury += amount;
                 } else {
-                    if (commit.revealableAfter <= pastEpochCutoffAt && round.state == RoundLib.RoundState.Tied) {
-                        // Past-epoch in a Tied round counts toward the cleanup queue but is refunded.
+                    if (
+                        round.state == RoundLib.RoundState.RevealFailed
+                            || (commit.revealableAfter <= pastEpochCutoffAt && round.state == RoundLib.RoundState.Tied)
+                    ) {
+                        // Counts toward the cleanup queue but is refunded. Every unrevealed
+                        // RevealFailed commit was pre-counted by markRoundRevealFailed.
                         processedPastEpochCount++;
                     }
                     try TokenTransferLib.safeTransfer(lrepToken, commit.voter, amount) {

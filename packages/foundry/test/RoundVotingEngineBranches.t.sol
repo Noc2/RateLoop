@@ -3112,7 +3112,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertFalse(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
     }
 
-    function test_RevealFailed_RefundsRevealedAndForfeitsUnrevealed() public {
+    function test_RevealFailed_RefundsRevealedAndUnrevealed() public {
         uint256 contentId = _submitContent();
 
         mockRaterIdentityRegistry.setHolder(voter1);
@@ -3134,20 +3134,27 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.claimCancelledRoundRefund(contentId, roundId);
         assertEq(lrepToken.balanceOf(voter1) - voter1BalBefore, STAKE, "revealed voters recover stake");
 
+        // Unrevealed voters cannot pull-claim; their refund arrives via the
+        // permissionless cleanup sweep below.
         vm.expectRevert(RoundVotingEngine.VoteNotRevealed.selector);
         vm.prank(voter2);
         engine.claimCancelledRoundRefund(contentId, roundId);
 
         uint256 treasuryBefore = lrepToken.balanceOf(treasury);
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
+        uint256 voter2Before = lrepToken.balanceOf(voter2);
+        uint256 voter3Before = lrepToken.balanceOf(voter3);
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
-        uint256 treasuryAfter = lrepToken.balanceOf(treasury);
-        uint256 keeperAfter = lrepToken.balanceOf(keeper);
-        uint256 incentive = (STAKE * 2) / 100;
         assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0, "cleanup queue clears");
-        assertEq(keeperAfter - keeperBefore, incentive, "cleanup caller receives 1% incentive");
-        assertEq(treasuryAfter - treasuryBefore, STAKE * 2 - incentive, "remaining stakes forfeit");
+        assertEq(
+            lrepToken.balanceOf(voter2) - voter2Before, STAKE, "unrevealed stake refunds on systemic reveal failure"
+        );
+        assertEq(
+            lrepToken.balanceOf(voter3) - voter3Before, STAKE, "unrevealed stake refunds on systemic reveal failure"
+        );
+        assertEq(lrepToken.balanceOf(treasury), treasuryBefore, "nothing forfeits to treasury");
+        assertEq(lrepToken.balanceOf(keeper), keeperBefore, "no forfeit means no cleanup incentive");
     }
 
     function test_CommitAfterRevealFailedGrace_StartsNewRound() public {

@@ -912,7 +912,7 @@ contract RoundVotingEngine is
     /// @dev The min-RBTS-quorum lockout only engages once at least one commit in the round has
     ///      originated from a human-credential-verified identity. A pure-sybil attacker (no HRC)
     ///      reaching N >= 3 commits at min stake can no longer grief honest content into a
-    ///      `RevealFailed` cycle (~80 min @ ~3 LREP/cycle) -- the round remains
+    ///      `RevealFailed` cycle (~80 min per cycle) -- the round remains
     ///      refund-cancellable until any HRC voter participates.
     ///      Trade-off: this slightly weakens the "min-stake universal" property by one bit, but
     ///      eliminates the cheapest cancel-griefing vector. HRC voters are unaffected; the
@@ -1133,9 +1133,10 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Process unrevealed votes in batches after settlement. Permissionless.
-    /// @dev For settled/tied rounds: unrevealed votes from past epochs are forfeited to treasury.
-    ///      Current/future-epoch votes at settlement/tie time are refunded because they had no chance.
-    ///      For reveal-failed rounds: all unrevealed votes are forfeited because the final reveal grace has passed.
+    /// @dev For settled rounds: unrevealed votes from past epochs are forfeited to treasury.
+    ///      Current/future-epoch votes at settlement time are refunded because they had no chance.
+    ///      For tied and reveal-failed rounds: all unrevealed votes are refunded — neither state
+    ///      has a winner, and a reveal-liveness failure is systemic, not the voter's fault.
     function processUnrevealedVotes(uint256 contentId, uint256 roundId, uint256 startIndex, uint256 count)
         external
         nonReentrant
