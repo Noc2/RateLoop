@@ -12,10 +12,6 @@ import {
   normalizeStakeSelectorRating,
 } from "~~/components/swipe/StakeSelector";
 
-test("normalizeStakeSelectorRating accepts out-of-ten ratings", () => {
-  assert.equal(normalizeStakeSelectorRating(6.4), 6.4);
-});
-
 test("normalizeStakeSelectorRating keeps unrated commit defaults neutral", () => {
   assert.equal(normalizeStakeSelectorRating(null), 5);
   assert.equal(normalizeStakeSelectorRating(undefined), 5);
@@ -25,13 +21,15 @@ test("normalizeStakeSelectorRating converts display-scale ratings", () => {
   assert.equal(normalizeStakeSelectorRating(64), 6.4);
 });
 
-test("normalizeStakeSelectorRating converts basis-point ratings", () => {
-  assert.equal(normalizeStakeSelectorRating(6400), 6.4);
+test("normalizeStakeSelectorRating keeps sub-1.0 ratings on the out-of-ten scale", () => {
+  // ratingBps 800 -> display scale 8 -> 0.8/10, matching the feed orb.
+  assert.equal(normalizeStakeSelectorRating(8), 0.8);
 });
 
-test("normalizeStakeSelectorRating clamps protocol maximum to slider maximum", () => {
+test("normalizeStakeSelectorRating clamps out-of-range values to the slider range", () => {
   assert.equal(normalizeStakeSelectorRating(100), 10);
   assert.equal(normalizeStakeSelectorRating(10_000), 10);
+  assert.equal(normalizeStakeSelectorRating(-5), 0);
 });
 
 test("normalizeStakeSelectorAmount keeps advisory at zero", () => {

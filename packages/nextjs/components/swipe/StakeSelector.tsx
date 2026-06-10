@@ -83,11 +83,13 @@ function clampRating(value: number) {
   return Math.min(10, Math.max(0, value));
 }
 
+/**
+ * Converts a display-scale (0-100) community rating to the 0-10 slider scale.
+ * Matches formatRatingScoreOutOfTen: divide by 10 exactly once at display time.
+ */
 export function normalizeStakeSelectorRating(currentRating: number | null | undefined) {
   if (currentRating === null || currentRating === undefined || !Number.isFinite(currentRating)) return 5;
-  if (currentRating > 100) return clampRating(currentRating / 1000);
-  if (currentRating > 10) return clampRating(currentRating / 10);
-  return clampRating(currentRating);
+  return clampRating(currentRating / 10);
 }
 
 export function normalizeStakeSelectorAmount(stakeAmount: number) {

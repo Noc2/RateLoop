@@ -99,12 +99,6 @@ const ShareContentModal = dynamic(
   { ssr: false },
 );
 
-function getStakeModalCurrentRating(item: ContentItem) {
-  const visibleRating = getVisibleContentRating(item);
-  if (visibleRating === null) return null;
-  return visibleRating > 10 ? visibleRating / 10 : visibleRating;
-}
-
 const ALL_FILTER = DISCOVER_ALL_FILTER;
 const BROKEN_FILTER = DISCOVER_BROKEN_FILTER;
 const EXPIRED_BOUNTY_FILTER = DISCOVER_EXPIRED_BOUNTY_FILTER;
@@ -1279,7 +1273,7 @@ const HomeInner = () => {
         contentId: item.id,
         questionTitle: item.question?.trim() || item.title,
         categoryId: item.categoryId,
-        currentRating: getStakeModalCurrentRating(item),
+        currentRating: getVisibleContentRating(item),
         bountyEligibility: item.rewardPoolSummary?.bountyEligibility ?? item.bundle?.bountyEligibility ?? null,
         roundConfig: item.roundConfig,
         openRound: item.openRound,
