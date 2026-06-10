@@ -988,40 +988,56 @@ export async function resolveRounds(
               functionName: "settleRound",
               args: [contentId, activeRoundId],
             });
-            logger.info("Settled round", {
-              contentId: contentId.toString(),
-              roundId: Number(activeRoundId),
-            });
-            result.roundsSettled++;
-            enqueueRoundForCleanup(contentId, activeRoundId);
-            result.advisoryLaunchCreditsClaimed +=
-              await _claimAdvisoryLaunchCredits(
+            round = await readRound(
+              publicClient,
+              engineAddr,
+              contentId,
+              activeRoundId,
+            );
+            if (round.state === RoundState.Open) {
+              logger.info("Captured RBTS settlement seed", {
+                contentId: contentId.toString(),
+                roundId: Number(activeRoundId),
+              });
+            } else if (
+              round.state === RoundState.Settled ||
+              round.state === RoundState.Tied
+            ) {
+              logger.info("Settled round", {
+                contentId: contentId.toString(),
+                roundId: Number(activeRoundId),
+              });
+              result.roundsSettled++;
+              enqueueRoundForCleanup(contentId, activeRoundId);
+              result.advisoryLaunchCreditsClaimed +=
+                await _claimAdvisoryLaunchCredits(
+                  publicClient,
+                  walletClient,
+                  chain,
+                  account,
+                  logger,
+                  advisoryAddr,
+                  contentId,
+                  activeRoundId,
+                );
+
+              // Drive bundle qualification (no-op for non-bundled content). Settlement only
+              // records the round into the bundle slot; qualification — which iterates voters
+              // and bundle questions — is intentionally deferred to keep settlement O(1).
+              // A hostile funder could otherwise wait for the refund window and reclaim
+              // rewards voters have earned, since `refundQuestionBundleReward` reads
+              // `bundle.completedRoundSets` (which only advances on qualification).
+              await _syncBundleQuestionTerminal(
                 publicClient,
                 walletClient,
                 chain,
                 account,
-                logger,
-                advisoryAddr,
+                registryAddr,
                 contentId,
                 activeRoundId,
+                logger,
               );
-
-            // Drive bundle qualification (no-op for non-bundled content). Settlement only
-            // records the round into the bundle slot; qualification — which iterates voters
-            // and bundle questions — is intentionally deferred to keep settlement O(1).
-            // A hostile funder could otherwise wait for the refund window and reclaim
-            // rewards voters have earned, since `refundQuestionBundleReward` reads
-            // `bundle.completedRoundSets` (which only advances on qualification).
-            await _syncBundleQuestionTerminal(
-              publicClient,
-              walletClient,
-              chain,
-              account,
-              registryAddr,
-              contentId,
-              activeRoundId,
-              logger,
-            );
+            }
           } catch (err: unknown) {
             const reason = getRevertReason(err);
             if (!isExpectedRevert(reason)) {

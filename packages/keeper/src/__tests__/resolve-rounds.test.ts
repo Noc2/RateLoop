@@ -302,6 +302,7 @@ function makeHarness(options: {
   revealGracePeriod?: bigint;
   lastCommitRevealableAfter?: bigint;
   roundHasHumanVerifiedCommit?: boolean;
+  settleRoundResultState?: RoundStateValue;
 }) {
   const roundConfig = options.roundConfig || {
     epochDuration: 1200n,
@@ -503,8 +504,10 @@ function makeHarness(options: {
         }
 
         if (functionName === "settleRound") {
-          round.state = 1;
-          round.settledAt = now;
+          round.state = options.settleRoundResultState ?? 1;
+          if (round.state !== 0) {
+            round.settledAt = now;
+          }
           return "0xsettled";
         }
 
@@ -702,6 +705,51 @@ describe("resolveRounds", () => {
     expect(commits[COMMIT_KEY_2].revealed).toBe(true);
     expect(round.state).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not count RBTS seed capture as terminal settlement", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 3n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+      settleRoundResultState: 0,
+      now: 1_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result).toMatchObject({
+      roundsSettled: 0,
+      advisoryLaunchCreditsClaimed: 0,
+      cleanupBatchesProcessed: 0,
+    });
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "settleRound" }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "syncBundleQuestionTerminal" }),
+    );
+    expect(round.state).toBe(0);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Captured RBTS settlement seed",
+      expect.objectContaining({
+        contentId: "1",
+        roundId: 1,
+      }),
+    );
   });
 
   it("reveals a World Chain Sepolia quicknet-t commit with the quicknet-t client", async () => {
