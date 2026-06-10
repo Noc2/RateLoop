@@ -600,6 +600,26 @@ test("agent quote route returns a tokenless wallet quote response", async () => 
   assert.equal((body.wallet as Record<string, unknown>).address, "0x00000000000000000000000000000000000000aa");
 });
 
+test("agent quote route marks dry-run quotes without requiring payment", async () => {
+  installQuoteOverrides();
+
+  const response = await quoteRoute.POST(
+    makePublicPost("https://rateloop.ai/api/agent/quote", {
+      ...questionPayload("quote-public-dry-run"),
+      dryRun: true,
+      walletAddress: "0x00000000000000000000000000000000000000aa",
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.clientRequestId, "quote-public-dry-run");
+  assert.equal(body.dryRun, true);
+  assert.equal(body.executionMode, "dry_run");
+  assert.equal(body.paymentRequired, false);
+  assert.equal(body.walletPolicyRequired, false);
+});
+
 test("agent quote route treats malformed authorization as managed auth", async () => {
   const response = await quoteRoute.POST(
     makePublicPost(
@@ -654,6 +674,41 @@ test("agent asks route returns a tokenless wallet transaction plan response", as
   assert.equal(body.walletPolicyRequired, false);
   assert.equal(body.managedBudget, null);
   assert.equal((body.transactionPlan as { calls: unknown[] }).calls.length, 1);
+});
+
+test("agent asks route returns dry-run response without preparing transactions", async () => {
+  const forbidden = async () => {
+    throw new Error("dry run should not create side effects");
+  };
+  installAskOverrides({
+    prepareAgentWalletQuestionSubmissionRequest: forbidden as never,
+    prepareNativeX402QuestionSubmissionRequest: forbidden as never,
+    reserveMcpAgentBudget: forbidden as never,
+    upsertAgentCallbackSubscription: forbidden as never,
+  });
+
+  const response = await asksRoute.POST(
+    makePost("https://rateloop.ai/api/agent/asks", {
+      ...questionPayload("ask-http-dry-run"),
+      dryRun: true,
+      maxPaymentAmount: "1500000",
+      webhookUrl: "https://example.com/callback",
+      webhookSecret: "secret",
+      webhookEvents: ["question.submitted"],
+    }),
+  );
+  const body = (await response.json()) as Record<string, unknown>;
+
+  assert.equal(response.status, 200);
+  assert.equal(body.clientRequestId, "ask-http-dry-run");
+  assert.equal(body.status, "dry_run");
+  assert.equal(body.dryRun, true);
+  assert.equal(body.executionMode, "dry_run");
+  assert.equal(body.paymentRequired, false);
+  assert.equal(body.transactionPlan, null);
+  assert.equal(body.x402AuthorizationRequest, null);
+  assert.equal((body.wallet as Record<string, unknown>).fundingMode, "dry_run");
+  assert.equal((body.result as Record<string, unknown>).answer, "dry_run_complete");
 });
 
 test("agent asks route rejects oversized JSON bodies", async () => {

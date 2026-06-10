@@ -550,6 +550,9 @@ const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
   "webhookSecret",
   "webhookEvents",
   "paymentAuthorization",
+  "dryRun",
+  "executionMode",
+  "sandbox",
   // Used by the public SDK's `AskHumansRequest` type (packages/sdk/src/agent.ts). The Next.js
   // signing-intents POST persists the request body as-is, and these fields are part of the
   // public contract — `signatureMode` selects browser-handoff vs agent_signs, `transport`

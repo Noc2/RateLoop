@@ -84,6 +84,8 @@ export interface RateLoopAgentRoundConfig {
 export interface RateLoopAgentQuestionRequest {
   clientRequestId: string;
   chainId?: number;
+  dryRun?: boolean;
+  executionMode?: "dry_run";
   question?: RateLoopAgentQuestionItem;
   questions?: RateLoopAgentQuestionItem[];
   bounty: RateLoopAgentBounty;
@@ -97,7 +99,7 @@ export interface QuoteQuestionRequest extends RateLoopAgentQuestionRequest {}
 
 export interface AskHumansRequest extends RateLoopAgentQuestionRequest {
   maxPaymentAmount?: string | number | bigint;
-  mode?: "sync" | "async";
+  mode?: "sync" | "async" | "dry_run";
   paymentAuthorization?: {
     from?: `0x${string}` | string;
     nonce?: `0x${string}` | string;
@@ -347,12 +349,15 @@ export interface RateLoopAgentLiveAskGuidance {
 export interface QuoteQuestionResponse {
   canSubmit?: boolean;
   clientRequestId?: string;
+  dryRun?: boolean;
+  executionMode?: "dry_run" | string;
   fastLane?: RateLoopAgentFastLaneGuidance;
   feedbackBonus?: RateLoopAgentFeedbackBonusState;
   feedbackBonusGuidance?: JsonRecord;
   operationKey?: `0x${string}` | string;
   payloadHash?: string;
   payment?: RateLoopAgentPayment;
+  paymentRequired?: boolean;
   questionCount?: number;
   resolvedCategoryIds?: string[];
   walletPolicyRequired?: boolean;
@@ -367,6 +372,8 @@ export interface AskHumansResponse {
   fastLane?: RateLoopAgentFastLaneGuidance;
   feedbackBonus?: RateLoopAgentFeedbackBonusState;
   feedbackBonusGuidance?: JsonRecord;
+  dryRun?: boolean;
+  executionMode?: "dry_run" | string;
   managedBudget?: JsonRecord | null;
   nextAction?: string | null;
   pollAfterMs?: number | null;
@@ -378,6 +385,7 @@ export interface AskHumansResponse {
   statusTool?: string;
   confirmTool?: string;
   payment?: RateLoopAgentPayment;
+  paymentRequired?: boolean;
   paymentMode?: "wallet_calls" | "x402_authorization" | string;
   rewardPoolId?: string | null;
   transactionPlan?: RateLoopAgentWalletTransactionPlan;

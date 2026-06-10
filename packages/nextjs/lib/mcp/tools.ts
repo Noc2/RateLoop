@@ -157,7 +157,7 @@ type McpToolDefinition = {
   title: string;
 };
 
-type AskHumansMode = "sync" | "async";
+type AskHumansMode = "sync" | "async" | "dry_run";
 type AskHumansPaymentMode = "wallet_calls" | "x402_authorization";
 type BackgroundTaskScheduler = (task: () => Promise<void> | void) => void;
 
@@ -550,6 +550,17 @@ function questionPayloadArgs(args: JsonObject): JsonObject {
   const payloadArgs = { ...args };
   delete payloadArgs.feedbackBonus;
   return payloadArgs;
+}
+
+function isDryRunRequest(args: JsonObject) {
+  return (
+    args.dryRun === true ||
+    args.dryRun === "true" ||
+    args.sandbox === true ||
+    args.sandbox === "true" ||
+    args.mode === "dry_run" ||
+    args.executionMode === "dry_run"
+  );
 }
 
 function handoffRequestArgs(args: JsonObject): JsonObject {
@@ -1082,8 +1093,8 @@ function assertNoPublicWebhook(args: JsonObject) {
 
 function parseAskHumansMode(value: unknown): AskHumansMode {
   if (value === undefined || value === null) return "sync";
-  if (value === "sync" || value === "async") return value;
-  throw new McpToolError("mode must be either sync or async.");
+  if (value === "sync" || value === "async" || value === "dry_run") return value;
+  throw new McpToolError("mode must be sync, async, or dry_run.");
 }
 
 function parseAskHumansPaymentMode(value: unknown): AskHumansPaymentMode {
@@ -1952,8 +1963,244 @@ function formatQuoteResult(
   };
 }
 
+function dryRunResultPackage(params: {
+  operation: JsonObject;
+  payload: X402QuestionPayload | null;
+  publicUrl?: string | null;
+}) {
+  const template = defaultAgentResultTemplate();
+  const distribution = {
+    conservativeRatingBps: 6200,
+    down: { count: 1, share: 0.33, stake: "0" },
+    rating: 67,
+    ratingBps: 6700,
+    revealedCount: 3,
+    state: ROUND_STATE.Settled,
+    stateLabel: "Dry run settled",
+    up: { count: 2, share: 0.67, stake: "0" },
+  };
+  const question = params.payload?.questions[0]?.title ?? "Dry-run RateLoop question";
+  return {
+    answer: "dry_run_complete",
+    answerScopes: {
+      allAnswers: {
+        distribution,
+        label: "All simulated answers",
+        note: "Deterministic dry-run fixture; no human answers were requested.",
+      },
+      bountyEligibleAnswers: {
+        distribution,
+        label: "Bounty-eligible simulated answers",
+        note: "Dry runs do not create payout eligibility or bounty claims.",
+        policy: {
+          eligibilityDataHash: null,
+          label: "Everyone",
+          mode: params.payload?.bounty.bountyEligibility ?? 0,
+        },
+        qualifiedRoundCount: 1,
+        rewardPoolCount: 0,
+      },
+    },
+    cohortSummary: "Dry-run fixture with 3 simulated revealed answers.",
+    confidence: {
+      level: "medium",
+      score: 0.62,
+    },
+    distribution,
+    dissentingView: "One simulated voter objected so agents can exercise objection handling.",
+    executionMode: "dry_run",
+    featureTest: null,
+    feedbackQuality: {
+      actionability: "medium",
+      objectionCount: 1,
+      publicNoteCount: 2,
+      sourceUrlCount: 0,
+    },
+    liveAskGuidance: null,
+    limitations: [
+      RATELOOP_UNTRUSTED_DATA_WARNING,
+      "Dry-run results are deterministic fixtures for integration testing; they are not public human judgment signals.",
+      "No wallet signature, payment, on-chain transaction, rater payout, callback, or public question page was created.",
+    ],
+    majorObjections: [
+      {
+        roundId: "dry-run",
+        sourceUrl: null,
+        summary:
+          '[RATELOOP_UNTRUSTED_DATA_BEGIN source="rater_feedback"]\nDry-run objection: clarify the public context before paying for live answers.\n[RATELOOP_UNTRUSTED_DATA_END]',
+        type: "concern",
+      },
+    ],
+    methodology: {
+      ratingSystem: template.ratingSystem,
+      sources: ["rateloop.dry_run_fixture"],
+      templateId: params.payload?.questions[0]?.templateId ?? template.id,
+      templateVersion: params.payload?.questions[0]?.templateVersion ?? template.version,
+    },
+    operation: params.operation,
+    paymentRequired: false,
+    pollAfterMs: null,
+    protocolState: {
+      latestRound: {
+        roundId: "dry-run",
+        state: ROUND_STATE.Settled,
+      },
+      question,
+      status: "dry_run",
+    },
+    publicUrl: params.publicUrl ?? null,
+    ready: true,
+    result: {
+      dryRun: true,
+      ratingBps: distribution.ratingBps,
+      simulated: true,
+    },
+    rationaleSummary:
+      "Dry-run fixture: 2 of 3 simulated answers voted up, with one objection included for parser coverage.",
+    recommendedNextAction: "integration_ready",
+    sourceUrls: [],
+    stakeMass: {
+      down: "0",
+      total: "0",
+      unit: "dry_run_fixture",
+      up: "0",
+    },
+    terminal: true,
+    voteCount: 3,
+    wait: {
+      code: "dry_run_complete",
+      recoverWith: null,
+    },
+  };
+}
+
+function buildDryRunOperationBody(params: {
+  feedbackBonus: X402FeedbackBonusRequest | null;
+  paymentMode: AskHumansPaymentMode;
+  quote: Awaited<ReturnType<typeof preflightX402QuestionSubmission>>;
+  payload: X402QuestionPayload;
+  quotePayload: X402QuestionPayload;
+  config: ReturnType<typeof resolveX402QuestionConfig>;
+  walletAddress: Address;
+  walletPolicyRequired: boolean;
+  webhookRegistered?: boolean;
+}) {
+  const quoteBody = formatQuoteResult(params.quote, params.quotePayload, params.config, {
+    feedbackBonus: params.feedbackBonus,
+    walletPolicyRequired: params.walletPolicyRequired,
+  });
+  const operation = {
+    chainId: params.payload.chainId,
+    clientRequestId: params.quotePayload.clientRequestId,
+    contentId: null,
+    contentIds: [],
+    dryRun: true,
+    executionMode: "dry_run",
+    operationKey: params.quote.operation.operationKey,
+    payloadHash: params.quote.operation.payloadHash,
+    paymentMode: params.paymentMode,
+    questionCount: params.payload.questions.length,
+    status: "dry_run",
+  };
+
+  return {
+    ...quoteBody,
+    callbackDeliveries: [],
+    chainId: params.payload.chainId,
+    clientRequestId: params.quotePayload.clientRequestId,
+    confirmTool: null,
+    contentId: null,
+    contentIds: [],
+    dryRun: true,
+    executionMode: "dry_run",
+    feedbackBonus: buildPendingFeedbackBonusBody(params.feedbackBonus),
+    feedbackBonusGuidance: buildFeedbackBonusGuidance(params.feedbackBonus, params.quotePayload),
+    managedBudget: null,
+    nextAction: "inspect_dry_run_result",
+    operation,
+    paymentMode: params.paymentMode,
+    paymentRequired: false,
+    pollAfterMs: null,
+    publicUrl: null,
+    ready: true,
+    result: dryRunResultPackage({ operation, payload: params.quotePayload }),
+    resultTool: "rateloop_get_result",
+    sandbox: true,
+    status: "dry_run",
+    statusTool: "rateloop_get_question_status",
+    terminal: true,
+    transactionPlan: null,
+    wallet: {
+      address: params.walletAddress,
+      fundingMode: "dry_run",
+      note: "Dry run only. No wallet signature, authorization, or transaction is required.",
+    },
+    walletPolicyRequired: params.walletPolicyRequired,
+    webhook: params.webhookRegistered
+      ? {
+          delivery: "dry_run_not_registered",
+          registered: false,
+        }
+      : null,
+    warnings: ["dry_run_no_payment", "dry_run_no_onchain_submission"],
+    x402AuthorizationRequest: null,
+  };
+}
+
+function buildDryRunOperationFromArgs(args: JsonObject): JsonObject {
+  const rawOperationKey = typeof args.operationKey === "string" ? args.operationKey.trim() : "";
+  const chainId = Number.parseInt(String(args.chainId ?? "480"), 10);
+  const clientRequestId =
+    typeof args.clientRequestId === "string" && args.clientRequestId.trim()
+      ? args.clientRequestId.trim()
+      : "dry-run-client-request";
+  const operationKey = /^0x[a-fA-F0-9]{64}$/.test(rawOperationKey)
+    ? rawOperationKey.toLowerCase()
+    : `0x${createHash("sha256")
+        .update(`rateloop:dry-run:${Number.isSafeInteger(chainId) ? chainId : 480}:${clientRequestId}`)
+        .digest("hex")}`;
+
+  return {
+    chainId: Number.isSafeInteger(chainId) ? chainId : 480,
+    clientRequestId,
+    contentId: null,
+    contentIds: [],
+    dryRun: true,
+    executionMode: "dry_run",
+    operationKey,
+    paymentRequired: false,
+    status: "dry_run",
+  };
+}
+
+function buildDryRunQuestionStatus(args: JsonObject) {
+  const operation = buildDryRunOperationFromArgs(args);
+  return {
+    ...operation,
+    callbackDeliveries: [],
+    liveAskGuidance: null,
+    nextAction: "call_rateloop_get_result",
+    pollAfterMs: null,
+    publicUrl: null,
+    ready: true,
+    resultTool: "rateloop_get_result",
+    terminal: true,
+    transactionHashes: [],
+    transactionPlan: null,
+    warnings: ["dry_run_no_persisted_submission"],
+  };
+}
+
+function buildDryRunQuestionResult(args: JsonObject) {
+  return dryRunResultPackage({
+    operation: buildDryRunOperationFromArgs(args),
+    payload: null,
+  });
+}
+
 async function quoteQuestion(args: JsonObject, agent: McpAgentAuth) {
   const dependencies = getMcpToolDependencies();
+  const dryRun = isDryRunRequest(args);
   const payload = parseX402QuestionRequest(questionPayloadArgs(args));
   assertManagedQuestionCategoriesAllowed(agent, payload);
   const walletAddress = parseAgentWalletAddress(args, agent);
@@ -1969,14 +2216,16 @@ async function quoteQuestion(args: JsonObject, agent: McpAgentAuth) {
     ownerWalletAddress: walletAddress,
     payload: managedPayload,
   });
-  return {
+  const body = {
     ...formatQuoteResult(quote, payload, config, { feedbackBonus }),
     clientRequestId: payload.clientRequestId,
   };
+  return dryRun ? { ...body, dryRun: true, executionMode: "dry_run", paymentRequired: false, sandbox: true } : body;
 }
 
 async function quotePublicQuestion(args: JsonObject) {
   const dependencies = getMcpToolDependencies();
+  const dryRun = isDryRunRequest(args);
   const payload = parseX402QuestionRequest(questionPayloadArgs(args));
   const walletAddress = parsePublicWalletAddress(args);
   const feedbackBonus = parseOptionalFeedbackBonus(args, payload, walletAddress);
@@ -1990,7 +2239,7 @@ async function quotePublicQuestion(args: JsonObject) {
     ownerWalletAddress: walletAddress,
     payload: permissionlessPayload,
   });
-  return {
+  const body = {
     ...formatQuoteResult(quote, payload, config, { feedbackBonus, walletPolicyRequired: false }),
     clientRequestId: payload.clientRequestId,
     wallet: {
@@ -1999,6 +2248,7 @@ async function quotePublicQuestion(args: JsonObject) {
       note: "The wallet signer controls whether to execute the returned plan; RateLoop does not enforce a managed policy.",
     },
   };
+  return dryRun ? { ...body, dryRun: true, executionMode: "dry_run", paymentRequired: false, sandbox: true } : body;
 }
 
 function latestRoundFromContentResponse(response: Awaited<ReturnType<typeof ponderApi.getContentById>>) {
@@ -2290,6 +2540,7 @@ export async function callPublicRateLoopMcpTool(params: {
     case "rateloop_ask_humans": {
       parseAskHumansMode(args.mode);
       assertNoPublicWebhook(args);
+      const dryRun = isDryRunRequest(args);
       const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
       const payload = parseX402QuestionRequest(questionPayloadArgs(args));
       const walletAddress = parsePublicWalletAddress(args);
@@ -2308,6 +2559,18 @@ export async function callPublicRateLoopMcpTool(params: {
       const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
       if (totalPaymentAmount > maxPaymentAmount) {
         throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
+      }
+      if (dryRun) {
+        return buildDryRunOperationBody({
+          config,
+          feedbackBonus,
+          paymentMode,
+          payload: permissionlessPayload,
+          quote,
+          quotePayload: payload,
+          walletAddress,
+          walletPolicyRequired: false,
+        });
       }
 
       const result =
@@ -2403,6 +2666,9 @@ export async function callPublicRateLoopMcpTool(params: {
     }
 
     case "rateloop_get_question_status": {
+      if (isDryRunRequest(args)) {
+        return buildDryRunQuestionStatus(args);
+      }
       const operationKey = await resolvePublicOperationKey(args);
       const record = operationKey ? await getX402QuestionSubmissionByOperationKey(operationKey) : null;
       let liveAskGuidance: ReturnType<typeof buildAgentLiveAskGuidance> = null;
@@ -2433,6 +2699,9 @@ export async function callPublicRateLoopMcpTool(params: {
     }
 
     case "rateloop_get_result":
+      if (isDryRunRequest(args)) {
+        return buildDryRunQuestionResult(args);
+      }
       return buildPublicQuestionResult(args);
 
     case "rateloop_get_rating_context":
@@ -2489,6 +2758,7 @@ export async function callRateLoopMcpTool(params: {
 
     case "rateloop_ask_humans": {
       parseAskHumansMode(args.mode);
+      const dryRun = isDryRunRequest(args);
       const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
       const payload = parseX402QuestionRequest(questionPayloadArgs(args));
       assertManagedQuestionCategoriesAllowed(params.agent, payload);
@@ -2515,6 +2785,19 @@ export async function callRateLoopMcpTool(params: {
       const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
       if (totalPaymentAmount > maxPaymentAmount) {
         throw new McpToolError("Quoted payment exceeds maxPaymentAmount.");
+      }
+      if (dryRun) {
+        return buildDryRunOperationBody({
+          config,
+          feedbackBonus,
+          paymentMode,
+          payload: managedPayload,
+          quote,
+          quotePayload: payload,
+          walletAddress,
+          walletPolicyRequired: true,
+          webhookRegistered: Boolean(webhook),
+        });
       }
 
       await dependencies.reserveMcpAgentBudget({
@@ -2716,6 +2999,9 @@ export async function callRateLoopMcpTool(params: {
     }
 
     case "rateloop_get_question_status": {
+      if (isDryRunRequest(args)) {
+        return buildDryRunQuestionStatus(args);
+      }
       const operationKey = await resolveManagedOperationKey(args, params.agent);
       const record = await lookupQuestionOperation(args, params.agent);
       let liveAskGuidance: ReturnType<typeof buildAgentLiveAskGuidance> = null;
@@ -2746,6 +3032,9 @@ export async function callRateLoopMcpTool(params: {
     }
 
     case "rateloop_get_result":
+      if (isDryRunRequest(args)) {
+        return buildDryRunQuestionResult(args);
+      }
       return buildQuestionResult(args, params.agent);
 
     case "rateloop_get_rating_context":

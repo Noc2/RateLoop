@@ -348,6 +348,109 @@ test("rateloop_ask_humans returns a wallet transaction plan without submitting f
   assert.equal(prepared.length, 1);
 });
 
+test("rateloop_ask_humans dry-run validates without reserving budget or preparing transactions", async () => {
+  const forbidden = async () => {
+    throw new Error("dry run should not create side effects");
+  };
+
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    prepareAgentWalletQuestionSubmissionRequest: forbidden as never,
+    prepareNativeX402QuestionSubmissionRequest: forbidden as never,
+    reserveMcpAgentBudget: forbidden as never,
+    upsertAgentCallbackSubscription: forbidden as never,
+  });
+
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: askArguments({
+      dryRun: true,
+      webhookEvents: ["question.submitted"],
+      webhookSecret: "secret",
+      webhookUrl: "https://example.com/callback",
+    }),
+    name: "rateloop_ask_humans",
+  });
+
+  const body = result as unknown as {
+    dryRun: boolean;
+    executionMode: string;
+    operationKey: string;
+    paymentRequired: boolean;
+    result: { answer: string };
+    status: string;
+    transactionPlan: unknown;
+    wallet: { fundingMode: string };
+    warnings: string[];
+    x402AuthorizationRequest: unknown;
+  };
+
+  assert.equal(body.status, "dry_run");
+  assert.equal(body.dryRun, true);
+  assert.equal(body.executionMode, "dry_run");
+  assert.equal(body.paymentRequired, false);
+  assert.equal(body.transactionPlan, null);
+  assert.equal(body.x402AuthorizationRequest, null);
+  assert.equal(body.wallet.fundingMode, "dry_run");
+  assert.equal(body.result.answer, "dry_run_complete");
+  assert.equal(body.operationKey, OPERATION_KEY);
+  assert.ok(body.warnings.includes("dry_run_no_payment"));
+
+  const status = (await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: { dryRun: true, operationKey: body.operationKey },
+    name: "rateloop_get_question_status",
+  })) as unknown as { ready: boolean; status: string };
+  assert.equal(status.status, "dry_run");
+  assert.equal(status.ready, true);
+
+  const syntheticResult = (await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: { dryRun: true, operationKey: body.operationKey },
+    name: "rateloop_get_result",
+  })) as unknown as { answer: string; paymentRequired: boolean };
+  assert.equal(syntheticResult.answer, "dry_run_complete");
+  assert.equal(syntheticResult.paymentRequired, false);
+});
+
+test("public rateloop_ask_humans dry-run skips permissionless transaction planning", async () => {
+  const forbidden = async () => {
+    throw new Error("dry run should not prepare public wallet calls");
+  };
+
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    preparePermissionlessNativeX402QuestionSubmissionRequest: forbidden as never,
+    preparePermissionlessWalletQuestionSubmissionRequest: forbidden as never,
+  });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: askArguments({
+      dryRun: true,
+      walletAddress: AGENT.walletAddress,
+    }),
+    name: "rateloop_ask_humans",
+  });
+
+  const body = result as {
+    dryRun: boolean;
+    executionMode: string;
+    managedBudget: unknown;
+    paymentRequired: boolean;
+    status: string;
+    transactionPlan: unknown;
+    walletPolicyRequired: boolean;
+  };
+
+  assert.equal(body.status, "dry_run");
+  assert.equal(body.dryRun, true);
+  assert.equal(body.executionMode, "dry_run");
+  assert.equal(body.paymentRequired, false);
+  assert.equal(body.transactionPlan, null);
+  assert.equal(body.managedBudget, null);
+  assert.equal(body.walletPolicyRequired, false);
+});
+
 test("managed agents can upload generated image bytes and get a question imageUrl", async () => {
   const result = await callRateLoopMcpTool({
     agent: AGENT,

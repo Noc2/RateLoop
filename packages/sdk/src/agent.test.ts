@@ -479,6 +479,52 @@ test("askHumans supports tokenless direct agent HTTP with a wallet address", asy
   assert.equal(response.status, "awaiting_wallet_signature");
 });
 
+test("quoteQuestion and askHumans pass dryRun through direct HTTP", async () => {
+  const requestedBodies: any[] = [];
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async (_input: URL | RequestInfo, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      requestedBodies.push(body);
+      return jsonResponse({
+        clientRequestId: body.clientRequestId,
+        dryRun: true,
+        executionMode: "dry_run",
+        operationKey: `0x${"58".repeat(32)}`,
+        paymentRequired: false,
+        status: body.maxPaymentAmount ? "dry_run" : undefined,
+      });
+    },
+  });
+  const request = {
+    bounty: { amount: 1_000_000n, requiredVoters: 3n },
+    chainId: 480,
+    clientRequestId: "ask-dry-run",
+    dryRun: true,
+    question: {
+      categoryId: 7n,
+      contextUrl: "https://example.com/context",
+      tags: ["launch", "agent"],
+      title: "Launch readiness?",
+    },
+    walletAddress: "0x00000000000000000000000000000000000000aa",
+  } as const;
+
+  const quote = await agent.quoteQuestion(request);
+  const ask = await agent.askHumans({
+    ...request,
+    maxPaymentAmount: 1_250_000n,
+    mode: "dry_run",
+  });
+
+  assert.equal(requestedBodies[0].dryRun, true);
+  assert.equal(requestedBodies[1].dryRun, true);
+  assert.equal(requestedBodies[1].mode, "dry_run");
+  assert.equal(quote.paymentRequired, false);
+  assert.equal(ask.status, "dry_run");
+  assert.equal(ask.paymentRequired, false);
+});
+
 test("signing intent helpers use direct browser-handoff routes", async () => {
   const requestedUrls: string[] = [];
   const requestedBodies: any[] = [];

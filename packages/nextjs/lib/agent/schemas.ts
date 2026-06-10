@@ -379,6 +379,17 @@ const agentAskInputBaseProperties = {
     pattern: "^[A-Za-z0-9._:-]{4,160}$",
     type: "string",
   },
+  dryRun: {
+    default: false,
+    description:
+      "When true, validate and return a deterministic no-payment sandbox response without wallet signatures, transaction plans, callbacks, or on-chain submission.",
+    type: "boolean",
+  },
+  executionMode: {
+    description: "Use dry_run as an alias for dryRun=true.",
+    enum: ["dry_run"],
+    type: "string",
+  },
   question: agentQuestionInputSchema,
   questions: {
     description: "Ordered bundle of question payloads. The bounty pays only when every question is answered.",
@@ -553,8 +564,9 @@ export const agentAskHumansInputSchema = {
     },
     mode: {
       default: "sync",
-      description: "Use async to return after payment settlement and poll with rateloop_get_question_status.",
-      enum: ["sync", "async"],
+      description:
+        "Use async to return after payment settlement and poll with rateloop_get_question_status. Use dry_run for a no-payment sandbox response.",
+      enum: ["sync", "async", "dry_run"],
       type: "string",
     },
     paymentAuthorization: {
@@ -809,6 +821,9 @@ export const agentQuoteOutputSchema = {
     legalNotice: agentLegalNoticeOutputSchema,
     operationKey: { type: "string" },
     payment: agentPaymentOutputSchema,
+    dryRun: { type: "boolean" },
+    executionMode: { enum: ["dry_run"], type: "string" },
+    paymentRequired: { type: "boolean" },
     payloadHash: { type: "string" },
     questionCount: { type: "integer" },
     resolvedCategoryIds: { items: { type: "string" }, type: "array" },
@@ -846,6 +861,8 @@ export const agentQuestionStatusOutputSchema = {
     contentId: { type: ["string", "null"] },
     contentIds: { items: { type: "string" }, type: "array" },
     error: { type: ["string", "null"] },
+    dryRun: { type: "boolean" },
+    executionMode: { enum: ["dry_run"], type: "string" },
     feedbackBonus: { type: "object" },
     operationKey: { type: "string" },
     payloadHash: { type: "string" },
@@ -858,7 +875,7 @@ export const agentQuestionStatusOutputSchema = {
     rewardPoolId: { type: ["string", "null"] },
     resultTool: { type: ["string", "null"] },
     status: {
-      enum: ["not_found", "awaiting_wallet_signature", "submitted", "failed"],
+      enum: ["not_found", "awaiting_wallet_signature", "submitted", "failed", "dry_run"],
       type: "string",
     },
     terminal: { type: "boolean" },

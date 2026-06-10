@@ -53,6 +53,18 @@ test("parseX402QuestionRequest normalizes a valid paid question payload", () => 
   assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL]);
 });
 
+test("parseX402QuestionRequest accepts dry-run control fields", () => {
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    dryRun: true,
+    executionMode: "dry_run",
+    sandbox: true,
+  });
+
+  assert.equal(payload.clientRequestId, VALID_REQUEST.clientRequestId);
+  assert.equal(payload.questions.length, 1);
+});
+
 test("parseX402QuestionRequest accepts off-chain details URL and hash", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,
