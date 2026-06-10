@@ -155,6 +155,13 @@ contract LaunchDistributionPool is
         pendingEarnedRaterCredits;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint64))) public pendingEarnedRaterCreditReadyAt;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bytes32[]))) internal pendingEarnedRaterCreditAnchorIds;
+    /// @notice L-Launch-A: idempotency marker for {cancelStalePendingEarnedRaterCredit}. Without
+    ///         it a repeat cancel re-emits the cancellation event (confusing indexers/keepers)
+    ///         and, when the rater holds another pending credit sharing an anchor, decrements
+    ///         that sibling credit's shared reservation count a second time. A cancelled credit
+    ///         intentionally remains finalizable. Internal (no auto-getter) to fit the
+    ///         EIP-170 budget; observe cancellation via the event or the AlreadyClaimed revert.
+    mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) internal stalePendingEarnedRaterCreditCancelled;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) public earnedRewardCreditFinalized;
     mapping(uint256 => mapping(uint256 => bool)) public earnedRaterRoundPayoutSnapshotConsumed;
     /// @notice M-Oracle-1: Earliest sourceReadyAt observed for a given (contentId, roundId).
@@ -345,6 +352,10 @@ contract LaunchDistributionPool is
         if (readyAt == 0 || block.timestamp < uint256(readyAt) + STALE_PENDING_EARNED_RATER_CREDIT_DELAY) {
             revert PendingCreditNotStale();
         }
+        // L-Launch-A: one-shot. The reservations were already released by a prior cancel; running
+        // the release again would corrupt shared per-anchor reservation counts and re-emit the event.
+        if (stalePendingEarnedRaterCreditCancelled[contentId][roundId][commitKey]) revert AlreadyClaimed();
+        stalePendingEarnedRaterCreditCancelled[contentId][roundId][commitKey] = true;
         _releasePendingVerifiedAnchorReservations(contentId, roundId, commitKey, pending.rater);
         emit StalePendingEarnedRaterCreditCancelled(pending.rater, contentId, roundId, commitKey);
     }

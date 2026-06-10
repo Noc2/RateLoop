@@ -1087,6 +1087,12 @@ contract LaunchDistributionPoolTest is Test {
         assertTrue(pool.earnedRewardCreditRecorded(1, 300, firstCommitKey));
         assertTrue(pool.raterRoundCreditRecorded(firstRater, 1, 300));
 
+        // L-Launch-A: cancel is one-shot — a repeat call reverts instead of re-emitting the
+        // cancellation event after the reservations were already released.
+        vm.prank(bob);
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.cancelStalePendingEarnedRaterCredit(1, 300, firstCommitKey);
+
         bytes32 replacementCommitKey = keccak256("pending-anchor-replacement-after-cancel");
         pool.recordEarnedRaterRewardWithSourceReady(
             address(0xCAFE),
@@ -1149,6 +1155,12 @@ contract LaunchDistributionPoolTest is Test {
         pool.cancelStalePendingEarnedRaterCredit(500, 1, firstCommitKey);
         assertTrue(pool.verifiedAnchorRaterSeen(anchorId, alice));
         assertEq(pool.verifiedAnchorDistinctRaterCount(anchorId), 1);
+        assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, alice), 1);
+
+        // L-Launch-A: a repeat cancel of the first credit must revert; replaying it would
+        // decrement the sibling credit's shared anchor reservation a second time.
+        vm.expectRevert(LaunchDistributionPool.AlreadyClaimed.selector);
+        pool.cancelStalePendingEarnedRaterCredit(500, 1, firstCommitKey);
         assertEq(pool.pendingVerifiedAnchorReservationCount(anchorId, alice), 1);
 
         pool.cancelStalePendingEarnedRaterCredit(501, 1, secondCommitKey);
