@@ -1074,6 +1074,99 @@ describe("RoundVotingEngine ponder handlers", () => {
     });
   });
 
+  it("returns revealed RBTS stakes without scores when the score seed is zero", async () => {
+    const voter1 = "0x0000000000000000000000000000000000000001";
+    const voter2 = "0x0000000000000000000000000000000000000002";
+    const voter3 = "0x0000000000000000000000000000000000000003";
+    const zeroSeed = `0x${"00".repeat(32)}`;
+    const { db, updateCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        rbtsRewardWeight: 0n,
+      },
+      roundVotes: [
+        {
+          id: `7-2-${voter1}`,
+          voter: voter1,
+          commitHash: `0x${"11".repeat(32)}`,
+          revealed: true,
+          isUp: true,
+          predictedUpBps: 8000,
+          rbtsWeight: 25n,
+          stake: 25n,
+        },
+        {
+          id: `7-2-${voter2}`,
+          voter: voter2,
+          commitHash: `0x${"22".repeat(32)}`,
+          revealed: true,
+          isUp: true,
+          predictedUpBps: 7000,
+          rbtsWeight: 25n,
+          stake: 25n,
+        },
+        {
+          id: `7-2-${voter3}`,
+          voter: voter3,
+          commitHash: `0x${"33".repeat(32)}`,
+          revealed: true,
+          isUp: false,
+          predictedUpBps: 3000,
+          rbtsWeight: 25n,
+          stake: 25n,
+        },
+      ],
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "RoundVotingEngine:RbtsRewardsScored",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          scoreSeed: zeroSeed,
+          rewardWeight: 0n,
+          rewardClaimants: 0n,
+          forfeitedPool: 0n,
+          forfeitClaimants: 0n,
+        },
+        block: {
+          number: 45n,
+          timestamp: 2_100n,
+        },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).toContainEqual({
+      table: "round",
+      key: { id: "7-2" },
+      values: expect.objectContaining({
+        rbtsScoreSeed: zeroSeed,
+        rbtsRewardWeight: 0n,
+        rbtsForfeitedPool: 0n,
+      }),
+    });
+
+    for (const voter of [voter1, voter2, voter3]) {
+      const update = updateCalls.find(
+        (call) => call.table === "vote" && call.key.id === `7-2-${voter}`,
+      );
+      expect(update).toBeDefined();
+      expect(update?.values).toEqual({
+        rbtsScoreBps: null,
+        rbtsRewardWeight: 0n,
+        rbtsStakeReturned: 25n,
+        rbtsForfeitedStake: 0n,
+      });
+    }
+  });
+
   it("returns zero-stake revealed votes without economic RBTS rewards", async () => {
     const voter1 = "0x0000000000000000000000000000000000000001";
     const voter2 = "0x0000000000000000000000000000000000000002";

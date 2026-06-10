@@ -965,6 +965,21 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
         asc(vote.id),
       );
 
+    // On-chain scoreless settlement returns RBTS stakes before sampling, so
+    // keep revealed votes economically settled but unscored.
+    if (scoreSeed === ZERO_SCORE_SEED) {
+      for (const roundVote of roundVotes) {
+        await context.db.update(vote, { id: roundVote.id }).set({
+          rbtsScoreBps: null,
+          rbtsRewardWeight: 0n,
+          rbtsStakeReturned:
+            (roundVote.stake ?? 0n) > 0n ? (roundVote.stake ?? 0n) : 0n,
+          rbtsForfeitedStake: 0n,
+        });
+      }
+      return;
+    }
+
     const scoringWeights = await resolveRbtsScoringWeights({
       context,
       contentId,
