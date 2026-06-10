@@ -1166,7 +1166,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).snapshotProposerForFrontend(address(0)) returns (address) {}
+        try IFrontendRegistry(newFrontendRegistry).snapshotProposerForFrontend(address(0)) returns (address) { }
         catch {
             revert InvalidAddress();
         }

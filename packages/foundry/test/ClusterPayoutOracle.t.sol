@@ -1136,14 +1136,7 @@ contract ClusterPayoutOracleTest is Test {
         bytes32 clusterRoot = keccak256("cluster-root");
         bytes32 artifactHash = keccak256("epoch-artifact");
         oracle.proposeCorrelationEpoch(
-            1,
-            1,
-            20,
-            clusterRoot,
-            keccak256("params"),
-            artifactHash,
-            "ipfs://bad-epoch-uri",
-            _defaultEpochSources()
+            1, 1, 20, clusterRoot, keccak256("params"), artifactHash, "ipfs://bad-epoch-uri", _defaultEpochSources()
         );
         vm.warp(1 hours + 2);
         oracle.finalizeCorrelationEpoch(1);
@@ -1156,14 +1149,7 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeCorrelationEpoch(
-            1,
-            1,
-            20,
-            clusterRoot,
-            keccak256("params"),
-            artifactHash,
-            "ipfs://bad-epoch-uri",
-            _defaultEpochSources()
+            1, 1, 20, clusterRoot, keccak256("params"), artifactHash, "ipfs://bad-epoch-uri", _defaultEpochSources()
         );
 
         oracle.proposeCorrelationEpoch(
@@ -1254,14 +1240,7 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.prank(squatter);
         oracle.proposeCorrelationEpoch(
-            1,
-            1,
-            20,
-            clusterRoot,
-            keccak256("params"),
-            artifactHash,
-            "ipfs://bad-epoch-uri",
-            _defaultEpochSources()
+            1, 1, 20, clusterRoot, keccak256("params"), artifactHash, "ipfs://bad-epoch-uri", _defaultEpochSources()
         );
 
         bytes32 rejectedDigest = oracle.correlationEpochProposalDigest(1);
@@ -1272,14 +1251,7 @@ contract ClusterPayoutOracleTest is Test {
 
         vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.proposeCorrelationEpoch(
-            1,
-            1,
-            20,
-            clusterRoot,
-            keccak256("params"),
-            artifactHash,
-            "ipfs://bad-epoch-uri",
-            _defaultEpochSources()
+            1, 1, 20, clusterRoot, keccak256("params"), artifactHash, "ipfs://bad-epoch-uri", _defaultEpochSources()
         );
 
         oracle.proposeCorrelationEpoch(

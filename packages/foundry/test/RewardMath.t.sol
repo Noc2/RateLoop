@@ -36,11 +36,7 @@ contract RewardMathHarness {
         uint16 scoreBps,
         uint16 meanScoreBps,
         uint256 revealedCount
-    )
-        external
-        pure
-        returns (uint256)
-    {
+    ) external pure returns (uint256) {
         return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps, revealedCount);
     }
 

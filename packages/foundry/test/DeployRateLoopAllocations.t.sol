@@ -340,10 +340,7 @@ contract DeployRateLoopAllocationsTest is Test {
         vm.etch(bundledVerifier, address(verifier).code);
         vm.chainId(480);
 
-        assertEq(
-            deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), false),
-            bundledVerifier
-        );
+        assertEq(deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), false), bundledVerifier);
     }
 
     function test_WorldChainMainnetRejectsVerifierOverrideWithoutCanary() public {
@@ -375,10 +372,7 @@ contract DeployRateLoopAllocationsTest is Test {
         vm.etch(stagingVerifier, address(verifier).code);
         vm.chainId(480);
 
-        assertEq(
-            deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), true),
-            stagingVerifier
-        );
+        assertEq(deployScript.resolveWorldIdVerifierAddressForChain(false, false, address(0), true), stagingVerifier);
     }
 
     function test_WorldChainMainnetCanaryAcceptsStagingVerifierOverride() public {
@@ -389,8 +383,7 @@ contract DeployRateLoopAllocationsTest is Test {
         vm.chainId(480);
 
         assertEq(
-            deployScript.resolveWorldIdVerifierAddressForChain(false, true, stagingVerifier, true),
-            stagingVerifier
+            deployScript.resolveWorldIdVerifierAddressForChain(false, true, stagingVerifier, true), stagingVerifier
         );
     }
 

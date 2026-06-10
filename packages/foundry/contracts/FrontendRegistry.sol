@@ -447,12 +447,11 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @param amount Amount of LREP to slash
     /// @param reason Reason for the slash
     /// @param bountyRecipient The challenger receiving the fixed bounty share
-    function slashFrontendWithBounty(
-        address frontend,
-        uint256 amount,
-        string calldata reason,
-        address bountyRecipient
-    ) external nonReentrant onlyRole(GOVERNANCE_ROLE) {
+    function slashFrontendWithBounty(address frontend, uint256 amount, string calldata reason, address bountyRecipient)
+        external
+        nonReentrant
+        onlyRole(GOVERNANCE_ROLE)
+    {
         require(bountyRecipient != address(0), "Invalid bounty recipient");
         require(bountyRecipient != frontend, "Bounty recipient is frontend");
         require(bountyRecipient != snapshotProposerForFrontend[frontend], "Bounty recipient is proposer");

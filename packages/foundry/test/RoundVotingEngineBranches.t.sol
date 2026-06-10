@@ -1719,8 +1719,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_BasicLifecycle_VoterPoolAndWinningStake() public {
-        (uint256 contentId, uint256 roundId,) =
-            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), address(0));
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
@@ -2602,8 +2601,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_FrontendFee_EligibleFrontend_FeeAccumulated() public {
         _registerFrontend(frontend1);
-        (uint256 contentId, uint256 roundId,) =
-            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), frontend1);
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), frontend1);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
         uint256 feesBefore = frontendRegistry.getAccumulatedFees(frontend1);
@@ -2616,8 +2614,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_FrontendFee_ClaimSucceeds() public {
         _registerFrontend(frontend1);
-        (uint256 contentId, uint256 roundId,) =
-            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), frontend1);
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), frontend1);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
@@ -2631,8 +2628,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_FrontendFee_CannotClaimTwice() public {
         _registerFrontend(frontend1);
-        (uint256 contentId, uint256 roundId,) =
-            _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), frontend1);
+        (uint256 contentId, uint256 roundId,) = _setupEconomicPredictionRound(_fiveUpThreeDownDirections(), frontend1);
 
         _settleRoundAfterRbtsSeed(contentId, roundId);
 
@@ -2709,8 +2705,9 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         for (uint256 i = 0; i < voters.length; i++) {
             predictions[i] = _predictionBps(i, directions[i]);
             if (i == 0) {
-                (commitKeys[i], salts[i]) =
-                    _commitPredictionWithFrontend(voters[i], contentId, directions[i], predictions[i], STAKE, frontend1);
+                (commitKeys[i], salts[i]) = _commitPredictionWithFrontend(
+                    voters[i], contentId, directions[i], predictions[i], STAKE, frontend1
+                );
             } else {
                 (commitKeys[i], salts[i]) =
                     _commitPrediction(voters[i], contentId, directions[i], predictions[i], STAKE);
