@@ -76,6 +76,7 @@ vi.mock("tlock-js", () => ({
 }));
 
 import { resolveRounds, resetKeeperStateForTests } from "../keeper.js";
+import { FailoverChainClient } from "../drand.js";
 
 type RoundStateValue = 0 | 1 | 2 | 3 | 4;
 
@@ -713,9 +714,9 @@ describe("resolveRounds", () => {
 
     expect(result.votesRevealed).toBe(1);
     expect(commits[COMMIT_KEY_1].revealed).toBe(true);
-    expect(vi.mocked(timelockDecrypt).mock.calls[0]?.[1]).toMatchObject({
-      kind: "quicknet-t",
-    });
+    expect(vi.mocked(timelockDecrypt).mock.calls[0]?.[1]).toBeInstanceOf(
+      FailoverChainClient,
+    );
     expect(httpChainClient).toHaveBeenCalledWith(
       expect.objectContaining({
         url: expect.stringContaining(QUICKNET_T_DRAND_CHAIN_HASH.slice(2)),
