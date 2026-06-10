@@ -956,7 +956,8 @@ async function validateSponsoredCalls(
           functionName === "register" ||
           functionName === "requestDeregister" ||
           functionName === "completeDeregister" ||
-          functionName === "claimFees" ||
+          functionName === "requestFeeWithdrawal" ||
+          functionName === "completeFeeWithdrawal" ||
           functionName === "setSnapshotProposer" ||
           functionName === "clearSnapshotProposer"
         ) {
