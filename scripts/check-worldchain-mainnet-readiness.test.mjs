@@ -6,6 +6,8 @@ import {
   parseGeneratedContractsForChain,
 } from "./check-worldchain-sepolia-readiness.mjs";
 import {
+  loadOfflineInputs,
+  mainnetNotDeployedMessage,
   validateLiveReadiness,
   validateOfflineReadiness,
 } from "./check-worldchain-mainnet-readiness.mjs";
@@ -54,16 +56,16 @@ const questionRewardPoolsSource =
 test("parseGeneratedContractsForChain extracts addresses and deployed blocks for mainnet", () => {
   const contracts = parseGeneratedContractsForChain(
     makeGeneratedContractsSource(),
-    480
+    480,
   );
 
   assert.equal(
     contracts.get("ContentRegistry").address,
-    addressFor(REQUIRED_DEPLOYED_CONTRACTS.indexOf("ContentRegistry") + 1)
+    addressFor(REQUIRED_DEPLOYED_CONTRACTS.indexOf("ContentRegistry") + 1),
   );
   assert.equal(
     contracts.get("ContentRegistry").deployedOnBlock,
-    REQUIRED_DEPLOYED_CONTRACTS.indexOf("ContentRegistry") + 101
+    REQUIRED_DEPLOYED_CONTRACTS.indexOf("ContentRegistry") + 101,
   );
 });
 
@@ -101,8 +103,8 @@ test("validateOfflineReadiness rejects production artifacts when canary is expec
   assert.equal(result.ok, false);
   assert(
     result.failures.some((message) =>
-      message.includes("deployment artifact profile is mainnet-canary")
-    )
+      message.includes("deployment artifact profile is mainnet-canary"),
+    ),
   );
 });
 
@@ -120,8 +122,8 @@ test("validateOfflineReadiness rejects stale generated contract addresses", () =
   assert.equal(result.ok, false);
   assert(
     result.failures.some((message) =>
-      message.includes("ContentRegistry address matches")
-    )
+      message.includes("ContentRegistry address matches"),
+    ),
   );
 });
 
@@ -139,7 +141,7 @@ test("validateOfflineReadiness rejects missing mainnet USDC config", () => {
 test("validateOfflineReadiness rejects missing x402 submitter deployment", () => {
   const deploymentJson = makeDeploymentJson();
   const x402Address = buildDeploymentAddressMap(deploymentJson).get(
-    "X402QuestionSubmitter"
+    "X402QuestionSubmitter",
   );
   delete deploymentJson[x402Address];
 
@@ -152,8 +154,21 @@ test("validateOfflineReadiness rejects missing x402 submitter deployment", () =>
   assert.equal(result.ok, false);
   assert(
     result.failures.some((message) =>
-      message.includes("X402QuestionSubmitter has an address")
-    )
+      message.includes("X402QuestionSubmitter has an address"),
+    ),
+  );
+});
+
+test("loadOfflineInputs reports missing mainnet deployment artifact cleanly", () => {
+  assert.equal(
+    mainnetNotDeployedMessage(),
+    "World Chain mainnet is not deployed: missing packages/foundry/deployments/480.json.",
+  );
+  assert.throws(
+    () => loadOfflineInputs("/tmp/rateloop-mainnet-not-deployed"),
+    (error) =>
+      error?.code === "ENOENT" &&
+      String(error.path).endsWith("packages/foundry/deployments/480.json"),
   );
 });
 
@@ -174,12 +189,14 @@ test("validateLiveReadiness fails closed when required live targets are missing"
 
   assert.equal(result.ok, false);
   assert(
-    result.failures.some((message) => message.includes("WORLDCHAIN_RPC_URL"))
+    result.failures.some((message) => message.includes("WORLDCHAIN_RPC_URL")),
   );
   assert(
-    result.failures.some((message) => message.includes("WORLDCHAIN_PONDER_URL"))
+    result.failures.some((message) =>
+      message.includes("WORLDCHAIN_PONDER_URL"),
+    ),
   );
   assert(
-    result.failures.some((message) => message.includes("WORLDCHAIN_APP_URL"))
+    result.failures.some((message) => message.includes("WORLDCHAIN_APP_URL")),
   );
 });

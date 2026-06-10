@@ -13,6 +13,7 @@ const repoRoot = dirname(scriptDir);
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const WORLDCHAIN_CHAIN_ID = 480;
 const WORLDCHAIN_CHAIN_ID_HEX = "0x1e0";
+const WORLDCHAIN_DEPLOYMENT_ARTIFACT = "packages/foundry/deployments/480.json";
 const WORLDCHAIN_USDC = "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1";
 const WORLD_ID_PRODUCTION_VERIFIER =
   "0x00000000009E00F9FE82CfeeBB4556686da094d7";
@@ -47,6 +48,10 @@ function parseAddressResult(result) {
   return `0x${result.slice(-40)}`;
 }
 
+export function mainnetNotDeployedMessage() {
+  return `World Chain mainnet is not deployed: missing ${WORLDCHAIN_DEPLOYMENT_ARTIFACT}.`;
+}
+
 export function validateOfflineReadiness({
   deploymentJson,
   deployedContractsSource,
@@ -58,7 +63,7 @@ export function validateOfflineReadiness({
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
   const generatedContracts = parseGeneratedContractsForChain(
     deployedContractsSource,
-    WORLDCHAIN_CHAIN_ID
+    WORLDCHAIN_CHAIN_ID,
   );
   const expectedDeploymentProfile = DEPLOYMENT_PROFILE_BY_MODE[expectedMode];
 
@@ -66,26 +71,26 @@ export function validateOfflineReadiness({
     checks,
     failures,
     deploymentJson.networkName === "worldchain",
-    "deployment artifact targets worldchain"
+    "deployment artifact targets worldchain",
   );
   addCheck(
     checks,
     failures,
     deploymentJson.deploymentComplete === "true",
-    "deployment artifact is marked complete"
+    "deployment artifact is marked complete",
   );
   addCheck(
     checks,
     failures,
     deploymentJson.deploymentProfile === expectedDeploymentProfile,
-    `deployment artifact profile is ${expectedDeploymentProfile}`
+    `deployment artifact profile is ${expectedDeploymentProfile}`,
   );
   addCheck(
     checks,
     failures,
     Number.isInteger(deploymentJson.deploymentBlockNumber) &&
       deploymentJson.deploymentBlockNumber > 0,
-    "deployment artifact has a positive deployment block"
+    "deployment artifact has a positive deployment block",
   );
 
   for (const contractName of REQUIRED_DEPLOYED_CONTRACTS) {
@@ -94,7 +99,7 @@ export function validateOfflineReadiness({
       checks,
       failures,
       isAddress(deploymentAddress),
-      `${contractName} has an address in packages/foundry/deployments/480.json`
+      `${contractName} has an address in packages/foundry/deployments/480.json`,
     );
 
     const generated = generatedContracts.get(contractName);
@@ -102,7 +107,7 @@ export function validateOfflineReadiness({
       checks,
       failures,
       isAddress(generated?.address),
-      `${contractName} has an address in packages/contracts/src/deployedContracts.ts`
+      `${contractName} has an address in packages/contracts/src/deployedContracts.ts`,
     );
 
     if (deploymentAddress && generated?.address) {
@@ -110,7 +115,7 @@ export function validateOfflineReadiness({
         checks,
         failures,
         deploymentAddress.toLowerCase() === generated.address.toLowerCase(),
-        `${contractName} address matches between foundry and generated contract artifacts`
+        `${contractName} address matches between foundry and generated contract artifacts`,
       );
     }
 
@@ -120,7 +125,7 @@ export function validateOfflineReadiness({
         failures,
         Number.isInteger(generated?.deployedOnBlock) &&
           generated.deployedOnBlock > 0,
-        `${contractName} has a positive generated deployedOnBlock for Ponder start blocks`
+        `${contractName} has a positive generated deployedOnBlock for Ponder start blocks`,
       );
     }
   }
@@ -129,24 +134,23 @@ export function validateOfflineReadiness({
     checks,
     failures,
     questionRewardPoolsSource.includes(`480: "${WORLDCHAIN_USDC}"`),
-    "Next.js default USDC address is configured for World Chain mainnet"
+    "Next.js default USDC address is configured for World Chain mainnet",
   );
 
   return { ok: failures.length === 0, checks, failures };
 }
 
-function loadOfflineInputs(root = repoRoot) {
+export function loadOfflineInputs(root = repoRoot) {
+  const deploymentPath = join(root, WORLDCHAIN_DEPLOYMENT_ARTIFACT);
   return {
-    deploymentJson: JSON.parse(
-      readFileSync(join(root, "packages/foundry/deployments/480.json"), "utf8")
-    ),
+    deploymentJson: JSON.parse(readFileSync(deploymentPath, "utf8")),
     deployedContractsSource: readFileSync(
       join(root, "packages/contracts/src/deployedContracts.ts"),
-      "utf8"
+      "utf8",
     ),
     questionRewardPoolsSource: readFileSync(
       join(root, "packages/nextjs/lib/questionRewardPools.ts"),
-      "utf8"
+      "utf8",
     ),
   };
 }
@@ -173,7 +177,7 @@ async function rpc(rpcUrl, method, params = []) {
   const body = await response.json();
   if (body.error)
     throw new Error(
-      `${method} failed: ${body.error.message ?? JSON.stringify(body.error)}`
+      `${method} failed: ${body.error.message ?? JSON.stringify(body.error)}`,
     );
   return body.result;
 }
@@ -198,7 +202,7 @@ export async function validateLiveReadiness({
         checks,
         failures,
         String(chainId).toLowerCase() === WORLDCHAIN_CHAIN_ID_HEX,
-        `RPC reports World Chain mainnet chainId ${WORLDCHAIN_CHAIN_ID}`
+        `RPC reports World Chain mainnet chainId ${WORLDCHAIN_CHAIN_ID}`,
       );
 
       for (const contractName of REQUIRED_DEPLOYED_CONTRACTS) {
@@ -209,7 +213,7 @@ export async function validateLiveReadiness({
           checks,
           failures,
           typeof code === "string" && code !== "0x",
-          `${contractName} has bytecode on RPC`
+          `${contractName} has bytecode on RPC`,
         );
       }
 
@@ -224,7 +228,7 @@ export async function validateLiveReadiness({
           checks,
           failures,
           normalizeAddress(verifier) === normalizeAddress(expectedVerifier),
-          `RaterRegistry World ID verifier is ${expectedVerifier}`
+          `RaterRegistry World ID verifier is ${expectedVerifier}`,
         );
       }
     } catch (error) {
@@ -233,7 +237,7 @@ export async function validateLiveReadiness({
         checks,
         failures,
         false,
-        `RPC readiness probe failed: ${message}`
+        `RPC readiness probe failed: ${message}`,
       );
     }
   } else {
@@ -241,7 +245,7 @@ export async function validateLiveReadiness({
       checks,
       failures,
       !requireTargets,
-      "live RPC probe skipped because WORLDCHAIN_RPC_URL is unset"
+      "live RPC probe skipped because WORLDCHAIN_RPC_URL is unset",
     );
   }
 
@@ -253,7 +257,7 @@ export async function validateLiveReadiness({
         checks,
         failures,
         response.ok,
-        `Ponder /status returns HTTP ${response.status}`
+        `Ponder /status returns HTTP ${response.status}`,
       );
       if (response.ok) {
         const status = await response.json().catch(() => null);
@@ -262,7 +266,7 @@ export async function validateLiveReadiness({
           checks,
           failures,
           Number(blockNumber) >= Number(deploymentJson.deploymentBlockNumber),
-          "Ponder has indexed at or beyond the deployment block"
+          "Ponder has indexed at or beyond the deployment block",
         );
       }
     } catch (error) {
@@ -271,7 +275,7 @@ export async function validateLiveReadiness({
         checks,
         failures,
         false,
-        `Ponder readiness probe failed: ${message}`
+        `Ponder readiness probe failed: ${message}`,
       );
     }
   } else {
@@ -279,7 +283,7 @@ export async function validateLiveReadiness({
       checks,
       failures,
       !requireTargets,
-      "live Ponder probe skipped because WORLDCHAIN_PONDER_URL is unset"
+      "live Ponder probe skipped because WORLDCHAIN_PONDER_URL is unset",
     );
   }
 
@@ -291,7 +295,7 @@ export async function validateLiveReadiness({
           checks,
           failures,
           response.status < 500,
-          `app route ${path} returns below HTTP 500`
+          `app route ${path} returns below HTTP 500`,
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -299,7 +303,7 @@ export async function validateLiveReadiness({
           checks,
           failures,
           false,
-          `app route ${path} probe failed: ${message}`
+          `app route ${path} probe failed: ${message}`,
         );
       }
     }
@@ -308,7 +312,7 @@ export async function validateLiveReadiness({
       checks,
       failures,
       !requireTargets,
-      "live app probe skipped because WORLDCHAIN_APP_URL is unset"
+      "live app probe skipped because WORLDCHAIN_APP_URL is unset",
     );
   }
 
@@ -351,7 +355,20 @@ async function main() {
     process.exit(1);
   }
 
-  const offlineInputs = loadOfflineInputs();
+  let offlineInputs;
+  try {
+    offlineInputs = loadOfflineInputs();
+  } catch (error) {
+    if (
+      error?.code === "ENOENT" &&
+      error.path?.endsWith(WORLDCHAIN_DEPLOYMENT_ARTIFACT)
+    ) {
+      console.error(mainnetNotDeployedMessage());
+      process.exit(1);
+      return;
+    }
+    throw error;
+  }
   const offlineResult = validateOfflineReadiness({
     ...offlineInputs,
     expectedMode: args.expectedMode,
@@ -359,7 +376,7 @@ async function main() {
   printResult(
     `World Chain mainnet ${args.expectedMode} offline readiness`,
     offlineResult,
-    args.json
+    args.json,
   );
 
   let liveResult = { ok: true, checks: [], failures: [] };
@@ -375,7 +392,7 @@ async function main() {
     printResult(
       `World Chain mainnet ${args.expectedMode} live readiness`,
       liveResult,
-      args.json
+      args.json,
     );
   }
 
