@@ -387,35 +387,29 @@
     {
       "slot": 64,
       "offset": 0,
-      "label": "_roundRbtsSeedRefreshCount",
-      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint8))"
-    },
-    {
-      "slot": 65,
-      "offset": 0,
       "label": "_pendingTreasuryForfeitLrep",
       "type": "t_uint256"
     },
     {
-      "slot": 66,
+      "slot": 65,
       "offset": 0,
       "label": "commitCredentialMask",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8)))"
     },
     {
-      "slot": 67,
+      "slot": 66,
       "offset": 0,
       "label": "commitFreshCredentialMask",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_mapping(t_bytes32,t_uint8)))"
     },
     {
-      "slot": 68,
+      "slot": 67,
       "offset": 0,
       "label": "roundContentDormantCountSnapshot",
       "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_uint8))"
     },
     {
-      "slot": 69,
+      "slot": 68,
       "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
