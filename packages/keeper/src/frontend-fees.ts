@@ -19,6 +19,8 @@ interface FrontendFeeSweepResult {
   roundsClaimed: number;
   withdrawals: number;
   withdrawnAmount: bigint;
+  withdrawalRequests: number;
+  requestedAmount: bigint;
 }
 
 const recentCursors = new Map<string, FrontendFeeSweepCursor>();
@@ -249,6 +251,8 @@ export async function claimConfiguredFrontendFees(
       roundsClaimed: 0,
       withdrawals: 0,
       withdrawnAmount: 0n,
+      withdrawalRequests: 0,
+      requestedAmount: 0n,
     };
   }
 
@@ -262,6 +266,8 @@ export async function claimConfiguredFrontendFees(
       roundsClaimed: 0,
       withdrawals: 0,
       withdrawnAmount: 0n,
+      withdrawalRequests: 0,
+      requestedAmount: 0n,
     };
   }
 
@@ -282,6 +288,8 @@ export async function claimConfiguredFrontendFees(
       roundsClaimed: 0,
       withdrawals: 0,
       withdrawnAmount: 0n,
+      withdrawalRequests: 0,
+      requestedAmount: 0n,
     };
   }
 
@@ -323,27 +331,65 @@ export async function claimConfiguredFrontendFees(
 
   let withdrawals = 0;
   let withdrawnAmount = 0n;
+  let withdrawalRequests = 0;
+  let requestedAmount = 0n;
 
   if (config.frontendFees.withdrawEnabled) {
+    // Registry withdrawals are two-step: requestFeeWithdrawal moves accrued fees into a
+    // pending bucket that stays slashable for FEE_WITHDRAWAL_DELAY, then
+    // completeFeeWithdrawal pays out once the delay has elapsed. Complete a matured pending
+    // withdrawal first so the slot frees up for the next request in the same tick.
     try {
-      const accruedFees = (await publicClient.readContract({
+      let pendingAmount = (await publicClient.readContract({
         address: contracts.frontendRegistry,
         abi: FrontendRegistryAbi,
-        functionName: "getAccumulatedFees",
+        functionName: "pendingFeeWithdrawalAmount",
         args: [frontendAddress],
       })) as bigint;
 
-      if (accruedFees > 0n) {
-        await writeContractAndConfirm(publicClient, walletClient, {
-          chain,
-          account,
+      if (pendingAmount > 0n) {
+        const releaseAt = (await publicClient.readContract({
           address: contracts.frontendRegistry,
           abi: FrontendRegistryAbi,
-          functionName: "claimFees",
-          args: [],
-        });
-        withdrawals = 1;
-        withdrawnAmount = accruedFees;
+          functionName: "pendingFeeWithdrawalReleaseAt",
+          args: [frontendAddress],
+        })) as bigint;
+
+        if (releaseAt <= BigInt(Math.floor(Date.now() / 1000))) {
+          await writeContractAndConfirm(publicClient, walletClient, {
+            chain,
+            account,
+            address: contracts.frontendRegistry,
+            abi: FrontendRegistryAbi,
+            functionName: "completeFeeWithdrawal",
+            args: [],
+          });
+          withdrawals = 1;
+          withdrawnAmount = pendingAmount;
+          pendingAmount = 0n;
+        }
+      }
+
+      if (pendingAmount === 0n) {
+        const accruedFees = (await publicClient.readContract({
+          address: contracts.frontendRegistry,
+          abi: FrontendRegistryAbi,
+          functionName: "getAccumulatedFees",
+          args: [frontendAddress],
+        })) as bigint;
+
+        if (accruedFees > 0n) {
+          await writeContractAndConfirm(publicClient, walletClient, {
+            chain,
+            account,
+            address: contracts.frontendRegistry,
+            abi: FrontendRegistryAbi,
+            functionName: "requestFeeWithdrawal",
+            args: [],
+          });
+          withdrawalRequests = 1;
+          requestedAmount = accruedFees;
+        }
       }
     } catch (error: unknown) {
       logger.warn("Failed to withdraw accumulated frontend fees", {
@@ -358,5 +404,7 @@ export async function claimConfiguredFrontendFees(
     roundsClaimed,
     withdrawals,
     withdrawnAmount,
+    withdrawalRequests,
+    requestedAmount,
   };
 }

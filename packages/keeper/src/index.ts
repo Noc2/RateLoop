@@ -166,13 +166,16 @@ async function main() {
       if (
         frontendFeeResult &&
         (frontendFeeResult.roundsClaimed > 0 ||
-          frontendFeeResult.withdrawals > 0)
+          frontendFeeResult.withdrawals > 0 ||
+          frontendFeeResult.withdrawalRequests > 0)
       ) {
         logger.info("Frontend fee sweep complete", {
           frontendAddress: frontendFeeResult.frontendAddress,
           roundsClaimed: frontendFeeResult.roundsClaimed,
           withdrawals: frontendFeeResult.withdrawals,
           withdrawnAmount: frontendFeeResult.withdrawnAmount.toString(),
+          withdrawalRequests: frontendFeeResult.withdrawalRequests,
+          requestedAmount: frontendFeeResult.requestedAmount.toString(),
         });
       }
       if (
