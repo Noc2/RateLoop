@@ -84,7 +84,8 @@ const VALID_ENV = {
 function getExpectedProbeChainId(env: Record<string, string | undefined>) {
   if (env.PONDER_NETWORK === "worldchain") return 480;
   if (env.PONDER_NETWORK === "hardhat") return 31337;
-  return 4801;
+  if (env.PONDER_NETWORK === "worldchainSepolia") return 4801;
+  return 31337;
 }
 
 async function loadPonderConfig(overrides: Record<string, string | undefined> = {}, removals: string[] = []) {
