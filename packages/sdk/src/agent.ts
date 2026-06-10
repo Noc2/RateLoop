@@ -101,7 +101,7 @@ export interface QuoteQuestionRequest extends RateLoopAgentQuestionRequest {}
 
 export interface AskHumansRequest extends RateLoopAgentQuestionRequest {
   maxPaymentAmount?: string | number | bigint;
-  mode?: "sync" | "async" | "dry_run";
+  mode?: "dry_run";
   paymentAuthorization?: {
     from?: `0x${string}` | string;
     nonce?: `0x${string}` | string;

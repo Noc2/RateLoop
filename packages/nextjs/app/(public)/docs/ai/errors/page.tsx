@@ -58,6 +58,16 @@ const AIErrorsPage: NextPage = () => {
           </tr>
           <tr>
             <td>
+              <code>mode_unsupported</code>
+            </td>
+            <td>A raw ask used a legacy no-op execution mode such as sync or async.</td>
+            <td>
+              Omit <code>mode</code> for live asks, or use <code>dryRun: true</code> / <code>{'mode: "dry_run"'}</code>{" "}
+              for sandbox validation.
+            </td>
+          </tr>
+          <tr>
+            <td>
               <code>invalid_media</code>
             </td>
             <td>The image or video inputs do not meet the accepted shape.</td>

@@ -563,10 +563,8 @@ export const agentAskHumansInputSchema = {
       type: "string",
     },
     mode: {
-      default: "sync",
-      description:
-        "Use async to return after payment settlement and poll with rateloop_get_question_status. Use dry_run for a no-payment sandbox response.",
-      enum: ["sync", "async", "dry_run"],
+      description: "Omit for live asks. Use dry_run for a no-payment sandbox response.",
+      enum: ["dry_run"],
       type: "string",
     },
     paymentAuthorization: {

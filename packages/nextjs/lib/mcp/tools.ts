@@ -153,11 +153,13 @@ type McpToolDefinition = {
   inputSchema: JsonObject;
   name: string;
   outputSchema?: JsonObject;
+  rateLoopTier: "advanced" | "primary";
+  rateLoopWorkflow: "ask" | "managed" | "rating" | "reference";
+  recommendedEntryPoint?: boolean;
   requiredScope: McpScope;
   title: string;
 };
 
-type AskHumansMode = "sync" | "async" | "dry_run";
 type AskHumansPaymentMode = "wallet_calls" | "x402_authorization";
 type BackgroundTaskScheduler = (task: () => Promise<void> | void) => void;
 
@@ -253,6 +255,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: "object",
     },
     name: "rateloop_list_categories",
+    rateLoopTier: "primary",
+    rateLoopWorkflow: "reference",
     requiredScope: MCP_SCOPES.read,
     title: "List RateLoop Categories",
   },
@@ -270,6 +274,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     name: "rateloop_list_result_templates",
     outputSchema: templateListOutputSchema,
+    rateLoopTier: "primary",
+    rateLoopWorkflow: "reference",
     requiredScope: MCP_SCOPES.read,
     title: "List Result Templates",
   },
@@ -285,6 +291,9 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentCreateAskHandoffInputSchema,
     name: "rateloop_create_ask_handoff_link",
     outputSchema: agentAskHandoffOutputSchema,
+    rateLoopTier: "primary",
+    rateLoopWorkflow: "ask",
+    recommendedEntryPoint: true,
     requiredScope: MCP_SCOPES.ask,
     title: "Create Ask Handoff Link",
   },
@@ -299,6 +308,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentHandoffStatusInputSchema,
     name: "rateloop_get_handoff_status",
     outputSchema: agentAskHandoffOutputSchema,
+    rateLoopTier: "primary",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.read,
     title: "Get Handoff Status",
   },
@@ -313,6 +324,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentPrepareImageUploadInputSchema,
     name: "rateloop_prepare_image_upload",
     outputSchema: agentPrepareImageUploadOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.ask,
     title: "Prepare Image Upload",
   },
@@ -328,6 +341,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentUploadImageInputSchema,
     name: "rateloop_upload_image",
     outputSchema: agentImageUploadOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.ask,
     title: "Upload Image",
   },
@@ -341,6 +356,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentImageUploadStatusInputSchema,
     name: "rateloop_get_image_upload_status",
     outputSchema: agentImageUploadOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.read,
     title: "Get Image Upload Status",
   },
@@ -355,6 +372,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentQuoteInputSchema,
     name: "rateloop_quote_question",
     outputSchema: agentQuoteOutputSchema,
+    rateLoopTier: "primary",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.quote,
     title: "Quote Human Ask",
   },
@@ -370,6 +389,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentAskHumansInputSchema,
     name: "rateloop_ask_humans",
     outputSchema: agentAskHumansOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.ask,
     title: "Ask Humans",
   },
@@ -384,6 +405,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentConfirmAskTransactionsInputSchema,
     name: "rateloop_confirm_ask_transactions",
     outputSchema: agentQuestionStatusOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.ask,
     title: "Confirm Ask Transactions",
   },
@@ -398,6 +421,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentConfirmFeedbackBonusTransactionsInputSchema,
     name: "rateloop_confirm_feedback_bonus_transactions",
     outputSchema: agentQuestionStatusOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.ask,
     title: "Confirm Feedback Bonus Transactions",
   },
@@ -411,6 +436,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentOperationLookupInputSchema,
     name: "rateloop_get_question_status",
     outputSchema: agentQuestionStatusOutputSchema,
+    rateLoopTier: "primary",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.read,
     title: "Get Question Status",
   },
@@ -440,6 +467,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     name: "rateloop_get_result",
     outputSchema: resultPackageOutputSchema,
+    rateLoopTier: "primary",
+    rateLoopWorkflow: "ask",
     requiredScope: MCP_SCOPES.read,
     title: "Get Human Result",
   },
@@ -454,6 +483,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentRatingContextInputSchema,
     name: "rateloop_get_rating_context",
     outputSchema: agentRatingContextOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "rating",
     requiredScope: MCP_SCOPES.read,
     title: "Get Rating Context",
   },
@@ -469,6 +500,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentPrepareRatingTransactionsInputSchema,
     name: "rateloop_prepare_rating_transactions",
     outputSchema: agentPrepareRatingTransactionsOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "rating",
     requiredScope: MCP_SCOPES.rate,
     title: "Prepare Rating Transactions",
   },
@@ -482,6 +515,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentConfirmRatingTransactionsInputSchema,
     name: "rateloop_confirm_rating_transactions",
     outputSchema: agentRatingStatusOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "rating",
     requiredScope: MCP_SCOPES.rate,
     title: "Confirm Rating Transactions",
   },
@@ -495,6 +530,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: agentRatingStatusInputSchema,
     name: "rateloop_get_rating_status",
     outputSchema: agentRatingStatusOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "rating",
     requiredScope: MCP_SCOPES.read,
     title: "Get Rating Status",
   },
@@ -512,6 +549,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
     name: "rateloop_get_agent_balance",
     outputSchema: agentBalanceOutputSchema,
+    rateLoopTier: "advanced",
+    rateLoopWorkflow: "managed",
     requiredScope: MCP_SCOPES.balance,
     title: "Get Agent Balance",
   },
@@ -1091,10 +1130,14 @@ function assertNoPublicWebhook(args: JsonObject) {
   }
 }
 
-function parseAskHumansMode(value: unknown): AskHumansMode {
-  if (value === undefined || value === null) return "sync";
-  if (value === "sync" || value === "async" || value === "dry_run") return value;
-  throw new McpToolError("mode must be sync, async, or dry_run.");
+function assertSupportedAskHumansMode(value: unknown) {
+  if (value === undefined || value === null || value === "" || value === "dry_run") return;
+  if (value === "sync" || value === "async") {
+    throw new McpToolError(
+      'mode is not supported for live asks. Omit mode for live asks, or use mode: "dry_run" for sandbox validation.',
+    );
+  }
+  throw new McpToolError('mode must be omitted for live asks or set to "dry_run".');
 }
 
 function parseAskHumansPaymentMode(value: unknown): AskHumansPaymentMode {
@@ -2549,7 +2592,7 @@ export async function callPublicRateLoopMcpTool(params: {
       return quotePublicQuestion(args);
 
     case "rateloop_ask_humans": {
-      parseAskHumansMode(args.mode);
+      assertSupportedAskHumansMode(args.mode);
       assertNoPublicWebhook(args);
       const dryRun = isDryRunRequest(args);
       const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
@@ -2768,7 +2811,7 @@ export async function callRateLoopMcpTool(params: {
       return quoteQuestion(args, params.agent);
 
     case "rateloop_ask_humans": {
-      parseAskHumansMode(args.mode);
+      assertSupportedAskHumansMode(args.mode);
       const dryRun = isDryRunRequest(args);
       const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
       const payload = parseX402QuestionRequest(questionPayloadArgs(args));
@@ -3084,6 +3127,7 @@ type AgentToolErrorCode =
   | "invalid_arguments"
   | "invalid_media"
   | "max_payment_exceeded"
+  | "mode_unsupported"
   | "service_unavailable"
   | "unsupported_template"
   | "wallet_address_required";
@@ -3143,6 +3187,9 @@ function classifyToolError(error: unknown): {
   }
 
   if (error instanceof McpToolError) {
+    if (message.includes("mode is not supported")) {
+      return { code: "mode_unsupported", recoverWith: "omit_mode_or_use_dry_run", retryable: false };
+    }
     if (message.includes("walletaddress")) {
       return { code: "wallet_address_required", recoverWith: "include_walletAddress", retryable: false };
     }

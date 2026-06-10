@@ -451,6 +451,33 @@ test("public rateloop_ask_humans dry-run skips permissionless transaction planni
   assert.equal(body.walletPolicyRequired, false);
 });
 
+test("rateloop_ask_humans rejects unsupported sync and async modes", async () => {
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+  });
+
+  await assert.rejects(
+    () =>
+      callRateLoopMcpTool({
+        agent: AGENT,
+        arguments: askArguments({ mode: "sync" }),
+        name: "rateloop_ask_humans",
+      }),
+    /mode is not supported/,
+  );
+  await assert.rejects(
+    () =>
+      callPublicRateLoopMcpTool({
+        arguments: askArguments({
+          mode: "async",
+          walletAddress: AGENT.walletAddress,
+        }),
+        name: "rateloop_ask_humans",
+      }),
+    /mode is not supported/,
+  );
+});
+
 test("managed agents can upload generated image bytes and get a question imageUrl", async () => {
   const result = await callRateLoopMcpTool({
     agent: AGENT,
