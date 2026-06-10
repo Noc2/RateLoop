@@ -438,6 +438,23 @@ export const roundPayoutSnapshot = onchainTable(
   }),
 );
 
+export const payoutArtifactCache = onchainTable(
+  "payout_artifact_cache",
+  (t) => ({
+    artifactHash: t.hex().primaryKey(),
+    artifactUri: t.text().notNull(),
+    canonicalJson: t.text().notNull(),
+    byteLength: t.integer().notNull(),
+    firstSeenAt: t.bigint().notNull(),
+    lastFetchedAt: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    artifactUriIdx: index().on(table.artifactUri),
+    lastFetchedAtIdx: index().on(table.lastFetchedAt),
+  }),
+);
+
 export const questionRewardPoolClaim = onchainTable(
   "question_reward_pool_claim",
   (t) => ({

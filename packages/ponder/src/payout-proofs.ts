@@ -1,5 +1,8 @@
 import { merkleProof } from "@rateloop/node-utils/correlationScoring";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
+import { eq } from "ponder";
+import { db } from "ponder:api";
+import { payoutArtifactCache } from "ponder:schema";
 import type { Hex } from "viem";
 
 export interface PayoutWeightProof {
@@ -93,7 +96,7 @@ export async function resolveQuestionPayoutProof(
     return null;
   }
 
-  const artifact = await fetchArtifactJson(params.artifactUri);
+  const artifact = await fetchArtifactJson(params.artifactUri, params.artifactHash);
   if (!artifact) return null;
   if (!artifactHashMatches(artifact, params.artifactHash)) return null;
 
@@ -124,7 +127,13 @@ export async function resolveQuestionPayoutProof(
   }
 }
 
-async function fetchArtifactJson(uri: string): Promise<unknown | null> {
+async function fetchArtifactJson(
+  uri: string,
+  artifactHash?: Hex | null | undefined,
+): Promise<unknown | null> {
+  const cached = await readCachedArtifactJson(artifactHash);
+  if (cached !== null) return cached;
+
   const normalizedUri = normalizeArtifactUri(uri);
   if (!normalizedUri) return null;
 
@@ -138,6 +147,27 @@ async function fetchArtifactJson(uri: string): Promise<unknown | null> {
     return await promise;
   } catch {
     artifactCache.delete(normalizedUri);
+    return null;
+  }
+}
+
+async function readCachedArtifactJson(
+  artifactHash: Hex | null | undefined,
+): Promise<unknown | null> {
+  const normalizedArtifactHash = normalizeHex(artifactHash, 32);
+  if (!normalizedArtifactHash) return null;
+
+  try {
+    const rows = await db
+      .select({
+        canonicalJson: payoutArtifactCache.canonicalJson,
+      })
+      .from(payoutArtifactCache)
+      .where(eq(payoutArtifactCache.artifactHash, normalizedArtifactHash))
+      .limit(1);
+    const canonicalJson = rows[0]?.canonicalJson;
+    return canonicalJson ? JSON.parse(canonicalJson) : null;
+  } catch {
     return null;
   }
 }

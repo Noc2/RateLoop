@@ -44,9 +44,34 @@ function artifactHash(value: unknown) {
   return canonicalJsonHash(value);
 }
 
-async function loadResolver(allowlist = "") {
+function createCachedArtifactQuery(cachedCanonicalJson: string | null) {
+  const rows = cachedCanonicalJson ? [{ canonicalJson: cachedCanonicalJson }] : [];
+  const builder = {
+    from: vi.fn(() => builder),
+    where: vi.fn(() => builder),
+    limit: vi.fn(() => Promise.resolve(rows)),
+  };
+  return builder;
+}
+
+async function loadResolver(allowlist = "", cachedCanonicalJson: string | null = null) {
   vi.resetModules();
   process.env.PAYOUT_ARTIFACT_HTTPS_ALLOWLIST = allowlist;
+  const queryBuilder = createCachedArtifactQuery(cachedCanonicalJson);
+  vi.doMock("ponder:api", () => ({
+    db: {
+      select: vi.fn(() => queryBuilder),
+    },
+  }));
+  vi.doMock("ponder", () => ({
+    eq: (...args: unknown[]) => ({ kind: "eq", args }),
+  }));
+  vi.doMock("ponder:schema", () => ({
+    payoutArtifactCache: {
+      artifactHash: "payoutArtifactCache.artifactHash",
+      canonicalJson: "payoutArtifactCache.canonicalJson",
+    },
+  }));
   return import("../src/payout-proofs.js");
 }
 
@@ -110,6 +135,23 @@ describe("payout artifact proof resolution", () => {
         artifactUri,
       }),
     ).resolves.toBeNull();
+  });
+
+  it("uses cached canonical artifacts by hash before fetching the URI", async () => {
+    const fetchMock = mockArtifactFetch();
+    const { resolveQuestionPayoutProof } = await loadResolver(
+      "https://artifacts.example.com/",
+      JSON.stringify(artifact),
+    );
+
+    await expect(
+      resolveQuestionPayoutProof({
+        ...proofParams,
+        artifactHash: artifactHash(artifact),
+        artifactUri: "https://artifacts.example.com/rateloop/0xabc.json",
+      }),
+    ).resolves.toEqual(expect.objectContaining({ proof: [] }));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects payout weights with malformed ABI hex widths", async () => {
