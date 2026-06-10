@@ -70,6 +70,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
     uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
     uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
+    uint256 internal constant VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD = 10_000e6;
+    uint256 internal constant MIN_VERY_HIGH_VALUE_PARTICIPANTS = 8;
     uint256 internal constant MAX_FRONTEND_FEE_BPS = 500;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
@@ -572,6 +574,42 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         assertGt(rewardPoolId, 0);
     }
 
+    function testVeryHighValueRewardPoolRequiresEconomicParticipantFloor() public {
+        RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
+            epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 8, maxVoters: 8
+        });
+        uint256 contentId = _submitQuestionWithRoundConfig("very-high-value-floor", roundConfig);
+        uint256 veryHighValueAmount = VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD;
+        usdc.mint(funder, 2 * veryHighValueAmount);
+
+        vm.startPrank(funder);
+        usdc.approve(address(rewardPoolEscrow), veryHighValueAmount);
+        vm.expectRevert("High-value floor");
+        rewardPoolEscrow.createRewardPool(
+            contentId,
+            veryHighValueAmount,
+            MIN_HIGH_VALUE_PARTICIPANTS,
+            1,
+            block.timestamp + 30 days,
+            30 days,
+            0
+        );
+
+        usdc.approve(address(rewardPoolEscrow), veryHighValueAmount);
+        uint256 rewardPoolId = rewardPoolEscrow.createRewardPool(
+            contentId,
+            veryHighValueAmount,
+            MIN_VERY_HIGH_VALUE_PARTICIPANTS,
+            1,
+            block.timestamp + 30 days,
+            30 days,
+            0
+        );
+        vm.stopPrank();
+
+        assertGt(rewardPoolId, 0);
+    }
+
     function testOpenWalletCanClaimQuestionRewardWithoutRaterIdentity() public {
         address openVoter1 = address(201);
         address openVoter2 = address(202);
@@ -901,6 +939,59 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         rewardPoolEscrow.createSubmissionBundleFromRegistry(
             1, contentIds, funder, REWARD_ASSET_USDC, 20e6, 3, 1, block.timestamp + 1 hours, 1 hours, 1 hours, 0
         );
+    }
+
+    function testCreateSubmissionBundleRejectsVeryHighValueBelowEconomicFloor() public {
+        RoundLib.RoundConfig memory roundConfig = RoundLib.RoundConfig({
+            epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 8, maxVoters: 8
+        });
+        uint256[] memory contentIds = new uint256[](2);
+        contentIds[0] =
+            _submitQuestionWithContextAndRoundConfig("https://example.com/vh-bundle-a", "vh-a", roundConfig);
+        contentIds[1] =
+            _submitQuestionWithContextAndRoundConfig("https://example.com/vh-bundle-b", "vh-b", roundConfig);
+
+        usdc.mint(funder, 2 * VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD);
+
+        vm.startPrank(funder);
+        usdc.approve(address(rewardPoolEscrow), VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD);
+        vm.stopPrank();
+
+        vm.expectRevert("High-value floor");
+        vm.prank(address(registry));
+        rewardPoolEscrow.createSubmissionBundleFromRegistry(
+            1,
+            contentIds,
+            funder,
+            REWARD_ASSET_USDC,
+            VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD,
+            MIN_HIGH_VALUE_PARTICIPANTS,
+            1,
+            block.timestamp + 1 hours,
+            1 hours,
+            1 hours,
+            0
+        );
+
+        vm.startPrank(funder);
+        usdc.approve(address(rewardPoolEscrow), VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD);
+        vm.stopPrank();
+
+        vm.prank(address(registry));
+        uint256 bundleId = rewardPoolEscrow.createSubmissionBundleFromRegistry(
+            2,
+            contentIds,
+            funder,
+            REWARD_ASSET_USDC,
+            VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD,
+            MIN_VERY_HIGH_VALUE_PARTICIPANTS,
+            1,
+            block.timestamp + 1 hours,
+            1 hours,
+            1 hours,
+            0
+        );
+        assertEq(bundleId, 2);
     }
 
     function testT1BundleThresholdReachedAfterBountyCloseStillQualifiesMatchedCompleters() public {

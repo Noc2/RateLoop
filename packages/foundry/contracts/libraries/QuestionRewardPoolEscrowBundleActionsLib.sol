@@ -14,6 +14,7 @@ import { QuestionRewardPoolEscrowEligibilityLib } from "./QuestionRewardPoolEscr
 import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEscrowQualificationLib.sol";
 import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowTransferLib.sol";
 import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
+import { QuestionRewardParticipantFloorLib } from "./QuestionRewardParticipantFloorLib.sol";
 import {
     BundleReward,
     BundleQuestion,
@@ -29,9 +30,6 @@ library QuestionRewardPoolEscrowBundleActionsLib {
 
     uint256 internal constant MIN_REQUIRED_VOTERS = 3;
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
-    uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
-    uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
-    uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
     uint256 internal constant BPS_SCALE = 10_000;
     uint256 internal constant BUNDLE_CLAIM_GRACE = 7 days;
     uint256 internal constant BUNDLE_REFUND_GRACE = 98 days;
@@ -1317,7 +1315,7 @@ library QuestionRewardPoolEscrowBundleActionsLib {
     }
 
     function _requiredParticipantFloorForAmount(uint256 amount) private pure returns (uint256) {
-        return amount >= HIGH_VALUE_REWARD_POOL_THRESHOLD ? MIN_HIGH_VALUE_PARTICIPANTS : MIN_REWARD_POOL_PARTICIPANTS;
+        return QuestionRewardParticipantFloorLib.requiredParticipantFloorForAmount(amount);
     }
 
     function _initialBundleSyncCursor(RoundVotingEngine votingEngine, uint256 contentId)

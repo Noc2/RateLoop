@@ -13,6 +13,7 @@ import { QuestionRewardPoolEscrowQualificationLib } from "./QuestionRewardPoolEs
 import { QuestionRewardPoolEscrowTransferLib } from "./QuestionRewardPoolEscrowTransferLib.sol";
 import { QuestionRewardPoolEscrowVoterLib } from "./QuestionRewardPoolEscrowVoterLib.sol";
 import { QuestionRewardPoolEscrowWindowLib } from "./QuestionRewardPoolEscrowWindowLib.sol";
+import { QuestionRewardParticipantFloorLib } from "./QuestionRewardParticipantFloorLib.sol";
 import { RewardPool, CreateRewardPoolParams } from "./QuestionRewardPoolEscrowTypes.sol";
 import { RoundLib } from "./RoundLib.sol";
 
@@ -23,9 +24,6 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     uint256 internal constant MIN_REQUIRED_SETTLED_ROUNDS = 1;
     uint256 internal constant MAX_REQUIRED_SETTLED_ROUNDS = 16;
     uint256 internal constant MAX_REWARD_POOL_ROUND_VOTERS = 200;
-    uint256 internal constant MIN_REWARD_POOL_PARTICIPANTS = 3;
-    uint256 internal constant HIGH_VALUE_REWARD_POOL_THRESHOLD = 1_000e6;
-    uint256 internal constant MIN_HIGH_VALUE_PARTICIPANTS = 5;
     uint256 internal constant BPS_SCALE = 10_000;
     uint8 internal constant REWARD_ASSET_LREP = 0;
     uint8 internal constant REWARD_ASSET_USDC = 1;
@@ -412,6 +410,6 @@ library QuestionRewardPoolEscrowPoolActionsLib {
     }
 
     function _requiredParticipantFloorForAmount(uint256 amount) private pure returns (uint256) {
-        return amount >= HIGH_VALUE_REWARD_POOL_THRESHOLD ? MIN_HIGH_VALUE_PARTICIPANTS : MIN_REWARD_POOL_PARTICIPANTS;
+        return QuestionRewardParticipantFloorLib.requiredParticipantFloorForAmount(amount);
     }
 }
