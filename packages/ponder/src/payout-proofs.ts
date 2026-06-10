@@ -1,5 +1,6 @@
 import { merkleProof } from "@rateloop/node-utils/correlationScoring";
-import { keccak256, toBytes, type Hex } from "viem";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
+import type { Hex } from "viem";
 
 export interface PayoutWeightProof {
   payoutWeight: {
@@ -275,30 +276,8 @@ function readDataUri(uri: string) {
 function artifactHashMatches(artifact: unknown, expectedHash: Hex | null | undefined) {
   const normalizedExpectedHash = normalizeHex(expectedHash, 32);
   if (!normalizedExpectedHash) return true;
-  const actualHash = keccak256(toBytes(canonicalJson(artifact)));
+  const actualHash = canonicalJsonHash(artifact);
   return actualHash.toLowerCase() === normalizedExpectedHash.toLowerCase();
-}
-
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortJson(value), (_key, current) =>
-    typeof current === "bigint" ? current.toString() : current,
-  );
-}
-
-function sortJson(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortJson);
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const record = value as Record<string, unknown>;
-  return Object.fromEntries(
-    Object.keys(record)
-      .sort()
-      .map((key) => [key, sortJson(record[key])]),
-  );
 }
 
 function collectPayoutWeights(artifact: unknown): CandidatePayoutWeight[] {

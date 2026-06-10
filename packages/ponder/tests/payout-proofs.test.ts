@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { keccak256, toBytes } from "viem";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
 
 const proofParams = {
   domain: 1,
@@ -40,28 +40,8 @@ function artifactWithPayoutWeight(overrides: Record<string, unknown>) {
   };
 }
 
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(sortJson(value));
-}
-
-function sortJson(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortJson);
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-
-  const record = value as Record<string, unknown>;
-  return Object.fromEntries(
-    Object.keys(record)
-      .sort()
-      .map((key) => [key, sortJson(record[key])]),
-  );
-}
-
 function artifactHash(value: unknown) {
-  return keccak256(toBytes(canonicalJson(value)));
+  return canonicalJsonHash(value);
 }
 
 async function loadResolver(allowlist = "") {
