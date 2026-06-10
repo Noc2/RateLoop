@@ -90,6 +90,20 @@ describe("keeper client", () => {
     expect(clientModule.mocks.privateKeyToAccount).toHaveBeenCalledWith(privateKey);
   });
 
+  it("propagates keystore decryption failures instead of falling back to the private key", async () => {
+    const clientModule = await loadKeeperClient({
+      privateKey: `0x${"22".repeat(32)}`,
+    });
+    clientModule.mocks.getKeystoreAccount.mockImplementation(() => {
+      throw new Error('Failed to decrypt keystore account "keeper": MAC mismatch');
+    });
+
+    expect(() => clientModule.getAccount()).toThrow(
+      'Failed to decrypt keystore account "keeper": MAC mismatch',
+    );
+    expect(clientModule.mocks.privateKeyToAccount).not.toHaveBeenCalled();
+  });
+
   it("throws when no wallet identity is configured", async () => {
     const clientModule = await loadKeeperClient();
 
