@@ -23,7 +23,7 @@ const cocmPaperHref = "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=43115
 export const metadata = {
   title: "Tech Stack | RateLoop Docs",
   description:
-    "The protocol terms behind RateLoop: x402 agent payments, MCP, WebMCP browser tools, World ID proof-of-human credentials, Robust Bayesian Truth Serum reports, LREP staking, and World Chain USDC settlement.",
+    "The protocol terms behind RateLoop: EIP-3009 USDC authorization, MCP, WebMCP browser tools, World ID proof-of-human credentials, Robust Bayesian Truth Serum reports, LREP staking, and World Chain settlement.",
 } satisfies Metadata;
 
 const TechStackPage: NextPage = () => {
@@ -35,25 +35,25 @@ const TechStackPage: NextPage = () => {
         why they matter for AI-funded open feedback.
       </p>
 
-      <h2 id="x402-agent-payments">x402 Agent Payments</h2>
+      <h2 id="x402-agent-payments">EIP-3009 USDC Authorization</h2>
       <p>
         <a href={x402IntroHref} target="_blank" rel="noopener noreferrer" className="link link-primary">
           x402
         </a>{" "}
-        is an open payment standard built around HTTP <code>402 Payment Required</code>. It lets clients, including AI
-        agents, programmatically authorize crypto-native payments instead of creating accounts, API keys, card sessions,
-        or off-platform invoices.
+        is an open payment standard built around HTTP <code>402 Payment Required</code>. RateLoop does not currently
+        return HTTP 402 challenges, <code>PaymentRequirements</code>, or <code>X-PAYMENT</code> responses. Its live
+        agent wallet lane is an EIP-3009 <code>ReceiveWithAuthorization</code> signature over World Chain USDC.
       </p>
       <p>
-        In RateLoop, x402 is the agent-native World Chain USDC funding lane. An agent can ask with{" "}
-        <code>{'paymentMode: "x402_authorization"'}</code>, receive typed data for a USDC authorization, sign it with
-        its wallet, and then submit the ordered transaction plan that funds protocol escrow. That keeps spend tied to a
-        wallet signature while avoiding a custodial pre-deposit.
+        Agents should prefer <code>{'paymentMode: "eip3009_usdc_authorization"'}</code>. RateLoop still accepts{" "}
+        <code>{'paymentMode: "x402_authorization"'}</code> as a compatibility alias for existing integrations. The agent
+        receives typed data for a USDC authorization, signs it with its wallet, and then submits the ordered transaction
+        plan that funds protocol escrow. That keeps spend tied to a wallet signature while avoiding a custodial
+        pre-deposit.
       </p>
       <p>
-        RateLoop uses explicit World Chain USDC amounts. The x402 network model supports EVM chains through CAIP-2
-        identifiers and EVM token transfers through EIP-3009 or Permit2, so this is a standards-aligned payment path
-        rather than a plain JSON API label.
+        This is a standards-based USDC authorization path, not the full x402 wire protocol. Standard x402 client
+        libraries cannot auto-pay RateLoop through a 402 challenge until RateLoop adds that HTTP flow.
       </p>
 
       <h2 id="mcp-adapter">MCP Adapter</h2>
@@ -68,8 +68,8 @@ const TechStackPage: NextPage = () => {
       </p>
       <p>
         RateLoop uses MCP Streamable HTTP for remote agent access. The important point is not that the transport is
-        HTTP; it is that the agent sees a stable tool interface while RateLoop handles wallet plans, x402 authorization,
-        budgets, callbacks, and result packaging behind those tools.
+        HTTP; it is that the agent sees a stable tool interface while RateLoop handles wallet plans, EIP-3009 USDC
+        authorization, budgets, callbacks, and result packaging behind those tools.
       </p>
 
       <h2 id="webmcp">WebMCP</h2>
@@ -88,7 +88,7 @@ const TechStackPage: NextPage = () => {
       <p>
         Wallet-sensitive actions stay explicit. Browser signing remains a user approval step for injected wallets and
         Ledger, local signer CLI flows remain available for agents with encrypted keystores, and raw ordered wallet
-        calls or x402 authorization remain available for wallet-capable agents.
+        calls or EIP-3009 USDC authorization remain available for wallet-capable agents.
       </p>
 
       <span id="optional-identity" />
@@ -232,17 +232,18 @@ const TechStackPage: NextPage = () => {
 
       <h2 id="worldchain-usdc">World Chain USDC And Stablecoins</h2>
       <p>
-        RateLoop uses World Chain USDC for agent-friendly bounty funding, x402 authorization, and stablecoin Feedback
-        Bonuses. LREP Feedback Bonuses use the same wallet-call path as LREP bounties. Circle lists USDC on World Chain
-        as native ERC-20 USDC, and World Chain keeps the payment path EVM-compatible and low-cost for small
+        RateLoop uses World Chain USDC for agent-friendly bounty funding, EIP-3009 authorization, and stablecoin
+        Feedback Bonuses. LREP Feedback Bonuses use the same wallet-call path as LREP bounties. Circle lists USDC on
+        World Chain as native ERC-20 USDC, and World Chain keeps the payment path EVM-compatible and low-cost for small
         human-feedback jobs.
       </p>
 
       <h2>Research References</h2>
       <ul>
         <li>
-          x402: <a href={x402IntroHref}>overview</a>, <a href={x402Http402Href}>HTTP 402</a>,{" "}
-          <a href={x402NetworkSupportHref}>network and token support</a>, <a href={x402McpHref}>MCP integration</a>
+          x402 background and future wire-flow references: <a href={x402IntroHref}>overview</a>,{" "}
+          <a href={x402Http402Href}>HTTP 402</a>, <a href={x402NetworkSupportHref}>network and token support</a>,{" "}
+          <a href={x402McpHref}>MCP integration</a>
         </li>
         <li>
           MCP: <a href={mcpSpecHref}>base protocol</a>, <a href={mcpTransportsHref}>Streamable HTTP transport</a>

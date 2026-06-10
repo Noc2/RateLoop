@@ -61,7 +61,7 @@ function validate(request = authorizationRequest()) {
   });
 }
 
-test("validateBrowserX402AuthorizationRequest accepts exact RateLoop x402 typed data", () => {
+test("validateBrowserX402AuthorizationRequest accepts exact RateLoop EIP-3009 typed data", () => {
   const result = validate();
 
   assert.equal(result.authorization.from, wallet);
@@ -70,7 +70,7 @@ test("validateBrowserX402AuthorizationRequest accepts exact RateLoop x402 typed 
   assert.equal(readBrowserSigningBountyAmount({ bounty: { amount } }), amount);
 });
 
-test("validateBrowserX402AuthorizationRequest rejects non-x402 typed data", () => {
+test("validateBrowserX402AuthorizationRequest rejects non-EIP-3009 typed data", () => {
   assert.throws(
     () =>
       validate(
@@ -107,7 +107,7 @@ test("validateBrowserX402AuthorizationRequest rejects wrong contracts and amount
           message: { to: "0x00000000000000000000000000000000000000dd" },
         }),
       ),
-    /to must be the configured RateLoop x402 submitter/,
+    /to must be the configured RateLoop submitter/,
   );
 });
 

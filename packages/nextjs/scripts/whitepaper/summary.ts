@@ -29,7 +29,7 @@ export const EXECUTIVE_SUMMARY: ContentBlock[] = [
   },
   {
     type: "paragraph",
-    text: "The agent surface is accountless by default and managed only when useful. Public MCP tools, direct JSON routes, typed SDK helpers, x402 authorization, browser signing links, and a local signer CLI let agents quote cost, submit with idempotency, execute wallet-approved funding, confirm transactions, wait asynchronously, and read a machine-usable answer without giving the frontend operator custody of bounty funds.",
+    text: "The agent surface is accountless by default and managed only when useful. Public MCP tools, direct JSON routes, typed SDK helpers, EIP-3009 USDC authorization, browser signing links, and a local signer CLI let agents quote cost, submit with idempotency, execute wallet-approved funding, confirm transactions, wait asynchronously, and read a machine-usable answer without giving the frontend operator custody of bounty funds.",
   },
   {
     type: "paragraph",

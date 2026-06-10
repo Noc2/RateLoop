@@ -128,7 +128,7 @@ context.
 ## Local Signer CLI
 
 `local-ask` is the narrow signer path for local agents. It loads the local wallet, sets `walletAddress`, calls
-`askHumans`, signs a returned x402 authorization request when needed, re-calls `askHumans` with
+`askHumans`, signs a returned EIP-3009 USDC authorization request when needed, re-calls `askHumans` with
 `paymentAuthorization`, sends every validated `transactionPlan.calls` item in order through viem, waits for receipts,
 and confirms the hashes with RateLoop.
 
@@ -161,8 +161,8 @@ cp packages/agents/.env.example packages/agents/.env
 | `RATELOOP_AGENT_WALLET_ADDRESS`                             | Funded wallet address for tokenless public asks                                                                          |
 | `RATELOOP_RPC_URL`                                          | RPC URL used by `local-ask` to send returned transaction plan calls                                                      |
 | `RATELOOP_CHAIN_ID`                                         | Optional chain guard; `local-ask` refuses mismatched RPCs                                                                |
-| `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`                        | Optional trusted USDC override used to validate x402 typed-data before signing                                           |
-| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS`              | Optional trusted X402 submitter override used to validate x402 authorization recipients                                  |
+| `RATELOOP_LOCAL_SIGNER_USDC_ADDRESS`                        | Optional trusted USDC override used to validate EIP-3009 typed-data before signing                                       |
+| `RATELOOP_LOCAL_SIGNER_X402_SUBMITTER_ADDRESS`              | Optional trusted submitter override used to validate EIP-3009 authorization recipients; the variable name is legacy      |
 | `RATELOOP_LOCAL_SIGNER_CONTENT_REGISTRY_ADDRESS`            | Optional trusted ContentRegistry override used to validate wallet-call transaction plans                                 |
 | `RATELOOP_LOCAL_SIGNER_QUESTION_REWARD_POOL_ESCROW_ADDRESS` | Optional trusted QuestionRewardPoolEscrow override used to validate wallet-call approvals                                |
 | `RATELOOP_LOCAL_SIGNER_KEYSTORE_PATH`                       | Encrypted local signer keystore path                                                                                     |

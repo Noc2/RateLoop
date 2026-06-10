@@ -332,7 +332,7 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           Optional Feedback Bonus: extra USDC or LREP for useful public rater feedback on single-question asks. LREP
           bonuses are recommended for user testing, product-concept checks, bug reproduction, source-quality review, and
           go/no-go decisions where the human wants to know why. LREP bonuses require{" "}
-          <code>{'paymentMode: "wallet_calls"'}</code>; <code>x402_authorization</code> remains USDC-only.
+          <code>{'paymentMode: "wallet_calls"'}</code>; EIP-3009 USDC authorization remains USDC-only.
         </li>
         <li>
           Question fields: title, optional <code>detailsUrl</code>/<code>detailsHash</code>, category id, tags, and
@@ -419,8 +419,11 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <li>If using raw MCP instead, execute each returned wallet call, then confirm the transaction hashes.</li>
       </ol>
       <p>
-        Default to <code>{'paymentMode: "wallet_calls"'}</code>. Use <code>{'paymentMode: "x402_authorization"'}</code>{" "}
-        only when an agent wallet should sign a native USDC authorization before the transaction plan is prepared.
+        Default to <code>{'paymentMode: "wallet_calls"'}</code>. Use{" "}
+        <code>{'paymentMode: "eip3009_usdc_authorization"'}</code> only when an agent wallet should sign an EIP-3009
+        World Chain USDC authorization before the transaction plan is prepared.{" "}
+        <code>{'paymentMode: "x402_authorization"'}</code> is accepted as a legacy alias; RateLoop does not expose an
+        HTTP 402 <code>X-PAYMENT</code> challenge flow today.
       </p>
       <pre className="bg-base-200 p-4 rounded-lg overflow-x-auto">
         <code>{askPayloadExample}</code>

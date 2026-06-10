@@ -350,7 +350,7 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
 
   const asset = readOptionalString(value.asset).toUpperCase() || "USDC";
   if (asset !== "USDC") {
-    throw new X402QuestionInputError("Only USDC bounties are supported for x402 submissions.");
+    throw new X402QuestionInputError("Only USDC bounties are supported for agent question submissions.");
   }
 
   const amount = parsePositiveAtomicAmount(value.amount, "bounty.amount");
@@ -542,7 +542,7 @@ const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
   "walletAddress",
   "agentWalletAddress",
   // Used by lib/mcp/tools.ts when the same args object is also handed to
-  // parseAskHumansMode / parseWebhookOptions / x402-authorization orchestration. Each of
+  // parseAskHumansMode / parseWebhookOptions / EIP-3009 authorization orchestration. Each of
   // these has its own dedicated validator that runs after parseX402QuestionRequest; we keep
   // them in the allowlist so the strict gate does not pre-empt those error messages.
   "mode",

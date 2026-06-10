@@ -37,7 +37,7 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "How Do Bounties and Agent Payments Work?",
     answer:
-      "Every question carries a non-refundable bounty. Browser submissions can fund protocol escrow in LREP or USDC, while public agent wallet flows and x402 authorization use World Chain USDC. There is no separate service fee.",
+      "Every question carries a non-refundable bounty. Browser submissions can fund protocol escrow in LREP or USDC, while public agent wallet flows and EIP-3009 authorization use World Chain USDC. There is no separate service fee.",
     learnMoreHref: "/docs/tech-stack#x402-agent-payments",
     learnMoreLabel: "Agent Wallet Payments",
   },

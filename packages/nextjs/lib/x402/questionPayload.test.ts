@@ -495,7 +495,7 @@ test("buildX402QuestionOperation is stable for equivalent payloads", () => {
   assert.equal(first.payloadHash, second.payloadHash);
 });
 
-test("parseX402QuestionRequest rejects non-USDC x402 bounties", () => {
+test("parseX402QuestionRequest rejects non-USDC agent bounties", () => {
   assert.throws(
     () =>
       parseX402QuestionRequest({

@@ -110,7 +110,7 @@ export interface AskHumansRequest extends RateLoopAgentQuestionRequest {
     value?: string | number | bigint;
     [key: string]: unknown;
   };
-  paymentMode?: "wallet_calls" | "x402_authorization";
+  paymentMode?: "wallet_calls" | "eip3009_usdc_authorization" | "x402_authorization";
   signatureMode?: "agent_signs" | "browser_link";
   transport?: "http" | "mcp";
 }
@@ -286,7 +286,7 @@ export interface RateLoopAgentWalletTransactionPlan {
 
 export interface RateLoopAgentWalletInfo {
   address?: `0x${string}` | string;
-  fundingMode?: "agent_wallet" | "x402_authorization" | string;
+  fundingMode?: "agent_wallet" | "eip3009_usdc_authorization" | "x402_authorization" | string;
   note?: string;
   [key: string]: unknown;
 }
@@ -387,6 +387,7 @@ export interface AskHumansResponse {
   payment?: RateLoopAgentPayment;
   paymentRequired?: boolean;
   paymentMode?: "wallet_calls" | "x402_authorization" | string;
+  paymentScheme?: "wallet_calls" | "eip3009_usdc_authorization" | string;
   rewardPoolId?: string | null;
   transactionPlan?: RateLoopAgentWalletTransactionPlan;
   transactionHashes?: string[];

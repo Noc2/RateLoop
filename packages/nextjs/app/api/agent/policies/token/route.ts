@@ -21,7 +21,7 @@ function buildMcpConfig(token: string, request: NextRequest, agentWalletAddress:
           Authorization: `Bearer ${token}`,
           "MCP-Protocol-Version": "2025-11-25",
         },
-        paymentModes: ["wallet_calls", "x402_authorization"],
+        paymentModes: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
         transport: "streamable-http",
         url: new URL("/api/mcp", request.url).toString(),
         walletAddress: agentWalletAddress,

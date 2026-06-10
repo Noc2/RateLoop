@@ -1260,18 +1260,22 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
   const body = prepared.body as {
     nextAction: string;
     paymentMode: string;
+    paymentScheme: string;
     transactionPlan: null | { calls: unknown[] };
     x402AuthorizationRequest: {
       authorization: { nonce: string };
       eip712: { domain: { name?: string; version?: string; verifyingContract?: string } };
+      scheme: string;
     };
   };
 
   assert.equal(prepared.status, 202);
   assert.equal(body.paymentMode, "x402_authorization");
+  assert.equal(body.paymentScheme, "eip3009_usdc_authorization");
   assert.equal(body.nextAction, "sign_x402_authorization");
   assert.equal(body.transactionPlan, null);
   assert.equal(body.x402AuthorizationRequest.authorization.nonce, `0x${"4".repeat(64)}`);
+  assert.equal(body.x402AuthorizationRequest.scheme, "eip3009_usdc_authorization");
   assert.equal(body.x402AuthorizationRequest.eip712.domain.name, "USDC");
   assert.equal(body.x402AuthorizationRequest.eip712.domain.version, "2");
   assert.equal(body.x402AuthorizationRequest.eip712.domain.verifyingContract, TEST_CONFIG.usdcAddress);
@@ -1319,11 +1323,13 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
   const permissionlessBody = permissionless.body as {
     clientRequestId: string;
     paymentMode: string;
+    paymentScheme: string;
     x402AuthorizationRequest: { authorization: { nonce: string } };
   };
   assert.equal(permissionless.status, 202);
   assert.equal(permissionlessBody.clientRequestId, permissionlessPayload.clientRequestId);
   assert.equal(permissionlessBody.paymentMode, "x402_authorization");
+  assert.equal(permissionlessBody.paymentScheme, "eip3009_usdc_authorization");
 
   const storedClientRequestId = buildPermissionlessWalletClientRequestId({
     chainId: permissionlessPayload.chainId,

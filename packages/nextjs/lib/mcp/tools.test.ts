@@ -827,7 +827,7 @@ test("rateloop_ask_humans carries optional feedback bonus and reserves total spe
   assert.equal((reserved[0] as { amount: bigint }).amount, 3_000_000n);
 });
 
-test("rateloop_ask_humans can return a native x402 authorization request", async () => {
+test("rateloop_ask_humans can return an EIP-3009 USDC authorization request", async () => {
   const prepared: unknown[] = [];
 
   __setMcpToolTestOverridesForTests({
@@ -840,6 +840,7 @@ test("rateloop_ask_humans can return a native x402 authorization request", async
           nextAction: "sign_x402_authorization",
           operationKey: OPERATION_KEY,
           paymentMode: "x402_authorization",
+          paymentScheme: "eip3009_usdc_authorization",
           status: "awaiting_wallet_signature",
           transactionPlan: null,
           wallet: { address: params.walletAddress, fundingMode: "x402_authorization" },
@@ -862,7 +863,7 @@ test("rateloop_ask_humans can return a native x402 authorization request", async
 
   const result = await callRateLoopMcpTool({
     agent: AGENT,
-    arguments: askArguments({ paymentMode: "x402_authorization" }),
+    arguments: askArguments({ paymentMode: "eip3009_usdc_authorization" }),
     name: "rateloop_ask_humans",
   });
 
@@ -870,12 +871,14 @@ test("rateloop_ask_humans can return a native x402 authorization request", async
     confirmTool: string;
     nextAction: string;
     paymentMode: string;
+    paymentScheme: string;
     transactionPlan: null;
     wallet: { address: string; fundingMode: string };
     x402AuthorizationRequest: { authorization: { nonce: string } };
   };
 
   assert.equal(body.paymentMode, "x402_authorization");
+  assert.equal(body.paymentScheme, "eip3009_usdc_authorization");
   assert.equal(body.nextAction, "sign_x402_authorization");
   assert.equal(body.transactionPlan, null);
   assert.equal(body.confirmTool, "rateloop_confirm_ask_transactions");

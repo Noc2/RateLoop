@@ -99,7 +99,8 @@ function readPaymentMode(options: CliOptions) {
   const value = options["payment-mode"];
   if (value === undefined) return undefined;
   if (value === "wallet_calls" || value === "x402_authorization") return value;
-  throw new Error("--payment-mode must be wallet_calls or x402_authorization");
+  if (value === "eip3009_usdc_authorization" || value === "eip3009_authorization") return "x402_authorization";
+  throw new Error("--payment-mode must be wallet_calls, eip3009_usdc_authorization, or x402_authorization");
 }
 
 function printLocalAskProgress(event: LocalAskProgress) {
@@ -108,10 +109,10 @@ function printLocalAskProgress(event: LocalAskProgress) {
       console.error(`RateLoop ask prepared: ${event.response.operationKey ?? "operation pending"}`);
       return;
     case "x402_signed":
-      console.error("Signed x402 authorization.");
+      console.error("Signed EIP-3009 USDC authorization.");
       return;
     case "x402_resubmitted":
-      console.error(`RateLoop x402 ask prepared: ${event.response.operationKey ?? "operation pending"}`);
+      console.error(`RateLoop EIP-3009 USDC ask prepared: ${event.response.operationKey ?? "operation pending"}`);
       return;
     case "transaction_sent":
       console.error(`Sent transactionPlan.calls[${event.index}]${event.phase ? ` (${event.phase})` : ""}: ${event.hash}`);

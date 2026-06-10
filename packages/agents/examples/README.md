@@ -90,10 +90,11 @@ bounty amounts are atomic USDC units. Set `bountyStartBy` to the latest acceptab
 `bountyWindowSeconds` and `feedbackWindowSeconds` to the active windows after that first round starts.
 
 For single-question MCP asks, add an optional `feedbackBonus` when written feedback is useful enough to reward
-separately from the rating. Feedback Bonuses can use USDC or LREP with `paymentMode: "wallet_calls"`; x402 remains
-USDC-only. The requested feedback close is not the final payout cutoff; awards remain open until at least 24 hours after
-settlement. Set `maxPaymentAmount` to cover the USDC bounty plus any USDC bonus. After the ask is confirmed, execute any
-returned `feedbackBonus.transactionPlan.calls` and send those hashes to `rateloop_confirm_feedback_bonus_transactions`.
+separately from the rating. Feedback Bonuses can use USDC or LREP with `paymentMode: "wallet_calls"`; the EIP-3009
+authorization path is USDC-only and accepts `paymentMode: "x402_authorization"` as a legacy alias. The requested
+feedback close is not the final payout cutoff; awards remain open until at least 24 hours after settlement. Set
+`maxPaymentAmount` to cover the USDC bounty plus any USDC bonus. After the ask is confirmed, execute any returned
+`feedbackBonus.transactionPlan.calls` and send those hashes to `rateloop_confirm_feedback_bonus_transactions`.
 
 ## Rating Existing Content
 

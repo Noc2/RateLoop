@@ -31,7 +31,7 @@ const bytes32Schema = {
 const agentWalletAddressSchema = {
   ...evmAddressSchema,
   description:
-    "User-controlled wallet or scoped agent wallet that signs the returned transaction plan or x402 authorization.",
+    "User-controlled wallet or scoped agent wallet that signs the returned transaction plan or EIP-3009 USDC authorization.",
 };
 
 const templateSelectorSchema = {
@@ -399,7 +399,7 @@ const agentAskInputBaseProperties = {
   feedbackBonus: {
     ...agentFeedbackBonusInputSchema,
     description:
-      "Optional LREP or USDC pool for useful public feedback from revealed raters. LREP requires wallet_calls funding mode; x402_authorization remains USDC-only. Currently supported for single-question asks.",
+      "Optional LREP or USDC pool for useful public feedback from revealed raters. LREP requires wallet_calls funding mode; EIP-3009 USDC authorization remains USDC-only. Currently supported for single-question asks.",
   },
   roundConfig: agentRoundConfigInputSchema,
   ...templateSelectorSchema.properties,
@@ -572,7 +572,7 @@ export const agentAskHumansInputSchema = {
     paymentAuthorization: {
       additionalProperties: false,
       description:
-        "Signed EIP-3009 ReceiveWithAuthorization payload for paymentMode=x402_authorization. Omit signature on the first call to receive the authorization request.",
+        "Signed EIP-3009 ReceiveWithAuthorization payload for paymentMode=eip3009_usdc_authorization or the legacy x402_authorization alias. Omit signature on the first call to receive the authorization request.",
       properties: {
         from: evmAddressSchema,
         nonce: { pattern: "^0x[a-fA-F0-9]{64}$", type: "string" },
@@ -587,8 +587,8 @@ export const agentAskHumansInputSchema = {
     paymentMode: {
       default: "wallet_calls",
       description:
-        "wallet_calls returns approve/reserve/submit transactions. x402_authorization returns a native USDC authorization request, then ordered reserve/submit transactions after signature.",
-      enum: ["wallet_calls", "x402_authorization"],
+        "wallet_calls returns approve/reserve/submit transactions. eip3009_usdc_authorization returns an EIP-3009 World Chain USDC authorization request, then ordered reserve/submit transactions after signature. x402_authorization is accepted as a legacy compatibility alias.",
+      enum: ["wallet_calls", "eip3009_usdc_authorization", "x402_authorization"],
       type: "string",
     },
     walletAddress: agentWalletAddressSchema,
@@ -900,6 +900,7 @@ export const agentAskHumansOutputSchema = {
     transactionPlan: { type: ["object", "null"] },
     wallet: { type: "object" },
     paymentMode: { enum: ["wallet_calls", "x402_authorization"], type: "string" },
+    paymentScheme: { enum: ["wallet_calls", "eip3009_usdc_authorization"], type: "string" },
     warnings: { items: { type: "string" }, type: "array" },
     x402AuthorizationRequest: { type: ["object", "null"] },
   },

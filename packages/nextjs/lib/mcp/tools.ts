@@ -366,7 +366,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Advanced raw wallet-call flow. Prepare a paid human-feedback ask and return wallet transaction calls or a native x402 USDC authorization request; normal chat agents should create a handoff link instead.",
+      "Advanced raw wallet-call flow. Prepare a paid human-feedback ask and return wallet transaction calls or an EIP-3009 World Chain USDC authorization request; normal chat agents should create a handoff link instead.",
     inputSchema: agentAskHumansInputSchema,
     name: "rateloop_ask_humans",
     outputSchema: agentAskHumansOutputSchema,
@@ -1100,8 +1100,16 @@ function parseAskHumansMode(value: unknown): AskHumansMode {
 function parseAskHumansPaymentMode(value: unknown): AskHumansPaymentMode {
   if (value === undefined || value === null || value === "") return "wallet_calls";
   if (value === "wallet_calls" || value === "agent_wallet") return "wallet_calls";
-  if (value === "x402_authorization" || value === "native_x402" || value === "x402") return "x402_authorization";
-  throw new McpToolError("paymentMode must be wallet_calls or x402_authorization.");
+  if (
+    value === "eip3009_usdc_authorization" ||
+    value === "eip3009_authorization" ||
+    value === "x402_authorization" ||
+    value === "native_x402" ||
+    value === "x402"
+  ) {
+    return "x402_authorization";
+  }
+  throw new McpToolError("paymentMode must be wallet_calls, eip3009_usdc_authorization, or x402_authorization.");
 }
 
 type DeployedContractRecord = {
@@ -2085,6 +2093,7 @@ function buildDryRunOperationBody(params: {
   walletPolicyRequired: boolean;
   webhookRegistered?: boolean;
 }) {
+  const paymentScheme = params.paymentMode === "x402_authorization" ? "eip3009_usdc_authorization" : "wallet_calls";
   const quoteBody = formatQuoteResult(params.quote, params.quotePayload, params.config, {
     feedbackBonus: params.feedbackBonus,
     walletPolicyRequired: params.walletPolicyRequired,
@@ -2099,6 +2108,7 @@ function buildDryRunOperationBody(params: {
     operationKey: params.quote.operation.operationKey,
     payloadHash: params.quote.operation.payloadHash,
     paymentMode: params.paymentMode,
+    paymentScheme,
     questionCount: params.payload.questions.length,
     status: "dry_run",
   };
@@ -2119,6 +2129,7 @@ function buildDryRunOperationBody(params: {
     nextAction: "inspect_dry_run_result",
     operation,
     paymentMode: params.paymentMode,
+    paymentScheme,
     paymentRequired: false,
     pollAfterMs: null,
     publicUrl: null,
