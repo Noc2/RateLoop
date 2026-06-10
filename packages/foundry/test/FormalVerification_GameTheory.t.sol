@@ -454,7 +454,7 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
 
     // ==================== Test 9: Manufactured Dissent Unprofitable ====================
 
-    /// @notice Attacker: UP (100) + DOWN (50) via 2 wallets. 3 honest UP (50 each).
+    /// @notice Attacker: UP (100) + DOWN (50) via 2 wallets. 6 honest UP (50 each).
     function test_ManufacturedDissent_Unprofitable() public {
         uint256 cid = _submit();
 
@@ -467,6 +467,9 @@ contract FormalVerification_GameTheoryTest is VotingTestBase {
         _vote(v[2], cid, true, 5e6); // honest
         _vote(v[3], cid, true, 5e6); // honest
         _vote(v[4], cid, true, 5e6); // honest
+        _vote(v[5], cid, true, 5e6); // honest
+        _vote(v[6], cid, true, 5e6); // honest
+        _vote(v[7], cid, true, 5e6); // honest
 
         uint256 rid = RoundEngineReadHelpers.activeRoundId(engine, cid);
 

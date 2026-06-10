@@ -34,6 +34,9 @@ contract AdversarialTests is VotingTestBase {
     address voter3 = address(0xD3);
     address voter4 = address(0xD4);
     address voter5 = address(0xD5);
+    address voter6 = address(0xD6);
+    address voter7 = address(0xD7);
+    address voter8 = address(0xD8);
     address attacker = address(0xF1);
 
     uint256 constant STAKE = 10e6;
@@ -118,7 +121,7 @@ contract AdversarialTests is VotingTestBase {
         _setTlockRoundConfig(ProtocolConfig(address(engine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
 
         // Fund actors
-        address[6] memory users = [submitter, voter1, voter2, voter3, voter4, voter5];
+        address[9] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, voter7, voter8];
         for (uint256 i = 0; i < users.length; i++) {
             lrepToken.mint(users[i], 100_000e6);
         }
@@ -802,18 +805,28 @@ contract AdversarialTests is VotingTestBase {
         vm.prank(owner);
         lrepToken.mint(sybil, 100_000e6);
 
-        // Third honest voter to prevent tie
+        // Honest voters prevent a tie and activate the score-spread economic threshold.
         (bytes32 ckHonest,) = _commit(voter1, contentId, true, STAKE);
 
         // Attacker: big UP, small DOWN
         (bytes32 ckBig,) = _commit(attacker, contentId, true, 8e6);
         (bytes32 ckSmall,) = _commit(sybil, contentId, false, 2e6);
+        (bytes32 ck2,) = _commit(voter2, contentId, true, STAKE);
+        (bytes32 ck3,) = _commit(voter3, contentId, true, STAKE);
+        (bytes32 ck4,) = _commit(voter4, contentId, true, STAKE);
+        (bytes32 ck5,) = _commit(voter5, contentId, true, STAKE);
+        (bytes32 ck6,) = _commit(voter6, contentId, false, STAKE);
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
-        bytes32[] memory cks = new bytes32[](3);
+        bytes32[] memory cks = new bytes32[](8);
         cks[0] = ckHonest;
         cks[1] = ckBig;
         cks[2] = ckSmall;
+        cks[3] = ck2;
+        cks[4] = ck3;
+        cks[5] = ck4;
+        cks[6] = ck5;
+        cks[7] = ck6;
         _settleRound(contentId, roundId, cks);
 
         // UP wins. The losing sybil leg can earn RBTS stake return/reward, but still

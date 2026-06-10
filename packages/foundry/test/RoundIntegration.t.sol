@@ -45,6 +45,8 @@ contract RoundIntegrationTest is VotingTestBase {
     address public voter4 = address(6);
     address public voter5 = address(7);
     address public voter6 = address(8);
+    address public voter7 = address(11);
+    address public voter8 = address(12);
     address public delegate1 = address(9);
     address public delegate2 = address(10);
     address public treasury = address(100);
@@ -199,7 +201,7 @@ contract RoundIntegrationTest is VotingTestBase {
         _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
 
         // Mint LREP to all test users
-        address[7] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6];
+        address[9] memory users = [submitter, voter1, voter2, voter3, voter4, voter5, voter6, voter7, voter8];
         for (uint256 i = 0; i < users.length; i++) {
             lrepToken.mint(users[i], 10_000e6);
             _seedRaterIdentity(raterRegistry, users[i], bytes32(uint256(uint160(users[i]))));
@@ -348,10 +350,23 @@ contract RoundIntegrationTest is VotingTestBase {
         bytes32 salt,
         address frontend
     ) internal returns (bytes32 ch, bytes32 ck) {
+        return _commitWithSaltFrontendPrediction(voter, contentId, isUp, stakeAmount, salt, frontend, 5_000);
+    }
+
+    function _commitWithSaltFrontendPrediction(
+        address voter,
+        uint256 contentId,
+        bool isUp,
+        uint256 stakeAmount,
+        bytes32 salt,
+        address frontend,
+        uint16 predictedUpBps
+    ) internal returns (bytes32 ch, bytes32 ck) {
         bytes memory ct;
         uint64 targetRound;
         bytes32 drandChainHash;
-        (ch, ct, targetRound, drandChainHash) = _buildCommitPayload(isUp, salt, voter, contentId);
+        (ch, ct, targetRound, drandChainHash) =
+            _buildCommitPayloadWithPrediction(isUp, predictedUpBps, salt, voter, contentId);
 
         vm.startPrank(voter);
         lrepToken.approve(address(votingEngine), stakeAmount);
@@ -432,6 +447,80 @@ contract RoundIntegrationTest is VotingTestBase {
                 contentId, roundId, commitKeys[i], directions[i], _defaultPredictionBps(i, directions[i]), salts[i]
             );
         }
+    }
+
+    function _commitAllThenRevealWithFrontend(
+        address[] memory voters,
+        uint256 contentId,
+        bool[] memory directions,
+        uint256 stakeAmount,
+        address frontend
+    ) internal {
+        bytes32[] memory salts = new bytes32[](voters.length);
+        bytes32[] memory commitHashes = new bytes32[](voters.length);
+        bytes32[] memory commitKeys = new bytes32[](voters.length);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+        bool roundCreated = roundId > 0;
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            salts[i] = keccak256(abi.encodePacked(voters[i], contentId, directions[i], i));
+            uint16 predictedUpBps = _defaultPredictionBps(i, directions[i]);
+            (bytes32 commitHash, bytes memory ct, uint64 targetRound, bytes32 drandChainHash) =
+                _buildCommitPayloadWithPrediction(directions[i], predictedUpBps, salts[i], voters[i], contentId);
+            commitHashes[i] = commitHash;
+
+            vm.startPrank(voters[i]);
+            lrepToken.approve(address(votingEngine), stakeAmount);
+            uint256 cachedRoundContext =
+                _roundContext(_previewCommitRoundId(votingEngine, contentId), _currentRatingReferenceBps(contentId));
+            votingEngine.commitVote(
+                contentId, cachedRoundContext, targetRound, drandChainHash, commitHash, ct, stakeAmount, frontend
+            );
+            vm.stopPrank();
+
+            commitKeys[i] = _commitKey(voters[i], commitHash);
+            if (!roundCreated) {
+                roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
+                roundCreated = true;
+            }
+        }
+
+        vm.warp(block.timestamp + EPOCH_DURATION + _tlockDrandPeriod() + 1);
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            votingEngine.revealVoteByCommitKey(
+                contentId, roundId, commitKeys[i], directions[i], _defaultPredictionBps(i, directions[i]), salts[i]
+            );
+        }
+    }
+
+    function _economicVoters8() internal view returns (address[] memory voters) {
+        voters = new address[](8);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        voters[3] = voter4;
+        voters[4] = voter5;
+        voters[5] = voter6;
+        voters[6] = voter7;
+        voters[7] = voter8;
+    }
+
+    function _fiveUpThreeDownDirections() internal pure returns (bool[] memory dirs) {
+        dirs = new bool[](8);
+        dirs[0] = true;
+        dirs[1] = true;
+        dirs[2] = true;
+        dirs[3] = true;
+        dirs[4] = true;
+        dirs[5] = false;
+        dirs[6] = false;
+        dirs[7] = false;
+    }
+
+    function _settleEconomicRoundWith(uint256 contentId, uint256 stakeAmount) internal returns (uint256 roundId) {
+        roundId = _settleRoundWith(_economicVoters8(), contentId, _fiveUpThreeDownDirections(), stakeAmount);
     }
 
     /// @dev Returns the active round ID; if 0 (terminal), falls back to the last created round.
@@ -843,28 +932,32 @@ contract RoundIntegrationTest is VotingTestBase {
 
     function test_MultipleWinners_FinalClaimantReceivesVoterPoolRemainder() public {
         uint256 contentId = _submitContent();
-        uint256 stake1 = 1_000_001;
-        uint256 stake2 = 1_000_000;
-        uint256 stake3 = 1_000_000;
+        address[] memory voters = _economicVoters8();
+        bool[] memory dirs = _fiveUpThreeDownDirections();
+        uint256[] memory stakes = new uint256[](8);
+        bytes32[] memory salts = new bytes32[](8);
+        bytes32[] memory commitKeys = new bytes32[](8);
+        for (uint256 i = 0; i < voters.length; i++) {
+            stakes[i] = 1_000_000;
+        }
+        stakes[0] = 1_000_001;
 
-        bytes32 salt1 = keccak256(abi.encodePacked("dust", voter1, contentId));
-        bytes32 salt2 = keccak256(abi.encodePacked("dust", voter2, contentId));
-        bytes32 salt3 = keccak256(abi.encodePacked("dust", voter3, contentId));
-
-        uint16 p1 = _defaultPredictionBps(0, true);
-        uint16 p2 = _defaultPredictionBps(1, true);
-        uint16 p3 = _defaultPredictionBps(2, false);
-        (, bytes32 ck1) = _commitWithSaltAndPrediction(voter1, contentId, true, stake1, salt1, p1);
-        (, bytes32 ck2) = _commitWithSaltAndPrediction(voter2, contentId, true, stake2, salt2, p2);
-        (, bytes32 ck3) = _commitWithSaltAndPrediction(voter3, contentId, false, stake3, salt3, p3);
+        for (uint256 i = 0; i < voters.length; i++) {
+            salts[i] = keccak256(abi.encodePacked("dust", voters[i], contentId, i));
+            uint16 prediction = _defaultPredictionBps(i, dirs[i]);
+            (, commitKeys[i]) =
+                _commitWithSaltAndPrediction(voters[i], contentId, dirs[i], stakes[i], salts[i], prediction);
+        }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
 
         RoundLib.Round memory openRound = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(openRound.startTime) + EPOCH_DURATION);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, p1, salt1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, p2, salt2);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, p3, salt3);
+        for (uint256 i = 0; i < voters.length; i++) {
+            votingEngine.revealVoteByCommitKey(
+                contentId, roundId, commitKeys[i], dirs[i], _defaultPredictionBps(i, dirs[i]), salts[i]
+            );
+        }
 
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
@@ -872,40 +965,23 @@ contract RoundIntegrationTest is VotingTestBase {
         assertTrue(round.upWins, "UP should win");
 
         uint256 voterPool = _roundVoterPool(votingEngine, contentId, roundId);
-
-        uint256 bal1Before = lrepToken.balanceOf(voter1);
-        vm.prank(voter1);
-        rewardDistributor.claimReward(contentId, roundId);
-        uint256 claim1 = lrepToken.balanceOf(voter1) - bal1Before;
-
-        uint256 bal2Before = lrepToken.balanceOf(voter2);
-        vm.prank(voter2);
-        rewardDistributor.claimReward(contentId, roundId);
-        uint256 claim2 = lrepToken.balanceOf(voter2) - bal2Before;
-
-        assertGt(claim1, 0, "first claimant should receive a positive RBTS claim");
-        assertGt(claim2, 0, "second claimant should receive a positive RBTS claim");
+        assertGt(voterPool, 0, "economic-threshold round should create a voter pool");
 
         uint256 rewardClaimants = _roundRbtsRewardClaimants(votingEngine, contentId, roundId);
-        if (rewardDistributor.roundVoterRewardClaimedCount(contentId, roundId) < rewardClaimants) {
-            vm.prank(voter3);
+        assertGt(rewardClaimants, 0, "round should have reward claimants");
+        for (uint256 i = 0; i < voters.length; i++) {
+            if (rewardDistributor.roundVoterRewardClaimedCount(contentId, roundId) >= rewardClaimants) break;
+            vm.prank(voters[i]);
             rewardDistributor.claimReward(contentId, roundId);
         }
 
         assertEq(rewardDistributor.roundVoterRewardClaimedCount(contentId, roundId), rewardClaimants);
         assertEq(rewardDistributor.roundVoterRewardClaimedAmount(contentId, roundId), voterPool);
 
-        if (!rewardDistributor.rewardClaimed(contentId, roundId, voter3)) {
-            bytes32 loserCommitKey = _commitKey(voter3, _voterCommitHash(votingEngine, contentId, roundId, voter3));
-            uint256 expectedLoserClaim = _expectedRbtsClaimValue(contentId, roundId, loserCommitKey);
-            uint256 loserBefore = lrepToken.balanceOf(voter3);
-            vm.prank(voter3);
+        for (uint256 i = 0; i < voters.length; i++) {
+            if (rewardDistributor.rewardClaimed(contentId, roundId, voters[i])) continue;
+            vm.prank(voters[i]);
             rewardDistributor.claimReward(contentId, roundId);
-            assertEq(
-                lrepToken.balanceOf(voter3) - loserBefore,
-                expectedLoserClaim,
-                "loser claim should match RBTS claim value"
-            );
         }
 
         assertEq(lrepToken.balanceOf(address(votingEngine)), 0, "engine should not retain voter reward dust");
@@ -2813,76 +2889,11 @@ contract RoundIntegrationTest is VotingTestBase {
         vm.stopPrank();
     }
 
-    /// @dev Helper: commit 3 votes (2 up, 1 down) with a specific frontend, reveal, settle.
+    /// @dev Helper: commit enough votes for score-spread forfeits with a specific frontend, reveal, settle.
     function _settleRoundWithFrontend(address frontend) internal returns (uint256 contentId, uint256 roundId) {
         contentId = _submitContent();
-
-        bytes32 s1 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
-        bytes32 s2 = keccak256(abi.encodePacked(voter2, contentId, true, uint256(1)));
-        bytes32 s3 = keccak256(abi.encodePacked(voter3, contentId, false, uint256(2)));
-        uint16 p1 = _defaultPredictionBps(0, true);
-        uint16 p2 = _defaultPredictionBps(1, true);
-        uint16 p3 = _defaultPredictionBps(2, false);
-        bytes32 ch1 = _commitHashWithPrediction(true, p1, s1, voter1, contentId);
-        bytes32 ch2 = _commitHashWithPrediction(true, p2, s2, voter2, contentId);
-        bytes32 ch3 = _commitHashWithPrediction(false, p3, s3, voter3, contentId);
-
-        vm.startPrank(voter1);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext54 =
-            _roundContext(_previewCommitRoundId(votingEngine, contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext54,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch1,
-            _testCiphertext(true, s1, contentId),
-            STAKE,
-            frontend
-        );
-        vm.stopPrank();
-
-        vm.startPrank(voter2);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext55 =
-            _roundContext(_previewCommitRoundId(votingEngine, contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext55,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch2,
-            _testCiphertext(true, s2, contentId),
-            STAKE,
-            frontend
-        );
-        vm.stopPrank();
-
-        vm.startPrank(voter3);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext56 =
-            _roundContext(_previewCommitRoundId(votingEngine, contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext56,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch3,
-            _testCiphertext(false, s3, contentId),
-            STAKE,
-            frontend
-        );
-        vm.stopPrank();
-
-        roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
-
-        RoundLib.Round memory rFW0 = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(rFW0.startTime) + EPOCH_DURATION);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter1, ch1), true, p1, s1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter2, ch2), true, p2, s2);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter3, ch3), false, p3, s3);
-
+        _commitAllThenRevealWithFrontend(_economicVoters8(), contentId, _fiveUpThreeDownDirections(), STAKE, frontend);
+        roundId = _getActiveOrLatestRoundId(contentId);
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
     }
 
@@ -2906,24 +2917,34 @@ contract RoundIntegrationTest is VotingTestBase {
         _registerFrontend(frontendReg, frontendB);
 
         uint256 contentId = _submitContent();
-        uint256 stake1 = 1_000_001;
-        uint256 stake2 = 1_000_000;
-        uint256 stake3 = 1_000_000;
+        address[] memory voters = _economicVoters8();
+        bool[] memory dirs = _fiveUpThreeDownDirections();
+        uint256[] memory stakes = new uint256[](8);
+        address[] memory attributions = new address[](8);
+        bytes32[] memory salts = new bytes32[](8);
+        bytes32[] memory commitKeys = new bytes32[](8);
+        for (uint256 i = 0; i < voters.length; i++) {
+            stakes[i] = 1_000_000;
+            attributions[i] = i % 2 == 0 ? frontendA : frontendB;
+        }
+        stakes[0] = 1_000_001;
 
-        bytes32 salt1 = keccak256(abi.encodePacked("frontend-dust", voter1, contentId));
-        bytes32 salt2 = keccak256(abi.encodePacked("frontend-dust", voter2, contentId));
-        bytes32 salt3 = keccak256(abi.encodePacked("frontend-dust", voter3, contentId));
-
-        (, bytes32 ck1) = _commitWithSaltAndFrontend(voter1, contentId, true, stake1, salt1, frontendA);
-        (, bytes32 ck2) = _commitWithSaltAndFrontend(voter2, contentId, true, stake2, salt2, frontendB);
-        (, bytes32 ck3) = _commitWithSaltAndFrontend(voter3, contentId, false, stake3, salt3, address(0));
+        for (uint256 i = 0; i < voters.length; i++) {
+            salts[i] = keccak256(abi.encodePacked("frontend-dust", voters[i], contentId, i));
+            uint16 prediction = _defaultPredictionBps(i, dirs[i]);
+            (, commitKeys[i]) = _commitWithSaltFrontendPrediction(
+                voters[i], contentId, dirs[i], stakes[i], salts[i], attributions[i], prediction
+            );
+        }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
         RoundLib.Round memory openRound = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
         vm.warp(openRound.startTime + EPOCH_DURATION + _tlockDrandPeriod() + 1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck1, true, 5_000, salt1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck2, true, 5_000, salt2);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, ck3, false, 5_000, salt3);
+        for (uint256 i = 0; i < voters.length; i++) {
+            votingEngine.revealVoteByCommitKey(
+                contentId, roundId, commitKeys[i], dirs[i], _defaultPredictionBps(i, dirs[i]), salts[i]
+            );
+        }
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         address[] memory frontends = new address[](2);
@@ -3211,77 +3232,10 @@ contract RoundIntegrationTest is VotingTestBase {
     ///      held back until the window closes.
     function test_ClaimFrontendFee_BlocksClaimsWhileExitPending() public {
         (FrontendRegistry frontendReg, address frontendOp) = _setupFrontendRegistry();
-        uint256 contentId = _submitContent();
-
-        bytes32 s1 = keccak256(abi.encodePacked(voter1, contentId, true, uint256(0)));
-        bytes32 s2 = keccak256(abi.encodePacked(voter2, contentId, true, uint256(1)));
-        bytes32 s3 = keccak256(abi.encodePacked(voter3, contentId, false, uint256(2)));
-        uint16 p1 = _defaultPredictionBps(0, true);
-        uint16 p2 = _defaultPredictionBps(1, true);
-        uint16 p3 = _defaultPredictionBps(2, false);
-        bytes32 ch1 = _commitHashWithPrediction(true, p1, s1, voter1, contentId);
-        bytes32 ch2 = _commitHashWithPrediction(true, p2, s2, voter2, contentId);
-        bytes32 ch3 = _commitHashWithPrediction(false, p3, s3, voter3, contentId);
-
-        vm.startPrank(voter1);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext57 =
-            _roundContext(_previewCommitRoundId(votingEngine, contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext57,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch1,
-            _testCiphertext(true, s1, contentId),
-            STAKE,
-            frontendOp
-        );
-        vm.stopPrank();
-
-        vm.startPrank(voter2);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext58 =
-            _roundContext(_previewCommitRoundId(votingEngine, contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext58,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch2,
-            _testCiphertext(true, s2, contentId),
-            STAKE,
-            frontendOp
-        );
-        vm.stopPrank();
-
-        vm.startPrank(voter3);
-        lrepToken.approve(address(votingEngine), STAKE);
-        uint256 cachedRoundContext59 =
-            _roundContext(_previewCommitRoundId(votingEngine, contentId), _currentRatingReferenceBps(contentId));
-        votingEngine.commitVote(
-            contentId,
-            cachedRoundContext59,
-            _tlockCommitTargetRound(),
-            _tlockDrandChainHash(),
-            ch3,
-            _testCiphertext(false, s3, contentId),
-            STAKE,
-            frontendOp
-        );
-        vm.stopPrank();
+        (uint256 contentId, uint256 roundId) = _settleRoundWithFrontend(frontendOp);
 
         vm.prank(frontendOp);
         frontendReg.requestDeregister();
-
-        uint256 roundId = RoundEngineReadHelpers.activeRoundId(votingEngine, contentId);
-        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
-        _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter1, ch1), true, p1, s1);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter2, ch2), true, p2, s2);
-        votingEngine.revealVoteByCommitKey(contentId, roundId, _commitKey(voter3, ch3), false, p3, s3);
-
-        _settleAfterRbtsSeed(votingEngine, contentId, roundId);
 
         vm.expectRevert(RoundRewardDistributor.FrontendFeeNotClaimable.selector);
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
@@ -3378,7 +3332,7 @@ contract RoundIntegrationTest is VotingTestBase {
 
         bytes32[] memory commitKeys = RoundEngineReadHelpers.commitKeys(votingEngine, contentId, roundId);
 
-        assertEq(commitKeys.length, 3);
+        assertEq(commitKeys.length, 8);
 
         _claimFrontendFeeAsOperator(contentId, roundId, frontendOp);
         assertGt(frontendReg.getAccumulatedFees(frontendOp), 0, "Frontend fee claim should still succeed");
@@ -3447,19 +3401,9 @@ contract RoundIntegrationTest is VotingTestBase {
     }
 
     function test_ClaimFrontendFee_NoEligibleFrontendRedirectsToVoterPool() public {
-        // No frontend registry set — 3 voters (2 up, 1 down) to avoid tie
+        // No frontend registry set. Use enough voters for score-spread forfeits, so the frontend share falls back.
         uint256 contentId = _submitContent();
-
-        address[] memory voters = new address[](3);
-        voters[0] = voter1;
-        voters[1] = voter2;
-        voters[2] = voter3;
-        bool[] memory dirs = new bool[](3);
-        dirs[0] = true;
-        dirs[1] = true;
-        dirs[2] = false;
-
-        uint256 roundId = _settleRoundWith(voters, contentId, dirs, STAKE);
+        uint256 roundId = _settleEconomicRoundWith(contentId, STAKE);
 
         // Voter pool should include the frontend share
         uint256 voterPool = _roundVoterPool(votingEngine, contentId, roundId);

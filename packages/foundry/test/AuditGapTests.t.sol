@@ -35,6 +35,10 @@ contract AuditGapTests is VotingTestBase {
     address public voter3 = address(5);
     address public voter4 = address(6);
     address public frontend = address(7);
+    address public voter5 = address(8);
+    address public voter6 = address(9);
+    address public voter7 = address(10);
+    address public voter8 = address(11);
     address public treasury = address(100);
 
     uint256 public constant STAKE = 10e6;
@@ -109,7 +113,7 @@ contract AuditGapTests is VotingTestBase {
         _setTlockRoundConfig(ProtocolConfig(address(votingEngine.protocolConfig())), EPOCH_DURATION, 7 days, 3, 100);
 
         // Mint LREP to test users
-        address[6] memory users = [submitter, voter1, voter2, voter3, voter4, frontend];
+        address[10] memory users = [submitter, voter1, voter2, voter3, voter4, frontend, voter5, voter6, voter7, voter8];
         for (uint256 i = 0; i < users.length; i++) {
             lrepToken.mint(users[i], 100_000e6);
         }
@@ -337,16 +341,20 @@ contract AuditGapTests is VotingTestBase {
     function test_ClaimPaths_SingleRound() public {
         uint256 contentId = _submitContent("https://full-claim-test.com");
 
-        // voter1, voter2 = UP (winners), voter3 = DOWN (loser), all via frontend
-        (bytes32 s1, bytes32 ck1) = _commit(voter1, contentId, true, STAKE, frontend);
-        (bytes32 s2, bytes32 ck2) = _commit(voter2, contentId, true, STAKE, frontend);
-        (bytes32 s3, bytes32 ck3) = _commit(voter3, contentId, false, STAKE, frontend);
+        // 5 UP voters and 3 DOWN voters all via the frontend reach the score-spread economic threshold.
+        address[8] memory voters = [voter1, voter2, voter3, voter4, voter5, voter6, voter7, voter8];
+        bool[8] memory directions = [true, true, false, true, true, false, true, false];
+        bytes32[8] memory salts;
+        bytes32[8] memory commitKeys;
+        for (uint256 i = 0; i < voters.length; i++) {
+            (salts[i], commitKeys[i]) = _commit(voters[i], contentId, directions[i], STAKE, frontend);
+        }
 
         // Advance past epoch, reveal all
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
-        _reveal(voter1, contentId, 1, ck1, true, s1);
-        _reveal(voter2, contentId, 1, ck2, true, s2);
-        _reveal(voter3, contentId, 1, ck3, false, s3);
+        for (uint256 i = 0; i < voters.length; i++) {
+            _reveal(voters[i], contentId, 1, commitKeys[i], directions[i], salts[i]);
+        }
 
         // Warp past reveal grace period
         vm.warp(block.timestamp + 60 minutes + 1);
@@ -374,8 +382,8 @@ contract AuditGapTests is VotingTestBase {
         assertTrue(v2After > v2Before, "Winner 2 should receive reward");
 
         // 3. Lower-scoring claim (voter3 - revealed reports get RBTS stake return plus any positive-spread reward)
-        uint256 expectedLoserClaim = _commitRbtsStakeReturned(votingEngine, contentId, 1, ck3);
-        uint256 scoreWeight = _commitRbtsRewardWeight(votingEngine, contentId, 1, ck3);
+        uint256 expectedLoserClaim = _commitRbtsStakeReturned(votingEngine, contentId, 1, commitKeys[2]);
+        uint256 scoreWeight = _commitRbtsRewardWeight(votingEngine, contentId, 1, commitKeys[2]);
         if (scoreWeight > 0) {
             expectedLoserClaim += RewardMath.calculateVoterReward(
                 scoreWeight,
@@ -419,10 +427,6 @@ contract AuditGapTests is VotingTestBase {
         (bytes32 s2, bytes32 ck2) = _commit(voter2, contentId, true, STAKE, address(0));
         (bytes32 s3, bytes32 ck3) = _commit(voter3, contentId, false, STAKE, address(0));
         _commit(voter4, contentId, true, STAKE, address(0)); // unrevealed
-        // Need 5th voter for 2 unrevealed
-        address voter5 = address(8);
-        vm.prank(owner);
-        lrepToken.mint(voter5, 100_000e6);
         _commit(voter5, contentId, false, STAKE, address(0)); // unrevealed
 
         _warpPastTlockRevealTime(block.timestamp + EPOCH_DURATION);
