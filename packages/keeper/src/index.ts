@@ -17,7 +17,12 @@ import {
   chain,
   validateKeeperConnectivity,
 } from "./client.js";
-import { resolveRounds, validateKeeperContracts, type KeeperResult } from "./keeper.js";
+import {
+  resolveRounds,
+  validateKeeperContracts,
+  type KeeperResult,
+  type KeeperRunContext,
+} from "./keeper.js";
 import { claimConfiguredFrontendFees } from "./frontend-fees.js";
 import { publishConfiguredCorrelationSnapshots } from "./correlation-snapshots.js";
 import { closeKeeperState, runWithKeeperMainLoopLock } from "./keeper-state.js";
@@ -93,7 +98,12 @@ async function main() {
     logger.info("Metrics server started", {
       port: config.metricsPort,
       bindAddress: config.metricsBindAddress,
-      endpoints: ["/live", "/metrics", "/health", "/correlation-artifacts/:artifactHash.json"],
+      endpoints: [
+        "/live",
+        "/metrics",
+        "/health",
+        "/correlation-artifacts/:artifactHash.json",
+      ],
     });
   }
 
@@ -111,10 +121,12 @@ async function main() {
   const MIN_BALANCE = BigInt(config.minGasBalanceWei);
 
   async function updateOperationalGauges() {
-    const balanceResult = await publicClient.getBalance({ address: account.address }).then(
-      value => ({ status: "fulfilled" as const, value }),
-      reason => ({ status: "rejected" as const, reason }),
-    );
+    const balanceResult = await publicClient
+      .getBalance({ address: account.address })
+      .then(
+        (value) => ({ status: "fulfilled" as const, value }),
+        (reason) => ({ status: "rejected" as const, reason }),
+      );
 
     if (balanceResult.status === "fulfilled") {
       const balance = balanceResult.value;
@@ -149,12 +161,14 @@ async function main() {
         { result: emptyKeeperResult(), frontendFeeResult: null },
         async () => {
           mainLoopRan = true;
+          const runContext: KeeperRunContext = {};
           const result = await resolveRounds(
             publicClient,
             walletClient,
             chain,
             account,
             logger,
+            runContext,
           );
           const frontendFeeResult = config.frontendFees.enabled
             ? await claimConfiguredFrontendFees(
@@ -163,6 +177,7 @@ async function main() {
                 chain,
                 account,
                 logger,
+                { chainTimestamp: runContext.blockTimestamp },
               )
             : null;
           return { result, frontendFeeResult };

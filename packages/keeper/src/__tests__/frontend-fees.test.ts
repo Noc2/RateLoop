@@ -13,7 +13,8 @@ const {
 } = vi.hoisted(() => ({
   ACCOUNT: "0x1111111111111111111111111111111111111111" as const,
   FRONTEND: "0x2222222222222222222222222222222222222222" as const,
-  ROUND_REWARD_DISTRIBUTOR: "0x5555555555555555555555555555555555555555" as const,
+  ROUND_REWARD_DISTRIBUTOR:
+    "0x5555555555555555555555555555555555555555" as const,
   FRONTEND_REGISTRY: "0x6666666666666666666666666666666666666666" as const,
   mockConfig: {
     contracts: {
@@ -28,7 +29,8 @@ const {
       backfillRoundsPerTick: 50,
       withdrawEnabled: true,
       contracts: {
-        roundRewardDistributor: "0x5555555555555555555555555555555555555555" as const,
+        roundRewardDistributor:
+          "0x5555555555555555555555555555555555555555" as const,
         frontendRegistry: "0x6666666666666666666666666666666666666666" as const,
       },
     },
@@ -36,7 +38,9 @@ const {
   readCurrentRoundIds: vi.fn(),
   readRound: vi.fn(),
   writeContractAndConfirm: vi.fn(),
-  getRevertReason: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
+  getRevertReason: vi.fn((error: unknown) =>
+    error instanceof Error ? error.message : String(error),
+  ),
 }));
 
 vi.mock("../config.js", () => ({
@@ -154,20 +158,22 @@ describe("claimConfiguredFrontendFees", () => {
   it("claims settled frontend fees and requests a delayed withdrawal for accumulated credits", async () => {
     const logger = makeLogger();
     const publicClient = {
-      readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
-        switch (functionName) {
-          case "nextContentId":
-            return 2n;
-          case "previewFrontendFee":
-            return [15n, 0, ACCOUNT, false] as const;
-          case "pendingFeeWithdrawalAmount":
-            return 0n;
-          case "getAccumulatedFees":
-            return 15n;
-          default:
-            throw new Error(`Unexpected readContract(${functionName})`);
-        }
-      }),
+      readContract: vi.fn(
+        async ({ functionName }: { functionName: string }) => {
+          switch (functionName) {
+            case "nextContentId":
+              return 2n;
+            case "previewFrontendFee":
+              return [15n, 0, ACCOUNT, false] as const;
+            case "pendingFeeWithdrawalAmount":
+              return 0n;
+            case "getAccumulatedFees":
+              return 15n;
+            default:
+              throw new Error(`Unexpected readContract(${functionName})`);
+          }
+        },
+      ),
     };
 
     readCurrentRoundIds.mockResolvedValue({
@@ -220,24 +226,26 @@ describe("claimConfiguredFrontendFees", () => {
 
   it("completes a matured pending withdrawal and requests the next one", async () => {
     const logger = makeLogger();
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const chainTimestamp = 1_000_000n;
     const publicClient = {
-      readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
-        switch (functionName) {
-          case "nextContentId":
-            return 2n;
-          case "previewFrontendFee":
-            return [0n, 0, ACCOUNT, true] as const;
-          case "pendingFeeWithdrawalAmount":
-            return 20n;
-          case "pendingFeeWithdrawalReleaseAt":
-            return nowSeconds - 10n;
-          case "getAccumulatedFees":
-            return 5n;
-          default:
-            throw new Error(`Unexpected readContract(${functionName})`);
-        }
-      }),
+      readContract: vi.fn(
+        async ({ functionName }: { functionName: string }) => {
+          switch (functionName) {
+            case "nextContentId":
+              return 2n;
+            case "previewFrontendFee":
+              return [0n, 0, ACCOUNT, true] as const;
+            case "pendingFeeWithdrawalAmount":
+              return 20n;
+            case "pendingFeeWithdrawalReleaseAt":
+              return chainTimestamp - 10n;
+            case "getAccumulatedFees":
+              return 5n;
+            default:
+              throw new Error(`Unexpected readContract(${functionName})`);
+          }
+        },
+      ),
     };
 
     readCurrentRoundIds.mockResolvedValue({
@@ -255,6 +263,7 @@ describe("claimConfiguredFrontendFees", () => {
       { id: 31337 } as never,
       { address: ACCOUNT } as never,
       logger as never,
+      { chainTimestamp },
     );
 
     expect(result).toEqual({
@@ -290,22 +299,24 @@ describe("claimConfiguredFrontendFees", () => {
 
   it("waits for the withdrawal delay before completing a pending withdrawal", async () => {
     const logger = makeLogger();
-    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const chainTimestamp = 1_000n;
     const publicClient = {
-      readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
-        switch (functionName) {
-          case "nextContentId":
-            return 2n;
-          case "previewFrontendFee":
-            return [0n, 0, ACCOUNT, true] as const;
-          case "pendingFeeWithdrawalAmount":
-            return 20n;
-          case "pendingFeeWithdrawalReleaseAt":
-            return nowSeconds + 3600n;
-          default:
-            throw new Error(`Unexpected readContract(${functionName})`);
-        }
-      }),
+      readContract: vi.fn(
+        async ({ functionName }: { functionName: string }) => {
+          switch (functionName) {
+            case "nextContentId":
+              return 2n;
+            case "previewFrontendFee":
+              return [0n, 0, ACCOUNT, true] as const;
+            case "pendingFeeWithdrawalAmount":
+              return 20n;
+            case "pendingFeeWithdrawalReleaseAt":
+              return chainTimestamp + 3600n;
+            default:
+              throw new Error(`Unexpected readContract(${functionName})`);
+          }
+        },
+      ),
     };
 
     readCurrentRoundIds.mockResolvedValue({
@@ -323,6 +334,7 @@ describe("claimConfiguredFrontendFees", () => {
       { id: 31337 } as never,
       { address: ACCOUNT } as never,
       logger as never,
+      { chainTimestamp },
     );
 
     expect(result).toEqual({
@@ -341,27 +353,44 @@ describe("claimConfiguredFrontendFees", () => {
     mockConfig.frontendFees.lookbackRounds = 2;
     const logger = makeLogger();
     const publicClient = {
-      readContract: vi.fn(async ({ functionName, args }: { functionName: string; args?: readonly bigint[] }) => {
-        switch (functionName) {
-          case "nextContentId":
-            return 2n;
-          case "previewFrontendFee":
-            return args?.[1] === 3n ? ([15n, 0, ACCOUNT, false] as const) : ([0n, 0, ACCOUNT, false] as const);
-          case "getAccumulatedFees":
-            return 0n;
-          default:
-            throw new Error(`Unexpected readContract(${functionName})`);
-        }
-      }),
+      readContract: vi.fn(
+        async ({
+          functionName,
+          args,
+        }: {
+          functionName: string;
+          args?: readonly bigint[];
+        }) => {
+          switch (functionName) {
+            case "nextContentId":
+              return 2n;
+            case "previewFrontendFee":
+              return args?.[1] === 3n
+                ? ([15n, 0, ACCOUNT, false] as const)
+                : ([0n, 0, ACCOUNT, false] as const);
+            case "getAccumulatedFees":
+              return 0n;
+            default:
+              throw new Error(`Unexpected readContract(${functionName})`);
+          }
+        },
+      ),
     };
 
     readCurrentRoundIds.mockResolvedValue({
       activeRoundId: 0n,
       latestRoundId: 5n,
     });
-    readRound.mockImplementation(async (_publicClient: unknown, _engine: unknown, _contentId: bigint, roundId: bigint) => ({
-      state: roundId === 3n ? 1 : 0,
-    }));
+    readRound.mockImplementation(
+      async (
+        _publicClient: unknown,
+        _engine: unknown,
+        _contentId: bigint,
+        roundId: bigint,
+      ) => ({
+        state: roundId === 3n ? 1 : 0,
+      }),
+    );
     writeContractAndConfirm.mockResolvedValue("0xabc");
 
     const result = await claimConfiguredFrontendFees(
@@ -391,16 +420,18 @@ describe("claimConfiguredFrontendFees", () => {
     mockConfig.frontendFees.withdrawEnabled = false;
     const logger = makeLogger();
     const publicClient = {
-      readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
-        switch (functionName) {
-          case "nextContentId":
-            return 3n;
-          case "previewFrontendFee":
-            return [15n, 0, ACCOUNT, false] as const;
-          default:
-            throw new Error(`Unexpected readContract(${functionName})`);
-        }
-      }),
+      readContract: vi.fn(
+        async ({ functionName }: { functionName: string }) => {
+          switch (functionName) {
+            case "nextContentId":
+              return 3n;
+            case "previewFrontendFee":
+              return [15n, 0, ACCOUNT, false] as const;
+            default:
+              throw new Error(`Unexpected readContract(${functionName})`);
+          }
+        },
+      ),
     };
 
     readCurrentRoundIds.mockResolvedValue({
@@ -474,25 +505,34 @@ describe("claimConfiguredFrontendFees", () => {
     mockConfig.frontendFees.withdrawEnabled = false;
     const logger = makeLogger();
     const publicClient = {
-      readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
-        switch (functionName) {
-          case "nextContentId":
-            return 2n;
-          case "previewFrontendFee":
-            return [15n, 0, ACCOUNT, false] as const;
-          default:
-            throw new Error(`Unexpected readContract(${functionName})`);
-        }
-      }),
+      readContract: vi.fn(
+        async ({ functionName }: { functionName: string }) => {
+          switch (functionName) {
+            case "nextContentId":
+              return 2n;
+            case "previewFrontendFee":
+              return [15n, 0, ACCOUNT, false] as const;
+            default:
+              throw new Error(`Unexpected readContract(${functionName})`);
+          }
+        },
+      ),
     };
 
     readCurrentRoundIds.mockResolvedValue({
       activeRoundId: 0n,
       latestRoundId: 4n,
     });
-    readRound.mockImplementation(async (_publicClient: unknown, _engine: unknown, _contentId: bigint, roundId: bigint) => ({
-      state: roundId === 4n ? 0 : 1,
-    }));
+    readRound.mockImplementation(
+      async (
+        _publicClient: unknown,
+        _engine: unknown,
+        _contentId: bigint,
+        roundId: bigint,
+      ) => ({
+        state: roundId === 4n ? 0 : 1,
+      }),
+    );
     writeContractAndConfirm.mockResolvedValue("0xabc");
 
     const firstResult = await claimConfiguredFrontendFees(

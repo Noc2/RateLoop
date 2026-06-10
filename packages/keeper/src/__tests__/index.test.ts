@@ -9,7 +9,7 @@ type KeeperIndexOptions = {
   failBalanceRead?: boolean;
   frontendFeeEnabled?: boolean;
   resolveRoundsError?: Error;
-  resolveRoundsResult?: Record<string, number>;
+  resolveRoundsResult?: Record<string, number | null>;
 };
 
 async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
@@ -35,17 +35,33 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
 
   const resolveRounds = options.resolveRoundsError
     ? vi.fn().mockRejectedValue(options.resolveRoundsError)
-    : vi.fn().mockResolvedValue({
-        roundsSettled: 0,
-        roundsCancelled: 0,
-        roundsRevealFailedFinalized: 0,
-        votesRevealed: 0,
-        advisoryVotesRevealed: 0,
-        advisoryLaunchCreditsClaimed: 0,
-        cleanupBatchesProcessed: 0,
-        contentMarkedDormant: 0,
-        ...options.resolveRoundsResult,
-      });
+    : vi.fn(
+        async (
+          _publicClient,
+          _walletClient,
+          _chain,
+          _account,
+          _logger,
+          runContext?: { blockTimestamp?: bigint },
+        ) => {
+          if (runContext) {
+            runContext.blockTimestamp = 1234n;
+          }
+          return {
+            roundsSettled: 0,
+            roundsCancelled: 0,
+            roundsRevealFailedFinalized: 0,
+            votesRevealed: 0,
+            advisoryVotesRevealed: 0,
+            advisoryLaunchCreditsClaimed: 0,
+            cleanupBatchesProcessed: 0,
+            contentMarkedDormant: 0,
+            roundsAwaitingRevealQuorum: 0,
+            minRevealGraceSecondsRemaining: null,
+            ...options.resolveRoundsResult,
+          };
+        },
+      );
   const validateKeeperContracts = vi.fn().mockResolvedValue(undefined);
   const setGauge = vi.fn();
   const setWalletBalanceWei = vi.fn();
@@ -259,7 +275,9 @@ describe("keeper index", () => {
 
   it("records an error when resolveRounds fails entirely", async () => {
     const keeper = await loadKeeperIndex({
-      resolveRoundsError: new Error("Cannot resolve current block time: rpc down"),
+      resolveRoundsError: new Error(
+        "Cannot resolve current block time: rpc down",
+      ),
     });
 
     expect(keeper.recordError).toHaveBeenCalledOnce();
@@ -283,6 +301,7 @@ describe("keeper index", () => {
       expect.anything(),
       expect.objectContaining({ address: ACCOUNT }),
       expect.anything(),
+      { chainTimestamp: 1234n },
     );
   });
 });

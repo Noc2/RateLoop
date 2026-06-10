@@ -1,7 +1,15 @@
 import type { Account, Chain, PublicClient, WalletClient } from "viem";
-import { ContentRegistryAbi, FrontendRegistryAbi, RoundRewardDistributorAbi } from "@rateloop/contracts/abis";
+import {
+  ContentRegistryAbi,
+  FrontendRegistryAbi,
+  RoundRewardDistributorAbi,
+} from "@rateloop/contracts/abis";
 import { config } from "./config.js";
-import { readCurrentRoundIds, readRound, RoundState } from "./contract-reads.js";
+import {
+  readCurrentRoundIds,
+  readRound,
+  RoundState,
+} from "./contract-reads.js";
 import { writeContractAndConfirm } from "./keeper.js";
 import type { Logger } from "./logger.js";
 import { getRevertReason } from "./revert-utils.js";
@@ -21,6 +29,10 @@ interface FrontendFeeSweepResult {
   withdrawnAmount: bigint;
   withdrawalRequests: number;
   requestedAmount: bigint;
+}
+
+interface FrontendFeeSweepOptions {
+  chainTimestamp?: bigint;
 }
 
 const recentCursors = new Map<string, FrontendFeeSweepCursor>();
@@ -89,25 +101,36 @@ async function previewAndClaimFrontendFee(params: {
       return false;
     }
 
-    const [fee, disposition, operator, alreadyClaimed] = (await params.publicClient.readContract({
-      address: params.contracts.roundRewardDistributor,
-      abi: RoundRewardDistributorAbi,
-      functionName: "previewFrontendFee",
-      args: [params.contentId, params.roundId, params.frontendAddress],
-    })) as readonly [bigint, number, `0x${string}`, boolean];
+    const [fee, disposition, operator, alreadyClaimed] =
+      (await params.publicClient.readContract({
+        address: params.contracts.roundRewardDistributor,
+        abi: RoundRewardDistributorAbi,
+        functionName: "previewFrontendFee",
+        args: [params.contentId, params.roundId, params.frontendAddress],
+      })) as readonly [bigint, number, `0x${string}`, boolean];
 
-    if (fee === 0n || alreadyClaimed || disposition === PROTOCOL_FRONTEND_FEE_DISPOSITION) {
+    if (
+      fee === 0n ||
+      alreadyClaimed ||
+      disposition === PROTOCOL_FRONTEND_FEE_DISPOSITION
+    ) {
       return false;
     }
 
-    if (operator !== ZERO_ADDRESS && operator.toLowerCase() !== params.account.address.toLowerCase()) {
-      params.logger.warn("Skipping frontend fee claim because preview operator does not match keeper wallet", {
-        contentId: Number(params.contentId),
-        roundId: Number(params.roundId),
-        frontendAddress: params.frontendAddress,
-        operator,
-        account: params.account.address,
-      });
+    if (
+      operator !== ZERO_ADDRESS &&
+      operator.toLowerCase() !== params.account.address.toLowerCase()
+    ) {
+      params.logger.warn(
+        "Skipping frontend fee claim because preview operator does not match keeper wallet",
+        {
+          contentId: Number(params.contentId),
+          roundId: Number(params.roundId),
+          frontendAddress: params.frontendAddress,
+          operator,
+          account: params.account.address,
+        },
+      );
       return false;
     }
 
@@ -160,7 +183,10 @@ async function scanFrontendFeeWindow(params: {
   let contentWithoutSweepWork = 0n;
   let roundsClaimed = 0;
 
-  while (scannedSlots < params.maxRounds && contentWithoutSweepWork < contentCount) {
+  while (
+    scannedSlots < params.maxRounds &&
+    contentWithoutSweepWork < contentCount
+  ) {
     if (cursor.contentId < 1n || cursor.contentId >= params.nextContentId) {
       cursor = { contentId: 1n, roundId: 1n };
     }
@@ -182,9 +208,12 @@ async function scanFrontendFeeWindow(params: {
     }
 
     const recentStartRoundId =
-      latestRoundId > params.lookbackRounds ? latestRoundId - params.lookbackRounds + 1n : 1n;
+      latestRoundId > params.lookbackRounds
+        ? latestRoundId - params.lookbackRounds + 1n
+        : 1n;
     const windowStart = params.scope === "recent" ? recentStartRoundId : 1n;
-    const windowEnd = params.scope === "recent" ? latestRoundId : recentStartRoundId - 1n;
+    const windowEnd =
+      params.scope === "recent" ? latestRoundId : recentStartRoundId - 1n;
 
     if (windowEnd < windowStart) {
       scannedSlots++;
@@ -196,7 +225,10 @@ async function scanFrontendFeeWindow(params: {
       continue;
     }
 
-    const roundId = cursor.roundId >= windowStart && cursor.roundId <= windowEnd ? cursor.roundId : windowStart;
+    const roundId =
+      cursor.roundId >= windowStart && cursor.roundId <= windowEnd
+        ? cursor.roundId
+        : windowStart;
     scannedSlots++;
     contentWithoutSweepWork = 0n;
 
@@ -241,8 +273,10 @@ export async function claimConfiguredFrontendFees(
   chain: Chain,
   account: Account,
   logger: Logger,
+  options: FrontendFeeSweepOptions = {},
 ): Promise<FrontendFeeSweepResult> {
-  const frontendAddress = (config.frontendFees.frontendAddress ?? account.address) as `0x${string}`;
+  const frontendAddress = (config.frontendFees.frontendAddress ??
+    account.address) as `0x${string}`;
   const contracts = config.frontendFees.contracts;
 
   if (!config.frontendFees.enabled || !contracts) {
@@ -257,10 +291,13 @@ export async function claimConfiguredFrontendFees(
   }
 
   if (frontendAddress.toLowerCase() !== account.address.toLowerCase()) {
-    logger.warn("Skipping frontend fee sweep because keeper wallet is not the configured frontend operator", {
-      frontendAddress,
-      account: account.address,
-    });
+    logger.warn(
+      "Skipping frontend fee sweep because keeper wallet is not the configured frontend operator",
+      {
+        frontendAddress,
+        account: account.address,
+      },
+    );
     return {
       frontendAddress,
       roundsClaimed: 0,
@@ -294,7 +331,9 @@ export async function claimConfiguredFrontendFees(
   }
 
   let roundsClaimed = 0;
-  const lookbackRounds = BigInt(Math.max(1, config.frontendFees.lookbackRounds));
+  const lookbackRounds = BigInt(
+    Math.max(1, config.frontendFees.lookbackRounds),
+  );
   const latestRoundIdsByContent = new Map<bigint, bigint | null>();
   roundsClaimed += await scanFrontendFeeWindow({
     publicClient,
@@ -355,7 +394,11 @@ export async function claimConfiguredFrontendFees(
           args: [frontendAddress],
         })) as bigint;
 
-        if (releaseAt <= BigInt(Math.floor(Date.now() / 1000))) {
+        const chainTimestamp =
+          options.chainTimestamp ??
+          (await publicClient.getBlock({ blockTag: "latest" })).timestamp;
+
+        if (releaseAt <= chainTimestamp) {
           await writeContractAndConfirm(publicClient, walletClient, {
             chain,
             account,

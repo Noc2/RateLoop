@@ -7,8 +7,8 @@
  *   2. Call `settleRound(contentId, roundId)` when ≥max(minVoters, 3) are revealed.
  *      Low-turnout rounds still settle as feedback signals; score-spread LREP forfeits
  *      are only enabled by the contracts once the economic reveal threshold is reached.
- *   3. Call `finalizeRevealFailedRound(contentId, roundId)` once the last reveal grace
- *      deadline has passed without reveal quorum.
+ *   3. Call `finalizeRevealFailedRound(contentId, roundId)` once the extended
+ *      reveal-failed recovery window has passed without reveal quorum.
  *   4. Call `processUnrevealedVotes(contentId, roundId, startIndex, count)` for
  *      terminal rounds that still have unrevealed stake to sweep/refund.
  *   5. Call `cancelExpiredRound(contentId, roundId)` for rounds past maxDuration that
@@ -78,6 +78,9 @@ export interface KeeperResult {
    * RevealFailed (0 = already past its grace deadline); null when no round is at risk.
    */
   minRevealGraceSecondsRemaining: number | null;
+}
+export interface KeeperRunContext {
+  blockTimestamp?: bigint;
 }
 interface CleanupCursor {
   contentId: bigint;
@@ -591,7 +594,9 @@ function dedupeRoundCandidates(
   }
   return Array.from(byKey.values()).sort((a, b) => {
     const contentOrder = compareBigInt(a.contentId, b.contentId);
-    return contentOrder !== 0 ? contentOrder : compareBigInt(a.roundId, b.roundId);
+    return contentOrder !== 0
+      ? contentOrder
+      : compareBigInt(a.roundId, b.roundId);
   });
 }
 
@@ -926,6 +931,7 @@ export async function resolveRounds(
   chain: Chain,
   account: Account,
   logger: Logger,
+  runContext?: KeeperRunContext,
 ): Promise<KeeperResult> {
   const engineAddr = config.contracts.votingEngine;
   const registryAddr = config.contracts.contentRegistry;
@@ -942,6 +948,9 @@ export async function resolveRounds(
   let now: bigint;
   try {
     now = await resolveOnChainNowSeconds(publicClient);
+    if (runContext) {
+      runContext.blockTimestamp = now;
+    }
   } catch (err) {
     throw new Error(
       `Cannot resolve current block time: ${err instanceof Error ? err.message : String(err)}`,
