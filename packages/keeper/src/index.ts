@@ -182,13 +182,17 @@ async function main() {
       const duration = Date.now() - start;
       recordRun(result, duration);
 
-      // Log summary only when something happened
+      // Log summary only when something happened — include every KeeperResult counter
+      // so ticks that only finalize reveal-failed rounds or process cleanup batches
+      // still produce a "Run complete" log.
       const total =
         result.roundsSettled +
         result.roundsCancelled +
+        result.roundsRevealFailedFinalized +
         result.votesRevealed +
         result.advisoryVotesRevealed +
         result.advisoryLaunchCreditsClaimed +
+        result.cleanupBatchesProcessed +
         result.contentMarkedDormant;
       if (total > 0) {
         logger.info("Run complete", { ...result, durationMs: duration });
