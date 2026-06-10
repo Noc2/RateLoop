@@ -571,6 +571,16 @@ library RoundCleanupLib {
                         // RevealFailed commit was pre-counted by markRoundRevealFailed.
                         processedPastEpochCount++;
                     }
+                    // L-Cleanup-2 (accepted asymmetry): a failed voter refund transfer is folded
+                    // into the treasury forfeit (and thus subject to the cleanup-caller skim)
+                    // with no per-voter retry bucket, while treasury-side failures DO get a retry
+                    // path (`flushPendingTreasuryForfeit`, see L-Cleanup-1 below). This is safe
+                    // because LREP is a plain OZ ERC20 (no receiver hooks, no pause/blacklist;
+                    // its only `_update` restriction is a sender-side governance lock the engine
+                    // never engages), so a transfer to a recorded voter EOA/contract address
+                    // cannot realistically revert. Revisit and add a per-voter pending-refund
+                    // bucket if the token is ever swapped for one with transfer hooks or
+                    // receiver-side restrictions.
                     try TokenTransferLib.safeTransfer(lrepToken, commit.voter, amount) {
                         refundedLrep += amount;
                     } catch {
