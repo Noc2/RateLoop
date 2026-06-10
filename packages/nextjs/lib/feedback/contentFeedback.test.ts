@@ -232,6 +232,16 @@ test("rejects invalid feedback fields", () => {
     }).ok,
     false,
   );
+  assert.equal(
+    contentFeedback.normalizeContentFeedbackInput({
+      address: WALLET,
+      contentId: "1",
+      feedbackType: "evidence",
+      body: "Valid body",
+      sourceUrl: "http://example.com/source",
+    }).ok,
+    false,
+  );
 });
 
 test("builds stable canonical feedback hash metadata", () => {

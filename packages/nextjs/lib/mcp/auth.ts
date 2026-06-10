@@ -1,6 +1,15 @@
 import { createHash } from "crypto";
 import { getMcpAgentFromPolicyTokenHash, hashMcpBearerToken } from "~~/lib/agent/policies";
 
+/**
+ * MCP auth is intentionally opaque bearer only for now. The server hash-matches
+ * self-issued static/policy tokens and does not validate JWT aud/resource
+ * claims, so protected-resource metadata must not advertise an external OAuth
+ * authorization server until audience-bound JWT validation is implemented.
+ */
+export const MCP_AUTHENTICATION_SCHEME = "opaque_bearer" as const;
+export type McpAuthenticationScheme = typeof MCP_AUTHENTICATION_SCHEME;
+
 export const MCP_SCOPES = {
   ask: "rateloop:ask",
   balance: "rateloop:balance",

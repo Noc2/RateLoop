@@ -1,26 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MCP_SCOPES } from "~~/lib/mcp/auth";
+import { MCP_AUTHENTICATION_SCHEME, MCP_SCOPES } from "~~/lib/mcp/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MCP_RESOURCE_PATH = "/api/mcp";
-
-function normalizeUrl(value: string | undefined): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
-      return null;
-    }
-    url.hash = "";
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return null;
-  }
-}
 
 function resolveResourcePath(resource: string[] | undefined): string | null {
   if (!resource || resource.length === 0) return MCP_RESOURCE_PATH;
@@ -39,15 +23,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ res
   const resource = new URL(resourcePath, request.url);
   resource.hash = "";
   resource.search = "";
-  const authorizationServer = normalizeUrl(process.env.RATELOOP_MCP_AUTHORIZATION_SERVER_URL);
-
   return NextResponse.json(
     {
-      ...(authorizationServer ? { authorization_servers: [authorizationServer] } : {}),
       bearer_methods_supported: ["header"],
       resource: resource.toString(),
       resource_documentation: new URL("/docs/ai#mcp-adapter-shape", request.url).toString(),
       resource_name: "RateLoop MCP",
+      rateloop_authentication: MCP_AUTHENTICATION_SCHEME,
       scopes_supported: [MCP_SCOPES.quote, MCP_SCOPES.ask, MCP_SCOPES.rate, MCP_SCOPES.read, MCP_SCOPES.balance],
     },
     {

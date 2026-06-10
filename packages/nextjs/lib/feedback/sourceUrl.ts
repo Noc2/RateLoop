@@ -11,7 +11,7 @@ export function normalizeFeedbackSourceUrl(value: unknown): string | null | unde
 
   try {
     const url = new URL(trimmed);
-    if (url.protocol !== "https:" && url.protocol !== "http:") {
+    if (url.protocol !== "https:") {
       return undefined;
     }
     return url.toString();

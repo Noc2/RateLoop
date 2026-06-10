@@ -50,9 +50,10 @@ test("serves root MCP protected-resource metadata for static bearer-token agents
     "rateloop:balance",
   ]);
   assert.equal("authorization_servers" in body, false);
+  assert.equal(body.rateloop_authentication, "opaque_bearer");
 });
 
-test("includes configured authorization server in protected-resource metadata", async () => {
+test("omits configured authorization server until JWT audience validation exists", async () => {
   env.RATELOOP_MCP_AUTHORIZATION_SERVER_URL = "https://auth.rateloop.ai/";
 
   const response = await protectedResourceRoute.GET(
@@ -65,7 +66,8 @@ test("includes configured authorization server in protected-resource metadata", 
 
   assert.equal(response.status, 200);
   assert.equal(body.resource, "https://rateloop.ai/api/mcp");
-  assert.deepEqual(body.authorization_servers, ["https://auth.rateloop.ai"]);
+  assert.equal("authorization_servers" in body, false);
+  assert.equal(body.rateloop_authentication, "opaque_bearer");
 });
 
 test("rejects protected-resource metadata for unrelated paths", async () => {
