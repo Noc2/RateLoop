@@ -26,6 +26,7 @@ import {
   normalizeUtcDateKey,
 } from "./streak-utils.js";
 import { extendFeedbackBonusAwardDeadlinesForTerminalRound } from "./feedback-bonus-deadlines.js";
+import { tryContractRead } from "./contract-read.js";
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
@@ -92,37 +93,29 @@ async function resolveCommitIdentityAtCommit(params: {
     };
   }
 
-  try {
-    const state = (await params.context.client.readContract({
-      abi: RoundVotingEngineAbi,
-      address: engineAddress,
-      functionName: "commitIdentityState",
-      args: [params.contentId, params.roundId, params.commitKey],
-    })) as
-      | readonly [unknown, unknown, unknown, unknown, unknown, unknown]
-      | {
-          identityKey?: unknown;
-          holder?: unknown;
-          credentialMask?: unknown;
-          freshCredentialMask?: unknown;
-        };
-    const identityKey = Array.isArray(state) ? state[0] : state.identityKey;
-    const holder = Array.isArray(state) ? state[1] : state.holder;
-    const credentialMask =
-      Number(Array.isArray(state) ? state[3] : state.credentialMask) || 0;
-    const freshCredentialMask =
-      Number(Array.isArray(state) ? state[4] : state.freshCredentialMask) || 0;
-    const holderAddress = normalizeAddress(String(holder));
-    const identityHolder =
-      holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter;
-    return {
-      identityKey: nonZeroIdentityKey(identityKey, rawVoter),
-      identityHolder,
-      credentialMask,
-      freshCredentialMask,
-      hasHumanCredential: (credentialMask & HUMAN_CREDENTIAL_MASK) !== 0,
-    };
-  } catch {
+  // Only a deterministic call failure (revert / missing code / zero data) may fall back to the
+  // address-derived identity: the indexed identityKey feeds the RBTS sampler replication and
+  // voterStats attribution, so persisting the fallback after a transient RPC failure would
+  // silently corrupt the whole round. tryContractRead retries transient failures and then
+  // throws so Ponder retries the handler instead.
+  const result = await tryContractRead(
+    () =>
+      params.context.client.readContract({
+        abi: RoundVotingEngineAbi,
+        address: engineAddress,
+        functionName: "commitIdentityState",
+        args: [params.contentId, params.roundId, params.commitKey],
+      }) as Promise<
+        | readonly [unknown, unknown, unknown, unknown, unknown, unknown]
+        | {
+            identityKey?: unknown;
+            holder?: unknown;
+            credentialMask?: unknown;
+            freshCredentialMask?: unknown;
+          }
+      >,
+  );
+  if (!result.ok) {
     return {
       identityKey: addressIdentityKey(rawVoter),
       identityHolder: rawVoter,
@@ -131,6 +124,24 @@ async function resolveCommitIdentityAtCommit(params: {
       hasHumanCredential: false,
     };
   }
+
+  const state = result.value;
+  const identityKey = Array.isArray(state) ? state[0] : state.identityKey;
+  const holder = Array.isArray(state) ? state[1] : state.holder;
+  const credentialMask =
+    Number(Array.isArray(state) ? state[3] : state.credentialMask) || 0;
+  const freshCredentialMask =
+    Number(Array.isArray(state) ? state[4] : state.freshCredentialMask) || 0;
+  const holderAddress = normalizeAddress(String(holder));
+  const identityHolder =
+    holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter;
+  return {
+    identityKey: nonZeroIdentityKey(identityKey, rawVoter),
+    identityHolder,
+    credentialMask,
+    freshCredentialMask,
+    hasHumanCredential: (credentialMask & HUMAN_CREDENTIAL_MASK) !== 0,
+  };
 }
 
 function voteIdentity(voteRow: {
@@ -375,18 +386,24 @@ async function resolveRbtsScoringWeights(params: {
 
   await Promise.all(
     params.roundVotes.map(async (roundVote) => {
-      try {
-        const state = await params.context.client.readContract({
+      // Weight 0 silently drops the vote from the indexed scoring set, so only a
+      // deterministic call failure may map to it. Transient RPC failures throw (after the
+      // bounded retry in tryContractRead) so the handler fails loudly and Ponder retries it.
+      const result = await tryContractRead(() =>
+        params.context.client.readContract({
           abi: RoundVotingEngineAbi,
           address: engineAddress,
           functionName: "rbtsCommitState",
           args: [params.contentId, params.roundId, roundVote.commitKey],
-        });
-        const weight = Array.isArray(state) ? state[2] : 0n;
-        weights.set(roundVote.id, BigInt(String(weight)));
-      } catch {
+        }),
+      );
+      if (!result.ok) {
         weights.set(roundVote.id, 0n);
+        return;
       }
+      const state = result.value;
+      const weight = Array.isArray(state) ? state[2] : 0n;
+      weights.set(roundVote.id, BigInt(String(weight)));
     }),
   );
 

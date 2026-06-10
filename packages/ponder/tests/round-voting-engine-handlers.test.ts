@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { encodePacked, keccak256 } from "viem";
+import {
+  ContractFunctionRevertedError,
+  HttpRequestError,
+  encodePacked,
+  keccak256,
+} from "viem";
 import { SCORE_SPREAD_POLICY } from "@rateloop/contracts/protocol";
 
 type RegisteredHandler = (args: {
@@ -580,6 +585,157 @@ describe("RoundVotingEngine ponder handlers", () => {
         revealGracePeriod: 3_600n,
       }),
     });
+  });
+
+  it("falls back to the address identity when the identity read reverts deterministically", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
+    const ciphertext = "0x1234" as `0x${string}`;
+    const ciphertextHash = keccak256(ciphertext);
+    const expectedFallbackIdentityKey = keccak256(
+      encodePacked(
+        ["string", "address"],
+        ["rateloop.address-identity-v1", voter],
+      ),
+    );
+    const readContract = vi.fn(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "commitIdentityState") {
+          throw new ContractFunctionRevertedError({
+            abi: [],
+            functionName: "commitIdentityState",
+            message: "execution reverted",
+          });
+        }
+        if (functionName === "advisoryRoundContext") {
+          return [
+            0,
+            2_000n,
+            `0x${"00".repeat(32)}`,
+            0n,
+            0n,
+            false,
+            "0x0000000000000000000000000000000000000000",
+          ];
+        }
+        if (functionName === "roundLifecycleState") return [3_600n, 0n, 0n, 0n];
+        return null;
+      },
+    );
+    const { db, insertCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        startTime: 1_000n,
+        epochDuration: 600,
+        voteCount: 1,
+        totalStake: 10n,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:VoteCommitted");
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          voter,
+          commitHash,
+          roundReferenceRatingBps: 7200,
+          targetRound: 123n,
+          drandChainHash: `0x${"22".repeat(32)}`,
+          stake: 10n,
+          ciphertextHash,
+          ciphertext,
+        },
+        transaction: { hash: `0x${"44".repeat(32)}` },
+        block: { number: 43n, timestamp: 1_601n },
+        log: { logIndex: 9 },
+      },
+      context: {
+        db,
+        client: { readContract },
+        contracts: {
+          RoundVotingEngine: {
+            address: "0x0000000000000000000000000000000000000666",
+          },
+        },
+      },
+    });
+
+    expect(insertCalls).toContainEqual({
+      table: "vote",
+      values: expect.objectContaining({
+        id: `7-2-${voter}`,
+        identityKey: expectedFallbackIdentityKey,
+        identityHolder: voter,
+        credentialMask: 0,
+      }),
+    });
+  });
+
+  it("fails the commit handler when the identity read keeps failing transiently", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
+    const ciphertext = "0x1234" as `0x${string}`;
+    const ciphertextHash = keccak256(ciphertext);
+    const transportFailure = new HttpRequestError({
+      url: "http://localhost:8545",
+      details: "fetch failed",
+    });
+    const readContract = vi.fn(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "commitIdentityState") throw transportFailure;
+        return null;
+      },
+    );
+    const { db, insertCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        startTime: 1_000n,
+        epochDuration: 600,
+        voteCount: 1,
+        totalStake: 10n,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:VoteCommitted");
+
+    await expect(
+      handler!({
+        event: {
+          args: {
+            contentId: 7n,
+            roundId: 2n,
+            voter,
+            commitHash,
+            roundReferenceRatingBps: 7200,
+            targetRound: 123n,
+            drandChainHash: `0x${"22".repeat(32)}`,
+            stake: 10n,
+            ciphertextHash,
+            ciphertext,
+          },
+          transaction: { hash: `0x${"44".repeat(32)}` },
+          block: { number: 43n, timestamp: 1_601n },
+          log: { logIndex: 9 },
+        },
+        context: {
+          db,
+          client: { readContract },
+          contracts: {
+            RoundVotingEngine: {
+              address: "0x0000000000000000000000000000000000000666",
+            },
+          },
+        },
+      }),
+    ).rejects.toBe(transportFailure);
+    // Bounded in-process retry before failing loudly.
+    expect(readContract).toHaveBeenCalledTimes(3);
+    expect(insertCalls).not.toContainEqual(
+      expect.objectContaining({ table: "vote" }),
+    );
   });
 
   it("reuses indexed round voteability state during committed vote handling", async () => {
