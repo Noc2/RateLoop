@@ -146,10 +146,11 @@ const HowItWorks: NextPage = () => {
         To earn a bounty, reveal an eligible vote before the bounty closes; bundle bounties require revealing on every
         question in the claimed round set. Each qualified round pays{" "}
         <code>round allocation * claim weight / total claim weight</code>, where USDC claim weights come from the
-        finalized <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link> and
-        equal-weight rounds use one unit per eligible revealed rater. An eligible commit-attributed frontend receives
-        the default 3% frontend fee before rater payouts; if that frontend is not payable, the share stays with the
-        rater claim.
+        finalized <Link href="/docs/tech-stack#correlation-epoch-snapshots">correlation payout snapshot</Link> — a
+        surprise-weighted base weight (10,000-20,000 bps, higher when your answer was surprisingly common versus the
+        trailing base rate) times an independence multiplier — and equal-weight rounds use one unit per eligible
+        revealed rater. An eligible commit-attributed frontend receives the default 3% frontend fee before rater
+        payouts; if that frontend is not payable, the share stays with the rater claim.
       </p>
       <p>
         Bounty size can raise the required rater floor: {protocolDocFacts.bountyParticipantFloorsLabel}. The goal is to
@@ -157,9 +158,10 @@ const HowItWorks: NextPage = () => {
       </p>
       <p>
         Example: if a 30 USDC rater allocation is claimable and three eligible raters have effective correlation weights
-        of 2, 1, and 1, they claim 15 USDC, 7.5 USDC, and 7.5 USDC. Those weights are independence/correlation payout
-        weights, not stake amounts. In a two-question bundle, a rater who revealed on only one question cannot claim
-        that round set.
+        of 20,000, 10,000, and 10,000 — say one rater&apos;s answer was surprisingly common versus the trailing base
+        rate and earned the maximum surprise bonus while the others pay the flat floor — they claim 15 USDC, 7.50 USDC,
+        and 7.50 USDC. Those weights are surprise-and-independence payout weights, not stake amounts. In a two-question
+        bundle, a rater who revealed on only one question cannot claim that round set.
       </p>
 
       <h3>Feedback Bonuses</h3>

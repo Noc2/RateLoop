@@ -274,7 +274,10 @@ const Tokenomics = () => {
             <tr>
               <td>Register as frontend</td>
               <td className="font-mono">{protocolDocFacts.frontendOperatorStakeLabel}</td>
-              <td>Returned on exit unless slashed; also backs operator payout-root proposals</td>
+              <td>
+                Returned on exit unless slashed; also backs operator payout-root proposals. Earned fees stay slashable
+                through a 14-day withdrawal review window
+              </td>
             </tr>
           </tbody>
         </table>

@@ -7,30 +7,56 @@ import {
   type Address,
   type Hex,
 } from "viem";
+import { canonicalJsonHash } from "./json";
 
 export const PAYOUT_DOMAIN_QUESTION_REWARD = 1;
 export const PAYOUT_DOMAIN_LAUNCH_CREDIT = 2;
+export const CORRELATION_CANONICAL_JSON_VERSION = "rateloop-canonical-json-v1";
+export const CORRELATION_ELIGIBILITY_SPEC_VERSION =
+  "rateloop-correlation-eligibility-v1";
+export const CORRELATION_FEATURE_SPEC_VERSION =
+  "rateloop-correlation-features-v1";
 export const PAYOUT_WEIGHT_DOMAIN = keccak256(
   toBytes("rateloop.correlation.payout-weight.v1"),
 );
 export const BPS_DENOMINATOR = 10_000n;
+export const NEUTRAL_SURPRISE_BPS = 10_000;
+const FLAT_BASE_WEIGHT = 10_000n;
 
 export interface CorrelationScoringParams {
   minUnverifiedMaturityVotes: number;
   unverifiedFloorBps: number;
   verifiedFloorBps: number;
   maxClusterSizeWithoutDiscount: number;
+  surpriseCapBps: number;
+  baseWeightFloorBps: number;
+  baseWeightBonusBps: number;
+  baseRateWindowRounds: number;
+  baseRateMinBps: number;
+  baseRateMaxBps: number;
   scorerVersion: string;
+  eligibilitySpecVersion: string;
+  canonicalJsonVersion: string;
+  featureSpecVersion: string;
 }
 
 export interface CorrelationVoteInput {
   account: Address;
   identityKey: Hex;
   commitKey: Hex;
-  baseWeight: bigint;
   verifiedHuman: boolean;
   historicalVoteCount: number;
   features: readonly string[];
+  /**
+   * Revealed vote direction from `RbtsVoteRevealed`. Missing (null/undefined)
+   * yields the neutral surprise multiplier for this vote.
+   */
+  isUp?: boolean | null;
+  /**
+   * Epoch-weighted reveal weight (`effectiveWeight` in `RbtsVoteRevealed`).
+   * Missing (null/undefined) yields the neutral surprise multiplier.
+   */
+  revealWeight?: bigint | null;
 }
 
 export interface PayoutWeightLeafInput {
@@ -50,6 +76,7 @@ export interface PayoutWeightLeafInput {
 export interface ScoredPayoutWeight extends PayoutWeightLeafInput {
   clusterId: Hex;
   verifiedHuman: boolean;
+  surpriseBps: number;
   leaf: Hex;
   reasons: readonly string[];
 }
@@ -106,24 +133,38 @@ export function defaultCorrelationScoringParams(): CorrelationScoringParams {
     unverifiedFloorBps: 2_500,
     verifiedFloorBps: 6_000,
     maxClusterSizeWithoutDiscount: 1,
-    scorerVersion: "rateloop-correlation-epoch-v1",
+    surpriseCapBps: 30_000,
+    baseWeightFloorBps: 5_000,
+    baseWeightBonusBps: 5_000,
+    baseRateWindowRounds: 100,
+    baseRateMinBps: 500,
+    baseRateMaxBps: 9_500,
+    scorerVersion: "rateloop-correlation-epoch-v2",
+    eligibilitySpecVersion: CORRELATION_ELIGIBILITY_SPEC_VERSION,
+    canonicalJsonVersion: CORRELATION_CANONICAL_JSON_VERSION,
+    featureSpecVersion: CORRELATION_FEATURE_SPEC_VERSION,
   };
 }
 
 export function correlationParameterHash(
   params: CorrelationScoringParams,
 ): Hex {
-  return keccak256(
-    toBytes(
-      JSON.stringify({
-        maxClusterSizeWithoutDiscount: params.maxClusterSizeWithoutDiscount,
-        minUnverifiedMaturityVotes: params.minUnverifiedMaturityVotes,
-        scorerVersion: params.scorerVersion,
-        unverifiedFloorBps: params.unverifiedFloorBps,
-        verifiedFloorBps: params.verifiedFloorBps,
-      }),
-    ),
-  );
+  return canonicalJsonHash({
+    baseRateMaxBps: params.baseRateMaxBps,
+    baseRateMinBps: params.baseRateMinBps,
+    baseRateWindowRounds: params.baseRateWindowRounds,
+    baseWeightBonusBps: params.baseWeightBonusBps,
+    baseWeightFloorBps: params.baseWeightFloorBps,
+    canonicalJsonVersion: params.canonicalJsonVersion,
+    eligibilitySpecVersion: params.eligibilitySpecVersion,
+    featureSpecVersion: params.featureSpecVersion,
+    maxClusterSizeWithoutDiscount: params.maxClusterSizeWithoutDiscount,
+    minUnverifiedMaturityVotes: params.minUnverifiedMaturityVotes,
+    scorerVersion: params.scorerVersion,
+    surpriseCapBps: params.surpriseCapBps,
+    unverifiedFloorBps: params.unverifiedFloorBps,
+    verifiedFloorBps: params.verifiedFloorBps,
+  });
 }
 
 export function scoreRoundPayoutWeights(args: {
@@ -134,6 +175,12 @@ export function scoreRoundPayoutWeights(args: {
   contentId: bigint;
   roundId: bigint;
   votes: readonly CorrelationVoteInput[];
+  /**
+   * Trailing cross-round base rate for UP in bps (already clamped by the
+   * data source per spec; defensively re-clamped here). Missing (null or
+   * undefined) yields the neutral surprise multiplier for every vote.
+   */
+  trailingBaseRateUpBps?: number | null;
   params?: Partial<CorrelationScoringParams>;
 }): RoundPayoutScoringResult {
   const params = { ...defaultCorrelationScoringParams(), ...args.params };
@@ -144,6 +191,12 @@ export function scoreRoundPayoutWeights(args: {
     const root = clusters.find(index);
     clusterSizes.set(root, (clusterSizes.get(root) ?? 0) + 1);
   }
+  const surpriseBpsByVote = surpriseBpsForVotes(
+    args.domain,
+    args.votes,
+    args.trailingBaseRateUpBps,
+    params,
+  );
 
   const leaves = args.votes.map((vote, index) => {
     const clusterRoot = clusters.find(index);
@@ -154,8 +207,10 @@ export function scoreRoundPayoutWeights(args: {
       clusterSize,
       params,
     );
+    const surpriseBps = surpriseBpsByVote[index] ?? NEUTRAL_SURPRISE_BPS;
+    const baseWeight = baseWeightForVote(args.domain, surpriseBps, params);
     const effectiveWeight =
-      (vote.baseWeight * BigInt(independenceBps)) / BPS_DENOMINATOR;
+      (baseWeight * BigInt(independenceBps)) / BPS_DENOMINATOR;
     const reasonHash = keccak256(toBytes(reasons.join("|")));
     const payout: PayoutWeightLeafInput = {
       domain: args.domain,
@@ -165,7 +220,7 @@ export function scoreRoundPayoutWeights(args: {
       commitKey: vote.commitKey,
       identityKey: vote.identityKey,
       account: vote.account,
-      baseWeight: vote.baseWeight,
+      baseWeight,
       independenceBps,
       effectiveWeight,
       reasonHash,
@@ -174,6 +229,7 @@ export function scoreRoundPayoutWeights(args: {
       ...payout,
       clusterId,
       verifiedHuman: vote.verifiedHuman,
+      surpriseBps,
       leaf: payoutWeightLeaf(args.chainId, args.oracleAddress, payout),
       reasons,
     };
@@ -286,6 +342,86 @@ function buildClusters(votes: readonly CorrelationVoteInput[]): DisjointSet {
   return clusters;
 }
 
+/**
+ * Surprise-weighted bounty claim weights (docs/surprise-weighted-bounty-weights.md).
+ *
+ * Surprise applies only to the question-reward payout domain; the
+ * launch-credit domain requires flat weights and stays neutral. All math is
+ * integer bps with floor division, mirroring the normative spec exactly.
+ */
+function surpriseBpsForVotes(
+  domain: number,
+  votes: readonly CorrelationVoteInput[],
+  trailingBaseRateUpBps: number | null | undefined,
+  params: CorrelationScoringParams,
+): number[] {
+  if (
+    domain !== PAYOUT_DOMAIN_QUESTION_REWARD ||
+    trailingBaseRateUpBps === null ||
+    trailingBaseRateUpBps === undefined ||
+    !Number.isSafeInteger(trailingBaseRateUpBps)
+  ) {
+    return votes.map(() => NEUTRAL_SURPRISE_BPS);
+  }
+  const baseRateUpBps = BigInt(
+    Math.min(
+      Math.max(trailingBaseRateUpBps, params.baseRateMinBps),
+      params.baseRateMaxBps,
+    ),
+  );
+
+  let totalWeight = 0n;
+  let upWeight = 0n;
+  for (const vote of votes) {
+    if (!hasSurpriseInputs(vote)) continue;
+    totalWeight += vote.revealWeight;
+    if (vote.isUp) upWeight += vote.revealWeight;
+  }
+
+  return votes.map((vote) => {
+    if (!hasSurpriseInputs(vote)) return NEUTRAL_SURPRISE_BPS;
+    const otherWeight = totalWeight - vote.revealWeight;
+    if (otherWeight <= 0n) return NEUTRAL_SURPRISE_BPS;
+    const sideWeight = vote.isUp ? upWeight : totalWeight - upWeight;
+    const agreementBps =
+      ((sideWeight - vote.revealWeight) * BPS_DENOMINATOR) / otherWeight;
+    const baseRateBps = vote.isUp
+      ? baseRateUpBps
+      : BPS_DENOMINATOR - baseRateUpBps;
+    const surpriseBps = (agreementBps * BPS_DENOMINATOR) / baseRateBps;
+    const cap = BigInt(params.surpriseCapBps);
+    if (surpriseBps < BigInt(NEUTRAL_SURPRISE_BPS)) return NEUTRAL_SURPRISE_BPS;
+    if (surpriseBps > cap) return params.surpriseCapBps;
+    return Number(surpriseBps);
+  });
+}
+
+function hasSurpriseInputs(
+  vote: CorrelationVoteInput,
+): vote is CorrelationVoteInput & { isUp: boolean; revealWeight: bigint } {
+  return (
+    typeof vote.isUp === "boolean" &&
+    typeof vote.revealWeight === "bigint" &&
+    vote.revealWeight >= 0n
+  );
+}
+
+function baseWeightForVote(
+  domain: number,
+  surpriseBps: number,
+  params: CorrelationScoringParams,
+): bigint {
+  if (domain !== PAYOUT_DOMAIN_QUESTION_REWARD) {
+    // LaunchDistributionPool requires flat weights for the launch-credit
+    // domain; surprise weighting never applies outside question rewards.
+    return FLAT_BASE_WEIGHT;
+  }
+  return (
+    BigInt(params.baseWeightFloorBps) +
+    (BigInt(params.baseWeightBonusBps) * BigInt(surpriseBps)) / BPS_DENOMINATOR
+  );
+}
+
 function independenceForVote(
   vote: CorrelationVoteInput,
   clusterSize: number,
@@ -354,7 +490,17 @@ function validateParams(params: CorrelationScoringParams): void {
     params.unverifiedFloorBps > 10_000 ||
     params.verifiedFloorBps > 10_000 ||
     params.maxClusterSizeWithoutDiscount <= 0 ||
-    !params.scorerVersion
+    params.surpriseCapBps < NEUTRAL_SURPRISE_BPS ||
+    params.baseWeightFloorBps < 0 ||
+    params.baseWeightBonusBps < 0 ||
+    params.baseRateWindowRounds <= 0 ||
+    params.baseRateMinBps <= 0 ||
+    params.baseRateMaxBps >= 10_000 ||
+    params.baseRateMinBps > params.baseRateMaxBps ||
+    !params.scorerVersion ||
+    !params.eligibilitySpecVersion ||
+    !params.canonicalJsonVersion ||
+    !params.featureSpecVersion
   ) {
     throw new Error("Invalid correlation scoring parameters");
   }

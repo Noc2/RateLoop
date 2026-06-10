@@ -7,6 +7,7 @@
     "check-types": "tsc --noEmit",
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
+    "verify:correlation-artifact": "tsx src/correlation-artifact-verifier.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

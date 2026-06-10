@@ -44,7 +44,9 @@ function getClaimableRewardLabel(item: ClaimableRewardItem) {
     case "question_bundle_reward":
       return `bundle bounty #${item.bundleId} round set ${item.roundSetIndex + 1n}`;
     case "frontend_registry_fee":
-      return `frontend registry fees for ${item.frontend}`;
+      return `frontend registry fee withdrawal request for ${item.frontend}`;
+    case "frontend_registry_withdrawal":
+      return `matured frontend fee withdrawal for ${item.frontend}`;
     case "frontend_round_fee":
       return `frontend round fee for content #${item.contentId} round ${item.roundId}`;
     case "refund":
@@ -116,7 +118,16 @@ export function useClaimAll() {
       return {
         abi: frontendRegistryInfo.abi as Abi,
         address: frontendRegistryInfo.address as `0x${string}`,
-        functionName: "claimFees",
+        functionName: "requestFeeWithdrawal",
+      };
+    }
+
+    if (item.claimType === "frontend_registry_withdrawal") {
+      if (!frontendRegistryInfo) throw new Error("Frontend registry is unavailable right now.");
+      return {
+        abi: frontendRegistryInfo.abi as Abi,
+        address: frontendRegistryInfo.address as `0x${string}`,
+        functionName: "completeFeeWithdrawal",
       };
     }
 
@@ -235,7 +246,14 @@ export function useClaimAll() {
           } else if (item.claimType === "frontend_registry_fee") {
             await (writeFrontendRegistry as any)(
               {
-                functionName: "claimFees",
+                functionName: "requestFeeWithdrawal",
+              },
+              { getErrorMessage: getTransactionErrorMessage },
+            );
+          } else if (item.claimType === "frontend_registry_withdrawal") {
+            await (writeFrontendRegistry as any)(
+              {
+                functionName: "completeFeeWithdrawal",
               },
               { getErrorMessage: getTransactionErrorMessage },
             );

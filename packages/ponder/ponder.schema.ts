@@ -49,6 +49,7 @@ export const content = onchainTable(
     canonicalUrlIdx: index().on(table.canonicalUrl),
     urlHostIdx: index().on(table.urlHost),
     statusIdx: index().on(table.status),
+    statusLastActivityIdx: index().on(table.status, table.lastActivityAt),
     ratingIdx: index().on(table.rating),
     createdAtIdx: index().on(table.createdAt),
     searchIdx: index("content_search_idx").using(
@@ -146,6 +147,7 @@ export const round = onchainTable(
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.roundId),
     stateIdx: index().on(table.state),
+    stateContentRoundIdx: index().on(table.state, table.contentId, table.roundId),
     settledAtIdx: index().on(table.settledAt),
   }),
 );
@@ -171,7 +173,6 @@ export const vote = onchainTable(
     voter: t.hex().notNull(), // raw commit/stake-payer address
     identityKey: t.hex(), // resolved RaterRegistry identity key at commit time, when available
     identityHolder: t.hex(), // resolved RaterRegistry holder at commit time, or voter when unavailable
-    identityVoter: t.hex(), // compatibility alias for identityHolder
     credentialMask: t.integer().notNull().default(0), // active World ID credential kinds at commit time
     freshCredentialMask: t.integer().notNull().default(0), // recent user-presence rechecks at commit time
     commitKey: t.hex().notNull(),
@@ -201,7 +202,6 @@ export const vote = onchainTable(
     voterIdx: index().on(table.voter),
     identityKeyIdx: index().on(table.identityKey),
     identityHolderIdx: index().on(table.identityHolder),
-    identityVoterIdx: index().on(table.identityVoter),
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.roundId),
     contentRoundIdx: index().on(table.contentId, table.roundId),
@@ -433,6 +433,23 @@ export const roundPayoutSnapshot = onchainTable(
     epochIdx: index().on(table.correlationEpochId),
     frontendOperatorIdx: index().on(table.frontendOperator),
     statusIdx: index().on(table.status),
+  }),
+);
+
+export const payoutArtifactCache = onchainTable(
+  "payout_artifact_cache",
+  (t) => ({
+    artifactHash: t.hex().primaryKey(),
+    artifactUri: t.text().notNull(),
+    canonicalJson: t.text().notNull(),
+    byteLength: t.integer().notNull(),
+    firstSeenAt: t.bigint().notNull(),
+    lastFetchedAt: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    artifactUriIdx: index().on(table.artifactUri),
+    lastFetchedAtIdx: index().on(table.lastFetchedAt),
   }),
 );
 
@@ -950,6 +967,12 @@ export const frontend = onchainTable("frontend", (t) => ({
   exitAvailableAt: t.bigint(),
   totalFeesCredited: t.bigint().notNull(),
   totalFeesClaimed: t.bigint().notNull(),
+  // Two-step fee withdrawals: the requested amount stays slashable in the registry
+  // until the release timestamp passes (FrontendRegistry.FEE_WITHDRAWAL_DELAY).
+  pendingFeeWithdrawal: t.bigint().notNull().default(0n),
+  pendingFeeWithdrawalReleaseAt: t.bigint(),
+  // LREP routed to successful oracle challengers out of this frontend's slashes.
+  totalChallengerBountiesPaid: t.bigint().notNull().default(0n),
   registeredAt: t.bigint().notNull(),
 }));
 

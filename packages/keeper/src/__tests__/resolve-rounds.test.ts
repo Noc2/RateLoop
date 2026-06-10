@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { keccak256 } from "viem";
+import { encodePacked, keccak256 } from "viem";
 
 const VOTER = "0x3333333333333333333333333333333333333333" as const;
 const ACCOUNT = "0x4444444444444444444444444444444444444444" as const;
@@ -30,8 +30,14 @@ const {
       advisoryVoteRecorder: "0x5555555555555555555555555555555555555555",
     },
     ponderBaseUrl: "https://ponder.example.test",
+    keeperWorkDiscovery: {
+      enabled: false,
+      reconciliationEveryTicks: 120,
+      maxCandidates: 500,
+    },
     dormancyPeriod: 30n * 24n * 60n * 60n,
     cleanupBatchSize: 25,
+    logFallbackLookbackBlocks: 300_000,
   },
   timelockDecrypt: vi.fn(),
   mainnetClient: vi.fn(() => ({ kind: "mainnet" })),
@@ -75,6 +81,7 @@ vi.mock("tlock-js", () => ({
 }));
 
 import { resolveRounds, resetKeeperStateForTests } from "../keeper.js";
+import { FailoverChainClient } from "../drand.js";
 
 type RoundStateValue = 0 | 1 | 2 | 3 | 4;
 
@@ -294,9 +301,14 @@ function makeHarness(options: {
   questionRewardPoolEscrow?: `0x${string}`;
   advisoryCommitKeys?: readonly `0x${string}`[];
   advisoryCommitCores?: Record<string, unknown[]>;
+  advisoryCommits?: Record<string, CommitData>;
   revealGracePeriod?: bigint;
   lastCommitRevealableAfter?: bigint;
   roundHasHumanVerifiedCommit?: boolean;
+  ponderAvailable?: boolean;
+  ponderCommits?: Record<string, CommitData>;
+  onChainLogs?: { vote?: unknown[]; advisory?: unknown[] };
+  settleRoundResultState?: RoundStateValue;
 }) {
   const roundConfig = options.roundConfig || {
     epochDuration: 1200n,
@@ -316,14 +328,20 @@ function makeHarness(options: {
   const commits = options.commits ?? {};
   const advisoryCommitKeys = options.advisoryCommitKeys ?? [];
   const advisoryCommitCores = options.advisoryCommitCores ?? {};
+  const advisoryCommits = options.advisoryCommits ?? {};
   const round = options.round;
 
   const fetchMock = vi.fn(async () => {
-    const items = Object.entries(commits).map(([commitKey, commit]) => ({
-      commitKey,
-      ciphertextHash: commit.ciphertextHash,
-      ciphertext: commit.ciphertext,
-    }));
+    if (options.ponderAvailable === false) {
+      throw new Error("fetch failed");
+    }
+    const items = Object.entries(options.ponderCommits ?? commits).map(
+      ([commitKey, commit]) => ({
+        commitKey,
+        ciphertextHash: commit.ciphertextHash,
+        ciphertext: commit.ciphertext,
+      }),
+    );
     return {
       ok: true,
       status: 200,
@@ -334,6 +352,16 @@ function makeHarness(options: {
 
   const publicClient = {
     getBlock: vi.fn().mockResolvedValue({ timestamp: now }),
+    getBlockNumber: vi.fn().mockResolvedValue(2_000_000n),
+    getLogs: vi.fn(async ({ event }: { event?: { name?: string } }) => {
+      if (event?.name === "VoteCommitted") {
+        return options.onChainLogs?.vote ?? [];
+      }
+      if (event?.name === "AdvisoryVoteRecorded") {
+        return options.onChainLogs?.advisory ?? [];
+      }
+      return [];
+    }),
     readContract: vi.fn(
       async ({
         functionName,
@@ -424,6 +452,11 @@ function makeHarness(options: {
             return BigInt(advisoryCommitKeys.length);
           case "getRoundAdvisoryCommitKey":
             return advisoryCommitKeys[Number(args[2])] ?? zeroHash;
+          case "advisoryCommitRevealData":
+            return (
+              advisoryCommits[String(args[0])] ??
+              makeCommit({ revealed: true, stakeAmount: 0n })
+            );
           case "advisoryCommitCore":
             return (
               advisoryCommitCores[String(args[0])] ?? [
@@ -498,13 +531,25 @@ function makeHarness(options: {
         }
 
         if (functionName === "settleRound") {
-          round.state = 1;
-          round.settledAt = now;
+          round.state = options.settleRoundResultState ?? 1;
+          if (round.state !== 0) {
+            round.settledAt = now;
+          }
           return "0xsettled";
         }
 
         if (functionName === "syncBundleQuestionTerminal") {
           return "0xsync";
+        }
+
+        if (functionName === "revealAdvisoryVote") {
+          const commitKey = String(args[0]);
+          const commit = advisoryCommits[commitKey];
+          if (!commit || commit.revealed) {
+            throw new Error("AlreadyRevealed");
+          }
+          commit.revealed = true;
+          return "0xadvisoryrevealed";
         }
 
         if (functionName === "claimAdvisoryLaunchCredit") {
@@ -537,8 +582,63 @@ describe("resolveRounds", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    mockConfig.keeperWorkDiscovery.enabled = false;
+    mockConfig.keeperWorkDiscovery.reconciliationEveryTicks = 120;
+    mockConfig.keeperWorkDiscovery.maxCandidates = 500;
     mockConfig.cleanupBatchSize = 25;
     resetKeeperStateForTests();
+  });
+
+  it("uses Ponder keeper work candidates without scanning every content id", async () => {
+    mockConfig.keeperWorkDiscovery.enabled = true;
+
+    const round = makeRound({
+      state: 1,
+      voteCount: 0n,
+      revealedCount: 0n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 0n,
+      round,
+      dormancyEligible: true,
+      now: 3_000_000n,
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      expect(url.pathname).toBe("/keeper/work");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          openRounds: [],
+          cleanupRounds: [],
+          dormantContent: [{ contentId: "1", reason: "dormant" }],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.contentMarkedDormant).toBe(1);
+    expect(publicClient.readContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "nextContentId" }),
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "markDormant",
+        args: [1n],
+      }),
+    );
   });
 
   it("finalizes reveal-failed rounds and cleans up unrevealed stake", async () => {
@@ -562,7 +662,7 @@ describe("resolveRounds", () => {
       },
       revealGracePeriod: 60n,
       lastCommitRevealableAfter: 100n,
-      now: 605_000n,
+      now: 610_000n,
     });
     const logger = makeLogger();
 
@@ -580,6 +680,8 @@ describe("resolveRounds", () => {
       roundsSettled: 0,
       roundsCancelled: 0,
       votesRevealed: 0,
+      roundsAwaitingRevealQuorum: 1,
+      minRevealGraceSecondsRemaining: 0,
     });
     expect(walletClient.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
@@ -644,6 +746,51 @@ describe("resolveRounds", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not count RBTS seed capture as terminal settlement", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 3n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      questionRewardPoolEscrow: QUESTION_REWARD_POOL_ESCROW,
+      settleRoundResultState: 0,
+      now: 1_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result).toMatchObject({
+      roundsSettled: 0,
+      advisoryLaunchCreditsClaimed: 0,
+      cleanupBatchesProcessed: 0,
+    });
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "settleRound" }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "syncBundleQuestionTerminal" }),
+    );
+    expect(round.state).toBe(0);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Captured RBTS settlement seed",
+      expect.objectContaining({
+        contentId: "1",
+        roundId: 1,
+      }),
+    );
+  });
+
   it("reveals a World Chain Sepolia quicknet-t commit with the quicknet-t client", async () => {
     timelockDecrypt.mockResolvedValueOnce(makePlaintext(true, 1));
 
@@ -677,9 +824,9 @@ describe("resolveRounds", () => {
 
     expect(result.votesRevealed).toBe(1);
     expect(commits[COMMIT_KEY_1].revealed).toBe(true);
-    expect(vi.mocked(timelockDecrypt).mock.calls[0]?.[1]).toMatchObject({
-      kind: "quicknet-t",
-    });
+    expect(vi.mocked(timelockDecrypt).mock.calls[0]?.[1]).toBeInstanceOf(
+      FailoverChainClient,
+    );
     expect(httpChainClient).toHaveBeenCalledWith(
       expect.objectContaining({
         url: expect.stringContaining(QUICKNET_T_DRAND_CHAIN_HASH.slice(2)),
@@ -1345,6 +1492,326 @@ describe("resolveRounds", () => {
     expect(result.roundsRevealFailedFinalized).toBe(0);
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
+    );
+    // The round is reported as at-risk with the time left until finalization
+    // eligibility: (startTime 1 + maxDuration 5000 + 24x grace 60) - now 1000.
+    expect(result.roundsAwaitingRevealQuorum).toBe(1);
+    expect(result.minRevealGraceSecondsRemaining).toBe(5441);
+  });
+
+  it("does not finalize reveal-failed when ciphertexts are unavailable from all sources", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 2n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: makeCommit({ revealableAfter: 100n }),
+      },
+      // Ponder is down and the on-chain log fallback yields nothing.
+      ponderAvailable: false,
+      revealGracePeriod: 60n,
+      lastCommitRevealableAfter: 100n,
+      now: 610_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsRevealFailedFinalized).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skipping reveal-failed finalization; reveal pipeline was unhealthy this tick",
+      expect.objectContaining({ contentId: "1", roundId: 1 }),
+    );
+  });
+
+  it("does not finalize reveal-failed when every drand relay is unavailable", async () => {
+    const relayOutage = new Error(
+      "All drand relays failed fetching beacon round 123",
+    );
+    relayOutage.name = "DrandUnavailableError";
+    timelockDecrypt.mockRejectedValue(relayOutage);
+
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 2n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: makeCommit({ revealableAfter: 100n }),
+      },
+      revealGracePeriod: 60n,
+      lastCommitRevealableAfter: 100n,
+      now: 610_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsRevealFailedFinalized).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
+    );
+    // A relay outage must not burn the commit's permanent decrypt-failure budget.
+    expect(logger.warn).toHaveBeenCalledWith(
+      "All drand relays unavailable; retrying next tick",
+      expect.objectContaining({ commitKey: COMMIT_KEY_1 }),
+    );
+  });
+
+  it("reveals votes from on-chain VoteCommitted logs when Ponder is unavailable", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const commitHash = `0x${"11".repeat(32)}` as const;
+    const commitKey = keccak256(
+      encodePacked(["address", "bytes32"], [VOTER, commitHash]),
+    );
+    const commit = makeCommit({ revealableAfter: 100n });
+    const round = makeRound({ state: 0, voteCount: 3n, revealedCount: 2n });
+    const { publicClient, walletClient, fetchMock } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [commitKey],
+      commits: { [commitKey]: commit },
+      ponderAvailable: false,
+      onChainLogs: {
+        vote: [
+          {
+            args: {
+              contentId: 1n,
+              roundId: 1n,
+              voter: VOTER,
+              commitHash,
+              ciphertextHash: commit.ciphertextHash,
+              ciphertext: commit.ciphertext,
+            },
+          },
+        ],
+      },
+      now: 10_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(publicClient.getLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: mockConfig.contracts.votingEngine,
+        args: { contentId: 1n, roundId: 1n },
+      }),
+    );
+    expect(result.votesRevealed).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "revealVoteByCommitKey",
+        args: expect.arrayContaining([commitKey]),
+      }),
+    );
+  });
+
+  it("falls back to on-chain logs for commits missing from the Ponder response", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const commitHash = `0x${"22".repeat(32)}` as const;
+    const commitKey = keccak256(
+      encodePacked(["address", "bytes32"], [VOTER, commitHash]),
+    );
+    const commit = makeCommit({ revealableAfter: 100n });
+    const round = makeRound({ state: 0, voteCount: 3n, revealedCount: 2n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [commitKey],
+      commits: { [commitKey]: commit },
+      // Ponder responds, but its index is lagging and is missing this commit.
+      ponderCommits: {},
+      onChainLogs: {
+        vote: [
+          {
+            args: {
+              contentId: 1n,
+              roundId: 1n,
+              voter: VOTER,
+              commitHash,
+              ciphertextHash: commit.ciphertextHash,
+              ciphertext: commit.ciphertext,
+            },
+          },
+        ],
+      },
+      now: 10_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.votesRevealed).toBe(1);
+    expect(publicClient.getLogs).toHaveBeenCalled();
+  });
+
+  it("rejects fallback ciphertexts whose bytes do not match the on-chain hash", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const commitHash = `0x${"33".repeat(32)}` as const;
+    const commitKey = keccak256(
+      encodePacked(["address", "bytes32"], [VOTER, commitHash]),
+    );
+    const commit = makeCommit({ revealableAfter: 100n });
+    const forged = makeTlockCiphertext({
+      isUp: false,
+      salt: `0x${"bb".repeat(32)}`,
+      targetRound: commit.targetRound!,
+      drandChainHash: commit.drandChainHash!,
+    });
+    const round = makeRound({ state: 0, voteCount: 3n, revealedCount: 2n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [commitKey],
+      commits: { [commitKey]: commit },
+      ponderAvailable: false,
+      onChainLogs: {
+        vote: [
+          {
+            args: {
+              contentId: 1n,
+              roundId: 1n,
+              voter: VOTER,
+              commitHash,
+              // Claims the expected hash but carries different bytes.
+              ciphertextHash: commit.ciphertextHash,
+              ciphertext: forged,
+            },
+          },
+        ],
+      },
+      now: 10_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.votesRevealed).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "Indexed ciphertext bytes do not hash to on-chain ciphertext hash",
+      expect.objectContaining({ commitKey }),
+    );
+  });
+
+  it("reveals advisory votes from on-chain logs when Ponder is unavailable", async () => {
+    timelockDecrypt.mockResolvedValue(makePlaintext(true, 1));
+
+    const advisoryCommit = makeCommit({ revealableAfter: 100n });
+    const round = makeRound({ state: 0, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      ponderAvailable: false,
+      advisoryCommitKeys: [ADVISORY_COMMIT_KEY],
+      advisoryCommits: { [ADVISORY_COMMIT_KEY]: advisoryCommit },
+      advisoryCommitCores: {
+        [ADVISORY_COMMIT_KEY]: [
+          VOTER,
+          0n,
+          0n,
+          0n,
+          false,
+          true,
+          false,
+          false,
+          true,
+        ],
+      },
+      onChainLogs: {
+        advisory: [
+          {
+            args: {
+              contentId: 1n,
+              roundId: 1n,
+              voter: VOTER,
+              advisoryCommitKey: ADVISORY_COMMIT_KEY,
+              ciphertextHash: advisoryCommit.ciphertextHash,
+              ciphertext: advisoryCommit.ciphertext,
+            },
+          },
+        ],
+      },
+      now: 10_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.advisoryVotesRevealed).toBe(1);
+    expect(publicClient.getLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: mockConfig.contracts.advisoryVoteRecorder,
+      }),
+    );
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "revealAdvisoryVote",
+        args: expect.arrayContaining([ADVISORY_COMMIT_KEY]),
+      }),
     );
   });
 });

@@ -18,6 +18,7 @@ import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundCreationLib } from "./libraries/RoundCreationLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
 import { RoundVotingReadLib } from "./libraries/RoundVotingReadLib.sol";
+import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
@@ -98,6 +99,8 @@ contract RoundVotingEngine is
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+    uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_BPS = 100; // 1% of scored RBTS forfeits
+    uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_MAX = 1e6; // 1 LREP
     address internal constant DISABLED_ADVISORY_VOTE_RECORDER = address(1);
 
     // --- State ---
@@ -242,6 +245,10 @@ contract RoundVotingEngine is
         uint16 meanScoreBps
     );
     event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
+    event SettlementCallerIncentivePaid(
+        uint256 indexed contentId, uint256 indexed roundId, address indexed caller, uint256 amount
+    );
+    event SettlementCallerIncentiveSkipped(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event RoundSettled(uint256 indexed contentId, uint256 indexed roundId, bool upWins, uint256 losingPool);
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
     event RoundTied(uint256 indexed contentId, uint256 indexed roundId);
@@ -905,7 +912,7 @@ contract RoundVotingEngine is
     /// @dev The min-RBTS-quorum lockout only engages once at least one commit in the round has
     ///      originated from a human-credential-verified identity. A pure-sybil attacker (no HRC)
     ///      reaching N >= 3 commits at min stake can no longer grief honest content into a
-    ///      `RevealFailed` cycle (~80 min @ ~3 LREP/cycle) -- the round remains
+    ///      `RevealFailed` cycle (~80 min per cycle) -- the round remains
     ///      refund-cancellable until any HRC voter participates.
     ///      Trade-off: this slightly weakens the "min-stake universal" property by one bit, but
     ///      eliminates the cheapest cancel-griefing vector. HRC voters are unaffected; the
@@ -1015,14 +1022,10 @@ contract RoundVotingEngine is
             RoundRevealLib.captureRbtsSeed(roundRbtsSeedEntropy, contentId, roundId);
             return;
         }
-        if (RoundRevealLib.refreshExpiredRbtsSeed(roundRbtsSeedEntropy, _roundRbtsSeedRefreshCount, contentId, roundId))
-        {
-            return;
-        }
-
         (weightedRewardStake, rbtsForfeitedPool, scoreSeed) =
             _scoreRbtsRewards(contentId, roundId, round.revealedCount, round.thresholdReachedAt);
         roundRbtsScored[contentId][roundId] = true;
+        rbtsForfeitedPool = _paySettlementCallerIncentive(contentId, roundId, rbtsForfeitedPool);
 
         round.upWins = upWins;
         round.state = RoundLib.RoundState.Settled;
@@ -1071,6 +1074,29 @@ contract RoundVotingEngine is
         emit RoundSettled(contentId, roundId, upWins, binaryLosingPool);
     }
 
+    function _paySettlementCallerIncentive(uint256 contentId, uint256 roundId, uint256 forfeitedPool)
+        internal
+        returns (uint256 remainingForfeitedPool)
+    {
+        remainingForfeitedPool = forfeitedPool;
+        uint256 incentive = _settlementCallerIncentive(forfeitedPool);
+        if (incentive == 0) return remainingForfeitedPool;
+
+        try TokenTransferLib.safeTransfer(lrepToken, msg.sender, incentive) {
+            accountedLrepBalance -= incentive;
+            remainingForfeitedPool = forfeitedPool - incentive;
+            roundRbtsForfeitedPool[contentId][roundId] = remainingForfeitedPool;
+            emit SettlementCallerIncentivePaid(contentId, roundId, msg.sender, incentive);
+        } catch {
+            emit SettlementCallerIncentiveSkipped(contentId, roundId, incentive);
+        }
+    }
+
+    function _settlementCallerIncentive(uint256 forfeitedPool) internal pure returns (uint256 incentive) {
+        incentive = forfeitedPool * SETTLEMENT_CALLER_INCENTIVE_BPS / 10_000;
+        if (incentive > SETTLEMENT_CALLER_INCENTIVE_MAX) incentive = SETTLEMENT_CALLER_INCENTIVE_MAX;
+    }
+
     // =========================================================================
     // REFUNDS (cancelled/tied/reveal-failed rounds)
     // =========================================================================
@@ -1107,9 +1133,10 @@ contract RoundVotingEngine is
     // =========================================================================
 
     /// @notice Process unrevealed votes in batches after settlement. Permissionless.
-    /// @dev For settled/tied rounds: unrevealed votes from past epochs are forfeited to treasury.
-    ///      Current/future-epoch votes at settlement/tie time are refunded because they had no chance.
-    ///      For reveal-failed rounds: all unrevealed votes are forfeited because the final reveal grace has passed.
+    /// @dev For settled rounds: unrevealed votes from past epochs are forfeited to treasury.
+    ///      Current/future-epoch votes at settlement time are refunded because they had no chance.
+    ///      For tied and reveal-failed rounds: all unrevealed votes are refunded — neither state
+    ///      has a winner, and a reveal-liveness failure is systemic, not the voter's fault.
     function processUnrevealedVotes(uint256 contentId, uint256 roundId, uint256 startIndex, uint256 count)
         external
         nonReentrant
@@ -1789,10 +1816,6 @@ contract RoundVotingEngine is
     ///      do not flag the storage layout change.
     /// @custom:oz-renamed-from roundDeferredCleanupBounty
     mapping(uint256 contentId => mapping(uint256 roundId => uint48)) internal roundClusterPayoutReadyAt;
-
-    /// @dev Counts expired delayed-seed refreshes for observability; settlement keeps refreshing
-    ///      permissionlessly until a live blockhash can seed RBTS scoring.
-    mapping(uint256 contentId => mapping(uint256 roundId => uint8)) internal _roundRbtsSeedRefreshCount;
 
     /// @notice L-Cleanup-1: accumulated LREP that `processUnrevealedVotes` tried to send to
     ///         treasury but couldn't (treasury unset or transfer reverted). Permissionless

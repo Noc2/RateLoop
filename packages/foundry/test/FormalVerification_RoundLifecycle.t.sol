@@ -478,7 +478,8 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
     // ==================== Test 11: RevealFailed Refund Flow ====================
 
     /// @notice Once commit quorum exists, a round that never reaches reveal quorum finalizes as
-    ///         RevealFailed only after maxDuration and the final grace deadline. Revealed votes stay refundable.
+    ///         RevealFailed only after maxDuration and the final grace deadline. Revealed votes
+    ///         pull-claim their refund; unrevealed votes are refunded by the cleanup sweep.
     function test_RevealFailed_RefundsOnlyRevealedVotes() public {
         ProtocolConfig cfg = ProtocolConfig(address(engine.protocolConfig()));
         vm.prank(owner);
@@ -501,7 +502,9 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         engine.revealVoteByCommitKey(cid, rid, ck0, true, 5_000, s0);
 
-        vm.warp(round.startTime + MAX_DURATION + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod());
+        vm.warp(
+            round.startTime + MAX_DURATION + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() * 24
+        );
         engine.finalizeRevealFailedRound(cid, rid);
 
         RoundLib.Round memory failed = RoundEngineReadHelpers.round(engine, cid, rid);
@@ -515,6 +518,14 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         vm.prank(v[1]);
         vm.expectRevert(RoundVotingEngine.VoteNotRevealed.selector);
         engine.claimCancelledRoundRefund(cid, rid);
+
+        // The permissionless cleanup sweep refunds the unrevealed stakes in full —
+        // a reveal-liveness failure is systemic and must not forfeit voter stake.
+        uint256 voter1Before = lrepToken.balanceOf(v[1]);
+        uint256 voter2Before = lrepToken.balanceOf(v[2]);
+        engine.processUnrevealedVotes(cid, rid, 0, 0);
+        assertEq(lrepToken.balanceOf(v[1]) - voter1Before, 2e6, "unrevealed voter refunded by sweep");
+        assertEq(lrepToken.balanceOf(v[2]) - voter2Before, 3e6, "unrevealed voter refunded by sweep");
     }
 
     // ==================== Test 12: Post-Settlement Round Creation ====================

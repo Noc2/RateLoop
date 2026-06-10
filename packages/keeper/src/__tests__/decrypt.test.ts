@@ -59,8 +59,11 @@ vi.mock("../logger.js", () => ({
 }));
 
 import { decryptTlockVoteCiphertext, resetKeeperStateForTests } from "../keeper.js";
+import { FailoverChainClient } from "../drand.js";
 import { timelockDecrypt } from "tlock-js";
 
+const MAINNET_QUICKNET_DRAND_CHAIN_HASH =
+  "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
 const QUICKNET_T_DRAND_CHAIN_HASH =
   "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5" as const;
 const QUICKNET_T_DRAND_URL =
@@ -93,9 +96,20 @@ describe("decryptTlockVoteCiphertext", () => {
     expect(result!.predictedUpBps).toBe(6900);
     expect(result!.predictedUpPercent).toBe(69);
     expect(result!.salt).toBe(`0x${saltHex}`);
-    expect(vi.mocked(timelockDecrypt).mock.calls[0]?.[1]).toEqual({
-      kind: "mainnet",
-    });
+    expect(vi.mocked(timelockDecrypt).mock.calls[0]?.[1]).toBeInstanceOf(
+      FailoverChainClient,
+    );
+    // Without explicit chain metadata, the keeper defaults to drand quicknet and
+    // configures every independent mainnet relay for failover.
+    const constructedUrls = httpCachingChainMock.mock.calls.map(
+      (call) => call[0],
+    );
+    expect(constructedUrls).toEqual([
+      `https://api.drand.sh/${MAINNET_QUICKNET_DRAND_CHAIN_HASH}`,
+      `https://api2.drand.sh/${MAINNET_QUICKNET_DRAND_CHAIN_HASH}`,
+      `https://api3.drand.sh/${MAINNET_QUICKNET_DRAND_CHAIN_HASH}`,
+      `https://drand.cloudflare.com/${MAINNET_QUICKNET_DRAND_CHAIN_HASH}`,
+    ]);
   });
 
   it("uses the drand quicknet-t client for World Chain Sepolia ciphertexts", async () => {
@@ -125,14 +139,19 @@ describe("decryptTlockVoteCiphertext", () => {
         }),
       }),
     );
+    // The quicknet-t failover list includes the pl-us testnet relay as backup.
+    expect(httpCachingChainMock).toHaveBeenCalledWith(
+      `https://pl-us.testnet.drand.sh/${QUICKNET_T_DRAND_CHAIN_HASH.slice(2)}`,
+      expect.any(Object),
+    );
     expect(httpChainClientMock).toHaveBeenCalledWith(
       expect.objectContaining({ url: QUICKNET_T_DRAND_URL }),
       expect.any(Object),
       { userAgent: "rateloop-keeper" },
     );
-    expect(vi.mocked(timelockDecrypt).mock.calls[0]?.[1]).toMatchObject({
-      kind: "quicknet-t",
-    });
+    expect(vi.mocked(timelockDecrypt).mock.calls[0]?.[1]).toBeInstanceOf(
+      FailoverChainClient,
+    );
   });
 
   it("returns null for out-of-range prediction", async () => {

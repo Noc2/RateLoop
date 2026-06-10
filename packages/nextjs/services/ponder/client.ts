@@ -1022,7 +1022,8 @@ export interface PonderVoteItem {
   contentId: string;
   roundId: string;
   voter: string;
-  identityVoter?: string | null;
+  identityKey?: string | null;
+  identityHolder?: string | null;
   voterId?: string | null;
   commitKey?: string;
   commitHash?: string;

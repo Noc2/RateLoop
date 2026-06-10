@@ -254,9 +254,9 @@ contract InvariantSolvency is VotingTestBase {
                     pending += commit.stakeAmount;
                 }
             } else if (round.state == RoundLib.RoundState.RevealFailed) {
-                if (commit.revealed) {
-                    pending += commit.stakeAmount;
-                }
+                // All stakes are refund obligations: revealed via claimCancelledRoundRefund,
+                // unrevealed via the processUnrevealedVotes sweep.
+                pending += commit.stakeAmount;
             } else if (round.state == RoundLib.RoundState.Settled) {
                 if (!commit.revealed && commit.revealableAfter > round.settledAt) {
                     pending += commit.stakeAmount;

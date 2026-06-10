@@ -406,7 +406,7 @@ contract FrontendTransactionGasEstimatesTest is Test {
         console2.log("frontend_register_gas", gasUsed);
     }
 
-    function testGasEstimate_frontendClaimFees_logs() public {
+    function testGasEstimate_frontendFeeWithdrawal_logs() public {
         vm.pauseGasMetering();
         vm.startPrank(frontend);
         lrepToken.approve(address(registry), STAKE);
@@ -416,8 +416,14 @@ contract FrontendTransactionGasEstimatesTest is Test {
         vm.prank(feeCreditor);
         registry.creditFees(frontend, 200e6);
 
-        uint256 gasUsed = _measureCallAs(frontend, address(registry), abi.encodeCall(FrontendRegistry.claimFees, ()));
-        console2.log("frontend_claim_fees_gas", gasUsed);
+        uint256 gasUsed =
+            _measureCallAs(frontend, address(registry), abi.encodeCall(FrontendRegistry.requestFeeWithdrawal, ()));
+        console2.log("frontend_request_fee_withdrawal_gas", gasUsed);
+
+        vm.warp(block.timestamp + registry.FEE_WITHDRAWAL_DELAY());
+        gasUsed =
+            _measureCallAs(frontend, address(registry), abi.encodeCall(FrontendRegistry.completeFeeWithdrawal, ()));
+        console2.log("frontend_complete_fee_withdrawal_gas", gasUsed);
     }
 }
 

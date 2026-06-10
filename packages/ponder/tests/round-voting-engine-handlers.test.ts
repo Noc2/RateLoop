@@ -752,7 +752,6 @@ describe("RoundVotingEngine ponder handlers", () => {
         voter: delegate,
         identityKey,
         identityHolder: holder,
-        identityVoter: holder,
       }),
     });
     expect(readContract).toHaveBeenCalledWith(

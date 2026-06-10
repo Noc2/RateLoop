@@ -29,6 +29,21 @@ library RoundCleanupLib {
 
     uint256 internal constant CLEANUP_INCENTIVE_BPS = 100; // 1%
     uint256 internal constant CLEANUP_INCENTIVE_MAX = 5e6; // 5 LREP
+    /// @notice Grace multiplier applied before a round can finalize as RevealFailed
+    ///         (design review 2026-06, finding 3). Reveal liveness is a protocol
+    ///         responsibility (keeper/Ponder/drand/RPC), so a round whose reveals stalled
+    ///         deserves a long recovery window: reveal-failed eligibility also gates the
+    ///         late-reveal revert in the engine, so reveals keep landing until the
+    ///         extended deadline and the round can still reach quorum and settle. The
+    ///         multiplier is intentionally NOT conditioned on observed reveal activity —
+    ///         a reveal-count-dependent deadline would shrink the moment the first
+    ///         recovery reveal lands, re-blocking the remaining reveals mid-rescue. It
+    ///         applies only to the reveal-failed deadline; the settlement reveal grace for
+    ///         quorum-reached rounds is unchanged. With the RevealFailed refund path there
+    ///         is no punishment rationale for fast finalization; the only cost of the
+    ///         longer window is that stakes stay locked and the content cannot open a new
+    ///         round until the extended deadline passes.
+    uint256 internal constant REVEAL_FAILED_GRACE_MULTIPLIER = 24;
 
     error RoundNotCancelledOrTied();
     error AlreadyClaimed();
@@ -532,19 +547,28 @@ library RoundCleanupLib {
                 uint256 amount = commit.stakeAmount;
                 commit.stakeAmount = 0;
 
-                // L-Vote-1: only forfeit past-epoch unrevealed stakes when the round Actually
-                // produced a winner (Settled) or definitively failed reveal (RevealFailed).
-                // In a Tied round there's no winner by symmetry; refunding past-epoch
-                // non-revealers preserves the no-punishment invariant for ties.
-                if (
-                    round.state == RoundLib.RoundState.RevealFailed
-                        || (round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= pastEpochCutoffAt)
-                ) {
+                // L-Vote-1: only forfeit past-epoch unrevealed stakes when the round actually
+                // produced a winner (Settled). Terminal states without a winner never punish:
+                // Cancelled and Tied refund by symmetry, and RevealFailed refunds because
+                // reveal liveness is a protocol responsibility (keeper/Ponder/drand) — a
+                // systemic reveal outage must not be billed to individual voters (design
+                // review 2026-06, finding 3). Trade-off, stated explicitly: this removes the
+                // stake penalty for committing undecryptable garbage that drags a round into
+                // RevealFailed. That stays acceptable because garbage commits in rounds that
+                // settle are still forfeited, forcing RevealFailed requires holding reveals
+                // below quorum (already constrained by the HRC gate in
+                // _canFinalizeRevealFailedRound), and the attacker gains nothing but delay
+                // while paying gas with stake locked.
+                if (round.state == RoundLib.RoundState.Settled && commit.revealableAfter <= pastEpochCutoffAt) {
                     processedPastEpochCount++;
                     forfeitedToTreasury += amount;
                 } else {
-                    if (commit.revealableAfter <= pastEpochCutoffAt && round.state == RoundLib.RoundState.Tied) {
-                        // Past-epoch in a Tied round counts toward the cleanup queue but is refunded.
+                    if (
+                        round.state == RoundLib.RoundState.RevealFailed
+                            || (commit.revealableAfter <= pastEpochCutoffAt && round.state == RoundLib.RoundState.Tied)
+                    ) {
+                        // Counts toward the cleanup queue but is refunded. Every unrevealed
+                        // RevealFailed commit was pre-counted by markRoundRevealFailed.
                         processedPastEpochCount++;
                     }
                     try TokenTransferLib.safeTransfer(lrepToken, commit.voter, amount) {
@@ -610,7 +634,8 @@ library RoundCleanupLib {
 
         uint256 votingWindowEnd = uint256(round.startTime) + roundCfg.maxDuration;
         uint256 revealBase = lastRevealableAt > votingWindowEnd ? lastRevealableAt : votingWindowEnd;
-        return revealBase + _getRoundRevealGracePeriod(roundRevealGracePeriodSnapshot, protocolConfig, roundId);
+        uint256 gracePeriod = _getRoundRevealGracePeriod(roundRevealGracePeriodSnapshot, protocolConfig, roundId);
+        return revealBase + gracePeriod * REVEAL_FAILED_GRACE_MULTIPLIER;
     }
 
     function _getRoundConfig(

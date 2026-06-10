@@ -19,20 +19,21 @@
  * ends, the drand beacon makes the decryption key available and the keeper can decrypt.
  */
 import {
+  encodePacked,
+  getAbiItem,
   keccak256,
+  type AbiEvent,
   type PublicClient,
   type WalletClient,
   type Chain,
   type Account,
 } from "viem";
+import { timelockDecrypt } from "tlock-js";
 import {
-  HttpCachingChain,
-  HttpChainClient,
-  mainnetClient,
-  testnetClient,
-  timelockDecrypt,
-  type ChainClient,
-} from "tlock-js";
+  isDrandUnavailableError,
+  resetTlockClientCacheForTests,
+  resolveTlockClientForDrandChain,
+} from "./drand.js";
 import {
   AdvisoryVoteRecorderAbi,
   ContentRegistryAbi,
@@ -57,7 +58,7 @@ import {
 } from "./contract-reads.js";
 import { config } from "./config.js";
 import type { Logger } from "./logger.js";
-import { incrementCounter } from "./metrics.js";
+import { incrementCounter, setGauge } from "./metrics.js";
 import { getRevertReason, isExpectedRevert } from "./revert-utils.js";
 
 // --- Types ---
@@ -70,14 +71,41 @@ export interface KeeperResult {
   advisoryLaunchCreditsClaimed: number;
   cleanupBatchesProcessed: number;
   contentMarkedDormant: number;
+  /** Open rounds with commit quorum but reveal quorum still unmet this tick. */
+  roundsAwaitingRevealQuorum: number;
+  /**
+   * Smallest number of seconds until any of those rounds becomes finalizable as
+   * RevealFailed (0 = already past its grace deadline); null when no round is at risk.
+   */
+  minRevealGraceSecondsRemaining: number | null;
 }
 interface CleanupCursor {
   contentId: bigint;
   roundId: bigint;
   nextIndex: number;
 }
+interface KeeperWorkRoundCandidate {
+  contentId: bigint;
+  roundId: bigint;
+  reason?: string;
+}
+interface KeeperWorkContentCandidate {
+  contentId: bigint;
+  reason?: string;
+}
+interface KeeperWorkDiscovery {
+  source: "ponder" | "chain";
+  contentIds: bigint[];
+  openRounds: KeeperWorkRoundCandidate[];
+  cleanupRounds: KeeperWorkRoundCandidate[];
+  dormantContent: KeeperWorkContentCandidate[];
+}
 
 const MAX_CLEANUP_BATCHES_PER_TICK = 4;
+// Keep in sync with RoundCleanupLib.REVEAL_FAILED_GRACE_MULTIPLIER (design review
+// 2026-06, finding 3): reveal-failed finalization waits out an extended recovery
+// window of 24x the round's snapshotted reveal grace period.
+const REVEAL_FAILED_GRACE_MULTIPLIER = 24n;
 const MAX_CLEANUP_COMPLETED = 5000;
 const MAX_CLEANUP_QUEUE = 2000;
 const PONDER_FETCH_TIMEOUT_MS = 5_000;
@@ -86,80 +114,7 @@ const MAX_INDEXED_CIPHERTEXT_PAGES = 6;
 const cleanupQueue = new Map<string, CleanupCursor>();
 const cleanupCompletedRounds = new Set<string>();
 const cleanupDiscoveryRoundByContent = new Map<bigint, bigint>();
-const tlockClientCache = new Map<string, ChainClient>();
-
-const MAINNET_QUICKNET_CHAIN_HASH =
-  "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
-const TLOCK_JS_TESTNET_CHAIN_HASH =
-  "7672797f548f3f4748ac4bf3352fc6c6b6468c9ad40ad456a397545c6e2df5bf";
-const QUICKNET_T_CHAIN = {
-  url: "https://testnet-api.drand.cloudflare.com/cc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5",
-  chainHash: "cc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5",
-  publicKey:
-    "b15b65b46fb29104f6a4b5d1e11a8da6344463973d423661bb0804846a0ecd1ef93c25057f1c0baab2ac53e56c662b66072f6d84ee791a3382bfb055afab1e6a375538d8ffc451104ac971d2dc9b168e2d3246b0be2015969cbaac298f6502da",
-} as const;
-const KEEPER_TLOCK_USER_AGENT = "rateloop-keeper";
-
-function normalizeDrandChainHash(
-  drandChainHash: `0x${string}` | string | null | undefined,
-): string | null {
-  if (!drandChainHash) return null;
-  const normalized = drandChainHash.toLowerCase();
-  if (!/^0x[0-9a-f]{64}$/u.test(normalized)) {
-    throw new Error("Invalid drand chain hash");
-  }
-  return normalized.slice(2);
-}
-
-function cachedTlockClient(
-  cacheKey: string,
-  create: () => ChainClient,
-): ChainClient {
-  let client = tlockClientCache.get(cacheKey);
-  if (!client) {
-    client = create();
-    tlockClientCache.set(cacheKey, client);
-  }
-  return client;
-}
-
-function createQuicknetTClient(): ChainClient {
-  const options = {
-    disableBeaconVerification: false,
-    noCache: false,
-    chainVerificationParams: {
-      chainHash: QUICKNET_T_CHAIN.chainHash,
-      publicKey: QUICKNET_T_CHAIN.publicKey,
-    },
-  };
-  const httpChain = new HttpCachingChain(QUICKNET_T_CHAIN.url, options);
-  return new HttpChainClient(httpChain, options, {
-    userAgent: KEEPER_TLOCK_USER_AGENT,
-  });
-}
-
-function resolveTlockClientForDrandChain(
-  drandChainHash: `0x${string}` | string | null | undefined,
-): ChainClient {
-  const normalized = normalizeDrandChainHash(drandChainHash);
-  if (!normalized || normalized === MAINNET_QUICKNET_CHAIN_HASH) {
-    return cachedTlockClient(MAINNET_QUICKNET_CHAIN_HASH, () =>
-      mainnetClient(),
-    );
-  }
-  if (normalized === QUICKNET_T_CHAIN.chainHash) {
-    return cachedTlockClient(QUICKNET_T_CHAIN.chainHash, createQuicknetTClient);
-  }
-  if (normalized === TLOCK_JS_TESTNET_CHAIN_HASH) {
-    return cachedTlockClient(TLOCK_JS_TESTNET_CHAIN_HASH, () =>
-      testnetClient(),
-    );
-  }
-
-  throw new Error(
-    `Unsupported drand chain 0x${normalized}. Update the keeper tlock client allowlist before revealing votes for this deployment.`,
-  );
-}
+let keeperWorkDiscoveryTick = 0;
 
 function emptyResult(): KeeperResult {
   return {
@@ -171,6 +126,8 @@ function emptyResult(): KeeperResult {
     advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
     contentMarkedDormant: 0,
+    roundsAwaitingRevealQuorum: 0,
+    minRevealGraceSecondsRemaining: null,
   };
 }
 
@@ -180,8 +137,9 @@ export function resetKeeperStateForTests(): void {
   cleanupQueue.clear();
   cleanupCompletedRounds.clear();
   cleanupDiscoveryRoundByContent.clear();
+  keeperWorkDiscoveryTick = 0;
   decryptFailureCount.clear();
-  tlockClientCache.clear();
+  resetTlockClientCacheForTests();
 }
 
 // Track repeated decrypt failures per commitKey to stop retrying permanently bad ciphertexts
@@ -272,6 +230,11 @@ function classifyDecryptError(err: unknown): {
       message,
       decryptableAtRound: message.match(DECRYPTABLE_AT_ROUND_PATTERN)?.[1],
     };
+  }
+  // Every relay for the chain is down — an infrastructure outage, not a bad
+  // ciphertext. Never count it toward the permanent decrypt-failure budget.
+  if (isDrandUnavailableError(err)) {
+    return { retryable: true, message };
   }
 
   return { retryable: false, message };
@@ -416,6 +379,240 @@ async function discoverCleanupCandidate(
   }
 }
 
+async function discoverKeeperWorkCandidates(
+  publicClient: Pick<PublicClient, "readContract">,
+  registryAddr: `0x${string}`,
+  now: bigint,
+  logger: Logger,
+): Promise<KeeperWorkDiscovery> {
+  const startedAt = Date.now();
+  const discoveryConfig = config.keeperWorkDiscovery ?? {
+    enabled: false,
+    reconciliationEveryTicks: 1,
+    maxCandidates: 500,
+  };
+
+  keeperWorkDiscoveryTick += 1;
+  const reconcileEvery = Math.max(
+    1,
+    Number(discoveryConfig.reconciliationEveryTicks ?? 1),
+  );
+  const reconciliationDue = keeperWorkDiscoveryTick % reconcileEvery === 0;
+
+  let discovery: KeeperWorkDiscovery | null = null;
+  if (discoveryConfig.enabled && !reconciliationDue) {
+    discovery = await fetchKeeperWorkFromPonder(
+      now,
+      BigInt(config.dormancyPeriod),
+      Number(discoveryConfig.maxCandidates ?? 500),
+      logger,
+    );
+  }
+
+  if (!discovery) {
+    discovery = await discoverKeeperWorkFromChain(publicClient, registryAddr);
+  }
+
+  setGauge(
+    "keeper_work_discovery_last_duration_seconds",
+    (Date.now() - startedAt) / 1000,
+  );
+  setGauge(
+    "keeper_work_discovery_last_source",
+    discovery.source === "ponder" ? 1 : 2,
+  );
+  setGauge(
+    "keeper_work_discovery_open_round_candidates",
+    discovery.openRounds.length,
+  );
+  setGauge(
+    "keeper_work_discovery_cleanup_round_candidates",
+    discovery.cleanupRounds.length,
+  );
+  setGauge(
+    "keeper_work_discovery_dormant_content_candidates",
+    discovery.dormantContent.length,
+  );
+
+  return discovery;
+}
+
+async function discoverKeeperWorkFromChain(
+  publicClient: Pick<PublicClient, "readContract">,
+  registryAddr: `0x${string}`,
+): Promise<KeeperWorkDiscovery> {
+  const nextContentId = (await publicClient.readContract({
+    address: registryAddr,
+    abi: ContentRegistryAbi,
+    functionName: "nextContentId",
+    args: [],
+  })) as bigint;
+
+  const contentIds: bigint[] = [];
+  for (let contentId = 1n; contentId < nextContentId; contentId++) {
+    contentIds.push(contentId);
+  }
+
+  return {
+    source: "chain",
+    contentIds,
+    openRounds: [],
+    cleanupRounds: [],
+    dormantContent: [],
+  };
+}
+
+async function fetchKeeperWorkFromPonder(
+  now: bigint,
+  dormancyPeriod: bigint,
+  limit: number,
+  logger: Logger,
+): Promise<KeeperWorkDiscovery | null> {
+  const baseUrl = config.ponderBaseUrl;
+  if (!baseUrl) return null;
+
+  const url = new URL("/keeper/work", baseUrl);
+  url.searchParams.set("now", now.toString());
+  url.searchParams.set("dormancyPeriod", dormancyPeriod.toString());
+  url.searchParams.set("limit", String(Math.max(1, limit)));
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PONDER_FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Ponder keeper work request failed: ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const discovery = parseKeeperWorkPayload(payload);
+    if (!discovery) {
+      throw new Error("Ponder keeper work response was malformed");
+    }
+
+    return discovery;
+  } catch (err: unknown) {
+    incrementCounter("keeper_work_discovery_ponder_failures_total");
+    logger.warn("Falling back to chain keeper work discovery", {
+      error: getRevertReason(err),
+    });
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseKeeperWorkPayload(payload: unknown): KeeperWorkDiscovery | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  const openRounds = parseKeeperWorkRoundArray(record.openRounds);
+  const cleanupRounds = parseKeeperWorkRoundArray(record.cleanupRounds);
+  const dormantContent = parseKeeperWorkContentArray(record.dormantContent);
+
+  if (!openRounds || !cleanupRounds || !dormantContent) {
+    return null;
+  }
+
+  const contentIds = sortedUniqueBigInts([
+    ...openRounds.map((candidate) => candidate.contentId),
+    ...cleanupRounds.map((candidate) => candidate.contentId),
+    ...dormantContent.map((candidate) => candidate.contentId),
+  ]);
+
+  return {
+    source: "ponder",
+    contentIds,
+    openRounds,
+    cleanupRounds,
+    dormantContent,
+  };
+}
+
+function parseKeeperWorkRoundArray(
+  value: unknown,
+): KeeperWorkRoundCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+  const candidates: KeeperWorkRoundCandidate[] = [];
+  for (const item of value) {
+    const candidate = parseKeeperWorkRound(item);
+    if (!candidate) return null;
+    candidates.push(candidate);
+  }
+  return dedupeRoundCandidates(candidates);
+}
+
+function parseKeeperWorkContentArray(
+  value: unknown,
+): KeeperWorkContentCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+  const candidates: KeeperWorkContentCandidate[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const record = item as Record<string, unknown>;
+    const contentId = parsePositiveBigInt(record.contentId);
+    if (contentId === null) return null;
+    const key = contentId.toString();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      contentId,
+      reason: typeof record.reason === "string" ? record.reason : undefined,
+    });
+  }
+  return candidates.sort((a, b) => compareBigInt(a.contentId, b.contentId));
+}
+
+function parseKeeperWorkRound(value: unknown): KeeperWorkRoundCandidate | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const contentId = parsePositiveBigInt(record.contentId);
+  const roundId = parsePositiveBigInt(record.roundId);
+  if (contentId === null || roundId === null) return null;
+  return {
+    contentId,
+    roundId,
+    reason: typeof record.reason === "string" ? record.reason : undefined,
+  };
+}
+
+function dedupeRoundCandidates(
+  candidates: KeeperWorkRoundCandidate[],
+): KeeperWorkRoundCandidate[] {
+  const byKey = new Map<string, KeeperWorkRoundCandidate>();
+  for (const candidate of candidates) {
+    byKey.set(
+      cleanupRoundKey(candidate.contentId, candidate.roundId),
+      candidate,
+    );
+  }
+  return Array.from(byKey.values()).sort((a, b) => {
+    const contentOrder = compareBigInt(a.contentId, b.contentId);
+    return contentOrder !== 0 ? contentOrder : compareBigInt(a.roundId, b.roundId);
+  });
+}
+
+function sortedUniqueBigInts(values: bigint[]): bigint[] {
+  return Array.from(new Set(values.map((value) => value.toString())))
+    .map((value) => BigInt(value))
+    .sort(compareBigInt);
+}
+
+function parsePositiveBigInt(value: unknown): bigint | null {
+  try {
+    const parsed =
+      typeof value === "bigint" ? value : BigInt(String(value ?? ""));
+    return parsed > 0n ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function compareBigInt(a: bigint, b: bigint): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /**
  * Decrypt a tlock-encrypted ciphertext using the drand beacon.
  * Ciphertext on-chain is hex-encoded UTF-8 armored AGE string.
@@ -527,6 +724,7 @@ async function fetchIndexedCiphertextsForRound(params: {
         signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
       });
       if (!response.ok) {
+        incrementCounter("keeper_ponder_ciphertext_fetch_failures_total");
         params.logger.warn("Failed to fetch indexed vote ciphertext", {
           kind: params.kind,
           status: response.status,
@@ -549,8 +747,111 @@ async function fetchIndexedCiphertextsForRound(params: {
     }
     return indexedCiphertexts;
   } catch (err: unknown) {
+    incrementCounter("keeper_ponder_ciphertext_fetch_failures_total");
     params.logger.warn("Failed to resolve indexed vote ciphertexts", {
       kind: params.kind,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+// Reveal-liveness fallback (design review 2026-06, finding 3): Ponder is the primary
+// ciphertext source, but every commit's full ciphertext is also emitted on-chain in the
+// VoteCommitted / AdvisoryVoteRecorded events. When Ponder is down or its response is
+// missing a commit, rebuild the ciphertext map straight from `eth_getLogs` so a Ponder
+// outage alone can never stall reveals into a RevealFailed finalization.
+const LOG_FALLBACK_CHUNK_BLOCKS = 10_000n;
+
+const voteCommittedEvent = getAbiItem({
+  abi: RoundVotingEngineAbi,
+  name: "VoteCommitted",
+}) as AbiEvent;
+const advisoryVoteRecordedEvent = getAbiItem({
+  abi: AdvisoryVoteRecorderAbi,
+  name: "AdvisoryVoteRecorded",
+}) as AbiEvent;
+
+interface CommitEventArgs {
+  voter?: `0x${string}`;
+  commitHash?: `0x${string}`;
+  advisoryCommitKey?: `0x${string}`;
+  ciphertextHash?: `0x${string}`;
+  ciphertext?: `0x${string}`;
+}
+
+/** Vote commit keys are `keccak256(abi.encodePacked(voter, commitHash))` on-chain. */
+function voteCommitKeyFromEvent(args: CommitEventArgs): `0x${string}` | null {
+  if (!args.voter || !args.commitHash) return null;
+  return keccak256(
+    encodePacked(["address", "bytes32"], [args.voter, args.commitHash]),
+  );
+}
+
+async function fetchLogCiphertextsForRound(params: {
+  publicClient: Pick<PublicClient, "getBlockNumber" | "getLogs">;
+  kind: "vote" | "advisory";
+  contractAddress: `0x${string}`;
+  contentId: bigint;
+  roundId: bigint;
+  neededCommitKeys: ReadonlySet<string>;
+  logger: Logger;
+}): Promise<IndexedCiphertextMap | null> {
+  try {
+    const latestBlock = await params.publicClient.getBlockNumber();
+    const lookback = BigInt(config.logFallbackLookbackBlocks);
+    const minBlock = latestBlock > lookback ? latestBlock - lookback : 0n;
+    const event =
+      params.kind === "vote" ? voteCommittedEvent : advisoryVoteRecordedEvent;
+    const logCiphertexts: IndexedCiphertextMap = new Map();
+
+    // Scan backwards from the chain head in bounded chunks (RPC providers commonly cap
+    // getLogs ranges) and stop as soon as every commit key of the round is covered —
+    // commits cluster near the round window, so this normally takes a single request.
+    let toBlock = latestBlock;
+    while (toBlock >= minBlock) {
+      const fromBlock =
+        toBlock >= minBlock + LOG_FALLBACK_CHUNK_BLOCKS
+          ? toBlock - LOG_FALLBACK_CHUNK_BLOCKS + 1n
+          : minBlock;
+      const logs = await params.publicClient.getLogs({
+        address: params.contractAddress,
+        event,
+        args: { contentId: params.contentId, roundId: params.roundId },
+        fromBlock,
+        toBlock,
+      });
+      for (const log of logs) {
+        const args = (log as { args?: CommitEventArgs }).args ?? {};
+        const commitKey =
+          params.kind === "vote"
+            ? voteCommitKeyFromEvent(args)
+            : (args.advisoryCommitKey ?? null);
+        if (!commitKey || !args.ciphertextHash || !args.ciphertext) continue;
+        logCiphertexts.set(indexedCiphertextKey(commitKey), {
+          commitKey,
+          ciphertextHash: args.ciphertextHash,
+          ciphertext: args.ciphertext,
+        });
+      }
+
+      let allFound = true;
+      for (const needed of params.neededCommitKeys) {
+        if (!logCiphertexts.has(needed)) {
+          allFound = false;
+          break;
+        }
+      }
+      if (allFound) break;
+      toBlock = fromBlock - 1n;
+    }
+
+    return logCiphertexts;
+  } catch (err: unknown) {
+    params.logger.warn("Failed to fetch on-chain ciphertext logs", {
+      kind: params.kind,
+      contentId: params.contentId.toString(),
+      roundId: params.roundId.toString(),
       error: err instanceof Error ? err.message : String(err),
     });
     return null;
@@ -631,22 +932,26 @@ export async function resolveRounds(
 
   const result: KeeperResult = emptyResult();
 
-  // --- Get total content count ---
-  let nextContentId: bigint;
+  // --- Discover work candidates ---
+  let discovery: KeeperWorkDiscovery;
   try {
-    nextContentId = (await publicClient.readContract({
-      address: registryAddr,
-      abi: ContentRegistryAbi,
-      functionName: "nextContentId",
-      args: [],
-    })) as bigint;
+    discovery = await discoverKeeperWorkCandidates(
+      publicClient,
+      registryAddr,
+      now,
+      logger,
+    );
   } catch {
     logger.error("Could not connect to chain");
     return emptyResult();
   }
 
-  // --- Process each content item ---
-  for (let contentId = 1n; contentId < nextContentId; contentId++) {
+  for (const candidate of discovery.cleanupRounds) {
+    enqueueRoundForCleanup(candidate.contentId, candidate.roundId);
+  }
+
+  // --- Process discovered content items ---
+  for (const contentId of discovery.contentIds) {
     try {
       // Get the current round IDs for this content.
       let activeRoundId: bigint;
@@ -677,7 +982,7 @@ export async function resolveRounds(
 
       if (activeRoundId > 0n) {
         // --- 1. REVEAL LOOP: Decrypt and reveal unrevealed commits ---
-        const revealedCount = await _revealCommits(
+        const revealOutcome = await _revealCommits(
           publicClient,
           walletClient,
           chain,
@@ -688,7 +993,7 @@ export async function resolveRounds(
           activeRoundId,
           now,
         );
-        result.votesRevealed += revealedCount;
+        result.votesRevealed += revealOutcome.revealed;
         result.advisoryVotesRevealed += await _revealAdvisoryCommits(
           publicClient,
           walletClient,
@@ -734,40 +1039,56 @@ export async function resolveRounds(
               functionName: "settleRound",
               args: [contentId, activeRoundId],
             });
-            logger.info("Settled round", {
-              contentId: contentId.toString(),
-              roundId: Number(activeRoundId),
-            });
-            result.roundsSettled++;
-            enqueueRoundForCleanup(contentId, activeRoundId);
-            result.advisoryLaunchCreditsClaimed +=
-              await _claimAdvisoryLaunchCredits(
+            round = await readRound(
+              publicClient,
+              engineAddr,
+              contentId,
+              activeRoundId,
+            );
+            if (round.state === RoundState.Open) {
+              logger.info("Captured RBTS settlement seed", {
+                contentId: contentId.toString(),
+                roundId: Number(activeRoundId),
+              });
+            } else if (
+              round.state === RoundState.Settled ||
+              round.state === RoundState.Tied
+            ) {
+              logger.info("Settled round", {
+                contentId: contentId.toString(),
+                roundId: Number(activeRoundId),
+              });
+              result.roundsSettled++;
+              enqueueRoundForCleanup(contentId, activeRoundId);
+              result.advisoryLaunchCreditsClaimed +=
+                await _claimAdvisoryLaunchCredits(
+                  publicClient,
+                  walletClient,
+                  chain,
+                  account,
+                  logger,
+                  advisoryAddr,
+                  contentId,
+                  activeRoundId,
+                );
+
+              // Drive bundle qualification (no-op for non-bundled content). Settlement only
+              // records the round into the bundle slot; qualification — which iterates voters
+              // and bundle questions — is intentionally deferred to keep settlement O(1).
+              // A hostile funder could otherwise wait for the refund window and reclaim
+              // rewards voters have earned, since `refundQuestionBundleReward` reads
+              // `bundle.completedRoundSets` (which only advances on qualification).
+              await _syncBundleQuestionTerminal(
                 publicClient,
                 walletClient,
                 chain,
                 account,
-                logger,
-                advisoryAddr,
+                registryAddr,
                 contentId,
                 activeRoundId,
+                logger,
               );
-
-            // Drive bundle qualification (no-op for non-bundled content). Settlement only
-            // records the round into the bundle slot; qualification — which iterates voters
-            // and bundle questions — is intentionally deferred to keep settlement O(1).
-            // A hostile funder could otherwise wait for the refund window and reclaim
-            // rewards voters have earned, since `refundQuestionBundleReward` reads
-            // `bundle.completedRoundSets` (which only advances on qualification).
-            await _syncBundleQuestionTerminal(
-              publicClient,
-              walletClient,
-              chain,
-              account,
-              registryAddr,
-              contentId,
-              activeRoundId,
-              logger,
-            );
+            }
           } catch (err: unknown) {
             const reason = getRevertReason(err);
             if (!isExpectedRevert(reason)) {
@@ -786,6 +1107,7 @@ export async function resolveRounds(
           round.voteCount >= rbtsRevealQuorum &&
           round.revealedCount < rbtsRevealQuorum
         ) {
+          result.roundsAwaitingRevealQuorum++;
           try {
             const [roundLifecycle, blocksDormancy] = await Promise.all([
               readRoundLifecycleState(
@@ -798,33 +1120,69 @@ export async function resolveRounds(
             ]);
             const lastCommitRevealableAfter =
               roundLifecycle.lastCommitRevealableAfter;
-            const revealGracePeriod = roundLifecycle.revealGracePeriod;
+            // Mirrors RoundCleanupLib.REVEAL_FAILED_GRACE_MULTIPLIER: the on-chain
+            // reveal-failed deadline is the snapshotted grace period times 24, so
+            // computing it with the base grace would submit finalization transactions
+            // ~23 hours early and burn gas on RevealGraceActive reverts.
+            const revealFailedGrace =
+              roundLifecycle.revealGracePeriod * REVEAL_FAILED_GRACE_MULTIPLIER;
 
             const revealFailedEligibleAt =
               lastCommitRevealableAfter >
               round.startTime + roundConfig.maxDuration
-                ? lastCommitRevealableAfter + revealGracePeriod
-                : round.startTime + roundConfig.maxDuration + revealGracePeriod;
+                ? lastCommitRevealableAfter + revealFailedGrace
+                : round.startTime + roundConfig.maxDuration + revealFailedGrace;
+
+            if (lastCommitRevealableAfter > 0n) {
+              const remainingS =
+                revealFailedEligibleAt > now
+                  ? Number(revealFailedEligibleAt - now)
+                  : 0;
+              if (
+                result.minRevealGraceSecondsRemaining === null ||
+                remainingS < result.minRevealGraceSecondsRemaining
+              ) {
+                result.minRevealGraceSecondsRemaining = remainingS;
+              }
+            }
 
             if (
               blocksDormancy &&
               lastCommitRevealableAfter > 0n &&
               now >= revealFailedEligibleAt
             ) {
-              await writeContractAndConfirm(publicClient, walletClient, {
-                chain,
-                account,
-                address: engineAddr,
-                abi: RoundVotingEngineAbi,
-                functionName: "finalizeRevealFailedRound",
-                args: [contentId, activeRoundId],
-              });
-              logger.info("Finalized reveal-failed round", {
-                contentId: contentId.toString(),
-                roundId: Number(activeRoundId),
-              });
-              result.roundsRevealFailedFinalized++;
-              enqueueRoundForCleanup(contentId, activeRoundId);
+              if (revealOutcome.infrastructureFailure) {
+                // Never finalize while this tick's reveal pipeline was blocked by
+                // infrastructure (ciphertexts unavailable, drand relays down, RPC
+                // reads failing): finalization forfeits unrevealed stakes, and a
+                // systemic outage must not be billed to voters.
+                // finalizeRevealFailedRound stays permissionless on-chain, so this
+                // only stops THIS keeper from finalizing rounds it failed to reveal
+                // itself.
+                incrementCounter("keeper_reveal_failed_finalize_skipped_total");
+                logger.warn(
+                  "Skipping reveal-failed finalization; reveal pipeline was unhealthy this tick",
+                  {
+                    contentId: contentId.toString(),
+                    roundId: Number(activeRoundId),
+                  },
+                );
+              } else {
+                await writeContractAndConfirm(publicClient, walletClient, {
+                  chain,
+                  account,
+                  address: engineAddr,
+                  abi: RoundVotingEngineAbi,
+                  functionName: "finalizeRevealFailedRound",
+                  args: [contentId, activeRoundId],
+                });
+                logger.info("Finalized reveal-failed round", {
+                  contentId: contentId.toString(),
+                  roundId: Number(activeRoundId),
+                });
+                result.roundsRevealFailedFinalized++;
+                enqueueRoundForCleanup(contentId, activeRoundId);
+              }
             }
           } catch (err: unknown) {
             const reason = getRevertReason(err);
@@ -879,18 +1237,20 @@ export async function resolveRounds(
       }
 
       // --- 5. CLEANUP DISCOVERY: inspect at most one historical round per content ---
-      try {
-        await discoverCleanupCandidate(
-          publicClient,
-          engineAddr,
-          contentId,
-          latestRoundId,
-        );
-      } catch (err: unknown) {
-        logger.debug("Could not discover cleanup candidate", {
-          contentId: contentId.toString(),
-          error: getRevertReason(err),
-        });
+      if (discovery.source === "chain") {
+        try {
+          await discoverCleanupCandidate(
+            publicClient,
+            engineAddr,
+            contentId,
+            latestRoundId,
+          );
+        } catch (err: unknown) {
+          logger.debug("Could not discover cleanup candidate", {
+            contentId: contentId.toString(),
+            error: getRevertReason(err),
+          });
+        }
       }
 
       if (latestRoundId > 0n) {
@@ -1004,9 +1364,22 @@ export async function writeContractAndConfirm(
   return hash;
 }
 
+interface RevealCommitsOutcome {
+  revealed: number;
+  /**
+   * True when at least one pending reveal was blocked by infrastructure this tick:
+   * ciphertext bytes unavailable from both Ponder and the on-chain log fallback, every
+   * drand relay down, or the commit set unreadable over RPC. Distinct from legitimate
+   * skips (not yet revealable, permanently bad ciphertexts). While true, the keeper
+   * must not finalize the round as RevealFailed — that would convert the keeper's own
+   * outage into voter stake forfeitures (design review 2026-06, finding 3).
+   */
+  infrastructureFailure: boolean;
+}
+
 /**
  * Reveal all unrevealed commits for a round whose epoch has ended.
- * Returns the number of votes revealed in this call.
+ * Returns the number of votes revealed and whether infrastructure blocked any reveal.
  */
 async function _revealCommits(
   publicClient: PublicClient,
@@ -1018,8 +1391,9 @@ async function _revealCommits(
   contentId: bigint,
   roundId: bigint,
   now: bigint,
-): Promise<number> {
+): Promise<RevealCommitsOutcome> {
   let revealed = 0;
+  let infrastructureFailure = false;
 
   // Get all commit keys for this round
   let commitKeys: readonly `0x${string}`[];
@@ -1031,10 +1405,11 @@ async function _revealCommits(
       roundId,
     );
   } catch {
-    return 0;
+    return { revealed: 0, infrastructureFailure: true };
   }
 
   let indexedCiphertexts: IndexedCiphertextMap | null | undefined;
+  let logCiphertexts: IndexedCiphertextMap | null | undefined;
   for (const commitKey of commitKeys) {
     try {
       // Read commit data
@@ -1062,16 +1437,51 @@ async function _revealCommits(
           logger,
         });
       }
-      if (!indexedCiphertexts) continue;
-
-      const ciphertext = getIndexedCiphertext({
-        indexedCiphertexts,
-        kind: "vote",
-        commitKey,
-        expectedCiphertextHash: commit.ciphertextHash,
-        logger,
-      });
-      if (!ciphertext) continue;
+      let ciphertext = indexedCiphertexts
+        ? getIndexedCiphertext({
+            indexedCiphertexts,
+            kind: "vote",
+            commitKey,
+            expectedCiphertextHash: commit.ciphertextHash,
+            logger,
+          })
+        : null;
+      if (!ciphertext) {
+        if (logCiphertexts === undefined) {
+          logCiphertexts = await fetchLogCiphertextsForRound({
+            publicClient,
+            kind: "vote",
+            contractAddress: engineAddr,
+            contentId,
+            roundId,
+            neededCommitKeys: new Set(commitKeys.map(indexedCiphertextKey)),
+            logger,
+          });
+        }
+        if (logCiphertexts) {
+          ciphertext = getIndexedCiphertext({
+            indexedCiphertexts: logCiphertexts,
+            kind: "vote",
+            commitKey,
+            expectedCiphertextHash: commit.ciphertextHash,
+            logger,
+          });
+          if (ciphertext) {
+            incrementCounter("keeper_ciphertext_log_fallback_total");
+            logger.info("Resolved vote ciphertext from on-chain logs", {
+              contentId: contentId.toString(),
+              roundId: roundId.toString(),
+              commitKey,
+            });
+          }
+        }
+      }
+      if (!ciphertext) {
+        // Neither Ponder nor the on-chain log fallback produced verifiable ciphertext
+        // bytes for a pending commit — data unavailability, not a voter problem.
+        infrastructureFailure = true;
+        continue;
+      }
 
       const metadataValidation = validateCiphertextMetadata(commit, ciphertext);
       if (!metadataValidation.ok) {
@@ -1100,6 +1510,17 @@ async function _revealCommits(
           commit.drandChainHash,
         );
       } catch (err: unknown) {
+        if (isDrandUnavailableError(err)) {
+          infrastructureFailure = true;
+          decryptFailureCount.delete(commitKey);
+          logger.warn("All drand relays unavailable; retrying next tick", {
+            contentId: contentId.toString(),
+            roundId: roundId.toString(),
+            commitKey,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          continue;
+        }
         const decryptError = classifyDecryptError(err);
         if (decryptError.retryable) {
           decryptFailureCount.delete(commitKey);
@@ -1194,7 +1615,7 @@ async function _revealCommits(
     }
   }
 
-  return revealed;
+  return { revealed, infrastructureFailure };
 }
 
 async function readRoundAdvisoryCommitKeys(
@@ -1258,6 +1679,7 @@ async function _revealAdvisoryCommits(
   }
 
   let indexedCiphertexts: IndexedCiphertextMap | null | undefined;
+  let logCiphertexts: IndexedCiphertextMap | null | undefined;
   for (const commitKey of commitKeys) {
     try {
       const rawCommit = await publicClient.readContract({
@@ -1281,15 +1703,45 @@ async function _revealAdvisoryCommits(
           logger,
         });
       }
-      if (!indexedCiphertexts) continue;
-
-      const ciphertext = getIndexedCiphertext({
-        indexedCiphertexts,
-        kind: "advisory",
-        commitKey,
-        expectedCiphertextHash: commit.ciphertextHash,
-        logger,
-      });
+      let ciphertext = indexedCiphertexts
+        ? getIndexedCiphertext({
+            indexedCiphertexts,
+            kind: "advisory",
+            commitKey,
+            expectedCiphertextHash: commit.ciphertextHash,
+            logger,
+          })
+        : null;
+      if (!ciphertext) {
+        if (logCiphertexts === undefined) {
+          logCiphertexts = await fetchLogCiphertextsForRound({
+            publicClient,
+            kind: "advisory",
+            contractAddress: advisoryAddr,
+            contentId,
+            roundId,
+            neededCommitKeys: new Set(commitKeys.map(indexedCiphertextKey)),
+            logger,
+          });
+        }
+        if (logCiphertexts) {
+          ciphertext = getIndexedCiphertext({
+            indexedCiphertexts: logCiphertexts,
+            kind: "advisory",
+            commitKey,
+            expectedCiphertextHash: commit.ciphertextHash,
+            logger,
+          });
+          if (ciphertext) {
+            incrementCounter("keeper_ciphertext_log_fallback_total");
+            logger.info("Resolved advisory ciphertext from on-chain logs", {
+              contentId: contentId.toString(),
+              roundId: roundId.toString(),
+              commitKey,
+            });
+          }
+        }
+      }
       if (!ciphertext) continue;
 
       const metadataValidation = validateCiphertextMetadata(commit, ciphertext);

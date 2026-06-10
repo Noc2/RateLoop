@@ -82,6 +82,26 @@ this failure shape.
 - Reward successful challengers explicitly so the challenge path is economically live, not just
   theoretically present (the Kleros lesson: challenge machinery that's unprofitable goes unused).
 
+**Status (2026-06-10):** partially mitigated, with a deliberate design revision. Value-scaled
+per-snapshot proposer bonds were rejected: they tax the honest operator's capital (the scarce
+resource) and force operators to track gated value per snapshot, so all stakes stay fixed.
+Instead, accountability now scales through the fee stream and time:
+
+- *Implemented — delayed slashable fee withdrawals:* `FrontendRegistry.claimFees()` is replaced by
+  `requestFeeWithdrawal()` → 14-day review window → `completeFeeWithdrawal()`. Requested amounts
+  stay fully slashable until release, and `slashFrontend` confiscates the pending bucket alongside
+  accrued fees. The operator's undelivered earnings are now collateral that grows automatically
+  with usage — no per-snapshot bonding, no extra capital.
+- *Implemented — challenger bounty:* `slashFrontendWithBounty` routes a fixed 50%
+  (`CHALLENGER_BOUNTY_BPS`) of everything confiscated (stake cut + accrued fees + pending
+  withdrawals) to the recorded challenger of the rejected snapshot, making a correct challenge
+  directly profitable. The share is deliberately below 100% so a proposer cannot rescue its own
+  collateral by self-challenging through a fresh wallet.
+- *Open:* value-tiered challenge windows (12h → 48-72h for high-value pools; `MAX_CHALLENGE_WINDOW`
+  already allows 3 days) and a per-snapshot claim-rate ramp during the 7-day veto window, which
+  bounds what an exit-scamming proposer can extract before detection — the one case reputation and
+  fee escrow cannot deter.
+
 #### 2. Herding is the dominant strategy; bounties pay participation, not accuracy (economic)
 
 `QuestionRewardPoolEscrowClaimLib.sol:610` returns a flat `BASE_CLAIM_WEIGHT_BPS` — bounty share
@@ -100,6 +120,12 @@ reinforces this: agreeing with the expected majority maximizes qualification.
 - Mix in occasional ground-truth/audit rounds.
 - Consider restoring a "surprisingly common" information term (original BTS) to break
   predict-the-base-rate strategies.
+
+**Status (2026-06-10):** mitigated — bounty claim weights are now surprise-weighted (see
+`docs/surprise-weighted-bounty-weights.md`): snapshot rounds pay a participation floor plus a
+surprisingly-common bonus normalized by a trailing base rate, so conformist rounds pay flat while
+informative reporting earns up to 2x. Ground-truth audit rounds remain open as the long-term
+backstop.
 
 #### 3. Keeper liveness failure forfeits honest stake (liveness/economic)
 
@@ -137,15 +163,17 @@ add a dispute/escalation path that re-runs contested rounds with a larger indepe
 (the Kleros appeal lesson); document explicitly that settled scores must not settle external
 financial contracts.
 
-#### 5. RBTS seed reroll via blockhash expiry (economic)
+#### 5. RBTS seed reroll via blockhash expiry (economic) - mitigated
 
-If `settleRound` isn't called within 256 blocks of seed capture, anyone may
-`refreshExpiredRbtsSeed` to a new block, unboundedly (`RoundRevealLib.sol:287-312`). The seed
-picks the reference/peer draws that determine who forfeits. With no settlement-caller incentive,
-an actor who out-waits other settlers (~8.5 min on 2s blocks) rerolls repeatedly and settles only
-on favorable draws. **Recommendation:** cap refreshes then fall back to a drand-derived seed, or
-add a small settlement caller rebate so the first capture is reliably consumed (this also
-addresses the keeper-altruism problem in finding 9).
+Original risk: if `settleRound` was not called within 256 blocks of seed capture, the old
+expired-seed refresh path let the next caller move the seed to a fresh block, repeat that
+unboundedly, and settle only on favorable reference/peer draws. Mitigation: expired captured
+seeds are now terminal and scoreless. When the captured blockhash is unavailable, settlement
+stores a zero RBTS score seed, returns revealed RBTS scoring stakes, pays no RBTS scoring
+rewards or forfeits, and still finalizes the binary round outcome. The unused refresh helper and
+refresh counter were removed. A bounded settlement caller rebate (1% of scored RBTS forfeits,
+capped at 1 LREP) gives the first post-capture caller a small incentive to consume fresh seeds
+without creating a payout on scoreless expiry.
 
 #### 6. Agent adoption blockers: unpublished SDK, no sandbox, "x402" naming (adoption)
 
@@ -249,7 +277,7 @@ delimiters, add injection warnings to the tool description and `limitations`, an
   the oracle holds a non-rejected finalized snapshot (the gating conditions are on-chain
   checkable).
 - **Untested paths:** `flushPendingTreasuryForfeit`, `replayBundleObserverNotify`,
-  `refreshExpiredRbtsSeed`/seed expiry have zero test references, and `GasBudget.t.sol` only
+  and similar recovery edges still need direct branch coverage. `GasBudget.t.sol` only
   exercises 3-voter rounds while settlement is O(N) multi-pass with maxVoters up to 200.
   *Recommendation:* add direct tests for the recovery paths and gas tests at 3/100/200 voters
   against the World Chain block gas limit; batch scoring if it doesn't fit.
@@ -293,9 +321,10 @@ French online-reputation-management firm** — a trademark/SEO collision to chec
 ## Suggested sequencing
 
 1. **Before mainnet value flows:** finding 1 (oracle bonds), finding 3 (RevealFailed refunds +
-   reveal fallbacks), finding 7 (prompt-injection delimiters — cheap), finding 5 (seed reroll cap).
+   reveal fallbacks), finding 7 (prompt-injection delimiters — cheap).
 2. **Before pushing agent adoption:** finding 6 (publish SDK, testnet+faucet, x402 naming),
    finding 11 (timeouts, structured errors).
 3. **Before significant LREP distribution:** finding 8 (vesting verified bonuses, quorum floor,
-   USDC-denominated bonds), finding 2 (accuracy-linked bounty shares).
+   USDC-denominated bonds), finding 2 (accuracy-linked bounty shares — addressed 2026-06-10 via
+   surprise-weighted bounty claim weights, see `docs/surprise-weighted-bounty-weights.md`).
 4. **Ongoing hardening:** findings 4, 9, 10.

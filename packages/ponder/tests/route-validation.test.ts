@@ -27,11 +27,20 @@ function createQueryBuilder<T>(result: T) {
   return builder;
 }
 
-function mockPonderModules<T>(result: T) {
-  const queryBuilder = createQueryBuilder(result);
+function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
+  const queryBuilders = [
+    createQueryBuilder<unknown>(result),
+    ...additionalResults.map((additionalResult) => createQueryBuilder(additionalResult)),
+  ];
+  let selectCallCount = 0;
   const db = {
-    select: vi.fn(() => queryBuilder),
+    select: vi.fn(() => {
+      const queryBuilder = queryBuilders[Math.min(selectCallCount, queryBuilders.length - 1)]!;
+      selectCallCount += 1;
+      return queryBuilder;
+    }),
   };
+  const queryBuilder = queryBuilders[0]!;
 
   vi.doMock("ponder:api", () => ({ db }));
   vi.doMock("ponder", () => ({
@@ -76,6 +85,7 @@ function mockPonderModules<T>(result: T) {
     content: {
       canonicalUrl: "content.canonicalUrl",
       id: "content.id",
+      lastActivityAt: "content.lastActivityAt",
       bundleId: "content.bundleId",
       bundleIndex: "content.bundleIndex",
       categoryId: "content.categoryId",
@@ -428,10 +438,10 @@ function mockPonderModules<T>(result: T) {
       commitLogIndex: "vote.commitLogIndex",
       contentId: "vote.contentId",
       credentialMask: "vote.credentialMask",
+      epochIndex: "vote.epochIndex",
       freshCredentialMask: "vote.freshCredentialMask",
       identityHolder: "vote.identityHolder",
       identityKey: "vote.identityKey",
-      identityVoter: "vote.identityVoter",
       isUp: "vote.isUp",
       revealed: "vote.revealed",
       revealedAt: "vote.revealedAt",
@@ -441,6 +451,7 @@ function mockPonderModules<T>(result: T) {
       rbtsRewardWeight: "vote.rbtsRewardWeight",
       rbtsScoreBps: "vote.rbtsScoreBps",
       rbtsStakeReturned: "vote.rbtsStakeReturned",
+      rbtsWeight: "vote.rbtsWeight",
       voter: "vote.voter",
     },
     voterCategoryStats: {
@@ -477,7 +488,7 @@ function mockPonderModules<T>(result: T) {
     ]),
   }));
 
-  return { db, queryBuilder };
+  return { db, queryBuilder, queryBuilders };
 }
 
 afterEach(() => {
@@ -2080,18 +2091,25 @@ describe("registerCorrelationRoutes", () => {
   });
 
   it("returns eligible revealed vote inputs for correlation scoring", async () => {
-    const { db, queryBuilder } = mockPonderModules([
-      {
-        account: "0x0000000000000000000000000000000000000001",
-        voter: "0x0000000000000000000000000000000000000001",
-        identityKey: `0x${"a".repeat(64)}`,
-        commitKey: `0x${"b".repeat(64)}`,
-        baseWeight: 10000n,
-        verifiedHuman: true,
-        historicalVoteCount: 0,
-        features: "",
-      },
-    ]);
+    const { db, queryBuilder } = mockPonderModules(
+      [
+        {
+          account: "0x0000000000000000000000000000000000000001",
+          voter: "0x0000000000000000000000000000000000000001",
+          identityKey: `0x${"a".repeat(64)}`,
+          commitKey: `0x${"b".repeat(64)}`,
+          isUp: true,
+          stake: 25000000n,
+          epochIndex: 0,
+          revealWeight: 25000000n,
+          baseWeight: 10000n,
+          verifiedHuman: true,
+          historicalVoteCount: 0,
+          features: "",
+        },
+      ],
+      [[{ settledAt: 777n }], []],
+    );
     const { registerCorrelationRoutes } = await import(
       "../src/api/routes/correlation-routes.js"
     );
@@ -2111,14 +2129,27 @@ describe("registerCorrelationRoutes", () => {
       account: "0x0000000000000000000000000000000000000001",
       identityKey: `0x${"a".repeat(64)}`,
       commitKey: `0x${"b".repeat(64)}`,
+      isUp: true,
+      stake: "25000000",
+      epochIndex: 0,
+      revealWeight: "25000000",
       baseWeight: "10000",
       verifiedHuman: true,
       features: [`identity:0x${"a".repeat(64)}`],
+    });
+    expect(body.roundContext).toEqual({
+      trailingBaseRateUpBps: 5000,
+      baseRateWindowRounds: 100,
+      settledRoundsInWindow: 0,
     });
     const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
     expect(selection).toContain("historicalVoteCount");
     expect(selection).toContain("totalSettledVotes");
     expect(selection).toContain("- 1");
+    expect(selection).toContain("vote.isUp");
+    expect(selection).toContain("vote.stake");
+    expect(selection).toContain("vote.epochIndex");
+    expect(selection).toContain("vote.rbtsWeight");
     const whereArg = queryBuilder.where.mock.calls[0]?.[0];
     const serialized = serializeExpression(whereArg);
     expect(serialized).toContain("vote.revealed");
@@ -2131,6 +2162,167 @@ describe("registerCorrelationRoutes", () => {
       true,
     );
     expect(serializedJoins.some((join) => join.includes("round.settledAt"))).toBe(true);
+  });
+
+  it("computes the trailing base rate from prior settled round pools", async () => {
+    mockPonderModules(
+      [],
+      [
+        [{ settledAt: 777n }],
+        [
+          { upPool: 600n, downPool: 400n },
+          { upPool: 150n, downPool: 50n },
+        ],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    // sum(upPool) * 10000 / sum(upPool + downPool) = 750 * 10000 / 1200 = 6250
+    expect(body.roundContext).toEqual({
+      trailingBaseRateUpBps: 6250,
+      baseRateWindowRounds: 100,
+      settledRoundsInWindow: 2,
+    });
+  });
+
+  it("clamps the trailing base rate to [500, 9500]", async () => {
+    mockPonderModules(
+      [],
+      [
+        [{ settledAt: 777n }],
+        [{ upPool: 999n, downPool: 1n }],
+        [],
+        [{ settledAt: 777n }],
+        [{ upPool: 1n, downPool: 999n }],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const highResponse = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+    expect(highResponse.status).toBe(200);
+    const highBody = await highResponse.json();
+    // raw 9990 bps clamps down to 9500
+    expect(highBody.roundContext).toEqual({
+      trailingBaseRateUpBps: 9500,
+      baseRateWindowRounds: 100,
+      settledRoundsInWindow: 1,
+    });
+
+    const lowResponse = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+    expect(lowResponse.status).toBe(200);
+    const lowBody = await lowResponse.json();
+    // raw 10 bps clamps up to 500
+    expect(lowBody.roundContext).toEqual({
+      trailingBaseRateUpBps: 500,
+      baseRateWindowRounds: 100,
+      settledRoundsInWindow: 1,
+    });
+  });
+
+  it("falls back to a neutral base rate when the window is empty or pools sum to zero", async () => {
+    mockPonderModules(
+      [],
+      [
+        [{ settledAt: 777n }],
+        [],
+        [],
+        [{ settledAt: 777n }],
+        [{ upPool: 0n, downPool: 0n }],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const emptyResponse = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+    expect(emptyResponse.status).toBe(200);
+    const emptyBody = await emptyResponse.json();
+    expect(emptyBody.roundContext).toEqual({
+      trailingBaseRateUpBps: 5000,
+      baseRateWindowRounds: 100,
+      settledRoundsInWindow: 0,
+    });
+
+    const zeroSumResponse = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+    expect(zeroSumResponse.status).toBe(200);
+    const zeroSumBody = await zeroSumResponse.json();
+    expect(zeroSumBody.roundContext).toEqual({
+      trailingBaseRateUpBps: 5000,
+      baseRateWindowRounds: 100,
+      settledRoundsInWindow: 1,
+    });
+  });
+
+  it("excludes rounds settled after the requested round from the base-rate window", async () => {
+    const { queryBuilders } = mockPonderModules(
+      [],
+      [
+        [{ settledAt: 777n }],
+        [{ upPool: 100n, downPool: 100n }],
+      ],
+    );
+    const { registerCorrelationRoutes } = await import(
+      "../src/api/routes/correlation-routes.js"
+    );
+
+    const app = new Hono();
+    registerCorrelationRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/correlation/round-votes?rewardPoolId=7&contentId=9&roundId=2",
+    );
+    expect(response.status).toBe(200);
+
+    // The requested round's own (settledAt, contentId, roundId) tuple is looked up first.
+    const lookupBuilder = queryBuilders[1]!;
+    const lookupWhere = serializeExpression(lookupBuilder.where.mock.calls[0]?.[0]);
+    expect(lookupWhere).toContain("round.contentId");
+    expect(lookupWhere).toContain("round.roundId");
+    expect(lookupWhere).toContain("round.state");
+
+    // The window only admits rounds with a strictly smaller (settledAt, contentId, roundId)
+    // tuple, so rounds settled after the requested round (greater tuple) are excluded.
+    const windowBuilder = queryBuilders[2]!;
+    const windowWhere = serializeExpression(windowBuilder.where.mock.calls[0]?.[0]);
+    expect(windowWhere).toContain("round.state");
+    expect(windowWhere).toContain("round.settledAt");
+    expect(windowWhere).toContain(") < (");
+    expect(windowWhere).toContain("777");
+    expect(windowWhere).toContain("9");
+    expect(windowWhere).toContain("2");
+    const orderByArgs = windowBuilder.orderBy.mock.calls[0] ?? [];
+    expect(serializeExpression(orderByArgs[0])).toContain("round.settledAt");
+    expect(serializeExpression(orderByArgs[1])).toContain("round.contentId");
+    expect(serializeExpression(orderByArgs[2])).toContain("round.roundId");
+    expect(orderByArgs.map((arg: any) => arg?.kind)).toEqual(["desc", "desc", "desc"]);
+    expect(windowBuilder.limit).toHaveBeenCalledWith(100);
   });
 
   it("validates correlation round-vote identifiers", async () => {
@@ -2149,6 +2341,48 @@ describe("registerCorrelationRoutes", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
       error: "rewardPoolId, contentId, and roundId must be positive integers",
+    });
+  });
+});
+
+describe("registerKeeperRoutes", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  it("rejects malformed keeper work deadlines", async () => {
+    mockPonderModules([]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request("http://localhost/keeper/work?now=abc&dormancyPeriod=60");
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "now and dormancyPeriod must be non-negative integer seconds",
+    });
+  });
+
+  it("returns keeper work candidates as JSON-safe strings", async () => {
+    mockPonderModules([{ contentId: 9n, roundId: 2n, reason: "settle" }]);
+    const { registerKeeperRoutes } = await import(
+      "../src/api/routes/keeper-routes.js"
+    );
+    const app = new Hono();
+    registerKeeperRoutes(app);
+
+    const response = await app.request("http://localhost/keeper/work?now=100&dormancyPeriod=60&limit=5");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      source: "ponder",
+      openRounds: [{ contentId: "9", roundId: "2", reason: "settle" }],
+      cleanupRounds: [{ contentId: "9", roundId: "2", reason: "settle" }],
+      dormantContent: [{ contentId: "9", roundId: "2", reason: "settle" }],
     });
   });
 });
@@ -2216,8 +2450,7 @@ describe("registerDiscoveryRoutes", () => {
       serializedWhereCalls.some(
         (value) =>
           value.includes("vote.voter") &&
-          value.includes("vote.identityHolder") &&
-          value.includes("vote.identityVoter"),
+          value.includes("vote.identityHolder"),
       ),
     ).toBe(true);
   });

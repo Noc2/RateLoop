@@ -88,7 +88,10 @@ contract RoundVotingEngineDormancyTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        vm.warp(round.startTime + 7 days + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() + 1);
+        // The extended (24x) reveal-failed recovery grace must elapse first.
+        vm.warp(
+            round.startTime + 7 days + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() * 24 + 1
+        );
 
         _commit(voter4, contentId, true);
 

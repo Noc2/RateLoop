@@ -44,6 +44,7 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `KEEPER_PRIVATE_KEY`                              | —                                                                   | Raw private key fallback if no keystore is configured                                                              |
 | `KEEPER_INTERVAL_MS`                              | `30000`                                                             | Resolution loop frequency (ms)                                                                                     |
 | `PONDER_BASE_URL`                                 | —                                                                   | Ponder API base URL used to fetch event-indexed vote ciphertext for reveals                                        |
+| `KEEPER_LOG_FALLBACK_LOOKBACK_BLOCKS`             | `300000`                                                            | Max blocks the `eth_getLogs` ciphertext fallback scans when Ponder is unavailable or missing a commit              |
 | `KEEPER_STARTUP_JITTER_MS`                        | `0`                                                                 | Random startup delay for multi-instance staggering                                                                 |
 | `KEEPER_CLEANUP_BATCH_SIZE`                       | `25`                                                                | Max commit window processed per `processUnrevealedVotes()` batch                                                   |
 | `KEEPER_DATABASE_URL`                             | —                                                                   | Optional Postgres URL for keeper-only correlation artifact cache and advisory locks                                |
@@ -59,7 +60,7 @@ machine-specific local addresses. Only set address vars on unsupported chains or
 | `KEEPER_FRONTEND_FEE_LOOKBACK_ROUNDS`             | `8`                                                                 | Recent-round window per content item to prioritize before backfilling older frontend fees                          |
 | `KEEPER_FRONTEND_FEE_RECENT_ROUNDS_PER_TICK`      | `50`                                                                | Max recent frontend-fee content/round slots to scan per keeper tick                                                |
 | `KEEPER_FRONTEND_FEE_BACKFILL_ROUNDS_PER_TICK`    | `50`                                                                | Max older frontend-fee content/round slots to scan per keeper tick                                                 |
-| `KEEPER_FRONTEND_FEE_WITHDRAW`                    | `true`                                                              | Withdraw accumulated `FrontendRegistry` fees after claiming round fees                                             |
+| `KEEPER_FRONTEND_FEE_WITHDRAW`                    | `true`                                                              | Drive the two-step `FrontendRegistry` fee withdrawal after claiming round fees                                     |
 | `KEEPER_CORRELATION_SNAPSHOTS_ENABLED`            | `false`                                                             | Publish/finalize correlation epoch and round payout snapshot artifacts from an eligible or delegated keeper wallet |
 | `KEEPER_CORRELATION_SNAPSHOTS_MODE`               | `auto` without an artifact path, otherwise `file`                   | `auto` builds deterministic artifacts from Ponder; `file` reads a prebuilt artifact                                |
 | `KEEPER_CORRELATION_ARTIFACT_STORAGE`             | `data-uri` on local `31337`, otherwise `file`                       | Storage for auto-generated artifacts. Use `file` with a public base URL in production                              |
@@ -83,9 +84,51 @@ docker run --env-file packages/keeper/.env.local -e METRICS_BIND_ADDRESS=0.0.0.0
 
 Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `keeper_rounds_settled_total` (counter), `keeper_rounds_cancelled_total` (counter), `keeper_rounds_reveal_failed_finalized_total` (counter), and `keeper_unrevealed_cleanup_batches_total` (counter).
 
-When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes a bounded cursor through recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also withdraw accumulated `FrontendRegistry.claimFees()` credits.
+### Reveal-liveness metrics and alerting
 
-When `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, the worker checks that the keeper wallet resolves through `FrontendRegistry.authorizedSnapshotFrontend(...)` to an eligible frontend operator only when a missing/rejected proposal slot actually needs a proposal. The keeper wallet can be the registered frontend wallet itself, or a separate operational wallet assigned by that frontend operator. The worker proposes missing correlation epoch and round payout roots from the keeper wallet and finalizes already-proposed roots after the challenge window. In `auto` mode it first preflights on-chain status so already-proposed/finalized snapshots do not rebuild artifacts, then asks Ponder for settled USDC bounty rounds only when proposal data is needed, builds deterministic payout weights with `@rateloop/node-utils/correlationScoring`, stores the public artifact, and publishes the roots. In `file` mode it reads the same artifact shape from `KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH`.
+A keeper/Ponder/drand outage that outlasts the on-chain reveal grace period lets rounds finalize as `RevealFailed`, which forfeits unrevealed voter stakes — so reveal liveness is the keeper signal most worth paging on:
+
+| Metric | Type | Meaning |
+| --- | --- | --- |
+| `keeper_rounds_awaiting_reveal_quorum` | gauge | Open rounds with commit quorum whose reveal quorum is still unmet |
+| `keeper_reveal_grace_seconds_remaining_min` | gauge | Seconds until the most at-risk round becomes finalizable as `RevealFailed` (`-1` = none at risk) |
+| `keeper_rounds_reveal_failed_finalized_total` | counter | Rounds this keeper finalized as `RevealFailed` (each one forfeits unrevealed stake) |
+| `keeper_reveal_failed_finalize_skipped_total` | counter | Finalizations the keeper refused because its own reveal pipeline was unhealthy that tick |
+| `keeper_ponder_ciphertext_fetch_failures_total` | counter | Failed Ponder indexed-ciphertext fetches |
+| `keeper_ciphertext_log_fallback_total` | counter | Ciphertexts resolved via the `eth_getLogs` fallback instead of Ponder (Ponder degraded) |
+| `keeper_drand_relay_failovers_total` | counter | drand relay failover events (primary relay degraded) |
+
+Suggested Prometheus alert rules:
+
+```yaml
+groups:
+  - name: rateloop-keeper
+    rules:
+      - alert: KeeperDown
+        expr: time() - keeper_last_successful_run_timestamp > 300
+        labels: { severity: page }
+      - alert: KeeperRevealGraceExpiring
+        # A round is within 15 minutes of RevealFailed finalization (stake forfeiture).
+        expr: keeper_reveal_grace_seconds_remaining_min >= 0 and keeper_reveal_grace_seconds_remaining_min < 900
+        labels: { severity: page }
+      - alert: KeeperRevealFailedFinalized
+        # Any RevealFailed finalization forfeits voter stake; investigate every one.
+        expr: increase(keeper_rounds_reveal_failed_finalized_total[1h]) > 0
+        labels: { severity: page }
+      - alert: KeeperRevealPipelineUnhealthy
+        expr: increase(keeper_reveal_failed_finalize_skipped_total[15m]) > 0
+        labels: { severity: page }
+      - alert: KeeperPonderDegraded
+        expr: increase(keeper_ciphertext_log_fallback_total[15m]) > 0
+        labels: { severity: warn }
+      - alert: KeeperDrandRelayDegraded
+        expr: increase(keeper_drand_relay_failovers_total[15m]) > 0
+        labels: { severity: warn }
+```
+
+When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes a bounded cursor through recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also drive the two-step registry withdrawal: it completes a matured `FrontendRegistry.completeFeeWithdrawal()` first, then moves newly accrued fees into the next pending bucket with `requestFeeWithdrawal()`. Requested amounts stay slashable for the registry's 14-day `FEE_WITHDRAWAL_DELAY` before they can be completed.
+
+When `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, the worker checks that the keeper wallet resolves through `FrontendRegistry.authorizedSnapshotFrontend(...)` to an eligible frontend operator only when a missing/rejected proposal slot actually needs a proposal. The keeper wallet can be the registered frontend wallet itself, or a separate operational wallet assigned by that frontend operator. The worker proposes missing correlation epoch and round payout roots from the keeper wallet and finalizes already-proposed roots after the challenge window. In `auto` mode it first preflights on-chain status so already-proposed/finalized snapshots do not rebuild artifacts, then asks Ponder for settled USDC bounty rounds only when proposal data is needed, builds deterministic payout weights with `@rateloop/node-utils/correlationScoring` (question-reward weights use a surprise-weighted base weight in `[10_000, 20_000]` bps per [`docs/surprise-weighted-bounty-weights.md`](../../docs/surprise-weighted-bounty-weights.md); launch-credit weights stay flat), stores the public artifact, and publishes the roots. In `file` mode it reads the same artifact shape from `KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH`.
 
 Set `KEEPER_DATABASE_URL` to enable optional keeper persistence. The keeper creates a small `keeper_correlation_artifacts` table for automatic correlation artifact cache rows and uses a Postgres advisory lock to prevent overlapping Railway replicas or deployments from doing the same publication work at the same time. If the database is unavailable, the keeper logs a warning once and falls back to the existing stateless behavior; on-chain status checks still prevent duplicate proposals.
 

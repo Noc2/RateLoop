@@ -35,6 +35,13 @@ interface CandidateResponse {
 
 interface VoteResponse {
   items?: unknown[];
+  roundContext?: unknown;
+}
+
+interface RoundVotesPage {
+  votes: CorrelationVoteInput[];
+  /** Null when Ponder omits or malforms the round context (neutral fallback). */
+  trailingBaseRateUpBps: number | null;
 }
 
 export interface CorrelationRoundCandidate {
@@ -65,7 +72,20 @@ interface PublicRoundPayoutSnapshot {
   totalClaimWeight: string;
   weightRoot: Hex;
   reasonRoot: Hex;
+  trailingBaseRateUpBps: number | null;
+  eligibleVotes: PublicCorrelationVoteInput[];
   payoutWeights: PublicPayoutWeight[];
+}
+
+interface PublicCorrelationVoteInput {
+  account: Address;
+  identityKey: Hex;
+  commitKey: Hex;
+  verifiedHuman: boolean;
+  historicalVoteCount: number;
+  features: readonly string[];
+  isUp: boolean | null;
+  revealWeight: string | null;
 }
 
 interface PublicPayoutWeight {
@@ -79,6 +99,7 @@ interface PublicPayoutWeight {
   baseWeight: string;
   independenceBps: number;
   effectiveWeight: string;
+  surpriseBps: number;
   reasonHash: Hex;
   leaf: Hex;
   proof: Hex[];
@@ -146,7 +167,10 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
   const publicRounds: PublicRoundPayoutSnapshot[] = [];
 
   for (const candidate of candidates) {
-    const votes = await fetchRoundVotes(config.ponderBaseUrl, candidate);
+    const { votes, trailingBaseRateUpBps } = await fetchRoundVotes(
+      config.ponderBaseUrl,
+      candidate,
+    );
 
     const scored = scoreRoundPayoutWeights({
       chainId: BigInt(config.chainId),
@@ -156,6 +180,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
       contentId: candidate.contentId,
       roundId: candidate.roundId,
       votes,
+      trailingBaseRateUpBps,
     });
     const leaves = scored.leaves.map((leaf) => leaf.leaf);
 
@@ -170,6 +195,20 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
       totalClaimWeight: scored.totalClaimWeight.toString(),
       weightRoot: scored.weightRoot,
       reasonRoot: scored.reasonRoot,
+      trailingBaseRateUpBps,
+      eligibleVotes: votes.map((vote): PublicCorrelationVoteInput => ({
+        account: vote.account,
+        identityKey: vote.identityKey,
+        commitKey: vote.commitKey,
+        verifiedHuman: vote.verifiedHuman,
+        historicalVoteCount: vote.historicalVoteCount,
+        features: [...vote.features].sort(),
+        isUp: typeof vote.isUp === "boolean" ? vote.isUp : null,
+        revealWeight:
+          typeof vote.revealWeight === "bigint"
+            ? vote.revealWeight.toString()
+            : null,
+      })),
       payoutWeights: scored.leaves.map((leaf): PublicPayoutWeight => ({
         domain: leaf.domain,
         rewardPoolId: leaf.rewardPoolId.toString(),
@@ -181,6 +220,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
         baseWeight: leaf.baseWeight.toString(),
         independenceBps: leaf.independenceBps,
         effectiveWeight: leaf.effectiveWeight.toString(),
+        surpriseBps: leaf.surpriseBps,
         reasonHash: leaf.reasonHash,
         leaf: leaf.leaf,
         proof: merkleProof(leaves, leaf.leaf),
@@ -205,10 +245,13 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
   const parameterHash = correlationParameterHash(params);
   const publicEpochs = buildPublicEpochs(publicRounds, parameterHash);
   const stored = await storeCorrelationArtifact({
-    artifactVersion: "rateloop-correlation-artifact-v1",
+    artifactVersion: "rateloop-correlation-artifact-v2",
     chainId: config.chainId,
     oracleAddress: config.contracts.clusterPayoutOracle,
     scorerVersion: params.scorerVersion,
+    eligibilitySpecVersion: params.eligibilitySpecVersion,
+    canonicalJsonVersion: params.canonicalJsonVersion,
+    featureSpecVersion: params.featureSpecVersion,
     parameters: params,
     correlationEpochs: publicEpochs,
     roundPayoutSnapshots: publicRounds,
@@ -442,8 +485,9 @@ function selectCompleteEpochCandidates(
 async function fetchRoundVotes(
   ponderBaseUrl: string,
   candidate: CorrelationRoundCandidate,
-): Promise<CorrelationVoteInput[]> {
+): Promise<RoundVotesPage> {
   const votes: CorrelationVoteInput[] = [];
+  let trailingBaseRateUpBps: number | null = null;
   for (let page = 0; page < MAX_VOTE_PAGES_PER_ROUND; page += 1) {
     const offset = page * VOTE_PAGE_SIZE;
     const url = new URL("/correlation/round-votes", ponderBaseUrl);
@@ -457,9 +501,12 @@ async function fetchRoundVotes(
     if (items.length > VOTE_PAGE_SIZE) {
       throw new Error(`Ponder returned too many correlation votes: ${items.length} > ${VOTE_PAGE_SIZE}`);
     }
+    trailingBaseRateUpBps ??= parseRoundContextTrailingBaseRateUpBps(
+      response.roundContext,
+    );
     votes.push(...items.map(parseVote));
     if (items.length < VOTE_PAGE_SIZE) {
-      return votes;
+      return { votes, trailingBaseRateUpBps };
     }
   }
   throw new Error(
@@ -528,11 +575,11 @@ function parseVote(value: unknown): CorrelationVoteInput {
   const account = requireAddress(record.account, "account");
   const identityKey = requireHex(record.identityKey, "identityKey");
   const commitKey = requireHex(record.commitKey, "commitKey");
+  const revealWeight = parseBigInt(record.revealWeight);
   return {
     account,
     identityKey,
     commitKey,
-    baseWeight: requirePositiveBigInt(record.baseWeight, "baseWeight"),
     verifiedHuman: record.verifiedHuman === true,
     historicalVoteCount: requireNonNegativeNumber(
       record.historicalVoteCount,
@@ -541,7 +588,28 @@ function parseVote(value: unknown): CorrelationVoteInput {
     features: Array.isArray(record.features)
       ? record.features.filter((feature): feature is string => typeof feature === "string")
       : [],
+    // Surprise inputs are optional: a missing or malformed value falls back
+    // to the neutral surprise multiplier inside the scorer (spec fallback).
+    isUp: typeof record.isUp === "boolean" ? record.isUp : null,
+    revealWeight: revealWeight !== null && revealWeight >= 0n ? revealWeight : null,
   };
+}
+
+function parseRoundContextTrailingBaseRateUpBps(value: unknown): number | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const raw = (value as Record<string, unknown>).trailingBaseRateUpBps;
+  const parsed =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^\d+$/.test(raw)
+        ? Number(raw)
+        : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 10_000) {
+    return null;
+  }
+  return parsed;
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {

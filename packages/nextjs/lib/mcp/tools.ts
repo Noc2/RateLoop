@@ -2605,7 +2605,7 @@ async function loadBountyEligibleVotes(params: {
   }
   const revealedVotes = votes.filter(vote => vote.revealed && vote.isUp !== null);
   const raterAddresses = [
-    ...new Set(revealedVotes.map(vote => normalizeHexId(vote.identityVoter ?? vote.voter))),
+    ...new Set(revealedVotes.map(vote => normalizeHexId(vote.identityHolder ?? vote.voter))),
   ].filter(Boolean);
   const statuses = new Map<string, PonderRaterParticipationStatusResponse>();
   await Promise.all(
@@ -2619,7 +2619,7 @@ async function loadBountyEligibleVotes(params: {
   );
 
   return revealedVotes.filter(vote =>
-    isRaterEligibleForBounty(mode, statuses.get(normalizeHexId(vote.identityVoter ?? vote.voter))),
+    isRaterEligibleForBounty(mode, statuses.get(normalizeHexId(vote.identityHolder ?? vote.voter))),
   );
 }
 

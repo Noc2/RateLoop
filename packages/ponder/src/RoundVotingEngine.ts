@@ -86,7 +86,6 @@ async function resolveCommitIdentityAtCommit(params: {
     return {
       identityKey: addressIdentityKey(rawVoter),
       identityHolder: rawVoter,
-      identityVoter: rawVoter,
       credentialMask: 0,
       freshCredentialMask: 0,
       hasHumanCredential: false,
@@ -119,7 +118,6 @@ async function resolveCommitIdentityAtCommit(params: {
     return {
       identityKey: nonZeroIdentityKey(identityKey, rawVoter),
       identityHolder,
-      identityVoter: identityHolder,
       credentialMask,
       freshCredentialMask,
       hasHumanCredential: (credentialMask & HUMAN_CREDENTIAL_MASK) !== 0,
@@ -128,7 +126,6 @@ async function resolveCommitIdentityAtCommit(params: {
     return {
       identityKey: addressIdentityKey(rawVoter),
       identityHolder: rawVoter,
-      identityVoter: rawVoter,
       credentialMask: 0,
       freshCredentialMask: 0,
       hasHumanCredential: false,
@@ -138,9 +135,9 @@ async function resolveCommitIdentityAtCommit(params: {
 
 function voteIdentity(voteRow: {
   voter: `0x${string}`;
-  identityVoter?: `0x${string}` | null;
+  identityHolder?: `0x${string}` | null;
 }) {
-  return voteRow.identityVoter ?? voteRow.voter;
+  return voteRow.identityHolder ?? voteRow.voter;
 }
 
 function defaultRoundConfigFields() {
@@ -641,7 +638,6 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   const {
     identityKey,
     identityHolder,
-    identityVoter,
     credentialMask,
     freshCredentialMask,
     hasHumanCredential,
@@ -734,7 +730,6 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
       voter: rawVoter,
       identityKey,
       identityHolder,
-      identityVoter,
       credentialMask,
       freshCredentialMask,
       commitKey,
@@ -785,11 +780,11 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
 
   // Update voter profile aggregate
   const existingProfile = await context.db.find(profile, {
-    address: identityVoter,
+    address: identityHolder,
   });
   if (existingProfile) {
     await context.db
-      .update(profile, { address: identityVoter })
+      .update(profile, { address: identityHolder })
       .set((row) => ({ totalVotes: row.totalVotes + 1 }));
   }
 
@@ -813,14 +808,14 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   // --- Daily streak tracking ---
   const date = new Date(Number(event.block.timestamp) * 1000);
   const dateStr = formatUtcDateKey(date);
-  const activityKey = `${identityVoter}-${dateStr}`;
+  const activityKey = `${identityHolder}-${dateStr}`;
 
   // Upsert daily activity
   await context.db
     .insert(dailyVoteActivity)
     .values({
       id: activityKey,
-      voter: identityVoter,
+      voter: identityHolder,
       date: dateStr,
       voteCount: 1,
       firstVoteAt: event.block.timestamp,
@@ -834,11 +829,11 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
 
   // Upsert voter streak
   const existingStreak = await context.db.find(voterStreak, {
-    voter: identityVoter,
+    voter: identityHolder,
   });
   if (!existingStreak) {
     await context.db.insert(voterStreak).values({
-      voter: identityVoter,
+      voter: identityHolder,
       currentDailyStreak: 1,
       bestDailyStreak: 1,
       lastActiveDate: dateStr,
@@ -848,7 +843,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   } else if (normalizeUtcDateKey(existingStreak.lastActiveDate) === dateStr) {
     // Already active today — no streak change
     if (existingStreak.lastActiveDate !== dateStr) {
-      await context.db.update(voterStreak, { voter: identityVoter }).set({
+      await context.db.update(voterStreak, { voter: identityHolder }).set({
         lastActiveDate: dateStr,
       });
     }
@@ -858,7 +853,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
   ) {
     // Consecutive day — increment streak
     const newStreak = existingStreak.currentDailyStreak + 1;
-    await context.db.update(voterStreak, { voter: identityVoter }).set({
+    await context.db.update(voterStreak, { voter: identityHolder }).set({
       currentDailyStreak: newStreak,
       bestDailyStreak: Math.max(existingStreak.bestDailyStreak, newStreak),
       lastActiveDate: dateStr,
@@ -866,7 +861,7 @@ ponder.on("RoundVotingEngine:VoteCommitted", async ({ event, context }) => {
     });
   } else {
     // Gap — reset streak to 1 (also reset milestones to match on-chain)
-    await context.db.update(voterStreak, { voter: identityVoter }).set({
+    await context.db.update(voterStreak, { voter: identityHolder }).set({
       currentDailyStreak: 1,
       lastActiveDate: dateStr,
       totalActiveDays: existingStreak.totalActiveDays + 1,
@@ -1220,12 +1215,12 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
         ? 0n
         : v.stake;
 
-    const identityVoter = voteIdentity(v);
+    const identityHolder = voteIdentity(v);
 
     await context.db
       .insert(voterStats)
       .values({
-        voter: identityVoter,
+        voter: identityHolder,
         totalSettledVotes: 1,
         totalWins: won ? 1 : 0,
         totalLosses: won ? 0 : 1,
@@ -1254,12 +1249,12 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       });
 
     if (categoryId > 0n) {
-      const catStatsId = `${identityVoter}-${categoryId}`;
+      const catStatsId = `${identityHolder}-${categoryId}`;
       await context.db
         .insert(voterCategoryStats)
         .values({
           id: catStatsId,
-          voter: identityVoter,
+          voter: identityHolder,
           categoryId,
           totalSettledVotes: 1,
           totalWins: won ? 1 : 0,

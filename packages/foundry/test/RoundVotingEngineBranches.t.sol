@@ -128,6 +128,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     uint256 public constant STAKE = 5e6; // 5 LREP
     uint256 public constant T0 = 1_000_000; // setUp warp time
     uint256 public constant EPOCH = 1 hours; // epochDuration
+    uint256 internal constant SCORE_SPREAD_TEST_REVEALS = 8;
     uint8 internal constant COMMIT_STATUS_OPEN = 0;
     uint8 internal constant COMMIT_STATUS_STARTS_NEXT_ROUND = 1;
     uint8 internal constant COMMIT_STATUS_ROUND_FULL = 2;
@@ -371,6 +372,34 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint16[3] memory upPredictions = [uint16(7_000), uint16(6_000), uint16(5_500)];
         uint16[3] memory downPredictions = [uint16(4_000), uint16(3_500), uint16(3_000)];
         return isUp ? upPredictions[index % upPredictions.length] : downPredictions[index % downPredictions.length];
+    }
+
+    function _scoreSpreadFixtureVoters() internal returns (address[] memory voters) {
+        voters = new address[](SCORE_SPREAD_TEST_REVEALS);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        voters[3] = voter4;
+        voters[4] = voter5;
+        voters[5] = voter6;
+        voters[6] = frontend1;
+        voters[7] = delegate1;
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            mockRaterIdentityRegistry.setHolder(voters[i]);
+        }
+    }
+
+    function _scoreSpreadFixtureDirections() internal pure returns (bool[] memory directions) {
+        directions = new bool[](SCORE_SPREAD_TEST_REVEALS);
+        directions[0] = true;
+        directions[1] = true;
+        directions[2] = true;
+        directions[3] = true;
+        directions[4] = true;
+        directions[5] = false;
+        directions[6] = false;
+        directions[7] = false;
     }
 
     function _revealPrediction(
@@ -1113,6 +1142,52 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(_commitRbtsScoreBps(engine, contentId, roundId, commitKeys[0]), 0, "first commit scored");
     }
 
+    function test_SettleRound_PaysCallerIncentiveFromRbtsForfeits() public {
+        uint256 contentId = _submitContent();
+
+        address[] memory voters = _scoreSpreadFixtureVoters();
+        bool[] memory directions = _scoreSpreadFixtureDirections();
+        bytes32[] memory commitKeys = new bytes32[](SCORE_SPREAD_TEST_REVEALS);
+        bytes32[] memory salts = new bytes32[](SCORE_SPREAD_TEST_REVEALS);
+
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            (commitKeys[i], salts[i]) =
+                _commitPrediction(voters[i], contentId, directions[i], _predictionBps(i, directions[i]), STAKE);
+        }
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            engine.revealVoteByCommitKey(
+                contentId, roundId, commitKeys[i], directions[i], _predictionBps(i, directions[i]), salts[i]
+            );
+        }
+
+        engine.settleRound(contentId, roundId);
+        vm.roll(block.number + 1);
+
+        uint256 keeperBefore = lrepToken.balanceOf(keeper);
+        vm.prank(keeper);
+        engine.settleRound(contentId, roundId);
+
+        uint256 grossForfeited;
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            grossForfeited += _commitRbtsForfeitedStake(engine, contentId, roundId, commitKeys[i]);
+        }
+        uint256 expectedIncentive = grossForfeited / 100;
+        if (expectedIncentive > 1e6) expectedIncentive = 1e6;
+
+        assertGt(grossForfeited, 0, "fixture creates RBTS forfeits");
+        assertEq(lrepToken.balanceOf(keeper) - keeperBefore, expectedIncentive, "caller incentive paid");
+        assertEq(
+            _roundRbtsForfeitedPool(engine, contentId, roundId),
+            grossForfeited - expectedIncentive,
+            "stored forfeits are net of caller incentive"
+        );
+    }
+
     function test_RbtsSeedRequiresBlockAfterSettlementClosure() public {
         uint256 contentId = _submitContent();
 
@@ -1140,7 +1215,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
     }
 
-    function test_RbtsExpiredSeedRefreshesAndSettlesAfterNextBlock() public {
+    function test_RbtsExpiredSeedSettlesScorelessWithoutRefresh() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1162,25 +1237,49 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.roll(seedBlock + 257);
 
         engine.settleRound(contentId, roundId);
-        vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
-        engine.settleRound(contentId, roundId);
-        RoundLib.Round memory pendingRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        assertEq(uint256(pendingRound.state), uint256(RoundLib.RoundState.Open));
-        assertFalse(_roundRbtsScored(engine, contentId, roundId), "refresh only re-captures seed");
-
-        vm.roll(block.number + 1);
-        engine.settleRound(contentId, roundId);
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "refreshed seed scores rewards");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "refreshed seed has sampler seed");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, ck1), 0, "ck1 stake returned");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, ck2), 0, "ck2 stake returned");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, ck3), 0, "ck3 stake returned");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, ck4), 0, "ck4 stake returned");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed finalizes RBTS accounting");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "expired seed has no sampler seed");
+        assertEq(_roundRbtsRewardWeight(engine, contentId, roundId), 0, "expired seed has no RBTS rewards");
+        assertEq(_roundRbtsForfeitedPool(engine, contentId, roundId), 0, "expired seed has no RBTS forfeits");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck1), 10e6, "ck1 stake returned");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck2), 3e6, "ck2 stake returned");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck3), 3e6, "ck3 stake returned");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck4), 4e6, "ck4 stake returned");
     }
 
-    function test_RbtsExpiredSeedKeepsRefreshingAfterRefreshCap() public {
+    function test_RbtsExpiredSeedScorelessSettlementPaysNoCallerIncentive() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 7_000, 4e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 7_000, s4);
+
+        uint256 seedBlock = block.number;
+        engine.settleRound(contentId, roundId);
+        vm.roll(seedBlock + 257);
+
+        uint256 keeperBefore = lrepToken.balanceOf(keeper);
+        vm.prank(keeper);
+        engine.settleRound(contentId, roundId);
+
+        assertEq(lrepToken.balanceOf(keeper), keeperBefore, "scoreless expired settlement pays no caller incentive");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed finalizes RBTS accounting");
+        assertEq(_roundRbtsForfeitedPool(engine, contentId, roundId), 0, "expired seed has no RBTS forfeits");
+    }
+
+    function test_RbtsExpiredSeedCannotBeRerolledAfterScorelessSettlement() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1198,33 +1297,21 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 7_000, s4);
 
         engine.settleRound(contentId, roundId);
-        uint256 nextExpiredSeedBlock = block.number + 257;
-        vm.roll(nextExpiredSeedBlock);
+        vm.roll(block.number + 257);
         engine.settleRound(contentId, roundId);
-        assertFalse(_roundRbtsScored(engine, contentId, roundId), "first expired seed refresh waits");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed finalizes once");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "no replacement seed captured");
 
-        nextExpiredSeedBlock += 257;
-        vm.roll(nextExpiredSeedBlock);
-        engine.settleRound(contentId, roundId);
-        assertFalse(_roundRbtsScored(engine, contentId, roundId), "second expired seed refresh waits");
-
-        nextExpiredSeedBlock += 257;
-        vm.roll(nextExpiredSeedBlock);
-        engine.settleRound(contentId, roundId);
-        assertFalse(_roundRbtsScored(engine, contentId, roundId), "third expired seed refresh waits");
-
-        vm.roll(block.number + 1);
+        vm.expectRevert(RoundVotingEngine.RoundNotOpen.selector);
         engine.settleRound(contentId, roundId);
 
         RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
         assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled));
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "post-cap refreshed seed scores rewards");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "post-cap refresh produces score seed");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, ck1), 0, "ck1 stake returned");
-        assertGt(_commitRbtsStakeReturned(engine, contentId, roundId, ck4), 0, "ck4 stake returned");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck1), 10e6, "ck1 stake returned");
+        assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck4), 4e6, "ck4 stake returned");
     }
 
-    function test_AdvisoryLaunchCreditExpiredRbtsSeedRefreshesBeforeClaim() public {
+    function test_AdvisoryLaunchCreditExpiredRbtsSeedClaimsZeroScore() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1248,23 +1335,16 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.roll(seedBlock + 257);
 
         engine.settleRound(contentId, roundId);
-        assertFalse(_roundRbtsScored(engine, contentId, roundId), "refresh waits for next block");
-
-        vm.expectRevert(AdvisoryVoteRecorder.RoundNotSettled.selector);
-        advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
-
-        vm.roll(block.number + 1);
-        engine.settleRound(contentId, roundId);
-        assertTrue(_roundRbtsScored(engine, contentId, roundId), "refreshed seed reaches RBTS accounting");
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "refreshed seed produces score seed");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed reaches RBTS accounting");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "expired seed produces no sampler seed");
 
         (uint16 claimedScoreBps, uint256 paidAmount) = advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
         (,,,,,,,, bool launchCreditClaimed, uint16 storedScoreBps) =
             advisoryRecorder.advisoryCommitCore(advisoryCommitKey);
-        assertFalse(launchCreditClaimed, "fixture has no launch pool to record credit");
+        assertTrue(launchCreditClaimed, "zero-score expired seed claim is terminal");
         assertEq(paidAmount, 0, "fixture has no launch payment");
         assertEq(claimedScoreBps, storedScoreBps, "claim returns stored score");
-        assertGt(storedScoreBps, 0, "refreshed seed stores advisory score");
+        assertEq(storedScoreBps, 0, "expired seed stores zero advisory score");
     }
 
     function test_AdvisoryLaunchCreditRevealAfterRbtsSeedCaptureRejected() public {
@@ -1293,7 +1373,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         advisoryRecorder.claimAdvisoryLaunchCredit(advisoryCommitKey);
     }
 
-    function test_RbtsExpiredSeedRefreshDoesNotUseFallbackOrSettlementEntropy() public {
+    function test_RbtsExpiredSeedDoesNotUsePrevrandaoFallback() public {
         uint256 contentId = _submitContent();
 
         (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
@@ -1315,14 +1395,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes32 settlementPrevrandao = keccak256("expired-settlement-prevrandao");
         vm.prevrandao(settlementPrevrandao);
         engine.settleRound(contentId, roundId);
-        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "refresh call does not score");
-
-        vm.roll(block.number + 1);
-        vm.recordLogs();
-        engine.settleRound(contentId, roundId);
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 capturedEntropy = _rbtsEntropyFromLogs(logs, contentId, roundId);
-        assertNotEq(capturedEntropy, settlementPrevrandao, "refreshed seed must not use prevrandao fallback");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed finalizes accounting");
+        assertEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "expired seed does not score");
 
         bytes32 revealedSetHash;
         revealedSetHash = keccak256(abi.encodePacked(revealedSetHash, ck1));
@@ -1336,7 +1410,6 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertNotEq(
             _roundRbtsScoreSeed(engine, contentId, roundId), fallbackScoreSeed, "score seed must not use fallback"
         );
-        assertNotEq(_roundRbtsScoreSeed(engine, contentId, roundId), bytes32(0), "refreshed seed has sampler seed");
     }
 
     function test_RbtsScoringSeed_UsesCapturedEntropyAndCommittedSet() public {
@@ -2969,7 +3042,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        uint256 finalDeadline = round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+        uint256 gracePeriod = ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+        // Reveal-failed finalization waits out the extended (24x) recovery grace.
+        uint256 baseDeadline = round.startTime + 7 days + gracePeriod;
+        uint256 finalDeadline = round.startTime + 7 days + gracePeriod * 24;
+
+        vm.warp(baseDeadline);
+        vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
+        engine.finalizeRevealFailedRound(contentId, roundId);
 
         vm.warp(finalDeadline - 1);
         vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
@@ -2992,6 +3072,33 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(voter1), voter1BalBefore, "late reveals are not accepted after reveal failure");
     }
 
+    /// @notice A reveal outage that outlasts the ordinary grace period must stay recoverable:
+    ///         reveals keep landing inside the extended reveal-failed grace window and the
+    ///         round settles normally once quorum is reached (design review 2026-06, finding 3).
+    function test_RevealFailedGrace_RoundRecoversWithLateRevealsAndSettles() public {
+        uint256 contentId = _submitContent();
+
+        mockRaterIdentityRegistry.setHolder(voter1);
+        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+
+        // Simulate a systemic reveal outage that outlasts the ordinary grace period.
+        vm.warp(round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, false, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+
+        engine.settleRound(contentId, roundId);
+        _settleRoundAfterRbtsSeed(contentId, roundId);
+        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled), "recovered round settles normally");
+    }
+
     function test_RevealAfterFinalRevealFailedDeadline_RevertsBeforeQuorum() public {
         uint256 contentId = _submitContent();
 
@@ -3002,7 +3109,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        uint256 finalDeadline = round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+        uint256 finalDeadline =
+            round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24;
 
         vm.warp(finalDeadline - 1);
         _reveal(contentId, roundId, ck1, true, s1);
@@ -3039,7 +3147,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertFalse(_roundHasHumanVerifiedCommit(engine, contentId, roundId));
     }
 
-    function test_RevealFailed_RefundsRevealedAndForfeitsUnrevealed() public {
+    function test_RevealFailed_RefundsRevealedAndUnrevealed() public {
         uint256 contentId = _submitContent();
 
         mockRaterIdentityRegistry.setHolder(voter1);
@@ -3052,7 +3160,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH);
         _reveal(contentId, roundId, ck1, true, s1);
 
-        uint256 finalDeadline = round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1;
+        uint256 finalDeadline =
+            round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24 + 1;
         vm.warp(finalDeadline);
         engine.finalizeRevealFailedRound(contentId, roundId);
 
@@ -3061,20 +3170,27 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         engine.claimCancelledRoundRefund(contentId, roundId);
         assertEq(lrepToken.balanceOf(voter1) - voter1BalBefore, STAKE, "revealed voters recover stake");
 
+        // Unrevealed voters cannot pull-claim; their refund arrives via the
+        // permissionless cleanup sweep below.
         vm.expectRevert(RoundVotingEngine.VoteNotRevealed.selector);
         vm.prank(voter2);
         engine.claimCancelledRoundRefund(contentId, roundId);
 
         uint256 treasuryBefore = lrepToken.balanceOf(treasury);
         uint256 keeperBefore = lrepToken.balanceOf(keeper);
+        uint256 voter2Before = lrepToken.balanceOf(voter2);
+        uint256 voter3Before = lrepToken.balanceOf(voter3);
         vm.prank(keeper);
         engine.processUnrevealedVotes(contentId, roundId, 0, 0);
-        uint256 treasuryAfter = lrepToken.balanceOf(treasury);
-        uint256 keeperAfter = lrepToken.balanceOf(keeper);
-        uint256 incentive = (STAKE * 2) / 100;
         assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0, "cleanup queue clears");
-        assertEq(keeperAfter - keeperBefore, incentive, "cleanup caller receives 1% incentive");
-        assertEq(treasuryAfter - treasuryBefore, STAKE * 2 - incentive, "remaining stakes forfeit");
+        assertEq(
+            lrepToken.balanceOf(voter2) - voter2Before, STAKE, "unrevealed stake refunds on systemic reveal failure"
+        );
+        assertEq(
+            lrepToken.balanceOf(voter3) - voter3Before, STAKE, "unrevealed stake refunds on systemic reveal failure"
+        );
+        assertEq(lrepToken.balanceOf(treasury), treasuryBefore, "nothing forfeits to treasury");
+        assertEq(lrepToken.balanceOf(keeper), keeperBefore, "no forfeit means no cleanup incentive");
     }
 
     function test_CommitAfterRevealFailedGrace_StartsNewRound() public {
@@ -3088,7 +3204,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        vm.warp(round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1);
+        // The extended (24x) reveal-failed recovery grace must elapse first.
+        vm.warp(round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24 + 1);
 
         _commit(voter4, contentId, true, STAKE);
 

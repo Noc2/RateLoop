@@ -40,7 +40,7 @@ interface IFrontendRegistry {
     function getAccumulatedFees(address frontend) external view returns (uint256 lrepFees);
 
     /// @notice Whether a registered frontend can receive historical fees right now.
-    /// @dev Mirrors the `claimFees` eligibility (active operator, fully bonded, not slashed,
+    /// @dev Mirrors the `requestFeeWithdrawal` eligibility (active operator, fully bonded, not slashed,
     ///      not mid-unbonding, active human credential). Does NOT verify the frontend was registered
     ///      at the time the round settled; use `canClaimFeesForRound` for that round-time
     ///      guard.

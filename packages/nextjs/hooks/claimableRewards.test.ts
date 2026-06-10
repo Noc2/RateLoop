@@ -75,6 +75,11 @@ test("sortClaimableRewardItems keeps frontend round credits ahead of the final f
       claimType: "frontend_registry_fee",
     },
     {
+      frontend: "0x3000000000000000000000000000000000000000",
+      reward: 7n,
+      claimType: "frontend_registry_withdrawal",
+    },
+    {
       contentId: 8n,
       roundId: 2n,
       frontend: "0x3000000000000000000000000000000000000000",
@@ -120,6 +125,13 @@ test("sortClaimableRewardItems keeps frontend round credits ahead of the final f
       frontend: "0x3000000000000000000000000000000000000000",
       reward: 3n,
       claimType: "frontend_round_fee",
+    },
+    // The matured-withdrawal completion frees the single pending slot before the
+    // new withdrawal request runs.
+    {
+      frontend: "0x3000000000000000000000000000000000000000",
+      reward: 7n,
+      claimType: "frontend_registry_withdrawal",
     },
     {
       frontend: "0x3000000000000000000000000000000000000000",

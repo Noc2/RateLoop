@@ -112,6 +112,8 @@ describe("claimConfiguredFrontendFees", () => {
       roundsClaimed: 0,
       withdrawals: 0,
       withdrawnAmount: 0n,
+      withdrawalRequests: 0,
+      requestedAmount: 0n,
     });
     expect(publicClient.readContract).not.toHaveBeenCalled();
   });
@@ -136,6 +138,8 @@ describe("claimConfiguredFrontendFees", () => {
       roundsClaimed: 0,
       withdrawals: 0,
       withdrawnAmount: 0n,
+      withdrawalRequests: 0,
+      requestedAmount: 0n,
     });
     expect(logger.warn).toHaveBeenCalledWith(
       "Skipping frontend fee sweep because keeper wallet is not the configured frontend operator",
@@ -147,7 +151,7 @@ describe("claimConfiguredFrontendFees", () => {
     expect(publicClient.readContract).not.toHaveBeenCalled();
   });
 
-  it("claims settled frontend fees and withdraws accumulated credits", async () => {
+  it("claims settled frontend fees and requests a delayed withdrawal for accumulated credits", async () => {
     const logger = makeLogger();
     const publicClient = {
       readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
@@ -156,6 +160,8 @@ describe("claimConfiguredFrontendFees", () => {
             return 2n;
           case "previewFrontendFee":
             return [15n, 0, ACCOUNT, false] as const;
+          case "pendingFeeWithdrawalAmount":
+            return 0n;
           case "getAccumulatedFees":
             return 15n;
           default:
@@ -184,8 +190,10 @@ describe("claimConfiguredFrontendFees", () => {
     expect(result).toEqual({
       frontendAddress: ACCOUNT,
       roundsClaimed: 1,
-      withdrawals: 1,
-      withdrawnAmount: 15n,
+      withdrawals: 0,
+      withdrawnAmount: 0n,
+      withdrawalRequests: 1,
+      requestedAmount: 15n,
     });
     expect(writeContractAndConfirm).toHaveBeenNthCalledWith(
       1,
@@ -203,10 +211,129 @@ describe("claimConfiguredFrontendFees", () => {
       {},
       expect.objectContaining({
         address: FRONTEND_REGISTRY,
-        functionName: "claimFees",
+        functionName: "requestFeeWithdrawal",
         args: [],
       }),
     );
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("completes a matured pending withdrawal and requests the next one", async () => {
+    const logger = makeLogger();
+    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const publicClient = {
+      readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
+        switch (functionName) {
+          case "nextContentId":
+            return 2n;
+          case "previewFrontendFee":
+            return [0n, 0, ACCOUNT, true] as const;
+          case "pendingFeeWithdrawalAmount":
+            return 20n;
+          case "pendingFeeWithdrawalReleaseAt":
+            return nowSeconds - 10n;
+          case "getAccumulatedFees":
+            return 5n;
+          default:
+            throw new Error(`Unexpected readContract(${functionName})`);
+        }
+      }),
+    };
+
+    readCurrentRoundIds.mockResolvedValue({
+      activeRoundId: 0n,
+      latestRoundId: 1n,
+    });
+    readRound.mockResolvedValue({
+      state: 1,
+    });
+    writeContractAndConfirm.mockResolvedValue("0xabc");
+
+    const result = await claimConfiguredFrontendFees(
+      publicClient as never,
+      {} as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger as never,
+    );
+
+    expect(result).toEqual({
+      frontendAddress: ACCOUNT,
+      roundsClaimed: 0,
+      withdrawals: 1,
+      withdrawnAmount: 20n,
+      withdrawalRequests: 1,
+      requestedAmount: 5n,
+    });
+    expect(writeContractAndConfirm).toHaveBeenNthCalledWith(
+      1,
+      publicClient,
+      {},
+      expect.objectContaining({
+        address: FRONTEND_REGISTRY,
+        functionName: "completeFeeWithdrawal",
+        args: [],
+      }),
+    );
+    expect(writeContractAndConfirm).toHaveBeenNthCalledWith(
+      2,
+      publicClient,
+      {},
+      expect.objectContaining({
+        address: FRONTEND_REGISTRY,
+        functionName: "requestFeeWithdrawal",
+        args: [],
+      }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("waits for the withdrawal delay before completing a pending withdrawal", async () => {
+    const logger = makeLogger();
+    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const publicClient = {
+      readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
+        switch (functionName) {
+          case "nextContentId":
+            return 2n;
+          case "previewFrontendFee":
+            return [0n, 0, ACCOUNT, true] as const;
+          case "pendingFeeWithdrawalAmount":
+            return 20n;
+          case "pendingFeeWithdrawalReleaseAt":
+            return nowSeconds + 3600n;
+          default:
+            throw new Error(`Unexpected readContract(${functionName})`);
+        }
+      }),
+    };
+
+    readCurrentRoundIds.mockResolvedValue({
+      activeRoundId: 0n,
+      latestRoundId: 1n,
+    });
+    readRound.mockResolvedValue({
+      state: 1,
+    });
+    writeContractAndConfirm.mockResolvedValue("0xabc");
+
+    const result = await claimConfiguredFrontendFees(
+      publicClient as never,
+      {} as never,
+      { id: 31337 } as never,
+      { address: ACCOUNT } as never,
+      logger as never,
+    );
+
+    expect(result).toEqual({
+      frontendAddress: ACCOUNT,
+      roundsClaimed: 0,
+      withdrawals: 0,
+      withdrawnAmount: 0n,
+      withdrawalRequests: 0,
+      requestedAmount: 0n,
+    });
+    expect(writeContractAndConfirm).not.toHaveBeenCalled();
     expect(logger.warn).not.toHaveBeenCalled();
   });
 

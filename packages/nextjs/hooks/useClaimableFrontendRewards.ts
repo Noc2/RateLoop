@@ -100,6 +100,36 @@ export function useClaimableFrontendRewards() {
     },
   });
 
+  const {
+    data: pendingFeeWithdrawal,
+    isLoading: pendingFeeWithdrawalLoading,
+    refetch: refetchPendingFeeWithdrawal,
+  } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "pendingFeeWithdrawalAmount",
+    args: [address],
+    query: {
+      enabled: !!address && isRegistered,
+      staleTime: 30_000,
+      refetchInterval: isPageVisible ? 60_000 : false,
+    },
+  });
+
+  const {
+    data: pendingFeeWithdrawalReleaseAt,
+    isLoading: pendingFeeWithdrawalReleaseAtLoading,
+    refetch: refetchPendingFeeWithdrawalReleaseAt,
+  } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "pendingFeeWithdrawalReleaseAt",
+    args: [address],
+    query: {
+      enabled: !!address && isRegistered,
+      staleTime: 30_000,
+      refetchInterval: isPageVisible ? 60_000 : false,
+    },
+  });
+
   const frontendAddress = address?.toLowerCase() as `0x${string}` | undefined;
   const roundFeesQuery = useQuery({
     queryKey: getClaimableFrontendRewardsQueryKey(frontendAddress, targetNetwork.id),
@@ -140,8 +170,25 @@ export function useClaimableFrontendRewards() {
     }
 
     const items = [...roundFeeItems];
+    const pendingAmount = pendingFeeWithdrawal ?? 0n;
+    const pendingReleaseAt = pendingFeeWithdrawalReleaseAt ?? 0n;
+    const nowSeconds = BigInt(Math.floor(Date.now() / 1000));
+    const pendingMatured = pendingAmount > 0n && pendingReleaseAt <= nowSeconds;
+
+    if (canWithdrawFees && pendingMatured) {
+      items.push({
+        frontend: frontendAddress,
+        reward: pendingAmount,
+        claimType: "frontend_registry_withdrawal",
+      } satisfies ClaimableRewardItem);
+    }
+
+    // A new withdrawal request only succeeds once the pending bucket is empty —
+    // either there is none, or the matured one above is completed first in the
+    // same claim run.
+    const requestSlotFree = pendingAmount === 0n || pendingMatured;
     const withdrawableFees = canWithdrawFees ? (accumulatedFees ?? 0n) : 0n;
-    if (canWithdrawFees && (withdrawableFees > 0n || roundFeeItems.length > 0)) {
+    if (canWithdrawFees && requestSlotFree && (withdrawableFees > 0n || roundFeeItems.length > 0)) {
       items.push({
         frontend: frontendAddress,
         reward: withdrawableFees,
@@ -150,7 +197,14 @@ export function useClaimableFrontendRewards() {
     }
 
     return items;
-  }, [accumulatedFees, canWithdrawFees, frontendAddress, roundFeeItems]);
+  }, [
+    accumulatedFees,
+    canWithdrawFees,
+    frontendAddress,
+    pendingFeeWithdrawal,
+    pendingFeeWithdrawalReleaseAt,
+    roundFeeItems,
+  ]);
 
   const totalClaimable = useMemo(() => claimableItems.reduce((sum, item) => sum + item.reward, 0n), [claimableItems]);
 
@@ -158,6 +212,8 @@ export function useClaimableFrontendRewards() {
     refetchFrontendInfo();
     refetchExitAvailableAt();
     refetchAccumulatedFees();
+    refetchPendingFeeWithdrawal();
+    refetchPendingFeeWithdrawalReleaseAt();
     if (frontendAddress && canCreditRoundFees) {
       void roundFeesQuery.refetch();
     }
@@ -167,6 +223,8 @@ export function useClaimableFrontendRewards() {
     refetchAccumulatedFees,
     refetchExitAvailableAt,
     refetchFrontendInfo,
+    refetchPendingFeeWithdrawal,
+    refetchPendingFeeWithdrawalReleaseAt,
     roundFeesQuery,
   ]);
 
@@ -177,6 +235,8 @@ export function useClaimableFrontendRewards() {
       frontendInfoLoading ||
       exitAvailableAtLoading ||
       accumulatedFeesLoading ||
+      pendingFeeWithdrawalLoading ||
+      pendingFeeWithdrawalReleaseAtLoading ||
       (canCreditRoundFees && roundFeesQuery.isLoading),
     refetch,
   };

@@ -91,6 +91,7 @@ export function FrontendRegistration() {
   const [isDeregistering, setIsDeregistering] = useState(false);
   const [isCompletingDeregister, setIsCompletingDeregister] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
+  const [isCompletingWithdrawal, setIsCompletingWithdrawal] = useState(false);
   const [isClaimingAllRoundFees, setIsClaimingAllRoundFees] = useState(false);
   const [snapshotProposerInput, setSnapshotProposerInput] = useState("");
   const [isSettingSnapshotProposer, setIsSettingSnapshotProposer] = useState(false);
@@ -124,6 +125,19 @@ export function FrontendRegistration() {
   const { data: accumulatedFees, refetch: refetchFees } = useScaffoldReadContract({
     contractName: "FrontendRegistry",
     functionName: "getAccumulatedFees",
+    args: [address],
+  });
+
+  // Read the delayed-withdrawal bucket (requested fees stay slashable until release)
+  const { data: pendingWithdrawalAmountRaw, refetch: refetchPendingWithdrawal } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "pendingFeeWithdrawalAmount",
+    args: [address],
+  });
+
+  const { data: pendingWithdrawalReleaseAtRaw, refetch: refetchPendingWithdrawalReleaseAt } = useScaffoldReadContract({
+    contractName: "FrontendRegistry",
+    functionName: "pendingFeeWithdrawalReleaseAt",
     args: [address],
   });
 
@@ -175,6 +189,13 @@ export function FrontendRegistration() {
   // Parse fees (LREP only)
   const lrepFees = accumulatedFees ? Number(accumulatedFees) / 1e6 : 0;
   const hasFees = lrepFees > 0;
+  const pendingWithdrawalLrep = pendingWithdrawalAmountRaw ? Number(pendingWithdrawalAmountRaw) / 1e6 : 0;
+  const hasPendingWithdrawal = pendingWithdrawalLrep > 0;
+  const pendingWithdrawalReleaseAt = pendingWithdrawalReleaseAtRaw ? Number(pendingWithdrawalReleaseAtRaw) : 0;
+  const pendingWithdrawalMatured = hasPendingWithdrawal && nowMs >= pendingWithdrawalReleaseAt * 1000;
+  const pendingWithdrawalReleaseLabel = hasPendingWithdrawal
+    ? new Date(pendingWithdrawalReleaseAt * 1000).toLocaleString()
+    : "";
 
   // LREP balance
   const lrepFormatted = lrepBalance ? Number(lrepBalance) / 1e6 : 0;
@@ -352,8 +373,8 @@ export function FrontendRegistration() {
     }
   };
 
-  const handleClaimFees = async () => {
-    if (!address || !hasFees || !frontendRegistryInfo || !frontendRegistryAddress) return;
+  const handleRequestFeeWithdrawal = async () => {
+    if (!address || !hasFees || hasPendingWithdrawal || !frontendRegistryInfo || !frontendRegistryAddress) return;
     if (!ensureGasBalance()) return;
 
     setIsClaiming(true);
@@ -363,23 +384,58 @@ export function FrontendRegistration() {
           {
             abi: frontendRegistryInfo.abi,
             address: frontendRegistryAddress,
-            functionName: "claimFees",
+            functionName: "requestFeeWithdrawal",
           },
         ]);
       } else {
         await writeFrontendRegistry({
-          functionName: "claimFees",
+          functionName: "requestFeeWithdrawal",
         });
       }
 
-      notification.success(`Claimed ${lrepFees.toFixed(2)} LREP!`);
-      await refreshWalletBalances(address);
+      notification.success(
+        `Withdrawal of ${lrepFees.toFixed(2)} LREP requested. It unlocks after the 14-day review window.`,
+      );
       refetchFees();
+      refetchPendingWithdrawal();
+      refetchPendingWithdrawalReleaseAt();
     } catch (e: any) {
-      console.error("Claim failed:", e);
-      notifyTransactionError(e, "Failed to claim fees");
+      console.error("Withdrawal request failed:", e);
+      notifyTransactionError(e, "Failed to request fee withdrawal");
     } finally {
       setIsClaiming(false);
+    }
+  };
+
+  const handleCompleteFeeWithdrawal = async () => {
+    if (!address || !pendingWithdrawalMatured || !frontendRegistryInfo || !frontendRegistryAddress) return;
+    if (!ensureGasBalance()) return;
+
+    setIsCompletingWithdrawal(true);
+    try {
+      if (canUseSponsoredSubmitCalls) {
+        await executeSponsoredCalls([
+          {
+            abi: frontendRegistryInfo.abi,
+            address: frontendRegistryAddress,
+            functionName: "completeFeeWithdrawal",
+          },
+        ]);
+      } else {
+        await writeFrontendRegistry({
+          functionName: "completeFeeWithdrawal",
+        });
+      }
+
+      notification.success(`Withdrew ${pendingWithdrawalLrep.toFixed(2)} LREP!`);
+      await refreshWalletBalances(address);
+      refetchPendingWithdrawal();
+      refetchPendingWithdrawalReleaseAt();
+    } catch (e: any) {
+      console.error("Withdrawal failed:", e);
+      notifyTransactionError(e, "Failed to complete fee withdrawal");
+    } finally {
+      setIsCompletingWithdrawal(false);
     }
   };
 
@@ -859,15 +915,49 @@ export function FrontendRegistration() {
               <GradientActionButton
                 className="min-w-24"
                 size="sm"
-                onClick={handleClaimFees}
+                onClick={handleRequestFeeWithdrawal}
                 motion={getGradientActionMotion(isClaiming || isAwaitingSponsoredSubmitCalls)}
                 disabled={
-                  isClaiming || isAwaitingSponsoredSubmitCalls || isMissingGasBalance || !hasFees || isExitPending
+                  isClaiming ||
+                  isAwaitingSponsoredSubmitCalls ||
+                  isMissingGasBalance ||
+                  !hasFees ||
+                  hasPendingWithdrawal ||
+                  isExitPending
                 }
               >
-                {isClaiming ? <span className="loading loading-spinner loading-xs" /> : "Claim"}
+                {isClaiming ? <span className="loading loading-spinner loading-xs" /> : "Start withdrawal"}
               </GradientActionButton>
             </div>
+            <p className="text-sm text-base-content/50 mt-2">
+              Withdrawals unlock after a 14-day review window and stay slashable until then.
+            </p>
+            {hasPendingWithdrawal && (
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-base-300">
+                <div>
+                  <p className="text-base text-base-content/60">Pending withdrawal</p>
+                  <p className="text-lg font-bold text-primary">{pendingWithdrawalLrep.toFixed(2)}</p>
+                  <p className="text-sm text-base-content/50">
+                    {pendingWithdrawalMatured ? "Ready to withdraw" : `Unlocks ${pendingWithdrawalReleaseLabel}`}
+                  </p>
+                </div>
+                <GradientActionButton
+                  className="min-w-24"
+                  size="sm"
+                  onClick={handleCompleteFeeWithdrawal}
+                  motion={getGradientActionMotion(isCompletingWithdrawal || isAwaitingSponsoredSubmitCalls)}
+                  disabled={
+                    isCompletingWithdrawal ||
+                    isAwaitingSponsoredSubmitCalls ||
+                    isMissingGasBalance ||
+                    !pendingWithdrawalMatured ||
+                    isExitPending
+                  }
+                >
+                  {isCompletingWithdrawal ? <span className="loading loading-spinner loading-xs" /> : "Withdraw"}
+                </GradientActionButton>
+              </div>
+            )}
             {isExitPending && (
               <p className="text-sm text-base-content/50 mt-2">Fee withdrawals stay locked until exit is completed.</p>
             )}

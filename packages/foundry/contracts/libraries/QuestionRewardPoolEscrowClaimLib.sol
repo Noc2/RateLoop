@@ -46,6 +46,10 @@ struct WeightedShareInputs {
 
 library QuestionRewardPoolEscrowClaimLib {
     uint256 private constant BASE_CLAIM_WEIGHT_BPS = 10_000;
+    // Upper bound for surprise-weighted leaf base weights in cluster snapshots
+    // (baseWeightFloorBps + baseWeightBonusBps * surpriseCapBps / 10_000 with the
+    // defaults in docs/surprise-weighted-bounty-weights.md).
+    uint256 private constant MAX_CLAIM_WEIGHT_BPS = 20_000;
 
     function nextEqualShare(uint256 totalAmount, uint256 eligibleVoters, uint256 claimedCount)
         external
@@ -627,12 +631,16 @@ library QuestionRewardPoolEscrowClaimLib {
         bytes32 expectedSnapshotDigest,
         uint256 expectedTotalClaimWeight
     ) private view returns (uint256) {
+        // Cluster-snapshot leaves carry a surprise-weighted base weight in
+        // [10_000, 20_000] bps per docs/surprise-weighted-bounty-weights.md; non-snapshot
+        // rounds keep the flat equal-share path (`_roundClaimWeight` returning exactly
+        // BASE_CLAIM_WEIGHT_BPS).
         require(
             payoutWeight.domain == payoutDomain && payoutWeight.rewardPoolId == rewardPoolId
                 && payoutWeight.contentId == rewardPool.contentId && payoutWeight.roundId == roundId
                 && payoutWeight.commitKey == commitKey && payoutWeight.identityKey == identityKey
-                && payoutWeight.account == rewardRecipient && payoutWeight.baseWeight == baseClaimWeight
-                && payoutWeight.effectiveWeight > 0,
+                && payoutWeight.account == rewardRecipient && payoutWeight.baseWeight >= baseClaimWeight
+                && payoutWeight.baseWeight <= MAX_CLAIM_WEIGHT_BPS && payoutWeight.effectiveWeight > 0,
             "Invalid cluster proof"
         );
         address oracle = rewardPoolClusterPayoutOracle[rewardPool.id];

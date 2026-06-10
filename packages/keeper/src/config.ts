@@ -517,6 +517,23 @@ function loadConfig() {
     // Keeper behavior
     intervalMs: readPositiveIntEnv("KEEPER_INTERVAL_MS", "30000", errors),
     ponderBaseUrl,
+    keeperWorkDiscovery: {
+      enabled: parseBooleanEnv(
+        readEnv("KEEPER_WORK_DISCOVERY_PONDER_ENABLED"),
+        true,
+        "KEEPER_WORK_DISCOVERY_PONDER_ENABLED",
+      ),
+      reconciliationEveryTicks: readPositiveIntEnv(
+        "KEEPER_WORK_DISCOVERY_RECONCILE_EVERY_TICKS",
+        "120",
+        errors,
+      ),
+      maxCandidates: readPositiveIntEnv(
+        "KEEPER_WORK_DISCOVERY_MAX_CANDIDATES",
+        "500",
+        errors,
+      ),
+    },
     persistence: {
       databaseUrl: keeperDatabaseUrl ?? null,
     },
@@ -528,6 +545,14 @@ function loadConfig() {
     cleanupBatchSize: readPositiveIntEnv(
       "KEEPER_CLEANUP_BATCH_SIZE",
       "25",
+      errors,
+    ),
+    // How far back (in blocks) the eth_getLogs ciphertext fallback may scan when Ponder
+    // is unavailable. Default covers ~7 days at 2s blocks; raise it for deployments that
+    // configure round durations longer than that.
+    logFallbackLookbackBlocks: readPositiveIntEnv(
+      "KEEPER_LOG_FALLBACK_LOOKBACK_BLOCKS",
+      "300000",
       errors,
     ),
 

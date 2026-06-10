@@ -11,6 +11,7 @@ import { registerContentRoutes } from "./routes/content-routes.js";
 import { registerCorrelationRoutes } from "./routes/correlation-routes.js";
 import { registerDataRoutes } from "./routes/data-routes.js";
 import { registerDiscoveryRoutes } from "./routes/discovery-routes.js";
+import { registerKeeperRoutes } from "./routes/keeper-routes.js";
 import { registerLeaderboardRoutes } from "./routes/leaderboard-routes.js";
 
 const app = new Hono();
@@ -120,6 +121,7 @@ app.use(
 registerContentRoutes(app);
 registerCorrelationRoutes(app);
 registerDiscoveryRoutes(app);
+registerKeeperRoutes(app);
 registerLeaderboardRoutes(app);
 registerDataRoutes(app);
 

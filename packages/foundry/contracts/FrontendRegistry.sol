@@ -36,6 +36,14 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     uint256 public constant MAX_FEE_CREDIT = 50_000e6;
     /// @notice Maximum bytes allowed in a slashing reason.
     uint256 public constant MAX_SLASH_REASON_LENGTH = 280;
+
+    /// @notice Fixed share of confiscated stake and fees routed to the successful challenger
+    ///         when governance slashes through `slashFrontendWithBounty`.
+    /// @dev Intentionally below 100% so a misbehaving proposer cannot recover its own
+    ///      collateral by challenging itself through a fresh wallet: even with a sock puppet
+    ///      named as recipient, at least half of the confiscated value is still lost.
+    uint16 public constant CHALLENGER_BOUNTY_BPS = 5000;
+    uint16 internal constant BPS_DENOMINATOR = 10_000;
     bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
 
     /// @notice Fixed LREP stake required for frontend registration (1,000 LREP with 6 decimals)
@@ -43,6 +51,12 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
 
     /// @notice Slashable cooldown before a frontend can complete a voluntary exit.
     uint256 public constant UNBONDING_PERIOD = 14 days;
+
+    /// @notice Delay between requesting a fee withdrawal and the LREP leaving the registry.
+    /// @dev Accrued fees stay slashable for the same review window as a voluntary exit, so the
+    ///      operator's fee stream acts as collateral that grows with usage and backs optimistic
+    ///      payout-root proposals without requiring per-snapshot bonds.
+    uint256 public constant FEE_WITHDRAWAL_DELAY = 14 days;
 
     // --- Structs ---
     struct Frontend {
@@ -76,8 +90,14 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @notice Fee creditor => voting engine snapshot captured when governance authorizes it.
     mapping(address => address) public feeCreditorVotingEngine;
 
+    /// @notice LREP fees moved out of `lrepFees` by `requestFeeWithdrawal`, still slashable
+    ///         until the matching release timestamp passes.
+    mapping(address => uint256) public pendingFeeWithdrawalAmount;
+    /// @notice Timestamp at which a pending fee withdrawal can be completed.
+    mapping(address => uint256) public pendingFeeWithdrawalReleaseAt;
+
     /// @dev Reserved storage gap for future upgrades
-    uint256[41] private __gap;
+    uint256[39] private __gap;
 
     // --- Events ---
     event FrontendRegistered(address indexed frontend, address indexed operator, uint256 stakedAmount);
@@ -88,7 +108,9 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event FrontendStakeToppedUp(address indexed frontend, uint256 amount, uint256 newStakedAmount);
     event FeesCredited(address indexed frontend, uint256 lrepAmount);
     event FeesClaimed(address indexed frontend, uint256 lrepAmount);
+    event FeeWithdrawalRequested(address indexed frontend, uint256 lrepAmount, uint256 releaseAt);
     event FeesConfiscated(address indexed frontend, uint256 lrepAmount);
+    event ChallengerBountyPaid(address indexed frontend, address indexed recipient, uint256 lrepAmount);
     event VotingEngineUpdated(address votingEngine);
     event SnapshotProposerUpdated(
         address indexed frontend, address indexed previousProposer, address indexed newProposer
@@ -147,7 +169,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     /// @inheritdoc IFrontendRegistry
     /// @dev A frontend mid-unbonding (`frontendExitAvailableAt != 0`) cannot receive newly
     ///      claimed historical fees. The unbonding window is the slashing review period; the
-    ///      main `claimFees` path enforces this guard, so historical-fee resolution must
+    ///      main `requestFeeWithdrawal` path enforces this guard, so historical-fee resolution must
     ///      mirror it. Without the check, bounty-side fee routing (which calls this view via
     ///      `_resolveFrontendRewardRecipient`) would leak fees to the operator EOA mid-window.
     function canReceiveHistoricalFees(address frontend) public view override returns (bool) {
@@ -266,10 +288,12 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         require(block.timestamp >= availableAt, "Unbonding period active");
 
         uint256 refund = uint256(f.stakedAmount);
-        uint256 pendingFees = uint256(f.lrepFees);
+        uint256 pendingFees = uint256(f.lrepFees) + pendingFeeWithdrawalAmount[msg.sender];
         f.stakedAmount = 0;
         f.lrepFees = 0;
         f.operator = address(0); // Allow re-registration
+        delete pendingFeeWithdrawalAmount[msg.sender];
+        delete pendingFeeWithdrawalReleaseAt[msg.sender];
         delete frontendExitAvailableAt[msg.sender];
         _removeRegisteredFrontend(msg.sender);
 
@@ -284,19 +308,46 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         emit FrontendDeregistered(msg.sender);
     }
 
-    /// @notice Claim accumulated LREP fees
-    function claimFees() external nonReentrant {
+    /// @notice Start a delayed withdrawal of accumulated LREP fees.
+    /// @dev The amount stays in the registry and remains fully slashable until
+    ///      `FEE_WITHDRAWAL_DELAY` elapses, so an operator cannot drain the fee buffer ahead of
+    ///      a slashing review. One pending withdrawal per frontend; complete it before
+    ///      requesting the next.
+    function requestFeeWithdrawal() external nonReentrant {
         Frontend storage f = frontends[msg.sender];
         require(f.operator != address(0), "Not registered");
         require(!f.slashed, "Frontend is slashed");
         if (frontendExitAvailableAt[msg.sender] != 0) revert FrontendExitPending();
         require(uint256(f.stakedAmount) >= STAKE_AMOUNT, "Frontend is underbonded");
+        require(pendingFeeWithdrawalAmount[msg.sender] == 0, "Withdrawal already pending");
 
         uint256 lrepAmount = uint256(f.lrepFees);
 
         require(lrepAmount > 0, "No fees to claim");
 
         f.lrepFees = 0;
+        pendingFeeWithdrawalAmount[msg.sender] = lrepAmount;
+        uint256 releaseAt = block.timestamp + FEE_WITHDRAWAL_DELAY;
+        pendingFeeWithdrawalReleaseAt[msg.sender] = releaseAt;
+
+        emit FeeWithdrawalRequested(msg.sender, lrepAmount, releaseAt);
+    }
+
+    /// @notice Complete a matured fee withdrawal.
+    /// @dev Mid-exit completion is intentionally blocked: `completeDeregister` sweeps the
+    ///      pending bucket together with stake and fees after its own review window.
+    function completeFeeWithdrawal() external nonReentrant {
+        Frontend storage f = frontends[msg.sender];
+        require(f.operator != address(0), "Not registered");
+        require(!f.slashed, "Frontend is slashed");
+        if (frontendExitAvailableAt[msg.sender] != 0) revert FrontendExitPending();
+
+        uint256 lrepAmount = pendingFeeWithdrawalAmount[msg.sender];
+        require(lrepAmount > 0, "No pending withdrawal");
+        require(block.timestamp >= pendingFeeWithdrawalReleaseAt[msg.sender], "Withdrawal delay active");
+
+        pendingFeeWithdrawalAmount[msg.sender] = 0;
+        pendingFeeWithdrawalReleaseAt[msg.sender] = 0;
 
         lrepToken.safeTransfer(msg.sender, lrepAmount);
 
@@ -383,14 +434,44 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         nonReentrant
         onlyRole(GOVERNANCE_ROLE)
     {
+        _slashFrontend(frontend, amount, reason, address(0));
+    }
+
+    /// @notice Slash a frontend and route `CHALLENGER_BOUNTY_BPS` of everything confiscated
+    ///         (stake cut, accrued fees, pending withdrawals) to the successful challenger.
+    /// @dev Governance policy: `bountyRecipient` must be the recorded challenger of the
+    ///      rejected ClusterPayoutOracle snapshot that triggered the slash — the match is
+    ///      verifiable on-chain against the oracle's stored proposal. The remainder goes to
+    ///      `confiscationRecipient` as in a plain slash.
+    /// @param frontend The frontend address to slash
+    /// @param amount Amount of LREP to slash
+    /// @param reason Reason for the slash
+    /// @param bountyRecipient The challenger receiving the fixed bounty share
+    function slashFrontendWithBounty(
+        address frontend,
+        uint256 amount,
+        string calldata reason,
+        address bountyRecipient
+    ) external nonReentrant onlyRole(GOVERNANCE_ROLE) {
+        require(bountyRecipient != address(0), "Invalid bounty recipient");
+        require(bountyRecipient != frontend, "Bounty recipient is frontend");
+        require(bountyRecipient != snapshotProposerForFrontend[frontend], "Bounty recipient is proposer");
+        _slashFrontend(frontend, amount, reason, bountyRecipient);
+    }
+
+    function _slashFrontend(address frontend, uint256 amount, string calldata reason, address bountyRecipient)
+        internal
+    {
         require(bytes(reason).length <= MAX_SLASH_REASON_LENGTH, "Slash reason too long");
         Frontend storage f = frontends[frontend];
         require(f.operator != address(0), "Frontend not registered");
         require(uint256(f.stakedAmount) >= amount, "Slash exceeds stake");
 
-        uint256 confiscatedFees = uint256(f.lrepFees);
+        uint256 confiscatedFees = uint256(f.lrepFees) + pendingFeeWithdrawalAmount[frontend];
         f.stakedAmount -= amount.toUint64();
         f.lrepFees = 0;
+        delete pendingFeeWithdrawalAmount[frontend];
+        delete pendingFeeWithdrawalReleaseAt[frontend];
         f.slashed = true;
         _clearSnapshotProposer(frontend);
 
@@ -404,12 +485,25 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         }
 
         uint256 totalConfiscated = amount + confiscatedFees;
+        uint256 bountyAmount;
         if (totalConfiscated > 0) {
-            lrepToken.safeTransfer(confiscationRecipient, totalConfiscated);
+            if (bountyRecipient != address(0)) {
+                bountyAmount = (totalConfiscated * CHALLENGER_BOUNTY_BPS) / BPS_DENOMINATOR;
+                if (bountyAmount > 0) {
+                    lrepToken.safeTransfer(bountyRecipient, bountyAmount);
+                }
+            }
+            uint256 remainder = totalConfiscated - bountyAmount;
+            if (remainder > 0) {
+                lrepToken.safeTransfer(confiscationRecipient, remainder);
+            }
         }
 
         if (confiscatedFees > 0) {
             emit FeesConfiscated(frontend, confiscatedFees);
+        }
+        if (bountyAmount > 0) {
+            emit ChallengerBountyPaid(frontend, bountyRecipient, bountyAmount);
         }
 
         emit FrontendSlashed(frontend, amount, reason);
