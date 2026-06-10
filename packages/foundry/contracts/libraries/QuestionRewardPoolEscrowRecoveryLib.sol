@@ -107,7 +107,6 @@ library QuestionRewardPoolEscrowRecoveryLib {
             rewardPool.nextRoundToEvaluate = uint64(roundId);
         }
         reopenedRecoveredRound[rewardPoolId][roundId] = true;
-        rejectedRecoveredRound[rewardPoolId][roundId] = false;
 
         emit RecoveredSnapshotRoundReopened(rewardPoolId, rewardPool.contentId, roundId, newSnapshot.weightRoot);
     }

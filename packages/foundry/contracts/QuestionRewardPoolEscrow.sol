@@ -96,12 +96,12 @@ contract QuestionRewardPoolEscrow is
     mapping(uint256 => address) private rewardPoolClusterPayoutOracle;
     mapping(uint256 => mapping(uint256 => uint256)) private bundleQuestionTerminalSyncCursor;
     // FE-1 (audit 2026-05-20-followup): track rounds whose finalized snapshot was rejected and
-    // whose allocation was returned via `recoverRejectedSnapshotRound`. Required so the admin
+    // whose allocation was returned via `recoverRejectedSnapshotRound`. Required so any caller
     // can later reopen the round for requalification once the oracle finalizes a NEW snapshot
     // with a different `weightRoot`. Without this, honest voters of the rejected round are
     // permanently locked out because `nextRoundToEvaluate` is advanced past `roundId`.
     mapping(uint256 => mapping(uint256 => bool)) public rejectedRecoveredRound;
-    /// @notice Tracks recovered rounds the admin reopened for requalification. The
+    /// @notice Tracks recovered rounds reopened for requalification. The
     ///         qualification path honours this flag to admit `roundId != nextRoundToEvaluate`.
     mapping(uint256 => mapping(uint256 => bool)) public reopenedRecoveredRound;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => mapping(bytes32 => bool)))) private
@@ -182,8 +182,8 @@ contract QuestionRewardPoolEscrow is
     event RejectedSnapshotRoundRecovered(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, uint256 allocationReturned
     );
-    /// @notice Emitted by `reopenRecoveredSnapshotRound` when an admin authorises a recovered
-    ///         round to be requalified against a NEW finalized oracle snapshot. (FE-1.)
+    /// @notice Emitted by `reopenRecoveredSnapshotRound` when a recovered round can be
+    ///         requalified against a NEW finalized oracle snapshot. (FE-1.)
     event RecoveredSnapshotRoundReopened(
         uint256 indexed rewardPoolId, uint256 indexed contentId, uint256 indexed roundId, bytes32 newWeightRoot
     );
@@ -914,11 +914,7 @@ contract QuestionRewardPoolEscrow is
     ///      `allocation` to `unallocatedAmount`, decrements `qualifiedRounds`, and resets the
     ///      snapshot slot. `nextRoundToEvaluate` intentionally stays advanced so the same
     ///      rejected snapshot cannot be re-qualified. (L-Oracle-1, audit 2026-05-17.)
-    function recoverRejectedSnapshotRound(uint256 rewardPoolId, uint256 roundId)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        nonReentrant
-    {
+    function recoverRejectedSnapshotRound(uint256 rewardPoolId, uint256 roundId) external nonReentrant {
         QuestionRewardPoolEscrowRecoveryLib.recoverRejectedSnapshotRound(
             rewardPools,
             roundSnapshots,
@@ -939,18 +935,14 @@ contract QuestionRewardPoolEscrow is
     ///      rejected snapshot.
     ///
     ///      Gating:
-    ///        * `DEFAULT_ADMIN_ROLE` — same role as `recoverRejectedSnapshotRound`.
+    ///        * Permissionless; all safety gates are on-chain oracle/pool state checks.
     ///        * The pool MUST be cluster-snapshot-backed (USDC + pinned oracle).
     ///        * The round MUST have been previously recovered (`rejectedRecoveredRound` flag).
     ///        * The oracle MUST hold a finalized snapshot whose `weightRoot` is NOT on the
     ///          per-key rejected set; the oracle's propose path already blocks re-proposing
     ///          a rejected root, so this is defence-in-depth.
     ///        * The pool must still be incomplete (not refunded, not fully qualified).
-    function reopenRecoveredSnapshotRound(uint256 rewardPoolId, uint256 roundId)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        nonReentrant
-    {
+    function reopenRecoveredSnapshotRound(uint256 rewardPoolId, uint256 roundId) external nonReentrant {
         QuestionRewardPoolEscrowRecoveryLib.reopenRecoveredSnapshotRound(
             rewardPools,
             roundSnapshots,
@@ -1307,14 +1299,12 @@ contract QuestionRewardPoolEscrow is
     function _qualifyRound(uint256 rewardPoolId, RewardPool storage rewardPool, uint256 roundId) internal {
         // FE-1 (audit 2026-05-20-followup): the cluster-snapshot qualification path admits
         // either (a) `roundId == nextRoundToEvaluate` (the normal sequential cursor) or
-        // (b) a previously recovered round that the admin has reopened against a NEW oracle
-        // snapshot. Clear the reopen flag eagerly here so the post-qualify state matches the
-        // "single qualification per round" invariant — qualification can revert below, in
-        // which case the flag write reverts with it.
+        // (b) a previously recovered round that has been reopened against a NEW oracle
+        // snapshot. Clear recovery flags only after qualification succeeds so a replacement
+        // snapshot rejected between reopen and qualification cannot strand the round.
         bool reopened = reopenedRecoveredRound[rewardPoolId][roundId];
         uint256 recoveredAllocation;
         if (reopened) {
-            reopenedRecoveredRound[rewardPoolId][roundId] = false;
             recoveredAllocation = roundSnapshots[rewardPoolId][roundId].allocation;
         } else {
             _requireNoPendingRecoveredRounds(rewardPool);
@@ -1335,7 +1325,7 @@ contract QuestionRewardPoolEscrow is
                 recoveredAllocation
             );
             if (reopened) {
-                _consumePendingRecoveredRound(rewardPool);
+                _finishRecoveredRoundQualification(rewardPool, rewardPoolId, roundId);
             }
             return;
         }
@@ -1358,7 +1348,7 @@ contract QuestionRewardPoolEscrow is
             BPS_SCALE
         );
         if (reopened) {
-            _consumePendingRecoveredRound(rewardPool);
+            _finishRecoveredRoundQualification(rewardPool, rewardPoolId, roundId);
         }
 
         emit RewardPoolRoundQualified(
@@ -1484,6 +1474,14 @@ contract QuestionRewardPoolEscrow is
         unchecked {
             rewardPool.pendingRecoveredRounds -= 1;
         }
+    }
+
+    function _finishRecoveredRoundQualification(RewardPool storage rewardPool, uint256 rewardPoolId, uint256 roundId)
+        private
+    {
+        _consumePendingRecoveredRound(rewardPool);
+        reopenedRecoveredRound[rewardPoolId][roundId] = false;
+        rejectedRecoveredRound[rewardPoolId][roundId] = false;
     }
 
     uint256[46] private __gap;

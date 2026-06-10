@@ -292,8 +292,8 @@ library QuestionRewardPoolEscrowQualificationLib {
         require(!roundSnapshots[rewardPoolId][roundId].qualified, "Round qualified");
         // FE-1: admit either the normal sequential cursor OR a recovered-and-reopened round
         // whose cursor has already advanced past it. The escrow caller sets `reopened` only
-        // when the DEFAULT_ADMIN_ROLE-gated `reopenRecoveredSnapshotRound` ran and verified the
-        // oracle has a new finalized snapshot with a non-rejected weight root.
+        // when `reopenRecoveredSnapshotRound` verified a new finalized oracle snapshot with a
+        // non-rejected weight root.
         require(reopened || roundId == rewardPool.nextRoundToEvaluate, "Round out of order");
         require(
             QuestionRewardPoolEscrowWindowLib.activateRewardPoolWindowForRound(votingEngine, rewardPool, roundId),
