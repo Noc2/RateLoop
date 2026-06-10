@@ -1083,6 +1083,43 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertGt(_commitRbtsScoreBps(engine, contentId, roundId, ck1), 0, "ck1 scored");
     }
 
+    function test_SettleRound_PaysCallerIncentiveFromRbtsForfeits() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+
+        engine.settleRound(contentId, roundId);
+        vm.roll(block.number + 1);
+
+        uint256 keeperBefore = lrepToken.balanceOf(keeper);
+        vm.prank(keeper);
+        engine.settleRound(contentId, roundId);
+
+        uint256 grossForfeited = _commitRbtsForfeitedStake(engine, contentId, roundId, ck1)
+            + _commitRbtsForfeitedStake(engine, contentId, roundId, ck2)
+            + _commitRbtsForfeitedStake(engine, contentId, roundId, ck3);
+        uint256 expectedIncentive = grossForfeited / 100;
+        if (expectedIncentive > 1e6) expectedIncentive = 1e6;
+
+        assertGt(grossForfeited, 0, "fixture creates RBTS forfeits");
+        assertEq(lrepToken.balanceOf(keeper) - keeperBefore, expectedIncentive, "caller incentive paid");
+        assertEq(
+            _roundRbtsForfeitedPool(engine, contentId, roundId),
+            grossForfeited - expectedIncentive,
+            "stored forfeits are net of caller incentive"
+        );
+    }
+
     function test_RbtsSeedRequiresBlockAfterSettlementClosure() public {
         uint256 contentId = _submitContent();
 
@@ -1142,6 +1179,36 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck2), 3e6, "ck2 stake returned");
         assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck3), 3e6, "ck3 stake returned");
         assertEq(_commitRbtsStakeReturned(engine, contentId, roundId, ck4), 4e6, "ck4 stake returned");
+    }
+
+    function test_RbtsExpiredSeedScorelessSettlementPaysNoCallerIncentive() public {
+        uint256 contentId = _submitContent();
+
+        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
+        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
+        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+        (bytes32 ck4, bytes32 s4) = _commitPrediction(voter4, contentId, true, 7_000, 4e6);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
+
+        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
+        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
+        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+        engine.revealVoteByCommitKey(contentId, roundId, ck4, true, 7_000, s4);
+
+        uint256 seedBlock = block.number;
+        engine.settleRound(contentId, roundId);
+        vm.roll(seedBlock + 257);
+
+        uint256 keeperBefore = lrepToken.balanceOf(keeper);
+        vm.prank(keeper);
+        engine.settleRound(contentId, roundId);
+
+        assertEq(lrepToken.balanceOf(keeper), keeperBefore, "scoreless expired settlement pays no caller incentive");
+        assertTrue(_roundRbtsScored(engine, contentId, roundId), "expired seed finalizes RBTS accounting");
+        assertEq(_roundRbtsForfeitedPool(engine, contentId, roundId), 0, "expired seed has no RBTS forfeits");
     }
 
     function test_RbtsExpiredSeedCannotBeRerolledAfterScorelessSettlement() public {

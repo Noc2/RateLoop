@@ -18,6 +18,7 @@ import { RoundCleanupLib } from "./libraries/RoundCleanupLib.sol";
 import { RoundCreationLib } from "./libraries/RoundCreationLib.sol";
 import { RoundRevealLib } from "./libraries/RoundRevealLib.sol";
 import { RoundVotingReadLib } from "./libraries/RoundVotingReadLib.sol";
+import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 import { VotePreflightLib } from "./libraries/VotePreflightLib.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
@@ -98,6 +99,8 @@ contract RoundVotingEngine is
     uint256 internal constant VOTE_COOLDOWN = 24 hours; // Time-based cooldown per content per voter
     uint256 internal constant MAX_CIPHERTEXT_SIZE = 2_048; // 2 KB max ciphertext to prevent storage bloat
     uint16 internal constant MIN_RBTS_PARTICIPANTS = 3;
+    uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_BPS = 100; // 1% of scored RBTS forfeits
+    uint256 internal constant SETTLEMENT_CALLER_INCENTIVE_MAX = 1e6; // 1 LREP
     address internal constant DISABLED_ADVISORY_VOTE_RECORDER = address(1);
 
     // --- State ---
@@ -242,6 +245,10 @@ contract RoundVotingEngine is
         uint16 meanScoreBps
     );
     event RbtsSeedCaptured(uint256 indexed contentId, uint256 indexed roundId, bytes32 entropy);
+    event SettlementCallerIncentivePaid(
+        uint256 indexed contentId, uint256 indexed roundId, address indexed caller, uint256 amount
+    );
+    event SettlementCallerIncentiveSkipped(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event RoundSettled(uint256 indexed contentId, uint256 indexed roundId, bool upWins, uint256 losingPool);
     event RoundCancelled(uint256 indexed contentId, uint256 indexed roundId);
     event RoundTied(uint256 indexed contentId, uint256 indexed roundId);
@@ -1018,6 +1025,7 @@ contract RoundVotingEngine is
         (weightedRewardStake, rbtsForfeitedPool, scoreSeed) =
             _scoreRbtsRewards(contentId, roundId, round.revealedCount, round.thresholdReachedAt);
         roundRbtsScored[contentId][roundId] = true;
+        rbtsForfeitedPool = _paySettlementCallerIncentive(contentId, roundId, rbtsForfeitedPool);
 
         round.upWins = upWins;
         round.state = RoundLib.RoundState.Settled;
@@ -1064,6 +1072,29 @@ contract RoundVotingEngine is
             roundRbtsMeanScoreBps[contentId][roundId]
         );
         emit RoundSettled(contentId, roundId, upWins, binaryLosingPool);
+    }
+
+    function _paySettlementCallerIncentive(uint256 contentId, uint256 roundId, uint256 forfeitedPool)
+        internal
+        returns (uint256 remainingForfeitedPool)
+    {
+        remainingForfeitedPool = forfeitedPool;
+        uint256 incentive = _settlementCallerIncentive(forfeitedPool);
+        if (incentive == 0) return remainingForfeitedPool;
+
+        try TokenTransferLib.safeTransfer(lrepToken, msg.sender, incentive) {
+            accountedLrepBalance -= incentive;
+            remainingForfeitedPool = forfeitedPool - incentive;
+            roundRbtsForfeitedPool[contentId][roundId] = remainingForfeitedPool;
+            emit SettlementCallerIncentivePaid(contentId, roundId, msg.sender, incentive);
+        } catch {
+            emit SettlementCallerIncentiveSkipped(contentId, roundId, incentive);
+        }
+    }
+
+    function _settlementCallerIncentive(uint256 forfeitedPool) internal pure returns (uint256 incentive) {
+        incentive = forfeitedPool * SETTLEMENT_CALLER_INCENTIVE_BPS / 10_000;
+        if (incentive > SETTLEMENT_CALLER_INCENTIVE_MAX) incentive = SETTLEMENT_CALLER_INCENTIVE_MAX;
     }
 
     // =========================================================================
