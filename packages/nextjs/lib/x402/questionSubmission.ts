@@ -34,7 +34,11 @@ import {
   getContentRegistrySubmissionRewardMinimum,
   getSubmissionRewardCoverageMinimum,
 } from "~~/lib/questionRewardMinimums";
-import { questionRoundConfigToAbi, serializeQuestionRoundConfig } from "~~/lib/questionRoundConfig";
+import {
+  questionRoundConfigToAbi,
+  requiredQuestionRewardVotersForAmount,
+  serializeQuestionRoundConfig,
+} from "~~/lib/questionRoundConfig";
 import {
   buildQuestionBundleSubmissionRevealCommitment,
   buildQuestionSubmissionKey,
@@ -961,6 +965,13 @@ async function assertBountyMeetsProtocolMinimum(params: {
   if (params.payload.bounty.amount < coverageMinimum) {
     throw new X402QuestionConflictError(
       `Bounty is below the selected voter-cap minimum (${coverageMinimum.toString()} atomic units).`,
+    );
+  }
+
+  const requiredVoterFloor = requiredQuestionRewardVotersForAmount(params.payload.bounty.amount);
+  if (params.payload.bounty.requiredVoters < requiredVoterFloor) {
+    throw new X402QuestionConflictError(
+      `Bounty requires at least ${requiredVoterFloor.toString()} voters for this amount.`,
     );
   }
 

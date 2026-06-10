@@ -1,6 +1,6 @@
 import { AdvisoryVoteRecorderAbi, LoopReputationAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import deployedContracts from "@rateloop/contracts/deployedContracts";
-import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { ROUND_STATE, SCORE_SPREAD_POLICY } from "@rateloop/contracts/protocol";
 import { packVoteRoundContext } from "@rateloop/contracts/votingCore";
 import { createHash } from "crypto";
 import {
@@ -2214,6 +2214,8 @@ function dryRunResultPackage(params: {
       RATELOOP_UNTRUSTED_DATA_WARNING,
       "Dry-run results are deterministic fixtures for integration testing; they are not public human judgment signals.",
       "No wallet signature, payment, on-chain transaction, rater payout, callback, or public question page was created.",
+      "Settled RateLoop scores must not be used to settle external financial contracts.",
+      `Score-spread LREP forfeits require at least ${SCORE_SPREAD_POLICY.forfeitMinReveals} revealed voters; smaller settled rounds are feedback signals only.`,
     ],
     majorObjections: [
       {
@@ -2547,6 +2549,7 @@ function buildPendingQuestionResultPackage(params: { failed: boolean; operation:
       RATELOOP_UNTRUSTED_DATA_WARNING,
       RATELOOP_SOURCE_URL_WARNING,
       "The question has not reached a public RateLoop result page yet.",
+      "Settled RateLoop scores must not be used to settle external financial contracts.",
     ],
     majorObjections: [],
     methodology: {

@@ -49,7 +49,7 @@ Public context:
 - `walletAddress`: optional expected user wallet for handoff flows, or a scoped agent wallet for managed/local-signer flows
 - one public context source: `question.contextUrl`, `question.videoUrl`, or generated/local image bytes supplied as `generatedImages`
 - `bounty.amount`: USDC budget in atomic units, for example `2500000` for 2.5 USDC
-- `bounty.requiredVoters`: minimum eligible voters required by the bounty; when setting `roundConfig`, use the same value for `roundConfig.minVoters`
+- `bounty.requiredVoters`: minimum eligible voters required by the bounty; when setting `roundConfig`, use the same value for `roundConfig.minVoters`. Use at least 5 voters for bounties at or above 1000 USDC and at least 8 voters for bounties at or above 10000 USDC.
 - `bounty.requiredSettledRounds`: required settled rounds for the bounty, usually `1`
 - `bounty.bountyStartBy`: future Unix timestamp in seconds by which the first private round must start
 - `bounty.bountyWindowSeconds`: bounty eligibility duration after the first private round starts
@@ -121,6 +121,8 @@ Browser handoff pages may expose read-only WebMCP helpers for status, draft vali
 3. For asking, prefer `rateloop_create_ask_handoff_link`.
 4. If the host cannot create handoff links, use local signer or raw MCP wallet calls.
 5. Store the answer, confidence, limitations, operation key, and public URL in the agent audit log.
+
+Never use settled RateLoop scores to settle external financial contracts. Rounds with fewer than 8 revealed voters can still settle as feedback signals, but score-spread LREP forfeits are disabled at that turnout.
 
 Default to `paymentMode: "wallet_calls"`. Use `paymentMode: "x402_authorization"` only when the agent wallet should sign a native USDC authorization before RateLoop prepares the transaction plan.
 

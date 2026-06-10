@@ -400,6 +400,45 @@ test("parseX402QuestionRequest defaults settlement voters to bounty voters", () 
   assert.equal(payload.roundConfig.maxVoters, 100n);
 });
 
+test("parseX402QuestionRequest enforces bounty-size voter floors", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          amount: "1000000000",
+          requiredVoters: "3",
+        },
+      }),
+    /requiredVoters must be at least 5/,
+  );
+
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        bounty: {
+          ...VALID_REQUEST.bounty,
+          amount: "10000000000",
+          requiredVoters: "5",
+        },
+      }),
+    /requiredVoters must be at least 8/,
+  );
+
+  const payload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    bounty: {
+      ...VALID_REQUEST.bounty,
+      amount: "10000000000",
+      requiredVoters: "8",
+    },
+  });
+  assert.equal(payload.bounty.requiredVoters, 8n);
+  assert.equal(payload.roundConfig.minVoters, 8n);
+});
+
 test("parseX402QuestionRequest rejects bounty and round voter mismatches", () => {
   assert.throws(
     () =>

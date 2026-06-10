@@ -171,7 +171,8 @@ const agentBountyInputSchema = {
       type: ["integer", "string"],
     },
     requiredVoters: {
-      description: "Minimum eligible voters required by the bounty. Must match roundConfig.minVoters when provided.",
+      description:
+        "Minimum eligible voters required by the bounty. Must match roundConfig.minVoters when provided. Amount tiers require at least 5 voters for bounties at or above 1000 USDC and 8 voters at or above 10000 USDC.",
       type: ["integer", "string"],
     },
   },
@@ -232,7 +233,8 @@ const agentRoundConfigInputSchema = {
     },
     maxVoters: { description: "Maximum voters accepted by the private round.", type: ["integer", "string"] },
     minVoters: {
-      description: "Minimum voters required before settlement. Must match bounty.requiredVoters.",
+      description:
+        "Minimum voters required before settlement. Must match bounty.requiredVoters. Three-voter rounds settle as feedback signals; 8 revealed voters are required for full score-spread forfeiture economics.",
       type: ["integer", "string"],
     },
   },

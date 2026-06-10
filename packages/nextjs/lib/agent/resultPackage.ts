@@ -1,6 +1,6 @@
 import { type AgentCohortSummary, buildAgentCohortSummary } from "./cohortSummary";
 import { type AgentLiveAskGuidance, buildAgentLiveAskGuidance } from "./liveAskGuidance";
-import { ROUND_STATE, ROUND_STATE_LABEL } from "@rateloop/contracts/protocol";
+import { ROUND_STATE, ROUND_STATE_LABEL, SCORE_SPREAD_POLICY } from "@rateloop/contracts/protocol";
 import {
   type AgentDecisionAnswer,
   type AgentResultTemplate,
@@ -487,7 +487,11 @@ export function buildAgentResultPackage(params: {
   const template = getAgentResultTemplateBySpecHash(params.content.resultSpecHash);
   const answer = classifyAnswer({ conservativeRatingBps, ratingBps, roundState, template });
 
-  const participationScore = clamp01(revealedCount / Math.max(Number(params.content.roundMinVoters ?? 3) * 2, 1));
+  const participationTarget = Math.max(
+    Number(params.content.roundMinVoters ?? 3) * 2,
+    SCORE_SPREAD_POLICY.forfeitMinReveals,
+  );
+  const participationScore = clamp01(revealedCount / Math.max(participationTarget, 1));
   const marginScore =
     upShare !== null && downShare !== null
       ? Math.abs(upShare - downShare)
@@ -525,6 +529,7 @@ export function buildAgentResultPackage(params: {
     RATELOOP_UNTRUSTED_DATA_WARNING,
     RATELOOP_SOURCE_URL_WARNING,
     "RateLoop ratings are human judgment signals, not factual proof.",
+    "Settled RateLoop scores must not be used to settle external financial contracts.",
     "Confidence is derived from revealed participation, bounded evidence, stake margin, and settled history.",
   ];
 
@@ -532,6 +537,11 @@ export function buildAgentResultPackage(params: {
   if (params.feedback.length === 0) limitations.push("No public feedback text is available for rationale extraction.");
   if (revealedCount < Math.max(Number(params.content.roundMinVoters ?? 3), 3)) {
     limitations.push("The revealed vote count is low.");
+  }
+  if (ready && revealedCount < SCORE_SPREAD_POLICY.forfeitMinReveals) {
+    limitations.push(
+      `This round settled below the ${SCORE_SPREAD_POLICY.forfeitMinReveals}-reveal score-spread economic threshold, so low-turnout LREP forfeits were disabled.`,
+    );
   }
   const distribution = {
     conservativeRatingBps,

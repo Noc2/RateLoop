@@ -14,6 +14,7 @@ import { findBlockedContentTags } from "~~/lib/moderation/submissionValidation";
 import {
   DEFAULT_QUESTION_ROUND_CONFIG,
   type QuestionRoundConfig,
+  requiredQuestionRewardVotersForAmount,
   serializeQuestionRoundConfig,
 } from "~~/lib/questionRoundConfig";
 
@@ -372,6 +373,12 @@ function normalizeBounty(value: unknown): X402QuestionPayload["bounty"] {
 
   if (requiredVoters < X402_MIN_REWARD_POOL_REQUIRED_VOTERS) {
     throw new X402QuestionInputError(`bounty.requiredVoters must be at least ${X402_MIN_REWARD_POOL_REQUIRED_VOTERS}.`);
+  }
+  const requiredVoterFloor = requiredQuestionRewardVotersForAmount(amount);
+  if (requiredVoters < requiredVoterFloor) {
+    throw new X402QuestionInputError(
+      `bounty.requiredVoters must be at least ${requiredVoterFloor} for this bounty amount.`,
+    );
   }
   if (requiredSettledRounds < X402_MIN_REWARD_POOL_SETTLED_ROUNDS) {
     throw new X402QuestionInputError(
