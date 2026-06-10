@@ -937,6 +937,15 @@ contract RoundVotingEngine is
         RoundLib.Round storage round = rounds[contentId][roundId];
         if (round.state != RoundLib.RoundState.Open) revert RoundNotOpen();
         RoundLib.RoundConfig memory roundCfg = _getRoundConfig(contentId, roundId);
+        // L-Vote-B: raw `minVoters` here is only safe because ProtocolConfig's
+        // `_validateRoundConfigBounds` enforces minSettlementVoters >= 3 (== MIN_RBTS_PARTICIPANTS),
+        // so it always equals the max(minVoters, MIN_RBTS_PARTICIPANTS) quorum used by
+        // `RoundCleanupLib.canFinalizeRevealFailedRound` (checked via
+        // `_canFinalizeRevealFailedRound` below). If that bound is ever relaxed, switch this and
+        // `_canCancelExpiredRound` to the max() derivation; otherwise rounds with revealedCount in
+        // [minVoters, MIN_RBTS_PARTICIPANTS) would revert ThresholdReached here while
+        // `RoundRevealLib.scoreRbtsRewards` still rejects settlement — permanently locking stakes.
+        // (The max() helper does not fit the engine's EIP-170 budget today.)
         uint16 rbtsRevealQuorum = roundCfg.minVoters;
         if (round.voteCount < rbtsRevealQuorum) revert NotEnoughVotes();
         if (round.revealedCount >= rbtsRevealQuorum) revert ThresholdReached();
@@ -1341,6 +1350,8 @@ contract RoundVotingEngine is
         RoundLib.RoundConfig memory roundCfg
     ) internal view returns (bool) {
         if (!RoundLib.isExpired(round, roundCfg.maxDuration)) return false;
+        // L-Vote-B: raw `minVoters` is safe only while ProtocolConfig enforces
+        // minSettlementVoters >= MIN_RBTS_PARTICIPANTS; see finalizeRevealFailedRound.
         uint16 rbtsRevealQuorum = roundCfg.minVoters;
         if (round.revealedCount >= rbtsRevealQuorum) return false;
         return round.voteCount < rbtsRevealQuorum || !roundHasHumanVerifiedCommit[contentId][roundId];
