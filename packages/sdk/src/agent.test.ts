@@ -509,6 +509,71 @@ test("quoteQuestion supports tokenless direct agent HTTP with a wallet address",
   assert.equal(response.operationKey, `0x${"56".repeat(32)}`);
 });
 
+test("agent client preserves a path-prefixed apiBaseUrl for direct HTTP", async () => {
+  let requestedUrl = "";
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: `${API_BASE_URL}/ponder`,
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrl = String(input);
+      return jsonResponse({
+        canSubmit: true,
+        clientRequestId: "ask-prefixed",
+        operationKey: `0x${"57".repeat(32)}`,
+        payment: { amount: "1000000", asset: "USDC", decimals: 6 },
+      });
+    },
+    mcpAccessToken: "agent-token",
+  });
+
+  await agent.quoteQuestion({
+    bounty: { amount: 1_000_000n },
+    chainId: 480,
+    clientRequestId: "ask-prefixed",
+    question: {
+      categoryId: 5n,
+      description: "Does the prefixed base URL survive?",
+      tags: ["agent", "sdk"],
+      title: "Prefixed base",
+    },
+  });
+
+  assert.equal(
+    requestedUrl,
+    "https://rateloop.example/ponder/api/agent/quote",
+  );
+});
+
+test("agent client builds unchanged URLs for the default root-host apiBaseUrl", async () => {
+  let requestedUrl = "";
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: "https://api.rateloop.ai",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrl = String(input);
+      return jsonResponse({
+        canSubmit: true,
+        clientRequestId: "ask-default-base",
+        operationKey: `0x${"58".repeat(32)}`,
+        payment: { amount: "1000000", asset: "USDC", decimals: 6 },
+      });
+    },
+    mcpAccessToken: "agent-token",
+  });
+
+  await agent.quoteQuestion({
+    bounty: { amount: 1_000_000n },
+    chainId: 480,
+    clientRequestId: "ask-default-base",
+    question: {
+      categoryId: 5n,
+      description: "Does the default base URL stay unchanged?",
+      tags: ["agent", "sdk"],
+      title: "Default base",
+    },
+  });
+
+  assert.equal(requestedUrl, "https://api.rateloop.ai/api/agent/quote");
+});
+
 test("askHumans supports tokenless direct agent HTTP with a wallet address", async () => {
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;
