@@ -1,3 +1,6 @@
+#!/usr/bin/env node
+
+import { existsSync, readFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,7 +18,31 @@ import { listAgentResultTemplates } from "./templates";
 import { lintAgentAskRequest, summarizeLintFindings } from "./questions/lint";
 
 type CliOptions = Record<string, string | boolean>;
-const packageRoot = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
+
+function findPackageRoot(startDir: string) {
+  let current = resolve(startDir);
+  for (let depth = 0; depth < 8; depth++) {
+    const packageJsonPath = resolve(current, "package.json");
+    if (existsSync(packageJsonPath)) {
+      try {
+        const manifest = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { name?: unknown };
+        if (manifest.name === "@rateloop/agents") {
+          return current;
+        }
+      } catch {
+        // Keep walking; a malformed package.json should surface through normal command failures.
+      }
+    }
+
+    const parent = resolve(current, "..");
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return resolve(startDir, "..");
+}
+
+const packageRoot = findPackageRoot(fileURLToPath(new URL(".", import.meta.url)));
 
 function printJson(value: unknown) {
   console.log(JSON.stringify(value, null, 2));

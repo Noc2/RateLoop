@@ -1,7 +1,6 @@
 {
   "name": "@rateloop/sdk",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
   "description": "Framework-agnostic frontend SDK foundations for RateLoop integrations",
   "homepage": "https://github.com/Noc2/RateLoop/tree/main/packages/sdk",
@@ -20,23 +19,95 @@
     "reputation",
     "viem"
   ],
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "agent": [
+        "dist/esm/agent.d.ts"
+      ],
+      "client": [
+        "dist/esm/client.d.ts"
+      ],
+      "config": [
+        "dist/esm/config.d.ts"
+      ],
+      "errors": [
+        "dist/esm/errors.d.ts"
+      ],
+      "read": [
+        "dist/esm/read.d.ts"
+      ],
+      "types": [
+        "dist/esm/types.d.ts"
+      ],
+      "vote": [
+        "dist/esm/vote.d.ts"
+      ],
+      "*": [
+        "dist/esm/index.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
-    ".": "./src/index.ts",
-    "./agent": "./src/agent.ts",
-    "./client": "./src/client.ts",
-    "./config": "./src/config.ts",
-    "./errors": "./src/errors.ts",
-    "./read": "./src/read.ts",
-    "./types": "./src/types.ts",
-    "./vote": "./src/vote.ts"
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./agent": {
+      "types": "./dist/esm/agent.d.ts",
+      "import": "./dist/esm/agent.js",
+      "require": "./dist/cjs/agent.js"
+    },
+    "./client": {
+      "types": "./dist/esm/client.d.ts",
+      "import": "./dist/esm/client.js",
+      "require": "./dist/cjs/client.js"
+    },
+    "./config": {
+      "types": "./dist/esm/config.d.ts",
+      "import": "./dist/esm/config.js",
+      "require": "./dist/cjs/config.js"
+    },
+    "./errors": {
+      "types": "./dist/esm/errors.d.ts",
+      "import": "./dist/esm/errors.js",
+      "require": "./dist/cjs/errors.js"
+    },
+    "./read": {
+      "types": "./dist/esm/read.d.ts",
+      "import": "./dist/esm/read.js",
+      "require": "./dist/cjs/read.js"
+    },
+    "./types": {
+      "types": "./dist/esm/types.d.ts",
+      "import": "./dist/esm/types.js",
+      "require": "./dist/cjs/types.js"
+    },
+    "./vote": {
+      "types": "./dist/esm/vote.d.ts",
+      "import": "./dist/esm/vote.js",
+      "require": "./dist/cjs/vote.js"
+    }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/fix-esm-extensions.mjs",
+    "build": "node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.json && node ../../scripts/fix-esm-extensions.mjs dist/esm && tsc -p tsconfig.cjs.json && node ../../scripts/write-cjs-package-json.mjs dist/cjs",
     "check-types": "tsc --noEmit",
+    "prepack": "yarn build",
     "test": "node ../../scripts/run-node-tests.mjs src"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
-    "@rateloop/contracts": "workspace:*",
+    "@rateloop/contracts": "0.0.1",
     "viem": "2.39.0"
   },
   "devDependencies": {
