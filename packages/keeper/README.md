@@ -86,13 +86,13 @@ Key metrics: `keeper_is_running` (gauge), `keeper_wallet_balance_wei` (gauge), `
 
 ### Reveal-liveness metrics and alerting
 
-A keeper/Ponder/drand outage that outlasts the on-chain reveal grace period lets rounds finalize as `RevealFailed`, which forfeits unrevealed voter stakes — so reveal liveness is the keeper signal most worth paging on:
+A keeper/Ponder/drand outage that outlasts the on-chain reveal grace period lets rounds finalize as `RevealFailed`. Current contracts refund unrevealed voter stakes in that state, but the round loses RBTS scoring and indicates systemic reveal-liveness failure — so reveal liveness is still the keeper signal most worth paging on:
 
 | Metric | Type | Meaning |
 | --- | --- | --- |
 | `keeper_rounds_awaiting_reveal_quorum` | gauge | Open rounds with commit quorum whose reveal quorum is still unmet |
 | `keeper_reveal_grace_seconds_remaining_min` | gauge | Seconds until the most at-risk round becomes finalizable as `RevealFailed` (`-1` = none at risk) |
-| `keeper_rounds_reveal_failed_finalized_total` | counter | Rounds this keeper finalized as `RevealFailed` (each one forfeits unrevealed stake) |
+| `keeper_rounds_reveal_failed_finalized_total` | counter | Rounds this keeper finalized as `RevealFailed` (unrevealed stakes refund, but scoring did not complete) |
 | `keeper_reveal_failed_finalize_skipped_total` | counter | Finalizations the keeper refused because its own reveal pipeline was unhealthy that tick |
 | `keeper_ponder_ciphertext_fetch_failures_total` | counter | Failed Ponder indexed-ciphertext fetches |
 | `keeper_ciphertext_log_fallback_total` | counter | Ciphertexts resolved via the `eth_getLogs` fallback instead of Ponder (Ponder degraded) |
@@ -108,11 +108,11 @@ groups:
         expr: time() - keeper_last_successful_run_timestamp > 300
         labels: { severity: page }
       - alert: KeeperRevealGraceExpiring
-        # A round is within 15 minutes of RevealFailed finalization (stake forfeiture).
+        # A round is within 15 minutes of RevealFailed finalization.
         expr: keeper_reveal_grace_seconds_remaining_min >= 0 and keeper_reveal_grace_seconds_remaining_min < 900
         labels: { severity: page }
       - alert: KeeperRevealFailedFinalized
-        # Any RevealFailed finalization forfeits voter stake; investigate every one.
+        # Any RevealFailed finalization means the reveal path failed; investigate every one.
         expr: increase(keeper_rounds_reveal_failed_finalized_total[1h]) > 0
         labels: { severity: page }
       - alert: KeeperRevealPipelineUnhealthy
@@ -126,7 +126,7 @@ groups:
         labels: { severity: warn }
 ```
 
-When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes a bounded cursor through recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also drive the two-step registry withdrawal: it completes a matured `FrontendRegistry.completeFeeWithdrawal()` first, then moves newly accrued fees into the next pending bucket with `requestFeeWithdrawal()`. Requested amounts stay slashable for the registry's 14-day `FEE_WITHDRAWAL_DELAY` before they can be completed.
+When `KEEPER_FRONTEND_FEE_ENABLED=true`, the same worker prioritizes a bounded cursor through recent settled rounds for the configured frontend/operator, then backfills older settled rounds so historical `RoundRewardDistributor.claimFrontendFee(...)` claims do not age out of automation. It can also drive the two-step registry withdrawal: it completes a matured `FrontendRegistry.completeFeeWithdrawal()` first, then moves newly accrued fees into the next pending bucket with `requestFeeWithdrawal()`. Requested amounts stay slashable for the registry's 21-day `FEE_WITHDRAWAL_DELAY` before they can be completed.
 
 When `KEEPER_CORRELATION_SNAPSHOTS_ENABLED=true`, the worker checks that the keeper wallet resolves through `FrontendRegistry.authorizedSnapshotFrontend(...)` to an eligible frontend operator only when a missing/rejected proposal slot actually needs a proposal. The keeper wallet can be the registered frontend wallet itself, or a separate operational wallet assigned by that frontend operator. The worker proposes missing correlation epoch and round payout roots from the keeper wallet and finalizes already-proposed roots after the challenge window. In `auto` mode it first preflights on-chain status so already-proposed/finalized snapshots do not rebuild artifacts, then asks Ponder for settled USDC bounty rounds only when proposal data is needed, builds deterministic payout weights with `@rateloop/node-utils/correlationScoring` (question-reward weights use a surprise-weighted base weight in `[10_000, 20_000]` bps per [`docs/surprise-weighted-bounty-weights.md`](../../docs/surprise-weighted-bounty-weights.md); launch-credit weights stay flat), stores the public artifact, and publishes the roots. In `file` mode it reads the same artifact shape from `KEEPER_CORRELATION_SNAPSHOT_ARTIFACT_PATH`.
 

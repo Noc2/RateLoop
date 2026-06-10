@@ -30,6 +30,22 @@ For bounty rechecks, it should request the selected credential kind with
 `RaterRegistry.attestHumanPresenceWithV4Proof`. The current freshness window is
 15 minutes.
 
+## Launch Gate
+
+The current Solidity interface is a RateLoop integration target for World ID v4,
+not proof that the final production verifier ABI is frozen. Before any production
+launch depends on World ID credentials:
+
+- confirm the final World ID v4 verifier ABI matches `IWorldIDVerifier`;
+- confirm the configured production verifier address has code on World Chain;
+- run an integration test against that live verifier, not only
+  `MockWorldIDVerifier`;
+- redeploy the dependent contracts if the final verifier selector, argument
+  order, proof arity, or revert/return behavior differs.
+
+Changing `WORLD_ID_V4_VERIFIER_ADDRESS` can swap the verifier address only. It
+cannot adapt already deployed contracts to a different verifier ABI.
+
 ## Credential Lanes
 
 RateLoop bounty eligibility uses these encoded credential masks:

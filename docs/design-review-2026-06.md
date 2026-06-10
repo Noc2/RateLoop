@@ -67,6 +67,24 @@ the CI gate, a stale `FrontendRegistry` ABI that breaks the new fee-withdrawal U
 path, and a Ponder handler that fabricates RBTS scores for scoreless settlements) plus a set of
 new economic findings — see [New findings](#new-findings-second-pass-2026-06-10).
 
+## Release-doc addendum (2026-06-10)
+
+Some same-day audit text below intentionally remains historical. For current release decisions:
+
+- `refreshExpiredRbtsSeed` is deleted. Expired RBTS seeds are terminal and scoreless; callers no
+  longer re-anchor the seed by refreshing it to a later block.
+- Seed expiry is not the raw EVM 256-block `BLOCKHASH` window on World Chain while the code uses
+  OpenZeppelin `Blockhash.blockHash()`. EIP-2935 extends available history to roughly 8191 blocks.
+  If RateLoop wants a shorter expiry window, add an explicit block-age guard instead of relying on
+  `blockHash() == 0`.
+- `RevealFailed` is a systemic reveal-liveness terminal state and now refunds unrevealed stakes.
+  Older statements saying it forfeits unrevealed voter stake describe the pre-mitigation design.
+- `FEE_WITHDRAWAL_DELAY` is now 21 days. Older statements describing a 14-day frontend fee escrow
+  explain the reviewed gap that led to the longer slashable fee-withdrawal window.
+- Production World ID launch remains gated on a finalized World ID v4 verifier ABI and a live
+  production verifier address. The current interface must be rechecked against the final ABI before
+  any production deployment treats World ID as an enforced launch credential.
+
 ## What the design gets right
 
 Worth stating explicitly, because several of these are under-credited even in the project's own
@@ -119,7 +137,7 @@ resource) and force operators to track gated value per snapshot, so all stakes s
 Instead, accountability now scales through the fee stream and time:
 
 - *Implemented — delayed slashable fee withdrawals:* `FrontendRegistry.claimFees()` is replaced by
-  `requestFeeWithdrawal()` → 14-day review window → `completeFeeWithdrawal()`. Requested amounts
+  `requestFeeWithdrawal()` → 21-day review window → `completeFeeWithdrawal()`. Requested amounts
   stay fully slashable until release, and `slashFrontend` confiscates the pending bucket alongside
   accrued fees. The operator's undelivered earnings are now collateral that grows automatically
   with usage — no per-snapshot bonding, no extra capital.
@@ -133,8 +151,8 @@ Instead, accountability now scales through the fee stream and time:
   bounds what an exit-scamming proposer can extract before detection — the one case reputation and
   fee escrow cannot deter.
 
-**Second pass (418e4202): partially mitigated.** The implemented items check out exactly as
-described: `requestFeeWithdrawal`/`completeFeeWithdrawal` with `FEE_WITHDRAWAL_DELAY = 14 days`
+**Second pass (418e4202): partially mitigated.** The implemented items checked out as
+described at that point: `requestFeeWithdrawal`/`completeFeeWithdrawal` with `FEE_WITHDRAWAL_DELAY = 14 days`
 (`FrontendRegistry.sol:316-355`), pending buckets confiscated on slash (`:470-474`) and held
 through the unbonding window, `CHALLENGER_BOUNTY_BPS = 5000` with exact-split accounting
 (`:450-510`). But `ClusterPayoutOracle.sol` is byte-identical to `2843dbaa` — proposer bonds
@@ -146,7 +164,8 @@ escrow only out-runs the ~10-day minimum governance slash latency (1d delay + 7d
 timelock) by ~4 days, with the attacker controlling when the clock starts; and the consent-free
 `setSnapshotProposer` (audit M-2, still unfixed) lets a slashee bind the recorded challenger as
 its "proposer" to make the bounty-routing slash revert. Value-tiered windows and the claim-rate
-ramp remain open.
+ramp remain open. Current HEAD lengthens `FEE_WITHDRAWAL_DELAY` to 21 days, closing the timing
+slack called out here while preserving the same two-step slashable withdrawal model.
 
 #### 2. Herding is the dominant strategy; bounties pay participation, not accuracy (economic)
 

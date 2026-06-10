@@ -35,6 +35,21 @@ and `PAUSER_ROLE` to governance in `initialize`, the deploy script and all consu
 removed `grantRole`/`revokeRole`/`renounceRole`/`getRoleAdmin`, and role mutation can still be
 restored by upgrade if ever needed (TransparentUpgradeableProxy, governance is proxy admin).
 
+## Release-doc addendum
+
+For the current 0.1.0 publish gate, treat the seed and World ID notes below as active launch
+assumptions rather than speculative cleanup:
+
+- The removed `refreshExpiredRbtsSeed` path must not be cited as a current control. Current code
+  resolves unavailable RBTS seed blockhashes as terminal scoreless settlements.
+- With OpenZeppelin `Blockhash.blockHash()`, World Chain seed availability follows EIP-2935's
+  extended history window. A deliberate 256-block expiry requires an explicit guard in RateLoop
+  code; it is not implied by the library call.
+- Mainnet World ID rollout is blocked until the final World ID v4 verifier ABI is known, the live
+  verifier address has code, and an integration test exercises that exact ABI/address pair.
+- `FEE_WITHDRAWAL_DELAY` is now 21 days; older "14-day" fee-withdrawal wording below describes the
+  reviewed gap rather than the current launch window.
+
 ---
 
 ## New findings

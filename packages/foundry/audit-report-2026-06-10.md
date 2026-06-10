@@ -107,6 +107,12 @@ Areas the agents validated this pass without finding exploitable issues:
 - Dormant/stale-round commit replay blocked by `_requireRoundContentLifecycleActive` on the commit path (`5a71d471`).
 - Base World ID v4 credential verify enforces per-kind nullifier ownership, prior-nullifier match, and revocation checks (`RaterRegistry.sol:849-872`).
 
+**Addendum (2026-06-10 later merge):** the `refreshExpiredRbtsSeed` control described above is
+stale. Current HEAD deletes that helper; unavailable RBTS seed blockhashes resolve to terminal
+scoreless settlement with RBTS stakes returned. Because the code uses OpenZeppelin
+`Blockhash.blockHash()`, expiry follows EIP-2935 history availability on World Chain rather than a
+raw 256-block `BLOCKHASH` assumption unless RateLoop adds an explicit shorter block-age guard.
+
 **Governance / upgrade**
 - `_disableInitializers()` present on upgradeable contracts; `__gap` accounting balanced under fresh-redeploy. (See Watch item below for the RaterRegistry layout.)
 

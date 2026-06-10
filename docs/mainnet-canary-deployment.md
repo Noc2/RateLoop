@@ -31,6 +31,16 @@ staging verifier is:
 Do not reuse a staging-verifier canary contract as production. Deploy fresh
 production contracts once canary testing is finished.
 
+### World ID ABI Launch Gate
+
+The production cutover must verify more than address bytecode. Before treating
+World ID as an enforced production credential, confirm the final World ID v4
+verifier ABI matches the `IWorldIDVerifier` interface compiled into
+`RaterRegistry`, run a live integration test against the production verifier
+address, and redeploy contracts if the final selector, argument order, proof
+shape, or revert/return behavior differs. `WORLD_ID_V4_VERIFIER_ADDRESS` only
+changes the verifier address; it cannot patch a deployed ABI mismatch.
+
 ## Deployment Model
 
 Use the same hosted services only because the canary is temporary and does not
