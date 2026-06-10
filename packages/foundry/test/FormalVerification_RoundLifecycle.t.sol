@@ -502,7 +502,9 @@ contract FormalVerification_RoundLifecycleTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH_DURATION);
         engine.revealVoteByCommitKey(cid, rid, ck0, true, 5_000, s0);
 
-        vm.warp(round.startTime + MAX_DURATION + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod());
+        vm.warp(
+            round.startTime + MAX_DURATION + ProtocolConfig(address(engine.protocolConfig())).revealGracePeriod() * 24
+        );
         engine.finalizeRevealFailedRound(cid, rid);
 
         RoundLib.Round memory failed = RoundEngineReadHelpers.round(engine, cid, rid);

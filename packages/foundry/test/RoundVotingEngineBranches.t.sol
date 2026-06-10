@@ -3042,7 +3042,14 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        uint256 finalDeadline = round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+        uint256 gracePeriod = ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+        // Reveal-failed finalization waits out the extended (24x) recovery grace.
+        uint256 baseDeadline = round.startTime + 7 days + gracePeriod;
+        uint256 finalDeadline = round.startTime + 7 days + gracePeriod * 24;
+
+        vm.warp(baseDeadline);
+        vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
+        engine.finalizeRevealFailedRound(contentId, roundId);
 
         vm.warp(finalDeadline - 1);
         vm.expectRevert(RoundVotingEngine.RevealGraceActive.selector);
@@ -3065,6 +3072,33 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(lrepToken.balanceOf(voter1), voter1BalBefore, "late reveals are not accepted after reveal failure");
     }
 
+    /// @notice A reveal outage that outlasts the ordinary grace period must stay recoverable:
+    ///         reveals keep landing inside the extended reveal-failed grace window and the
+    ///         round settles normally once quorum is reached (design review 2026-06, finding 3).
+    function test_RevealFailedGrace_RoundRecoversWithLateRevealsAndSettles() public {
+        uint256 contentId = _submitContent();
+
+        mockRaterIdentityRegistry.setHolder(voter1);
+        (bytes32 ck1, bytes32 s1) = _commit(voter1, contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, false, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
+
+        // Simulate a systemic reveal outage that outlasts the ordinary grace period.
+        vm.warp(round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1);
+
+        _reveal(contentId, roundId, ck1, true, s1);
+        _reveal(contentId, roundId, ck2, false, s2);
+        _reveal(contentId, roundId, ck3, true, s3);
+
+        engine.settleRound(contentId, roundId);
+        _settleRoundAfterRbtsSeed(contentId, roundId);
+        RoundLib.Round memory settledRound = RoundEngineReadHelpers.round(engine, contentId, roundId);
+        assertEq(uint256(settledRound.state), uint256(RoundLib.RoundState.Settled), "recovered round settles normally");
+    }
+
     function test_RevealAfterFinalRevealFailedDeadline_RevertsBeforeQuorum() public {
         uint256 contentId = _submitContent();
 
@@ -3075,7 +3109,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        uint256 finalDeadline = round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+        uint256 finalDeadline =
+            round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24;
 
         vm.warp(finalDeadline - 1);
         _reveal(contentId, roundId, ck1, true, s1);
@@ -3125,7 +3160,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         _warpPastTlockRevealTime(uint256(round.startTime) + EPOCH);
         _reveal(contentId, roundId, ck1, true, s1);
 
-        uint256 finalDeadline = round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1;
+        uint256 finalDeadline =
+            round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24 + 1;
         vm.warp(finalDeadline);
         engine.finalizeRevealFailedRound(contentId, roundId);
 
@@ -3168,7 +3204,8 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory round = RoundEngineReadHelpers.round(engine, contentId, roundId);
-        vm.warp(round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() + 1);
+        // The extended (24x) reveal-failed recovery grace must elapse first.
+        vm.warp(round.startTime + 7 days + ProtocolConfig(protocolConfigAddress).revealGracePeriod() * 24 + 1);
 
         _commit(voter4, contentId, true, STAKE);
 

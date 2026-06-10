@@ -29,6 +29,21 @@ library RoundCleanupLib {
 
     uint256 internal constant CLEANUP_INCENTIVE_BPS = 100; // 1%
     uint256 internal constant CLEANUP_INCENTIVE_MAX = 5e6; // 5 LREP
+    /// @notice Grace multiplier applied before a round can finalize as RevealFailed
+    ///         (design review 2026-06, finding 3). Reveal liveness is a protocol
+    ///         responsibility (keeper/Ponder/drand/RPC), so a round whose reveals stalled
+    ///         deserves a long recovery window: reveal-failed eligibility also gates the
+    ///         late-reveal revert in the engine, so reveals keep landing until the
+    ///         extended deadline and the round can still reach quorum and settle. The
+    ///         multiplier is intentionally NOT conditioned on observed reveal activity —
+    ///         a reveal-count-dependent deadline would shrink the moment the first
+    ///         recovery reveal lands, re-blocking the remaining reveals mid-rescue. It
+    ///         applies only to the reveal-failed deadline; the settlement reveal grace for
+    ///         quorum-reached rounds is unchanged. With the RevealFailed refund path there
+    ///         is no punishment rationale for fast finalization; the only cost of the
+    ///         longer window is that stakes stay locked and the content cannot open a new
+    ///         round until the extended deadline passes.
+    uint256 internal constant REVEAL_FAILED_GRACE_MULTIPLIER = 24;
 
     error RoundNotCancelledOrTied();
     error AlreadyClaimed();
@@ -619,7 +634,8 @@ library RoundCleanupLib {
 
         uint256 votingWindowEnd = uint256(round.startTime) + roundCfg.maxDuration;
         uint256 revealBase = lastRevealableAt > votingWindowEnd ? lastRevealableAt : votingWindowEnd;
-        return revealBase + _getRoundRevealGracePeriod(roundRevealGracePeriodSnapshot, protocolConfig, roundId);
+        uint256 gracePeriod = _getRoundRevealGracePeriod(roundRevealGracePeriodSnapshot, protocolConfig, roundId);
+        return revealBase + gracePeriod * REVEAL_FAILED_GRACE_MULTIPLIER;
     }
 
     function _getRoundConfig(
