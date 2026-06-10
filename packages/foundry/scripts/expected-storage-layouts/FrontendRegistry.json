@@ -87,6 +87,18 @@
     {
       "slot": 13,
       "offset": 0,
+      "label": "pendingFeeWithdrawalAmount",
+      "type": "t_mapping(t_address,t_uint256)"
+    },
+    {
+      "slot": 14,
+      "offset": 0,
+      "label": "pendingFeeWithdrawalReleaseAt",
+      "type": "t_mapping(t_address,t_uint256)"
+    },
+    {
+      "slot": 15,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -108,8 +120,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[41]",
-      "numberOfBytes": "1312",
+      "label": "uint256[39]",
+      "numberOfBytes": "1248",
       "base": "t_uint256"
     },
     {

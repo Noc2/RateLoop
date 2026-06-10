@@ -36,12 +36,13 @@ contract MathHarness {
         return RewardMath.calculatePositiveScoreSpreadWeight(rbtsWeight, scoreBps, meanScoreBps);
     }
 
-    function calculateNegativeScoreSpreadForfeit(uint256 stakeAmount, uint16 scoreBps, uint16 meanScoreBps)
-        external
-        pure
-        returns (uint256)
-    {
-        return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps);
+    function calculateNegativeScoreSpreadForfeit(
+        uint256 stakeAmount,
+        uint16 scoreBps,
+        uint16 meanScoreBps,
+        uint256 revealedCount
+    ) external pure returns (uint256) {
+        return RewardMath.calculateNegativeScoreSpreadForfeit(stakeAmount, scoreBps, meanScoreBps, revealedCount);
     }
 
     // splitPool returns a 3-tuple; expose each share separately so the spec can

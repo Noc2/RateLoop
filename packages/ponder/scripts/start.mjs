@@ -1,38 +1,108 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { buildPonderStartArgs } from "./databaseSchema.mjs";
 
-const { args, env, schemaInfo } = buildPonderStartArgs(process.argv.slice(2), process.env);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(__dirname, "../../..");
+const contractsRoot = resolve(repoRoot, "packages/contracts");
+export const requiredContractsArtifacts = [
+  resolve(contractsRoot, "dist/esm/abis/index.js"),
+  resolve(contractsRoot, "dist/esm/deployedContracts.js"),
+  resolve(contractsRoot, "dist/esm/deployments.js"),
+  resolve(contractsRoot, "dist/esm/protocol.js"),
+];
 
-if (schemaInfo?.ignoredLegacyDatabaseSchema) {
-  console.warn(
-    `[ponder:start] Ignoring DATABASE_SCHEMA=ponder to avoid colliding with legacy Ponder app metadata; using ${schemaInfo.schema}.`,
-  );
-  console.warn("[ponder:start] Set RATELOOP_PONDER_DATABASE_SCHEMA to choose a different Ponder schema.");
-} else if (schemaInfo?.source === "RAILWAY_DEPLOYMENT_ID") {
-  console.warn(
-    `[ponder:start] Using Railway deployment-scoped Ponder schema ${schemaInfo.schema}.`,
-  );
-} else if (schemaInfo?.source === "default") {
-  console.warn(
-    `[ponder:start] DATABASE_SCHEMA is not set; using RateLoop's production default schema ${schemaInfo.schema}.`,
-  );
+export function contractsArtifactsExist({
+  exists = existsSync,
+  requiredArtifacts = requiredContractsArtifacts,
+} = {}) {
+  return requiredArtifacts.every((path) => exists(path));
 }
 
-const child = spawn("ponder", args, {
-  env,
-  stdio: "inherit",
-});
-
-child.on("error", (error) => {
-  console.error(`[ponder:start] Failed to start Ponder: ${error.message}`);
-  process.exitCode = 1;
-});
-
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
+export function ensureContractsArtifacts({
+  exists = existsSync,
+  spawnSyncImpl = spawnSync,
+  cwd = repoRoot,
+  requiredArtifacts = requiredContractsArtifacts,
+} = {}) {
+  if (contractsArtifactsExist({ exists, requiredArtifacts })) {
+    return false;
   }
 
-  process.exitCode = code ?? 1;
-});
+  console.warn("[ponder:start] Missing @rateloop/contracts build artifacts; building the contracts workspace.");
+  const result = spawnSyncImpl("yarn", ["workspace", "@rateloop/contracts", "build"], {
+    cwd,
+    stdio: "inherit",
+  });
+
+  if (result.error) {
+    throw new Error(`Failed to build @rateloop/contracts: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(`Failed to build @rateloop/contracts: yarn exited with status ${result.status ?? "unknown"}.`);
+  }
+  if (!contractsArtifactsExist({ exists, requiredArtifacts })) {
+    throw new Error("Built @rateloop/contracts, but required Ponder contract artifacts are still missing.");
+  }
+
+  return true;
+}
+
+export function startPonder({
+  argv = process.argv.slice(2),
+  env = process.env,
+  spawnImpl = spawn,
+  ensureContractsArtifactsImpl = ensureContractsArtifacts,
+} = {}) {
+  ensureContractsArtifactsImpl();
+
+  const { args, env: childEnv, schemaInfo } = buildPonderStartArgs(argv, env);
+
+  if (schemaInfo?.ignoredLegacyDatabaseSchema) {
+    console.warn(
+      `[ponder:start] Ignoring DATABASE_SCHEMA=ponder to avoid colliding with legacy Ponder app metadata; using ${schemaInfo.schema}.`,
+    );
+    console.warn("[ponder:start] Set RATELOOP_PONDER_DATABASE_SCHEMA to choose a different Ponder schema.");
+  } else if (schemaInfo?.source === "RAILWAY_DEPLOYMENT_ID") {
+    console.warn(
+      `[ponder:start] Using Railway deployment-scoped Ponder schema ${schemaInfo.schema}.`,
+    );
+  } else if (schemaInfo?.source === "default") {
+    console.warn(
+      `[ponder:start] DATABASE_SCHEMA is not set; using RateLoop's production default schema ${schemaInfo.schema}.`,
+    );
+  }
+
+  const child = spawnImpl("ponder", args, {
+    env: childEnv,
+    stdio: "inherit",
+  });
+
+  child.on("error", (error) => {
+    console.error(`[ponder:start] Failed to start Ponder: ${error.message}`);
+    process.exitCode = 1;
+  });
+
+  child.on("exit", (code, signal) => {
+    if (signal) {
+      process.kill(process.pid, signal);
+      return;
+    }
+
+    process.exitCode = code ?? 1;
+  });
+
+  return child;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    startPonder();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[ponder:start] ${message}`);
+    process.exitCode = 1;
+  }
+}

@@ -18,6 +18,7 @@ const SHUTDOWN_STATUS_TIMEOUT_MS = 1_500;
 const PONDER_PORT_RELEASE_TIMEOUT_MS = 10_000;
 const PONDER_PORT_RELEASE_POLL_MS = 250;
 const PONDER_PORT_CHECK_TIMEOUT_MS = 500;
+const DEFAULT_DEV_RAW_SCRIPT = "dev:raw";
 const PONDER_PORT_FALLBACK_PATTERN = /\bPort (\d{1,5}) was in use, trying port (\d{1,5})\b/g;
 const PONDER_SERVER_TRANSITION_PATTERN =
   /\b(Hot reload|Using PGlite database at|Port \d{1,5} was in use, trying port \d{1,5}|Started listening on port \d{1,5})\b/;
@@ -180,10 +181,14 @@ async function waitForPonderPortRelease(statusUrl, env = process.env) {
   return false;
 }
 
-function runDevRaw() {
+export function resolveDevRawScript(argv = process.argv.slice(2)) {
+  return argv[0]?.trim() || DEFAULT_DEV_RAW_SCRIPT;
+}
+
+function runDevRaw({ scriptName = resolveDevRawScript() } = {}) {
   return new Promise((resolve, reject) => {
     const useProcessGroup = process.platform !== "win32";
-    const child = spawn("yarn", ["run", "dev:raw"], {
+    const child = spawn("yarn", ["run", scriptName], {
       cwd: ponderDir,
       stdio: ["inherit", "pipe", "pipe"],
       env: process.env,
@@ -331,7 +336,8 @@ function resetPgliteIfPresent() {
 }
 
 async function main() {
-  const firstRun = await runDevRaw();
+  const scriptName = resolveDevRawScript();
+  const firstRun = await runDevRaw({ scriptName });
   const recoveryReason = getRecoveryReason(firstRun.output, process.env);
   if (firstRun.code === 0 || firstRun.shutdownRequested || !recoveryReason) {
     process.exit(firstRun.code);
@@ -355,7 +361,7 @@ async function main() {
     console.warn("\nWarning: Ponder port is still occupied after recovery stop; retrying anyway...\n");
   }
 
-  const secondRun = await runDevRaw();
+  const secondRun = await runDevRaw({ scriptName });
   process.exit(secondRun.code);
 }
 

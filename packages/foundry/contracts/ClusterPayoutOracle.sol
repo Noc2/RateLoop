@@ -259,6 +259,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         if (existing.status != SnapshotStatus.None && existing.status != SnapshotStatus.Rejected) {
             revert SnapshotExists();
         }
+        if (rejectedCorrelationEpochRoots[epochId][clusterRoot]) revert InvalidSnapshot();
         (bytes32 coverageDigest, bytes32 sourceSetDigest) =
             _requireCorrelationEpochSourcesReady(epochId, fromRoundId, toRoundId, sourceRefs);
         bytes32 proposalDigest = _correlationEpochDigest(
@@ -273,10 +274,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         );
         if (rejectedCorrelationEpochSnapshotDigests[epochId][proposalDigest]) revert InvalidSnapshot();
         // L-Oracle-4: block identical re-proposal of a previously rejected clusterRoot.
-        if (
-            rejectedCorrelationEpochRoots[epochId][clusterRoot]
-                || rejectedCorrelationEpochRootKeys[correlationEpochRootKey(sourceSetDigest, clusterRoot)]
-        ) {
+        if (rejectedCorrelationEpochRootKeys[correlationEpochRootKey(sourceSetDigest, clusterRoot)]) {
             revert InvalidSnapshot();
         }
         address proposalTimeSnapshotProposer = frontendRegistry.snapshotProposerForFrontend(frontendOperator);
@@ -1166,7 +1164,7 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         catch {
             revert InvalidAddress();
         }
-        try IFrontendRegistry(newFrontendRegistry).snapshotProposerForFrontend(address(0)) returns (address) {}
+        try IFrontendRegistry(newFrontendRegistry).snapshotProposerForFrontend(address(0)) returns (address) { }
         catch {
             revert InvalidAddress();
         }

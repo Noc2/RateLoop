@@ -91,11 +91,7 @@ library RewardMath {
         uint16 scoreBps,
         uint16 meanScoreBps,
         uint256 revealedCount
-    )
-        internal
-        pure
-        returns (uint256)
-    {
+    ) internal pure returns (uint256) {
         if (revealedCount < SCORE_SPREAD_FORFEIT_MIN_REVEALS) return 0;
         if (stakeAmount == 0 || scoreBps >= meanScoreBps) return 0;
         uint256 deltaBps = uint256(meanScoreBps) - scoreBps;

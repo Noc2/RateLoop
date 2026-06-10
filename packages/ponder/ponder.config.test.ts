@@ -81,6 +81,12 @@ const VALID_ENV = {
   PONDER_CONTENT_REGISTRY_START_BLOCK: String(expectedContentRegistryStartBlock),
 };
 
+function getExpectedProbeChainId(env: Record<string, string | undefined>) {
+  if (env.PONDER_NETWORK === "worldchain") return 480;
+  if (env.PONDER_NETWORK === "hardhat") return 31337;
+  return 4801;
+}
+
 async function loadPonderConfig(overrides: Record<string, string | undefined> = {}, removals: string[] = []) {
   vi.resetModules();
   process.env = {
@@ -93,11 +99,23 @@ async function loadPonderConfig(overrides: Record<string, string | undefined> = 
     delete process.env[key];
   }
 
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      const chainId = getExpectedProbeChainId(process.env);
+      return new Response(JSON.stringify({ result: `0x${chainId.toString(16)}` }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+
   return import("./ponder.config.ts");
 }
 
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.resetModules();
 });

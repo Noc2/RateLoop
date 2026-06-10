@@ -15,6 +15,7 @@
     "chain": "yarn foundry:chain",
     "compile": "yarn foundry:compile",
     "deploy": "yarn workspace @rateloop/foundry deploy",
+    "build:workspace-deps": "yarn workspace @rateloop/contracts build && yarn workspace @rateloop/sdk build && yarn workspace @rateloop/agents build",
     "dead-code": "yarn dead-code:scan",
     "dead-code:scan": "knip --no-progress --no-exit-code",
     "dev:db": "node scripts/dev-db.mjs up",
@@ -77,7 +78,7 @@
     "ponder:check-types": "yarn workspace @rateloop/ponder check-types",
     "agents:ask": "yarn workspace @rateloop/agents ask",
     "agents:check-types": "yarn workspace @rateloop/agents check-types",
-    "agents:lint": "yarn workspace @rateloop/agents lint:questions",
+    "agents:lint": "yarn build:workspace-deps && yarn workspace @rateloop/agents lint:questions",
     "agents:quote": "yarn workspace @rateloop/agents quote",
     "agents:result": "yarn workspace @rateloop/agents result",
     "agents:sandbox": "yarn workspace @rateloop/agents sandbox",
@@ -94,7 +95,7 @@
     "e2e:ci:app": "yarn workspace @rateloop/nextjs e2e:ci:app",
     "e2e:ci:full": "yarn workspace @rateloop/nextjs e2e:ci:full",
     "e2e:ui": "yarn workspace @rateloop/nextjs e2e:ui",
-    "test:ts": "yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn agents:check-types && yarn keeper:check-types && yarn test:node && yarn contracts:test && yarn node-utils:test && yarn sdk:test && yarn next:test && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
+    "test:ts": "yarn build:workspace-deps && yarn contracts:check-types && yarn node-utils:check-types && yarn sdk:check-types && yarn ponder:check-types && yarn agents:check-types && yarn keeper:check-types && yarn test:node && yarn contracts:test && yarn node-utils:test && yarn sdk:test && yarn next:test && yarn workspace @rateloop/keeper test && yarn workspace @rateloop/agents test && yarn workspace @rateloop/ponder test"
   },
   "devDependencies": {
     "husky": "~9.1.6",

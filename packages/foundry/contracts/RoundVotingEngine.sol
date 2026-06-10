@@ -325,23 +325,6 @@ contract RoundVotingEngine is
         return _accessControlStorage().roles[role].hasRole[account];
     }
 
-    function getRoleAdmin(bytes32) public pure returns (bytes32) {
-        return DEFAULT_ADMIN_ROLE;
-    }
-
-    function grantRole(bytes32 role, address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        _grantRole(role, account);
-    }
-
-    function revokeRole(bytes32 role, address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        _revokeRole(role, account);
-    }
-
-    function renounceRole(bytes32 role, address callerConfirmation) public {
-        if (callerConfirmation != msg.sender) revert AccessControlBadConfirmation();
-        _revokeRole(role, callerConfirmation);
-    }
-
     modifier onlyRole(bytes32 role) {
         _checkRole(role, msg.sender);
         _;
@@ -356,14 +339,6 @@ contract RoundVotingEngine is
         if ($.roles[role].hasRole[account]) return false;
         $.roles[role].hasRole[account] = true;
         emit RoleGranted(role, account, msg.sender);
-        return true;
-    }
-
-    function _revokeRole(bytes32 role, address account) internal returns (bool) {
-        AccessControlStorage storage $ = _accessControlStorage();
-        if (!$.roles[role].hasRole[account]) return false;
-        $.roles[role].hasRole[account] = false;
-        emit RoleRevoked(role, account, msg.sender);
         return true;
     }
 

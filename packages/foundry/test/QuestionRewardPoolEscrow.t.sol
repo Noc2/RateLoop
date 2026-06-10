@@ -586,24 +586,12 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         usdc.approve(address(rewardPoolEscrow), veryHighValueAmount);
         vm.expectRevert("High-value floor");
         rewardPoolEscrow.createRewardPool(
-            contentId,
-            veryHighValueAmount,
-            MIN_HIGH_VALUE_PARTICIPANTS,
-            1,
-            block.timestamp + 30 days,
-            30 days,
-            0
+            contentId, veryHighValueAmount, MIN_HIGH_VALUE_PARTICIPANTS, 1, block.timestamp + 30 days, 30 days, 0
         );
 
         usdc.approve(address(rewardPoolEscrow), veryHighValueAmount);
         uint256 rewardPoolId = rewardPoolEscrow.createRewardPool(
-            contentId,
-            veryHighValueAmount,
-            MIN_VERY_HIGH_VALUE_PARTICIPANTS,
-            1,
-            block.timestamp + 30 days,
-            30 days,
-            0
+            contentId, veryHighValueAmount, MIN_VERY_HIGH_VALUE_PARTICIPANTS, 1, block.timestamp + 30 days, 30 days, 0
         );
         vm.stopPrank();
 
@@ -946,10 +934,8 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             epochDuration: uint32(EPOCH_DURATION), maxDuration: uint32(7 days), minVoters: 8, maxVoters: 8
         });
         uint256[] memory contentIds = new uint256[](2);
-        contentIds[0] =
-            _submitQuestionWithContextAndRoundConfig("https://example.com/vh-bundle-a", "vh-a", roundConfig);
-        contentIds[1] =
-            _submitQuestionWithContextAndRoundConfig("https://example.com/vh-bundle-b", "vh-b", roundConfig);
+        contentIds[0] = _submitQuestionWithContextAndRoundConfig("https://example.com/vh-bundle-a", "vh-a", roundConfig);
+        contentIds[1] = _submitQuestionWithContextAndRoundConfig("https://example.com/vh-bundle-b", "vh-b", roundConfig);
 
         usdc.mint(funder, 2 * VERY_HIGH_VALUE_REWARD_POOL_THRESHOLD);
 
@@ -4290,9 +4276,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         expectedRewards[1] = 33_333_333;
         expectedRewards[2] = 44_444_445;
 
-        _runSurpriseWeightedClaimScenario(
-            baseWeights, independenceBps, expectedRewards, _directions(true, true, false)
-        );
+        _runSurpriseWeightedClaimScenario(baseWeights, independenceBps, expectedRewards, _directions(true, true, false));
     }
 
     function testClusterClaimRejectsBaseWeightAboveSurpriseCap() public {

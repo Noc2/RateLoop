@@ -650,7 +650,8 @@ test("supported sponsored operation families are allowlisted", async () => {
     [encodeCall(contentRegistryContract, "cancelReservedSubmission", [`0x${"2".repeat(64)}`])],
     [submitQuestionWithRewardCall()],
     [encodeCall(frontendRegistryContract, "register")],
-    [encodeCall(frontendRegistryContract, "claimFees")],
+    [encodeCall(frontendRegistryContract, "requestFeeWithdrawal")],
+    [encodeCall(frontendRegistryContract, "completeFeeWithdrawal")],
     [encodeCall(frontendRegistryContract, "setSnapshotProposer", [WALLET])],
     [encodeCall(frontendRegistryContract, "clearSnapshotProposer")],
     [
