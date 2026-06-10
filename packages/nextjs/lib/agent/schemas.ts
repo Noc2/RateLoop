@@ -1010,7 +1010,10 @@ export const agentRatingStatusOutputSchema = {
 export const resultPackageOutputSchema = {
   additionalProperties: true,
   properties: {
-    answer: { type: "string" },
+    answer: {
+      description: 'Template-specific answer string. Dry-run fixtures use the sentinel value "dry_run_complete".',
+      type: "string",
+    },
     answerScopes: { type: "object" },
     cohortSummary: { type: ["object", "null"] },
     confidence: {
@@ -1035,11 +1038,28 @@ export const resultPackageOutputSchema = {
     publicUrl: { type: ["string", "null"] },
     rationaleSummary: { type: "string" },
     ready: { type: "boolean" },
-    recommendedNextAction: { type: "string" },
+    recommendedNextAction: {
+      description: 'Recommended agent action. Dry-run fixtures use the sentinel value "integration_ready".',
+      enum: [
+        "wait_for_settlement",
+        "proceed",
+        "proceed_after_addressing_objections",
+        "revise_and_resubmit",
+        "do_not_proceed",
+        "collect_more_votes",
+        "manual_review",
+        "integration_ready",
+      ],
+      type: "string",
+    },
     wait: {
       additionalProperties: true,
       properties: {
-        code: { type: "string" },
+        code: {
+          description: 'Synthetic wait/result code. Dry-run fixtures use "dry_run_complete".',
+          enum: ["dry_run_complete", "failed_submission", "still_settling"],
+          type: "string",
+        },
         recoverWith: { type: "string" },
       },
       type: "object",

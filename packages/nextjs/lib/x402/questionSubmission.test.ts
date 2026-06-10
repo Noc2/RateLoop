@@ -1183,6 +1183,38 @@ test("preparePermissionlessWalletQuestionSubmissionRequest rejects uploaded imag
   );
 });
 
+test("prepareNativeX402QuestionSubmissionRequest rejects overlong validBefore before storing a plan", async () => {
+  const payload = buildPayload("native-x402-valid-before-cap");
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const overlongValidBefore = BigInt(Math.floor(Date.now() / 1000)) + 24n * 60n * 60n + 60n;
+
+  __setX402QuestionSubmissionTestOverridesForTests({
+    resolveX402QuestionConfig: () => TEST_CONFIG,
+  });
+
+  await assert.rejects(
+    () =>
+      prepareNativeX402QuestionSubmissionRequest({
+        agentId: "native-agent",
+        paymentAuthorization: {
+          validBefore: overlongValidBefore.toString(),
+        },
+        payload,
+        walletAddress,
+      }),
+    (error: unknown) =>
+      error instanceof Error &&
+      error.name === "X402QuestionConflictError" &&
+      error.message.includes("validBefore must be within 86400 seconds"),
+  );
+
+  const record = await getX402QuestionSubmissionByClientRequest({
+    chainId: payload.chainId,
+    clientRequestId: payload.clientRequestId,
+  });
+  assert.equal(record, null);
+});
+
 test("prepareNativeX402QuestionSubmissionRequest returns an authorization request before signature", async () => {
   const payload = buildPayload("native-x402-plan");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
@@ -1281,13 +1313,17 @@ test("prepareNativeX402QuestionSubmissionRequest returns an authorization reques
   assert.equal(body.x402AuthorizationRequest.eip712.domain.verifyingContract, TEST_CONFIG.usdcAddress);
 
   const submitFunction = X402QuestionSubmitterAbi.find(
-    item => item.type === "function" && item.name === "submitQuestionWithX402Payment",
+    (item: (typeof X402QuestionSubmitterAbi)[number]) =>
+      item.type === "function" && item.name === "submitQuestionWithX402Payment",
   );
   assert.ok(submitFunction && "inputs" in submitFunction);
   const paymentAuthorizationInput = submitFunction.inputs.at(-1);
   assert.deepEqual(
     paymentAuthorizationInput && "components" in paymentAuthorizationInput
-      ? paymentAuthorizationInput.components.map(component => [component.name, component.type])
+      ? paymentAuthorizationInput.components.map((component: { name: string; type: string }) => [
+          component.name,
+          component.type,
+        ])
       : [],
     [
       ["from", "address"],

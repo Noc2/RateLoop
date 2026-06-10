@@ -90,6 +90,12 @@ async function insertX402SubmissionRecord(params: {
   contentId?: string | null;
   mode?: string;
   operationKey?: `0x${string}`;
+  pendingCallback?: {
+    agentId: string;
+    callbackUrl: string;
+    eventTypes: string[];
+    secret: string;
+  };
   status?: string;
 }) {
   const now = new Date();
@@ -130,6 +136,7 @@ async function insertX402SubmissionRecord(params: {
         ...(params.agentId ? { agentId: params.agentId } : {}),
         mode: params.mode,
         operationKey,
+        ...(params.pendingCallback ? { pendingCallback: params.pendingCallback } : {}),
         walletAddress: AGENT.walletAddress,
       }),
       now,
@@ -402,7 +409,7 @@ test("rateloop_ask_humans dry-run validates without reserving budget or preparin
   assert.equal(body.x402AuthorizationRequest, null);
   assert.equal(body.wallet.fundingMode, "dry_run");
   assert.equal(body.result.answer, "dry_run_complete");
-  assert.equal(body.operationKey, OPERATION_KEY);
+  assert.match(body.operationKey, /^0x[a-f0-9]{64}$/);
   assert.ok(body.warnings.includes("dry_run_no_payment"));
 
   const status = (await callRateLoopMcpTool({
@@ -500,7 +507,7 @@ test("public rateloop_ask_humans returns a wallet-signed webhook challenge befor
   assert.deepEqual(body.webhook.events, ["question.submitting"]);
 });
 
-test("public rateloop_ask_humans accepts signed webhook registration and enqueues submitting callback", async () => {
+test("public rateloop_ask_humans stores signed webhook registration until payment confirmation", async () => {
   const account = privateKeyToAccount(`0x${"3".repeat(64)}`);
   const registered: unknown[] = [];
   const enqueued: unknown[] = [];
@@ -560,33 +567,18 @@ test("public rateloop_ask_humans accepts signed webhook registration and enqueue
   const callbackAgentId = publicWebhookAgentId({ chainId: 480, walletAddress: account.address });
 
   assert.equal(body.status, "awaiting_wallet_signature");
-  assert.equal(body.webhook.registered, true);
+  assert.equal(body.webhook.registered, false);
   assert.deepEqual(body.webhook.events, ["question.submitting"]);
   assert.ok(body.webhook.signatureHeaders.includes("x-rateloop-callback-signature"));
   assert.equal(prepared.length, 1);
-  assert.deepEqual(registered[0], {
+  assert.deepEqual((prepared[0] as { pendingCallback?: unknown }).pendingCallback, {
     agentId: callbackAgentId,
     callbackUrl: "https://agent.example/rateloop",
     eventTypes: ["question.submitting"],
     secret: "webhook-secret",
   });
-  assert.equal(enqueued.length, 1);
-  assert.deepEqual(enqueued[0], {
-    agentId: callbackAgentId,
-    eventId: `${OPERATION_KEY}:question.submitting`,
-    eventType: "question.submitting",
-    payload: {
-      chainId: 480,
-      clientRequestId: "ask-bookkeeping-failure",
-      contentId: null,
-      contentIds: [],
-      error: null,
-      eventType: "question.submitting",
-      operationKey: OPERATION_KEY,
-      publicUrl: null,
-      status: "awaiting_wallet_signature",
-    },
-  });
+  assert.equal(registered.length, 0);
+  assert.equal(enqueued.length, 0);
 });
 
 test("rateloop_ask_humans rejects unsupported sync and async modes", async () => {
@@ -1237,9 +1229,10 @@ test("rateloop_ask_humans rejects feedback bonuses on bundles", async () => {
   );
 });
 
-test("rateloop_ask_humans registers webhooks and enqueues the awaiting-signature callback", async () => {
+test("rateloop_ask_humans stores webhooks until payment confirmation", async () => {
   const registered: unknown[] = [];
   const enqueued: unknown[] = [];
+  const prepared: unknown[] = [];
 
   __setMcpToolTestOverridesForTests({
     enqueueAgentCallbackEvent: async params => {
@@ -1247,14 +1240,17 @@ test("rateloop_ask_humans registers webhooks and enqueues the awaiting-signature
       return [];
     },
     getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
-    prepareAgentWalletQuestionSubmissionRequest: async params => ({
-      body: {
-        operationKey: OPERATION_KEY,
-        status: "awaiting_wallet_signature",
-        wallet: { address: params.walletAddress, fundingMode: "agent_wallet" },
-      },
-      status: 202,
-    }),
+    prepareAgentWalletQuestionSubmissionRequest: async params => {
+      prepared.push(params);
+      return {
+        body: {
+          operationKey: OPERATION_KEY,
+          status: "awaiting_wallet_signature",
+          wallet: { address: params.walletAddress, fundingMode: "agent_wallet" },
+        },
+        status: 202,
+      };
+    },
     ...quoteOverrides(),
     upsertAgentCallbackSubscription: async params => {
       registered.push(params);
@@ -1276,48 +1272,37 @@ test("rateloop_ask_humans registers webhooks and enqueues the awaiting-signature
     webhook: { events: string[]; registered: boolean; signatureHeaders: string[] };
   };
 
-  assert.equal(body.webhook.registered, true);
+  assert.equal(body.webhook.registered, false);
   assert.deepEqual(body.webhook.events, ["question.submitting"]);
   assert.ok(body.webhook.signatureHeaders.includes("x-rateloop-callback-signature"));
-  assert.equal(registered.length, 1);
-  assert.deepEqual(registered[0], {
+  assert.equal(prepared.length, 1);
+  assert.deepEqual((prepared[0] as { pendingCallback?: unknown }).pendingCallback, {
     agentId: AGENT.id,
     callbackUrl: "https://agent.example/rateloop",
     eventTypes: ["question.submitting"],
     secret: "webhook-secret",
   });
-  assert.equal(enqueued.length, 1);
-  assert.deepEqual(enqueued[0], {
-    agentId: AGENT.id,
-    eventId: `${OPERATION_KEY}:question.submitting`,
-    eventType: "question.submitting",
-    payload: {
-      chainId: 480,
-      clientRequestId: "ask-bookkeeping-failure",
-      contentId: null,
-      contentIds: [],
-      error: null,
-      eventType: "question.submitting",
-      operationKey: OPERATION_KEY,
-      publicUrl: null,
-      status: "awaiting_wallet_signature",
-    },
-  });
+  assert.equal(registered.length, 0);
+  assert.equal(enqueued.length, 0);
 });
 
-test("rateloop_ask_humans registers the default lifecycle webhook events", async () => {
+test("rateloop_ask_humans stores the default lifecycle webhook events", async () => {
   const registered: unknown[] = [];
+  const prepared: unknown[] = [];
 
   __setMcpToolTestOverridesForTests({
     enqueueAgentCallbackEvent: async () => [],
     getMcpAgentBudgetSummary: async () => managedBudgetSummary(),
-    prepareAgentWalletQuestionSubmissionRequest: async () => ({
-      body: {
-        operationKey: OPERATION_KEY,
-        status: "awaiting_wallet_signature",
-      },
-      status: 202,
-    }),
+    prepareAgentWalletQuestionSubmissionRequest: async params => {
+      prepared.push(params);
+      return {
+        body: {
+          operationKey: OPERATION_KEY,
+          status: "awaiting_wallet_signature",
+        },
+        status: 202,
+      };
+    },
     ...quoteOverrides(),
     upsertAgentCallbackSubscription: async params => {
       registered.push(params);
@@ -1334,7 +1319,8 @@ test("rateloop_ask_humans registers the default lifecycle webhook events", async
     name: "rateloop_ask_humans",
   });
 
-  assert.deepEqual(registered[0], {
+  assert.equal(registered.length, 0);
+  assert.deepEqual((prepared[0] as { pendingCallback?: unknown }).pendingCallback, {
     agentId: AGENT.id,
     callbackUrl: "https://agent.example/rateloop",
     eventTypes: [
@@ -1410,6 +1396,67 @@ test("rateloop_confirm_ask_transactions marks budget submitted and enqueues subm
   });
 });
 
+test("rateloop_confirm_ask_transactions activates pending webhook subscriptions after payment confirmation", async () => {
+  const registered: unknown[] = [];
+  const enqueued: unknown[] = [];
+  const pendingCallback = {
+    agentId: AGENT.id,
+    callbackUrl: "https://agent.example/rateloop",
+    eventTypes: ["question.submitting", "question.submitted"],
+    secret: "webhook-secret",
+  };
+  await insertX402SubmissionRecord({
+    agentId: AGENT.id,
+    mode: "agent-wallet-plan",
+    pendingCallback,
+  });
+
+  __setMcpToolTestOverridesForTests({
+    confirmAgentWalletQuestionSubmissionRequest: async () => ({
+      body: {
+        chainId: 480,
+        clientRequestId: "ask-bookkeeping-failure",
+        contentId: "123",
+        contentIds: ["123"],
+        operationKey: OPERATION_KEY,
+        status: "submitted",
+      },
+      status: 200,
+    }),
+    enqueueAgentCallbackEvent: async params => {
+      enqueued.push(params);
+      return [];
+    },
+    updateMcpBudgetReservation: async () => null,
+    upsertAgentCallbackSubscription: async params => {
+      registered.push(params);
+      return null;
+    },
+  });
+
+  const result = await callRateLoopMcpTool({
+    agent: AGENT,
+    arguments: {
+      operationKey: OPERATION_KEY,
+      transactionHashes: [`0x${"4".repeat(64)}`],
+    },
+    name: "rateloop_confirm_ask_transactions",
+  });
+
+  const body = result as unknown as { status: string; warnings: string[] };
+  assert.equal(body.status, "submitted");
+  assert.deepEqual(body.warnings, []);
+  assert.deepEqual(registered, [pendingCallback]);
+  assert.deepEqual(
+    enqueued.map(event => (event as { eventType: string }).eventType),
+    ["question.submitting", "question.submitted"],
+  );
+  assert.deepEqual(
+    enqueued.map(event => (event as { agentId: string }).agentId),
+    [AGENT.id, AGENT.id],
+  );
+});
+
 test("public rateloop_confirm_ask_transactions enqueues wallet webhook callbacks", async () => {
   const enqueued: unknown[] = [];
 
@@ -1445,6 +1492,74 @@ test("public rateloop_confirm_ask_transactions enqueues wallet webhook callbacks
   assert.deepEqual(body.warnings, []);
   assert.deepEqual(enqueued[0], {
     agentId: publicWebhookAgentId({ chainId: 480, walletAddress: String(AGENT.walletAddress) }),
+    eventId: `${OPERATION_KEY}:question.submitted`,
+    eventType: "question.submitted",
+    payload: {
+      chainId: 480,
+      clientRequestId: "ask-public-callback",
+      contentId: "123",
+      contentIds: ["123"],
+      error: null,
+      eventType: "question.submitted",
+      operationKey: OPERATION_KEY,
+      publicUrl: "http://localhost:3000/rate?content=123",
+      status: "submitted",
+    },
+  });
+});
+
+test("public rateloop_confirm_ask_transactions activates pending wallet webhook subscriptions after payment confirmation", async () => {
+  const registered: unknown[] = [];
+  const enqueued: unknown[] = [];
+  const agentId = publicWebhookAgentId({ chainId: 480, walletAddress: String(AGENT.walletAddress) });
+  const pendingCallback = {
+    agentId,
+    callbackUrl: "https://agent.example/rateloop",
+    eventTypes: ["question.submitted"],
+    secret: "webhook-secret",
+  };
+  await insertX402SubmissionRecord({
+    mode: "permissionless-wallet-plan",
+    pendingCallback,
+  });
+
+  __setMcpToolTestOverridesForTests({
+    confirmAgentWalletQuestionSubmissionRequest: async () => ({
+      body: {
+        chainId: 480,
+        clientRequestId: "ask-public-callback",
+        contentId: "123",
+        contentIds: ["123"],
+        operationKey: OPERATION_KEY,
+        payerAddress: AGENT.walletAddress,
+        status: "submitted",
+      },
+      status: 200,
+    }),
+    enqueueAgentCallbackEvent: async params => {
+      enqueued.push(params);
+      return [];
+    },
+    upsertAgentCallbackSubscription: async params => {
+      registered.push(params);
+      return null;
+    },
+  });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: {
+      operationKey: OPERATION_KEY,
+      transactionHashes: [`0x${"4".repeat(64)}`],
+    },
+    name: "rateloop_confirm_ask_transactions",
+  });
+  const body = result as { status: string; warnings: string[] };
+
+  assert.equal(body.status, "submitted");
+  assert.deepEqual(body.warnings, []);
+  assert.deepEqual(registered, [pendingCallback]);
+  assert.deepEqual(enqueued[0], {
+    agentId,
     eventId: `${OPERATION_KEY}:question.submitted`,
     eventType: "question.submitted",
     payload: {

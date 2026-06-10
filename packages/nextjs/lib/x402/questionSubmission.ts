@@ -57,6 +57,7 @@ import {
 
 const RESERVED_SUBMISSION_WAIT_MS = 1_100;
 const TX_RECEIPT_TIMEOUT_MS = 180_000;
+const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const FEEDBACK_BONUS_ASSET_LREP = 0;
 const FEEDBACK_BONUS_ASSET_USDC = 1;
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
@@ -91,6 +92,7 @@ type StoredWalletSubmissionPlanReceipt = {
   expectedContentHashes?: Hex[];
   expectedContextUrls?: string[];
   feedbackBonus?: StoredFeedbackBonusRequest;
+  pendingCallback?: StoredPendingAgentCallback;
   expectedRewardTerms?: StoredQuestionRewardTerms;
   expectedRoundConfig?: ReturnType<typeof serializeQuestionRoundConfig>;
   mode?: WalletSubmissionReceiptMode;
@@ -98,6 +100,13 @@ type StoredWalletSubmissionPlanReceipt = {
   originalClientRequestId?: string;
   revealCommitment?: Hex;
   walletAddress?: Address;
+};
+
+export type StoredPendingAgentCallback = {
+  agentId: string;
+  callbackUrl: string;
+  eventTypes: string[];
+  secret: string;
 };
 
 type StoredQuestionRewardTerms = {
@@ -433,6 +442,26 @@ function parseStoredFeedbackBonusRequest(value: unknown): StoredFeedbackBonusReq
   };
 }
 
+function parseStoredPendingAgentCallback(value: unknown): StoredPendingAgentCallback | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const parsed = value as Record<string, unknown>;
+  const agentId = typeof parsed.agentId === "string" ? parsed.agentId.trim() : "";
+  const callbackUrl = typeof parsed.callbackUrl === "string" ? parsed.callbackUrl.trim() : "";
+  const secret = typeof parsed.secret === "string" ? parsed.secret : "";
+  const eventTypes = Array.isArray(parsed.eventTypes)
+    ? parsed.eventTypes.filter(
+        (eventType): eventType is string => typeof eventType === "string" && eventType.trim().length > 0,
+      )
+    : [];
+  if (!agentId || !callbackUrl || !secret || eventTypes.length === 0) return undefined;
+  return {
+    agentId,
+    callbackUrl,
+    eventTypes,
+    secret,
+  };
+}
+
 function parseStoredSubmissionPlanReceipt(value: string | null): StoredWalletSubmissionPlanReceipt | null {
   if (!value) return null;
 
@@ -458,6 +487,7 @@ function parseStoredSubmissionPlanReceipt(value: string | null): StoredWalletSub
       expectedContentHashes,
       expectedContextUrls,
       feedbackBonus: parseStoredFeedbackBonusRequest(parsed.feedbackBonus),
+      pendingCallback: parseStoredPendingAgentCallback(parsed.pendingCallback),
       expectedRewardTerms,
       expectedRoundConfig,
       mode:
@@ -479,6 +509,12 @@ function parseStoredSubmissionPlanReceipt(value: string | null): StoredWalletSub
   } catch {
     return null;
   }
+}
+
+export function readPendingAgentCallbackFromSubmissionRecord(
+  record: X402QuestionSubmissionRecord | null,
+): StoredPendingAgentCallback | null {
+  return parseStoredSubmissionPlanReceipt(record?.paymentReceipt ?? null)?.pendingCallback ?? null;
 }
 
 export function isPublicPermissionlessQuestionSubmissionRecord(record: X402QuestionSubmissionRecord | null) {
@@ -1353,6 +1389,18 @@ function defaultNativeX402ValidBefore() {
   return BigInt(Math.floor(Date.now() / 1000) + 30 * 60);
 }
 
+function assertNativeX402ValidityWindow(validAfter: bigint, validBefore: bigint) {
+  if (validBefore <= validAfter) {
+    throw new X402QuestionConflictError("paymentAuthorization.validBefore must be greater than validAfter.");
+  }
+  const maxValidBefore = BigInt(Math.floor(Date.now() / 1000)) + MAX_X402_AUTHORIZATION_VALIDITY_SECONDS;
+  if (validBefore > maxValidBefore) {
+    throw new X402QuestionConflictError(
+      `paymentAuthorization.validBefore must be within ${MAX_X402_AUTHORIZATION_VALIDITY_SECONDS.toString()} seconds (24 hours) of now.`,
+    );
+  }
+}
+
 function getEip3009SignatureParts(signature: Hex) {
   if (signature.length !== 132) {
     throw new X402QuestionConflictError("paymentAuthorization.signature must be a 65-byte EIP-3009 signature.");
@@ -1413,6 +1461,11 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     throw new X402QuestionConfigError("EIP-3009 USDC question submissions require the submitter deployment.");
   }
 
+  const inputAuthorization = normalizeNativeX402AuthorizationInput(params.paymentAuthorization);
+  const validAfter = BigInt(inputAuthorization.validAfter ?? "0");
+  const validBefore = BigInt(inputAuthorization.validBefore ?? defaultNativeX402ValidBefore().toString());
+  assertNativeX402ValidityWindow(validAfter, validBefore);
+
   const publicClient = createPublicQuestionClient(params.config);
   const operation = buildX402QuestionOperation(params.payload);
   const preflight = await preflightX402QuestionSubmissionWithClient({
@@ -1441,12 +1494,6 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
     submitter: params.walletAddress,
   });
   const question = context.primaryQuestion;
-  const inputAuthorization = normalizeNativeX402AuthorizationInput(params.paymentAuthorization);
-  const validAfter = BigInt(inputAuthorization.validAfter ?? "0");
-  const validBefore = BigInt(inputAuthorization.validBefore ?? defaultNativeX402ValidBefore().toString());
-  if (validBefore <= validAfter) {
-    throw new X402QuestionConflictError("paymentAuthorization.validBefore must be greater than validAfter.");
-  }
 
   const computedNonce = (await publicClient.readContract({
     address: params.config.x402QuestionSubmitterAddress,
@@ -1982,6 +2029,7 @@ async function recordAgentWalletSubmissionPlan(params: {
   operation: X402QuestionOperation;
   originalClientRequestId?: string;
   payload: X402QuestionPayload;
+  pendingCallback?: StoredPendingAgentCallback | null;
   plan: AgentWalletQuestionSubmissionPlan;
 }) {
   const now = new Date();
@@ -1990,6 +2038,7 @@ async function recordAgentWalletSubmissionPlan(params: {
     expectedContentHashes: buildExpectedQuestionContentHashes(params.payload),
     expectedContextUrls: buildExpectedQuestionContextUrls(params.payload),
     ...(params.feedbackBonus ? { feedbackBonus: serializeFeedbackBonusRequest(params.feedbackBonus) } : {}),
+    ...(params.pendingCallback ? { pendingCallback: params.pendingCallback } : {}),
     expectedRewardTerms: serializeExpectedRewardTerms(params.payload),
     expectedRoundConfig: serializeQuestionRoundConfig(params.payload.roundConfig),
     mode: params.mode ?? "agent-wallet-plan",
@@ -2079,6 +2128,7 @@ async function recordNativeX402SubmissionPlan(params: {
   operation: X402QuestionOperation;
   originalClientRequestId?: string;
   payload: X402QuestionPayload;
+  pendingCallback?: StoredPendingAgentCallback | null;
   plan: NativeX402QuestionSubmissionPlan;
 }) {
   const now = new Date();
@@ -2088,6 +2138,7 @@ async function recordNativeX402SubmissionPlan(params: {
     expectedContentHashes: buildExpectedQuestionContentHashes(params.payload),
     expectedContextUrls: buildExpectedQuestionContextUrls(params.payload),
     ...(params.feedbackBonus ? { feedbackBonus: serializeFeedbackBonusRequest(params.feedbackBonus) } : {}),
+    ...(params.pendingCallback ? { pendingCallback: params.pendingCallback } : {}),
     expectedRewardTerms: serializeExpectedRewardTerms(params.payload),
     expectedRoundConfig: serializeQuestionRoundConfig(params.payload.roundConfig),
     mode: params.mode ?? "native-x402-authorization",
@@ -2585,11 +2636,13 @@ export async function prepareAgentWalletQuestionSubmissionRequest(params: {
   agentId: string;
   feedbackBonus?: X402FeedbackBonusRequest | null;
   payload: X402QuestionPayload;
+  pendingCallback?: StoredPendingAgentCallback | null;
   walletAddress: Address;
 }): Promise<{ body: unknown; status: number }> {
   return prepareWalletQuestionSubmissionRequest({
     agentId: params.agentId,
     feedbackBonus: params.feedbackBonus,
+    pendingCallback: params.pendingCallback,
     payload: params.payload,
     walletAddress: params.walletAddress,
   });
@@ -2598,6 +2651,7 @@ export async function prepareAgentWalletQuestionSubmissionRequest(params: {
 export async function preparePermissionlessWalletQuestionSubmissionRequest(params: {
   feedbackBonus?: X402FeedbackBonusRequest | null;
   payload: X402QuestionPayload;
+  pendingCallback?: StoredPendingAgentCallback | null;
   walletAddress: Address;
 }): Promise<{ body: unknown; status: number }> {
   return prepareWalletQuestionSubmissionRequest({
@@ -2605,6 +2659,7 @@ export async function preparePermissionlessWalletQuestionSubmissionRequest(param
     feedbackBonus: params.feedbackBonus,
     mode: "permissionless-wallet-plan",
     originalClientRequestId: params.payload.clientRequestId,
+    pendingCallback: params.pendingCallback,
     payload: toPermissionlessWalletPayload(params.payload, params.walletAddress),
     responseClientRequestId: params.payload.clientRequestId,
     walletAddress: params.walletAddress,
@@ -2617,6 +2672,7 @@ async function prepareWalletQuestionSubmissionRequest(params: {
   mode?: WalletSubmissionReceiptMode;
   originalClientRequestId?: string;
   payload: X402QuestionPayload;
+  pendingCallback?: StoredPendingAgentCallback | null;
   responseClientRequestId?: string;
   walletAddress: Address;
 }): Promise<{ body: unknown; status: number }> {
@@ -2658,6 +2714,7 @@ async function prepareWalletQuestionSubmissionRequest(params: {
     operation,
     originalClientRequestId: params.originalClientRequestId,
     payload: params.payload,
+    pendingCallback: params.pendingCallback,
     plan,
   });
 
@@ -2676,12 +2733,14 @@ export async function prepareNativeX402QuestionSubmissionRequest(params: {
   feedbackBonus?: X402FeedbackBonusRequest | null;
   paymentAuthorization?: NativeX402PaymentAuthorizationInput | null;
   payload: X402QuestionPayload;
+  pendingCallback?: StoredPendingAgentCallback | null;
   walletAddress: Address;
 }): Promise<{ body: unknown; status: number }> {
   return prepareNativeQuestionSubmissionRequest({
     agentId: params.agentId,
     feedbackBonus: params.feedbackBonus,
     paymentAuthorization: params.paymentAuthorization,
+    pendingCallback: params.pendingCallback,
     payload: params.payload,
     walletAddress: params.walletAddress,
   });
@@ -2691,6 +2750,7 @@ export async function preparePermissionlessNativeX402QuestionSubmissionRequest(p
   feedbackBonus?: X402FeedbackBonusRequest | null;
   paymentAuthorization?: NativeX402PaymentAuthorizationInput | null;
   payload: X402QuestionPayload;
+  pendingCallback?: StoredPendingAgentCallback | null;
   walletAddress: Address;
 }): Promise<{ body: unknown; status: number }> {
   return prepareNativeQuestionSubmissionRequest({
@@ -2699,6 +2759,7 @@ export async function preparePermissionlessNativeX402QuestionSubmissionRequest(p
     mode: "permissionless-x402-authorization",
     originalClientRequestId: params.payload.clientRequestId,
     paymentAuthorization: params.paymentAuthorization,
+    pendingCallback: params.pendingCallback,
     payload: toPermissionlessWalletPayload(params.payload, params.walletAddress),
     responseClientRequestId: params.payload.clientRequestId,
     walletAddress: params.walletAddress,
@@ -2712,6 +2773,7 @@ async function prepareNativeQuestionSubmissionRequest(params: {
   originalClientRequestId?: string;
   paymentAuthorization?: NativeX402PaymentAuthorizationInput | null;
   payload: X402QuestionPayload;
+  pendingCallback?: StoredPendingAgentCallback | null;
   responseClientRequestId?: string;
   walletAddress: Address;
 }): Promise<{ body: unknown; status: number }> {
@@ -2759,6 +2821,7 @@ async function prepareNativeQuestionSubmissionRequest(params: {
     operation,
     originalClientRequestId: params.originalClientRequestId,
     payload: params.payload,
+    pendingCallback: params.pendingCallback,
     plan,
   });
 

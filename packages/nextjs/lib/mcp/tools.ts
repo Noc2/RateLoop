@@ -112,15 +112,18 @@ import {
   reserveMcpAgentBudget,
   updateMcpBudgetReservation,
 } from "~~/lib/mcp/budget";
+import { buildQuestionSubmissionKey } from "~~/lib/questionSubmissionCommitment";
 import { resolveRoundVoteRuntime } from "~~/lib/vote/roundVoteRuntime";
 import { type RoundVoteContractCall, buildRoundVoteTransactionPlan } from "~~/lib/vote/roundVoteTransactionPlan";
 import {
   X402QuestionInputError,
   type X402QuestionPayload,
   X402_USDC_DECIMALS,
+  buildX402QuestionOperation,
   parseX402QuestionRequest,
 } from "~~/lib/x402/questionPayload";
 import {
+  type StoredPendingAgentCallback,
   type X402FeedbackBonusRequest,
   X402QuestionConfigError,
   X402QuestionConflictError,
@@ -136,6 +139,7 @@ import {
   prepareNativeX402QuestionSubmissionRequest,
   preparePermissionlessNativeX402QuestionSubmissionRequest,
   preparePermissionlessWalletQuestionSubmissionRequest,
+  readPendingAgentCallbackFromSubmissionRecord,
   resolveX402QuestionConfig,
   toPermissionlessWalletPayload,
   x402QuestionSubmissionRecordBody,
@@ -1764,6 +1768,68 @@ function webhookDeliveryInfo(params: {
   };
 }
 
+function pendingCallbackFromWebhook(params: {
+  agentId: string;
+  callbackUrl: string;
+  eventTypes: AgentCallbackEventType[];
+  secret: string;
+}): StoredPendingAgentCallback {
+  return {
+    agentId: params.agentId,
+    callbackUrl: params.callbackUrl,
+    eventTypes: params.eventTypes,
+    secret: params.secret,
+  };
+}
+
+async function activatePendingCallbackSubscription(params: {
+  body: JsonObject;
+  dependencies: McpToolDependencies;
+  logPrefix: string;
+  operationKey: `0x${string}`;
+  pendingCallback: StoredPendingAgentCallback | null;
+  warnings: string[];
+}) {
+  const pending = params.pendingCallback;
+  if (!pending) return false;
+  const eventTypes = pending.eventTypes.filter((eventType): eventType is AgentCallbackEventType =>
+    AGENT_CALLBACK_EVENT_TYPES.includes(eventType as AgentCallbackEventType),
+  );
+  if (eventTypes.length === 0) return false;
+
+  await params.dependencies.upsertAgentCallbackSubscription({
+    agentId: pending.agentId,
+    callbackUrl: pending.callbackUrl,
+    eventTypes,
+    secret: pending.secret,
+  });
+
+  const enqueueIfRequested = async (eventType: AgentCallbackEventType) => {
+    if (!eventTypes.includes(eventType)) return;
+    try {
+      await params.dependencies.enqueueAgentCallbackEvent({
+        agentId: pending.agentId,
+        eventId: callbackEventId(params.operationKey, eventType),
+        eventType,
+        payload: buildAgentCallbackPayload({
+          body: params.body,
+          chainId: typeof params.body.chainId === "number" ? params.body.chainId : 0,
+          clientRequestId: typeof params.body.clientRequestId === "string" ? params.body.clientRequestId : "",
+          eventType,
+          operationKey: params.operationKey,
+        }),
+      });
+    } catch (error) {
+      console.error(`${params.logPrefix} callback enqueue failed`, error);
+      params.warnings.push(`callback_enqueue_failed:${eventType}`);
+    }
+  };
+
+  await enqueueIfRequested("question.submitting");
+  await enqueueIfRequested("question.submitted");
+  return true;
+}
+
 async function verifyPublicWebhookRegistration(params: {
   args: JsonObject;
   chainId: number;
@@ -2119,6 +2185,26 @@ function publicCallbackAgentIdFromBody(body: JsonObject) {
   return publicWebhookAgentId({ chainId, walletAddress });
 }
 
+function buildDryRunQuote(payload: X402QuestionPayload): Awaited<ReturnType<typeof preflightX402QuestionSubmission>> {
+  return {
+    operation: buildX402QuestionOperation(payload),
+    paymentAmount: payload.bounty.amount,
+    resolvedCategoryIds: payload.questions.map(question => question.categoryId),
+    submissionKeys: payload.questions.map(question =>
+      buildQuestionSubmissionKey({
+        categoryId: question.categoryId,
+        contextUrl: question.contextUrl,
+        detailsHash: question.detailsHash,
+        detailsUrl: question.detailsUrl,
+        imageUrls: question.imageUrls,
+        title: question.title,
+        tags: question.tags,
+        videoUrl: question.videoUrl,
+      }),
+    ),
+  };
+}
+
 function formatQuoteResult(
   params: Awaited<ReturnType<typeof preflightX402QuestionSubmission>>,
   payload: X402QuestionPayload,
@@ -2408,12 +2494,14 @@ async function quoteQuestion(args: JsonObject, agent: McpAgentAuth) {
   if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
     throw new McpToolError("Feedback Bonus escrow is not deployed for the requested chain.", 503);
   }
-  const quote = await dependencies.preflightX402QuestionSubmission({
-    agentId: agent.id,
-    config,
-    ownerWalletAddress: walletAddress,
-    payload: managedPayload,
-  });
+  const quote = dryRun
+    ? buildDryRunQuote(managedPayload)
+    : await dependencies.preflightX402QuestionSubmission({
+        agentId: agent.id,
+        config,
+        ownerWalletAddress: walletAddress,
+        payload: managedPayload,
+      });
   const body = {
     ...formatQuoteResult(quote, payload, config, { feedbackBonus }),
     clientRequestId: payload.clientRequestId,
@@ -2432,11 +2520,13 @@ async function quotePublicQuestion(args: JsonObject) {
   if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
     throw new McpToolError("Feedback Bonus escrow is not deployed for the requested chain.", 503);
   }
-  const quote = await dependencies.preflightX402QuestionSubmission({
-    config,
-    ownerWalletAddress: walletAddress,
-    payload: permissionlessPayload,
-  });
+  const quote = dryRun
+    ? buildDryRunQuote(permissionlessPayload)
+    : await dependencies.preflightX402QuestionSubmission({
+        config,
+        ownerWalletAddress: walletAddress,
+        payload: permissionlessPayload,
+      });
   const body = {
     ...formatQuoteResult(quote, payload, config, { feedbackBonus, walletPolicyRequired: false }),
     clientRequestId: payload.clientRequestId,
@@ -2749,11 +2839,13 @@ export async function callPublicRateLoopMcpTool(params: {
       if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
         throw new McpToolError("Feedback Bonus escrow is not deployed for the requested chain.", 503);
       }
-      const quote = await dependencies.preflightX402QuestionSubmission({
-        config,
-        ownerWalletAddress: walletAddress,
-        payload: permissionlessPayload,
-      });
+      const quote = dryRun
+        ? buildDryRunQuote(permissionlessPayload)
+        : await dependencies.preflightX402QuestionSubmission({
+            config,
+            ownerWalletAddress: walletAddress,
+            payload: permissionlessPayload,
+          });
       const totalPaymentAmount = quote.paymentAmount + feedbackBonusUsdcPaymentAmount(feedbackBonus);
       const maxPaymentAmount = parseMaxPaymentAmount(args.maxPaymentAmount);
       if (totalPaymentAmount > maxPaymentAmount) {
@@ -2791,6 +2883,21 @@ export async function callPublicRateLoopMcpTool(params: {
           walletAddress,
         });
       }
+      const callbackAgentId = publicWebhook
+        ? publicWebhookAgentId({
+            chainId: payload.chainId,
+            walletAddress,
+          })
+        : null;
+      const pendingCallback =
+        webhook && publicWebhook?.verified && callbackAgentId
+          ? pendingCallbackFromWebhook({
+              agentId: callbackAgentId,
+              callbackUrl: publicWebhook.payload.callbackUrl,
+              eventTypes: publicWebhook.payload.eventTypes,
+              secret: webhook.secret,
+            })
+          : null;
 
       const result =
         paymentMode === "x402_authorization"
@@ -2800,51 +2907,18 @@ export async function callPublicRateLoopMcpTool(params: {
                 typeof args.paymentAuthorization === "object" && args.paymentAuthorization
                   ? (args.paymentAuthorization as Record<string, unknown>)
                   : null,
+              pendingCallback,
               payload,
               walletAddress,
             })
           : await dependencies.preparePermissionlessWalletQuestionSubmissionRequest({
               feedbackBonus,
+              pendingCallback,
               payload,
               walletAddress,
             });
       const body = applyFeedbackBonusPaymentFields(normalizeMcpQuestionBody(result.body) as JsonObject, feedbackBonus);
       const warnings: string[] = [];
-      const callbackAgentId = publicWebhook
-        ? publicWebhookAgentId({
-            chainId: payload.chainId,
-            walletAddress,
-          })
-        : null;
-      const callbackWarnings: string[] = [];
-      if (webhook && publicWebhook && callbackAgentId) {
-        await dependencies.upsertAgentCallbackSubscription({
-          agentId: callbackAgentId,
-          callbackUrl: publicWebhook.payload.callbackUrl,
-          eventTypes: publicWebhook.payload.eventTypes,
-          secret: webhook.secret,
-        });
-      }
-      const enqueuePublicCallbackEvent = async (eventType: AgentCallbackEventType, callbackBody: JsonObject) => {
-        if (!callbackAgentId) return;
-        try {
-          await dependencies.enqueueAgentCallbackEvent({
-            agentId: callbackAgentId,
-            eventId: callbackEventId(quote.operation.operationKey, eventType),
-            eventType,
-            payload: buildAgentCallbackPayload({
-              body: callbackBody,
-              chainId: payload.chainId,
-              clientRequestId: payload.clientRequestId,
-              eventType,
-              operationKey: quote.operation.operationKey,
-            }),
-          });
-        } catch (error) {
-          console.error("[mcp-public] callback enqueue failed", error);
-          callbackWarnings.push(`callback_enqueue_failed:${eventType}`);
-        }
-      };
       try {
         await attachImagesToOperation({
           imageUrls: getQuestionImageUrls(payload),
@@ -2856,7 +2930,6 @@ export async function callPublicRateLoopMcpTool(params: {
         console.error("[mcp-public] image attachment association failed", error);
         warnings.push("image_attachment_association_failed");
       }
-      await enqueuePublicCallbackEvent("question.submitting", body);
 
       return {
         ...body,
@@ -2878,10 +2951,10 @@ export async function callPublicRateLoopMcpTool(params: {
         webhook: publicWebhook
           ? webhookDeliveryInfo({
               events: publicWebhook.payload.eventTypes,
-              registered: true,
+              registered: false,
             })
           : null,
-        warnings: [...warnings, ...callbackWarnings],
+        warnings,
       };
     }
 
@@ -2899,8 +2972,18 @@ export async function callPublicRateLoopMcpTool(params: {
       let body = normalizeMcpQuestionBody(result.body) as JsonObject;
       const warnings: string[] = [];
       body = await attachFeedbackBonusPlan(body, dependencies, warnings);
-      const callbackAgentId = publicCallbackAgentIdFromBody(body);
-      if (callbackAgentId) {
+      const submittedRecord = await getX402QuestionSubmissionByOperationKey(operationKey);
+      const pendingCallback = readPendingAgentCallbackFromSubmissionRecord(submittedRecord);
+      const activatedPendingCallback = await activatePendingCallbackSubscription({
+        body,
+        dependencies,
+        logPrefix: "[mcp-public]",
+        operationKey,
+        pendingCallback,
+        warnings,
+      });
+      const callbackAgentId = pendingCallback?.agentId ?? publicCallbackAgentIdFromBody(body);
+      if (callbackAgentId && !activatedPendingCallback) {
         try {
           await dependencies.enqueueAgentCallbackEvent({
             agentId: callbackAgentId,
@@ -3052,12 +3135,14 @@ export async function callRateLoopMcpTool(params: {
       if (feedbackBonus && !config.feedbackBonusEscrowAddress) {
         throw new McpToolError("Feedback Bonus escrow is not deployed for the requested chain.", 503);
       }
-      const quote = await dependencies.preflightX402QuestionSubmission({
-        agentId: params.agent.id,
-        config,
-        ownerWalletAddress: walletAddress,
-        payload: managedPayload,
-      });
+      const quote = dryRun
+        ? buildDryRunQuote(managedPayload)
+        : await dependencies.preflightX402QuestionSubmission({
+            agentId: params.agent.id,
+            config,
+            ownerWalletAddress: walletAddress,
+            payload: managedPayload,
+          });
       const fastLane = buildAgentFastLaneGuidance({
         bounty: payload.bounty,
         questionCount: payload.questions.length,
@@ -3092,42 +3177,20 @@ export async function callRateLoopMcpTool(params: {
         payloadHash: quote.operation.payloadHash,
       });
 
-      const callbackWarnings: string[] = [];
-      if (webhook) {
-        await dependencies.upsertAgentCallbackSubscription({
-          agentId: params.agent.id,
-          callbackUrl: webhook.url,
-          eventTypes: webhook.events,
-          secret: webhook.secret,
-        });
-      }
-
-      const enqueueCallbackEvent = async (eventType: AgentCallbackEventType, body: JsonObject) => {
-        if (!webhook) return;
-        try {
-          await dependencies.enqueueAgentCallbackEvent({
+      const pendingCallback = webhook
+        ? pendingCallbackFromWebhook({
             agentId: params.agent.id,
-            eventId: callbackEventId(quote.operation.operationKey, eventType),
-            eventType,
-            payload: buildAgentCallbackPayload({
-              body,
-              chainId: payload.chainId,
-              clientRequestId: payload.clientRequestId,
-              eventType,
-              operationKey: quote.operation.operationKey,
-            }),
-          });
-        } catch (error) {
-          console.error("[mcp] callback enqueue failed", error);
-          callbackWarnings.push(`callback_enqueue_failed:${eventType}`);
-        }
-      };
+            callbackUrl: webhook.url,
+            eventTypes: webhook.events,
+            secret: webhook.secret,
+          })
+        : null;
 
       const webhookInfo = webhook
         ? {
             delivery: "signed_hmac_sha256",
             events: webhook.events,
-            registered: true,
+            registered: false,
             signatureHeaders: [
               "x-rateloop-callback-id",
               "x-rateloop-callback-timestamp",
@@ -3149,12 +3212,14 @@ export async function callRateLoopMcpTool(params: {
                   typeof args.paymentAuthorization === "object" && args.paymentAuthorization
                     ? (args.paymentAuthorization as Record<string, unknown>)
                     : null,
+                pendingCallback,
                 payload: managedPayload,
                 walletAddress,
               })
             : await dependencies.prepareAgentWalletQuestionSubmissionRequest({
                 agentId: params.agent.id,
                 feedbackBonus,
+                pendingCallback,
                 payload: managedPayload,
                 walletAddress,
               });
@@ -3162,10 +3227,6 @@ export async function callRateLoopMcpTool(params: {
         await dependencies.updateMcpBudgetReservation({
           error: error instanceof Error ? error.message : String(error),
           operationKey: quote.operation.operationKey,
-          status: "failed",
-        });
-        await enqueueCallbackEvent("question.failed", {
-          error: error instanceof Error ? error.message : String(error),
           status: "failed",
         });
         throw error;
@@ -3185,7 +3246,6 @@ export async function callRateLoopMcpTool(params: {
         console.error("[mcp] image attachment association failed", error);
         warnings.push("image_attachment_association_failed");
       }
-      await enqueueCallbackEvent("question.submitting", body);
 
       let managedBudget: Awaited<ReturnType<typeof getMcpAgentBudgetSummary>> | null = null;
       try {
@@ -3208,7 +3268,7 @@ export async function callRateLoopMcpTool(params: {
         publicUrl: null,
         statusTool: "rateloop_get_question_status",
         webhook: webhookInfo,
-        warnings: [...warnings, ...callbackWarnings],
+        warnings,
       };
     }
 
@@ -3226,6 +3286,16 @@ export async function callRateLoopMcpTool(params: {
       let body = normalizeMcpQuestionBody(result.body) as JsonObject;
       const warnings: string[] = [];
       body = await attachFeedbackBonusPlan(body, dependencies, warnings);
+      const submittedRecord = await getX402QuestionSubmissionByOperationKey(operationKey);
+      const pendingCallback = readPendingAgentCallbackFromSubmissionRecord(submittedRecord);
+      const activatedPendingCallback = await activatePendingCallbackSubscription({
+        body,
+        dependencies,
+        logPrefix: "[mcp]",
+        operationKey,
+        pendingCallback,
+        warnings,
+      });
       try {
         await dependencies.updateMcpBudgetReservation({
           contentId: typeof body.contentId === "string" ? body.contentId : null,
@@ -3236,22 +3306,24 @@ export async function callRateLoopMcpTool(params: {
         console.error("[mcp] confirmed ask bookkeeping update failed", error);
         warnings.push("submitted_budget_update_failed");
       }
-      try {
-        await dependencies.enqueueAgentCallbackEvent({
-          agentId: params.agent.id,
-          eventId: callbackEventId(operationKey, "question.submitted"),
-          eventType: "question.submitted",
-          payload: buildAgentCallbackPayload({
-            body,
-            chainId: typeof body.chainId === "number" ? body.chainId : 0,
-            clientRequestId: typeof body.clientRequestId === "string" ? body.clientRequestId : "",
+      if (!activatedPendingCallback) {
+        try {
+          await dependencies.enqueueAgentCallbackEvent({
+            agentId: params.agent.id,
+            eventId: callbackEventId(operationKey, "question.submitted"),
             eventType: "question.submitted",
-            operationKey,
-          }),
-        });
-      } catch (error) {
-        console.error("[mcp] callback enqueue failed", error);
-        warnings.push("callback_enqueue_failed:question.submitted");
+            payload: buildAgentCallbackPayload({
+              body,
+              chainId: typeof body.chainId === "number" ? body.chainId : 0,
+              clientRequestId: typeof body.clientRequestId === "string" ? body.clientRequestId : "",
+              eventType: "question.submitted",
+              operationKey,
+            }),
+          });
+        } catch (error) {
+          console.error("[mcp] callback enqueue failed", error);
+          warnings.push("callback_enqueue_failed:question.submitted");
+        }
       }
 
       return {
