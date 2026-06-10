@@ -5,6 +5,7 @@ import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   DEFAULT_ROUND_CONFIG,
   ROUND_STATE,
+  SCORE_SPREAD_POLICY,
 } from "@rateloop/contracts/protocol";
 import {
   round,
@@ -28,7 +29,6 @@ import { extendFeedbackBonusAwardDeadlinesForTerminalRound } from "./feedback-bo
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
-const RBTS_NEGATIVE_SPREAD_FORFEIT_BPS = 15_000n;
 const HUMAN_CREDENTIAL_MASK = 1 << 3;
 const ZERO_SCORE_SEED = `0x${"00".repeat(32)}` as `0x${string}`;
 const ZERO_BYTES32 = `0x${"00".repeat(32)}` as `0x${string}`;
@@ -336,13 +336,19 @@ function rbtsPositiveSpreadRewardWeight(
 function rbtsNegativeSpreadForfeiture(
   stake: bigint,
   negativeDeltaBps: bigint,
+  scoringParticipantCount: number,
 ): bigint {
   if (stake <= 0n || negativeDeltaBps <= 0n) return 0n;
+  if (scoringParticipantCount < SCORE_SPREAD_POLICY.forfeitMinReveals) {
+    return 0n;
+  }
   const forfeiture =
-    (stake * RBTS_NEGATIVE_SPREAD_FORFEIT_BPS * negativeDeltaBps) /
+    (stake * BigInt(SCORE_SPREAD_POLICY.intensityBps) * negativeDeltaBps) /
     RBTS_SCORE_SCALE /
     RBTS_SCORE_SCALE;
-  return forfeiture > stake ? stake : forfeiture;
+  const maxForfeiture =
+    (stake * BigInt(SCORE_SPREAD_POLICY.maxForfeitBps)) / RBTS_SCORE_SCALE;
+  return forfeiture > maxForfeiture ? maxForfeiture : forfeiture;
 }
 
 function rbtsCommitKey(voter: `0x${string}`, commitHash: `0x${string}`) {
@@ -1073,7 +1079,11 @@ ponder.on("RoundVotingEngine:RbtsRewardsScored", async ({ event, context }) => {
       const deltaBps = BigInt(scoredVote.scoreBps) - indexedMeanScoreBps;
       const forfeitedStake =
         positiveSpreadWeight > 0n && deltaBps < 0n
-          ? rbtsNegativeSpreadForfeiture(scoredVote.stake, -deltaBps)
+          ? rbtsNegativeSpreadForfeiture(
+              scoredVote.stake,
+              -deltaBps,
+              scoredVotes.length,
+            )
           : 0n;
       await context.db.update(vote, { id: scoredVote.id }).set({
         rbtsScoreBps: scoredVote.scoreBps,

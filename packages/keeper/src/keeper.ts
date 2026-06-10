@@ -5,6 +5,8 @@
  * With tlock commit-reveal voting, the keeper has six jobs:
  *   1. Reveal committed RBTS votes after each epoch ends (using drand beacon decryption).
  *   2. Call `settleRound(contentId, roundId)` when ≥max(minVoters, 3) are revealed.
+ *      Low-turnout rounds still settle as feedback signals; score-spread LREP forfeits
+ *      are only enabled by the contracts once the economic reveal threshold is reached.
  *   3. Call `finalizeRevealFailedRound(contentId, roundId)` once the last reveal grace
  *      deadline has passed without reveal quorum.
  *   4. Call `processUnrevealedVotes(contentId, roundId, startIndex, count)` for
@@ -716,7 +718,7 @@ export async function resolveRounds(
           continue;
         }
 
-        // --- 2. SETTLE: If threshold reached (enough RBTS votes revealed) ---
+        // --- 2. SETTLE: If settlement threshold reached (not necessarily full-strength economics) ---
         const rbtsRevealQuorum =
           roundConfig.minVoters > 3n ? roundConfig.minVoters : 3n;
         if (

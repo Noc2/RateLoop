@@ -52,3 +52,28 @@ export const REWARD_SPLIT_BPS = {
   platform: PLATFORM_REWARD_SPLIT_BPS.frontend,
   treasury: 100,
 } as const;
+
+export const SCORE_SPREAD_POLICY = {
+  intensityBps: 15_000,
+  forfeitMinReveals: 8,
+  maxForfeitBps: 5_000,
+} as const;
+
+export const QUESTION_REWARD_PARTICIPANT_FLOORS = {
+  minParticipants: 3,
+  highValueAmount: 1_000_000_000,
+  highValueMinParticipants: 5,
+  veryHighValueAmount: 10_000_000_000,
+  veryHighValueMinParticipants: SCORE_SPREAD_POLICY.forfeitMinReveals,
+} as const;
+
+export function requiredQuestionRewardParticipants(amountAtomic: bigint | number): number {
+  const amount = typeof amountAtomic === "bigint" ? amountAtomic : BigInt(amountAtomic);
+  if (amount >= BigInt(QUESTION_REWARD_PARTICIPANT_FLOORS.veryHighValueAmount)) {
+    return QUESTION_REWARD_PARTICIPANT_FLOORS.veryHighValueMinParticipants;
+  }
+  if (amount >= BigInt(QUESTION_REWARD_PARTICIPANT_FLOORS.highValueAmount)) {
+    return QUESTION_REWARD_PARTICIPANT_FLOORS.highValueMinParticipants;
+  }
+  return QUESTION_REWARD_PARTICIPANT_FLOORS.minParticipants;
+}
