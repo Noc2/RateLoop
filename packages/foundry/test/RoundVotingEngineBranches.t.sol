@@ -126,6 +126,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     uint256 public constant STAKE = 5e6; // 5 LREP
     uint256 public constant T0 = 1_000_000; // setUp warp time
     uint256 public constant EPOCH = 1 hours; // epochDuration
+    uint256 internal constant SCORE_SPREAD_TEST_REVEALS = 8;
     uint8 internal constant COMMIT_STATUS_OPEN = 0;
     uint8 internal constant COMMIT_STATUS_STARTS_NEXT_ROUND = 1;
     uint8 internal constant COMMIT_STATUS_ROUND_FULL = 2;
@@ -368,6 +369,34 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint16[3] memory upPredictions = [uint16(7_000), uint16(6_000), uint16(5_500)];
         uint16[3] memory downPredictions = [uint16(4_000), uint16(3_500), uint16(3_000)];
         return isUp ? upPredictions[index % upPredictions.length] : downPredictions[index % downPredictions.length];
+    }
+
+    function _scoreSpreadFixtureVoters() internal returns (address[] memory voters) {
+        voters = new address[](SCORE_SPREAD_TEST_REVEALS);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+        voters[3] = voter4;
+        voters[4] = voter5;
+        voters[5] = voter6;
+        voters[6] = frontend1;
+        voters[7] = delegate1;
+
+        for (uint256 i = 0; i < voters.length; i++) {
+            mockRaterIdentityRegistry.setHolder(voters[i]);
+        }
+    }
+
+    function _scoreSpreadFixtureDirections() internal pure returns (bool[] memory directions) {
+        directions = new bool[](SCORE_SPREAD_TEST_REVEALS);
+        directions[0] = true;
+        directions[1] = true;
+        directions[2] = true;
+        directions[3] = true;
+        directions[4] = true;
+        directions[5] = false;
+        directions[6] = false;
+        directions[7] = false;
     }
 
     function _revealPrediction(
@@ -1079,24 +1108,32 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         forfeitedPool = _roundRbtsForfeitedPool(engine, contentId, roundId);
         assertTrue(scored, "RBTS scored");
         assertGt(rewardWeight, 0, "positive RBTS reward weight");
-        assertGt(forfeitedPool, 0, "imperfect scores forfeit some stake");
+        assertEq(forfeitedPool, 0, "low-turnout score spread does not forfeit stake");
         assertGt(_commitRbtsScoreBps(engine, contentId, roundId, ck1), 0, "ck1 scored");
     }
 
     function test_SettleRound_PaysCallerIncentiveFromRbtsForfeits() public {
         uint256 contentId = _submitContent();
 
-        (bytes32 ck1, bytes32 s1) = _commitPrediction(voter1, contentId, true, 8_000, 10e6);
-        (bytes32 ck2, bytes32 s2) = _commitPrediction(voter2, contentId, false, 5_000, 3e6);
-        (bytes32 ck3, bytes32 s3) = _commitPrediction(voter3, contentId, true, 6_500, 3e6);
+        address[] memory voters = _scoreSpreadFixtureVoters();
+        bool[] memory directions = _scoreSpreadFixtureDirections();
+        bytes32[] memory commitKeys = new bytes32[](SCORE_SPREAD_TEST_REVEALS);
+        bytes32[] memory salts = new bytes32[](SCORE_SPREAD_TEST_REVEALS);
+
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            (commitKeys[i], salts[i]) =
+                _commitPrediction(voters[i], contentId, directions[i], _predictionBps(i, directions[i]), STAKE);
+        }
 
         uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
         RoundLib.Round memory r0 = RoundEngineReadHelpers.round(engine, contentId, roundId);
         _warpPastTlockRevealTime(uint256(r0.startTime) + EPOCH);
 
-        engine.revealVoteByCommitKey(contentId, roundId, ck1, true, 8_000, s1);
-        engine.revealVoteByCommitKey(contentId, roundId, ck2, false, 5_000, s2);
-        engine.revealVoteByCommitKey(contentId, roundId, ck3, true, 6_500, s3);
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            engine.revealVoteByCommitKey(
+                contentId, roundId, commitKeys[i], directions[i], _predictionBps(i, directions[i]), salts[i]
+            );
+        }
 
         engine.settleRound(contentId, roundId);
         vm.roll(block.number + 1);
@@ -1105,9 +1142,10 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(keeper);
         engine.settleRound(contentId, roundId);
 
-        uint256 grossForfeited = _commitRbtsForfeitedStake(engine, contentId, roundId, ck1)
-            + _commitRbtsForfeitedStake(engine, contentId, roundId, ck2)
-            + _commitRbtsForfeitedStake(engine, contentId, roundId, ck3);
+        uint256 grossForfeited;
+        for (uint256 i = 0; i < SCORE_SPREAD_TEST_REVEALS; i++) {
+            grossForfeited += _commitRbtsForfeitedStake(engine, contentId, roundId, commitKeys[i]);
+        }
         uint256 expectedIncentive = grossForfeited / 100;
         if (expectedIncentive > 1e6) expectedIncentive = 1e6;
 
