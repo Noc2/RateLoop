@@ -617,6 +617,8 @@ describe("resolveRounds", () => {
       roundsSettled: 0,
       roundsCancelled: 0,
       votesRevealed: 0,
+      roundsAwaitingRevealQuorum: 1,
+      minRevealGraceSecondsRemaining: 0,
     });
     expect(walletClient.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
@@ -1383,6 +1385,10 @@ describe("resolveRounds", () => {
     expect(walletClient.writeContract).not.toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
     );
+    // The round is reported as at-risk with the time left until finalization
+    // eligibility: (startTime 1 + maxDuration 5000 + grace 60) - now 1000.
+    expect(result.roundsAwaitingRevealQuorum).toBe(1);
+    expect(result.minRevealGraceSecondsRemaining).toBe(4061);
   });
 
   it("does not finalize reveal-failed when ciphertexts are unavailable from all sources", async () => {

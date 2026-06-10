@@ -12,6 +12,7 @@
  * `fetchBeacon` verifies the BLS signature against those params after fetching.
  */
 import { HttpCachingChain, HttpChainClient, type ChainClient } from "tlock-js";
+import { incrementCounter } from "./metrics.js";
 
 type DrandChain = ReturnType<ChainClient["chain"]>;
 
@@ -138,6 +139,7 @@ export class FailoverChainClient implements ChainClient {
         const message = err instanceof Error ? err.message : String(err);
         failures.push(`${baseUrl}: ${message}`);
         if (attempt < this.clients.length - 1) {
+          incrementCounter("keeper_drand_relay_failovers_total");
           console.warn(
             `[Keeper] drand relay failed for ${what}; failing over (${baseUrl}: ${message})`,
           );

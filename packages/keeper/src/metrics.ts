@@ -20,6 +20,10 @@ const counters: Record<string, number> = {
   keeper_runs_total: 0,
   keeper_errors_total: 0,
   keeper_decrypt_failures_total: 0,
+  keeper_ponder_ciphertext_fetch_failures_total: 0,
+  keeper_ciphertext_log_fallback_total: 0,
+  keeper_drand_relay_failovers_total: 0,
+  keeper_reveal_failed_finalize_skipped_total: 0,
 };
 
 // --- Gauges ---
@@ -28,6 +32,9 @@ const gauges: Record<string, number> = {
   keeper_last_successful_run_timestamp: 0,
   keeper_is_running: 0,
   keeper_wallet_balance_wei: 0,
+  keeper_rounds_awaiting_reveal_quorum: 0,
+  // -1 means no round is currently at risk of RevealFailed finalization.
+  keeper_reveal_grace_seconds_remaining_min: -1,
 };
 
 const startTime = Date.now();
@@ -66,6 +73,9 @@ export function recordRun(result: KeeperResult, durationMs: number) {
   counters.keeper_advisory_launch_credits_claimed_total += result.advisoryLaunchCreditsClaimed;
   counters.keeper_unrevealed_cleanup_batches_total += result.cleanupBatchesProcessed;
   counters.keeper_content_marked_dormant_total += result.contentMarkedDormant;
+  gauges.keeper_rounds_awaiting_reveal_quorum = result.roundsAwaitingRevealQuorum;
+  gauges.keeper_reveal_grace_seconds_remaining_min =
+    result.minRevealGraceSecondsRemaining ?? -1;
   gauges.keeper_last_run_duration_seconds = durationMs / 1000;
   gauges.keeper_last_successful_run_timestamp = Date.now() / 1000;
   consecutiveErrors = 0;
@@ -94,6 +104,14 @@ function renderMetrics(): string {
     keeper_runs_total: "Total keeper run cycles",
     keeper_errors_total: "Total keeper run errors",
     keeper_decrypt_failures_total: "Total tlock decryption failures",
+    keeper_ponder_ciphertext_fetch_failures_total:
+      "Total failed Ponder indexed-ciphertext fetches",
+    keeper_ciphertext_log_fallback_total:
+      "Total ciphertexts resolved via the eth_getLogs fallback instead of Ponder",
+    keeper_drand_relay_failovers_total:
+      "Total drand relay failover events (a relay failed and the next one was tried)",
+    keeper_reveal_failed_finalize_skipped_total:
+      "Total reveal-failed finalizations skipped because the reveal pipeline was unhealthy",
   };
 
   for (const [name, value] of Object.entries(counters)) {
@@ -107,6 +125,10 @@ function renderMetrics(): string {
     keeper_last_successful_run_timestamp: "Unix timestamp of last successful run",
     keeper_is_running: "Whether a keeper run is currently in progress",
     keeper_wallet_balance_wei: "Keeper wallet native balance in wei",
+    keeper_rounds_awaiting_reveal_quorum:
+      "Open rounds with commit quorum whose reveal quorum is still unmet",
+    keeper_reveal_grace_seconds_remaining_min:
+      "Seconds until the most at-risk round becomes finalizable as RevealFailed (-1 = none)",
   };
 
   for (const [name, value] of Object.entries(gauges)) {
@@ -140,6 +162,8 @@ function renderHealth(): { status: number; body: string } {
     roundsRevealFailedFinalized: counters.keeper_rounds_reveal_failed_finalized_total,
     cleanupBatchesProcessed: counters.keeper_unrevealed_cleanup_batches_total,
     decryptFailures: counters.keeper_decrypt_failures_total,
+    roundsAwaitingRevealQuorum: gauges.keeper_rounds_awaiting_reveal_quorum,
+    revealGraceSecondsRemainingMin: gauges.keeper_reveal_grace_seconds_remaining_min,
     walletBalanceWei: String(BigInt(Math.round(gauges.keeper_wallet_balance_wei))),
   });
   return { status: healthy ? 200 : 503, body };

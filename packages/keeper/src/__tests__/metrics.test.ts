@@ -27,6 +27,8 @@ function makeResult(overrides: Partial<KeeperResult> = {}): KeeperResult {
     advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
     contentMarkedDormant: 0,
+    roundsAwaitingRevealQuorum: 0,
+    minRevealGraceSecondsRemaining: null,
     ...overrides,
   };
 }
@@ -94,6 +96,8 @@ describe("metrics", () => {
       makeResult({
         roundsRevealFailedFinalized: 2,
         cleanupBatchesProcessed: 3,
+        roundsAwaitingRevealQuorum: 4,
+        minRevealGraceSecondsRemaining: 120,
       }),
       75,
     );
@@ -103,6 +107,11 @@ describe("metrics", () => {
     expect(metricsBody).toContain("keeper_rounds_reveal_failed_finalized_total 2");
     expect(metricsBody).toContain("keeper_unrevealed_cleanup_batches_total 3");
     expect(metricsBody).toContain("keeper_wallet_balance_wei 4000000000000");
+    expect(metricsBody).toContain("keeper_rounds_awaiting_reveal_quorum 4");
+    expect(metricsBody).toContain("keeper_reveal_grace_seconds_remaining_min 120");
+    expect(metricsBody).toContain("keeper_ciphertext_log_fallback_total 0");
+    expect(metricsBody).toContain("keeper_drand_relay_failovers_total 0");
+    expect(metricsBody).toContain("keeper_reveal_failed_finalize_skipped_total 0");
 
     const health = getHealthSnapshot();
     expect([200, 503]).toContain(health.status);
@@ -110,7 +119,16 @@ describe("metrics", () => {
       roundsRevealFailedFinalized: 2,
       cleanupBatchesProcessed: 3,
       walletBalanceWei: "4000000000000",
+      roundsAwaitingRevealQuorum: 4,
+      revealGraceSecondsRemainingMin: 120,
     });
+  });
+
+  it("reports -1 for the grace gauge when no round is at risk", () => {
+    recordRun(makeResult({ minRevealGraceSecondsRemaining: null }), 10);
+    expect(getMetricsText()).toContain(
+      "keeper_reveal_grace_seconds_remaining_min -1",
+    );
   });
 
   it("resolves only hash-named correlation artifacts from the artifact directory", async () => {

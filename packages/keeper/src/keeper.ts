@@ -69,6 +69,13 @@ export interface KeeperResult {
   advisoryLaunchCreditsClaimed: number;
   cleanupBatchesProcessed: number;
   contentMarkedDormant: number;
+  /** Open rounds with commit quorum but reveal quorum still unmet this tick. */
+  roundsAwaitingRevealQuorum: number;
+  /**
+   * Smallest number of seconds until any of those rounds becomes finalizable as
+   * RevealFailed (0 = already past its grace deadline); null when no round is at risk.
+   */
+  minRevealGraceSecondsRemaining: number | null;
 }
 interface CleanupCursor {
   contentId: bigint;
@@ -96,6 +103,8 @@ function emptyResult(): KeeperResult {
     advisoryLaunchCreditsClaimed: 0,
     cleanupBatchesProcessed: 0,
     contentMarkedDormant: 0,
+    roundsAwaitingRevealQuorum: 0,
+    minRevealGraceSecondsRemaining: null,
   };
 }
 
@@ -457,6 +466,7 @@ async function fetchIndexedCiphertextsForRound(params: {
         signal: AbortSignal.timeout(PONDER_FETCH_TIMEOUT_MS),
       });
       if (!response.ok) {
+        incrementCounter("keeper_ponder_ciphertext_fetch_failures_total");
         params.logger.warn("Failed to fetch indexed vote ciphertext", {
           kind: params.kind,
           status: response.status,
@@ -479,6 +489,7 @@ async function fetchIndexedCiphertextsForRound(params: {
     }
     return indexedCiphertexts;
   } catch (err: unknown) {
+    incrementCounter("keeper_ponder_ciphertext_fetch_failures_total");
     params.logger.warn("Failed to resolve indexed vote ciphertexts", {
       kind: params.kind,
       error: err instanceof Error ? err.message : String(err),
@@ -813,30 +824,12 @@ export async function resolveRounds(
         }
 
         // --- 3. REVEAL FAILED: commit quorum reached, reveal quorum never did ---
-        // Never finalize while this tick's reveal pipeline was blocked by
-        // infrastructure (ciphertexts unavailable, drand relays down, RPC reads
-        // failing): finalization forfeits unrevealed stakes, and a systemic outage
-        // must not be billed to voters. finalizeRevealFailedRound stays
-        // permissionless on-chain, so this only stops THIS keeper from finalizing
-        // rounds it failed to reveal itself.
         if (
-          round.state === RoundState.Open &&
-          round.voteCount >= rbtsRevealQuorum &&
-          round.revealedCount < rbtsRevealQuorum &&
-          revealOutcome.infrastructureFailure
-        ) {
-          logger.warn(
-            "Skipping reveal-failed finalization; reveal pipeline was unhealthy this tick",
-            {
-              contentId: contentId.toString(),
-              roundId: Number(activeRoundId),
-            },
-          );
-        } else if (
           round.state === RoundState.Open &&
           round.voteCount >= rbtsRevealQuorum &&
           round.revealedCount < rbtsRevealQuorum
         ) {
+          result.roundsAwaitingRevealQuorum++;
           try {
             const [roundLifecycle, blocksDormancy] = await Promise.all([
               readRoundLifecycleState(
@@ -857,25 +850,56 @@ export async function resolveRounds(
                 ? lastCommitRevealableAfter + revealGracePeriod
                 : round.startTime + roundConfig.maxDuration + revealGracePeriod;
 
+            if (lastCommitRevealableAfter > 0n) {
+              const remainingS =
+                revealFailedEligibleAt > now
+                  ? Number(revealFailedEligibleAt - now)
+                  : 0;
+              if (
+                result.minRevealGraceSecondsRemaining === null ||
+                remainingS < result.minRevealGraceSecondsRemaining
+              ) {
+                result.minRevealGraceSecondsRemaining = remainingS;
+              }
+            }
+
             if (
               blocksDormancy &&
               lastCommitRevealableAfter > 0n &&
               now >= revealFailedEligibleAt
             ) {
-              await writeContractAndConfirm(publicClient, walletClient, {
-                chain,
-                account,
-                address: engineAddr,
-                abi: RoundVotingEngineAbi,
-                functionName: "finalizeRevealFailedRound",
-                args: [contentId, activeRoundId],
-              });
-              logger.info("Finalized reveal-failed round", {
-                contentId: contentId.toString(),
-                roundId: Number(activeRoundId),
-              });
-              result.roundsRevealFailedFinalized++;
-              enqueueRoundForCleanup(contentId, activeRoundId);
+              if (revealOutcome.infrastructureFailure) {
+                // Never finalize while this tick's reveal pipeline was blocked by
+                // infrastructure (ciphertexts unavailable, drand relays down, RPC
+                // reads failing): finalization forfeits unrevealed stakes, and a
+                // systemic outage must not be billed to voters.
+                // finalizeRevealFailedRound stays permissionless on-chain, so this
+                // only stops THIS keeper from finalizing rounds it failed to reveal
+                // itself.
+                incrementCounter("keeper_reveal_failed_finalize_skipped_total");
+                logger.warn(
+                  "Skipping reveal-failed finalization; reveal pipeline was unhealthy this tick",
+                  {
+                    contentId: contentId.toString(),
+                    roundId: Number(activeRoundId),
+                  },
+                );
+              } else {
+                await writeContractAndConfirm(publicClient, walletClient, {
+                  chain,
+                  account,
+                  address: engineAddr,
+                  abi: RoundVotingEngineAbi,
+                  functionName: "finalizeRevealFailedRound",
+                  args: [contentId, activeRoundId],
+                });
+                logger.info("Finalized reveal-failed round", {
+                  contentId: contentId.toString(),
+                  roundId: Number(activeRoundId),
+                });
+                result.roundsRevealFailedFinalized++;
+                enqueueRoundForCleanup(contentId, activeRoundId);
+              }
             }
           } catch (err: unknown) {
             const reason = getRevertReason(err);
@@ -1158,6 +1182,7 @@ async function _revealCommits(
             logger,
           });
           if (ciphertext) {
+            incrementCounter("keeper_ciphertext_log_fallback_total");
             logger.info("Resolved vote ciphertext from on-chain logs", {
               contentId: contentId.toString(),
               roundId: roundId.toString(),
@@ -1423,6 +1448,7 @@ async function _revealAdvisoryCommits(
             logger,
           });
           if (ciphertext) {
+            incrementCounter("keeper_ciphertext_log_fallback_total");
             logger.info("Resolved advisory ciphertext from on-chain logs", {
               contentId: contentId.toString(),
               roundId: roundId.toString(),
