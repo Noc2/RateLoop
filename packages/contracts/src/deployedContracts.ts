@@ -8655,31 +8655,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "RoleRevoked",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "account",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "sender",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "RoundCancelled",
           inputs: [
             {
@@ -9025,11 +9000,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           anonymous: false,
-        },
-        {
-          type: "error",
-          name: "AccessControlBadConfirmation",
-          inputs: [],
         },
         {
           type: "error",
@@ -35641,31 +35611,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "event",
-          name: "RoleRevoked",
-          inputs: [
-            {
-              name: "role",
-              type: "bytes32",
-              indexed: true,
-              internalType: "bytes32",
-            },
-            {
-              name: "account",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "sender",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "RoundCancelled",
           inputs: [
             {
@@ -36011,11 +35956,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           anonymous: false,
-        },
-        {
-          type: "error",
-          name: "AccessControlBadConfirmation",
-          inputs: [],
         },
         {
           type: "error",
