@@ -82,7 +82,9 @@ agreementBps_i = (W_side(side_i) - w_i) * 10_000 / (W_total - w_i)
 ```
 
 If `W_total - w_i == 0` (sole eligible voter) or `w_i` is unavailable, the voter's surprise
-multiplier is neutral (`surpriseBps_i = 10_000`).
+multiplier is neutral (`surpriseBps_i = 10_000`). Votes missing `side` or `w` are excluded from
+`W_total`/`W_side` entirely (and receive the neutral multiplier), so the agreement pools are
+always computed over the same well-defined vote set.
 
 ### Surprise multiplier
 
