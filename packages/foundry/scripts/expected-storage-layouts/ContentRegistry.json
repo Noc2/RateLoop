@@ -159,6 +159,18 @@
     {
       "slot": 26,
       "offset": 0,
+      "label": "questionBundleRewardPoolEscrow",
+      "type": "t_address"
+    },
+    {
+      "slot": 27,
+      "offset": 0,
+      "label": "questionBundleRewardPoolEscrowForBundle",
+      "type": "t_mapping(t_uint256,t_address)"
+    },
+    {
+      "slot": 28,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -173,8 +185,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[41]",
-      "numberOfBytes": "1312",
+      "label": "uint256[39]",
+      "numberOfBytes": "1248",
       "base": "t_uint256"
     },
     {

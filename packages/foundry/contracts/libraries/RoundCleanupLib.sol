@@ -387,7 +387,7 @@ library RoundCleanupLib {
         uint256 roundId,
         bool settled
     ) public {
-        address bundleEscrow = registry.questionRewardPoolEscrow();
+        address bundleEscrow = registry.questionBundleRoundObserver(contentId);
         if (bundleEscrow == address(0)) return;
 
         try IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled) {
@@ -408,7 +408,7 @@ library RoundCleanupLib {
         bool settled
     ) external {
         require(pendingBundleObserverReplay[roundId], "no pending replay");
-        address bundleEscrow = registry.questionRewardPoolEscrow();
+        address bundleEscrow = registry.questionBundleRoundObserver(contentId);
         if (bundleEscrow == address(0)) return;
         IQuestionBundleRoundObserver(bundleEscrow).recordBundleQuestionTerminal(contentId, roundId, settled);
         delete pendingBundleObserverReplay[roundId];

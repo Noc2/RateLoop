@@ -23,6 +23,8 @@ import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ICategoryRegistry } from "./interfaces/ICategoryRegistry.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
 import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
+import { IRoundVotingCommitReveal } from "./interfaces/IRoundVotingCommitReveal.sol";
+import { IRoundVotingSettlement } from "./interfaces/IRoundVotingSettlement.sol";
 
 /// @title RoundVotingEngine
 /// @notice Per-content round-based parimutuel voting with keeper-assisted/self-reveal and epoch-weighted rewards.
@@ -39,7 +41,13 @@ import { IRoundVotingEngine } from "./interfaces/IRoundVotingEngine.sol";
 ///      and the final reveal grace deadline has passed.
 ///      Epoch-weighting: epoch-1 (blind) = 100% reward weight; epoch-2+ (informed) = 25%.
 ///      Win condition uses weighted pools, not raw stake, preventing late-voter herding.
-contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuardTransient {
+contract RoundVotingEngine is
+    IRoundVotingEngine,
+    IRoundVotingCommitReveal,
+    IRoundVotingSettlement,
+    Initializable,
+    ReentrancyGuardTransient
+{
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 

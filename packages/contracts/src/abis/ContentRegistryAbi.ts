@@ -616,6 +616,57 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "questionBundleRewardPoolEscrow",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "questionBundleRewardPoolEscrowForBundle",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "questionBundleRoundObserver",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "bundleRewardPoolEscrow",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "questionRewardPoolEscrow",
     "inputs": [],
     "outputs": [
@@ -760,6 +811,19 @@ export const ContentRegistryAbi = [
     "inputs": [
       {
         "name": "_protocolConfig",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setQuestionBundleRewardPoolEscrow",
+    "inputs": [
+      {
+        "name": "_questionBundleRewardPoolEscrow",
         "type": "address",
         "internalType": "address"
       }
@@ -1776,6 +1840,19 @@ export const ContentRegistryAbi = [
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "QuestionBundleRewardPoolEscrowUpdated",
+    "inputs": [
+      {
+        "name": "rewardPoolEscrow",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       }
     ],
     "anonymous": false
