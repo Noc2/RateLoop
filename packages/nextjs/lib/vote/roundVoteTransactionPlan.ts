@@ -1,5 +1,5 @@
 import { AdvisoryVoteRecorderAbi, LoopReputationAbi, RoundVotingEngineAbi } from "@rateloop/contracts/abis";
-import { type Abi, type Hex, concatHex, encodeAbiParameters, encodeFunctionData } from "viem";
+import { type Abi, type Hex } from "viem";
 
 type EvmAddress = `0x${string}`;
 
@@ -25,6 +25,8 @@ type CommitVoteArgs = readonly [
   stakeWei: bigint,
   frontend: EvmAddress,
 ];
+
+type CommitVoteWithPermitArgs = readonly [...CommitVoteArgs, permitDeadline: bigint, v: number, r: Hex, s: Hex];
 
 type AdvisoryVoteArgs = readonly [
   contentId: bigint,
@@ -112,22 +114,19 @@ export function buildRoundVoteTransactionPlan(params: {
   }
 
   if (needsApproval && params.permitSignature) {
-    const commitVoteData = encodeFunctionData({
-      abi: RoundVotingEngineAbi as Abi,
-      args: commitVoteArgs as never,
-      functionName: "commitVote",
-    });
-    const permitData = encodeAbiParameters(
-      [{ type: "uint256" }, { type: "uint8" }, { type: "bytes32" }, { type: "bytes32" }],
-      [params.permitSignature.deadline, params.permitSignature.v, params.permitSignature.r, params.permitSignature.s],
-    );
+    const commitVoteWithPermitArgs = [
+      ...commitVoteArgs,
+      params.permitSignature.deadline,
+      params.permitSignature.v,
+      params.permitSignature.r,
+      params.permitSignature.s,
+    ] as const satisfies CommitVoteWithPermitArgs;
 
     calls.push({
       abi: RoundVotingEngineAbi as Abi,
       address: params.votingEngineAddress,
-      args: commitVoteArgs,
-      data: concatHex([commitVoteData, permitData]),
-      functionName: "commitVote",
+      args: commitVoteWithPermitArgs,
+      functionName: "commitVoteWithPermit",
       kind: "commitVoteWithPermit",
     });
 

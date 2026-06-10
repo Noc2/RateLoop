@@ -298,7 +298,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         return vm.sign(ownerKey, digest);
     }
 
-    function _commitVoteWithAppendedPermit(
+    function _commitVoteWithPermit(
         address voter,
         uint256 contentId,
         TestCommitArtifacts memory artifacts,
@@ -307,30 +307,21 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         bytes32 r,
         bytes32 s
     ) internal {
-        bytes memory callData = abi.encodePacked(
-            abi.encodeCall(
-                RoundVotingEngine.commitVote,
-                (
-                    contentId,
-                    _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
-                    artifacts.targetRound,
-                    artifacts.drandChainHash,
-                    artifacts.commitHash,
-                    artifacts.ciphertext,
-                    STAKE,
-                    address(0)
-                )
-            ),
-            abi.encode(deadline, v, r, s)
-        );
-
         vm.prank(voter);
-        (bool success, bytes memory returnData) = address(engine).call(callData);
-        if (!success) {
-            assembly ("memory-safe") {
-                revert(add(returnData, 32), mload(returnData))
-            }
-        }
+        engine.commitVoteWithPermit(
+            contentId,
+            _roundContext(artifacts.roundId, artifacts.roundReferenceRatingBps),
+            artifacts.targetRound,
+            artifacts.drandChainHash,
+            artifacts.commitHash,
+            artifacts.ciphertext,
+            STAKE,
+            address(0),
+            deadline,
+            v,
+            r,
+            s
+        );
     }
 
     /// @dev Reveal a vote by commit key. Permissionless — no prank needed.
@@ -794,7 +785,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         uint256 deadline = block.timestamp + 1 hours;
         (uint8 v, bytes32 r, bytes32 s) = _signLrepPermit(voterKey, permitVoter, address(engine), STAKE, deadline);
 
-        _commitVoteWithAppendedPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
+        _commitVoteWithPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
 
         assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
         assertEq(lrepToken.balanceOf(address(engine)), STAKE);
@@ -803,7 +794,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
     function test_CommitVoteWithPermitToleratesFrontRunConsumedPermit() public {
         // A mempool observer front-runs the public permit, consuming the voter's
-        // nonce. The appended-permit commit must still succeed (the front-run
+        // nonce. The permit-backed commit must still succeed (the front-run
         // already set the allowance) rather than reverting and bricking the
         // single-transaction permit-backed commit.
         uint256 voterKey = 0xB0B;
@@ -824,7 +815,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
 
         // The commit still goes through: the stale permit reverts internally but
         // is swallowed, and the already-granted allowance covers the stake.
-        _commitVoteWithAppendedPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
+        _commitVoteWithPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
 
         assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
         assertEq(lrepToken.balanceOf(address(engine)), STAKE);
@@ -832,7 +823,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
     }
 
     function test_CommitVoteWithPermitRevertsWhenNoAllowanceAfterFailedPermit() public {
-        // If the appended permit is invalid AND there is no pre-existing
+        // If the permit is invalid AND there is no pre-existing
         // allowance, the commit must still revert (fail-closed, no free stake).
         uint256 voterKey = 0xB0BB1E;
         address permitVoter = vm.addr(voterKey);
@@ -848,7 +839,7 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         (uint8 v, bytes32 r, bytes32 s) = _signLrepPermit(voterKey, permitVoter, address(0xdead), STAKE, deadline);
 
         vm.expectRevert();
-        _commitVoteWithAppendedPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
+        _commitVoteWithPermit(permitVoter, contentId, artifacts, deadline, v, r, s);
 
         assertEq(lrepToken.allowance(permitVoter, address(engine)), 0);
         assertEq(_voterCommitHash(engine, contentId, artifacts.roundId, permitVoter), bytes32(0));

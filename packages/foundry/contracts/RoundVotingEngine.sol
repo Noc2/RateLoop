@@ -4,6 +4,7 @@ pragma solidity ^0.8.34;
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
@@ -449,7 +450,39 @@ contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuard
         uint256 stakeAmount,
         address frontend
     ) external nonReentrant whenNotPaused {
-        _applyAppendedPermit(ciphertext, stakeAmount);
+        _commitVote(
+            msg.sender,
+            contentId,
+            roundContext,
+            targetRound,
+            drandChainHash,
+            commitHash,
+            ciphertext,
+            stakeAmount,
+            frontend
+        );
+    }
+
+    /// @notice Commit a blind vote after attempting an EIP-2612 permit for the LREP stake.
+    /// @dev The permit call is front-run tolerant: if the signature was already consumed but
+    ///      allowance exists, the subsequent stake transfer succeeds; if allowance is absent,
+    ///      `_commitVote` fails closed on `safeTransferFrom`.
+    function commitVoteWithPermit(
+        uint256 contentId,
+        uint256 roundContext,
+        uint64 targetRound,
+        bytes32 drandChainHash,
+        bytes32 commitHash,
+        bytes calldata ciphertext,
+        uint256 stakeAmount,
+        address frontend,
+        uint256 permitDeadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant whenNotPaused {
+        try IERC20Permit(address(lrepToken)).permit(msg.sender, address(this), stakeAmount, permitDeadline, v, r, s) { }
+            catch { }
         _commitVote(
             msg.sender,
             contentId,
@@ -577,45 +610,6 @@ contract RoundVotingEngine is IRoundVotingEngine, Initializable, ReentrancyGuard
             ciphertextHash,
             ciphertext
         );
-    }
-
-    function _applyAppendedPermit(bytes calldata ciphertext, uint256 stakeAmount) private {
-        bool hasPermit;
-        uint256 permitDeadline;
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-        assembly ("memory-safe") {
-            let permitOffset := add(ciphertext.offset, and(add(ciphertext.length, 31), not(31)))
-            hasPermit := gt(calldatasize(), permitOffset)
-            permitDeadline := calldataload(permitOffset)
-            v := calldataload(add(permitOffset, 32))
-            r := calldataload(add(permitOffset, 64))
-            s := calldataload(add(permitOffset, 96))
-        }
-        if (!hasPermit) return;
-
-        // Front-run-tolerant permit. The permit signature is public in the
-        // mempool, so an observer can replay it to consume the owner's nonce and
-        // make a bare permit() call revert -- which would brick the
-        // single-transaction permit-backed commit. Swallow the permit revert:
-        // the replay still grants the allowance we need, and if it didn't, the
-        // stake safeTransferFrom in _commitVote fails closed. (Kept inline
-        // rather than in a library to avoid embedding another library-address
-        // push in RoundVotingEngine's EIP-170-constrained bytecode.)
-        address token = address(lrepToken);
-        assembly ("memory-safe") {
-            let ptr := mload(0x40)
-            mstore(ptr, shl(224, 0xd505accf)) // permit(address,address,uint256,uint256,uint8,bytes32,bytes32)
-            mstore(add(ptr, 0x04), caller())
-            mstore(add(ptr, 0x24), address())
-            mstore(add(ptr, 0x44), stakeAmount)
-            mstore(add(ptr, 0x64), permitDeadline)
-            mstore(add(ptr, 0x84), v)
-            mstore(add(ptr, 0xa4), r)
-            mstore(add(ptr, 0xc4), s)
-            pop(call(gas(), token, 0, ptr, 0xe4, 0, 0))
-        }
     }
 
     function _computeCommitEpoch(RoundLib.Round storage round, RoundLib.RoundConfig memory roundCfg)
