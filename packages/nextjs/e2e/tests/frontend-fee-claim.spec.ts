@@ -1,15 +1,17 @@
-import "../helpers/fetch-shim";
 import {
   approveLREP,
   claimFrontendFee,
-  claimFrontendFees,
   commitVoteDirect,
+  completeFrontendFeeWithdrawal,
   confiscateFrontendFee,
   evmIncreaseTime,
   getActiveRoundId,
   getFrontendAccumulatedFees,
+  getPendingFrontendFeeWithdrawalAmount,
+  getPendingFrontendFeeWithdrawalReleaseAt,
   readTokenBalance,
   registerFrontend,
+  requestFrontendFeeWithdrawal,
   revealVoteDirect,
   setTestConfig,
   settleRoundDirect,
@@ -20,6 +22,7 @@ import {
 } from "../helpers/admin-helpers";
 import { ANVIL_ACCOUNTS, DEPLOYER } from "../helpers/anvil-accounts";
 import { CONTRACT_ADDRESSES } from "../helpers/contracts";
+import "../helpers/fetch-shim";
 import { getContentList } from "../helpers/ponder-api";
 import { E2E_RPC_URL } from "../helpers/service-urls";
 import { expect, test } from "@playwright/test";
@@ -41,6 +44,7 @@ test.describe("Frontend fee claim lifecycle", () => {
   const STAKE = BigInt(10e6);
   const FRONTEND_STAKE = BigInt(1000e6);
   const EPOCH_DURATION = 300;
+  const FEE_WITHDRAWAL_DELAY = 21 * 86400;
 
   // Shared across serial tests — set by test 1, consumed by test 3.
   let withdrawableFrontend: `0x${string}` | null = null;
@@ -188,7 +192,7 @@ test.describe("Frontend fee claim lifecycle", () => {
     const feesAfter = await getFrontendAccumulatedFees(frontendAddress, FRONTEND_REGISTRY);
     expect(feesAfter).toBeGreaterThan(feesBefore);
 
-    // Save for the claimFees withdrawal test
+    // Save for the two-step fee withdrawal test
     withdrawableFrontend = frontendAddress;
 
     const doubleClaim = await claimFrontendFee(
@@ -231,7 +235,7 @@ test.describe("Frontend fee claim lifecycle", () => {
     expect(await getFrontendAccumulatedFees(frontendAddress, FRONTEND_REGISTRY)).toBe(feesBefore);
   });
 
-  test("operator withdraws accumulated fees via claimFees()", async () => {
+  test("operator withdraws accumulated fees via delayed fee withdrawal", async () => {
     test.setTimeout(60_000);
 
     // Uses the frontend from test 1 which already has credited fees.
@@ -243,19 +247,34 @@ test.describe("Frontend fee claim lifecycle", () => {
 
     const walletBefore = await readTokenBalance(frontendAddress, LREP_TOKEN);
 
-    const withdrawn = await claimFrontendFees(frontendAddress, FRONTEND_REGISTRY);
-    expect(withdrawn, "claimFees() should succeed for eligible frontend with fees").toBe(true);
+    const requested = await requestFrontendFeeWithdrawal(frontendAddress, FRONTEND_REGISTRY);
+    expect(requested, "requestFeeWithdrawal() should move accumulated fees into the pending bucket").toBe(true);
 
-    // Accumulated fees should be zeroed after withdrawal
-    const accumulatedAfter = await getFrontendAccumulatedFees(frontendAddress, FRONTEND_REGISTRY);
-    expect(accumulatedAfter).toBe(0n);
+    const accumulatedAfterRequest = await getFrontendAccumulatedFees(frontendAddress, FRONTEND_REGISTRY);
+    expect(accumulatedAfterRequest).toBe(0n);
 
-    // Operator wallet should have received the LREP
+    const pendingAmount = await getPendingFrontendFeeWithdrawalAmount(frontendAddress, FRONTEND_REGISTRY);
+    expect(pendingAmount).toBe(accumulatedBefore);
+
+    const releaseAt = await getPendingFrontendFeeWithdrawalReleaseAt(frontendAddress, FRONTEND_REGISTRY);
+    expect(releaseAt).toBeGreaterThan(0n);
+
+    const earlyWithdraw = await completeFrontendFeeWithdrawal(frontendAddress, FRONTEND_REGISTRY);
+    expect(earlyWithdraw, "completeFeeWithdrawal() should revert before the review window matures").toBe(false);
+    expect(await readTokenBalance(frontendAddress, LREP_TOKEN)).toBe(walletBefore);
+
+    await evmIncreaseTime(FEE_WITHDRAWAL_DELAY + 1);
+
+    const withdrawn = await completeFrontendFeeWithdrawal(frontendAddress, FRONTEND_REGISTRY);
+    expect(withdrawn, "completeFeeWithdrawal() should succeed after the review window").toBe(true);
+
+    expect(await getPendingFrontendFeeWithdrawalAmount(frontendAddress, FRONTEND_REGISTRY)).toBe(0n);
+    expect(await getPendingFrontendFeeWithdrawalReleaseAt(frontendAddress, FRONTEND_REGISTRY)).toBe(0n);
+
     const walletAfter = await readTokenBalance(frontendAddress, LREP_TOKEN);
     expect(walletAfter - walletBefore).toBe(accumulatedBefore);
 
-    // Double withdrawal should revert (no fees remaining)
-    const doubleWithdraw = await claimFrontendFees(frontendAddress, FRONTEND_REGISTRY);
-    expect(doubleWithdraw, "claimFees() should revert when no fees remain").toBe(false);
+    const doubleWithdraw = await completeFrontendFeeWithdrawal(frontendAddress, FRONTEND_REGISTRY);
+    expect(doubleWithdraw, "completeFeeWithdrawal() should revert when no withdrawal is pending").toBe(false);
   });
 });

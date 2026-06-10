@@ -141,7 +141,7 @@ const GovernanceDocs: NextPage = () => {
         The intended security model is optimistic rather than fully per-snapshot economically secured on-chain. Public
         artifacts, challenge windows, governance arbitration, and the globally bonded frontend-operator set are meant to
         make incorrect payout roots observable and punishable through frontend slashing, reputation loss, and future-fee
-        loss. Frontend fee withdrawals wait out a 14-day slashable review window, so an operator&apos;s undelivered
+        loss. Frontend fee withdrawals wait out a 21-day slashable review window, so an operator&apos;s undelivered
         earnings act as collateral that grows with their usage — a misbehaving proposer forfeits the bond, weeks of fee
         income, and the future fee stream together.
       </p>

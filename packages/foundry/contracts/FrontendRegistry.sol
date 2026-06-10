@@ -53,10 +53,10 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     uint256 public constant UNBONDING_PERIOD = 14 days;
 
     /// @notice Delay between requesting a fee withdrawal and the LREP leaving the registry.
-    /// @dev Accrued fees stay slashable for the same review window as a voluntary exit, so the
-    ///      operator's fee stream acts as collateral that grows with usage and backs optimistic
-    ///      payout-root proposals without requiring per-snapshot bonds.
-    uint256 public constant FEE_WITHDRAWAL_DELAY = 14 days;
+    /// @dev Accrued fees stay slashable long enough for the full governance slash path
+    ///      (proposal delay + voting + timelock) plus detection slack, so the operator's fee
+    ///      stream backs optimistic payout-root proposals without requiring per-snapshot bonds.
+    uint256 public constant FEE_WITHDRAWAL_DELAY = 21 days;
 
     // --- Structs ---
     struct Frontend {

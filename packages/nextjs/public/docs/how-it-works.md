@@ -113,7 +113,7 @@ The oracle is intentionally optimistic. The goal is not fully per-snapshot
 economic collateralization on-chain; it is public artifacts, challenge windows,
 governance arbitration, and frontend-operator accountability through possible
 slashing, reputation loss, and future-income loss. Frontend fee withdrawals
-wait out a 14-day slashable review window in the FrontendRegistry, so an
+wait out a 21-day slashable review window in the FrontendRegistry, so an
 operator's undelivered earnings act as collateral that grows automatically with
 their usage.
 

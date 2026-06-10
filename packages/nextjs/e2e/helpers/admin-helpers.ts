@@ -2239,24 +2239,94 @@ export async function waitForPonderSync(
   return false;
 }
 
+async function readFrontendFeeWithdrawalValue(
+  functionName: "pendingFeeWithdrawalAmount" | "pendingFeeWithdrawalReleaseAt",
+  frontendAddr: string,
+  contractAddress: string,
+): Promise<bigint> {
+  const { decodeFunctionResult, encodeFunctionData } = await import("viem");
+  const abi = [
+    {
+      name: functionName,
+      type: "function",
+      inputs: [{ name: "frontend", type: "address" }],
+      outputs: [{ name: "", type: "uint256" }],
+      stateMutability: "view",
+    },
+  ] as const;
+  const data = encodeFunctionData({
+    abi,
+    functionName,
+    args: [frontendAddr as `0x${string}`],
+  });
+  const res = await fetch(ANVIL_RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "eth_call",
+      params: [{ to: contractAddress, data }, "latest"],
+      id: Date.now(),
+    }),
+  });
+  const json = await res.json();
+  if (json.error || !json.result) return 0n;
+  return decodeFunctionResult({ abi, functionName, data: json.result }) as bigint;
+}
+
+export async function getPendingFrontendFeeWithdrawalAmount(
+  frontendAddr: string,
+  contractAddress: string,
+): Promise<bigint> {
+  return readFrontendFeeWithdrawalValue("pendingFeeWithdrawalAmount", frontendAddr, contractAddress);
+}
+
+export async function getPendingFrontendFeeWithdrawalReleaseAt(
+  frontendAddr: string,
+  contractAddress: string,
+): Promise<bigint> {
+  return readFrontendFeeWithdrawalValue("pendingFeeWithdrawalReleaseAt", frontendAddr, contractAddress);
+}
+
 /**
- * Withdraw accumulated frontend fees via FrontendRegistry.claimFees().
- * Must be called by the frontend operator address. Transfers LREP from
- * the registry to the operator's wallet.
+ * Start the delayed frontend fee withdrawal window.
+ * Must be called by the frontend operator address.
  */
-export async function claimFrontendFees(fromAddress: string, contractAddress: string): Promise<boolean> {
+export async function requestFrontendFeeWithdrawal(fromAddress: string, contractAddress: string): Promise<boolean> {
   const { encodeFunctionData } = await import("viem");
   const data = encodeFunctionData({
     abi: [
       {
-        name: "claimFees",
+        name: "requestFeeWithdrawal",
         type: "function",
         inputs: [],
         outputs: [],
         stateMutability: "nonpayable",
       },
     ],
-    functionName: "claimFees",
+    functionName: "requestFeeWithdrawal",
+    args: [],
+  });
+  return sendTx(fromAddress, contractAddress, data);
+}
+
+/**
+ * Complete a matured frontend fee withdrawal.
+ * Must be called by the frontend operator address after the review window.
+ */
+export async function completeFrontendFeeWithdrawal(fromAddress: string, contractAddress: string): Promise<boolean> {
+  const { encodeFunctionData } = await import("viem");
+  const data = encodeFunctionData({
+    abi: [
+      {
+        name: "completeFeeWithdrawal",
+        type: "function",
+        inputs: [],
+        outputs: [],
+        stateMutability: "nonpayable",
+      },
+    ],
+    functionName: "completeFeeWithdrawal",
     args: [],
   });
   return sendTx(fromAddress, contractAddress, data);

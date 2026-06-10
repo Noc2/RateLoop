@@ -584,7 +584,7 @@ const SmartContracts: NextPage = () => {
         receive {protocolDocFacts.frontendShareLabel} for each settled two-sided round they facilitated votes in. This
         global operator bond also backs optimistic payout-root proposals; the oracle design relies on public artifacts,
         challenge windows, governance arbitration, and possible slashing or future-income loss rather than fully
-        collateralizing each snapshot on-chain. Fee withdrawals are delayed behind a 14-day slashable review window and
+        collateralizing each snapshot on-chain. Fee withdrawals are delayed behind a 21-day slashable review window and
         successful oracle challengers receive a fixed share of slash proceeds, so accountability scales with an
         operator&apos;s actual earnings instead of requiring per-snapshot bonds.
       </p>
@@ -608,7 +608,7 @@ const SmartContracts: NextPage = () => {
         <li>
           <code>requestFeeWithdrawal()</code> / <code>completeFeeWithdrawal()</code> &mdash; Two-step withdrawal of
           accumulated platform fees while healthy, fully bonded, and not exiting. The requested amount stays in the
-          registry and remains fully slashable for a 14-day review window before it can be completed, so the fee stream
+          registry and remains fully slashable for a 21-day review window before it can be completed, so the fee stream
           works as collateral that grows with the operator&apos;s usage.
         </li>
         <li>

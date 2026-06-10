@@ -15,6 +15,7 @@ import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContr
 import { useTargetNetwork } from "~~/hooks/scaffold-eth/useTargetNetwork";
 import { useFrontendClaimableFees } from "~~/hooks/useFrontendClaimableFees";
 import { useGasBalanceStatus } from "~~/hooks/useGasBalanceStatus";
+import { usePageVisibility } from "~~/hooks/usePageVisibility";
 import { useRefreshWalletBalances } from "~~/hooks/useRefreshWalletBalances";
 import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSubmitCalls";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
@@ -70,6 +71,7 @@ function FrontendOperatorAddressRow({ label, address }: { label?: string; addres
 export function FrontendRegistration() {
   const { address } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const isPageVisible = usePageVisibility();
   const refreshWalletBalances = useRefreshWalletBalances();
   const {
     canSponsorTransactions,
@@ -133,12 +135,22 @@ export function FrontendRegistration() {
     contractName: "FrontendRegistry",
     functionName: "pendingFeeWithdrawalAmount",
     args: [address],
+    query: {
+      enabled: !!address,
+      staleTime: 30_000,
+      refetchInterval: isPageVisible ? 30_000 : false,
+    },
   });
 
   const { data: pendingWithdrawalReleaseAtRaw, refetch: refetchPendingWithdrawalReleaseAt } = useScaffoldReadContract({
     contractName: "FrontendRegistry",
     functionName: "pendingFeeWithdrawalReleaseAt",
     args: [address],
+    query: {
+      enabled: !!address,
+      staleTime: 30_000,
+      refetchInterval: isPageVisible ? 30_000 : false,
+    },
   });
 
   const { data: exitAvailableAtRaw, refetch: refetchExitAvailableAt } = useScaffoldReadContract({
@@ -196,6 +208,7 @@ export function FrontendRegistration() {
   const pendingWithdrawalReleaseLabel = hasPendingWithdrawal
     ? new Date(pendingWithdrawalReleaseAt * 1000).toLocaleString()
     : "";
+  const hasPendingDeadline = isExitPending || hasPendingWithdrawal;
 
   // LREP balance
   const lrepFormatted = lrepBalance ? Number(lrepBalance) / 1e6 : 0;
@@ -211,12 +224,12 @@ export function FrontendRegistration() {
   const totalClaimableRoundFeesFormatted = Number(totalClaimableRoundFees) / 1e6;
 
   useEffect(() => {
-    if (!isExitPending) return;
+    if (!hasPendingDeadline) return;
 
     setNowMs(Date.now());
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
     return () => window.clearInterval(timer);
-  }, [isExitPending]);
+  }, [hasPendingDeadline]);
 
   const ensureGasBalance = () => {
     if (isAwaitingSponsoredSubmitCalls) {
@@ -394,7 +407,7 @@ export function FrontendRegistration() {
       }
 
       notification.success(
-        `Withdrawal of ${lrepFees.toFixed(2)} LREP requested. It unlocks after the 14-day review window.`,
+        `Withdrawal of ${lrepFees.toFixed(2)} LREP requested. It unlocks after the 21-day review window.`,
       );
       refetchFees();
       refetchPendingWithdrawal();
@@ -930,7 +943,7 @@ export function FrontendRegistration() {
               </GradientActionButton>
             </div>
             <p className="text-sm text-base-content/50 mt-2">
-              Withdrawals unlock after a 14-day review window and stay slashable until then.
+              Withdrawals unlock after a 21-day review window and stay slashable until then.
             </p>
             {hasPendingWithdrawal && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-base-300">
@@ -959,7 +972,9 @@ export function FrontendRegistration() {
               </div>
             )}
             {isExitPending && (
-              <p className="text-sm text-base-content/50 mt-2">Fee withdrawals stay locked until exit is completed.</p>
+              <p className="text-sm text-base-content/50 mt-2">
+                Completing deregistration after the unbonding period also withdraws fees still held in the registry.
+              </p>
             )}
           </div>
 

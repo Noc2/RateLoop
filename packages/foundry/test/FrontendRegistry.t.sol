@@ -816,6 +816,10 @@ contract FrontendRegistryTest is Test {
 
     // --- Fee Withdrawal Tests ---
 
+    function test_FeeWithdrawalDelayCoversGovernanceReviewSlack() public view {
+        assertEq(registry.FEE_WITHDRAWAL_DELAY(), 21 days);
+    }
+
     function test_FeeWithdrawalTwoStep() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
