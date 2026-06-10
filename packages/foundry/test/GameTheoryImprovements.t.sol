@@ -166,6 +166,31 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         _settleAfterRbtsSeed(engine, contentId, roundId);
     }
 
+    function _settleWeightedTieBoundary(uint256 earlyDownStake)
+        internal
+        returns (RoundLib.Round memory revealed, RoundLib.Round memory settled)
+    {
+        uint256 cid = _submit();
+
+        _commit(alice, cid, true, 10e6);
+        _commit(bob, cid, false, earlyDownStake);
+
+        uint256 roundId = engine.currentRoundId(cid);
+        RoundLib.Round memory openRound = RoundEngineReadHelpers.round(engine, cid, roundId);
+        uint256 roundStart = uint256(openRound.startTime);
+        _warpPastTlockRevealTime(roundStart + EPOCH_DURATION);
+        _reveal(alice, cid, roundId, true);
+        _reveal(bob, cid, roundId, false);
+
+        _commit(carol, cid, false, 10e6);
+        _warpPastTlockRevealTime(roundStart + 2 * EPOCH_DURATION);
+        _reveal(carol, cid, roundId, false);
+
+        revealed = RoundEngineReadHelpers.round(engine, cid, roundId);
+        _settle(cid, roundId);
+        settled = RoundEngineReadHelpers.round(engine, cid, roundId);
+    }
+
     // =========================================================================
     // TEST 1: EpochWeightWinCondition
     // =========================================================================
@@ -259,6 +284,25 @@ contract GameTheoryImprovementsTest is VotingTestBase {
         vm.prank(carol);
         vm.expectRevert(RoundVotingEngine.RoundNotCancelledOrTied.selector);
         engine.claimCancelledRoundRefund(cid, roundId);
+    }
+
+    function test_WeightedTieBreak_KnifeEdgeBoundaryAroundOneAtomicStake() public {
+        (RoundLib.Round memory below, RoundLib.Round memory belowSettled) = _settleWeightedTieBoundary(7_499_999);
+        assertEq(below.weightedUpPool, 10e6, "below: weighted UP");
+        assertEq(below.weightedDownPool, 9_999_999, "below: weighted DOWN");
+        assertTrue(belowSettled.upWins, "below boundary: UP wins by weighted majority");
+
+        (RoundLib.Round memory exact, RoundLib.Round memory exactSettled) = _settleWeightedTieBoundary(7_500_000);
+        assertEq(exact.weightedUpPool, 10e6, "exact: weighted UP");
+        assertEq(exact.weightedDownPool, 10e6, "exact: weighted DOWN");
+        assertEq(exact.upPool, 10e6, "exact: raw UP");
+        assertEq(exact.downPool, 17_500_000, "exact: raw DOWN");
+        assertTrue(exactSettled.upWins, "exact boundary: smaller raw pool wins");
+
+        (RoundLib.Round memory above, RoundLib.Round memory aboveSettled) = _settleWeightedTieBoundary(7_500_001);
+        assertEq(above.weightedUpPool, 10e6, "above: weighted UP");
+        assertEq(above.weightedDownPool, 10_000_001, "above: weighted DOWN");
+        assertFalse(aboveSettled.upWins, "above boundary: one atomic stake flips to DOWN");
     }
 
     // =========================================================================

@@ -61,6 +61,41 @@ contract MockAdvisoryLaunchDistributionPool {
     }
 }
 
+contract LockingLoopGovernor {
+    LoopReputation public immutable reputationToken;
+
+    constructor(LoopReputation token) {
+        reputationToken = token;
+    }
+
+    function lock(address account, uint256 amount, uint256 unlockTime) external {
+        reputationToken.lockForGovernanceUntil(account, amount, unlockTime);
+    }
+}
+
+contract RevertingBundleObserver {
+    uint16 public defaultFrontendFeeBps = 300;
+    bool public shouldRevert = true;
+    uint256 public observedContentId;
+    uint256 public observedRoundId;
+    bool public observedSettled;
+    uint256 public notifyCount;
+
+    error ObserverUnavailable();
+
+    function setShouldRevert(bool value) external {
+        shouldRevert = value;
+    }
+
+    function recordBundleQuestionTerminal(uint256 contentId, uint256 roundId, bool settled) external {
+        if (shouldRevert) revert ObserverUnavailable();
+        observedContentId = contentId;
+        observedRoundId = roundId;
+        observedSettled = settled;
+        notifyCount++;
+    }
+}
+
 // =========================================================================
 // TEST CONTRACT
 // =========================================================================
@@ -953,6 +988,35 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled));
         assertTrue(round.upWins);
         assertGt(round.settledAt, 0);
+    }
+
+    function test_ReplayBundleObserverNotify_ReplaysFailedSettledNotification() public {
+        (uint256 contentId, uint256 roundId) = _setupThreeVoterRound(true, true, false);
+        RevertingBundleObserver observer = new RevertingBundleObserver();
+
+        vm.prank(owner);
+        registry.pause();
+        vm.prank(owner);
+        registry.setQuestionRewardPoolEscrow(address(observer));
+        vm.prank(owner);
+        registry.unpause();
+
+        _settleRoundAfterRbtsSeed(contentId, roundId);
+        assertEq(observer.notifyCount(), 0, "failed callback is retained for replay");
+
+        observer.setShouldRevert(false);
+        vm.prank(owner);
+        bool settled = engine.replayBundleObserverNotify(contentId, roundId);
+
+        assertTrue(settled, "replay derives settled state from engine");
+        assertEq(observer.notifyCount(), 1, "observer replayed once");
+        assertEq(observer.observedContentId(), contentId);
+        assertEq(observer.observedRoundId(), roundId);
+        assertTrue(observer.observedSettled(), "observer receives settled=true");
+
+        vm.prank(owner);
+        vm.expectRevert("no pending replay");
+        engine.replayBundleObserverNotify(contentId, roundId);
     }
 
     function test_VerifiedHumanDoesNotBoostStakeWeight() public {
@@ -2623,6 +2687,48 @@ contract RoundVotingEngineBranchesTest is VotingTestBase {
         vm.prank(frontend1);
         rewardDistributor.claimFrontendFee(contentId, roundId, frontend1);
         assertGt(frontendRegistry.getAccumulatedFees(frontend1), feesBefore);
+    }
+
+    function test_FlushPendingTreasuryForfeit_RetriesRetainedCleanupForfeit() public {
+        uint256 contentId = _submitContent();
+
+        _commit(voter1, contentId, true, STAKE);
+        (bytes32 ck2, bytes32 s2) = _commit(voter2, contentId, true, STAKE);
+        (bytes32 ck3, bytes32 s3) = _commit(voter3, contentId, false, STAKE);
+        (bytes32 ck4, bytes32 s4) = _commit(voter4, contentId, true, STAKE);
+
+        uint256 roundId = RoundEngineReadHelpers.activeRoundId(engine, contentId);
+        uint256 revealGracePeriod = ProtocolConfig(protocolConfigAddress).revealGracePeriod();
+        vm.warp(_lastCommitRevealableAfter(engine, contentId, roundId) + revealGracePeriod + 1);
+
+        _reveal(contentId, roundId, ck2, true, s2);
+        _reveal(contentId, roundId, ck3, false, s3);
+        _reveal(contentId, roundId, ck4, true, s4);
+        _settleRoundAfterRbtsSeed(contentId, roundId);
+
+        uint256 incentive = STAKE / 100;
+        uint256 retainedForfeit = STAKE - incentive;
+        uint256 unlockAt = block.timestamp + 2 days;
+        LockingLoopGovernor lockingGovernor = new LockingLoopGovernor(lrepToken);
+        vm.prank(owner);
+        lrepToken.setGovernor(address(lockingGovernor));
+        lockingGovernor.lock(address(engine), lrepToken.balanceOf(address(engine)) - incentive, unlockAt);
+
+        uint256 keeperBefore = lrepToken.balanceOf(keeper);
+        uint256 treasuryBefore = lrepToken.balanceOf(treasury);
+        vm.prank(keeper);
+        engine.processUnrevealedVotes(contentId, roundId, 0, 0);
+
+        assertEq(lrepToken.balanceOf(keeper) - keeperBefore, incentive, "keeper incentive still pays");
+        assertEq(lrepToken.balanceOf(treasury), treasuryBefore, "treasury transfer is retained while locked");
+        assertEq(_roundUnrevealedCleanupRemaining(engine, contentId, roundId), 0, "cleanup queue clears");
+
+        vm.warp(unlockAt + 1);
+        engine.flushPendingTreasuryForfeit();
+        assertEq(lrepToken.balanceOf(treasury) - treasuryBefore, retainedForfeit, "retained forfeit flushes later");
+
+        vm.expectRevert(RoundVotingEngine.NothingProcessed.selector);
+        engine.flushPendingTreasuryForfeit();
     }
 
     function test_ProcessUnrevealed_SettledRoundProcessesExpiredVotesInBatches() public {
