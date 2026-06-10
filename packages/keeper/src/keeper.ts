@@ -102,6 +102,10 @@ interface KeeperWorkDiscovery {
 }
 
 const MAX_CLEANUP_BATCHES_PER_TICK = 4;
+// Keep in sync with RoundCleanupLib.REVEAL_FAILED_GRACE_MULTIPLIER (design review
+// 2026-06, finding 3): reveal-failed finalization waits out an extended recovery
+// window of 24x the round's snapshotted reveal grace period.
+const REVEAL_FAILED_GRACE_MULTIPLIER = 24n;
 const MAX_CLEANUP_COMPLETED = 5000;
 const MAX_CLEANUP_QUEUE = 2000;
 const PONDER_FETCH_TIMEOUT_MS = 5_000;
@@ -1116,13 +1120,18 @@ export async function resolveRounds(
             ]);
             const lastCommitRevealableAfter =
               roundLifecycle.lastCommitRevealableAfter;
-            const revealGracePeriod = roundLifecycle.revealGracePeriod;
+            // Mirrors RoundCleanupLib.REVEAL_FAILED_GRACE_MULTIPLIER: the on-chain
+            // reveal-failed deadline is the snapshotted grace period times 24, so
+            // computing it with the base grace would submit finalization transactions
+            // ~23 hours early and burn gas on RevealGraceActive reverts.
+            const revealFailedGrace =
+              roundLifecycle.revealGracePeriod * REVEAL_FAILED_GRACE_MULTIPLIER;
 
             const revealFailedEligibleAt =
               lastCommitRevealableAfter >
               round.startTime + roundConfig.maxDuration
-                ? lastCommitRevealableAfter + revealGracePeriod
-                : round.startTime + roundConfig.maxDuration + revealGracePeriod;
+                ? lastCommitRevealableAfter + revealFailedGrace
+                : round.startTime + roundConfig.maxDuration + revealFailedGrace;
 
             if (lastCommitRevealableAfter > 0n) {
               const remainingS =

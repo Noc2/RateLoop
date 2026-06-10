@@ -662,7 +662,7 @@ describe("resolveRounds", () => {
       },
       revealGracePeriod: 60n,
       lastCommitRevealableAfter: 100n,
-      now: 605_000n,
+      now: 610_000n,
     });
     const logger = makeLogger();
 
@@ -1494,9 +1494,9 @@ describe("resolveRounds", () => {
       expect.objectContaining({ functionName: "finalizeRevealFailedRound" }),
     );
     // The round is reported as at-risk with the time left until finalization
-    // eligibility: (startTime 1 + maxDuration 5000 + grace 60) - now 1000.
+    // eligibility: (startTime 1 + maxDuration 5000 + 24x grace 60) - now 1000.
     expect(result.roundsAwaitingRevealQuorum).toBe(1);
-    expect(result.minRevealGraceSecondsRemaining).toBe(4061);
+    expect(result.minRevealGraceSecondsRemaining).toBe(5441);
   });
 
   it("does not finalize reveal-failed when ciphertexts are unavailable from all sources", async () => {
@@ -1519,7 +1519,7 @@ describe("resolveRounds", () => {
       ponderAvailable: false,
       revealGracePeriod: 60n,
       lastCommitRevealableAfter: 100n,
-      now: 605_000n,
+      now: 610_000n,
     });
     const logger = makeLogger();
 
@@ -1563,7 +1563,7 @@ describe("resolveRounds", () => {
       },
       revealGracePeriod: 60n,
       lastCommitRevealableAfter: 100n,
-      now: 605_000n,
+      now: 610_000n,
     });
     const logger = makeLogger();
 
