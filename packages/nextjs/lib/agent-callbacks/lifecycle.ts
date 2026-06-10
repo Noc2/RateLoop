@@ -1,5 +1,6 @@
 import { enqueueAgentCallbackEvent } from "./events";
 import { buildAgentCallbackPayload, callbackEventId } from "./payload";
+import { publicWebhookAgentId } from "./publicWebhooks";
 import type { AgentCallbackEventType } from "./types";
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
 import { buildAgentLiveAskGuidance } from "~~/lib/agent/liveAskGuidance";
@@ -92,8 +93,19 @@ function lifecycleEventsForContent(params: {
   return events;
 }
 
+function readOriginalClientRequestIdFromReceipt(value: unknown) {
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value) as { originalClientRequestId?: unknown };
+    return typeof parsed.originalClientRequestId === "string" ? parsed.originalClientRequestId : null;
+  } catch {
+    return null;
+  }
+}
+
 async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycleCursor | null; limit: number }) {
-  const sortExpression = "COALESCE(submissions.submitted_at, submissions.updated_at, reservations.updated_at)";
+  const managedSortExpression = "COALESCE(submissions.submitted_at, submissions.updated_at, reservations.updated_at)";
+  const publicSortExpression = "COALESCE(submissions.submitted_at, submissions.updated_at)";
   const result = await dbClient.execute({
     args: [
       params.after?.sortAt ?? null,
@@ -103,36 +115,75 @@ async function listManagedLifecycleCandidates(params: { after?: ManagedLifecycle
       params.limit,
     ],
     sql: `
-      SELECT
-        reservations.agent_id,
-        reservations.chain_id,
-        reservations.client_request_id,
-        submissions.content_id,
-        reservations.operation_key,
-        ${sortExpression} AS sort_at
-      FROM mcp_agent_budget_reservations AS reservations
-      INNER JOIN x402_question_submissions AS submissions
-        ON submissions.operation_key = reservations.operation_key
-      WHERE submissions.status = 'submitted'
-        AND submissions.content_id IS NOT NULL
-        AND (
-          ? IS NULL
-          OR ${sortExpression} > ?
-          OR (${sortExpression} = ? AND reservations.operation_key > ?)
-        )
-      ORDER BY sort_at ASC, reservations.operation_key ASC
+      WITH lifecycle_candidates AS (
+        SELECT
+          reservations.agent_id,
+          reservations.chain_id,
+          reservations.client_request_id,
+          submissions.content_id,
+          reservations.operation_key,
+          NULL AS payment_receipt,
+          NULL AS payer_address,
+          ${managedSortExpression} AS sort_at
+        FROM mcp_agent_budget_reservations AS reservations
+        INNER JOIN x402_question_submissions AS submissions
+          ON submissions.operation_key = reservations.operation_key
+        WHERE submissions.status = 'submitted'
+          AND submissions.content_id IS NOT NULL
+
+        UNION ALL
+
+        SELECT
+          NULL AS agent_id,
+          submissions.chain_id,
+          submissions.client_request_id,
+          submissions.content_id,
+          submissions.operation_key,
+          submissions.payment_receipt,
+          submissions.payer_address,
+          ${publicSortExpression} AS sort_at
+        FROM x402_question_submissions AS submissions
+        WHERE submissions.status = 'submitted'
+          AND submissions.content_id IS NOT NULL
+          AND submissions.payer_address IS NOT NULL
+          AND (
+            submissions.client_request_id LIKE 'wallet:%'
+            OR submissions.payment_receipt LIKE '%"mode":"permissionless-wallet-plan"%'
+            OR submissions.payment_receipt LIKE '%"mode":"permissionless-x402-authorization"%'
+          )
+          AND (
+            submissions.payment_receipt IS NULL
+            OR submissions.payment_receipt NOT LIKE '%"agentId"%'
+          )
+      )
+      SELECT *
+      FROM lifecycle_candidates
+      WHERE (
+        ? IS NULL
+        OR sort_at > ?
+        OR (sort_at = ? AND operation_key > ?)
+      )
+      ORDER BY sort_at ASC, operation_key ASC
       LIMIT ?
     `,
   });
 
-  return result.rows.map(row => ({
-    agentId: String(row.agent_id),
-    chainId: Number(row.chain_id),
-    clientRequestId: String(row.client_request_id),
-    contentId: String(row.content_id),
-    operationKey: String(row.operation_key) as `0x${string}`,
-    sortAt: row.sort_at instanceof Date ? row.sort_at : new Date(String(row.sort_at)),
-  }));
+  return result.rows.map(row => {
+    const chainId = Number(row.chain_id);
+    const payerAddress = typeof row.payer_address === "string" ? row.payer_address : "";
+    const agentId =
+      typeof row.agent_id === "string" && row.agent_id
+        ? row.agent_id
+        : publicWebhookAgentId({ chainId, walletAddress: payerAddress });
+    return {
+      agentId,
+      chainId,
+      clientRequestId: readOriginalClientRequestIdFromReceipt(row.payment_receipt) ?? String(row.client_request_id),
+      contentId: String(row.content_id),
+      operationKey: String(row.operation_key) as `0x${string}`,
+      sortAt: row.sort_at instanceof Date ? row.sort_at : new Date(String(row.sort_at)),
+    };
+  });
 }
 
 export async function sweepAgentLifecycleCallbacks(params: { limit?: number; now?: Date } = {}) {

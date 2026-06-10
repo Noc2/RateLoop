@@ -603,6 +603,15 @@ export const agentAskHumansInputSchema = {
       description: "Shared HMAC secret used to sign callback deliveries.",
       type: "string",
     },
+    webhookChallengeId: {
+      description: "Public wallet webhook challenge id returned by the previous webhook_signature_required response.",
+      type: "string",
+    },
+    webhookSignature: {
+      description: "Wallet signature for webhookChallengeId. Required for tokenless public webhook registration.",
+      pattern: "^0x([a-fA-F0-9]{2})*$",
+      type: "string",
+    },
   },
   required: ["clientRequestId", "bounty", "maxPaymentAmount"],
   type: "object",
@@ -873,7 +882,7 @@ export const agentQuestionStatusOutputSchema = {
     rewardPoolId: { type: ["string", "null"] },
     resultTool: { type: ["string", "null"] },
     status: {
-      enum: ["not_found", "awaiting_wallet_signature", "submitted", "failed", "dry_run"],
+      enum: ["not_found", "awaiting_wallet_signature", "submitted", "failed", "dry_run", "webhook_signature_required"],
       type: "string",
     },
     terminal: { type: "boolean" },

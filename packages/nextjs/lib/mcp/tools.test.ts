@@ -7,6 +7,11 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { encodeAbiParameters, encodeEventTopics } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import {
+  enqueueAgentCallbackEvent,
+  publicWebhookAgentId,
+  upsertAgentCallbackSubscription,
+} from "~~/lib/agent-callbacks";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { __setUrlSafetyDnsResolversForTests } from "~~/utils/urlSafety";
@@ -82,8 +87,10 @@ function budgetReservation() {
 async function insertX402SubmissionRecord(params: {
   agentId?: string;
   clientRequestId?: string;
+  contentId?: string | null;
   mode?: string;
   operationKey?: `0x${string}`;
+  status?: string;
 }) {
   const now = new Date();
   const operationKey = params.operationKey ?? OPERATION_KEY;
@@ -100,11 +107,12 @@ async function insertX402SubmissionRecord(params: {
         bounty_amount,
         question_count,
         status,
+        content_id,
         payment_receipt,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     args: [
       operationKey,
@@ -116,7 +124,8 @@ async function insertX402SubmissionRecord(params: {
       "1000000",
       "1000000",
       1,
-      "awaiting_wallet_signature",
+      params.status ?? "awaiting_wallet_signature",
+      params.contentId ?? null,
       JSON.stringify({
         ...(params.agentId ? { agentId: params.agentId } : {}),
         mode: params.mode,
@@ -449,6 +458,135 @@ test("public rateloop_ask_humans dry-run skips permissionless transaction planni
   assert.equal(body.transactionPlan, null);
   assert.equal(body.managedBudget, null);
   assert.equal(body.walletPolicyRequired, false);
+});
+
+test("public rateloop_ask_humans returns a wallet-signed webhook challenge before side effects", async () => {
+  const account = privateKeyToAccount(`0x${"2".repeat(64)}`);
+  const forbidden = async () => {
+    throw new Error("unsigned public webhook registration should not prepare or register");
+  };
+
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    enqueueAgentCallbackEvent: forbidden as never,
+    preparePermissionlessNativeX402QuestionSubmissionRequest: forbidden as never,
+    preparePermissionlessWalletQuestionSubmissionRequest: forbidden as never,
+    upsertAgentCallbackSubscription: forbidden as never,
+  });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: askArguments({
+      walletAddress: account.address,
+      webhookEvents: ["question.submitting"],
+      webhookSecret: "webhook-secret",
+      webhookUrl: "https://agent.example/rateloop",
+    }),
+    name: "rateloop_ask_humans",
+  });
+  const body = result as {
+    message: string;
+    operationKey: string;
+    status: string;
+    transactionPlan: unknown;
+    webhook: { events: string[]; registered: boolean; signatureRequired: boolean };
+  };
+
+  assert.equal(body.status, "webhook_signature_required");
+  assert.equal(body.operationKey, OPERATION_KEY);
+  assert.equal(body.transactionPlan, null);
+  assert.match(body.message, /RateLoop public webhook/);
+  assert.equal(body.webhook.registered, false);
+  assert.equal(body.webhook.signatureRequired, true);
+  assert.deepEqual(body.webhook.events, ["question.submitting"]);
+});
+
+test("public rateloop_ask_humans accepts signed webhook registration and enqueues submitting callback", async () => {
+  const account = privateKeyToAccount(`0x${"3".repeat(64)}`);
+  const registered: unknown[] = [];
+  const enqueued: unknown[] = [];
+  const prepared: unknown[] = [];
+
+  __setMcpToolTestOverridesForTests({
+    ...quoteOverrides(),
+    enqueueAgentCallbackEvent: async params => {
+      enqueued.push(params);
+      return [];
+    },
+    preparePermissionlessWalletQuestionSubmissionRequest: async params => {
+      prepared.push(params);
+      return {
+        body: {
+          clientRequestId: params.payload.clientRequestId,
+          operationKey: OPERATION_KEY,
+          payerAddress: params.walletAddress,
+          status: "awaiting_wallet_signature",
+          wallet: { address: params.walletAddress, fundingMode: "permissionless_wallet" },
+        },
+        status: 202,
+      };
+    },
+    upsertAgentCallbackSubscription: async params => {
+      registered.push(params);
+      return null;
+    },
+  });
+
+  const unsigned = (await callPublicRateLoopMcpTool({
+    arguments: askArguments({
+      walletAddress: account.address,
+      webhookEvents: ["question.submitting"],
+      webhookSecret: "webhook-secret",
+      webhookUrl: "https://agent.example/rateloop",
+    }),
+    name: "rateloop_ask_humans",
+  })) as { challengeId: string; message: string };
+  const signature = await account.signMessage({ message: unsigned.message });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: askArguments({
+      walletAddress: account.address,
+      webhookChallengeId: unsigned.challengeId,
+      webhookEvents: ["question.submitting"],
+      webhookSecret: "webhook-secret",
+      webhookSignature: signature,
+      webhookUrl: "https://agent.example/rateloop",
+    }),
+    name: "rateloop_ask_humans",
+  });
+  const body = result as {
+    status: string;
+    webhook: { events: string[]; registered: boolean; signatureHeaders: string[] };
+  };
+  const callbackAgentId = publicWebhookAgentId({ chainId: 480, walletAddress: account.address });
+
+  assert.equal(body.status, "awaiting_wallet_signature");
+  assert.equal(body.webhook.registered, true);
+  assert.deepEqual(body.webhook.events, ["question.submitting"]);
+  assert.ok(body.webhook.signatureHeaders.includes("x-rateloop-callback-signature"));
+  assert.equal(prepared.length, 1);
+  assert.deepEqual(registered[0], {
+    agentId: callbackAgentId,
+    callbackUrl: "https://agent.example/rateloop",
+    eventTypes: ["question.submitting"],
+    secret: "webhook-secret",
+  });
+  assert.equal(enqueued.length, 1);
+  assert.deepEqual(enqueued[0], {
+    agentId: callbackAgentId,
+    eventId: `${OPERATION_KEY}:question.submitting`,
+    eventType: "question.submitting",
+    payload: {
+      chainId: 480,
+      clientRequestId: "ask-bookkeeping-failure",
+      contentId: null,
+      contentIds: [],
+      error: null,
+      eventType: "question.submitting",
+      operationKey: OPERATION_KEY,
+      publicUrl: null,
+      status: "awaiting_wallet_signature",
+    },
+  });
 });
 
 test("rateloop_ask_humans rejects unsupported sync and async modes", async () => {
@@ -1270,6 +1408,100 @@ test("rateloop_confirm_ask_transactions marks budget submitted and enqueues subm
       status: "submitted",
     },
   });
+});
+
+test("public rateloop_confirm_ask_transactions enqueues wallet webhook callbacks", async () => {
+  const enqueued: unknown[] = [];
+
+  __setMcpToolTestOverridesForTests({
+    confirmAgentWalletQuestionSubmissionRequest: async () => ({
+      body: {
+        chainId: 480,
+        clientRequestId: "ask-public-callback",
+        contentId: "123",
+        contentIds: ["123"],
+        operationKey: OPERATION_KEY,
+        payerAddress: AGENT.walletAddress,
+        status: "submitted",
+      },
+      status: 200,
+    }),
+    enqueueAgentCallbackEvent: async params => {
+      enqueued.push(params);
+      return [];
+    },
+  });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: {
+      operationKey: OPERATION_KEY,
+      transactionHashes: [`0x${"4".repeat(64)}`],
+    },
+    name: "rateloop_confirm_ask_transactions",
+  });
+  const body = result as { status: string; warnings: string[] };
+
+  assert.equal(body.status, "submitted");
+  assert.deepEqual(body.warnings, []);
+  assert.deepEqual(enqueued[0], {
+    agentId: publicWebhookAgentId({ chainId: 480, walletAddress: String(AGENT.walletAddress) }),
+    eventId: `${OPERATION_KEY}:question.submitted`,
+    eventType: "question.submitted",
+    payload: {
+      chainId: 480,
+      clientRequestId: "ask-public-callback",
+      contentId: "123",
+      contentIds: ["123"],
+      error: null,
+      eventType: "question.submitted",
+      operationKey: OPERATION_KEY,
+      publicUrl: "http://localhost:3000/rate?content=123",
+      status: "submitted",
+    },
+  });
+});
+
+test("public rateloop_get_question_status surfaces wallet callback deliveries", async () => {
+  const agentId = publicWebhookAgentId({ chainId: 480, walletAddress: String(AGENT.walletAddress) });
+  await insertX402SubmissionRecord({
+    mode: "permissionless-wallet-plan",
+    operationKey: OPERATION_KEY,
+    status: "submitted",
+  });
+  await upsertAgentCallbackSubscription({
+    agentId,
+    callbackUrl: "https://agent.example/rateloop",
+    eventTypes: ["question.submitted"],
+    secret: "webhook-secret",
+  });
+  await enqueueAgentCallbackEvent({
+    agentId,
+    eventId: `${OPERATION_KEY}:question.submitted`,
+    eventType: "question.submitted",
+    payload: {
+      chainId: 480,
+      clientRequestId: "ask-public-callback",
+      eventType: "question.submitted",
+      operationKey: OPERATION_KEY,
+      status: "submitted",
+    },
+  });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: { operationKey: OPERATION_KEY },
+    name: "rateloop_get_question_status",
+  });
+  const body = result as {
+    callbackDeliveries: Array<{ callbackUrl: string; eventId: string; eventType: string; status: string }>;
+    status: string;
+  };
+
+  assert.equal(body.status, "submitted");
+  assert.equal(body.callbackDeliveries.length, 1);
+  assert.equal(body.callbackDeliveries[0]?.callbackUrl, "https://agent.example/rateloop");
+  assert.equal(body.callbackDeliveries[0]?.eventId, `${OPERATION_KEY}:question.submitted`);
+  assert.equal(body.callbackDeliveries[0]?.eventType, "question.submitted");
+  assert.equal(body.callbackDeliveries[0]?.status, "pending");
 });
 
 test("rateloop_confirm_ask_transactions returns a pending feedback bonus transaction plan", async () => {

@@ -261,9 +261,9 @@ synthetic result without a wallet signature, payment authorization, transaction 
 submission. For live asks, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe
 default. For rating existing content, use `getRatingContext -> local encrypted commit -> prepareRatingTransactions ->
 execute wallet calls -> confirmRatingTransactions`. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded
-`walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, callbacks, balance tooling, and audit
-surfaces. Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent
-wallet. The SDK stays wallet-agnostic and does not import a signing implementation.
+`walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, balance tooling, and audit surfaces.
+Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet.
+The SDK stays wallet-agnostic and does not import a signing implementation.
 
 Ask confirmations can wait for on-chain receipts. The SDK uses a longer `confirmTimeoutMs` for
 `confirmAskTransactions`, `confirmFeedbackBonusTransactions`, and `confirmRatingTransactions` while ordinary reads and
@@ -273,6 +273,11 @@ hashes, or poll status by `operationKey`; RateLoop treats the operation key as t
 `quoteFetchImpl` can route quote-only calls through separate infrastructure from mutating calls. Structured API errors
 are exposed on `RateLoopApiError` as `code`, `retryable`, `recoverWith`, `originalCode`, and `details` so agents can
 branch without parsing the message.
+
+Public wallet-mode asks can register webhooks without a managed token. Include `webhookUrl`, `webhookSecret`, and
+optional `webhookEvents`; if the response has `status: "webhook_signature_required"`, sign `message` with the paying
+wallet and repeat the same ask with `webhookChallengeId: challengeId` and `webhookSignature`. The subscription is keyed
+to the paying wallet on that chain. Managed-token asks can include webhook fields directly.
 
 When an agent wallet should sign USDC authorization typed data before RateLoop prepares the submit transaction, use
 `paymentMode: "eip3009_usdc_authorization"`. The older `paymentMode: "x402_authorization"` value remains accepted as a

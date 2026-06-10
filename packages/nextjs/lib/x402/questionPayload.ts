@@ -549,6 +549,8 @@ const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
   "webhookUrl",
   "webhookSecret",
   "webhookEvents",
+  "webhookChallengeId",
+  "webhookSignature",
   "paymentAuthorization",
   "dryRun",
   "executionMode",

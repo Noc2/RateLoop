@@ -1336,7 +1336,7 @@ test("agent asks route requires walletAddress for tokenless asks", async () => {
   assert.match(String(body.message), /walletAddress is required/i);
 });
 
-test("agent asks route keeps callbacks managed-only for tokenless asks", async () => {
+test("agent asks route returns a public webhook signature challenge for tokenless asks", async () => {
   installAskOverrides();
 
   const response = await asksRoute.POST(
@@ -1350,8 +1350,27 @@ test("agent asks route keeps callbacks managed-only for tokenless asks", async (
   );
   const body = (await response.json()) as Record<string, unknown>;
 
-  assert.equal(response.status, 401);
-  assert.match(String(body.message), /managed agent token/i);
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "webhook_signature_required");
+  assert.equal(body.operationKey, OPERATION_KEY);
+  assert.equal(body.signatureRequired, true);
+  assert.match(String(body.message), /RateLoop public webhook/);
+  assert.deepEqual(body.webhook, {
+    delivery: "signed_hmac_sha256",
+    events: [
+      "bounty.low_response",
+      "feedback.unlocked",
+      "question.failed",
+      "question.open",
+      "question.settled",
+      "question.settling",
+      "question.submitted",
+      "question.submitting",
+    ],
+    registered: false,
+    signatureHeaders: ["x-rateloop-callback-id", "x-rateloop-callback-timestamp", "x-rateloop-callback-signature"],
+    signatureRequired: true,
+  });
 });
 
 test("agent asks route returns the EIP-3009 USDC authorization response", async () => {

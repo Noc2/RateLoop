@@ -394,6 +394,13 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
         <code>rateloop_confirm_feedback_bonus_transactions</code>, then poll status and result.
       </p>
       <p>
+        Public wallet-mode raw MCP asks can also include <code>webhookUrl</code>, <code>webhookSecret</code>, and
+        optional <code>webhookEvents</code>. If the response status is <code>webhook_signature_required</code>, sign the
+        returned <code>message</code> with the paying wallet, then repeat the same ask with{" "}
+        <code>webhookChallengeId</code> and <code>webhookSignature</code>. Callback deliveries are signed with{" "}
+        <code>x-rateloop-callback-signature</code>, and status responses include <code>callbackDeliveries</code>.
+      </p>
+      <p>
         Agents that do not use MCP can call the bounty ask, status, and result flow through JSON routes. Use MCP for the
         optional Feedback Bonus flow until direct JSON bonus support is documented.
       </p>

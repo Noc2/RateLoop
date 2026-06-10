@@ -19,8 +19,15 @@ import {
 import {
   AGENT_CALLBACK_EVENT_TYPES,
   type AgentCallbackEventType,
+  PUBLIC_WEBHOOK_CHALLENGE_TITLE,
+  type PublicWebhookRegistrationPayload,
+  REGISTER_PUBLIC_WEBHOOK_ACTION,
+  buildPublicWebhookRegistrationMessage,
   enqueueAgentCallbackEvent,
+  hashPublicWebhookRegistrationPayload,
   listAgentCallbackEventsByEventIdPrefix,
+  normalizePublicWebhookRegistrationInput,
+  publicWebhookAgentId,
   upsertAgentCallbackSubscription,
 } from "~~/lib/agent-callbacks";
 import { buildAgentCallbackPayload, callbackEventId, getAgentPublicQuestionUrl } from "~~/lib/agent-callbacks/payload";
@@ -1121,15 +1128,6 @@ async function getImageUploadStatus(args: JsonObject, requestUrl: string) {
   });
 }
 
-function assertNoPublicWebhook(args: JsonObject) {
-  const hasWebhookUrl = typeof args.webhookUrl === "string" && args.webhookUrl.trim().length > 0;
-  const hasWebhookSecret = typeof args.webhookSecret === "string" && args.webhookSecret.trim().length > 0;
-  const hasWebhookEvents = Array.isArray(args.webhookEvents) && args.webhookEvents.length > 0;
-  if (hasWebhookUrl || hasWebhookSecret || hasWebhookEvents) {
-    throw new McpToolError("Callbacks require a managed agent token and are unavailable in public wallet mode.", 401);
-  }
-}
-
 function assertSupportedAskHumansMode(value: unknown) {
   if (value === undefined || value === null || value === "" || value === "dry_run") return;
   if (value === "sync" || value === "async") {
@@ -1748,6 +1746,135 @@ async function parseWebhookOptions(args: JsonObject): Promise<{
   };
 }
 
+function callbackSignatureHeaders() {
+  return ["x-rateloop-callback-id", "x-rateloop-callback-timestamp", "x-rateloop-callback-signature"];
+}
+
+function webhookDeliveryInfo(params: {
+  events: AgentCallbackEventType[];
+  registered: boolean;
+  signatureRequired?: boolean;
+}) {
+  return {
+    delivery: "signed_hmac_sha256",
+    events: params.events,
+    registered: params.registered,
+    signatureHeaders: callbackSignatureHeaders(),
+    ...(params.signatureRequired ? { signatureRequired: true } : {}),
+  };
+}
+
+async function verifyPublicWebhookRegistration(params: {
+  args: JsonObject;
+  chainId: number;
+  walletAddress: string;
+  webhook: NonNullable<Awaited<ReturnType<typeof parseWebhookOptions>>>;
+}): Promise<
+  | {
+      challenge: Awaited<ReturnType<typeof issueSignedActionChallenge>>;
+      payload: PublicWebhookRegistrationPayload;
+      verified: false;
+    }
+  | {
+      payload: PublicWebhookRegistrationPayload;
+      verified: true;
+    }
+> {
+  const normalized = await normalizePublicWebhookRegistrationInput({
+    callbackUrl: params.webhook.url,
+    chainId: params.chainId,
+    eventTypes: params.webhook.events,
+    secret: params.webhook.secret,
+    walletAddress: params.walletAddress,
+  });
+  if (!normalized.ok) {
+    throw new McpToolError(normalized.error);
+  }
+
+  const payloadHash = hashPublicWebhookRegistrationPayload(normalized.payload);
+  const challengeId = readOptionalStringField(params.args, "webhookChallengeId");
+  const signature = readOptionalStringField(params.args, "webhookSignature") as `0x${string}`;
+  if (!challengeId || !signature) {
+    return {
+      challenge: await issueSignedActionChallenge({
+        action: REGISTER_PUBLIC_WEBHOOK_ACTION,
+        payloadHash,
+        title: PUBLIC_WEBHOOK_CHALLENGE_TITLE,
+        walletAddress: normalized.payload.normalizedAddress,
+      }),
+      payload: normalized.payload,
+      verified: false,
+    };
+  }
+
+  const challengeFailure = await verifySignedActionChallenge({
+    action: REGISTER_PUBLIC_WEBHOOK_ACTION,
+    buildMessage: ({ nonce, expiresAt }) =>
+      buildPublicWebhookRegistrationMessage({
+        expiresAt,
+        nonce,
+        payload: normalized.payload,
+        payloadHash,
+      }),
+    challengeId,
+    payloadHash,
+    signature,
+    walletAddress: normalized.payload.normalizedAddress,
+  });
+  if (challengeFailure) {
+    const body = (await challengeFailure.json().catch(() => null)) as { error?: string } | null;
+    throw new McpToolError(body?.error ?? "Invalid signed webhook challenge.", challengeFailure.status);
+  }
+
+  return {
+    payload: normalized.payload,
+    verified: true,
+  };
+}
+
+function publicWebhookSignatureRequiredBody(params: {
+  challenge: Awaited<ReturnType<typeof issueSignedActionChallenge>>;
+  config: ReturnType<typeof resolveX402QuestionConfig>;
+  feedbackBonus?: X402FeedbackBonusRequest | null;
+  paymentMode: AskHumansPaymentMode;
+  payload: X402QuestionPayload;
+  quote: Awaited<ReturnType<typeof preflightX402QuestionSubmission>>;
+  webhookEvents: AgentCallbackEventType[];
+  walletAddress: string;
+}) {
+  return {
+    ...formatQuoteResult(params.quote, params.payload, params.config, {
+      feedbackBonus: params.feedbackBonus,
+      walletPolicyRequired: false,
+    }),
+    authMode: "wallet_signature",
+    challengeId: params.challenge.challengeId,
+    clientRequestId: params.payload.clientRequestId,
+    expiresAt: params.challenge.expiresAt,
+    legalNotice: buildAgentLegalNotice(),
+    managedBudget: null,
+    message: params.challenge.message,
+    nextAction:
+      "Sign message, then call rateloop_ask_humans again with webhookChallengeId and webhookSignature plus the same ask and webhook fields.",
+    paymentMode: params.paymentMode,
+    pollAfterMs: null,
+    publicUrl: null,
+    signatureRequired: true,
+    status: "webhook_signature_required",
+    transactionPlan: null,
+    wallet: {
+      address: params.walletAddress,
+      fundingMode: "permissionless_wallet",
+    },
+    walletPolicyRequired: false,
+    webhook: webhookDeliveryInfo({
+      events: params.webhookEvents,
+      registered: false,
+      signatureRequired: true,
+    }),
+  };
+}
+
 function normalizeMcpPayment(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const payment = value as JsonObject;
@@ -1975,6 +2102,21 @@ async function loadCallbackDeliveryStatus(operationKey: `0x${string}`, agentId: 
       eventIdPrefix: `${operationKey}:`,
     }),
   );
+}
+
+function publicCallbackAgentIdFromRecord(record: Awaited<ReturnType<typeof getX402QuestionSubmissionByOperationKey>>) {
+  if (!record?.payerAddress) return null;
+  return publicWebhookAgentId({
+    chainId: record.chainId,
+    walletAddress: record.payerAddress,
+  });
+}
+
+function publicCallbackAgentIdFromBody(body: JsonObject) {
+  const chainId = typeof body.chainId === "number" ? body.chainId : Number(body.chainId);
+  const walletAddress = typeof body.payerAddress === "string" ? body.payerAddress : "";
+  if (!Number.isSafeInteger(chainId) || chainId <= 0 || !isAddress(walletAddress)) return null;
+  return publicWebhookAgentId({ chainId, walletAddress });
 }
 
 function formatQuoteResult(
@@ -2593,11 +2735,11 @@ export async function callPublicRateLoopMcpTool(params: {
 
     case "rateloop_ask_humans": {
       assertSupportedAskHumansMode(args.mode);
-      assertNoPublicWebhook(args);
       const dryRun = isDryRunRequest(args);
       const paymentMode = parseAskHumansPaymentMode(args.paymentMode ?? args.fundingMode);
       const payload = parseX402QuestionRequest(questionPayloadArgs(args));
       const walletAddress = parsePublicWalletAddress(args);
+      const webhook = await parseWebhookOptions(args);
       const feedbackBonus = parseOptionalFeedbackBonus(args, payload, walletAddress);
       const permissionlessPayload = toPermissionlessWalletPayload(payload, walletAddress);
       const config = dependencies.resolveX402QuestionConfig(permissionlessPayload.chainId);
@@ -2626,6 +2768,26 @@ export async function callPublicRateLoopMcpTool(params: {
           walletPolicyRequired: false,
         });
       }
+      const publicWebhook = webhook
+        ? await verifyPublicWebhookRegistration({
+            args,
+            chainId: payload.chainId,
+            walletAddress,
+            webhook,
+          })
+        : null;
+      if (publicWebhook && !publicWebhook.verified) {
+        return publicWebhookSignatureRequiredBody({
+          challenge: publicWebhook.challenge,
+          config,
+          feedbackBonus,
+          paymentMode,
+          payload,
+          quote,
+          webhookEvents: publicWebhook.payload.eventTypes,
+          walletAddress,
+        });
+      }
 
       const result =
         paymentMode === "x402_authorization"
@@ -2645,6 +2807,41 @@ export async function callPublicRateLoopMcpTool(params: {
             });
       const body = applyFeedbackBonusPaymentFields(normalizeMcpQuestionBody(result.body) as JsonObject, feedbackBonus);
       const warnings: string[] = [];
+      const callbackAgentId = publicWebhook
+        ? publicWebhookAgentId({
+            chainId: payload.chainId,
+            walletAddress,
+          })
+        : null;
+      const callbackWarnings: string[] = [];
+      if (webhook && publicWebhook && callbackAgentId) {
+        await dependencies.upsertAgentCallbackSubscription({
+          agentId: callbackAgentId,
+          callbackUrl: publicWebhook.payload.callbackUrl,
+          eventTypes: publicWebhook.payload.eventTypes,
+          secret: webhook.secret,
+        });
+      }
+      const enqueuePublicCallbackEvent = async (eventType: AgentCallbackEventType, callbackBody: JsonObject) => {
+        if (!callbackAgentId) return;
+        try {
+          await dependencies.enqueueAgentCallbackEvent({
+            agentId: callbackAgentId,
+            eventId: callbackEventId(quote.operation.operationKey, eventType),
+            eventType,
+            payload: buildAgentCallbackPayload({
+              body: callbackBody,
+              chainId: payload.chainId,
+              clientRequestId: payload.clientRequestId,
+              eventType,
+              operationKey: quote.operation.operationKey,
+            }),
+          });
+        } catch (error) {
+          console.error("[mcp-public] callback enqueue failed", error);
+          callbackWarnings.push(`callback_enqueue_failed:${eventType}`);
+        }
+      };
       try {
         await attachImagesToOperation({
           imageUrls: getQuestionImageUrls(payload),
@@ -2656,6 +2853,7 @@ export async function callPublicRateLoopMcpTool(params: {
         console.error("[mcp-public] image attachment association failed", error);
         warnings.push("image_attachment_association_failed");
       }
+      await enqueuePublicCallbackEvent("question.submitting", body);
 
       return {
         ...body,
@@ -2674,8 +2872,13 @@ export async function callPublicRateLoopMcpTool(params: {
         publicUrl: null,
         statusTool: "rateloop_get_question_status",
         walletPolicyRequired: false,
-        webhook: null,
-        warnings,
+        webhook: publicWebhook
+          ? webhookDeliveryInfo({
+              events: publicWebhook.payload.eventTypes,
+              registered: true,
+            })
+          : null,
+        warnings: [...warnings, ...callbackWarnings],
       };
     }
 
@@ -2693,6 +2896,26 @@ export async function callPublicRateLoopMcpTool(params: {
       let body = normalizeMcpQuestionBody(result.body) as JsonObject;
       const warnings: string[] = [];
       body = await attachFeedbackBonusPlan(body, dependencies, warnings);
+      const callbackAgentId = publicCallbackAgentIdFromBody(body);
+      if (callbackAgentId) {
+        try {
+          await dependencies.enqueueAgentCallbackEvent({
+            agentId: callbackAgentId,
+            eventId: callbackEventId(operationKey, "question.submitted"),
+            eventType: "question.submitted",
+            payload: buildAgentCallbackPayload({
+              body,
+              chainId: typeof body.chainId === "number" ? body.chainId : 0,
+              clientRequestId: typeof body.clientRequestId === "string" ? body.clientRequestId : "",
+              eventType: "question.submitted",
+              operationKey,
+            }),
+          });
+        } catch (error) {
+          console.error("[mcp-public] callback enqueue failed", error);
+          warnings.push("callback_enqueue_failed:question.submitted");
+        }
+      }
       return {
         ...body,
         publicUrl: getAgentPublicQuestionUrl(typeof body.contentId === "string" ? body.contentId : null),
@@ -2740,9 +2963,11 @@ export async function callPublicRateLoopMcpTool(params: {
           console.error("[mcp-public] live ask guidance unavailable", error);
         }
       }
+      const callbackAgentId = publicCallbackAgentIdFromRecord(record);
       const body = {
         ...(normalizeMcpQuestionBody(x402QuestionSubmissionRecordBody(record)) as JsonObject),
-        callbackDeliveries: [],
+        callbackDeliveries:
+          operationKey && callbackAgentId ? await loadCallbackDeliveryStatus(operationKey, callbackAgentId) : [],
         liveAskGuidance,
         publicUrl: getAgentPublicQuestionUrl(record?.contentId ?? null),
       };

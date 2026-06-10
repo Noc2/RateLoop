@@ -115,6 +115,11 @@ export interface AskHumansRequest extends RateLoopAgentQuestionRequest {
   paymentMode?: "wallet_calls" | "eip3009_usdc_authorization" | "x402_authorization";
   signatureMode?: "agent_signs" | "browser_link";
   transport?: "http" | "mcp";
+  webhookChallengeId?: string;
+  webhookEvents?: string[];
+  webhookSecret?: string;
+  webhookSignature?: `0x${string}` | string;
+  webhookUrl?: string;
 }
 
 export interface PrepareImageUploadRequest {
