@@ -14,6 +14,8 @@ library RewardMath {
     uint256 internal constant TREASURY_BPS = 100; // 1% treasury
     uint256 internal constant BPS_TOTAL = 10000;
     uint256 internal constant SCORE_SPREAD_INTENSITY_BPS = 15_000; // 1.5x below-mean score penalty
+    uint256 internal constant SCORE_SPREAD_FORFEIT_MIN_REVEALS = 8;
+    uint256 internal constant MAX_SCORE_SPREAD_FORFEIT_BPS = 5_000; // 50% max score-spread stake loss
 
     // Rating calculation parameter (fixed, not configurable)
     uint256 internal constant RATING_B = 50e6; // Smoothing parameter for rating formula (50 LREP in 6 decimals)
@@ -78,15 +80,23 @@ library RewardMath {
     /// @param stakeAmount Raw stake attached to the revealed report.
     /// @param scoreBps Rater's RBTS score in bps.
     /// @param meanScoreBps Stake-weighted round mean RBTS score in bps.
-    function calculateNegativeScoreSpreadForfeit(uint256 stakeAmount, uint16 scoreBps, uint16 meanScoreBps)
+    /// @param revealedCount Number of score-eligible revealed participants in the round.
+    function calculateNegativeScoreSpreadForfeit(
+        uint256 stakeAmount,
+        uint16 scoreBps,
+        uint16 meanScoreBps,
+        uint256 revealedCount
+    )
         internal
         pure
         returns (uint256)
     {
+        if (revealedCount < SCORE_SPREAD_FORFEIT_MIN_REVEALS) return 0;
         if (stakeAmount == 0 || scoreBps >= meanScoreBps) return 0;
         uint256 deltaBps = uint256(meanScoreBps) - scoreBps;
         uint256 forfeitedStake = (stakeAmount * SCORE_SPREAD_INTENSITY_BPS * deltaBps) / BPS_TOTAL / BPS_TOTAL;
-        return forfeitedStake > stakeAmount ? stakeAmount : forfeitedStake;
+        uint256 maxForfeit = (stakeAmount * MAX_SCORE_SPREAD_FORFEIT_BPS) / BPS_TOTAL;
+        return forfeitedStake > maxForfeit ? maxForfeit : forfeitedStake;
     }
 
     /// @notice Split the forfeited pool into voter and protocol buckets.

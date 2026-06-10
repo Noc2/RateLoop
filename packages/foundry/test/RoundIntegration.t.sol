@@ -1917,6 +1917,35 @@ contract RoundIntegrationTest is VotingTestBase {
         );
     }
 
+    function test_ScoreSpreadForfeitsDisabledBelowEconomicRevealThreshold() public {
+        uint256 contentId = _submitContent();
+
+        address[] memory voters = new address[](3);
+        voters[0] = voter1;
+        voters[1] = voter2;
+        voters[2] = voter3;
+
+        bool[] memory directions = new bool[](3);
+        directions[0] = true;
+        directions[1] = true;
+        directions[2] = false;
+
+        uint256[] memory stakes = new uint256[](3);
+        stakes[0] = 10e6;
+        stakes[1] = 10e6;
+        stakes[2] = 5e6;
+
+        uint256 roundId = _settleRoundWithStakes(voters, contentId, directions, stakes);
+
+        RoundLib.Round memory round = RoundEngineReadHelpers.round(votingEngine, contentId, roundId);
+        assertEq(uint256(round.state), uint256(RoundLib.RoundState.Settled), "low-turnout round still settles");
+        assertEq(_roundRbtsForfeitedPool(votingEngine, contentId, roundId), 0, "low-turnout score spread has no pool");
+        assertEq(_roundVoterPool(votingEngine, contentId, roundId), 0, "low-turnout score spread is not recycled");
+        assertEq(_expectedRbtsReturnedStake(contentId, roundId, voter1), stakes[0], "voter1 stake returned");
+        assertEq(_expectedRbtsReturnedStake(contentId, roundId, voter2), stakes[1], "voter2 stake returned");
+        assertEq(_expectedRbtsReturnedStake(contentId, roundId, voter3), stakes[2], "voter3 stake returned");
+    }
+
     function test_ConsensusSettlement_OnlyDownVoters() public {
         uint256 contentId = _submitContent();
 
