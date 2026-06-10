@@ -1245,6 +1245,31 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
 
     const identityHolder = voteIdentity(v);
 
+    // globalStats.totalVoterIds counts distinct voter identities with at
+    // least one settled vote. A voterStats row is created exactly once per
+    // identity (here, on its first settled vote), so increment when the row
+    // does not exist yet.
+    const existingVoterStats = await context.db.find(voterStats, {
+      voter: identityHolder,
+    });
+    if (!existingVoterStats) {
+      await context.db
+        .insert(globalStats)
+        .values({
+          id: "global",
+          totalContent: 0,
+          totalVotes: 0,
+          totalRoundsSettled: 0,
+          totalRewardsClaimed: 0n,
+          totalFrontendFeesClaimed: 0n,
+          totalProfiles: 0,
+          totalVoterIds: 1,
+        })
+        .onConflictDoUpdate((row) => ({
+          totalVoterIds: row.totalVoterIds + 1,
+        }));
+    }
+
     await context.db
       .insert(voterStats)
       .values({

@@ -130,7 +130,7 @@ function createDb({
     content: contentRecord,
     round: roundRecord ?? {},
     vote: existingVote ?? {},
-    globalStats: { totalVotes: 0, totalRoundsSettled: 0 },
+    globalStats: { totalVotes: 0, totalRoundsSettled: 0, totalVoterIds: 0 },
     dailyVoteActivity: { voteCount: 0 },
     voterStreak: {
       currentDailyStreak: 0,
@@ -1522,6 +1522,45 @@ describe("RoundVotingEngine ponder handlers", () => {
         totalStakeLost: 50n,
         currentStreak: 2,
         bestWinStreak: 3,
+      }),
+    );
+  });
+
+  it("increments totalVoterIds when a voter identity is first seen at settlement", async () => {
+    const voter = "0x00000000000000000000000000000000000000a3";
+    const { db, insertCalls } = createDb({
+      existingRound: { id: "7-2" },
+      roundVotes: [
+        {
+          id: `7-2-${voter}`,
+          voter,
+          isUp: true,
+          stake: 100n,
+          revealed: true,
+          rbtsScoreBps: null,
+          rbtsRewardWeight: null,
+          rbtsStakeReturned: null,
+          rbtsForfeitedStake: null,
+        },
+      ],
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:RoundSettled");
+
+    await handler!({
+      event: {
+        args: { contentId: 7n, roundId: 2n, upWins: true, losingPool: 0n },
+        block: { number: 50n, timestamp: 2_200n },
+      },
+      context: { db },
+    });
+
+    // The mock store has no voterStats row for this identity, so the handler
+    // must count it as a newly seen voter id.
+    expect(insertCalls).toContainEqual(
+      expect.objectContaining({
+        table: "globalStats",
+        values: expect.objectContaining({ totalVoterIds: 1 }),
       }),
     );
   });

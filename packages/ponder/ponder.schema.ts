@@ -276,7 +276,7 @@ export const rewardClaim = onchainTable(
     contentId: t.bigint().notNull(),
     roundId: t.bigint().notNull(),
     epochId: t.bigint(), // set only for epoch-based claims (distinguishes from round-based)
-    source: t.text().notNull(), // "round", "epoch", or "launch"
+    source: t.text().notNull(), // "round", "launch", or "refund" (no handler writes "epoch" anymore)
     // For round-based RewardClaimed: `voter` receives `lrepReward` (current SBT holder),
     // `stakePayer` receives `stakeReturned` (original commit.voter — typically a delegate).
     // When `stakePayer` is null/equal to `voter`, the two collapse (no delegation split).
@@ -1020,6 +1020,9 @@ export const globalStats = onchainTable("global_stats", (t) => ({
   // inflate totalRewardsClaimed. Tracked separately here.
   totalFrontendFeesClaimed: t.bigint().notNull().default(0n),
   totalProfiles: t.integer().notNull(),
+  // Distinct voter identities with at least one settled vote; incremented in
+  // the RoundSettled handler when a voterStats row is created for an identity
+  // seen for the first time.
   totalVoterIds: t.integer().notNull(),
 }));
 
@@ -1030,7 +1033,7 @@ export const globalStats = onchainTable("global_stats", (t) => ({
 export const ratingChange = onchainTable(
   "rating_change",
   (t) => ({
-    id: t.text().primaryKey(), // `${contentId}-${blockNumber}`
+    id: t.text().primaryKey(), // `${contentId}-${roundId}-${blockNumber}`
     contentId: t.bigint().notNull(),
     roundId: t.bigint().notNull(),
     oldRating: t.integer().notNull(),
