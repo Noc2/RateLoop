@@ -238,6 +238,33 @@ export interface CreateSigningIntentRequest {
   ttlMs?: number;
 }
 
+export interface RateLoopAgentGeneratedImage {
+  dataUrl?: string;
+  filename?: string;
+  imageBase64?: string;
+  mimeType?: "image/jpeg" | "image/png" | "image/webp" | string;
+  sha256?: string;
+  sizeBytes?: number;
+  [key: string]: unknown;
+}
+
+export type CreateAskHandoffRequest =
+  | (AskHumansRequest & {
+      generatedImages?: RateLoopAgentGeneratedImage[];
+      request?: never;
+      ttlMs?: number;
+    })
+  | {
+      generatedImages?: RateLoopAgentGeneratedImage[];
+      request: AskHumansRequest;
+      ttlMs?: number;
+    };
+
+export interface AskHandoffLookup {
+  handoffId: string;
+  handoffToken: string;
+}
+
 export interface SigningIntentLookup {
   intentId: string;
   token: string;
@@ -409,6 +436,14 @@ export interface SigningIntentResponse extends AskHumansResponse {
   id: string;
   signingUrl?: string;
   expiresAt: string;
+  requestBody?: JsonRecord;
+}
+
+export interface AskHandoffResponse extends AskHumansResponse {
+  handoffId?: string;
+  handoffToken?: string;
+  handoffUrl?: string;
+  id: string;
   requestBody?: JsonRecord;
 }
 
@@ -611,6 +646,10 @@ export interface RateLoopAgentClient {
   getImageUploadStatus(
     params: ImageUploadStatusLookup,
   ): Promise<ImageUploadResponse>;
+  createAskHandoff(
+    params: CreateAskHandoffRequest,
+  ): Promise<AskHandoffResponse>;
+  getAskHandoffStatus(params: AskHandoffLookup): Promise<AskHandoffResponse>;
   createSigningIntent(
     params: CreateSigningIntentRequest,
   ): Promise<SigningIntentResponse>;
@@ -731,6 +770,8 @@ export function createRateLoopAgentClient(
     prepareImageUpload: (params) => prepareImageUpload(params, config),
     uploadImage: (params) => uploadImage(params, config),
     getImageUploadStatus: (params) => getImageUploadStatus(params, config),
+    createAskHandoff: (params) => createAskHandoff(params, config),
+    getAskHandoffStatus: (params) => getAskHandoffStatus(params, config),
     createSigningIntent: (params) => createSigningIntent(params, config),
     getSigningIntent: (params) => getSigningIntent(params, config),
     prepareSigningIntent: (params) => prepareSigningIntent(params, config),
@@ -842,6 +883,57 @@ export function getImageUploadStatus(
     "rateloop_get_image_upload_status",
     { ...params },
   );
+}
+
+export async function createAskHandoff(
+  params: CreateAskHandoffRequest,
+  options: RateLoopAgentClientOptions = {},
+): Promise<AskHandoffResponse> {
+  const config = normalizeAgentConfig(options);
+  if (hasDirectAgentHttp(config)) {
+    return requestJson<AskHandoffResponse>(config, agentHandoffsUrl(config), {
+      body: stringifyJson(params),
+      headers: jsonAgentHeaders(config),
+      method: "POST",
+    });
+  }
+
+  if (config.mcpApiUrl) {
+    return callMcpTool<AskHandoffResponse>(
+      config,
+      "rateloop_create_ask_handoff_link",
+      { ...params } as JsonRecord,
+    );
+  }
+
+  throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
+}
+
+export async function getAskHandoffStatus(
+  params: AskHandoffLookup,
+  options: RateLoopAgentClientOptions = {},
+): Promise<AskHandoffResponse> {
+  const config = normalizeAgentConfig(options);
+  if (hasDirectAgentHttp(config)) {
+    return requestJson<AskHandoffResponse>(
+      config,
+      agentHandoffUrl(config, params),
+      {
+        headers: handoffReadHeaders(config, params),
+        method: "GET",
+      },
+    );
+  }
+
+  if (config.mcpApiUrl) {
+    return callMcpTool<AskHandoffResponse>(
+      config,
+      "rateloop_get_handoff_status",
+      { ...params },
+    );
+  }
+
+  throw new RateLoopSdkError(AGENT_AUTH_REQUIRED_MESSAGE);
 }
 
 export async function createSigningIntent(
@@ -1520,6 +1612,26 @@ function agentAsksUrl(config: NormalizedAgentConfig) {
   return new URL("./asks", `${agentBaseUrl(config)}/`).toString();
 }
 
+function agentHandoffsUrl(config: NormalizedAgentConfig) {
+  return new URL("./handoffs", `${agentBaseUrl(config)}/`).toString();
+}
+
+function agentHandoffUrl(
+  config: NormalizedAgentConfig,
+  params: AskHandoffLookup,
+) {
+  if (!params.handoffId.trim()) {
+    throw new RateLoopSdkError("handoffId is required");
+  }
+  if (!params.handoffToken.trim()) {
+    throw new RateLoopSdkError("handoffToken is required");
+  }
+  return new URL(
+    `./handoffs/${params.handoffId.trim()}`,
+    `${agentBaseUrl(config)}/`,
+  ).toString();
+}
+
 function agentSigningIntentsUrl(config: NormalizedAgentConfig) {
   return new URL("./signing-intents", `${agentBaseUrl(config)}/`).toString();
 }
@@ -1700,6 +1812,16 @@ function signingIntentReadHeaders(
   return {
     ...agentHeaders(config),
     "x-rateloop-signing-intent-token": params.token.trim(),
+  };
+}
+
+function handoffReadHeaders(
+  config: NormalizedAgentConfig,
+  params: AskHandoffLookup,
+) {
+  return {
+    ...agentHeaders(config),
+    "x-rateloop-handoff-token": params.handoffToken.trim(),
   };
 }
 

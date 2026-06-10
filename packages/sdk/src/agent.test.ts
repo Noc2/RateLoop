@@ -712,6 +712,75 @@ test("signing intent helpers use direct browser-handoff routes", async () => {
   assert.equal(completeResponse.status, "submitted");
 });
 
+test("ask handoff helpers use direct browser-handoff routes", async () => {
+  const requestedUrls: string[] = [];
+  const requestedBodies: any[] = [];
+  const requestedHeaders: Headers[] = [];
+  const agent = createRateLoopAgentClient({
+    apiBaseUrl: API_BASE_URL,
+    fetchImpl: async (input: URL | RequestInfo, init?: RequestInit) => {
+      requestedUrls.push(String(input));
+      requestedBodies.push(init?.body ? JSON.parse(String(init.body)) : null);
+      requestedHeaders.push(new Headers(init?.headers));
+      const url = String(input);
+      if (url.endsWith("/api/agent/handoffs")) {
+        return jsonResponse({
+          handoffId: "ahf_test",
+          handoffToken: "secret",
+          handoffUrl:
+            "https://rateloop.example/agent/handoff/ahf_test#token=secret",
+          id: "ahf_test",
+          status: "pending",
+        });
+      }
+      return jsonResponse({
+        handoffId: "ahf_test",
+        id: "ahf_test",
+        operationKey: `0x${"69".repeat(32)}`,
+        status: "submitted",
+      });
+    },
+  });
+
+  const created = await agent.createAskHandoff({
+    request: {
+      bounty: { amount: 1_000_000n },
+      chainId: 480,
+      clientRequestId: "browser-handoff",
+      maxPaymentAmount: 1_000_000n,
+      question: {
+        categoryId: 7n,
+        contextUrl: "https://example.com/context",
+        tags: ["agent", "handoff"],
+        title: "Browser handoff?",
+      },
+    },
+    ttlMs: 300_000,
+  });
+  const status = await agent.getAskHandoffStatus({
+    handoffId: "ahf_test",
+    handoffToken: "secret",
+  });
+
+  assert.equal(
+    requestedUrls[0],
+    "https://rateloop.example/api/agent/handoffs",
+  );
+  assert.equal(
+    requestedUrls[1],
+    "https://rateloop.example/api/agent/handoffs/ahf_test",
+  );
+  assert.equal(requestedHeaders[1].get("x-rateloop-handoff-token"), "secret");
+  assert.equal(requestedBodies[0].request.clientRequestId, "browser-handoff");
+  assert.equal(requestedBodies[0].request.bounty.amount, "1000000");
+  assert.equal(requestedBodies[0].ttlMs, 300_000);
+  assert.equal(
+    created.handoffUrl,
+    "https://rateloop.example/agent/handoff/ahf_test#token=secret",
+  );
+  assert.equal(status.operationKey, `0x${"69".repeat(32)}`);
+});
+
 test("askHumans prefers direct authenticated agent HTTP before MCP framing", async () => {
   let requestedUrl = "";
   let requestedHeaders: Headers | undefined;

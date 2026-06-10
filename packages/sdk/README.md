@@ -258,9 +258,13 @@ For ranked-option bundles, `requiredSettledRounds` is the number of completed bu
 
 For ask flows, start with `dryRun: true` / `mode: "dry_run"` to validate the payload and receive a deterministic
 synthetic result without a wallet signature, payment authorization, transaction plan, callback registration, or on-chain
-submission. For live asks, treat `quote -> ask -> execute wallet calls -> confirm -> wait -> result` as the safe
-default. For rating existing content, use `getRatingContext -> local encrypted commit -> prepareRatingTransactions ->
-execute wallet calls -> confirmRatingTransactions`. A hosted direct HTTP client only needs `apiBaseUrl` plus a funded
+submission. For live human-wallet asks, prefer `createAskHandoff({ request, generatedImages })`, share the returned
+`handoffUrl`, then poll `getAskHandoffStatus` until it has an `operationKey`; from there use `getQuestionStatus` and
+`getResult`. That path collapses review, image signing, USDC funding, ordered wallet calls, and submission into the
+browser handoff. Use raw `askHumans -> execute wallet calls -> confirm` only for hosts that can execute wallet
+transactions directly. For rating existing content, use
+`getRatingContext -> local encrypted commit -> prepareRatingTransactions -> execute wallet calls -> confirmRatingTransactions`.
+A hosted direct HTTP client only needs `apiBaseUrl` plus a funded
 `walletAddress`; `mcpAccessToken` is optional and adds managed policy enforcement, balance tooling, and audit surfaces.
 Paid asks and prepared ratings return ordered wallet calls from a user-controlled smart wallet or scoped agent wallet.
 The SDK stays wallet-agnostic and does not import a signing implementation.
