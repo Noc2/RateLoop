@@ -23,6 +23,20 @@ interface TermsAcceptanceContextType {
 
 const TermsAcceptanceContext = createContext<TermsAcceptanceContextType | null>(null);
 
+export type TermsAcceptanceResolver = (value: boolean) => void;
+
+/**
+ * Settles every queued requireAcceptance promise with the modal outcome.
+ * Multiple actions can await acceptance concurrently; settling all of them
+ * keeps no caller hanging when the modal resolves once.
+ */
+export function settlePendingTermsResolvers(queue: TermsAcceptanceResolver[], value: boolean) {
+  const resolvers = queue.splice(0, queue.length);
+  for (const resolve of resolvers) {
+    resolve(value);
+  }
+}
+
 function readStoredTermsAcceptance(): boolean {
   try {
     const stored = localStorage.getItem(TERMS_ACCEPTED_KEY);
@@ -42,8 +56,9 @@ export function TermsAcceptanceProvider({ children }: { children: React.ReactNod
   const [showModal, setShowModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<ActionType>(null);
 
-  // Store resolve function for the pending promise
-  const pendingResolveRef = useRef<((value: boolean) => void) | null>(null);
+  // Store resolve functions for every pending promise; concurrent callers
+  // (e.g. commitVote and claimAll) must all settle when the modal resolves.
+  const pendingResolversRef = useRef<TermsAcceptanceResolver[]>([]);
 
   // Check localStorage on mount
   useEffect(() => {
@@ -77,7 +92,7 @@ export function TermsAcceptanceProvider({ children }: { children: React.ReactNod
 
       // Return promise that resolves when user accepts or closes
       return new Promise<boolean>(resolve => {
-        pendingResolveRef.current = resolve;
+        pendingResolversRef.current.push(resolve);
       });
     },
     [isAccepted],
@@ -99,22 +114,16 @@ export function TermsAcceptanceProvider({ children }: { children: React.ReactNod
     setShowModal(false);
     setPendingAction(null);
 
-    // Resolve pending promise with true
-    if (pendingResolveRef.current) {
-      pendingResolveRef.current(true);
-      pendingResolveRef.current = null;
-    }
+    // Resolve every pending promise with true
+    settlePendingTermsResolvers(pendingResolversRef.current, true);
   }, []);
 
   const closeModal = useCallback(() => {
     setShowModal(false);
     setPendingAction(null);
 
-    // Resolve pending promise with false
-    if (pendingResolveRef.current) {
-      pendingResolveRef.current(false);
-      pendingResolveRef.current = null;
-    }
+    // Resolve every pending promise with false
+    settlePendingTermsResolvers(pendingResolversRef.current, false);
   }, []);
 
   return (
