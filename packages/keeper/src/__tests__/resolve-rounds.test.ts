@@ -907,6 +907,65 @@ describe("resolveRounds", () => {
     );
   });
 
+  it("warns when the indexed ciphertext page limit truncates a round", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 1n,
+      revealedCount: 0n,
+    });
+    const commit = makeCommit({ revealableAfter: 100n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: commit,
+      },
+      now: 1_000n,
+    });
+    // Every page is full of other commits, so pagination hits the page cap without
+    // ever returning a short page.
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      const offset = Number(url.searchParams.get("offset"));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: Array.from({ length: 200 }, (_, index) => ({
+            commitKey: `0x${(offset + index + 1).toString(16).padStart(64, "0")}`,
+          })),
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.votesRevealed).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Indexed ciphertext page limit reached; commits beyond the limit fall back to on-chain logs",
+      expect.objectContaining({
+        kind: "vote",
+        contentId: 1,
+        roundId: 1,
+        maxCommits: 1_200,
+      }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
+    );
+  });
+
   it("syncs bundle question terminal after settling a round", async () => {
     const round = makeRound({
       state: 0,
