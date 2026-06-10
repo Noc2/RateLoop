@@ -1,0 +1,23 @@
+{
+  "name": "@rateloop/promo-video",
+  "version": "0.0.1",
+  "private": true,
+  "description": "RateLoop promo video built with Remotion, reusing the website's design system",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts RateLoopPromo out/rateloop-promo.mp4",
+    "poster": "remotion still src/index.ts RateLoopPromo out/rateloop-promo-poster.png --frame=150",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "@remotion/google-fonts": "^4.0.0",
+    "react": "~19.2.3",
+    "react-dom": "~19.2.3",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "~5.8.2"
+  }
+}
