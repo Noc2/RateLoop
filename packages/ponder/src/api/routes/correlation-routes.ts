@@ -295,7 +295,7 @@ export function registerCorrelationRoutes(app: ApiApp) {
         account: row.account ?? row.voter,
         identityKey: row.identityKey ?? ZERO_HASH,
         isUp: row.isUp ?? null,
-        revealWeight: row.revealWeight ?? 0n,
+        revealWeight: row.revealWeight ?? null,
         features: [
           row.identityKey ? `identity:${row.identityKey.toLowerCase()}` : null,
         ].filter((value): value is string => value !== null),

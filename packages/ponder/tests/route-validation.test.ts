@@ -2107,6 +2107,20 @@ describe("registerCorrelationRoutes", () => {
           historicalVoteCount: 0,
           features: "",
         },
+        {
+          account: "0x0000000000000000000000000000000000000002",
+          voter: "0x0000000000000000000000000000000000000002",
+          identityKey: `0x${"c".repeat(64)}`,
+          commitKey: `0x${"d".repeat(64)}`,
+          isUp: false,
+          stake: 15000000n,
+          epochIndex: 1,
+          revealWeight: null,
+          baseWeight: 10000n,
+          verifiedHuman: false,
+          historicalVoteCount: 3,
+          features: "",
+        },
       ],
       [[{ settledAt: 777n }], []],
     );
@@ -2136,6 +2150,18 @@ describe("registerCorrelationRoutes", () => {
       baseWeight: "10000",
       verifiedHuman: true,
       features: [`identity:0x${"a".repeat(64)}`],
+    });
+    expect(body.items[1]).toMatchObject({
+      account: "0x0000000000000000000000000000000000000002",
+      identityKey: `0x${"c".repeat(64)}`,
+      commitKey: `0x${"d".repeat(64)}`,
+      isUp: false,
+      stake: "15000000",
+      epochIndex: 1,
+      revealWeight: null,
+      baseWeight: "10000",
+      verifiedHuman: false,
+      features: [`identity:0x${"c".repeat(64)}`],
     });
     expect(body.roundContext).toEqual({
       trailingBaseRateUpBps: 5000,
