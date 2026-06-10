@@ -4093,30 +4093,150 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
     }
 
     function testClusterRewardPoolPaysAllMerkleProofClaimantsWithEffectiveWeights() public {
+        uint256[] memory baseWeights = new uint256[](4);
+        baseWeights[0] = 10_000;
+        baseWeights[1] = 10_000;
+        baseWeights[2] = 10_000;
+        baseWeights[3] = 10_000;
+        uint16[] memory independenceBps = new uint16[](4);
+        independenceBps[0] = 10_000;
+        independenceBps[1] = 10_000;
+        independenceBps[2] = 6_000;
+        independenceBps[3] = 4_000;
+        // effectiveWeights = [10_000, 10_000, 6_000, 4_000], totalClaimWeight = 30_000;
+        // 100e6 * weight / 30_000, with the last claimant sweeping the rounding residue.
+        uint256[] memory expectedRewards = new uint256[](4);
+        expectedRewards[0] = 33_333_333;
+        expectedRewards[1] = 33_333_333;
+        expectedRewards[2] = 20_000_000;
+        expectedRewards[3] = 13_333_334;
+
+        _runSurpriseWeightedClaimScenario(
+            baseWeights, independenceBps, expectedRewards, _directions(true, true, false, true)
+        );
+    }
+
+    // Surprise-weighted leaves (docs/surprise-weighted-bounty-weights.md) carry baseWeight in
+    // [10_000, 20_000]; each claim pays allocation * effectiveWeight / totalClaimWeight.
+    function testClusterRewardPoolPaysSurpriseWeightedBaseClaimWeights() public {
+        uint256[] memory baseWeights = new uint256[](3);
+        baseWeights[0] = 10_000;
+        baseWeights[1] = 15_000;
+        baseWeights[2] = 20_000;
+        uint16[] memory independenceBps = new uint16[](3);
+        independenceBps[0] = 10_000;
+        independenceBps[1] = 10_000;
+        independenceBps[2] = 10_000;
+        // totalClaimWeight = 45_000; 100e6 * weight / 45_000, with the last claimant sweeping
+        // the rounding residue.
+        uint256[] memory expectedRewards = new uint256[](3);
+        expectedRewards[0] = 22_222_222;
+        expectedRewards[1] = 33_333_333;
+        expectedRewards[2] = 44_444_445;
+
+        _runSurpriseWeightedClaimScenario(
+            baseWeights, independenceBps, expectedRewards, _directions(true, true, false)
+        );
+    }
+
+    function testClusterClaimRejectsBaseWeightAboveSurpriseCap() public {
         ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
         uint256 contentId = _submitQuestion("");
         uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
 
-        address[] memory voters = _fourVoters();
-        uint256 roundId = _settleRoundWith(voters, contentId, _directions(true, true, false, true));
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        payoutWeight.baseWeight = 20_001;
+        payoutWeight.effectiveWeight = 20_001;
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            3,
+            30_000,
+            payoutWeight.effectiveWeight,
+            oracle.payoutWeightLeaf(payoutWeight)
+        );
 
-        uint16[4] memory independenceBps = [uint16(10_000), uint16(10_000), uint16(6_000), uint16(4_000)];
-        uint256[4] memory expectedRewards =
-            [uint256(33_333_333), uint256(33_333_333), uint256(20_000_000), uint256(13_333_334)];
-        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights = new IClusterPayoutOracle.PayoutWeight[](4);
-        bytes32[] memory leaves = new bytes32[](4);
-        uint32 effectiveParticipantUnits;
-        uint256 totalClaimWeight;
+        bytes32[] memory proof = new bytes32[](0);
+        vm.prank(voter1);
+        vm.expectRevert("Invalid cluster proof");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof);
+    }
 
-        for (uint256 i = 0; i < voters.length; i++) {
-            payoutWeights[i] = _clusterPayoutWeight(rewardPoolId, contentId, roundId, i);
-            payoutWeights[i].independenceBps = independenceBps[i];
-            payoutWeights[i].effectiveWeight = (payoutWeights[i].baseWeight * uint256(independenceBps[i])) / 10_000;
-            payoutWeights[i].reasonHash = keccak256(abi.encodePacked("multi-claim-cluster-payout", i));
-            leaves[i] = oracle.payoutWeightLeaf(payoutWeights[i]);
-            effectiveParticipantUnits += independenceBps[i];
-            totalClaimWeight += payoutWeights[i].effectiveWeight;
-        }
+    function testClusterClaimRejectsBaseWeightBelowFloor() public {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        uint256 roundId = _settleRoundWith(_threeVoters(), contentId, _directions(true, true, false));
+        IClusterPayoutOracle.PayoutWeight memory payoutWeight =
+            _clusterPayoutWeight(rewardPoolId, contentId, roundId, 0);
+        payoutWeight.baseWeight = 9_999;
+        payoutWeight.effectiveWeight = 9_999;
+        _finalizeClusterPayoutSnapshotWithRoot(
+            oracle,
+            rewardPoolId,
+            contentId,
+            roundId,
+            3,
+            30_000,
+            payoutWeight.effectiveWeight,
+            oracle.payoutWeightLeaf(payoutWeight)
+        );
+
+        bytes32[] memory proof = new bytes32[](0);
+        vm.prank(voter1);
+        vm.expectRevert("Invalid cluster proof");
+        rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeight, proof);
+    }
+
+    // Surprise-weighted baseWeight composes multiplicatively with the independence discount:
+    // effectiveWeight = baseWeight * independenceBps / 10_000.
+    function testClusterRewardPoolComposesSurpriseWeightWithIndependenceDiscount() public {
+        uint256[] memory baseWeights = new uint256[](4);
+        baseWeights[0] = 10_000;
+        baseWeights[1] = 15_000;
+        baseWeights[2] = 20_000;
+        baseWeights[3] = 20_000;
+        uint16[] memory independenceBps = new uint16[](4);
+        independenceBps[0] = 10_000;
+        independenceBps[1] = 10_000;
+        independenceBps[2] = 6_000;
+        independenceBps[3] = 4_000;
+        // effectiveWeights = [10_000, 15_000, 12_000, 8_000], totalClaimWeight = 45_000;
+        // 100e6 * weight / 45_000, with the last claimant sweeping the rounding residue.
+        uint256[] memory expectedRewards = new uint256[](4);
+        expectedRewards[0] = 22_222_222;
+        expectedRewards[1] = 33_333_333;
+        expectedRewards[2] = 26_666_666;
+        expectedRewards[3] = 17_777_779;
+
+        _runSurpriseWeightedClaimScenario(
+            baseWeights, independenceBps, expectedRewards, _directions(true, true, false, true)
+        );
+    }
+
+    /// @dev Drives a full cluster-snapshot claim scenario with per-rater surprise-weighted
+    ///      baseWeights and independence discounts. Split into helpers so the via-ir compiler
+    ///      stays within the stack budget.
+    function _runSurpriseWeightedClaimScenario(
+        uint256[] memory baseWeights,
+        uint16[] memory independenceBps,
+        uint256[] memory expectedRewards,
+        bool[] memory directions
+    ) internal {
+        ClusterPayoutOracle oracle = _enableClusterPayoutOracle();
+        uint256 contentId = _submitQuestion("");
+        uint256 rewardPoolId = _createRewardPool(contentId, REWARD_POOL_AMOUNT, 3, 1);
+
+        address[] memory voters = baseWeights.length == 4 ? _fourVoters() : _threeVoters();
+        uint256 roundId = _settleRoundWith(voters, contentId, directions);
+
+        (IClusterPayoutOracle.PayoutWeight[] memory payoutWeights, bytes32[] memory leaves) =
+            _surpriseWeightedPayoutLeaves(oracle, rewardPoolId, contentId, roundId, baseWeights, independenceBps);
 
         _finalizeClusterPayoutSnapshotWithRoot(
             oracle,
@@ -4124,27 +4244,76 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             contentId,
             roundId,
             uint32(voters.length),
-            effectiveParticipantUnits,
-            totalClaimWeight,
+            _sumIndependenceUnits(independenceBps),
+            _sumEffectiveWeights(payoutWeights),
             _merkleRoot(leaves)
         );
 
-        uint256 totalClaimed;
+        uint256 totalClaimed =
+            _claimWeightedRewards(rewardPoolId, roundId, voters, payoutWeights, leaves, expectedRewards);
+        assertEq(totalClaimed, REWARD_POOL_AMOUNT);
+        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
+    }
+
+    function _surpriseWeightedPayoutLeaves(
+        ClusterPayoutOracle oracle,
+        uint256 rewardPoolId,
+        uint256 contentId,
+        uint256 roundId,
+        uint256[] memory baseWeights,
+        uint16[] memory independenceBps
+    ) internal view returns (IClusterPayoutOracle.PayoutWeight[] memory payoutWeights, bytes32[] memory leaves) {
+        payoutWeights = new IClusterPayoutOracle.PayoutWeight[](baseWeights.length);
+        leaves = new bytes32[](baseWeights.length);
+        for (uint256 i = 0; i < baseWeights.length; i++) {
+            payoutWeights[i] = _clusterPayoutWeight(rewardPoolId, contentId, roundId, i);
+            payoutWeights[i].baseWeight = baseWeights[i];
+            payoutWeights[i].independenceBps = independenceBps[i];
+            payoutWeights[i].effectiveWeight = (baseWeights[i] * uint256(independenceBps[i])) / 10_000;
+            payoutWeights[i].reasonHash = keccak256(abi.encodePacked("surprise-weighted-payout", i));
+            leaves[i] = oracle.payoutWeightLeaf(payoutWeights[i]);
+        }
+    }
+
+    function _sumIndependenceUnits(uint16[] memory independenceBps) internal pure returns (uint32 units) {
+        for (uint256 i = 0; i < independenceBps.length; i++) {
+            units += independenceBps[i];
+        }
+    }
+
+    function _sumEffectiveWeights(IClusterPayoutOracle.PayoutWeight[] memory payoutWeights)
+        internal
+        pure
+        returns (uint256 total)
+    {
+        for (uint256 i = 0; i < payoutWeights.length; i++) {
+            total += payoutWeights[i].effectiveWeight;
+        }
+    }
+
+    function _claimWeightedRewards(
+        uint256 rewardPoolId,
+        uint256 roundId,
+        address[] memory voters,
+        IClusterPayoutOracle.PayoutWeight[] memory payoutWeights,
+        bytes32[] memory leaves,
+        uint256[] memory expectedRewards
+    ) internal returns (uint256 totalClaimed) {
         for (uint256 i = 0; i < voters.length; i++) {
             bytes32[] memory proof = _merkleProof(leaves, leaves[i]);
-            uint256 claimable = rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
-                rewardPoolId, roundId, voters[i], payoutWeights[i], proof
+            assertEq(
+                rewardPoolEscrow.claimableQuestionRewardWithPayoutWeight(
+                    rewardPoolId, roundId, voters[i], payoutWeights[i], proof
+                ),
+                expectedRewards[i],
+                "claimable weighted reward"
             );
-            assertEq(claimable, expectedRewards[i], "claimable weighted reward");
 
             vm.prank(voters[i]);
             uint256 claimed = rewardPoolEscrow.claimQuestionReward(rewardPoolId, roundId, payoutWeights[i], proof);
             assertEq(claimed, expectedRewards[i], "claimed weighted reward");
             totalClaimed += claimed;
         }
-
-        assertEq(totalClaimed, REWARD_POOL_AMOUNT);
-        assertEq(usdc.balanceOf(address(rewardPoolEscrow)), 0);
     }
 
     function testClusterRewardPoolSkipsRawIneligibleRoundWithoutOracleSnapshot() public {
