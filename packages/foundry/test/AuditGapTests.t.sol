@@ -391,14 +391,17 @@ contract AuditGapTests is VotingTestBase {
         assertEq(v3After - v3Before, expectedLoserClaim, "Revealed losing-side claim should match RBTS claim value");
         assertLt(v3After - v3Before, STAKE, "Forfeited losing side should not recover full stake");
 
-        // 4. Frontend fee (credited to FrontendRegistry, then claimed by operator)
+        // 4. Frontend fee (credited to FrontendRegistry, then withdrawn by operator after the delay)
         vm.prank(frontend);
         rewardDistributor.claimFrontendFee(contentId, 1, frontend);
         uint256 feBefore = lrepToken.balanceOf(frontend);
         vm.prank(frontend);
-        frontendRegistry.claimFees();
+        frontendRegistry.requestFeeWithdrawal();
+        vm.warp(block.timestamp + frontendRegistry.FEE_WITHDRAWAL_DELAY());
+        vm.prank(frontend);
+        frontendRegistry.completeFeeWithdrawal();
         uint256 feAfter = lrepToken.balanceOf(frontend);
-        assertTrue(feAfter > feBefore, "Frontend should receive fee via claimFees");
+        assertTrue(feAfter > feBefore, "Frontend should receive fee via delayed withdrawal");
 
         // Verify: no double claims
         vm.prank(voter1);

@@ -280,7 +280,7 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(frontend1);
         vm.expectRevert(IFrontendRegistry.FrontendExitPending.selector);
-        registry.claimFees();
+        registry.requestFeeWithdrawal();
 
         assertEq(registry.getAccumulatedFees(frontend1), 100e6);
     }
@@ -718,9 +718,9 @@ contract FrontendRegistryTest is Test {
         registry.creditFees(frontend1, 100e6);
     }
 
-    // --- Claim Fees Tests ---
+    // --- Fee Withdrawal Tests ---
 
-    function test_ClaimFees() public {
+    function test_FeeWithdrawalTwoStep() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -732,16 +732,124 @@ contract FrontendRegistryTest is Test {
         uint256 lrepBefore = lrepToken.balanceOf(frontend1);
 
         vm.prank(frontend1);
-        registry.claimFees();
+        registry.requestFeeWithdrawal();
+
+        // Fees move to the pending bucket immediately, but nothing leaves the registry.
+        assertEq(registry.getAccumulatedFees(frontend1), 0);
+        assertEq(registry.pendingFeeWithdrawalAmount(frontend1), 100e6);
+        assertEq(registry.pendingFeeWithdrawalReleaseAt(frontend1), block.timestamp + registry.FEE_WITHDRAWAL_DELAY());
+        assertEq(lrepToken.balanceOf(frontend1), lrepBefore);
+
+        vm.warp(block.timestamp + registry.FEE_WITHDRAWAL_DELAY());
+
+        vm.prank(frontend1);
+        registry.completeFeeWithdrawal();
 
         assertEq(lrepToken.balanceOf(frontend1) - lrepBefore, 100e6);
-
-        // Fees should be reset
-        uint256 lrepFees = registry.getAccumulatedFees(frontend1);
-        assertEq(lrepFees, 0);
+        assertEq(registry.pendingFeeWithdrawalAmount(frontend1), 0);
+        assertEq(registry.pendingFeeWithdrawalReleaseAt(frontend1), 0);
     }
 
-    function test_RevertClaimFeesWhileSlashed() public {
+    function test_RevertCompleteFeeWithdrawalBeforeDelay() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.prank(feeCreditor);
+        registry.creditFees(frontend1, 100e6);
+
+        vm.prank(frontend1);
+        registry.requestFeeWithdrawal();
+
+        vm.warp(block.timestamp + registry.FEE_WITHDRAWAL_DELAY() - 1);
+
+        vm.prank(frontend1);
+        vm.expectRevert("Withdrawal delay active");
+        registry.completeFeeWithdrawal();
+    }
+
+    function test_RevertRequestFeeWithdrawalWhilePending() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.prank(feeCreditor);
+        registry.creditFees(frontend1, 100e6);
+
+        vm.prank(frontend1);
+        registry.requestFeeWithdrawal();
+
+        vm.prank(feeCreditor);
+        registry.creditFees(frontend1, 50e6);
+
+        vm.prank(frontend1);
+        vm.expectRevert("Withdrawal already pending");
+        registry.requestFeeWithdrawal();
+    }
+
+    function test_SlashConfiscatesPendingFeeWithdrawal() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.prank(feeCreditor);
+        registry.creditFees(frontend1, 100e6);
+
+        vm.prank(frontend1);
+        registry.requestFeeWithdrawal();
+
+        vm.warp(block.timestamp + registry.FEE_WITHDRAWAL_DELAY());
+
+        uint256 recipientBefore = lrepToken.balanceOf(admin);
+        vm.prank(admin);
+        registry.slashFrontend(frontend1, STAKE / 2, "Test");
+
+        // Slash sweeps the matured-but-uncompleted pending bucket along with the stake cut.
+        assertEq(lrepToken.balanceOf(admin) - recipientBefore, STAKE / 2 + 100e6);
+        assertEq(registry.pendingFeeWithdrawalAmount(frontend1), 0);
+        assertEq(registry.pendingFeeWithdrawalReleaseAt(frontend1), 0);
+
+        vm.prank(frontend1);
+        vm.expectRevert("Frontend is slashed");
+        registry.completeFeeWithdrawal();
+    }
+
+    function test_DeregisterSweepsPendingFeeWithdrawal() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.prank(feeCreditor);
+        registry.creditFees(frontend1, 100e6);
+
+        vm.prank(frontend1);
+        registry.requestFeeWithdrawal();
+
+        vm.prank(feeCreditor);
+        registry.creditFees(frontend1, 50e6);
+
+        vm.prank(frontend1);
+        registry.requestDeregister();
+
+        // Completion is blocked mid-exit; everything pays out at completeDeregister.
+        vm.warp(block.timestamp + registry.FEE_WITHDRAWAL_DELAY());
+        vm.prank(frontend1);
+        vm.expectRevert(IFrontendRegistry.FrontendExitPending.selector);
+        registry.completeFeeWithdrawal();
+
+        uint256 balanceBefore = lrepToken.balanceOf(frontend1);
+        _completeDeregister(frontend1);
+
+        assertEq(lrepToken.balanceOf(frontend1) - balanceBefore, STAKE + 150e6);
+        assertEq(registry.pendingFeeWithdrawalAmount(frontend1), 0);
+        assertEq(registry.pendingFeeWithdrawalReleaseAt(frontend1), 0);
+    }
+
+    function test_RevertRequestFeeWithdrawalWhileSlashed() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -755,10 +863,10 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(frontend1);
         vm.expectRevert("Frontend is slashed");
-        registry.claimFees();
+        registry.requestFeeWithdrawal();
     }
 
-    function test_RevertClaimFeesWhileUnderbonded() public {
+    function test_RevertRequestFeeWithdrawalWhileUnderbonded() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
@@ -774,40 +882,33 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(frontend1);
         vm.expectRevert("Frontend is underbonded");
-        registry.claimFees();
+        registry.requestFeeWithdrawal();
     }
 
-    function test_RevertClaimFeesNotRegistered() public {
+    function test_RevertRequestFeeWithdrawalNotRegistered() public {
         vm.prank(frontend1);
         vm.expectRevert("Not registered");
-        registry.claimFees();
+        registry.requestFeeWithdrawal();
     }
 
-    function test_RevertClaimFeesNoFees() public {
+    function test_RevertRequestFeeWithdrawalNoFees() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
 
         vm.expectRevert("No fees to claim");
-        registry.claimFees();
+        registry.requestFeeWithdrawal();
         vm.stopPrank();
     }
 
-    function test_ClaimFeesWithoutIdentityGate() public {
+    function test_RevertCompleteFeeWithdrawalNothingPending() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
         registry.register();
+
+        vm.expectRevert("No pending withdrawal");
+        registry.completeFeeWithdrawal();
         vm.stopPrank();
-
-        vm.prank(feeCreditor);
-        registry.creditFees(frontend1, 100e6);
-
-        uint256 lrepBefore = lrepToken.balanceOf(frontend1);
-
-        vm.prank(frontend1);
-        registry.claimFees();
-
-        assertEq(lrepToken.balanceOf(frontend1) - lrepBefore, 100e6);
     }
 
     function test_DeregisterPaysPendingFeesWithoutIdentityGate() public {

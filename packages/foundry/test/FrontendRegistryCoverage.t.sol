@@ -584,7 +584,7 @@ contract FrontendRegistryCoverageTest is Test {
 
         vm.prank(frontend1);
         vm.expectRevert("Frontend is underbonded");
-        registry.claimFees();
+        registry.requestFeeWithdrawal();
 
         assertEq(registry.getAccumulatedFees(frontend1), 0);
     }
@@ -600,7 +600,7 @@ contract FrontendRegistryCoverageTest is Test {
 
         vm.prank(frontend1);
         vm.expectRevert("Frontend is slashed");
-        registry.claimFees();
+        registry.requestFeeWithdrawal();
 
         assertEq(registry.getAccumulatedFees(frontend1), 0);
     }
@@ -616,7 +616,7 @@ contract FrontendRegistryCoverageTest is Test {
 
         vm.prank(frontend1);
         vm.expectRevert(IFrontendRegistry.FrontendExitPending.selector);
-        registry.claimFees();
+        registry.requestFeeWithdrawal();
 
         assertEq(registry.getAccumulatedFees(frontend1), 500e6);
     }
