@@ -48,6 +48,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
       });
   const validateKeeperContracts = vi.fn().mockResolvedValue(undefined);
   const setGauge = vi.fn();
+  const setWalletBalanceWei = vi.fn();
   const recordRun = vi.fn();
   const recordError = vi.fn();
   const incrementCounter = vi.fn();
@@ -144,6 +145,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     recordError,
     setGauge,
     incrementCounter,
+    setWalletBalanceWei,
     getConsecutiveErrors,
   }));
 
@@ -157,6 +159,7 @@ async function loadKeeperIndex(options: KeeperIndexOptions = {}) {
     resolveRounds,
     validateKeeperContracts,
     setGauge,
+    setWalletBalanceWei,
     recordRun,
     recordError,
     incrementCounter,
@@ -192,10 +195,7 @@ describe("keeper index", () => {
     );
     expect(keeper.getBalance).toHaveBeenCalledWith({ address: ACCOUNT });
     expect(keeper.readContract).not.toHaveBeenCalled();
-    expect(keeper.setGauge).toHaveBeenCalledWith(
-      "keeper_wallet_balance_wei",
-      1500,
-    );
+    expect(keeper.setWalletBalanceWei).toHaveBeenCalledWith(1_500n);
     expect(keeper.resolveRounds).toHaveBeenCalledOnce();
     expect(keeper.recordRun).toHaveBeenCalledOnce();
   });
@@ -227,10 +227,7 @@ describe("keeper index", () => {
         minRequired: "100",
       },
     );
-    expect(keeper.setGauge).toHaveBeenCalledWith(
-      "keeper_wallet_balance_wei",
-      50,
-    );
+    expect(keeper.setWalletBalanceWei).toHaveBeenCalledWith(50n);
     expect(keeper.resolveRounds).toHaveBeenCalledOnce();
   });
 
