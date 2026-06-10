@@ -292,7 +292,7 @@ async function createTlockVoteArtifacts(
     ciphertext,
     ciphertextHash: keccak256(ciphertext),
     targetRound: BigInt(targetRound),
-    drandChainHash: `0x${chainInfo.hash}` as VoteDrandChainHash,
+    drandChainHash: `0x${chainInfo.hash.toLowerCase()}` as VoteDrandChainHash,
   };
 }
 
