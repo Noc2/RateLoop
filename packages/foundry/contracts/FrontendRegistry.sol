@@ -36,6 +36,14 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     uint256 public constant MAX_FEE_CREDIT = 50_000e6;
     /// @notice Maximum bytes allowed in a slashing reason.
     uint256 public constant MAX_SLASH_REASON_LENGTH = 280;
+
+    /// @notice Fixed share of confiscated stake and fees routed to the successful challenger
+    ///         when governance slashes through `slashFrontendWithBounty`.
+    /// @dev Intentionally below 100% so a misbehaving proposer cannot recover its own
+    ///      collateral by challenging itself through a fresh wallet: even with a sock puppet
+    ///      named as recipient, at least half of the confiscated value is still lost.
+    uint16 public constant CHALLENGER_BOUNTY_BPS = 5000;
+    uint16 internal constant BPS_DENOMINATOR = 10_000;
     bytes32 internal constant RATELOOP_REWARD_DISTRIBUTOR_MARKER = keccak256("rateloop.round-reward-distributor.v1");
 
     /// @notice Fixed LREP stake required for frontend registration (1,000 LREP with 6 decimals)
@@ -102,6 +110,7 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
     event FeesClaimed(address indexed frontend, uint256 lrepAmount);
     event FeeWithdrawalRequested(address indexed frontend, uint256 lrepAmount, uint256 releaseAt);
     event FeesConfiscated(address indexed frontend, uint256 lrepAmount);
+    event ChallengerBountyPaid(address indexed frontend, address indexed recipient, uint256 lrepAmount);
     event VotingEngineUpdated(address votingEngine);
     event SnapshotProposerUpdated(
         address indexed frontend, address indexed previousProposer, address indexed newProposer
@@ -425,6 +434,34 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         nonReentrant
         onlyRole(GOVERNANCE_ROLE)
     {
+        _slashFrontend(frontend, amount, reason, address(0));
+    }
+
+    /// @notice Slash a frontend and route `CHALLENGER_BOUNTY_BPS` of everything confiscated
+    ///         (stake cut, accrued fees, pending withdrawals) to the successful challenger.
+    /// @dev Governance policy: `bountyRecipient` must be the recorded challenger of the
+    ///      rejected ClusterPayoutOracle snapshot that triggered the slash — the match is
+    ///      verifiable on-chain against the oracle's stored proposal. The remainder goes to
+    ///      `confiscationRecipient` as in a plain slash.
+    /// @param frontend The frontend address to slash
+    /// @param amount Amount of LREP to slash
+    /// @param reason Reason for the slash
+    /// @param bountyRecipient The challenger receiving the fixed bounty share
+    function slashFrontendWithBounty(
+        address frontend,
+        uint256 amount,
+        string calldata reason,
+        address bountyRecipient
+    ) external nonReentrant onlyRole(GOVERNANCE_ROLE) {
+        require(bountyRecipient != address(0), "Invalid bounty recipient");
+        require(bountyRecipient != frontend, "Bounty recipient is frontend");
+        require(bountyRecipient != snapshotProposerForFrontend[frontend], "Bounty recipient is proposer");
+        _slashFrontend(frontend, amount, reason, bountyRecipient);
+    }
+
+    function _slashFrontend(address frontend, uint256 amount, string calldata reason, address bountyRecipient)
+        internal
+    {
         require(bytes(reason).length <= MAX_SLASH_REASON_LENGTH, "Slash reason too long");
         Frontend storage f = frontends[frontend];
         require(f.operator != address(0), "Frontend not registered");
@@ -448,12 +485,25 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         }
 
         uint256 totalConfiscated = amount + confiscatedFees;
+        uint256 bountyAmount;
         if (totalConfiscated > 0) {
-            lrepToken.safeTransfer(confiscationRecipient, totalConfiscated);
+            if (bountyRecipient != address(0)) {
+                bountyAmount = (totalConfiscated * CHALLENGER_BOUNTY_BPS) / BPS_DENOMINATOR;
+                if (bountyAmount > 0) {
+                    lrepToken.safeTransfer(bountyRecipient, bountyAmount);
+                }
+            }
+            uint256 remainder = totalConfiscated - bountyAmount;
+            if (remainder > 0) {
+                lrepToken.safeTransfer(confiscationRecipient, remainder);
+            }
         }
 
         if (confiscatedFees > 0) {
             emit FeesConfiscated(frontend, confiscatedFees);
+        }
+        if (bountyAmount > 0) {
+            emit ChallengerBountyPaid(frontend, bountyRecipient, bountyAmount);
         }
 
         emit FrontendSlashed(frontend, amount, reason);

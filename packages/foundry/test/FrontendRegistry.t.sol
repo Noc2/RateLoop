@@ -604,6 +604,102 @@ contract FrontendRegistryTest is Test {
         assertEq(lrepToken.balanceOf(admin), confiscationRecipientBefore + slashAmount);
     }
 
+    function test_SlashFrontendWithBounty_SplitsConfiscation() public {
+        address challenger = address(77);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        // Build up both fee buckets: 100 LREP pending withdrawal, 50 LREP accrued.
+        vm.prank(feeCreditor);
+        registry.creditFees(frontend1, 100e6);
+        vm.prank(frontend1);
+        registry.requestFeeWithdrawal();
+        vm.prank(feeCreditor);
+        registry.creditFees(frontend1, 50e6);
+
+        uint256 slashAmount = STAKE;
+        uint256 totalConfiscated = slashAmount + 150e6;
+        uint256 expectedBounty = (totalConfiscated * registry.CHALLENGER_BOUNTY_BPS()) / 10_000;
+
+        uint256 recipientBefore = lrepToken.balanceOf(admin);
+        uint256 challengerBefore = lrepToken.balanceOf(challenger);
+
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit FrontendRegistry.ChallengerBountyPaid(frontend1, challenger, expectedBounty);
+        vm.prank(admin);
+        registry.slashFrontendWithBounty(frontend1, slashAmount, "Rejected payout root", challenger);
+
+        assertEq(lrepToken.balanceOf(challenger) - challengerBefore, expectedBounty);
+        assertEq(lrepToken.balanceOf(admin) - recipientBefore, totalConfiscated - expectedBounty);
+        assertEq(registry.getAccumulatedFees(frontend1), 0);
+        assertEq(registry.pendingFeeWithdrawalAmount(frontend1), 0);
+
+        (,,, bool slashed) = registry.getFrontendInfo(frontend1);
+        assertTrue(slashed);
+    }
+
+    function test_SlashFrontendWithBounty_RoundsBountyDown() public {
+        address challenger = address(77);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        // Odd confiscation total: bounty rounds down, dust stays with the confiscation recipient.
+        uint256 slashAmount = 3;
+        uint256 recipientBefore = lrepToken.balanceOf(admin);
+
+        vm.prank(admin);
+        registry.slashFrontendWithBounty(frontend1, slashAmount, "Rejected payout root", challenger);
+
+        assertEq(lrepToken.balanceOf(challenger), 1);
+        assertEq(lrepToken.balanceOf(admin) - recipientBefore, 2);
+    }
+
+    function test_RevertSlashFrontendWithBountyInvalidRecipient() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+        vm.expectRevert("Invalid bounty recipient");
+        registry.slashFrontendWithBounty(frontend1, STAKE / 2, "Test", address(0));
+
+        vm.expectRevert("Bounty recipient is frontend");
+        registry.slashFrontendWithBounty(frontend1, STAKE / 2, "Test", frontend1);
+        vm.stopPrank();
+    }
+
+    function test_RevertSlashFrontendWithBountyRecipientIsProposer() public {
+        address proposer = address(88);
+
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        registry.setSnapshotProposer(proposer);
+        vm.stopPrank();
+
+        vm.prank(admin);
+        vm.expectRevert("Bounty recipient is proposer");
+        registry.slashFrontendWithBounty(frontend1, STAKE / 2, "Test", proposer);
+    }
+
+    function test_RevertSlashFrontendWithBountyNonGovernance() public {
+        vm.startPrank(frontend1);
+        lrepToken.approve(address(registry), STAKE);
+        registry.register();
+        vm.stopPrank();
+
+        vm.prank(frontend2);
+        vm.expectRevert();
+        registry.slashFrontendWithBounty(frontend1, STAKE / 2, "Test", address(77));
+    }
+
     function test_UnslashFrontend() public {
         vm.startPrank(frontend1);
         lrepToken.approve(address(registry), STAKE);
