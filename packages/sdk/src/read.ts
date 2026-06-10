@@ -530,7 +530,13 @@ async function request<T>(
     throw new RateLoopSdkError("apiBaseUrl is required for read operations");
   }
 
-  const url = new URL(path, `${baseUrl}/`);
+  // Resolve relative to the base URL so path-prefixed bases (e.g.
+  // "https://host/ponder") are preserved; a leading "/" would replace the
+  // base path entirely per WHATWG URL semantics.
+  const url = new URL(
+    path.replace(/^\/+/, ""),
+    `${baseUrl.replace(/\/+$/, "")}/`,
+  );
 
   for (const [key, value] of Object.entries(
     (params ?? {}) as Record<string, QueryValue>,

@@ -34,7 +34,9 @@ interface ScryptKdfParams {
 const KEYSTORE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const MAX_SCRYPT_MEMORY_BYTES = 512 * 1024 * 1024;
 const MAX_SCRYPT_PARALLELIZATION = 16;
-const MIN_SCRYPT_DKLEN = 16;
+// Keystore V3 derives the AES key from bytes 0-15 and the MAC key from bytes
+// 16-31 of the derived key, so anything shorter than 32 bytes cannot be valid.
+const MIN_SCRYPT_DKLEN = 32;
 const MAX_SCRYPT_DKLEN = 64;
 
 export function resolveKeystorePath(name: string): string {

@@ -500,6 +500,12 @@ function runDbPush(databaseConfig, options = {}) {
   }
 }
 
+export function getUnexpectedServiceExitCode(code) {
+  // A managed service exiting on its own is an abnormal teardown, so the
+  // stack must report failure even when the service itself exited with 0.
+  return typeof code === "number" && code !== 0 ? code : 1;
+}
+
 function spawnService(service, extraEnv = {}) {
   const prefix = `${service.color}[${service.label}]${resetColor}`;
   const child = spawn(service.command, service.args, {
@@ -520,7 +526,7 @@ function spawnService(service, extraEnv = {}) {
 
     const suffix = signal ? `signal ${signal}` : `code ${code ?? 0}`;
     console.error(`[dev-stack] ${service.name} exited with ${suffix}. Shutting down the rest of the stack.`);
-    shutdown(code ?? 1);
+    shutdown(getUnexpectedServiceExitCode(code));
   });
 
   child.on("error", error => {

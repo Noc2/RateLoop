@@ -63,6 +63,19 @@ export function buildDeploymentAddressMap(deploymentJson) {
   return byName;
 }
 
+function extractBalancedObject(source, openBraceIndex) {
+  let depth = 0;
+  for (let index = openBraceIndex; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(openBraceIndex, index + 1);
+    }
+  }
+  return undefined;
+}
+
 export function parseGeneratedContractsForChain(source, chainId = WORLDCHAIN_SEPOLIA_CHAIN_ID) {
   const marker = `  ${chainId}: {`;
   const start = source.indexOf(marker);
@@ -75,16 +88,20 @@ export function parseGeneratedContractsForChain(source, chainId = WORLDCHAIN_SEP
   const contracts = new Map();
 
   for (const contractName of REQUIRED_DEPLOYED_CONTRACTS) {
-    const contractRe = new RegExp(
-      `${contractName}:\\s*\\{[\\s\\S]*?address:\\s*"([^"]+)"[\\s\\S]*?deployedOnBlock:\\s*(\\d+)`,
-    );
-    const match = contractRe.exec(chainSource);
-    if (match) {
-      contracts.set(contractName, {
-        address: match[1],
-        deployedOnBlock: Number(match[2]),
-      });
-    }
+    const keyMatch = new RegExp(`(?:^|[\\s{,])${contractName}:\\s*\\{`).exec(chainSource);
+    if (!keyMatch) continue;
+
+    // Parse only inside this contract's own balanced object so a missing field
+    // can never borrow a value from the next contract entry.
+    const contractSource = extractBalancedObject(chainSource, keyMatch.index + keyMatch[0].length - 1);
+    if (!contractSource) continue;
+
+    const addressMatch = /address:\s*"([^"]+)"/.exec(contractSource);
+    const deployedOnBlockMatch = /deployedOnBlock:\s*(\d+)/.exec(contractSource);
+    contracts.set(contractName, {
+      address: addressMatch?.[1],
+      deployedOnBlock: deployedOnBlockMatch ? Number(deployedOnBlockMatch[1]) : undefined,
+    });
   }
 
   return contracts;

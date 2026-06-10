@@ -1598,8 +1598,11 @@ function agentBaseUrl(config: NormalizedAgentConfig) {
     );
   }
 
+  // Resolve relative to the base URL so path-prefixed bases (e.g.
+  // "https://host/ponder") are preserved; a leading "/" would replace the
+  // base path entirely per WHATWG URL semantics.
   return new URL(
-    config.agentApiPath.replace(/\/+$/, ""),
+    config.agentApiPath.replace(/^\/+/, "").replace(/\/+$/, ""),
     `${config.apiBaseUrl}/`,
   ).toString();
 }

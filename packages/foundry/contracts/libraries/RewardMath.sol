@@ -17,13 +17,18 @@ library RewardMath {
     uint256 internal constant SCORE_SPREAD_FORFEIT_MIN_REVEALS = 8;
     uint256 internal constant MAX_SCORE_SPREAD_FORFEIT_BPS = 5_000; // 50% max score-spread stake loss
 
-    // Rating calculation parameter (fixed, not configurable)
+    // Rating calculation parameter (fixed, not configurable). Only used by the legacy
+    // reference formula `calculateRating` below; not referenced by any production path.
     uint256 internal constant RATING_B = 50e6; // Smoothing parameter for rating formula (50 LREP in 6 decimals)
 
-    /// @notice Calculate live content rating based on revealed stake pools.
-    /// @dev rating = 50 + 50 * (qUp - qDown) / (qUp + qDown + b)
+    /// @notice Legacy stake-pool rating formula. Reference-only — NOT used in production.
+    /// @dev L-Math-A: the live rating model is `RatingMath.evidenceRatingBps`, applied at
+    ///      settlement via `RoundSettlementSideEffectsLib.recordSettlement`. No deployed
+    ///      contract calls this function; it is kept as a reference implementation exercised
+    ///      by the Certora `Math.spec` rating rules (via `MathHarness`) and the RewardMath
+    ///      unit/fuzz tests. Removing it requires updating those specs/tests in lockstep.
+    ///      rating = 50 + 50 * (qUp - qDown) / (qUp + qDown + b)
     ///      Clamped to [0, 100]. Uses fixed b=50 LREP for smoothing.
-    ///      Called at settlement with final revealed raw pools.
     ///      AUDIT NOTE (I-2): Integer granularity [0-100] is intentional. The RATING_B smoothing
     ///      parameter (50 LREP) ensures small-stake rounds stay near 50, preventing manipulation.
     ///      Higher precision (e.g. 1e18) would add gas cost with no UX benefit since ratings

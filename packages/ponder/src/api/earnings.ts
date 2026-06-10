@@ -12,8 +12,16 @@ import {
 } from "ponder:schema";
 
 type EarningsAssetFilter = "all" | "lrep" | "usdc";
-type EarningsSourceFilter = "all" | "bounty" | "feedback" | "round";
-type EarningsSource = "question_reward" | "question_bundle_reward" | "feedback_bonus" | "round_reward";
+type EarningsSourceFilter = "all" | "bounty" | "feedback" | "round" | "launch";
+type EarningsSource =
+  | "question_reward"
+  | "question_bundle_reward"
+  | "feedback_bonus"
+  | "round_reward"
+  | "launch_reward";
+
+/** rewardClaim.source values backing the "round" and "launch" earnings buckets. */
+type RewardClaimSource = "round" | "launch";
 
 interface WindowBounds {
   startsAt: bigint | null;
@@ -40,6 +48,7 @@ interface ProfileEarningsSummary {
   feedbackUsdcEarned: bigint;
   feedbackLrepEarned: bigint;
   roundLrepEarned: bigint;
+  launchLrepEarned: bigint;
   paidEventCount: number;
   latestPaidAt: bigint | null;
 }
@@ -78,7 +87,7 @@ export function parseEarningsAssetFilter(value: string | undefined): EarningsAss
 
 export function parseEarningsSourceFilter(value: string | undefined): EarningsSourceFilter | null {
   if (!value || value === "all") return "all";
-  if (value === "bounty" || value === "feedback" || value === "round") return value;
+  if (value === "bounty" || value === "feedback" || value === "round" || value === "launch") return value;
   return null;
 }
 
@@ -91,6 +100,7 @@ export function emptyProfileEarningsSummary(): ProfileEarningsSummary {
     feedbackUsdcEarned: 0n,
     feedbackLrepEarned: 0n,
     roundLrepEarned: 0n,
+    launchLrepEarned: 0n,
     paidEventCount: 0,
     latestPaidAt: null,
   };
@@ -141,6 +151,8 @@ function addAggregate(
     else summary.feedbackUsdcEarned += amount;
   } else if (source === "round") {
     summary.roundLrepEarned += amount;
+  } else if (source === "launch") {
+    summary.launchLrepEarned += amount;
   }
 
   summary.paidEventCount += Number(eventCount ?? 0);
@@ -215,9 +227,17 @@ async function getFeedbackBonusAggregates(address: `0x${string}`, bounds: Window
     .groupBy(feedbackBonusAward.asset);
 }
 
-async function getRoundRewardAggregates(address: `0x${string}`, bounds: WindowBounds) {
+async function getRewardClaimAggregates(
+  address: `0x${string}`,
+  bounds: WindowBounds,
+  claimSource: RewardClaimSource,
+) {
+  // Filter by rewardClaim.source: rewardClaim also stores launch-pool bonus rows
+  // (source "launch") and cancelled-round refunds (source "refund"), which must not leak
+  // into the "round" earnings bucket.
   const conditions = [
     eq(rewardClaim.voter, address),
+    eq(rewardClaim.source, claimSource),
     sql`${rewardClaim.lrepReward} > 0`,
     ...timeConditions(rewardClaim.claimedAt, bounds),
   ];
@@ -249,18 +269,21 @@ export async function getProfileEarningsSummary(
   const includeBounty = source === "all" || source === "bounty";
   const includeFeedback = source === "all" || source === "feedback";
   const includeRound = (source === "all" || source === "round") && asset !== "usdc";
+  const includeLaunch = (source === "all" || source === "launch") && asset !== "usdc";
 
-  const [questionRewards, bundleRewards, feedbackRewards, roundRewards] = await Promise.all([
+  const [questionRewards, bundleRewards, feedbackRewards, roundRewards, launchRewards] = await Promise.all([
     includeBounty ? getQuestionRewardAggregates(address, bounds, asset) : [],
     includeBounty ? getQuestionBundleAggregates(address, bounds, asset) : [],
     includeFeedback ? getFeedbackBonusAggregates(address, bounds, asset) : [],
-    includeRound ? getRoundRewardAggregates(address, bounds) : [],
+    includeRound ? getRewardClaimAggregates(address, bounds, "round") : [],
+    includeLaunch ? getRewardClaimAggregates(address, bounds, "launch") : [],
   ]);
 
   for (const row of questionRewards) addRowAggregate(summary, "bounty", row);
   for (const row of bundleRewards) addRowAggregate(summary, "bounty", row);
   for (const row of feedbackRewards) addRowAggregate(summary, "feedback", row);
   for (const row of roundRewards) addRowAggregate(summary, "round", row);
+  for (const row of launchRewards) addRowAggregate(summary, "launch", row);
 
   return summary;
 }
@@ -335,16 +358,19 @@ export async function getRecentProfileEarnings(address: `0x${string}`, limit: nu
       .where(eq(feedbackBonusAward.recipient, address))
       .orderBy(desc(feedbackBonusAward.awardedAt))
       .limit(sourceLimit),
+    // Round rewards and launch-pool bonuses both live in rewardClaim. Launch rows often carry
+    // contentId 0 (no content row), so left-join content instead of inner-joining: otherwise
+    // they would be counted in the summary while silently vanishing from this itemized list.
     db
       .select({
         id: rewardClaim.id,
-        source: sql<EarningsSource>`'round_reward'`,
+        source: sql<EarningsSource>`case when ${rewardClaim.source} = 'launch' then 'launch_reward' else 'round_reward' end`,
         asset: sql<number>`${REWARD_ASSET_LREP}`,
         amount: rewardClaim.lrepReward,
         grossAmount: rewardClaim.lrepReward,
         frontendFee: sql<bigint>`0`,
-        contentId: rewardClaim.contentId,
-        roundId: rewardClaim.roundId,
+        contentId: sql<bigint | null>`case when ${rewardClaim.source} = 'launch' and ${rewardClaim.contentId} = 0 then null else ${rewardClaim.contentId} end`,
+        roundId: sql<bigint | null>`case when ${rewardClaim.source} = 'launch' and ${rewardClaim.contentId} = 0 then null else ${rewardClaim.roundId} end`,
         rewardPoolId: sql<bigint | null>`null`,
         bundleId: sql<bigint | null>`null`,
         roundSetIndex: sql<number | null>`null`,
@@ -353,8 +379,14 @@ export async function getRecentProfileEarnings(address: `0x${string}`, limit: nu
         paidAt: rewardClaim.claimedAt,
       })
       .from(rewardClaim)
-      .innerJoin(content, eq(rewardClaim.contentId, content.id))
-      .where(and(eq(rewardClaim.voter, address), sql`${rewardClaim.lrepReward} > 0`))
+      .leftJoin(content, eq(rewardClaim.contentId, content.id))
+      .where(
+        and(
+          eq(rewardClaim.voter, address),
+          sql`${rewardClaim.source} in ('round', 'launch')`,
+          sql`${rewardClaim.lrepReward} > 0`,
+        ),
+      )
       .orderBy(desc(rewardClaim.claimedAt))
       .limit(sourceLimit),
   ]);
@@ -459,8 +491,18 @@ async function getFeedbackBonusContributions(bounds: WindowBounds, asset: Earnin
     .limit(limit);
 }
 
-async function getRoundRewardContributions(bounds: WindowBounds, limit: number) {
-  const conditions = [sql`${rewardClaim.lrepReward} > 0`, ...timeConditions(rewardClaim.claimedAt, bounds)];
+async function getRewardClaimContributions(
+  bounds: WindowBounds,
+  limit: number,
+  claimSource: RewardClaimSource,
+) {
+  // See getRewardClaimAggregates: keep launch-pool bonuses and refunds out of the "round"
+  // bucket by filtering on rewardClaim.source.
+  const conditions = [
+    eq(rewardClaim.source, claimSource),
+    sql`${rewardClaim.lrepReward} > 0`,
+    ...timeConditions(rewardClaim.claimedAt, bounds),
+  ];
 
   return db
     .select({
@@ -496,12 +538,14 @@ export async function getEarningsLeaderboard({
   const includeBounty = source === "all" || source === "bounty";
   const includeFeedback = source === "all" || source === "feedback";
   const includeRound = (source === "all" || source === "round") && asset !== "usdc";
+  const includeLaunch = (source === "all" || source === "launch") && asset !== "usdc";
 
-  const [questionRewards, bundleRewards, feedbackRewards, roundRewards] = await Promise.all([
+  const [questionRewards, bundleRewards, feedbackRewards, roundRewards, launchRewards] = await Promise.all([
     includeBounty ? getQuestionRewardContributions(bounds, asset, sourceLimit) : [],
     includeBounty ? getQuestionBundleContributions(bounds, asset, sourceLimit) : [],
     includeFeedback ? getFeedbackBonusContributions(bounds, asset, sourceLimit) : [],
-    includeRound ? getRoundRewardContributions(bounds, sourceLimit) : [],
+    includeRound ? getRewardClaimContributions(bounds, sourceLimit, "round") : [],
+    includeLaunch ? getRewardClaimContributions(bounds, sourceLimit, "launch") : [],
   ]);
 
   const items = new Map<string, EarningsLeaderboardItem>();
@@ -509,6 +553,7 @@ export async function getEarningsLeaderboard({
   for (const row of bundleRewards) mergeContribution(items, row, "bounty");
   for (const row of feedbackRewards) mergeContribution(items, row, "feedback");
   for (const row of roundRewards) mergeContribution(items, row, "round");
+  for (const row of launchRewards) mergeContribution(items, row, "launch");
 
   return [...items.values()]
     .sort((left, right) => {

@@ -1359,14 +1359,6 @@ contract QuestionRewardPoolEscrow is
         );
     }
 
-    function _canPreviewNewQualification(RewardPool storage rewardPool, uint256 roundId) internal view returns (bool) {
-        if (
-            rewardPool.refunded || rewardPool.unallocatedRefunded
-                || rewardPool.qualifiedRounds >= rewardPool.requiredSettledRounds
-        ) return false;
-        return roundId >= rewardPool.startRoundId && roundId == rewardPool.nextRoundToEvaluate;
-    }
-
     function _timelyRevealedCommitFrontend(
         uint256 contentId,
         uint256 roundId,

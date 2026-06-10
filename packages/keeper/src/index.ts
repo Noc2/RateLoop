@@ -28,6 +28,7 @@ import {
   recordError,
   setGauge,
   incrementCounter,
+  setWalletBalanceWei,
   getConsecutiveErrors,
 } from "./metrics.js";
 
@@ -117,7 +118,9 @@ async function main() {
 
     if (balanceResult.status === "fulfilled") {
       const balance = balanceResult.value;
-      setGauge("keeper_wallet_balance_wei", Number(balance));
+      // Keeps the exact bigint for /health; the Prometheus gauge is a float64
+      // approximation. The low-balance check below stays on the exact bigint.
+      setWalletBalanceWei(balance);
       if (balance < MIN_BALANCE) {
         logger.warn("Keeper wallet balance low", {
           balance: balance.toString(),
@@ -182,13 +185,17 @@ async function main() {
       const duration = Date.now() - start;
       recordRun(result, duration);
 
-      // Log summary only when something happened
+      // Log summary only when something happened — include every KeeperResult counter
+      // so ticks that only finalize reveal-failed rounds or process cleanup batches
+      // still produce a "Run complete" log.
       const total =
         result.roundsSettled +
         result.roundsCancelled +
+        result.roundsRevealFailedFinalized +
         result.votesRevealed +
         result.advisoryVotesRevealed +
         result.advisoryLaunchCreditsClaimed +
+        result.cleanupBatchesProcessed +
         result.contentMarkedDormant;
       if (total > 0) {
         logger.info("Run complete", { ...result, durationMs: duration });

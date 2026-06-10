@@ -48,6 +48,10 @@ const startTime = Date.now();
 let consecutiveErrors = 0;
 let lastRunTime: Date | null = null;
 let healthThresholdMs = 90_000; // 3x default 30s interval
+// Exact wallet balance for /health. The Prometheus gauge is a float64, which loses wei
+// precision above 2^53 wei (~0.009 ETH); keep the bigint separately so /health does not
+// re-present a rounded double as an exact-looking integer.
+let walletBalanceWei: bigint | null = null;
 
 export function setHealthThreshold(intervalMs: number) {
   healthThresholdMs = intervalMs * 3;
@@ -63,6 +67,16 @@ export function setGauge(name: string, value: number) {
   if (name in gauges) {
     gauges[name] = value;
   }
+}
+
+/**
+ * Record the keeper wallet balance. The exact bigint is kept for /health; the
+ * Prometheus gauge necessarily exposes a float64 approximation (documented in its
+ * HELP text), which is fine for alerting thresholds.
+ */
+export function setWalletBalanceWei(balance: bigint) {
+  walletBalanceWei = balance;
+  gauges.keeper_wallet_balance_wei = Number(balance);
 }
 
 export function getConsecutiveErrors(): number {
@@ -133,7 +147,8 @@ function renderMetrics(): string {
     keeper_last_run_duration_seconds: "Duration of the last keeper run in seconds",
     keeper_last_successful_run_timestamp: "Unix timestamp of last successful run",
     keeper_is_running: "Whether a keeper run is currently in progress",
-    keeper_wallet_balance_wei: "Keeper wallet native balance in wei",
+    keeper_wallet_balance_wei:
+      "Keeper wallet native balance in wei (float64-approximate above 2^53 wei; /health reports the exact value)",
     keeper_rounds_awaiting_reveal_quorum:
       "Open rounds with commit quorum whose reveal quorum is still unmet",
     keeper_reveal_grace_seconds_remaining_min:
@@ -183,7 +198,7 @@ function renderHealth(): { status: number; body: string } {
     openRoundCandidates: gauges.keeper_work_discovery_open_round_candidates,
     cleanupRoundCandidates: gauges.keeper_work_discovery_cleanup_round_candidates,
     dormantContentCandidates: gauges.keeper_work_discovery_dormant_content_candidates,
-    walletBalanceWei: String(BigInt(Math.round(gauges.keeper_wallet_balance_wei))),
+    walletBalanceWei: (walletBalanceWei ?? 0n).toString(),
   });
   return { status: healthy ? 200 : 503, body };
 }

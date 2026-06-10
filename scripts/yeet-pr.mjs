@@ -134,7 +134,10 @@ function run(command, args, options = {}) {
   });
 
   if (result.error) {
-    fail(`Failed to run \`${pretty}\`: ${result.error.message}`);
+    if (!allowFailure) {
+      fail(`Failed to run \`${pretty}\`: ${result.error.message}`);
+    }
+    return { ...result, status: result.status ?? 1 };
   }
 
   if (!allowFailure && result.status !== 0) {
@@ -145,7 +148,9 @@ function run(command, args, options = {}) {
 }
 
 function requireCommand(command) {
-  const result = run("command", ["-v", command], { allowFailure: true, capture: true });
+  // Probe the binary directly: `command -v` is a shell builtin and is not
+  // spawnable on platforms without a /usr/bin/command stub (e.g. Linux).
+  const result = run(command, ["--version"], { allowFailure: true, capture: true });
   if (result.status !== 0) {
     fail(`Missing required command: ${command}`);
   }

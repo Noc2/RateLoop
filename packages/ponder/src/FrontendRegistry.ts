@@ -20,6 +20,7 @@ ponder.on(
         exitAvailableAt: null,
         totalFeesCredited: 0n,
         totalFeesClaimed: 0n,
+        totalFeesConfiscated: 0n,
         registeredAt: event.block.timestamp,
       })
       .onConflictDoUpdate({
@@ -145,6 +146,22 @@ ponder.on(
       .update(frontend, { address: addr })
       .set((row) => ({
         totalChallengerBountiesPaid: row.totalChallengerBountiesPaid + lrepAmount,
+      }));
+  },
+);
+
+ponder.on(
+  "FrontendRegistry:FeesConfiscated",
+  async ({ event, context }) => {
+    // FrontendRegistry.slashFrontend zeroes the frontend's accrued lrepFees and emits
+    // FeesConfiscated with the zeroed amount. Track it cumulatively so derived pending fees
+    // (totalFeesCredited - totalFeesClaimed - totalFeesConfiscated) do not overstate after a
+    // slash.
+    const { frontend: addr, lrepAmount } = event.args;
+    await context.db
+      .update(frontend, { address: addr })
+      .set((row) => ({
+        totalFeesConfiscated: row.totalFeesConfiscated + lrepAmount,
       }));
   },
 );

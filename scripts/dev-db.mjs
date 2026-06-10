@@ -124,9 +124,17 @@ function getComposeCommand() {
   throw new MissingDockerComposeError();
 }
 
+export function resolveComposeBindHost(host) {
+  // Docker publishes on an IP, so map the localhost alias to 127.0.0.1 and
+  // forward other local hosts (e.g. ::1) verbatim so pg_isready inside the
+  // container only passes when the published host actually accepts clients.
+  return host === "localhost" ? "127.0.0.1" : host;
+}
+
 function getComposeEnv(config = resolveNextDatabaseConfig()) {
   return {
     ...process.env,
+    RATELOOP_LOCAL_DB_HOST: resolveComposeBindHost(config.host),
     RATELOOP_LOCAL_DB_NAME: config.databaseName,
     RATELOOP_LOCAL_DB_USER: config.user,
     RATELOOP_LOCAL_DB_PASSWORD: config.password,

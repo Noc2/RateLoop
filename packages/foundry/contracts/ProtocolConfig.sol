@@ -760,6 +760,12 @@ contract ProtocolConfig is Initializable, AccessControlUpgradeable {
             revert InvalidConfig();
         }
         if (minRoundDuration / minEpochDuration > 2016) revert InvalidConfig();
+        // L-Vote-B: the `>= 3` floor must match RoundVotingEngine.MIN_RBTS_PARTICIPANTS. The
+        // engine's finalizeRevealFailedRound / _canCancelExpiredRound pre-checks use raw
+        // `minVoters` (engine size budget) and rely on this bound to stay aligned with the
+        // max(minVoters, MIN_RBTS_PARTICIPANTS) quorum in RoundCleanupLib; relaxing it below 3
+        // without updating those engine paths would permanently lock stakes in rounds whose
+        // revealedCount lands in [minVoters, 3).
         if (minSettlementVoters < 3 || maxSettlementVoters < minSettlementVoters) revert InvalidConfig();
         if (minVoterCap < minSettlementVoters || maxVoterCap < maxSettlementVoters) revert InvalidConfig();
         if (minVoterCap > MAX_BUNDLE_COMPATIBLE_MIN_VOTER_CAP) revert InvalidConfig();

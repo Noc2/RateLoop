@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildLocalDatabasePortConflictMessage, composeOutputHasPortConflict } from "./dev-db.mjs";
+import {
+  buildLocalDatabasePortConflictMessage,
+  composeOutputHasPortConflict,
+  resolveComposeBindHost,
+} from "./dev-db.mjs";
 
 const localDatabaseConfig = {
   url: "postgresql://postgres:postgres@127.0.0.1:5432/rateloop_app",
@@ -12,6 +16,12 @@ const localDatabaseConfig = {
   isLocal: true,
   isMemory: false,
 };
+
+test("forwards the DATABASE_URL host as the Docker bind host", () => {
+  assert.equal(resolveComposeBindHost("127.0.0.1"), "127.0.0.1");
+  assert.equal(resolveComposeBindHost("localhost"), "127.0.0.1");
+  assert.equal(resolveComposeBindHost("::1"), "::1");
+});
 
 test("detects Docker Compose port allocation failures", () => {
   const output =

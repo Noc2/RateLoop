@@ -75,6 +75,13 @@ const X402_AUTHORIZATION_FIELDS = [
   { name: "validBefore", type: "uint256" },
   { name: "nonce", type: "bytes32" },
 ] as const;
+/**
+ * Sanity cap on EIP-3009 authorization lifetimes. The RateLoop server
+ * proposes validBefore, so without a cap a compromised or buggy server could
+ * obtain a transfer authorization that stays valid for years. Question
+ * submissions settle within minutes, so 24 hours is generous headroom.
+ */
+const MAX_X402_AUTHORIZATION_VALIDITY_SECONDS = 24n * 60n * 60n;
 const X402_SUBMISSION_REWARD_ASSET_USDC = 1;
 const X402_DEFAULT_SUBMISSION_BOUNTY_USDC = 1_000_000n;
 const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
@@ -898,15 +905,24 @@ function assertTrustedX402Authorization(
       "x402 authorization.value must equal the requested bounty amount.",
     );
   }
+  const validBefore = normalizeBigInt(
+    authorization.validBefore,
+    "paymentAuthorization.validBefore",
+  );
   if (
-    normalizeBigInt(
-      authorization.validBefore,
-      "paymentAuthorization.validBefore",
-    ) <=
+    validBefore <=
     normalizeBigInt(authorization.validAfter, "paymentAuthorization.validAfter")
   ) {
     throw new Error(
       "x402 authorization.validBefore must be greater than validAfter.",
+    );
+  }
+  const maxValidBefore =
+    BigInt(Math.floor(Date.now() / 1000)) +
+    MAX_X402_AUTHORIZATION_VALIDITY_SECONDS;
+  if (validBefore > maxValidBefore) {
+    throw new Error(
+      `x402 authorization.validBefore must be within ${MAX_X402_AUTHORIZATION_VALIDITY_SECONDS} seconds (24 hours) of now.`,
     );
   }
   if (
@@ -1339,13 +1355,18 @@ function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
   };
 }
 
-function normalizeLocalRoundConfig(value: unknown): LocalQuestionRoundConfig {
+function normalizeLocalRoundConfig(
+  value: unknown,
+  requiredVoters: bigint,
+): LocalQuestionRoundConfig {
   if (value === undefined || value === null) {
+    const defaultMaxVoters = BigInt(DEFAULT_ROUND_CONFIG.maxVoters);
     return {
       epochDuration: BigInt(DEFAULT_ROUND_CONFIG.epochDurationSeconds),
       maxDuration: BigInt(DEFAULT_ROUND_CONFIG.maxDurationSeconds),
-      minVoters: BigInt(DEFAULT_ROUND_CONFIG.minVoters),
-      maxVoters: BigInt(DEFAULT_ROUND_CONFIG.maxVoters),
+      minVoters: requiredVoters,
+      maxVoters:
+        defaultMaxVoters < requiredVoters ? requiredVoters : defaultMaxVoters,
     };
   }
   if (!isJsonRecord(value)) {
@@ -1381,6 +1402,11 @@ function normalizeLocalRoundConfig(value: unknown): LocalQuestionRoundConfig {
   }
   if (minVoters <= 0n || maxVoters <= 0n || maxVoters < minVoters) {
     throw new Error("question.roundConfig voter values are invalid.");
+  }
+  if (minVoters !== requiredVoters) {
+    throw new Error(
+      "question.roundConfig.minVoters must match bounty.requiredVoters.",
+    );
   }
 
   return { epochDuration, maxDuration, minVoters, maxVoters };
@@ -1533,10 +1559,11 @@ function parseLocalQuestionRequest(
   }
 
   const firstQuestion = isJsonRecord(rawQuestions[0]) ? rawQuestions[0] : {};
+  const bounty = normalizeLocalBounty(request.bounty);
   const roundConfig = normalizeLocalRoundConfig(
     request.roundConfig ?? firstQuestion.roundConfig,
+    bounty.requiredVoters,
   );
-  const bounty = normalizeLocalBounty(request.bounty);
   const topLevelTemplateInputs = cloneJsonObject<
     AgentQuestionSpecInput["templateInputs"]
   >(request.templateInputs, "templateInputs", null);
@@ -1612,6 +1639,22 @@ function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
     })),
     roundConfig: serializeLocalRoundConfig(payload.roundConfig),
   };
+}
+
+/**
+ * Parses a local ask payload and returns the canonical JSON payload the
+ * RateLoop server hashes for operationKey/payloadHash derivation. Exposed so
+ * agents and tests can verify the local signer normalization (including the
+ * bounty.requiredVoters / roundConfig.minVoters alignment) matches the server
+ * byte for byte.
+ */
+export function buildLocalQuestionCanonicalPayload(
+  payload: unknown,
+  fallbackChainId?: number,
+) {
+  return toCanonicalLocalQuestionPayload(
+    parseLocalQuestionRequest(payload, fallbackChainId),
+  );
 }
 
 function buildLocalQuestionOperation(payload: LocalQuestionPayload) {

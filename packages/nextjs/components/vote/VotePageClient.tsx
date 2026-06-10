@@ -14,6 +14,7 @@ import { StreakCounter } from "~~/components/shared/StreakCounter";
 import { VotingQuestionCard } from "~~/components/shared/VotingQuestionCard";
 import { FeedScopeFilter } from "~~/components/vote/FeedScopeFilter";
 import { VoteSignalRail } from "~~/components/vote/VoteSignalRail";
+import { resolveStakeModalVoteItem } from "~~/components/vote/stakeModalVoteItem";
 import { RATE_ROUTE } from "~~/constants/routes";
 import { useMobileHeaderVisibility } from "~~/contexts/MobileHeaderVisibilityContext";
 import {
@@ -98,12 +99,6 @@ const ShareContentModal = dynamic(
   () => import("~~/components/shared/ShareContentModal").then(m => m.ShareContentModal),
   { ssr: false },
 );
-
-function getStakeModalCurrentRating(item: ContentItem) {
-  const visibleRating = getVisibleContentRating(item);
-  if (visibleRating === null) return null;
-  return visibleRating > 10 ? visibleRating / 10 : visibleRating;
-}
 
 const ALL_FILTER = DISCOVER_ALL_FILTER;
 const BROKEN_FILTER = DISCOVER_BROKEN_FILTER;
@@ -728,6 +723,9 @@ const HomeInner = () => {
     bountyEligibility?: number | null;
     roundConfig?: ContentItem["roundConfig"] | null;
     openRound?: ContentItem["openRound"] | null;
+    // Snapshot of the targeted item so a background feed refetch dropping the
+    // item while the modal is open cannot misreport active content as inactive.
+    voteItemSnapshot?: ContentItem | null;
   }>({
     isOpen: false,
     initialIsUp: true,
@@ -738,6 +736,7 @@ const HomeInner = () => {
     bountyEligibility: null,
     roundConfig: null,
     openRound: null,
+    voteItemSnapshot: null,
   });
   const [worldIdProofRequest, setWorldIdProofRequest] = useState<{
     kind: WorldCredentialKind;
@@ -1279,10 +1278,11 @@ const HomeInner = () => {
         contentId: item.id,
         questionTitle: item.question?.trim() || item.title,
         categoryId: item.categoryId,
-        currentRating: getStakeModalCurrentRating(item),
+        currentRating: getVisibleContentRating(item),
         bountyEligibility: item.rewardPoolSummary?.bountyEligibility ?? item.bundle?.bountyEligibility ?? null,
         roundConfig: item.roundConfig,
         openRound: item.openRound,
+        voteItemSnapshot: item,
       });
     },
     [
@@ -1400,7 +1400,11 @@ const HomeInner = () => {
         return;
       }
 
-      const item = displayFeed.find(i => i.id === stakeModal.contentId);
+      const item = resolveStakeModalVoteItem({
+        feed: displayFeed,
+        contentId: stakeModal.contentId,
+        snapshot: stakeModal.voteItemSnapshot,
+      });
       if (!item) {
         notification.info(getInactiveContentVotingMessage(), { duration: 6000 });
         setStakeModal(prev => ({ ...prev, isOpen: false }));

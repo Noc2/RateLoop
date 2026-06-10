@@ -403,6 +403,58 @@ test("read client surfaces API errors with status codes", async () => {
   );
 });
 
+test("read client preserves a path-prefixed apiBaseUrl", async () => {
+  const requestedUrls: string[] = [];
+  const read = createRateLoopReadClient({
+    apiBaseUrl: "https://api.rateloop.ai/ponder",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrls.push(String(input));
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+    timeoutMs: 5_000,
+  });
+
+  await read.searchContent({ limit: 5 });
+  await read.getContent("42");
+  await read.getStats();
+
+  assert.equal(
+    requestedUrls[0],
+    "https://api.rateloop.ai/ponder/content?limit=5",
+  );
+  assert.equal(requestedUrls[1], "https://api.rateloop.ai/ponder/content/42");
+  assert.equal(requestedUrls[2], "https://api.rateloop.ai/ponder/stats");
+});
+
+test("read client builds unchanged URLs for the default root-host apiBaseUrl", async () => {
+  const requestedUrls: string[] = [];
+  const read = createRateLoopReadClient({
+    apiBaseUrl: "https://api.rateloop.ai",
+    fetchImpl: async (input: URL | RequestInfo) => {
+      requestedUrls.push(String(input));
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+    timeoutMs: 5_000,
+  });
+
+  await read.searchContent({ limit: 5, offset: 10 });
+  await read.getContent("42");
+  await read.getStats();
+
+  assert.equal(
+    requestedUrls[0],
+    "https://api.rateloop.ai/content?limit=5&offset=10",
+  );
+  assert.equal(requestedUrls[1], "https://api.rateloop.ai/content/42");
+  assert.equal(requestedUrls[2], "https://api.rateloop.ai/stats");
+});
+
 test("read client requires an apiBaseUrl", async () => {
   const read = createRateLoopReadClient({
     apiBaseUrl: undefined,

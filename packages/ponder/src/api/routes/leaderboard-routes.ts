@@ -334,7 +334,10 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     if (sortBy === "signalScore") {
       const aggregateTotalSettledVotes = sql<number>`count(*)`;
       const aggregateTotalWins = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 1 else 0 end end)`;
-      const aggregateTotalLosses = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 0 else 1 end else case when ${vote.isUp} = ${round.upWins} then 0 else 1 end end)`;
+      // RBTS losses mirror voterStats semantics: only votes actually scored
+      // against (forfeited stake > 0) count as losses; unscored/unpenalized
+      // votes are neutral. See the RoundSettled handler in src/RoundVotingEngine.ts.
+      const aggregateTotalLosses = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsForfeitedStake}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 0 else 1 end end)`;
       const aggregateTotalStakeWon = sql<bigint>`coalesce(sum(case when ${vote.rbtsStakeReturned} is not null then coalesce(${vote.rbtsStakeReturned}, 0) else case when ${vote.isUp} = ${round.upWins} then ${vote.stake} else 0 end end), 0)`;
       const aggregateTotalStakeLost = sql<bigint>`coalesce(sum(case when ${vote.rbtsForfeitedStake} is not null then coalesce(${vote.rbtsForfeitedStake}, ${vote.stake}) else case when ${vote.isUp} = ${round.upWins} then 0 else ${vote.stake} end end), 0)`;
       const aggregateScoredVotes = sql<number>`sum(case when ${vote.rbtsScoreBps} is not null then 1 else 0 end)`;
@@ -512,7 +515,10 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     ) {
       const aggregateTotalSettledVotes = sql<number>`count(*)`;
       const aggregateTotalWins = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 1 else 0 end end)`;
-      const aggregateTotalLosses = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 0 else 1 end else case when ${vote.isUp} = ${round.upWins} then 0 else 1 end end)`;
+      // RBTS losses mirror voterStats semantics: only votes actually scored
+      // against (forfeited stake > 0) count as losses; unscored/unpenalized
+      // votes are neutral. See the RoundSettled handler in src/RoundVotingEngine.ts.
+      const aggregateTotalLosses = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsForfeitedStake}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 0 else 1 end end)`;
       const aggregateTotalStakeWon = sql<bigint>`coalesce(sum(case when ${vote.rbtsStakeReturned} is not null then coalesce(${vote.rbtsStakeReturned}, 0) else case when ${vote.isUp} = ${round.upWins} then ${vote.stake} else 0 end end), 0)`;
       const aggregateTotalStakeLost = sql<bigint>`coalesce(sum(case when ${vote.rbtsForfeitedStake} is not null then coalesce(${vote.rbtsForfeitedStake}, ${vote.stake}) else case when ${vote.isUp} = ${round.upWins} then 0 else ${vote.stake} end end), 0)`;
       const aggregateWinRate = sql<number>`CAST(${aggregateTotalWins} AS FLOAT) / ${aggregateTotalSettledVotes}`;

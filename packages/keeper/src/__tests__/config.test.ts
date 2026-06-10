@@ -166,6 +166,30 @@ describe("keeper config", () => {
     ).rejects.toThrow("KEEPER_CLEANUP_BATCH_SIZE must be a positive integer");
   });
 
+  it("clamps DORMANCY_PERIOD below the on-chain contract constant and warns", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { config } = await loadKeeperConfig({
+      DORMANCY_PERIOD: "86400", // 1 day < ContentRegistry.DORMANCY_PERIOD (30 days)
+    });
+
+    expect(config.dormancyPeriod).toBe(30n * 24n * 60n * 60n);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("below the on-chain ContentRegistry.DORMANCY_PERIOD"),
+    );
+  });
+
+  it("accepts DORMANCY_PERIOD at or above the on-chain contract constant", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { config } = await loadKeeperConfig({
+      DORMANCY_PERIOD: "5184000", // 60 days
+    });
+
+    expect(config.dormancyPeriod).toBe(5_184_000n);
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("DORMANCY_PERIOD"),
+    );
+  });
+
   it("loads and normalizes the Ponder API base URL", async () => {
     const { config } = await loadKeeperConfig({
       PONDER_BASE_URL: "https://ponder.example.com/",

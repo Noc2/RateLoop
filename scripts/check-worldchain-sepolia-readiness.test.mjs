@@ -62,6 +62,50 @@ test("parseGeneratedContractsForChain extracts addresses and deployed blocks for
   assert.equal(contracts.get("ContentRegistry").deployedOnBlock, REQUIRED_DEPLOYED_CONTRACTS.indexOf("ContentRegistry") + 101);
 });
 
+test("parseGeneratedContractsForChain does not borrow deployedOnBlock from the next contract", () => {
+  const source = `
+const deployedContracts = {
+  4801: {
+    AdvisoryVoteRecorder: {
+      address: "${addressFor(1)}",
+      abi: [],
+    },
+    CategoryRegistry: {
+      address: "${addressFor(2)}",
+      abi: [],
+      deployedOnBlock: 222,
+    },
+  },
+  31337: {},
+};`;
+
+  const contracts = parseGeneratedContractsForChain(source);
+
+  assert.equal(contracts.get("AdvisoryVoteRecorder").address, addressFor(1));
+  assert.equal(contracts.get("AdvisoryVoteRecorder").deployedOnBlock, undefined);
+  assert.equal(contracts.get("CategoryRegistry").deployedOnBlock, 222);
+});
+
+test("validateOfflineReadiness flags a contract whose deployedOnBlock is missing", () => {
+  const deployedContractsSource = makeGeneratedContractsSource().replace(
+    /\n\s*deployedOnBlock: 101,/,
+    "",
+  );
+
+  const result = validateOfflineReadiness({
+    deploymentJson: makeDeploymentJson(),
+    deployedContractsSource,
+    questionRewardPoolsSource,
+  });
+
+  assert.equal(result.ok, false);
+  assert(
+    result.failures.some(message =>
+      message.includes(`${REQUIRED_DEPLOYED_CONTRACTS[0]} has a positive generated deployedOnBlock`),
+    ),
+  );
+});
+
 test("validateOfflineReadiness accepts synchronized Sepolia deployment artifacts", () => {
   const result = validateOfflineReadiness({
     deploymentJson: makeDeploymentJson(),

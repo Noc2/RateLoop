@@ -26,6 +26,7 @@ import {
   normalizeUtcDateKey,
 } from "./streak-utils.js";
 import { extendFeedbackBonusAwardDeadlinesForTerminalRound } from "./feedback-bonus-deadlines.js";
+import { tryContractRead } from "./contract-read.js";
 
 const RBTS_SCORE_SCALE_BPS = 10_000;
 const RBTS_SCORE_SCALE = 10_000n;
@@ -92,37 +93,29 @@ async function resolveCommitIdentityAtCommit(params: {
     };
   }
 
-  try {
-    const state = (await params.context.client.readContract({
-      abi: RoundVotingEngineAbi,
-      address: engineAddress,
-      functionName: "commitIdentityState",
-      args: [params.contentId, params.roundId, params.commitKey],
-    })) as
-      | readonly [unknown, unknown, unknown, unknown, unknown, unknown]
-      | {
-          identityKey?: unknown;
-          holder?: unknown;
-          credentialMask?: unknown;
-          freshCredentialMask?: unknown;
-        };
-    const identityKey = Array.isArray(state) ? state[0] : state.identityKey;
-    const holder = Array.isArray(state) ? state[1] : state.holder;
-    const credentialMask =
-      Number(Array.isArray(state) ? state[3] : state.credentialMask) || 0;
-    const freshCredentialMask =
-      Number(Array.isArray(state) ? state[4] : state.freshCredentialMask) || 0;
-    const holderAddress = normalizeAddress(String(holder));
-    const identityHolder =
-      holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter;
-    return {
-      identityKey: nonZeroIdentityKey(identityKey, rawVoter),
-      identityHolder,
-      credentialMask,
-      freshCredentialMask,
-      hasHumanCredential: (credentialMask & HUMAN_CREDENTIAL_MASK) !== 0,
-    };
-  } catch {
+  // Only a deterministic call failure (revert / missing code / zero data) may fall back to the
+  // address-derived identity: the indexed identityKey feeds the RBTS sampler replication and
+  // voterStats attribution, so persisting the fallback after a transient RPC failure would
+  // silently corrupt the whole round. tryContractRead retries transient failures and then
+  // throws so Ponder retries the handler instead.
+  const result = await tryContractRead(
+    () =>
+      params.context.client.readContract({
+        abi: RoundVotingEngineAbi,
+        address: engineAddress,
+        functionName: "commitIdentityState",
+        args: [params.contentId, params.roundId, params.commitKey],
+      }) as Promise<
+        | readonly [unknown, unknown, unknown, unknown, unknown, unknown]
+        | {
+            identityKey?: unknown;
+            holder?: unknown;
+            credentialMask?: unknown;
+            freshCredentialMask?: unknown;
+          }
+      >,
+  );
+  if (!result.ok) {
     return {
       identityKey: addressIdentityKey(rawVoter),
       identityHolder: rawVoter,
@@ -131,6 +124,24 @@ async function resolveCommitIdentityAtCommit(params: {
       hasHumanCredential: false,
     };
   }
+
+  const state = result.value;
+  const identityKey = Array.isArray(state) ? state[0] : state.identityKey;
+  const holder = Array.isArray(state) ? state[1] : state.holder;
+  const credentialMask =
+    Number(Array.isArray(state) ? state[3] : state.credentialMask) || 0;
+  const freshCredentialMask =
+    Number(Array.isArray(state) ? state[4] : state.freshCredentialMask) || 0;
+  const holderAddress = normalizeAddress(String(holder));
+  const identityHolder =
+    holderAddress && holderAddress !== zeroAddress ? holderAddress : rawVoter;
+  return {
+    identityKey: nonZeroIdentityKey(identityKey, rawVoter),
+    identityHolder,
+    credentialMask,
+    freshCredentialMask,
+    hasHumanCredential: (credentialMask & HUMAN_CREDENTIAL_MASK) !== 0,
+  };
 }
 
 function voteIdentity(voteRow: {
@@ -375,18 +386,24 @@ async function resolveRbtsScoringWeights(params: {
 
   await Promise.all(
     params.roundVotes.map(async (roundVote) => {
-      try {
-        const state = await params.context.client.readContract({
+      // Weight 0 silently drops the vote from the indexed scoring set, so only a
+      // deterministic call failure may map to it. Transient RPC failures throw (after the
+      // bounded retry in tryContractRead) so the handler fails loudly and Ponder retries it.
+      const result = await tryContractRead(() =>
+        params.context.client.readContract({
           abi: RoundVotingEngineAbi,
           address: engineAddress,
           functionName: "rbtsCommitState",
           args: [params.contentId, params.roundId, roundVote.commitKey],
-        });
-        const weight = Array.isArray(state) ? state[2] : 0n;
-        weights.set(roundVote.id, BigInt(String(weight)));
-      } catch {
+        }),
+      );
+      if (!result.ok) {
         weights.set(roundVote.id, 0n);
+        return;
       }
+      const state = result.value;
+      const weight = Array.isArray(state) ? state[2] : 0n;
+      weights.set(roundVote.id, BigInt(String(weight)));
     }),
   );
 
@@ -1214,8 +1231,44 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       : won
         ? 0n
         : v.stake;
+    // A revealed RBTS vote only counts as a loss when it was actually scored
+    // against. On-chain (RoundRevealLib RBTS scoring + RewardMath
+    // negativeSpreadForfeiture) the only penalty is forfeited stake: voters
+    // scoring below the round mean forfeit part of their stake, while voters
+    // at the mean, voters in degraded rounds (scoring set < 3 — full stake
+    // returned, weight 0), and post-threshold reveals that were never scored
+    // get their entire stake back. We mirror that by treating
+    // rbtsForfeitedStake > 0 as the loss criterion; unscored/unpenalized
+    // voters are neutral — neither a win nor a loss, and their streak is
+    // left untouched. Legacy (non-RBTS) rounds keep the binary outcome.
+    const lost = rbtsRound ? !won && stakeLost > 0n : !won;
 
     const identityHolder = voteIdentity(v);
+
+    // globalStats.totalVoterIds counts distinct voter identities with at
+    // least one settled vote. A voterStats row is created exactly once per
+    // identity (here, on its first settled vote), so increment when the row
+    // does not exist yet.
+    const existingVoterStats = await context.db.find(voterStats, {
+      voter: identityHolder,
+    });
+    if (!existingVoterStats) {
+      await context.db
+        .insert(globalStats)
+        .values({
+          id: "global",
+          totalContent: 0,
+          totalVotes: 0,
+          totalRoundsSettled: 0,
+          totalRewardsClaimed: 0n,
+          totalFrontendFeesClaimed: 0n,
+          totalProfiles: 0,
+          totalVoterIds: 1,
+        })
+        .onConflictDoUpdate((row) => ({
+          totalVoterIds: row.totalVoterIds + 1,
+        }));
+    }
 
     await context.db
       .insert(voterStats)
@@ -1223,24 +1276,28 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
         voter: identityHolder,
         totalSettledVotes: 1,
         totalWins: won ? 1 : 0,
-        totalLosses: won ? 0 : 1,
+        totalLosses: lost ? 1 : 0,
         totalStakeWon: stakeWon,
         totalStakeLost: stakeLost,
-        currentStreak: won ? 1 : -1,
+        currentStreak: won ? 1 : lost ? -1 : 0,
         bestWinStreak: won ? 1 : 0,
       })
       .onConflictDoUpdate((row) => {
+        // Neutral outcomes (revealed but never scored against) leave the
+        // win/loss streak untouched.
         const newStreak = won
           ? row.currentStreak > 0
             ? row.currentStreak + 1
             : 1
-          : row.currentStreak < 0
-            ? row.currentStreak - 1
-            : -1;
+          : lost
+            ? row.currentStreak < 0
+              ? row.currentStreak - 1
+              : -1
+            : row.currentStreak;
         return {
           totalSettledVotes: row.totalSettledVotes + 1,
           totalWins: row.totalWins + (won ? 1 : 0),
-          totalLosses: row.totalLosses + (won ? 0 : 1),
+          totalLosses: row.totalLosses + (lost ? 1 : 0),
           totalStakeWon: row.totalStakeWon + stakeWon,
           totalStakeLost: row.totalStakeLost + stakeLost,
           currentStreak: newStreak,
@@ -1258,14 +1315,14 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
           categoryId,
           totalSettledVotes: 1,
           totalWins: won ? 1 : 0,
-          totalLosses: won ? 0 : 1,
+          totalLosses: lost ? 1 : 0,
           totalStakeWon: stakeWon,
           totalStakeLost: stakeLost,
         })
         .onConflictDoUpdate((row) => ({
           totalSettledVotes: row.totalSettledVotes + 1,
           totalWins: row.totalWins + (won ? 1 : 0),
-          totalLosses: row.totalLosses + (won ? 0 : 1),
+          totalLosses: row.totalLosses + (lost ? 1 : 0),
           totalStakeWon: row.totalStakeWon + stakeWon,
           totalStakeLost: row.totalStakeLost + stakeLost,
         }));

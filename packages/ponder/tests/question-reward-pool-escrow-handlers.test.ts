@@ -60,8 +60,13 @@ function createDb(findResults: Record<string, unknown> = {}) {
     key: Record<string, unknown>;
     values: Record<string, unknown>;
   }> = [];
+  const deletes: Array<{ table: string; key: Record<string, unknown> }> = [];
 
   const db = {
+    delete: vi.fn(async (table: string, key: Record<string, unknown>) => {
+      deletes.push({ table, key });
+      return true;
+    }),
     find: vi.fn(async (table: string, key: Record<string, unknown>) => {
       const lookupKey = `${table}:${JSON.stringify(key, (_name, value) =>
         typeof value === "bigint" ? value.toString() : value,
@@ -90,7 +95,7 @@ function createDb(findResults: Record<string, unknown> = {}) {
     })),
   };
 
-  return { db, inserts, updates };
+  return { db, inserts, updates, deletes };
 }
 
 async function loadHandlers() {
@@ -504,6 +509,160 @@ describe("QuestionRewardPoolEscrow ponder handlers", () => {
     );
     expect(updates).toContainEqual(
       expect.objectContaining({ table: "content" }),
+    );
+  });
+
+  it("reverses round qualification when a rejected snapshot round is recovered", async () => {
+    const { db, deletes, updates } = createDb({
+      'questionRewardPoolRound:{"id":"7-3"}': { id: "7-3" },
+      content: { id: 1n },
+    });
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RejectedSnapshotRoundRecovered",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          allocationReturned: 50_000_000n,
+        },
+        block: { number: 14n, timestamp: 2_100n },
+      },
+      context: { db },
+    });
+
+    expect(deletes).toContainEqual({
+      table: "questionRewardPoolRound",
+      key: { id: "7-3" },
+    });
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "questionRewardPool",
+        key: { id: 7n },
+        values: expect.objectContaining({
+          unallocatedAmount: 150_000_000n,
+          allocatedAmount: -50_000_000n,
+          qualifiedRounds: -1,
+          updatedAt: 2_100n,
+        }),
+      }),
+    );
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "content",
+        values: expect.objectContaining({ lastActivityAt: 2_100n }),
+      }),
+    );
+  });
+
+  it("ignores recovery events for rounds that were never indexed as qualified", async () => {
+    const { db, deletes, updates } = createDb({ content: { id: 1n } });
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RejectedSnapshotRoundRecovered",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          allocationReturned: 50_000_000n,
+        },
+        block: { number: 14n, timestamp: 2_100n },
+      },
+      context: { db },
+    });
+
+    expect(deletes).toEqual([]);
+    expect(updates).not.toContainEqual(
+      expect.objectContaining({ table: "questionRewardPool" }),
+    );
+  });
+
+  it("re-applies qualification accounting when a recovered round re-qualifies", async () => {
+    // After RejectedSnapshotRoundRecovered deletes the round row, a fresh
+    // RewardPoolRoundQualified must insert the row again and update the pool aggregates.
+    const { db, inserts, updates } = createDb({ content: { id: 1n } });
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RewardPoolRoundQualified",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          allocation: 40_000_000n,
+          eligibleVoters: 4n,
+          frontendFeeAllocation: 1_200_000n,
+        },
+        block: { number: 16n, timestamp: 2_300n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "questionRewardPoolRound",
+        values: expect.objectContaining({
+          id: "7-3",
+          allocation: 40_000_000n,
+          frontendFeeAllocation: 1_200_000n,
+          eligibleVoters: 4,
+        }),
+      }),
+    );
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "questionRewardPool",
+        key: { id: 7n },
+        values: expect.objectContaining({
+          allocatedAmount: 40_000_000n,
+          qualifiedRounds: 1,
+        }),
+      }),
+    );
+  });
+
+  it("touches pool and content timestamps when a recovered round is reopened", async () => {
+    const { db, updates } = createDb({
+      'questionRewardPool:{"id":"7"}': { id: 7n, contentId: 1n },
+      content: { id: 1n },
+    });
+    const registeredHandlers = await loadHandlers();
+
+    await registeredHandlers.get(
+      "QuestionRewardPoolEscrow:RecoveredSnapshotRoundReopened",
+    )!({
+      event: {
+        args: {
+          rewardPoolId: 7n,
+          contentId: 1n,
+          roundId: 3n,
+          newWeightRoot: `0x${"2".repeat(64)}`,
+        },
+        block: { number: 15n, timestamp: 2_200n },
+      },
+      context: { db },
+    });
+
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "questionRewardPool",
+        key: { id: 7n },
+        values: expect.objectContaining({ updatedAt: 2_200n }),
+      }),
+    );
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        table: "content",
+        values: expect.objectContaining({ lastActivityAt: 2_200n }),
+      }),
     );
   });
 

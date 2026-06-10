@@ -2,6 +2,9 @@ import { findAgentResultTemplate } from "../templates";
 import type { AgentAskExample, AgentQuestionExample, JsonObject, JsonValue, QuestionLintFinding } from "./types";
 
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
+// Contracts enforce rewardTerms.requiredVoters == roundConfig.minVoters
+// ("Voters mismatch"), and the server defaults requiredVoters to 3.
+const DEFAULT_REQUIRED_VOTERS = 3n;
 const RANK_BY_RATING_TEMPLATE_IDS = new Set(["ranked_option_member", "pairwise_output_preference"]);
 const FEATURE_ACCEPTANCE_TEMPLATE_ID = "feature_acceptance_test";
 const FEATURE_ACCEPTANCE_REQUIRED_INPUTS = ["expectedBehavior", "testSteps", "acceptanceCriteria"] as const;
@@ -100,6 +103,38 @@ function pushFinding(
 function templateInputText(templateInputs: JsonObject | null, key: string): string {
   const value = templateInputs?.[key];
   return typeof value === "string" ? value.trim() : "";
+}
+
+function parseLintVoterCount(value: unknown): bigint | null {
+  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "bigint") return null;
+  const raw = String(value).trim();
+  return /^\d+$/.test(raw) ? BigInt(raw) : null;
+}
+
+function lintRoundConfigVoterAlignment(request: Partial<AgentAskExample>, findings: QuestionLintFinding[]) {
+  const firstQuestion = request.question ?? (Array.isArray(request.questions) ? request.questions[0] : undefined);
+  const usesTopLevelRoundConfig = isObject(request.roundConfig);
+  const roundConfig = usesTopLevelRoundConfig
+    ? (request.roundConfig as JsonObject)
+    : isObject(firstQuestion) && isObject((firstQuestion as JsonObject).roundConfig)
+      ? ((firstQuestion as JsonObject).roundConfig as JsonObject)
+      : null;
+  if (!roundConfig || roundConfig.minVoters === undefined || roundConfig.minVoters === null) return;
+
+  const minVoters = parseLintVoterCount(roundConfig.minVoters);
+  if (minVoters === null) return;
+  const requiredVoters = isObject(request.bounty)
+    ? (parseLintVoterCount(request.bounty.requiredVoters) ?? DEFAULT_REQUIRED_VOTERS)
+    : DEFAULT_REQUIRED_VOTERS;
+
+  if (minVoters !== requiredVoters) {
+    pushFinding(
+      findings,
+      "error",
+      usesTopLevelRoundConfig ? "roundConfig.minVoters" : "question.roundConfig.minVoters",
+      `roundConfig.minVoters (${minVoters}) must match bounty.requiredVoters (${requiredVoters}); contracts reject mismatched voter thresholds. Omit roundConfig to inherit bounty.requiredVoters.`,
+    );
+  }
 }
 
 export function lintAgentQuestion(
@@ -251,6 +286,8 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
   if (request.templateId && !findAgentResultTemplate(request.templateId)) {
     pushFinding(findings, "error", "templateId", `Unknown result template: ${request.templateId}.`);
   }
+
+  lintRoundConfigVoterAlignment(request, findings);
 
   const questions = asQuestionArray(request as AgentAskExample);
   if (questions.length === 0) {

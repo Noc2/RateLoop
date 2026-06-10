@@ -106,6 +106,22 @@ export function getWalletWriteUnavailableMessage({
   return null;
 }
 
+/**
+ * Builds the gas estimation request from the merged write call so per-call
+ * overrides (address/abi spread from variables) are honored, matching the
+ * simulation and the actual write instead of always targeting the deployed contract.
+ */
+export function buildGasEstimationRequest(writeContractObject: { address: string; abi: Abi }, accountAddress: string) {
+  const { address, abi, functionName, args, value } = writeContractObject as {
+    address: string;
+    abi: Abi;
+    functionName?: string;
+    args?: readonly unknown[];
+    value?: bigint;
+  };
+  return { address, abi, functionName, args, account: accountAddress, value };
+}
+
 export function useScaffoldWriteContract<TContractName extends ContractName>(
   config: UseScaffoldWriteConfig<TContractName>,
 ): ScaffoldWriteContractReturnType<TContractName>;
@@ -209,14 +225,9 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
         const publicClient = getPublicClient(wagmiConfig, { chainId: selectedNetwork.id as any });
         if (publicClient) {
           try {
-            const estimated = await publicClient.estimateContractGas({
-              address: deployedContractData.address,
-              abi: deployedContractData.abi as Abi,
-              functionName: (variables as any).functionName,
-              args: (variables as any).args,
-              account: accountAddress,
-              value: (variables as any).value,
-            });
+            const estimated = await publicClient.estimateContractGas(
+              buildGasEstimationRequest(writeContractObject, accountAddress) as any,
+            );
             // Add 20% buffer; setting gas explicitly skips wallet-side gas estimation
             (writeContractObject as any).gas = (estimated * 120n) / 100n;
           } catch {

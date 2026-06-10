@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   ContentRegistryAbi,
   X402QuestionSubmitterAbi,
@@ -18,6 +19,7 @@ import { buildQuestionSpecHashes } from "../questionSpecs.js";
 import { findAgentResultTemplate } from "../templates.js";
 import {
   askHumansWithLocalSigner,
+  buildLocalQuestionCanonicalPayload,
   signX402AuthorizationRequest,
   validateLocalSignerTransactionPlan,
   withLocalSignerWallet,
@@ -47,7 +49,8 @@ const BOUNTY_START_BY = 1_893_456_000n;
 const BOUNTY_WINDOW_SECONDS = 1_200n;
 const FEEDBACK_WINDOW_SECONDS = 1_200n;
 const X402_VALID_AFTER = "0";
-const X402_VALID_BEFORE = "9999999999";
+// Must stay within the local signer's 24-hour validBefore sanity cap.
+const X402_VALID_BEFORE = String(Math.floor(Date.now() / 1000) + 3_600);
 const TEST_SIGNATURE = `0x${"1".repeat(64)}${"3".repeat(64)}1b` as const;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
 const EMPTY_DETAILS = { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH } as const;
@@ -736,6 +739,17 @@ describe("local signer", () => {
     ).rejects.toThrow(/validBefore must be greater than validAfter/);
   });
 
+  it("rejects x402 authorizations whose validBefore exceeds the 24 hour cap", async () => {
+    const farFuture = String(Math.floor(Date.now() / 1000) + 25 * 60 * 60);
+    const request = x402AuthorizationRequest();
+    request.authorization.validBefore = farFuture;
+    request.typedData.message.validBefore = farFuture;
+
+    await expect(
+      signX402AuthorizationRequest(account, request, X402_SIGN_OPTIONS),
+    ).rejects.toThrow(/validBefore must be within 86400 seconds/);
+  });
+
   it("rejects x402 authorizations whose nonce is not bound to the ask payload", async () => {
     await expect(
       signX402AuthorizationRequest(account, x402AuthorizationRequest(), {
@@ -1046,5 +1060,104 @@ describe("local signer", () => {
         },
       }),
     ).rejects.toThrow(/chainId 4801 does not match local signer chain 480/);
+  });
+});
+
+function fiveVoterAskPayload(
+  overrides: Partial<AskHumansRequest> = {},
+): AskHumansRequest {
+  const base = askPayload();
+  return {
+    ...base,
+    bounty: { ...base.bounty, requiredVoters: "5" },
+    roundConfig: undefined,
+    ...overrides,
+  };
+}
+
+describe("local signer round config alignment", () => {
+  it("defaults roundConfig.minVoters to bounty.requiredVoters when omitted", () => {
+    const canonical = buildLocalQuestionCanonicalPayload(fiveVoterAskPayload(), 480);
+
+    expect(canonical.roundConfig).toEqual({
+      epochDuration: "1200",
+      maxDuration: "1200",
+      minVoters: "5",
+      maxVoters: "100",
+    });
+    expect(canonical.bounty.requiredVoters).toBe("5");
+  });
+
+  it("raises the default maxVoters when requiredVoters exceeds it", () => {
+    const payload = fiveVoterAskPayload();
+    payload.bounty.requiredVoters = "150";
+
+    const canonical = buildLocalQuestionCanonicalPayload(payload, 480);
+
+    expect(canonical.roundConfig).toEqual({
+      epochDuration: "1200",
+      maxDuration: "1200",
+      minVoters: "150",
+      maxVoters: "150",
+    });
+  });
+
+  it("accepts an explicit roundConfig that matches bounty.requiredVoters", () => {
+    const canonical = buildLocalQuestionCanonicalPayload(
+      fiveVoterAskPayload({
+        roundConfig: {
+          epochDuration: "1200",
+          maxDuration: "1200",
+          maxVoters: "100",
+          minVoters: "5",
+        },
+      }),
+      480,
+    );
+
+    expect(canonical.roundConfig).toEqual({
+      epochDuration: "1200",
+      maxDuration: "1200",
+      minVoters: "5",
+      maxVoters: "100",
+    });
+  });
+
+  it("rejects an explicit roundConfig.minVoters that mismatches bounty.requiredVoters", () => {
+    expect(() =>
+      buildLocalQuestionCanonicalPayload(
+        fiveVoterAskPayload({
+          roundConfig: {
+            epochDuration: "1200",
+            maxDuration: "1200",
+            maxVoters: "100",
+            minVoters: "3",
+          },
+        }),
+      ),
+    ).toThrow(/question\.roundConfig\.minVoters must match bounty\.requiredVoters/);
+  });
+
+  it("keeps the shipped five-voter examples aligned with the round quorum", () => {
+    const exampleFiles = [
+      "agent-trace-review.json",
+      "feature-acceptance-test.json",
+      "generated-mockup-feedback.json",
+      "ai-website-feedback-service.json",
+    ];
+
+    for (const fileName of exampleFiles) {
+      const example = JSON.parse(
+        readFileSync(
+          new URL(`../../examples/questions/${fileName}`, import.meta.url),
+          "utf8",
+        ),
+      );
+
+      const canonical = buildLocalQuestionCanonicalPayload(example);
+      expect(canonical.bounty.requiredVoters).toBe("5");
+      expect(canonical.roundConfig.minVoters).toBe("5");
+      expect(BigInt(canonical.roundConfig.maxVoters)).toBeGreaterThanOrEqual(5n);
+    }
   });
 });

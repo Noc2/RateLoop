@@ -140,6 +140,8 @@ export function resetKeeperStateForTests(): void {
   keeperWorkDiscoveryTick = 0;
   decryptFailureCount.clear();
   resetTlockClientCacheForTests();
+  lastBlockTimestampS = null;
+  lastBlockObservedAtMs = null;
 }
 
 // Track repeated decrypt failures per commitKey to stop retrying permanently bad ciphertexts
@@ -745,6 +747,20 @@ async function fetchIndexedCiphertextsForRound(params: {
       if (items.length < INDEXED_CIPHERTEXT_PAGE_SIZE)
         return indexedCiphertexts;
     }
+    // Currently unreachable for protocol-capped rounds (max 200 voters), but a governance
+    // cap raise past MAX_INDEXED_CIPHERTEXT_PAGES * INDEXED_CIPHERTEXT_PAGE_SIZE commits
+    // would otherwise silently truncate the map. Commits beyond the limit are no longer
+    // permanently unrevealable — the eth_getLogs fallback recovers them — but every such
+    // round would silently lean on the slower on-chain log scan, so still warn loudly.
+    params.logger.warn(
+      "Indexed ciphertext page limit reached; commits beyond the limit fall back to on-chain logs",
+      {
+        kind: params.kind,
+        contentId: Number(params.contentId),
+        roundId: Number(params.roundId),
+        maxCommits: MAX_INDEXED_CIPHERTEXT_PAGES * INDEXED_CIPHERTEXT_PAGE_SIZE,
+      },
+    );
     return indexedCiphertexts;
   } catch (err: unknown) {
     incrementCounter("keeper_ponder_ciphertext_fetch_failures_total");
@@ -920,19 +936,27 @@ export async function resolveRounds(
   // from the last successful block timestamp (bounded). It throws if there's no cached value or
   // the cache is too stale, so the keeper short-circuits this iteration loudly rather than
   // continuing on a possibly-skewed system clock.
+  // A total RPC outage must surface as a FAILED tick: throwing here propagates to
+  // tick()'s error path (recordError -> consecutiveErrors / keeper_errors_total), so
+  // /health degrades instead of the outage looking like an endless successful empty run.
   let now: bigint;
   try {
     now = await resolveOnChainNowSeconds(publicClient);
   } catch (err) {
-    logger.error(
-      `[Keeper] Cannot resolve current block time: ${err instanceof Error ? err.message : String(err)}`,
+    throw new Error(
+      `Cannot resolve current block time: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return emptyResult();
   }
 
   const result: KeeperResult = emptyResult();
 
   // --- Discover work candidates ---
+  // Like the block-time read above, a total chain outage here is a fatal whole-tick
+  // failure: propagate it so recordRun is not called and the tick is counted as an
+  // error. Ponder-side discovery failures already fall back to chain enumeration
+  // inside discoverKeeperWorkCandidates (fetchKeeperWorkFromPonder returns null), so
+  // only the on-chain nextContentId read can throw here. Per-round failures further
+  // down keep their partial-failure semantics.
   let discovery: KeeperWorkDiscovery;
   try {
     discovery = await discoverKeeperWorkCandidates(
@@ -941,9 +965,10 @@ export async function resolveRounds(
       now,
       logger,
     );
-  } catch {
-    logger.error("Could not connect to chain");
-    return emptyResult();
+  } catch (err) {
+    throw new Error(
+      `Could not connect to chain: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   for (const candidate of discovery.cleanupRounds) {
@@ -1268,6 +1293,18 @@ export async function resolveRounds(
       }
 
       // --- 6. Dormancy sweep ---
+      // ContentRegistry.markDormant actually gates on `dormancyAnchorAt` (bumped only by
+      // submission, revival, and meaningful settlement — vote commits deliberately bump
+      // `lastActivityAt` but NOT the anchor) and hard-reverts "Bundled content" when
+      // `contentBundleId != 0`. Neither mapping has a public view, so the keeper cannot
+      // read them directly. `lastActivityAt` is a safe pre-filter because every anchor
+      // bump also bumps `lastActivityAt`, so `lastActivityAt >= dormancyAnchorAt` always:
+      // with config.dormancyPeriod clamped to the contract's 30-day DORMANCY_PERIOD
+      // (see config.ts), this check never fires before the contract would accept it —
+      // at worst it fires late for content kept "active" by vote commits alone.
+      // Bundled content cannot be detected up front; the pre-broadcast gas estimation
+      // in writeContractAndConfirm catches its revert without burning gas, and the
+      // catch below treats it as an expected skip.
       try {
         const rawContent = await publicClient.readContract({
           address: registryAddr,
@@ -1305,9 +1342,14 @@ export async function resolveRounds(
         }
       } catch (err: unknown) {
         const reason = getRevertReason(err);
+        // "Bundled content" and "Dormancy period not elapsed" are expected skips: the
+        // keeper cannot read contentBundleId / dormancyAnchorAt (no views exist), so it
+        // discovers them via the pre-broadcast estimation revert.
         if (
           !reason.includes("pending votes") &&
-          !reason.includes("Content has active round")
+          !reason.includes("Content has active round") &&
+          !reason.includes("Bundled content") &&
+          !reason.includes("Dormancy period not elapsed")
         ) {
           logger.debug("Could not check dormancy", {
             contentId: contentId.toString(),
@@ -1335,14 +1377,62 @@ export async function resolveRounds(
   return result;
 }
 
+// Small headroom over eth_estimateGas so minor state drift between estimation and
+// inclusion (e.g. another keeper's reveal landing first) does not OOG the transaction.
+const GAS_ESTIMATE_BUFFER_NUMERATOR = 12n;
+const GAS_ESTIMATE_BUFFER_DENOMINATOR = 10n;
+
 export async function writeContractAndConfirm(
   publicClient: Pick<PublicClient, "waitForTransactionReceipt">,
   walletClient: WalletClient,
   request: Parameters<WalletClient["writeContract"]>[0],
 ): Promise<`0x${string}`> {
-  // Enforce gas cap to prevent runaway transactions
-  if (!request.gas && config.maxGasPerTx > 0) {
-    request.gas = BigInt(config.maxGasPerTx);
+  // Estimate gas BEFORE broadcasting. Supplying an explicit `gas` makes viem skip
+  // eth_estimateGas — the keeper's only pre-broadcast simulation — so the old behavior
+  // of unconditionally setting `gas = maxGasPerTx` broadcast every transaction whose
+  // contract conditions were not met, mining a revert and burning gas on every benign
+  // race (AlreadyRevealed, UnrevealedPastEpochVotes, "Bundled content", redundant
+  // keeper instances, ...). Instead, estimate first: if estimation reverts, the error
+  // propagates to the caller's existing getRevertReason/isExpectedRevert classification
+  // and nothing is broadcast. maxGasPerTx acts purely as a CAP on the estimate.
+  if (!request.gas) {
+    const estimateContractGas = (
+      publicClient as Partial<Pick<PublicClient, "estimateContractGas">>
+    ).estimateContractGas;
+    if (estimateContractGas) {
+      const req = request as {
+        address: `0x${string}`;
+        abi: unknown;
+        functionName: string;
+        args?: readonly unknown[];
+        account?: unknown;
+        value?: bigint;
+      };
+      const estimate = await estimateContractGas.call(publicClient, {
+        address: req.address,
+        abi: req.abi,
+        functionName: req.functionName,
+        args: req.args,
+        account: req.account,
+        ...(req.value !== undefined ? { value: req.value } : {}),
+      } as Parameters<PublicClient["estimateContractGas"]>[0]);
+
+      const cap = config.maxGasPerTx > 0 ? BigInt(config.maxGasPerTx) : null;
+      if (cap !== null && estimate > cap) {
+        // Broadcasting with `gas = cap` would deterministically run out of gas on-chain
+        // and burn the entire cap. Refuse instead.
+        throw new Error(
+          `Estimated gas ${estimate} exceeds MAX_GAS_PER_TX ${config.maxGasPerTx}; not broadcasting`,
+        );
+      }
+      const buffered =
+        (estimate * GAS_ESTIMATE_BUFFER_NUMERATOR) /
+        GAS_ESTIMATE_BUFFER_DENOMINATOR;
+      request.gas = cap !== null && buffered > cap ? cap : buffered;
+    } else if (config.maxGasPerTx > 0) {
+      // Test doubles without estimateContractGas: keep the legacy hard cap.
+      request.gas = BigInt(config.maxGasPerTx);
+    }
   }
 
   const hash = await walletClient.writeContract(request);

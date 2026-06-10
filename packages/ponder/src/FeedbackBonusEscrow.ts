@@ -1,5 +1,6 @@
 import { ponder } from "ponder:registry";
-import { content, feedbackBonusAward, feedbackBonusPool } from "ponder:schema";
+import { content, feedbackBonusAward, feedbackBonusPool, round } from "ponder:schema";
+import { resolveFeedbackBonusAwardDeadline } from "./feedback-bonus-deadlines.js";
 
 async function touchContent(context: { db: any }, contentId: bigint, timestamp: bigint) {
   const existingContent = await context.db.find(content, { id: contentId });
@@ -12,6 +13,22 @@ async function touchContent(context: { db: any }, contentId: bigint, timestamp: 
 
 ponder.on("FeedbackBonusEscrow:FeedbackBonusPoolCreated", async ({ event, context }) => {
   const { poolId, contentId, roundId, funder, awarder, amount, feedbackClosesAt, frontendFeeBps, asset } = event.args;
+
+  // The contract allows creating a pool that targets a round that is already
+  // terminal (settled/tied/reveal-failed). For such pools the on-chain award
+  // deadline is already max(feedbackClosesAt, settledAt + 24h)
+  // (FeedbackBonusEscrow._feedbackBonusAwardDeadline), but no further Round*
+  // terminal event will fire to trigger
+  // extendFeedbackBonusAwardDeadlinesForTerminalRound — so apply the same
+  // extension here. Cancelled rounds deliberately never set settledAt on the
+  // indexed round row and keep the requested deadline, matching the contract.
+  const targetRound = await context.db.find(round, {
+    id: `${contentId}-${roundId}`,
+  });
+  const awardDeadline = resolveFeedbackBonusAwardDeadline(
+    feedbackClosesAt,
+    targetRound?.settledAt ?? null,
+  );
 
   await context.db
     .insert(feedbackBonusPool)
@@ -30,7 +47,7 @@ ponder.on("FeedbackBonusEscrow:FeedbackBonusPoolCreated", async ({ event, contex
       forfeitedAmount: 0n,
       awardCount: 0,
       feedbackClosesAt,
-      awardDeadline: feedbackClosesAt,
+      awardDeadline,
       frontendFeeBps: Number(frontendFeeBps),
       forfeited: false,
       createdAt: event.block.timestamp,

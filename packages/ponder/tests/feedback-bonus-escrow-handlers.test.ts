@@ -22,6 +22,7 @@ vi.mock("ponder:schema", () => ({
   content: "content",
   feedbackBonusAward: "feedbackBonusAward",
   feedbackBonusPool: "feedbackBonusPool",
+  round: "round",
 }));
 
 function resolveSetter(valuesOrUpdater: Record<string, unknown> | ((row: any) => Record<string, unknown>)) {
@@ -119,6 +120,83 @@ describe("FeedbackBonusEscrow ponder handlers", () => {
       }),
     });
     expect(updates).toContainEqual(expect.objectContaining({ table: "content" }));
+  });
+
+  it("extends the award deadline when the pool targets an already-settled round", async () => {
+    const settledAt = 1_000_000n;
+    const feedbackClosesAt = 1_000_100n; // before settledAt + 24h
+    const { db, inserts } = createDb({
+      content: { id: 1n },
+      'round:{"id":"1-3"}': { id: "1-3", settledAt },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("FeedbackBonusEscrow:FeedbackBonusPoolCreated");
+
+    await handler!({
+      event: {
+        args: {
+          poolId: 8n,
+          contentId: 1n,
+          roundId: 3n,
+          funder: "0x0000000000000000000000000000000000000001",
+          awarder: "0x0000000000000000000000000000000000000002",
+          asset: 0n,
+          amount: 100_000_000n,
+          feedbackClosesAt,
+          frontendFeeBps: 300n,
+        },
+        block: { number: 20n, timestamp: 1_000_050n },
+      },
+      context: { db },
+    });
+
+    // On-chain deadline for pools targeting terminal rounds is
+    // max(feedbackClosesAt, settledAt + 24h).
+    expect(inserts).toContainEqual({
+      table: "feedbackBonusPool",
+      values: expect.objectContaining({
+        id: 8n,
+        feedbackClosesAt,
+        awardDeadline: settledAt + 24n * 60n * 60n,
+      }),
+    });
+  });
+
+  it("keeps the requested deadline when the target round is not settled", async () => {
+    // Cancelled rounds never set settledAt on the indexed round row, so they
+    // must not receive the post-settlement extension.
+    const { db, inserts } = createDb({
+      content: { id: 1n },
+      'round:{"id":"1-3"}': { id: "1-3", settledAt: null },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("FeedbackBonusEscrow:FeedbackBonusPoolCreated");
+
+    await handler!({
+      event: {
+        args: {
+          poolId: 9n,
+          contentId: 1n,
+          roundId: 3n,
+          funder: "0x0000000000000000000000000000000000000001",
+          awarder: "0x0000000000000000000000000000000000000002",
+          asset: 0n,
+          amount: 100_000_000n,
+          feedbackClosesAt: 2_592_000n,
+          frontendFeeBps: 300n,
+        },
+        block: { number: 21n, timestamp: 1_700n },
+      },
+      context: { db },
+    });
+
+    expect(inserts).toContainEqual({
+      table: "feedbackBonusPool",
+      values: expect.objectContaining({
+        id: 9n,
+        awardDeadline: 2_592_000n,
+      }),
+    });
   });
 
   it("updates pool accounting for awards and forfeits", async () => {

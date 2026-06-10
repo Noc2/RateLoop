@@ -1,6 +1,7 @@
 import {
   buildClaimableQuestionRewardCandidateVoters,
   getClaimableQuestionRewardsQueryKey,
+  getQuestionRewardAsset,
 } from "./useClaimableQuestionRewards";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -28,4 +29,16 @@ test("getClaimableQuestionRewardsQueryKey keeps linked claim discovery scoped by
       480,
     ],
   );
+});
+
+test("getQuestionRewardAsset resolves LREP from either the currency string or the asset id", () => {
+  assert.equal(getQuestionRewardAsset({ currency: "LREP", asset: 0 }), "LREP");
+  assert.equal(getQuestionRewardAsset({ currency: null, asset: 0 }), "LREP");
+  assert.equal(getQuestionRewardAsset({ currency: "LREP", asset: null }), "LREP");
+});
+
+test("getQuestionRewardAsset falls back to USDC for non-LREP candidates", () => {
+  assert.equal(getQuestionRewardAsset({ currency: "USDC", asset: 1 }), "USDC");
+  assert.equal(getQuestionRewardAsset({ currency: null, asset: 1 }), "USDC");
+  assert.equal(getQuestionRewardAsset({ currency: null, asset: null }), "USDC");
 });

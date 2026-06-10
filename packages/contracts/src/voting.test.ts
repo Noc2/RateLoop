@@ -439,6 +439,50 @@ test("createTlockRbtsVoteCommit uses the latest shared drand target round", asyn
   assert.equal(commit.targetRound, 403n);
 });
 
+test("createTlockRbtsVoteCommit lowercases the drand chain hash", async () => {
+  const uppercaseHashClient = {
+    chain: () => ({
+      info: async () => ({
+        period: 3,
+        genesis_time: 1692803367,
+        hash: "52DB9BA70E0CC0F6EAF7803DD07447A1F5477735FD3F661792BA94600C84E971",
+      }),
+    }),
+  } as any;
+
+  const commit = await createTlockRbtsVoteCommit(
+    {
+      voter: "0x2222222222222222222222222222222222222222",
+      isUp: true,
+      predictedUpBps: 6_900,
+      salt: ("0x" + "66".repeat(32)) as `0x${string}`,
+      contentId: 7n,
+      roundId: 3n,
+      roundReferenceRatingBps: 5_000,
+      epochDurationSeconds: 1200,
+    },
+    {
+      client: uppercaseHashClient,
+      now: fakeNow,
+      encryptFn: async (targetRound) =>
+        Buffer.from(
+          makeFakeArmoredTlockCiphertext({
+            targetRound: BigInt(targetRound),
+            drandChainHash:
+              "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+            plaintextMarker: "1:" + "66".repeat(32),
+          }).slice(2),
+          "hex",
+        ).toString("utf8"),
+    },
+  );
+
+  assert.equal(
+    commit.drandChainHash,
+    "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
+  );
+});
+
 test("createTlockVoteCommit returns the tlock metadata used in the commit hash", async () => {
   const voter = "0x2222222222222222222222222222222222222222";
   const commit = await createTlockVoteCommit(

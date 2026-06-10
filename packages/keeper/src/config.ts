@@ -13,6 +13,12 @@ const CHAIN_NAMES: Record<number, string> = {
 };
 
 const LOCAL_HARDHAT_CHAIN_ID = 31337;
+// ContentRegistry gates markDormant on its internal constant `DORMANCY_PERIOD = 30 days`
+// (and on `dormancyAnchorAt`, which has no public view). The constant is not exposed
+// on-chain either, so it cannot be read at runtime: a keeper-side period below 30 days
+// can only produce guaranteed "Dormancy period not elapsed" reverts. Keep this constant
+// in sync with packages/foundry/contracts/ContentRegistry.sol.
+const CONTRACT_DORMANCY_PERIOD_S = 30n * 24n * 60n * 60n;
 const isProduction = process.env.NODE_ENV === "production";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const CORRELATION_SNAPSHOT_MODES = ["file", "auto"] as const;
@@ -468,6 +474,19 @@ function loadConfig() {
         })
       : undefined;
 
+  const configuredDormancyPeriod = readPositiveBigIntEnv(
+    "DORMANCY_PERIOD",
+    String(CONTRACT_DORMANCY_PERIOD_S),
+    errors,
+  );
+  if (configuredDormancyPeriod < CONTRACT_DORMANCY_PERIOD_S) {
+    warnings.push(
+      `DORMANCY_PERIOD=${configuredDormancyPeriod}s is below the on-chain ContentRegistry.DORMANCY_PERIOD ` +
+        `(${CONTRACT_DORMANCY_PERIOD_S}s = 30 days); markDormant would always revert with ` +
+        `"Dormancy period not elapsed". Clamping to ${CONTRACT_DORMANCY_PERIOD_S}s.`,
+    );
+  }
+
   const loadedConfig = {
     // Network
     rpcUrl: requireUrlEnv("RPC_URL", errors),
@@ -557,11 +576,10 @@ function loadConfig() {
     ),
 
     // Tuning
-    dormancyPeriod: readPositiveBigIntEnv(
-      "DORMANCY_PERIOD",
-      String(30 * 24 * 60 * 60),
-      errors,
-    ),
+    dormancyPeriod:
+      configuredDormancyPeriod < CONTRACT_DORMANCY_PERIOD_S
+        ? CONTRACT_DORMANCY_PERIOD_S
+        : configuredDormancyPeriod,
     minGasBalanceWei: readNonNegativeBigIntStringEnv(
       "MIN_GAS_BALANCE_WEI",
       "10000000000000000",

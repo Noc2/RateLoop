@@ -10,6 +10,22 @@ function toBigIntValue(value: bigint | string | number | null | undefined) {
   return 0n;
 }
 
+// Mirrors FeedbackBonusEscrow._feedbackBonusAwardDeadline for terminal rounds:
+// the awarder always gets at least 24h after settlement to decide, so the
+// effective deadline is max(feedbackClosesAt, settledAt + 24h).
+export function resolveFeedbackBonusAwardDeadline(
+  feedbackClosesAt: bigint | string | number | null | undefined,
+  settledAt: bigint | string | number | null | undefined,
+) {
+  const requestedDeadline = toBigIntValue(feedbackClosesAt);
+  const settled = toBigIntValue(settledAt);
+  if (settled === 0n) return requestedDeadline;
+  const minimumAwardDeadline = settled + MIN_FEEDBACK_AWARD_DECISION_SECONDS;
+  return requestedDeadline > minimumAwardDeadline
+    ? requestedDeadline
+    : minimumAwardDeadline;
+}
+
 export async function extendFeedbackBonusAwardDeadlinesForTerminalRound(
   context: { db: any },
   params: { contentId: bigint; roundId: bigint; settledAt: bigint },
@@ -23,15 +39,11 @@ export async function extendFeedbackBonusAwardDeadlinesForTerminalRound(
         eq(feedbackBonusPool.roundId, params.roundId),
       ),
     );
-  const minimumAwardDeadline =
-    params.settledAt + MIN_FEEDBACK_AWARD_DECISION_SECONDS;
-
   for (const pool of pools) {
-    const requestedDeadline = toBigIntValue(pool.feedbackClosesAt);
-    const awardDeadline =
-      requestedDeadline > minimumAwardDeadline
-        ? requestedDeadline
-        : minimumAwardDeadline;
+    const awardDeadline = resolveFeedbackBonusAwardDeadline(
+      pool.feedbackClosesAt,
+      params.settledAt,
+    );
 
     if (toBigIntValue(pool.awardDeadline) === awardDeadline) continue;
 

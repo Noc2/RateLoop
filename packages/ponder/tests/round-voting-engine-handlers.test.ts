@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { encodePacked, keccak256 } from "viem";
+import {
+  ContractFunctionRevertedError,
+  HttpRequestError,
+  encodePacked,
+  keccak256,
+} from "viem";
 import { SCORE_SPREAD_POLICY } from "@rateloop/contracts/protocol";
 
 type RegisteredHandler = (args: {
@@ -73,14 +78,20 @@ function createDb({
   existingVote = null,
   feedbackBonusPools = [],
   roundVotes = [],
+  voterStatsRow = null,
 }: {
   existingRound?: Record<string, unknown> | null;
   existingVote?: Record<string, unknown> | null;
   feedbackBonusPools?: Record<string, unknown>[];
   roundVotes?: Record<string, unknown>[];
+  voterStatsRow?: Record<string, unknown> | null;
 } = {}) {
   const insertCalls: Array<{ table: string; values: Record<string, unknown> }> =
     [];
+  const conflictUpdateCalls: Array<{
+    table: string;
+    values: Record<string, unknown>;
+  }> = [];
   const updateCalls: Array<{
     table: string;
     key: Record<string, unknown>;
@@ -119,7 +130,7 @@ function createDb({
     content: contentRecord,
     round: roundRecord ?? {},
     vote: existingVote ?? {},
-    globalStats: { totalVotes: 0, totalRoundsSettled: 0 },
+    globalStats: { totalVotes: 0, totalRoundsSettled: 0, totalVoterIds: 0 },
     dailyVoteActivity: { voteCount: 0 },
     voterStreak: {
       currentDailyStreak: 0,
@@ -128,6 +139,9 @@ function createDb({
       totalActiveDays: 0,
     },
   };
+  if (voterStatsRow) {
+    rowsByTable.voterStats = voterStatsRow;
+  }
   const resolveSetValues = (
     table: string,
     values:
@@ -137,6 +151,7 @@ function createDb({
     typeof values === "function" ? values(rowsByTable[table] ?? {}) : values;
 
   return {
+    conflictUpdateCalls,
     db: {
       find: vi.fn(async (table: string) => {
         if (table === "content") return contentRecord;
@@ -149,7 +164,24 @@ function createDb({
           insertCalls.push({ table, values });
           return {
             onConflictDoNothing: vi.fn(async () => undefined),
-            onConflictDoUpdate: vi.fn(async () => undefined),
+            // Resolve the conflict updater against a known row only when the
+            // test provided one; otherwise stay a no-op like before.
+            onConflictDoUpdate: vi.fn(
+              async (
+                updater?:
+                  | Record<string, unknown>
+                  | ((row: Record<string, any>) => Record<string, unknown>),
+              ) => {
+                if (updater === undefined || !(table in rowsByTable)) {
+                  return undefined;
+                }
+                conflictUpdateCalls.push({
+                  table,
+                  values: resolveSetValues(table, updater),
+                });
+                return undefined;
+              },
+            ),
           };
         }),
       })),
@@ -580,6 +612,157 @@ describe("RoundVotingEngine ponder handlers", () => {
         revealGracePeriod: 3_600n,
       }),
     });
+  });
+
+  it("falls back to the address identity when the identity read reverts deterministically", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
+    const ciphertext = "0x1234" as `0x${string}`;
+    const ciphertextHash = keccak256(ciphertext);
+    const expectedFallbackIdentityKey = keccak256(
+      encodePacked(
+        ["string", "address"],
+        ["rateloop.address-identity-v1", voter],
+      ),
+    );
+    const readContract = vi.fn(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "commitIdentityState") {
+          throw new ContractFunctionRevertedError({
+            abi: [],
+            functionName: "commitIdentityState",
+            message: "execution reverted",
+          });
+        }
+        if (functionName === "advisoryRoundContext") {
+          return [
+            0,
+            2_000n,
+            `0x${"00".repeat(32)}`,
+            0n,
+            0n,
+            false,
+            "0x0000000000000000000000000000000000000000",
+          ];
+        }
+        if (functionName === "roundLifecycleState") return [3_600n, 0n, 0n, 0n];
+        return null;
+      },
+    );
+    const { db, insertCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        startTime: 1_000n,
+        epochDuration: 600,
+        voteCount: 1,
+        totalStake: 10n,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:VoteCommitted");
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          roundId: 2n,
+          voter,
+          commitHash,
+          roundReferenceRatingBps: 7200,
+          targetRound: 123n,
+          drandChainHash: `0x${"22".repeat(32)}`,
+          stake: 10n,
+          ciphertextHash,
+          ciphertext,
+        },
+        transaction: { hash: `0x${"44".repeat(32)}` },
+        block: { number: 43n, timestamp: 1_601n },
+        log: { logIndex: 9 },
+      },
+      context: {
+        db,
+        client: { readContract },
+        contracts: {
+          RoundVotingEngine: {
+            address: "0x0000000000000000000000000000000000000666",
+          },
+        },
+      },
+    });
+
+    expect(insertCalls).toContainEqual({
+      table: "vote",
+      values: expect.objectContaining({
+        id: `7-2-${voter}`,
+        identityKey: expectedFallbackIdentityKey,
+        identityHolder: voter,
+        credentialMask: 0,
+      }),
+    });
+  });
+
+  it("fails the commit handler when the identity read keeps failing transiently", async () => {
+    const voter = "0x0000000000000000000000000000000000000001";
+    const commitHash = `0x${"11".repeat(32)}` as `0x${string}`;
+    const ciphertext = "0x1234" as `0x${string}`;
+    const ciphertextHash = keccak256(ciphertext);
+    const transportFailure = new HttpRequestError({
+      url: "http://localhost:8545",
+      details: "fetch failed",
+    });
+    const readContract = vi.fn(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "commitIdentityState") throw transportFailure;
+        return null;
+      },
+    );
+    const { db, insertCalls } = createDb({
+      existingRound: {
+        id: "7-2",
+        startTime: 1_000n,
+        epochDuration: 600,
+        voteCount: 1,
+        totalStake: 10n,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:VoteCommitted");
+
+    await expect(
+      handler!({
+        event: {
+          args: {
+            contentId: 7n,
+            roundId: 2n,
+            voter,
+            commitHash,
+            roundReferenceRatingBps: 7200,
+            targetRound: 123n,
+            drandChainHash: `0x${"22".repeat(32)}`,
+            stake: 10n,
+            ciphertextHash,
+            ciphertext,
+          },
+          transaction: { hash: `0x${"44".repeat(32)}` },
+          block: { number: 43n, timestamp: 1_601n },
+          log: { logIndex: 9 },
+        },
+        context: {
+          db,
+          client: { readContract },
+          contracts: {
+            RoundVotingEngine: {
+              address: "0x0000000000000000000000000000000000000666",
+            },
+          },
+        },
+      }),
+    ).rejects.toBe(transportFailure);
+    // Bounded in-process retry before failing loudly.
+    expect(readContract).toHaveBeenCalledTimes(3);
+    expect(insertCalls).not.toContainEqual(
+      expect.objectContaining({ table: "vote" }),
+    );
   });
 
   it("reuses indexed round voteability state during committed vote handling", async () => {
@@ -1266,5 +1449,187 @@ describe("RoundVotingEngine ponder handlers", () => {
       );
       expect(update?.values.rbtsScoreBps).toEqual(expect.any(Number));
     }
+  });
+
+  it("treats unscored RBTS reveals as neutral in voterStats", async () => {
+    const voter = "0x00000000000000000000000000000000000000a1";
+    const { db, insertCalls, conflictUpdateCalls } = createDb({
+      existingRound: { id: "7-2" },
+      roundVotes: [
+        // Degraded-round / post-threshold shape: full stake returned, never
+        // scored against — on-chain this voter is not penalized at all.
+        {
+          id: `7-2-${voter}`,
+          voter,
+          isUp: true,
+          stake: 100n,
+          revealed: true,
+          rbtsScoreBps: null,
+          rbtsRewardWeight: 0n,
+          rbtsStakeReturned: 100n,
+          rbtsForfeitedStake: 0n,
+        },
+      ],
+      voterStatsRow: {
+        totalSettledVotes: 4,
+        totalWins: 3,
+        totalLosses: 1,
+        totalStakeWon: 300n,
+        totalStakeLost: 50n,
+        currentStreak: 2,
+        bestWinStreak: 3,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:RoundSettled");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: { contentId: 7n, roundId: 2n, upWins: true, losingPool: 0n },
+        block: { number: 50n, timestamp: 2_200n },
+      },
+      context: { db },
+    });
+
+    // First-seen path: neither a win nor a loss, streak stays neutral.
+    expect(insertCalls).toContainEqual(
+      expect.objectContaining({
+        table: "voterStats",
+        values: expect.objectContaining({
+          totalWins: 0,
+          totalLosses: 0,
+          totalStakeWon: 100n,
+          totalStakeLost: 0n,
+          currentStreak: 0,
+          bestWinStreak: 0,
+        }),
+      }),
+    );
+
+    // Existing-row path: counters advance but win/loss totals and the active
+    // win streak are untouched.
+    const statsUpdate = conflictUpdateCalls.find(
+      (call) => call.table === "voterStats",
+    );
+    expect(statsUpdate?.values).toEqual(
+      expect.objectContaining({
+        totalSettledVotes: 5,
+        totalWins: 3,
+        totalLosses: 1,
+        totalStakeWon: 400n,
+        totalStakeLost: 50n,
+        currentStreak: 2,
+        bestWinStreak: 3,
+      }),
+    );
+  });
+
+  it("increments totalVoterIds when a voter identity is first seen at settlement", async () => {
+    const voter = "0x00000000000000000000000000000000000000a3";
+    const { db, insertCalls } = createDb({
+      existingRound: { id: "7-2" },
+      roundVotes: [
+        {
+          id: `7-2-${voter}`,
+          voter,
+          isUp: true,
+          stake: 100n,
+          revealed: true,
+          rbtsScoreBps: null,
+          rbtsRewardWeight: null,
+          rbtsStakeReturned: null,
+          rbtsForfeitedStake: null,
+        },
+      ],
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:RoundSettled");
+
+    await handler!({
+      event: {
+        args: { contentId: 7n, roundId: 2n, upWins: true, losingPool: 0n },
+        block: { number: 50n, timestamp: 2_200n },
+      },
+      context: { db },
+    });
+
+    // The mock store has no voterStats row for this identity, so the handler
+    // must count it as a newly seen voter id.
+    expect(insertCalls).toContainEqual(
+      expect.objectContaining({
+        table: "globalStats",
+        values: expect.objectContaining({ totalVoterIds: 1 }),
+      }),
+    );
+  });
+
+  it("counts an RBTS reveal as a loss only when stake was forfeited", async () => {
+    const voter = "0x00000000000000000000000000000000000000a2";
+    const { db, insertCalls, conflictUpdateCalls } = createDb({
+      existingRound: { id: "7-2" },
+      roundVotes: [
+        // Scored below the round mean: part of the stake was forfeited.
+        {
+          id: `7-2-${voter}`,
+          voter,
+          isUp: false,
+          stake: 100n,
+          revealed: true,
+          rbtsScoreBps: -500,
+          rbtsRewardWeight: 0n,
+          rbtsStakeReturned: 60n,
+          rbtsForfeitedStake: 40n,
+        },
+      ],
+      voterStatsRow: {
+        totalSettledVotes: 4,
+        totalWins: 3,
+        totalLosses: 1,
+        totalStakeWon: 300n,
+        totalStakeLost: 50n,
+        currentStreak: 2,
+        bestWinStreak: 3,
+      },
+    });
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("RoundVotingEngine:RoundSettled");
+
+    await handler!({
+      event: {
+        args: { contentId: 7n, roundId: 2n, upWins: true, losingPool: 40n },
+        block: { number: 50n, timestamp: 2_200n },
+      },
+      context: { db },
+    });
+
+    expect(insertCalls).toContainEqual(
+      expect.objectContaining({
+        table: "voterStats",
+        values: expect.objectContaining({
+          totalWins: 0,
+          totalLosses: 1,
+          totalStakeWon: 60n,
+          totalStakeLost: 40n,
+          currentStreak: -1,
+        }),
+      }),
+    );
+
+    const statsUpdate = conflictUpdateCalls.find(
+      (call) => call.table === "voterStats",
+    );
+    expect(statsUpdate?.values).toEqual(
+      expect.objectContaining({
+        totalSettledVotes: 5,
+        totalWins: 3,
+        totalLosses: 2,
+        totalStakeWon: 360n,
+        totalStakeLost: 90n,
+        currentStreak: -1,
+        bestWinStreak: 3,
+      }),
+    );
   });
 });

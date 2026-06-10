@@ -309,6 +309,7 @@ function makeHarness(options: {
   ponderCommits?: Record<string, CommitData>;
   onChainLogs?: { vote?: unknown[]; advisory?: unknown[] };
   settleRoundResultState?: RoundStateValue;
+  estimateContractGas?: (args: { functionName: string }) => Promise<bigint>;
 }) {
   const roundConfig = options.roundConfig || {
     epochDuration: 1200n,
@@ -362,6 +363,9 @@ function makeHarness(options: {
       }
       return [];
     }),
+    ...(options.estimateContractGas
+      ? { estimateContractGas: vi.fn(options.estimateContractGas) }
+      : {}),
     readContract: vi.fn(
       async ({
         functionName,
@@ -899,6 +903,65 @@ describe("resolveRounds", () => {
       ),
     ).toEqual(["0", "200"]);
     expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
+    );
+  });
+
+  it("warns when the indexed ciphertext page limit truncates a round", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 1n,
+      revealedCount: 0n,
+    });
+    const commit = makeCommit({ revealableAfter: 100n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      commitKeys: [COMMIT_KEY_1],
+      commits: {
+        [COMMIT_KEY_1]: commit,
+      },
+      now: 1_000n,
+    });
+    // Every page is full of other commits, so pagination hits the page cap without
+    // ever returning a short page.
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      const offset = Number(url.searchParams.get("offset"));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: Array.from({ length: 200 }, (_, index) => ({
+            commitKey: `0x${(offset + index + 1).toString(16).padStart(64, "0")}`,
+          })),
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.votesRevealed).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Indexed ciphertext page limit reached; commits beyond the limit fall back to on-chain logs",
+      expect.objectContaining({
+        kind: "vote",
+        contentId: 1,
+        roundId: 1,
+        maxCommits: 1_200,
+      }),
+    );
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
       expect.objectContaining({ functionName: "revealVoteByCommitKey" }),
     );
   });
@@ -1813,5 +1876,194 @@ describe("resolveRounds", () => {
         args: expect.arrayContaining([ADVISORY_COMMIT_KEY]),
       }),
     );
+  });
+
+  it("skips broadcasting silently when gas estimation reverts with an expected reason", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 3n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      now: 1_000n,
+      estimateContractGas: async ({ functionName }) => {
+        if (functionName === "settleRound") {
+          throw new Error("ThresholdReached");
+        }
+        return 100_000n;
+      },
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsSettled).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "settleRound" }),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Failed to settle round",
+      expect.anything(),
+    );
+  });
+
+  it("warns without broadcasting when gas estimation reverts unexpectedly", async () => {
+    const round = makeRound({
+      state: 0,
+      voteCount: 3n,
+      revealedCount: 3n,
+    });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 1n,
+      latestRoundId: 1n,
+      round,
+      now: 1_000n,
+      estimateContractGas: async ({ functionName }) => {
+        if (functionName === "settleRound") {
+          throw new Error("SomethingWentVeryWrong");
+        }
+        return 100_000n;
+      },
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.roundsSettled).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "settleRound" }),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Failed to settle round",
+      expect.objectContaining({ error: "SomethingWentVeryWrong" }),
+    );
+  });
+
+  it("marks eligible content dormant", async () => {
+    const round = makeRound({ state: 1, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 1n,
+      round,
+      dormancyEligible: true,
+      now: 10_000_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.contentMarkedDormant).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "markDormant", args: [1n] }),
+    );
+  });
+
+  it.each([
+    // ContentRegistry gates markDormant on dormancyAnchorAt and contentBundleId, neither
+    // of which is exposed via a view — the keeper discovers them via the pre-broadcast
+    // estimation revert and must treat both as expected skips.
+    ["Bundled content"],
+    ["Dormancy period not elapsed"],
+  ])("treats a %s dormancy revert as an expected skip", async revertReason => {
+    const round = makeRound({ state: 1, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 1n,
+      round,
+      dormancyEligible: true,
+      now: 10_000_000n,
+      estimateContractGas: async ({ functionName }) => {
+        if (functionName === "markDormant") {
+          throw new Error(revertReason);
+        }
+        return 100_000n;
+      },
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.contentMarkedDormant).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "markDormant" }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.debug).not.toHaveBeenCalledWith(
+      "Could not check dormancy",
+      expect.anything(),
+    );
+  });
+
+  it("rejects when the current block time cannot be resolved", async () => {
+    const round = makeRound({ state: 0, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({ round });
+    publicClient.getBlock.mockRejectedValue(new Error("rpc down"));
+    const logger = makeLogger();
+
+    // Total RPC outage must propagate so tick() records an error and /health degrades,
+    // instead of looking like an endless successful empty run.
+    await expect(
+      resolveRounds(
+        publicClient as any,
+        walletClient as any,
+        {} as any,
+        { address: ACCOUNT } as any,
+        logger as any,
+      ),
+    ).rejects.toThrow(/Cannot resolve current block time/);
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the content registry cannot be read", async () => {
+    const round = makeRound({ state: 0, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({ round });
+    publicClient.readContract.mockImplementation(
+      async ({ functionName }: { functionName: string }) => {
+        if (functionName === "nextContentId") {
+          throw new Error("connection refused");
+        }
+        throw new Error(`Unexpected readContract(${functionName})`);
+      },
+    );
+    const logger = makeLogger();
+
+    await expect(
+      resolveRounds(
+        publicClient as any,
+        walletClient as any,
+        {} as any,
+        { address: ACCOUNT } as any,
+        logger as any,
+      ),
+    ).rejects.toThrow(/Could not connect to chain: connection refused/);
+    expect(walletClient.writeContract).not.toHaveBeenCalled();
   });
 });
