@@ -23,7 +23,7 @@ jobs:
           node-version: "24"
           cache: yarn
       - run: yarn install --immutable
-      - name: Run Knip dead-code scan
+      - name: Run Knip dead-code scan (advisory)
         run: yarn dead-code:scan
 
   keeper-docker:
