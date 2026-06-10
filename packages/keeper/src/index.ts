@@ -28,6 +28,7 @@ import {
   recordError,
   setGauge,
   incrementCounter,
+  setWalletBalanceWei,
   getConsecutiveErrors,
 } from "./metrics.js";
 
@@ -117,7 +118,9 @@ async function main() {
 
     if (balanceResult.status === "fulfilled") {
       const balance = balanceResult.value;
-      setGauge("keeper_wallet_balance_wei", Number(balance));
+      // Keeps the exact bigint for /health; the Prometheus gauge is a float64
+      // approximation. The low-balance check below stays on the exact bigint.
+      setWalletBalanceWei(balance);
       if (balance < MIN_BALANCE) {
         logger.warn("Keeper wallet balance low", {
           balance: balance.toString(),

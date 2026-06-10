@@ -9,6 +9,7 @@ import {
   incrementCounter,
   getMetricsText,
   setGauge,
+  setWalletBalanceWei,
   recordRun,
   recordError,
   getConsecutiveErrors,
@@ -101,7 +102,7 @@ describe("metrics", () => {
       }),
       75,
     );
-    setGauge("keeper_wallet_balance_wei", 4_000_000_000_000);
+    setWalletBalanceWei(4_000_000_000_000n);
 
     const metricsBody = getMetricsText();
     expect(metricsBody).toContain("keeper_rounds_reveal_failed_finalized_total 2");
@@ -128,6 +129,21 @@ describe("metrics", () => {
     recordRun(makeResult({ minRevealGraceSecondsRemaining: null }), 10);
     expect(getMetricsText()).toContain(
       "keeper_reveal_grace_seconds_remaining_min -1",
+    );
+  });
+
+  it("reports the exact wallet balance in /health above float64 precision", async () => {
+    // 1 ETH + 1 wei: Number() rounds this to 1e18, so the old
+    // String(BigInt(Math.round(gauge))) path would silently drop the trailing wei.
+    const exactBalance = 10n ** 18n + 1n;
+    setWalletBalanceWei(exactBalance);
+
+    const health = JSON.parse(getHealthSnapshot().body);
+    expect(health.walletBalanceWei).toBe("1000000000000000001");
+
+    // The Prometheus gauge is a documented float64 approximation.
+    expect(getMetricsText()).toContain(
+      "keeper_wallet_balance_wei 1000000000000000000",
     );
   });
 
