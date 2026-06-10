@@ -200,6 +200,11 @@ ponder.on(
     const id = `${rewardPoolId}-${roundId}`;
     const existingRound = await context.db.find(questionRewardPoolRound, { id });
 
+    // Re-qualification after a snapshot recovery works through this same insert: the
+    // RejectedSnapshotRoundRecovered handler deletes the questionRewardPoolRound row (mirroring
+    // the contract's `delete roundSnapshots[rewardPoolId][roundId]`), so a later
+    // RewardPoolRoundQualified for the same round inserts a fresh row with the (possibly
+    // different) new allocation and re-applies the pool aggregates below.
     await context.db
       .insert(questionRewardPoolRound)
       .values({
@@ -232,6 +237,69 @@ ponder.on(
           qualifiedRounds: row.qualifiedRounds + 1,
           updatedAt: event.block.timestamp,
         }));
+    }
+
+    const existingContent = await context.db.find(content, { id: contentId });
+    if (existingContent) {
+      await context.db.update(content, { id: contentId }).set({
+        lastActivityAt: event.block.timestamp,
+      });
+    }
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:RejectedSnapshotRoundRecovered",
+  async ({ event, context }) => {
+    const { rewardPoolId, contentId, roundId, allocationReturned } = event.args;
+    const id = `${rewardPoolId}-${roundId}`;
+    const existingRound = await context.db.find(questionRewardPoolRound, { id });
+
+    // Mirrors QuestionRewardPoolEscrowRecoveryLib.recoverRejectedSnapshotRound: the round is
+    // un-qualified (qualifiedRounds -= 1), its allocation flows back into the unallocated
+    // balance, and the round snapshot is deleted on-chain. Delete the round row so consumers
+    // (which treat row presence as "qualified/claimable") stop presenting it, and so a later
+    // re-qualification after RecoveredSnapshotRoundReopened inserts a fresh row via the
+    // RewardPoolRoundQualified handler. The contract guarantees no claims were paid for the
+    // round (`!snapshot.firstClaimPaid`), so no claim accounting is lost by the delete.
+    if (existingRound) {
+      await context.db.delete(questionRewardPoolRound, { id });
+
+      await context.db
+        .update(questionRewardPool, { id: rewardPoolId })
+        .set((row) => ({
+          unallocatedAmount: row.unallocatedAmount + allocationReturned,
+          allocatedAmount: row.allocatedAmount - allocationReturned,
+          qualifiedRounds: row.qualifiedRounds - 1,
+          updatedAt: event.block.timestamp,
+        }));
+    }
+
+    const existingContent = await context.db.find(content, { id: contentId });
+    if (existingContent) {
+      await context.db.update(content, { id: contentId }).set({
+        lastActivityAt: event.block.timestamp,
+      });
+    }
+  },
+);
+
+ponder.on(
+  "QuestionRewardPoolEscrow:RecoveredSnapshotRoundReopened",
+  async ({ event, context }) => {
+    const { rewardPoolId, contentId } = event.args;
+
+    // Mirrors QuestionRewardPoolEscrowRecoveryLib.reopenRecoveredSnapshotRound: the round only
+    // re-enters evaluation (cursor rewind + recovery flag reset) with no balance or
+    // qualification change. The round row is re-created when the contract re-emits
+    // RewardPoolRoundQualified, so here we only surface the activity to consumers.
+    const existingRewardPool = await context.db.find(questionRewardPool, {
+      id: rewardPoolId,
+    });
+    if (existingRewardPool) {
+      await context.db.update(questionRewardPool, { id: rewardPoolId }).set({
+        updatedAt: event.block.timestamp,
+      });
     }
 
     const existingContent = await context.db.find(content, { id: contentId });
