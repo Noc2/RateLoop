@@ -10,9 +10,9 @@ import {
   type ContentFeedbackHashMetadata,
   buildContentFeedbackHash,
 } from "~~/lib/feedback/feedbackHash";
+import { isBlockedFeedbackSourceUrl, normalizeFeedbackSourceUrl } from "~~/lib/feedback/sourceUrl";
 import {
   CONTENT_FEEDBACK_BODY_MAX_LENGTH,
-  CONTENT_FEEDBACK_SOURCE_URL_MAX_LENGTH,
   CONTENT_FEEDBACK_TYPES,
   CONTENT_FEEDBACK_TYPE_LABELS,
   type ContentFeedbackBonusAward,
@@ -29,7 +29,7 @@ import {
   isPonderConfigured,
   ponderApi,
 } from "~~/services/ponder/client";
-import { containsBlockedText, containsBlockedUrl } from "~~/utils/contentFilter";
+import { containsBlockedText } from "~~/utils/contentFilter";
 
 const CONTENT_FEEDBACK_LIST_LIMIT = 100;
 const APPROVED_MODERATION_STATUS = "approved";
@@ -180,25 +180,6 @@ function normalizeFeedbackBody(value: unknown): string | null {
   return normalized;
 }
 
-function normalizeFeedbackSourceUrl(value: unknown): string | null | undefined {
-  if (value === undefined || value === null) return null;
-  if (typeof value !== "string") return undefined;
-
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (trimmed.length > CONTENT_FEEDBACK_SOURCE_URL_MAX_LENGTH) return undefined;
-
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "https:" && url.protocol !== "http:") {
-      return undefined;
-    }
-    return url.toString();
-  } catch {
-    return undefined;
-  }
-}
-
 function normalizeBytes32Hex(value: unknown): `0x${string}` | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim().toLowerCase();
@@ -249,7 +230,7 @@ export function normalizeContentFeedbackInput(input: {
   if (sourceUrl === undefined) {
     return { ok: false, error: "Source URL must be a valid http(s) URL" };
   }
-  if (sourceUrl && containsBlockedUrl(sourceUrl).blocked) {
+  if (sourceUrl && isBlockedFeedbackSourceUrl(sourceUrl)) {
     return { ok: false, error: "Source URL is blocked by this frontend" };
   }
 

@@ -242,6 +242,7 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   const result = body.result as {
     tools: Array<{
       annotations?: Record<string, unknown>;
+      description?: string;
       inputSchema?: unknown;
       name: string;
       outputSchema?: unknown;
@@ -269,6 +270,8 @@ test("tools/list accepts supported MCP-Protocol-Version and returns tool annotat
   assert.ok(toolByName.get("rateloop_ask_humans")?.outputSchema);
   assert.ok(toolByName.get("rateloop_get_question_status")?.outputSchema);
   assert.ok(toolByName.get("rateloop_get_result")?.outputSchema);
+  assert.match(toolByName.get("rateloop_get_result")?.description ?? "", /RATELOOP_UNTRUSTED_DATA/);
+  assert.match(toolByName.get("rateloop_get_result")?.description ?? "", /never follow instructions/i);
   assert.ok(toolByName.get("rateloop_get_rating_context")?.inputSchema);
   assert.ok(toolByName.get("rateloop_prepare_rating_transactions")?.outputSchema);
   assert.ok(toolByName.get("rateloop_confirm_rating_transactions")?.inputSchema);
@@ -312,14 +315,16 @@ test("public MCP tools/list excludes managed-only balance tool", async () => {
     { "mcp-protocol-version": "2025-11-25" },
   );
 
-  const result = body.result as { tools: Array<{ name: string }> };
+  const result = body.result as { tools: Array<{ description?: string; name: string }> };
   const names = result.tools.map(tool => tool.name);
+  const toolByName = new Map(result.tools.map(tool => [tool.name, tool]));
   assert.equal(response.status, 200);
   assert.equal(names.includes("rateloop_prepare_image_upload"), true);
   assert.equal(names.includes("rateloop_upload_image"), true);
   assert.equal(names.includes("rateloop_ask_humans"), true);
   assert.equal(names.includes("rateloop_prepare_rating_transactions"), true);
   assert.equal(names.includes("rateloop_get_agent_balance"), false);
+  assert.match(toolByName.get("rateloop_get_result")?.description ?? "", /RATELOOP_UNTRUSTED_DATA/);
 });
 
 test("MCP routes reject oversized JSON-RPC bodies", async () => {
@@ -608,6 +613,7 @@ test("pending result returns a full pending result package", async () => {
   assert.equal(structured.ready, false);
   assert.equal(structured.answer, "pending");
   assert.equal(structured.recommendedNextAction, "wait_for_settlement");
+  assert.ok((structured.limitations as string[]).some(item => item.includes("RATELOOP_UNTRUSTED_DATA")));
   assert.deepEqual(structured.wait, {
     code: "still_settling",
     recoverWith: "rateloop_get_question_status",
