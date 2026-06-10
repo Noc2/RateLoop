@@ -20,7 +20,6 @@ function voteMatchesVoter(address: `0x${string}`) {
   return or(
     eq(vote.voter, address),
     eq(vote.identityHolder, address),
-    eq(vote.identityVoter, address),
   );
 }
 
@@ -28,7 +27,6 @@ function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
   return or(
     inArray(vote.voter, addresses),
     inArray(vote.identityHolder, addresses),
-    inArray(vote.identityVoter, addresses),
   );
 }
 

@@ -432,7 +432,6 @@ function mockPonderModules<T>(result: T) {
       freshCredentialMask: "vote.freshCredentialMask",
       identityHolder: "vote.identityHolder",
       identityKey: "vote.identityKey",
-      identityVoter: "vote.identityVoter",
       isUp: "vote.isUp",
       revealed: "vote.revealed",
       revealedAt: "vote.revealedAt",
@@ -2259,8 +2258,7 @@ describe("registerDiscoveryRoutes", () => {
       serializedWhereCalls.some(
         (value) =>
           value.includes("vote.voter") &&
-          value.includes("vote.identityHolder") &&
-          value.includes("vote.identityVoter"),
+          value.includes("vote.identityHolder"),
       ),
     ).toBe(true);
   });

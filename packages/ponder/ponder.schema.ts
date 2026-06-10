@@ -173,7 +173,6 @@ export const vote = onchainTable(
     voter: t.hex().notNull(), // raw commit/stake-payer address
     identityKey: t.hex(), // resolved RaterRegistry identity key at commit time, when available
     identityHolder: t.hex(), // resolved RaterRegistry holder at commit time, or voter when unavailable
-    identityVoter: t.hex(), // compatibility alias for identityHolder
     credentialMask: t.integer().notNull().default(0), // active World ID credential kinds at commit time
     freshCredentialMask: t.integer().notNull().default(0), // recent user-presence rechecks at commit time
     commitKey: t.hex().notNull(),
@@ -203,7 +202,6 @@ export const vote = onchainTable(
     voterIdx: index().on(table.voter),
     identityKeyIdx: index().on(table.identityKey),
     identityHolderIdx: index().on(table.identityHolder),
-    identityVoterIdx: index().on(table.identityVoter),
     contentIdx: index().on(table.contentId),
     roundIdx: index().on(table.roundId),
     contentRoundIdx: index().on(table.contentId, table.roundId),
