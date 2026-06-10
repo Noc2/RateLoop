@@ -208,9 +208,10 @@ const TermsPage: NextPage = () => {
           processed.
         </p>
         <p>
-          Bounty payouts are equal within each qualified bounty round for eligible revealed voters, and claims remain
-          gated by the relevant protocol checks. These guardrails are intended to reduce spam, preserve Sybil
-          resistance, and keep the submission surface narrow.
+          Bounty payouts within each qualified bounty round are split among eligible revealed voters pro-rata by
+          protocol-defined claim weights (equal weights, or surprise-and-correlation-weighted snapshot weights,
+          depending on the round), and claims remain gated by the relevant protocol checks. These guardrails are
+          intended to reduce spam, preserve Sybil resistance, and keep the submission surface narrow.
         </p>
         <p>
           LREP or USDC bounties, feedback bonuses, and any other reward surfaces are task or participation payments, not

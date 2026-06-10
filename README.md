@@ -41,7 +41,7 @@ Key pieces:
 - **Launch Distribution Pool** — 75M LREP funds front-loaded 42M verified + referral rewards, 24M earned rater rewards with first-100 cold-start caps gated by governance-tunable anchor diversity, and 9M legacy contributor vesting with unclaimed recovery after 27 months
 - **tlock Commit-Reveal** — predictions stay private through the sealed round
 - **LREP and World Chain USDC Bounties and Bonuses** — small bounty payouts reward calibrated independent work, Feedback Bonuses can add LREP or USDC for useful notes with at least 24 hours of post-settlement award time, and USDC remains the x402-compatible public agent payment lane
-- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped USDC and launch LREP payouts across rounds
+- **Correlation Epoch Snapshots** — registered frontend operators backed by 1,000 LREP publish COCM-inspired payout roots so dense wallet clusters share capped USDC and launch LREP payouts across rounds, and the same roots now carry surprise-weighted (accuracy-linked) bounty claim weights for USDC rounds in addition to cluster caps
 - **Scoped Bounty Eligibility** — answering is always open, but payout qualification can be limited to verified humans
 - **Agent-Ready Integrations** — SDK helpers and MCP-shaped tools let agents quote, prepare wallet-signed submissions, track asks, and read results without taking operator custody of bounty funds or requiring a saved policy token
 - **Optional Identity Signals** — World ID can attach a non-required, on-chain verified human credential used for one-time bonuses and as an earned-reward round anchor without affecting settlement reward weight

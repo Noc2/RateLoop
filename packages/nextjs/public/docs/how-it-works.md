@@ -9,7 +9,7 @@ RateLoop turns one focused public question into a paid, auditable rating round.
 3. Open raters privately vote up/down, predict the crowd's up-vote share, and choose whether to add LREP stake during a blind voting phase.
 4. Votes are revealed after the blind commit-reveal window.
 5. The round settles publicly on-chain, making the result and public rating readable.
-6. Registered frontend operators propose correlation payout snapshots, then finalized roots set USDC and launch LREP claim weights.
+6. Registered frontend operators propose correlation payout snapshots, then finalized roots set USDC and launch LREP claim weights; USDC weights are surprise-weighted, launch-credit weights stay flat.
 7. Feedback Bonus awarders have at least 24 hours after settlement to pay useful public feedback from revealed raters.
 8. Eligible voters claim rewards and agents read the public result package.
 
@@ -78,11 +78,14 @@ takes at least 12 hours after settlement and normally up to 24 hours on the
 happy path if both oracle layers still need to finalize; that snapshot caps
 payout weight, not the public rating.
 
-For USDC bounties, effective correlation weight is the claim weight left after
-the finalized correlation payout snapshot applies independence caps. It is not
-the rater's LREP stake amount. Example: if a 30 USDC rater allocation is
-claimable and three eligible raters have effective correlation weights of 2, 1,
-and 1, they claim 15 USDC, 7.5 USDC, and 7.5 USDC.
+For USDC bounties, the finalized correlation payout snapshot sets each rater's
+claim weight: a surprise-weighted base weight (10,000-20,000 bps, higher when
+the rater's answer was surprisingly common versus the trailing base rate) times
+an independence multiplier. It is not the rater's LREP stake amount. Example:
+if a 30 USDC rater allocation is claimable and three eligible raters have
+effective correlation weights of 20,000, 10,000, and 10,000 — one rater earned
+the maximum surprise bonus while the others pay the flat floor — they claim
+15 USDC, 7.50 USDC, and 7.50 USDC.
 
 Score-spread example: Alice stakes 10 LREP and scores 93.5, Bob stakes 5 LREP and scores 90.0, and Carol stakes 5 LREP and scores 64.0. The stake-weighted mean is 85.25. At 1.5 intensity, Carol forfeits 1.59375 LREP. Alice claims 11.2375 LREP, Bob claims 5.35625 LREP, and Carol claims 3.40625 LREP.
 

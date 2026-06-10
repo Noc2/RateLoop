@@ -175,8 +175,8 @@ const TechStackPage: NextPage = () => {
       <p>
         A bounty claim uses <code>round allocation * claim weight / total claim weight</code>. Equal-weight bounty
         rounds give one claim-weight unit to each eligible revealed rater. USDC bounty rounds can instead use the
-        finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective correlation weight.
-        With the current oracle default, USDC bounty claims have a{" "}
+        finalized correlation payout snapshot, where the claim weight is the rater&apos;s effective correlation weight
+        built from a surprise-weighted base claim weight. With the current oracle default, USDC bounty claims have a{" "}
         <strong>{protocolDocFacts.usdcBountyPayoutMinimumDelayLabel}</strong> minimum post-settlement delay when the
         correlation epoch is already finalized, or about{" "}
         <strong>{protocolDocFacts.usdcBountyPayoutHappyPathMaxDelayLabel}</strong> on the normal happy path when both
@@ -190,11 +190,15 @@ const TechStackPage: NextPage = () => {
         weights. This delays payout finality, not the result itself.
       </p>
       <p>
-        Effective correlation weight is the payout weight left after applying an independence multiplier to a
-        rater&apos;s base claim weight. It answers &quot;how much independent payout credit should this revealed rater
-        receive?&quot; rather than &quot;how much LREP did this rater stake?&quot; For example, a fully independent
-        rater may keep 10,000 independence bps, while two tightly correlated raters may each be capped to a fractional
-        weight. A 30 USDC rater allocation split across effective correlation weights of 2, 1, and 1 pays 15 USDC, 7.5
+        For USDC bounty snapshot rounds, the base claim weight is surprise-weighted: it ranges from 10,000 to 20,000 bps
+        depending on how surprisingly common the rater&apos;s revealed answer was among peers compared with a trailing
+        cross-round base rate. An answer that merely matches the prior pays the flat 10,000 bps floor, while an answer
+        that predicts peers better than the base rate earns up to the 20,000 bps cap; launch-credit weights stay flat.
+        Effective correlation weight is the payout weight left after applying an independence multiplier to that base
+        claim weight. It answers &quot;how much independent payout credit should this revealed rater receive?&quot;
+        rather than &quot;how much LREP did this rater stake?&quot; For example, a fully independent rater may keep
+        10,000 independence bps, while two tightly correlated raters may each be capped to a fractional weight. A 30
+        USDC rater allocation split across effective correlation weights of 20,000, 10,000, and 10,000 pays 15 USDC, 7.5
         USDC, and 7.5 USDC.
       </p>
       <p>
