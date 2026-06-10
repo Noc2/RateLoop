@@ -1279,6 +1279,18 @@ export async function resolveRounds(
       }
 
       // --- 6. Dormancy sweep ---
+      // ContentRegistry.markDormant actually gates on `dormancyAnchorAt` (bumped only by
+      // submission, revival, and meaningful settlement — vote commits deliberately bump
+      // `lastActivityAt` but NOT the anchor) and hard-reverts "Bundled content" when
+      // `contentBundleId != 0`. Neither mapping has a public view, so the keeper cannot
+      // read them directly. `lastActivityAt` is a safe pre-filter because every anchor
+      // bump also bumps `lastActivityAt`, so `lastActivityAt >= dormancyAnchorAt` always:
+      // with config.dormancyPeriod clamped to the contract's 30-day DORMANCY_PERIOD
+      // (see config.ts), this check never fires before the contract would accept it —
+      // at worst it fires late for content kept "active" by vote commits alone.
+      // Bundled content cannot be detected up front; the pre-broadcast gas estimation
+      // in writeContractAndConfirm catches its revert without burning gas, and the
+      // catch below treats it as an expected skip.
       try {
         const rawContent = await publicClient.readContract({
           address: registryAddr,
@@ -1316,9 +1328,14 @@ export async function resolveRounds(
         }
       } catch (err: unknown) {
         const reason = getRevertReason(err);
+        // "Bundled content" and "Dormancy period not elapsed" are expected skips: the
+        // keeper cannot read contentBundleId / dormancyAnchorAt (no views exist), so it
+        // discovers them via the pre-broadcast estimation revert.
         if (
           !reason.includes("pending votes") &&
-          !reason.includes("Content has active round")
+          !reason.includes("Content has active round") &&
+          !reason.includes("Bundled content") &&
+          !reason.includes("Dormancy period not elapsed")
         ) {
           logger.debug("Could not check dormancy", {
             contentId: contentId.toString(),

@@ -1895,6 +1895,74 @@ describe("resolveRounds", () => {
     );
   });
 
+  it("marks eligible content dormant", async () => {
+    const round = makeRound({ state: 1, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 1n,
+      round,
+      dormancyEligible: true,
+      now: 10_000_000n,
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.contentMarkedDormant).toBe(1);
+    expect(walletClient.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "markDormant", args: [1n] }),
+    );
+  });
+
+  it.each([
+    // ContentRegistry gates markDormant on dormancyAnchorAt and contentBundleId, neither
+    // of which is exposed via a view — the keeper discovers them via the pre-broadcast
+    // estimation revert and must treat both as expected skips.
+    ["Bundled content"],
+    ["Dormancy period not elapsed"],
+  ])("treats a %s dormancy revert as an expected skip", async revertReason => {
+    const round = makeRound({ state: 1, voteCount: 0n, revealedCount: 0n });
+    const { publicClient, walletClient } = makeHarness({
+      activeRoundId: 0n,
+      latestRoundId: 1n,
+      round,
+      dormancyEligible: true,
+      now: 10_000_000n,
+      estimateContractGas: async ({ functionName }) => {
+        if (functionName === "markDormant") {
+          throw new Error(revertReason);
+        }
+        return 100_000n;
+      },
+    });
+    const logger = makeLogger();
+
+    const result = await resolveRounds(
+      publicClient as any,
+      walletClient as any,
+      {} as any,
+      { address: ACCOUNT } as any,
+      logger as any,
+    );
+
+    expect(result.contentMarkedDormant).toBe(0);
+    expect(walletClient.writeContract).not.toHaveBeenCalledWith(
+      expect.objectContaining({ functionName: "markDormant" }),
+    );
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.debug).not.toHaveBeenCalledWith(
+      "Could not check dormancy",
+      expect.anything(),
+    );
+  });
+
   it("rejects when the current block time cannot be resolved", async () => {
     const round = makeRound({ state: 0, voteCount: 0n, revealedCount: 0n });
     const { publicClient, walletClient } = makeHarness({ round });
