@@ -115,7 +115,6 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     event DefaultFrontendFeeBpsUpdated(uint256 previousFrontendFeeBps, uint256 newFrontendFeeBps);
     event FeedbackRegistryUpdated(address feedbackRegistry);
     event RaterRegistryUpdated(address raterRegistry);
-    event VotingEngineUpdated(address votingEngine);
     event NonAssetTokenRecovered(address indexed token, address indexed to, uint256 amount);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -428,6 +427,10 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
         _setFeedbackRegistry(feedbackRegistry_);
     }
 
+    /// @notice The voting engine is immutable for this escrow; this setter exists only for
+    ///         compatibility with tooling that probes the shared setter surface.
+    /// @dev Always reverts and never emits an event. Bonus accounting is keyed by
+    ///      contentId/roundId, so rotating engines requires deploying a fresh escrow.
     function setVotingEngine(address) external view onlyRole(CONFIG_ROLE) {
         revert("Invalid engine");
     }

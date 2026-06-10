@@ -146,7 +146,6 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         address frontendRegistry,
         uint256 amount
     );
-    event VotingEngineUpdated(address votingEngine);
     event VoterRewardDustFinalized(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event FrontendFeeDustFinalized(uint256 indexed contentId, uint256 indexed roundId, uint256 amount);
     event FrontendFeeDustBatchProcessed(
@@ -192,9 +191,12 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
         emit StrandedLrepSwept(treasury, amount);
     }
 
-    /// @notice The voting engine is immutable for this distributor.
-    /// @dev Claim accounting is keyed by contentId/roundId, so a fresh engine with reused round IDs
-    ///      must use a fresh distributor instead of reusing this stateful instance.
+    /// @notice The voting engine is immutable for this distributor; this setter is a
+    ///         compatibility no-op kept for tooling that probes the shared setter surface.
+    /// @dev It never updates state and emits no event: it succeeds only when passed the
+    ///      current engine and reverts for any other address. Claim accounting is keyed by
+    ///      contentId/roundId, so a fresh engine with reused round IDs must use a fresh
+    ///      distributor instead of reusing this stateful instance.
     function setVotingEngine(address _votingEngine) external view onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_votingEngine != address(0), "Invalid voting engine");
         require(_votingEngine == address(votingEngine), "Voting engine immutable");
