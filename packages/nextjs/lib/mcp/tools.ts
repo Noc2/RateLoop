@@ -2742,6 +2742,7 @@ function dryRunResultPackage(params: {
       unit: "dry_run_fixture",
       up: "0",
     },
+    targetAudienceMatch: null,
     terminal: true,
     voteCount: 3,
     wait: {

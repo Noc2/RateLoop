@@ -491,7 +491,12 @@ test("rateloop_ask_humans dry-run validates without reserving budget or preparin
     executionMode: string;
     operationKey: string;
     paymentRequired: boolean;
-    result: { answer: string; cohortSummary: { simulatedRevealedAnswers: number }; wait: { recoverWith: null } };
+    result: {
+      answer: string;
+      cohortSummary: { simulatedRevealedAnswers: number };
+      targetAudienceMatch: unknown;
+      wait: { recoverWith: null };
+    };
     status: string;
     transactionPlan: unknown;
     wallet: { fundingMode: string };
@@ -508,6 +513,7 @@ test("rateloop_ask_humans dry-run validates without reserving budget or preparin
   assert.equal(body.wallet.fundingMode, "dry_run");
   assert.equal(body.result.answer, "dry_run_complete");
   assert.equal(body.result.cohortSummary.simulatedRevealedAnswers, 3);
+  assert.equal(body.result.targetAudienceMatch, null);
   assert.equal(body.result.wait.recoverWith, null);
   assert.match(body.operationKey, /^0x[a-f0-9]{64}$/);
   assert.ok(body.warnings.includes("dry_run_no_payment"));
@@ -528,12 +534,14 @@ test("rateloop_ask_humans dry-run validates without reserving budget or preparin
     answer: string;
     cohortSummary: { kind: string; simulatedRevealedAnswers: number };
     paymentRequired: boolean;
+    targetAudienceMatch: unknown;
     wait: { recoverWith: null };
   };
   assert.equal(syntheticResult.answer, "dry_run_complete");
   assert.equal(syntheticResult.cohortSummary.kind, "dry_run_fixture");
   assert.equal(syntheticResult.cohortSummary.simulatedRevealedAnswers, 3);
   assert.equal(syntheticResult.paymentRequired, false);
+  assert.equal(syntheticResult.targetAudienceMatch, null);
   assert.equal(syntheticResult.wait.recoverWith, null);
 });
 
