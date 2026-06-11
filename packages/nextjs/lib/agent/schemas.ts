@@ -79,7 +79,7 @@ function stringArraySchema(description: string) {
 const targetAudienceInputSchema = {
   additionalProperties: false,
   description:
-    "Optional structured self-reported audience request. Use rateloop_list_audience_options for valid values. Raters do not see the target criteria.",
+    "Optional structured self-reported audience request. Use rateloop_list_audience_options for valid values. Target criteria are hidden from the normal rating UI but are part of the public question metadata preimage; do not put secrets here.",
   properties: {
     ageGroups: enumArraySchema(targetAudienceTaxonomy.ageGroups),
     countries: stringArraySchema(targetAudienceTaxonomy.countries),

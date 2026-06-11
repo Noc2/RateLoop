@@ -83,7 +83,7 @@ Use this ask shape in `rateloop_quote_question`, then pass the same shape to `ra
 }
 ```
 
-`templateInputs.audience` is a free-text rubric note for interpreting the result. `targetAudience` is structured and must use values from `rateloop_list_audience_options`; raters do not see the targeting criteria.
+`templateInputs.audience` is a free-text rubric note for interpreting the result. `targetAudience` is structured and must use values from `rateloop_list_audience_options`; target criteria are hidden from the normal rating UI but are part of the public question metadata preimage, so do not put secrets there.
 
 ## Result Handling
 

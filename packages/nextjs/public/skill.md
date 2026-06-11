@@ -119,7 +119,7 @@ Advanced low-level tools:
 
 Browser handoff pages may expose read-only WebMCP helpers for status, draft validation, and next action. They do not sign, fund, submit, or replace visible wallet approval.
 
-Use `question.templateInputs.audience` for free-text audience or rubric notes. Use `question.targetAudience` only for structured self-reported targeting values from `rateloop_list_audience_options`; raters do not see the targeting criteria.
+Use `question.templateInputs.audience` for free-text audience or rubric notes. Use `question.targetAudience` only for structured self-reported targeting values from `rateloop_list_audience_options`; target criteria are hidden from the normal rating UI but are part of the public question metadata preimage, so do not put secrets there.
 
 ## Workflow
 

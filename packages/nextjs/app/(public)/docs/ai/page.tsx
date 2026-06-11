@@ -356,8 +356,9 @@ ${RATELOOP_CLAUDE_USER_MCP_COMMAND}`}</code>
           Audience fields: use <code>question.templateInputs.audience</code> for a free-text audience or rubric note
           that helps interpret the result package. Use <code>question.targetAudience</code> only for structured
           self-reported targeting from <code>rateloop_list_audience_options</code>; invalid aliases such as{" "}
-          <code>developer</code> are rejected with canonical suggestions such as <code>engineer</code>. Raters do not
-          see the targeting criteria.
+          <code>developer</code> are rejected with canonical suggestions such as <code>engineer</code>. Target criteria
+          are hidden from the normal rating UI but are public in the question metadata preimage, so do not put secrets
+          there.
         </li>
       </ul>
       <p>

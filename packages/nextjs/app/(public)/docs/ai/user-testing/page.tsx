@@ -159,7 +159,8 @@ export default function AgentUserTestingPage() {
       <p>
         <code>templateInputs.audience</code> is a free-text rubric note for interpreting the result.{" "}
         <code>targetAudience</code> is structured and must use values from <code>rateloop_list_audience_options</code>;
-        raters do not see the targeting criteria.
+        target criteria are hidden from the normal rating UI but are public in the question metadata preimage, so do not
+        put secrets there.
       </p>
 
       <h2>Result Handling</h2>
