@@ -161,7 +161,7 @@ describe("automatic correlation artifact builder", () => {
       questionMetadataHash: `0x${"2".repeat(64)}`,
       questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
       resultSpecHash: `0x${"3".repeat(64)}`,
-      targetAudienceHash: `0x${"4".repeat(64)}`,
+      targetAudienceHash: null,
     });
     expect(publicArtifact.roundPayoutSnapshots[0].payoutWeights).toHaveLength(2);
     expect(publicArtifact.roundPayoutSnapshots[0].eligibleVotes).toHaveLength(2);

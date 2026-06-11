@@ -686,7 +686,9 @@ function parseRoundContextQuestionMetadataRef(value: unknown): PublicQuestionMet
     questionMetadataHash: parseOptionalHex(record.questionMetadataHash),
     questionMetadataUri: parseOptionalString(record.questionMetadataUri),
     resultSpecHash: parseOptionalHex(record.resultSpecHash),
-    targetAudienceHash: parseOptionalHex(record.targetAudienceHash),
+    // Target-audience metadata is not derived from indexed chain events today.
+    // Keep it out of correlation artifacts so payout roots stay reproducible.
+    targetAudienceHash: null,
   };
 }
 

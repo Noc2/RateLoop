@@ -1,12 +1,9 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
-import { canonicalJsonHash } from "@rateloop/node-utils/json";
-import { evaluateTargetAudienceEligibility } from "@rateloop/node-utils/profileSelfReport";
 import { and, asc, desc, eq, or, sql } from "ponder";
 import { db } from "ponder:api";
 import {
   content,
   correlationEpochSnapshot,
-  profileSelfReportHistory,
   questionRewardPool,
   round,
   roundPayoutSnapshot,
@@ -37,34 +34,6 @@ const BASE_RATE_NEUTRAL_BPS = 5000;
 const VOTE_SCAN_PAGE_SIZE = 1_000;
 const MAX_VOTE_SCAN_PAGES = 50;
 
-function historicalProfileSelfReportAtRoundOpen() {
-  return sql<string | null>`(
-    select ${profileSelfReportHistory.selfReport}
-    from ${profileSelfReportHistory}
-    where ${profileSelfReportHistory.address} = ${vote.identityHolder}
-      and ${round.startTime} is not null
-      and ${profileSelfReportHistory.updatedAt} <= ${round.startTime}
-    order by ${profileSelfReportHistory.updatedAt} desc,
-      ${profileSelfReportHistory.blockNumber} desc,
-      ${profileSelfReportHistory.logIndex} desc
-    limit 1
-  )`;
-}
-
-function historicalProfileUpdatedAtRoundOpen() {
-  return sql<bigint | null>`(
-    select ${profileSelfReportHistory.updatedAt}
-    from ${profileSelfReportHistory}
-    where ${profileSelfReportHistory.address} = ${vote.identityHolder}
-      and ${round.startTime} is not null
-      and ${profileSelfReportHistory.updatedAt} <= ${round.startTime}
-    order by ${profileSelfReportHistory.updatedAt} desc,
-      ${profileSelfReportHistory.blockNumber} desc,
-      ${profileSelfReportHistory.logIndex} desc
-    limit 1
-  )`;
-}
-
 const HEX32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 
 function normalizeHex32(value: unknown): `0x${string}` | null {
@@ -75,25 +44,18 @@ function normalizeString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function targetAudienceRefHash(value: unknown): `0x${string}` | null {
-  const parsed = parseStoredTargetAudience(value);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || "invalidTargetAudienceMetadata" in parsed) {
-    return null;
-  }
-  return canonicalJsonHash(parsed);
-}
-
 function questionMetadataRef(row: {
   questionMetadataHash?: string | null;
   questionMetadataUri?: string | null;
   resultSpecHash?: string | null;
-  targetAudience?: string | null;
 } | null) {
   return {
     questionMetadataHash: normalizeHex32(row?.questionMetadataHash),
     questionMetadataUri: normalizeString(row?.questionMetadataUri),
     resultSpecHash: normalizeHex32(row?.resultSpecHash),
-    targetAudienceHash: targetAudienceRefHash(row?.targetAudience),
+    // Target audience is stored from a best-effort metadata push, not an
+    // indexer-derived chain event, so it must not affect payout artifacts.
+    targetAudienceHash: null,
   };
 }
 
@@ -104,7 +66,6 @@ async function getRoundContext(contentId: bigint, roundId: bigint) {
       questionMetadataUri: content.questionMetadataUri,
       resultSpecHash: content.resultSpecHash,
       settledAt: round.settledAt,
-      targetAudience: content.targetAudience,
     })
     .from(round)
     .innerJoin(content, eq(content.id, round.contentId))
@@ -176,21 +137,6 @@ function optionalNonNegativeNumberParam(value: string | undefined): number | nul
   return Number.isSafeInteger(parsed) ? parsed : Number.NaN;
 }
 
-function parseStoredTargetAudience(value: unknown) {
-  if (typeof value !== "string") return value ?? null;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed === "null") return null;
-  try {
-    return JSON.parse(trimmed) as unknown;
-  } catch {
-    return { invalidTargetAudienceMetadata: true };
-  }
-}
-
-function stringifyOptionalBigInt(value: unknown) {
-  return typeof value === "bigint" ? value.toString() : null;
-}
-
 function formatCorrelationVoteRow(row: {
   account: `0x${string}` | null;
   voter: `0x${string}`;
@@ -203,29 +149,9 @@ function formatCorrelationVoteRow(row: {
   baseWeight: bigint;
   verifiedHuman: boolean;
   historicalVoteCount: number;
-  profileSelfReport?: string | null;
-  profileUpdatedAt?: bigint | null;
-  roundStartTime?: bigint | null;
-  targetAudience?: string | null;
 }) {
   const account = row.account ?? row.voter;
   const identityKey = row.identityKey ?? ZERO_HASH;
-  let eligibility: ReturnType<typeof evaluateTargetAudienceEligibility>;
-  try {
-    eligibility = evaluateTargetAudienceEligibility({
-      profileUpdatedAtSeconds: row.profileUpdatedAt ?? null,
-      roundOpenTimeSeconds: row.roundStartTime ?? null,
-      selfReport: row.profileSelfReport ?? null,
-      targetAudience: parseStoredTargetAudience(row.targetAudience),
-    });
-  } catch {
-    eligibility = {
-      cooldownSeconds: 0,
-      eligible: false,
-      reasons: ["target_audience_invalid"],
-      targetAudience: null,
-    };
-  }
 
   const item = {
     account,
@@ -239,24 +165,14 @@ function formatCorrelationVoteRow(row: {
     baseWeight: row.baseWeight,
     verifiedHuman: row.verifiedHuman,
     historicalVoteCount: row.historicalVoteCount,
-    payoutEligible: eligibility.eligible,
+    payoutEligible: true,
     features: [
       row.identityKey ? `identity:${row.identityKey.toLowerCase()}` : null,
     ].filter((value): value is string => value !== null),
   };
 
   return {
-    excludedVote: eligibility.eligible
-      ? null
-      : {
-          account,
-          identityKey,
-          commitKey: row.commitKey,
-          cooldownSeconds: eligibility.cooldownSeconds,
-          profileUpdatedAt: stringifyOptionalBigInt(row.profileUpdatedAt),
-          reasons: eligibility.reasons,
-          roundOpenTime: stringifyOptionalBigInt(row.roundStartTime),
-        },
+    excludedVote: null,
     item,
   };
 }
@@ -355,10 +271,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
           baseWeight: sql<bigint>`10000`,
           verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
           historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
-          profileSelfReport: historicalProfileSelfReportAtRoundOpen(),
-          profileUpdatedAt: historicalProfileUpdatedAtRoundOpen(),
-          roundStartTime: round.startTime,
-          targetAudience: content.targetAudience,
         })
         .from(vote)
         .innerJoin(

@@ -2614,10 +2614,7 @@ describe("registerCorrelationRoutes", () => {
         questionMetadataHash: `0x${"2".repeat(64)}`,
         questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
         resultSpecHash: `0x${"3".repeat(64)}`,
-        targetAudienceHash: canonicalJsonHash({
-          languages: ["de"],
-          roles: ["engineer"],
-        }),
+        targetAudienceHash: null,
       },
       settledRoundsInWindow: 0,
     });
@@ -2629,8 +2626,7 @@ describe("registerCorrelationRoutes", () => {
     expect(selection).toContain("vote.stake");
     expect(selection).toContain("vote.epochIndex");
     expect(selection).toContain("vote.rbtsWeight");
-    expect(selection).toContain("profileSelfReportHistory.selfReport");
-    expect(selection).toContain("profileSelfReportHistory.updatedAt");
+    expect(selection).not.toContain("profileSelfReportHistory");
     const whereArg = queryBuilder.where.mock.calls[0]?.[0];
     const serialized = serializeExpression(whereArg);
     expect(serialized).toContain("vote.revealed");
@@ -2649,7 +2645,7 @@ describe("registerCorrelationRoutes", () => {
     ).toBe(true);
   });
 
-  it("filters targeted correlation votes by self-report match and profile cooldown", async () => {
+  it("treats target audience as informational for correlation payouts", async () => {
     const cooldown = 7 * 24 * 60 * 60;
     mockPonderModules(
       [
@@ -2741,23 +2737,29 @@ describe("registerCorrelationRoutes", () => {
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.items).toHaveLength(1);
-    expect(body.items[0]).toMatchObject({
-      account: "0x0000000000000000000000000000000000000001",
-      payoutEligible: true,
-    });
-    expect(body.items[0]).not.toHaveProperty("targetAudience");
-    expect(body.items[0]).not.toHaveProperty("profileSelfReport");
-    expect(body.excludedVotes).toEqual([
-      expect.objectContaining({
+    expect(body.items).toHaveLength(3);
+    expect(body.items.map((item: { account: string; payoutEligible: boolean }) => ({
+      account: item.account,
+      payoutEligible: item.payoutEligible,
+    }))).toEqual([
+      {
+        account: "0x0000000000000000000000000000000000000001",
+        payoutEligible: true,
+      },
+      {
         account: "0x0000000000000000000000000000000000000002",
-        reasons: ["profile_cooldown_active"],
-      }),
-      expect.objectContaining({
+        payoutEligible: true,
+      },
+      {
         account: "0x0000000000000000000000000000000000000003",
-        reasons: ["audience_mismatch:languages", "audience_mismatch:roles"],
-      }),
+        payoutEligible: true,
+      },
     ]);
+    for (const item of body.items) {
+      expect(item).not.toHaveProperty("targetAudience");
+      expect(item).not.toHaveProperty("profileSelfReport");
+    }
+    expect(body.excludedVotes).toEqual([]);
   });
 
   it("computes the trailing base rate from prior settled round pools", async () => {
