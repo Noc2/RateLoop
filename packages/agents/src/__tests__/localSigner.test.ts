@@ -12,6 +12,7 @@ import {
   keccak256,
   parseSignature,
   stringToHex,
+  type Abi,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -53,12 +54,15 @@ const X402_VALID_AFTER = "0";
 const X402_VALID_BEFORE = String(Math.floor(Date.now() / 1000) + 3_600);
 const TEST_SIGNATURE = `0x${"1".repeat(64)}${"3".repeat(64)}1b` as const;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
-const EMPTY_DETAILS = { detailsUrl: "", detailsHash: EMPTY_DETAILS_HASH } as const;
+const EMPTY_DETAILS = {
+  detailsUrl: "",
+  detailsHash: EMPTY_DETAILS_HASH,
+} as const;
 const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
 );
 const QUESTION_REVEAL_DOMAIN = keccak256(
-  stringToHex("rateloop-question-reveal-v7"),
+  stringToHex("rateloop-question-reveal-v8"),
 );
 const X402_SIGN_OPTIONS: NonNullable<
   Parameters<typeof signX402AuthorizationRequest>[2]
@@ -68,6 +72,38 @@ const X402_SIGN_OPTIONS: NonNullable<
   expectedUsdcAddress: X402_USDC_ADDRESS,
   expectedX402QuestionSubmitterAddress: X402_SUBMITTER_ADDRESS,
 };
+
+const ZERO_CONFIDENTIALITY_HASH = keccak256(
+  encodeAbiParameters(
+    [
+      { type: "bool" },
+      { type: "uint8" },
+      { type: "uint64" },
+      { type: "uint8" },
+    ],
+    [false, 0, 0n, 0],
+  ),
+);
+const ZERO_CONFIDENTIALITY_CONFIG = {
+  bondAmount: 0n,
+  bondAsset: 0,
+  flags: 0,
+  gated: false,
+} as const;
+const ContentRegistrySubmitQuestionWithConfidentialityAbi =
+  ContentRegistryAbi.filter(
+    (item) =>
+      item.type === "function" &&
+      item.name === "submitQuestionWithRewardAndRoundConfig" &&
+      item.inputs.length === 12,
+  ) as Abi;
+const X402QuestionSubmitterSubmitWithConfidentialityAbi =
+  X402QuestionSubmitterAbi.filter(
+    (item) =>
+      item.type === "function" &&
+      item.name === "submitQuestionWithX402Payment" &&
+      item.inputs.length === 13,
+  ) as Abi;
 
 type TestX402AuthorizationRequest = {
   authorization: Record<string, string>;
@@ -311,6 +347,7 @@ function expectedRevealCommitment() {
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
+        { type: "bytes32" },
       ],
       [
         QUESTION_REVEAL_DOMAIN,
@@ -335,6 +372,7 @@ function expectedRevealCommitment() {
         roundConfigHash(),
         spec.questionMetadataHash,
         spec.resultSpecHash,
+        ZERO_CONFIDENTIALITY_HASH,
       ],
     ),
   );
@@ -392,6 +430,7 @@ function x402PaymentNonce(from = account.address) {
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
+        { type: "bytes32" },
       ],
       [
         keccak256(stringToHex("rateloop-x402-question-payment-v3")),
@@ -407,6 +446,7 @@ function x402PaymentNonce(from = account.address) {
         submissionPayloadHash,
         rewardTermsHash(),
         roundConfigHash(),
+        ZERO_CONFIDENTIALITY_HASH,
         spec.questionMetadataHash,
         spec.resultSpecHash,
       ],
@@ -424,7 +464,7 @@ function reserveSubmissionData(revealCommitment = expectedRevealCommitment()) {
 
 function submitQuestionData(amount = BigInt(X402_AMOUNT)) {
   return encodeFunctionData({
-    abi: ContentRegistryAbi,
+    abi: ContentRegistrySubmitQuestionWithConfidentialityAbi,
     args: [
       QUESTION_CONTEXT_URL,
       [],
@@ -437,6 +477,7 @@ function submitQuestionData(amount = BigInt(X402_AMOUNT)) {
       rewardTerms(amount),
       roundConfig(),
       questionSpec(),
+      ZERO_CONFIDENTIALITY_CONFIG,
     ],
     functionName: "submitQuestionWithRewardAndRoundConfig",
   });
@@ -445,7 +486,7 @@ function submitQuestionData(amount = BigInt(X402_AMOUNT)) {
 function submitX402QuestionData(amount = BigInt(X402_AMOUNT)) {
   const signature = parseSignature(TEST_SIGNATURE);
   return encodeFunctionData({
-    abi: X402QuestionSubmitterAbi,
+    abi: X402QuestionSubmitterSubmitWithConfidentialityAbi,
     args: [
       QUESTION_CONTEXT_URL,
       [],
@@ -458,6 +499,7 @@ function submitX402QuestionData(amount = BigInt(X402_AMOUNT)) {
       rewardTerms(amount),
       roundConfig(),
       questionSpec(),
+      ZERO_CONFIDENTIALITY_CONFIG,
       {
         from: account.address,
         nonce: x402PaymentNonce(),
@@ -794,7 +836,7 @@ describe("local signer", () => {
 
   it("rejects transaction plans whose submission calldata differs from the ask payload", () => {
     const changedTitleData = encodeFunctionData({
-      abi: ContentRegistryAbi,
+      abi: ContentRegistrySubmitQuestionWithConfidentialityAbi,
       args: [
         QUESTION_CONTEXT_URL,
         [],
@@ -807,6 +849,7 @@ describe("local signer", () => {
         rewardTerms(),
         roundConfig(),
         questionSpec(),
+        ZERO_CONFIDENTIALITY_CONFIG,
       ],
       functionName: "submitQuestionWithRewardAndRoundConfig",
     });
@@ -1083,7 +1126,10 @@ function fiveVoterAskPayload(
 
 describe("local signer round config alignment", () => {
   it("defaults roundConfig.minVoters to bounty.requiredVoters when omitted", () => {
-    const canonical = buildLocalQuestionCanonicalPayload(fiveVoterAskPayload(), 480);
+    const canonical = buildLocalQuestionCanonicalPayload(
+      fiveVoterAskPayload(),
+      480,
+    );
 
     expect(canonical.roundConfig).toEqual({
       epochDuration: "1200",
@@ -1143,7 +1189,8 @@ describe("local signer round config alignment", () => {
             visibility: "gated",
           },
           detailsHash: `0x${"4".repeat(64)}`,
-          detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+          detailsUrl:
+            "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
           tags: [QUESTION_TAG],
           title: QUESTION_TITLE,
         },
@@ -1174,7 +1221,9 @@ describe("local signer round config alignment", () => {
           },
         }),
       ),
-    ).toThrow(/question\.roundConfig\.minVoters must match bounty\.requiredVoters/);
+    ).toThrow(
+      /question\.roundConfig\.minVoters must match bounty\.requiredVoters/,
+    );
   });
 
   it("keeps the shipped five-voter examples aligned with the round quorum", () => {
@@ -1196,7 +1245,9 @@ describe("local signer round config alignment", () => {
       const canonical = buildLocalQuestionCanonicalPayload(example);
       expect(canonical.bounty.requiredVoters).toBe("5");
       expect(canonical.roundConfig.minVoters).toBe("5");
-      expect(BigInt(canonical.roundConfig.maxVoters)).toBeGreaterThanOrEqual(5n);
+      expect(BigInt(canonical.roundConfig.maxVoters)).toBeGreaterThanOrEqual(
+        5n,
+      );
     }
   });
 });

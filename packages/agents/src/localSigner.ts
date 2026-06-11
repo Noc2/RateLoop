@@ -96,7 +96,7 @@ const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
 );
 const QUESTION_REVEAL_DOMAIN = keccak256(
-  stringToHex("rateloop-question-reveal-v7"),
+  stringToHex("rateloop-question-reveal-v8"),
 );
 const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(
   stringToHex("rateloop-question-bundle-item-v5"),
@@ -335,6 +335,7 @@ type LocalRewardTerms = {
 
 type LocalQuestionSubmission = {
   categoryId: bigint;
+  confidentiality: LocalQuestionConfidentiality;
   contextUrl: string;
   detailsHash: Hex;
   detailsUrl: string;
@@ -349,6 +350,25 @@ type LocalQuestionSubmission = {
   title: string;
   videoUrl: string;
 };
+
+function buildQuestionConfidentialityHash(
+  confidentiality: LocalQuestionConfidentiality,
+): Hex {
+  const gated = confidentiality.visibility === "gated";
+  const asset = gated && confidentiality.bond?.asset === "USDC" ? 1 : 0;
+  const amount = gated ? BigInt(confidentiality.bond?.amount ?? "0") : 0n;
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bool" },
+        { type: "uint8" },
+        { type: "uint64" },
+        { type: "uint8" },
+      ],
+      [gated, asset, amount, 0],
+    ),
+  );
+}
 
 type ExpectedLocalSignerQuestionPlan = {
   canonicalPayload: ReturnType<typeof toCanonicalLocalQuestionPayload>;
@@ -1331,7 +1351,9 @@ function normalizeLocalQuestionConfidentiality(
   }
   if (visibility === "public") {
     if (value.bond !== undefined && value.bond !== null) {
-      throw new Error(`${fieldName}.bond is only supported for gated questions.`);
+      throw new Error(
+        `${fieldName}.bond is only supported for gated questions.`,
+      );
     }
     return {
       bond: null,
@@ -1727,6 +1749,25 @@ function parseLocalQuestionRequest(
     templateInputs: topLevelTemplateInputs,
     templateVersion: topLevelTemplateVersion,
   };
+  const questions = rawQuestions.map((question, index) =>
+    normalizeLocalQuestion(
+      question,
+      index,
+      templateDefaults,
+      bounty,
+      roundConfig,
+    ),
+  );
+  if (
+    questions.length > 1 &&
+    questions.some(
+      (question) => question.confidentiality.visibility === "gated",
+    )
+  ) {
+    throw new Error(
+      "Private context bundles are not supported yet. Submit gated questions one at a time.",
+    );
+  }
 
   return {
     bounty,
@@ -1735,15 +1776,7 @@ function parseLocalQuestionRequest(
       fallbackChainId,
     ),
     clientRequestId,
-    questions: rawQuestions.map((question, index) =>
-      normalizeLocalQuestion(
-        question,
-        index,
-        templateDefaults,
-        bounty,
-        roundConfig,
-      ),
-    ),
+    questions,
     roundConfig,
   };
 }
@@ -1964,6 +1997,7 @@ function buildSingleQuestionRevealCommitment(params: {
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
+        { type: "bytes32" },
       ],
       [
         QUESTION_REVEAL_DOMAIN,
@@ -1984,6 +2018,7 @@ function buildSingleQuestionRevealCommitment(params: {
         buildRoundConfigHash(params.roundConfig),
         params.question.spec.questionMetadataHash,
         params.question.spec.resultSpecHash,
+        buildQuestionConfidentialityHash(params.question.confidentiality),
       ],
     ),
   );
@@ -2010,16 +2045,8 @@ function buildQuestionBundleHash(
           QUESTION_BUNDLE_ITEM_DOMAIN,
           keccak256(
             encodeAbiParameters(
-              [
-                { type: "string" },
-                { type: "string" },
-                { type: "string" },
-              ],
-              [
-                question.contextUrl,
-                question.title,
-                question.tags,
-              ],
+              [{ type: "string" }, { type: "string" }, { type: "string" }],
+              [question.contextUrl, question.title, question.tags],
             ),
           ),
           buildSubmissionMediaHash(question.imageUrls, question.videoUrl),
@@ -2111,6 +2138,7 @@ function buildExpectedLocalSignerQuestionPlan(params: {
     const submissionKey = buildQuestionSubmissionKey(question);
     return {
       categoryId: question.categoryId,
+      confidentiality: question.confidentiality,
       contextUrl: question.contextUrl,
       detailsHash: question.detailsHash,
       detailsUrl: question.detailsUrl,
@@ -2224,6 +2252,7 @@ function buildX402QuestionPaymentNonce(params: {
         { type: "bytes32" },
         { type: "bytes32" },
         { type: "bytes32" },
+        { type: "bytes32" },
       ],
       [
         X402_QUESTION_PAYMENT_DOMAIN,
@@ -2248,6 +2277,7 @@ function buildX402QuestionPaymentNonce(params: {
         submissionPayloadHash,
         buildRewardTermsHash(params.rewardTerms),
         buildRoundConfigHash(params.roundConfig),
+        buildQuestionConfidentialityHash(params.question.confidentiality),
         params.question.spec.questionMetadataHash,
         params.question.spec.resultSpecHash,
       ],
@@ -2356,6 +2386,16 @@ function assertEqualNumber(
   fieldName: string,
 ) {
   if (Number(normalizeBigInt(actual, fieldName)) !== expected) {
+    throw new Error(`${fieldName} must match the local signer ask payload.`);
+  }
+}
+
+function assertEqualBoolean(
+  actual: unknown,
+  expected: boolean,
+  fieldName: string,
+) {
+  if (actual !== expected) {
     throw new Error(`${fieldName} must match the local signer ask payload.`);
   }
 }
@@ -2495,6 +2535,34 @@ function assertQuestionSpec(
     readStructField(value, "resultSpecHash", 1, fieldName),
     expected.resultSpecHash,
     `${fieldName}.resultSpecHash`,
+  );
+}
+
+function assertQuestionConfidentiality(
+  value: unknown,
+  expected: LocalQuestionConfidentiality,
+  fieldName: string,
+) {
+  const gated = expected.visibility === "gated";
+  assertEqualBoolean(
+    readStructField(value, "gated", 0, fieldName),
+    gated,
+    `${fieldName}.gated`,
+  );
+  assertEqualNumber(
+    readStructField(value, "bondAsset", 1, fieldName),
+    gated && expected.bond?.asset === "USDC" ? 1 : 0,
+    `${fieldName}.bondAsset`,
+  );
+  assertEqualBigInt(
+    readStructField(value, "bondAmount", 2, fieldName),
+    gated ? BigInt(expected.bond?.amount ?? "0") : 0n,
+    `${fieldName}.bondAmount`,
+  );
+  assertEqualNumber(
+    readStructField(value, "flags", 3, fieldName),
+    0,
+    `${fieldName}.flags`,
   );
 }
 
@@ -2759,6 +2827,11 @@ function validateSubmitQuestionCall(params: {
     params.expectedPlan.primaryQuestion.spec,
     `transactionPlan.calls[${params.index}].spec`,
   );
+  assertQuestionConfidentiality(
+    args[11],
+    params.expectedPlan.primaryQuestion.confidentiality,
+    `transactionPlan.calls[${params.index}].confidentiality`,
+  );
 }
 
 function validateSubmitX402QuestionCall(params: {
@@ -2849,7 +2922,12 @@ function validateSubmitX402QuestionCall(params: {
     params.expectedPlan.primaryQuestion.spec,
     `transactionPlan.calls[${params.index}].spec`,
   );
-  const authorization = decoded.args?.[11];
+  assertQuestionConfidentiality(
+    args[11],
+    params.expectedPlan.primaryQuestion.confidentiality,
+    `transactionPlan.calls[${params.index}].confidentiality`,
+  );
+  const authorization = decoded.args?.[12];
   if (!authorization || typeof authorization !== "object") {
     throw new Error(
       `transactionPlan.calls[${params.index}].paymentAuthorization is required.`,
