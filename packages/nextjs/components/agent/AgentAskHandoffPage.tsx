@@ -197,6 +197,7 @@ type SubmittedContentModalState = {
 
 type ConfidentialityVisibility = "public" | "gated";
 type ConfidentialityDisclosurePolicy = "after_settlement" | "private_forever";
+const PRIVATE_FOREVER_DISCLOSURE_POLICY = "private_forever" satisfies ConfidentialityDisclosurePolicy;
 type ConfidentialityBondAsset = "LREP" | "USDC";
 
 type DraftConfidentiality = {
@@ -222,7 +223,7 @@ const REQUIRED_VOTERS_TOOLTIP =
 const DEFAULT_DRAFT_CONFIDENTIALITY: DraftConfidentiality = {
   bondAmount: "0",
   bondAsset: "LREP",
-  disclosurePolicy: "after_settlement",
+  disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
   visibility: "public",
 };
 
@@ -326,17 +327,12 @@ function readStringArray(value: unknown) {
 }
 
 function cloneDraftConfidentiality(value: DraftConfidentiality): DraftConfidentiality {
-  return { ...value };
+  return { ...value, disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY };
 }
 
 function readConfidentialityVisibility(value: unknown, fallback: ConfidentialityVisibility) {
   const visibility = readString(value);
   return visibility === "gated" || visibility === "public" ? visibility : fallback;
-}
-
-function readDisclosurePolicy(value: unknown, fallback: ConfidentialityDisclosurePolicy) {
-  const policy = readString(value);
-  return policy === "private_forever" ? "private_forever" : policy === "after_settlement" ? policy : fallback;
 }
 
 function readConfidentialityBondAsset(value: unknown, fallback: ConfidentialityBondAsset) {
@@ -362,7 +358,7 @@ function readDraftConfidentiality(
   return {
     bondAmount: readAtomicAmountInput(bond?.amount ?? source.bondAmount, inherited.bondAmount),
     bondAsset: readConfidentialityBondAsset(bond?.asset ?? source.bondAsset, inherited.bondAsset),
-    disclosurePolicy: readDisclosurePolicy(source.disclosurePolicy, inherited.disclosurePolicy),
+    disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
     visibility: readConfidentialityVisibility(source.visibility, inherited.visibility),
   };
 }
@@ -390,7 +386,7 @@ function buildDraftConfidentialityInput(confidentiality: DraftConfidentiality): 
       amount: parseAtomicAmountInput(confidentiality.bondAmount, "Confidentiality bond"),
       asset: confidentiality.bondAsset,
     },
-    disclosurePolicy: confidentiality.disclosurePolicy,
+    disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
     visibility: "gated",
   };
 }
@@ -1529,7 +1525,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 ...question.confidentiality,
                 bondAmount: sharedConfidentiality?.bondAmount ?? "0",
                 bondAsset: sharedConfidentiality?.bondAsset ?? "LREP",
-                disclosurePolicy: question.confidentiality.disclosurePolicy,
+                disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
                 visibility: "gated",
               }
             : {
@@ -1548,18 +1544,6 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     });
     setDraftError(null);
   }, []);
-
-  const updateDraftQuestionDisclosurePolicy = useCallback(
-    (index: number, disclosurePolicy: ConfidentialityDisclosurePolicy) => {
-      updateDraftQuestion(index, {
-        confidentiality: {
-          ...(draftForm?.questions[index]?.confidentiality ?? DEFAULT_DRAFT_CONFIDENTIALITY),
-          disclosurePolicy,
-        },
-      });
-    },
-    [draftForm?.questions, updateDraftQuestion],
-  );
 
   const updateDraftPrivateConfidentialityBond = useCallback((patch: Partial<DraftConfidentiality>) => {
     setDraftForm(current => {
@@ -2126,29 +2110,10 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                             />
                           </label>
                           {question.confidentiality.visibility === "gated" ? (
-                            <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-end">
-                              <p className="text-sm leading-relaxed text-base-content/65">
-                                External context links and YouTube are disabled for private asks. Keep the title
-                                public-safe.
-                              </p>
-                              <label className="form-control">
-                                <span className="label-text text-sm font-medium">Disclosure</span>
-                                <select
-                                  className="select select-bordered select-sm bg-base-100"
-                                  disabled={!canEditDraft}
-                                  value={question.confidentiality.disclosurePolicy}
-                                  onChange={event =>
-                                    updateDraftQuestionDisclosurePolicy(
-                                      index,
-                                      event.target.value as ConfidentialityDisclosurePolicy,
-                                    )
-                                  }
-                                >
-                                  <option value="after_settlement">After settlement</option>
-                                  <option value="private_forever">Private forever</option>
-                                </select>
-                              </label>
-                            </div>
+                            <p className="mt-4 text-sm leading-relaxed text-base-content/65">
+                              External context links and YouTube are disabled for private asks. Keep the title
+                              public-safe.
+                            </p>
                           ) : null}
                           {question.confidentiality.visibility === "gated" &&
                           !draftQuestionHasHostedContext(question) &&

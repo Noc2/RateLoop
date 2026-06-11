@@ -136,6 +136,7 @@ const ShareModal = dynamic(() => import("~~/components/submit/ShareModal").then(
 type MediaMode = "images" | "video";
 type ContextVisibility = "public" | "gated";
 type ConfidentialityDisclosurePolicy = "after_settlement" | "private_forever";
+const PRIVATE_FOREVER_DISCLOSURE_POLICY = "private_forever" satisfies ConfidentialityDisclosurePolicy;
 
 const MEDIA_URL_CONFIG = {
   contextPlaceholder: "Paste a source link, or add media context below",
@@ -275,7 +276,7 @@ function createEmptyQuestionDraft(): QuestionDraft {
   return {
     mediaMode: "images",
     contextVisibility: "public",
-    disclosurePolicy: "after_settlement",
+    disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
     contextUrl: "",
     imageUrls: [""],
     videoUrl: "",
@@ -600,7 +601,6 @@ export function ContentSubmissionSection() {
 
   const [mediaMode, setMediaMode] = useState<MediaMode>("images");
   const [contextVisibility, setContextVisibility] = useState<ContextVisibility>("public");
-  const [disclosurePolicy, setDisclosurePolicy] = useState<ConfidentialityDisclosurePolicy>("after_settlement");
   const [contextUrl, setContextUrl] = useState("");
   const [contextUrlError, setContextUrlError] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([""]);
@@ -713,7 +713,7 @@ export function ContentSubmissionSection() {
   const getActiveQuestionDraft = (): QuestionDraft => ({
     mediaMode,
     contextVisibility,
-    disclosurePolicy,
+    disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
     contextUrl,
     imageUrls,
     videoUrl,
@@ -734,7 +734,6 @@ export function ContentSubmissionSection() {
   const loadQuestionDraft = (draft: QuestionDraft) => {
     setMediaMode(draft.mediaMode);
     setContextVisibility(draft.contextVisibility);
-    setDisclosurePolicy(draft.disclosurePolicy);
     setContextUrl(draft.contextUrl);
     setContextUrlError(null);
     setImageUrls(draft.imageUrls.length > 0 ? draft.imageUrls : [""]);
@@ -846,18 +845,16 @@ export function ContentSubmissionSection() {
       patchActiveQuestionDraft({
         contextUrl: "",
         contextVisibility: nextVisibility,
-        disclosurePolicy,
+        disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
         mediaMode: "images",
         videoUrl: "",
       });
       return;
     }
-    patchActiveQuestionDraft({ contextVisibility: nextVisibility, disclosurePolicy });
-  };
-
-  const handleDisclosurePolicyChange = (value: ConfidentialityDisclosurePolicy) => {
-    setDisclosurePolicy(value);
-    patchActiveQuestionDraft({ disclosurePolicy: value });
+    patchActiveQuestionDraft({
+      contextVisibility: nextVisibility,
+      disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
+    });
   };
 
   const handleDetailsTextChange = (value: string) => {
@@ -1818,7 +1815,7 @@ export function ContentSubmissionSection() {
     return {
       blockedContentTags,
       contextVisibility: draft.contextVisibility,
-      disclosurePolicy: draft.disclosurePolicy,
+      disclosurePolicy: PRIVATE_FOREVER_DISCLOSURE_POLICY,
       hasMediaError,
       hasQuestionErrors,
       selectedCategory: draft.selectedCategory,
@@ -4256,24 +4253,9 @@ export function ContentSubmissionSection() {
                     />
                   </label>
                   {privateContextEnabled ? (
-                    <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-end">
-                      <div className="text-sm leading-relaxed text-base-content/65">
-                        External context links and YouTube are disabled for private asks. Use RateLoop-hosted uploads or
-                        the description field.
-                      </div>
-                      <label className="form-control">
-                        <span className="label-text text-sm font-medium">Disclosure</span>
-                        <select
-                          className="select select-bordered select-sm bg-base-100"
-                          value={disclosurePolicy}
-                          onChange={e =>
-                            handleDisclosurePolicyChange(e.target.value as ConfidentialityDisclosurePolicy)
-                          }
-                        >
-                          <option value="after_settlement">After settlement</option>
-                          <option value="private_forever">Private forever</option>
-                        </select>
-                      </label>
+                    <div className="mt-4 text-sm leading-relaxed text-base-content/65">
+                      External context links and YouTube are disabled for private asks. Use RateLoop-hosted uploads or
+                      the description field.
                     </div>
                   ) : null}
                 </div>
