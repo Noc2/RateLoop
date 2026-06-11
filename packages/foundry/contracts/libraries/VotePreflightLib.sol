@@ -3,8 +3,10 @@ pragma solidity ^0.8.34;
 
 import { ContentRegistry } from "../ContentRegistry.sol";
 import { IAdvisoryVoteRecorder } from "../interfaces/IAdvisoryVoteRecorder.sol";
+import { IConfidentialityEscrow } from "../interfaces/IConfidentialityEscrow.sol";
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
 import { IRaterIdentityRegistry } from "../interfaces/IRaterIdentityRegistry.sol";
+import { IRaterRegistryStatus } from "../interfaces/IRaterRegistryStatus.sol";
 
 /// @title VotePreflightLib
 /// @notice Extracts external preflight checks for vote commits to reduce RoundVotingEngine runtime size.
@@ -15,6 +17,9 @@ library VotePreflightLib {
     error InvalidStake();
     error AlreadyCommitted();
     error MaxVotersReached();
+    error ConfidentialityCredentialRequired();
+    error ConfidentialityBondRequired();
+    error IdentityBanned();
 
     struct CommitPreflightParams {
         address voter;
@@ -48,6 +53,23 @@ library VotePreflightLib {
     ) external view {
         IRaterIdentityRegistry.ResolvedRater memory resolved = resolveRater(identityRegistry, opener);
         _validateContentAndNotSubmitter(registry, opener, contentId, resolved);
+    }
+
+    function validateConfidentialityGate(
+        IRaterIdentityRegistry identityRegistry,
+        address confidentialityEscrow,
+        uint256 contentId,
+        IRaterIdentityRegistry.ResolvedRater memory resolved
+    ) external view {
+        if (confidentialityEscrow == address(0)) return;
+        IConfidentialityEscrow escrow = IConfidentialityEscrow(confidentialityEscrow);
+        IConfidentialityEscrow.ConfidentialityConfig memory config = escrow.confidentialityConfig(contentId);
+        if (!config.gated) return;
+        if (!resolved.hasActiveHumanCredential) revert ConfidentialityCredentialRequired();
+        if (_isIdentityBanned(identityRegistry, resolved.identityKey)) revert IdentityBanned();
+        if (config.bondAmount != 0 && !escrow.hasActiveBond(contentId, resolved.identityKey)) {
+            revert ConfidentialityBondRequired();
+        }
     }
 
     function _validateContentAndNotSubmitter(
@@ -88,6 +110,19 @@ library VotePreflightLib {
     function addressIdentityKey(address account) public pure returns (bytes32) {
         if (account == address(0)) return bytes32(0);
         return keccak256(abi.encodePacked("rateloop.address-identity-v1", account));
+    }
+
+    function _isIdentityBanned(IRaterIdentityRegistry identityRegistry, bytes32 identityKey)
+        private
+        view
+        returns (bool)
+    {
+        if (address(identityRegistry) == address(0) || identityKey == bytes32(0)) return false;
+        try IRaterRegistryStatus(address(identityRegistry)).isIdentityKeyBanned(identityKey) returns (bool banned) {
+            return banned;
+        } catch {
+            return false;
+        }
     }
 
     function isFrontendEligible(IFrontendRegistry frontendRegistry, address frontend)

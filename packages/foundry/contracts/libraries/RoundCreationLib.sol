@@ -22,6 +22,9 @@ library RoundCreationLib {
         uint16 minVoters,
         uint16 maxVoters
     );
+    event RoundConfidentialityEscrowSnapshotted(
+        uint256 indexed contentId, uint256 indexed roundId, address confidentialityEscrow
+    );
 
     function snapshotRoundVotingConfig(
         mapping(uint256 => mapping(uint256 => RoundLib.RoundConfig)) storage roundConfigSnapshot,
@@ -62,6 +65,7 @@ library RoundCreationLib {
         mapping(uint256 => mapping(uint256 => address)) storage roundRaterRegistrySnapshot,
         mapping(uint256 => mapping(uint256 => address)) storage roundFrontendRegistrySnapshot,
         mapping(uint256 => mapping(uint256 => address)) storage roundAdvisoryVoteRecorderSnapshot,
+        mapping(uint256 => mapping(uint256 => address)) storage roundConfidentialityEscrowSnapshot,
         ProtocolConfig protocolConfig,
         uint256 contentId,
         uint256 roundId
@@ -74,6 +78,9 @@ library RoundCreationLib {
         address advisoryRecorder = protocolConfig.advisoryVoteRecorder();
         roundAdvisoryVoteRecorderSnapshot[contentId][roundId] =
             advisoryRecorder == address(0) ? address(1) : advisoryRecorder;
+        address confidentialityEscrow = protocolConfig.confidentialityEscrow();
+        roundConfidentialityEscrowSnapshot[contentId][roundId] = confidentialityEscrow;
+        emit RoundConfidentialityEscrowSnapshotted(contentId, roundId, confidentialityEscrow);
     }
 
     function activateNewRound(

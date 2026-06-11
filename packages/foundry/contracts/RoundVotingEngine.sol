@@ -200,6 +200,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) internal roundFrontendPool;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundEligibleFrontendCount;
     mapping(uint256 => mapping(uint256 => address)) public roundRaterRegistrySnapshot;
+    mapping(uint256 => mapping(uint256 => address)) public roundConfidentialityEscrowSnapshot;
     mapping(uint256 => mapping(uint256 => address)) internal roundAdvisoryVoteRecorderSnapshot;
 
     // --- Events ---
@@ -518,6 +519,9 @@ contract RoundVotingEngine is
         IRaterIdentityRegistry roundRaterRegistry = _getRoundRaterRegistry(contentId, roundId);
         IRaterIdentityRegistry.ResolvedRater memory resolved =
             VotePreflightLib.validateVoterAndContent(roundRaterRegistry, registry, voter, contentId);
+        VotePreflightLib.validateConfidentialityGate(
+            roundRaterRegistry, roundConfidentialityEscrowSnapshot[contentId][roundId], contentId, resolved
+        );
         (uint8 credentialMask, uint8 freshCredentialMask) =
             _credentialStatusBits(roundRaterRegistry, resolved.holder, resolved.hasActiveHumanCredential);
         VotePreflightLib.validateNoAdvisoryConflict(
@@ -825,6 +829,7 @@ contract RoundVotingEngine is
             roundRaterRegistrySnapshot,
             roundFrontendRegistrySnapshot,
             roundAdvisoryVoteRecorderSnapshot,
+            roundConfidentialityEscrowSnapshot,
             protocolConfig,
             contentId,
             roundId

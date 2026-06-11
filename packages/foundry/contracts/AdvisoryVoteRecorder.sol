@@ -8,7 +8,9 @@ import { ContentRegistry } from "./ContentRegistry.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { RoundVotingEngine } from "./RoundVotingEngine.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
 import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
 import { RobustBtsMath } from "./libraries/RobustBtsMath.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
@@ -41,6 +43,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
     error UnverifiedAdvisoryCapReached();
     error InvalidLaunchRewardPolicy();
     error TargetRoundOutOfWindow();
+    error ConfidentialityGated();
     /// @notice Reveal-time drand chain hash differs from the value used at commit-time.
     /// @dev Surfaces silent desync between the ciphertext (encrypted under the commit-time
     ///      chain hash) and the round snapshot — without this check the tlock decryption
@@ -109,7 +112,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         ThresholdReached,
         MaxAdvisoryVotersReached,
         InvalidConfig,
-        UnverifiedAdvisoryCapReached
+        UnverifiedAdvisoryCapReached,
+        ConfidentialityGated
     }
 
     struct AdvisoryCommitAvailability {
@@ -200,6 +204,10 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         availability.roundId = votingEngine.currentRoundId(contentId);
         if (availability.roundId == 0) {
             availability.status = AdvisoryCommitAvailabilityStatus.NoStakedRound;
+            return availability;
+        }
+        if (_isGatedContent(contentId, availability.roundId)) {
+            availability.status = AdvisoryCommitAvailabilityStatus.ConfidentialityGated;
             return availability;
         }
 
@@ -301,6 +309,7 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
 
         uint256 roundId = roundContext >> 16;
         if (roundId == 0) revert InvalidRound();
+        if (_isGatedContent(contentId, roundId)) revert ConfidentialityGated();
         uint16 roundReferenceRatingBps = uint16(roundContext);
 
         AdvisoryIdentityContext memory identityContext = _validateAdvisoryCommitter(contentId, roundId);
@@ -503,6 +512,18 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
 
         address launchPool = protocolConfig.launchDistributionPool();
         if (launchPool == address(0)) return (scoreBps, 0);
+        if (_isIdentityBanned(advisoryCommit.contentId, advisoryCommit.roundId, advisoryCommit.identityKey)) {
+            advisoryCommit.launchCreditClaimed = true;
+            emit AdvisoryLaunchCreditClaimed(
+                advisoryCommit.contentId,
+                advisoryCommit.roundId,
+                _advisoryRewardRecipient(advisoryCommit),
+                advisoryCommitKey,
+                scoreBps,
+                0
+            );
+            return (scoreBps, 0);
+        }
 
         address rewardRecipient = _advisoryRewardRecipient(advisoryCommit);
         ILaunchDistributionPool launchDistributionPool = ILaunchDistributionPool(launchPool);
@@ -823,6 +844,32 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
             snapshot = protocolConfig.raterRegistry();
         }
         return IRaterIdentityRegistry(snapshot);
+    }
+
+    function _isGatedContent(uint256 contentId, uint256 roundId) internal view returns (bool) {
+        address escrow = votingEngine.roundConfidentialityEscrowSnapshot(contentId, roundId);
+        if (escrow == address(0)) {
+            escrow = protocolConfig.confidentialityEscrow();
+        }
+        if (escrow == address(0)) return false;
+        try IConfidentialityEscrow(escrow).confidentialityConfig(contentId) returns (
+            IConfidentialityEscrow.ConfidentialityConfig memory config
+        ) {
+            return config.gated;
+        } catch {
+            return true;
+        }
+    }
+
+    function _isIdentityBanned(uint256 contentId, uint256 roundId, bytes32 identityKey) internal view returns (bool) {
+        if (identityKey == bytes32(0)) return false;
+        address registryAddress = address(_roundRaterRegistry(contentId, roundId));
+        if (registryAddress == address(0)) return false;
+        try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
+            return banned;
+        } catch {
+            return false;
+        }
     }
 
     function _maxUnverifiedAdvisoryCommitsPerRound() internal view returns (bool success, uint16 maxUnverifiedCommits) {
