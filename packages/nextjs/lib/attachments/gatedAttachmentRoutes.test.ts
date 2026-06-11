@@ -199,6 +199,56 @@ test("gated details require a signed accepted wallet session and avoid public ca
   ]);
 });
 
+test("pending gated hosted attachments fail closed before content linkage", async () => {
+  const now = new Date("2026-06-11T12:00:00.000Z");
+  await db.insert(questionDetails).values({
+    id: DETAILS_ID,
+    uploaderKind: "wallet",
+    ownerWalletAddress: WALLET,
+    requiresGatedAccess: true,
+    sizeBytes: new TextEncoder().encode(DETAILS_TEXT).byteLength,
+    sha256: createHash("sha256").update(DETAILS_TEXT).digest("hex"),
+    normalizedText: DETAILS_TEXT,
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db.insert(questionImageAttachments).values({
+    id: ATTACHMENT_ID,
+    uploaderKind: "wallet",
+    ownerWalletAddress: WALLET,
+    requiresGatedAccess: true,
+    normalizedBlobPathname: `local://question-attachments/${ATTACHMENT_ID}/image.webp`,
+    originalFilename: "secret-mockup.png",
+    mimeType: "image/webp",
+    sizeBytes: ONE_PIXEL_PNG.length,
+    sha256: "a".repeat(64),
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const details = await getDetails(new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}`), {
+    params: Promise.resolve({ detailsId: DETAILS_ID }),
+  });
+  assert.equal(details.status, 404);
+  assert.equal(details.headers.get("cache-control"), "private, no-store");
+  assert.equal(details.headers.get("x-robots-tag"), "noindex, noimageindex");
+  assert.equal(await details.text(), '{"error":"Question details not found."}');
+
+  const image = await getImage(
+    new NextRequest(`https://www.rateloop.ai/api/attachments/images/${ATTACHMENT_ID}.webp`),
+    {
+      params: Promise.resolve({ attachmentId: `${ATTACHMENT_ID}.webp` }),
+    },
+  );
+  assert.equal(image.status, 404);
+  assert.equal(image.headers.get("cache-control"), "private, no-store");
+  assert.equal(await image.text(), "Not found");
+});
+
 test("gated images require accepted wallet sessions and return watermarked no-store bytes", async () => {
   await seedGatedImage();
   const denied = await getImage(

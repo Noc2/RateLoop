@@ -28,8 +28,12 @@ import {
 import {
   attachImagesToContent,
   getImageAttachmentSubmissionValidationError,
+  markImagesRequireGatedAccess,
 } from "~~/lib/attachments/imageAttachments";
-import { attachQuestionDetailsToContent } from "~~/lib/attachments/questionDetails";
+import {
+  attachQuestionDetailsToContent,
+  markQuestionDetailsRequiresGatedAccess,
+} from "~~/lib/attachments/questionDetails";
 import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
 import { dbClient } from "~~/lib/db";
 import {
@@ -396,6 +400,29 @@ async function assertApprovedAttachmentsForSubmission(
   identity: AttachmentSubmissionIdentity,
 ) {
   await assertApprovedImageAttachmentsForSubmission(payload, identity);
+}
+
+async function markGatedHostedAttachmentsForSubmission(
+  payload: X402QuestionPayload,
+  identity: AttachmentSubmissionIdentity,
+) {
+  for (const question of payload.questions) {
+    if (question.confidentiality.visibility !== "gated") continue;
+    if (question.detailsUrl) {
+      await markQuestionDetailsRequiresGatedAccess({
+        agentId: identity.agentId,
+        detailsUrl: question.detailsUrl,
+        ownerWalletAddress: identity.ownerWalletAddress,
+      });
+    }
+    if (question.imageUrls.length > 0) {
+      await markImagesRequireGatedAccess({
+        agentId: identity.agentId,
+        imageUrls: question.imageUrls,
+        ownerWalletAddress: identity.ownerWalletAddress,
+      });
+    }
+  }
 }
 
 function buildExpectedQuestionContentHashes(payload: X402QuestionPayload): Hex[] {
@@ -2918,6 +2945,10 @@ async function prepareWalletQuestionSubmissionRequest(params: {
     payload: params.payload,
     walletAddress: params.walletAddress,
   });
+  await markGatedHostedAttachmentsForSubmission(params.payload, {
+    agentId: params.agentId,
+    ownerWalletAddress: params.walletAddress,
+  });
   const pendingCallback = params.pendingCallback ?? readPendingAgentCallbackFromSubmissionRecord(existingRecord);
   await recordAgentWalletSubmissionPlan({
     agentId: params.agentId,
@@ -3025,6 +3056,10 @@ async function prepareNativeQuestionSubmissionRequest(params: {
     payload: params.payload,
     paymentAuthorization: params.paymentAuthorization ?? storedAuthorization,
     walletAddress: params.walletAddress,
+  });
+  await markGatedHostedAttachmentsForSubmission(params.payload, {
+    agentId: params.agentId,
+    ownerWalletAddress: params.walletAddress,
   });
   const pendingCallback = params.pendingCallback ?? readPendingAgentCallbackFromSubmissionRecord(existingRecord);
   await recordNativeX402SubmissionPlan({

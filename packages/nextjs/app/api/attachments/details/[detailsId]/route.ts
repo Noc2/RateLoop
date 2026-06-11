@@ -22,6 +22,11 @@ const GATED_DETAILS_RESPONSE_HEADERS = {
   "X-Robots-Tag": "noindex, noimageindex",
 };
 
+const GATED_DETAILS_NOT_FOUND_RESPONSE = {
+  headers: GATED_DETAILS_RESPONSE_HEADERS,
+  status: 404,
+};
+
 export async function OPTIONS() {
   return new NextResponse(null, {
     headers: {
@@ -45,8 +50,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     );
   }
 
+  if (details.requiresGatedAccess && !details.contentId) {
+    return NextResponse.json({ error: "Question details not found." }, GATED_DETAILS_NOT_FOUND_RESPONSE);
+  }
+
   const confidentiality = details.contentId ? await getQuestionConfidentiality(details.contentId) : null;
-  const gated = isConfidentialityCurrentlyGated(confidentiality);
+  const gated = details.requiresGatedAccess
+    ? !confidentiality?.publishedAt
+    : isConfidentialityCurrentlyGated(confidentiality);
   if (gated && details.contentId) {
     const authorization = await authorizeGatedContextRequest(request, details.contentId);
     if (!authorization.ok) {

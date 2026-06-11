@@ -578,6 +578,86 @@ test("prepareAgentWalletQuestionSubmissionRequest stores optional feedback bonus
   assert.equal(body.feedbackBonus.status, "pending_question_confirmation");
 });
 
+test("prepareAgentWalletQuestionSubmissionRequest marks gated hosted attachments before confirm", async () => {
+  const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
+  const payload = buildPayload("wallet-prepare-gated-attachments");
+  const detailsId = "det_preparegateddetail";
+  const detailsHash = `0x${"7".repeat(64)}` as const;
+  const detailsUrl = `https://www.rateloop.ai/api/attachments/details/${detailsId}`;
+  const imageId = "att_preparegatedimg1";
+  const imageUrl = `https://www.rateloop.ai/api/attachments/images/${imageId}.webp#sha256=0x${"a".repeat(64)}`;
+  const [question] = payload.questions;
+  assert.ok(question);
+  payload.questions = [
+    {
+      ...question,
+      confidentiality: {
+        bond: { amount: "0", asset: "LREP" },
+        disclosurePolicy: "after_settlement",
+        visibility: "gated",
+      },
+      contextUrl: "",
+      detailsHash,
+      detailsUrl,
+      imageUrls: [imageUrl],
+    },
+  ];
+  const now = new Date();
+  await dbClient.execute({
+    sql: `
+      INSERT INTO question_details (
+        id,
+        uploader_kind,
+        owner_wallet_address,
+        agent_id,
+        size_bytes,
+        sha256,
+        normalized_text,
+        status,
+        moderation_status,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    args: [
+      detailsId,
+      "agent",
+      walletAddress,
+      "agent-wallet",
+      18,
+      detailsHash.slice(2),
+      "Expanded details",
+      "approved",
+      "approved",
+      now,
+      now,
+    ],
+  });
+  await insertQuestionImageAttachment({
+    agentId: "agent-wallet",
+    id: imageId,
+    ownerWalletAddress: walletAddress,
+    status: "approved",
+  });
+
+  await prepareAgentWalletQuestionSubmissionRequest({
+    agentId: "agent-wallet",
+    payload,
+    walletAddress,
+  });
+
+  const details = await dbClient.execute({
+    sql: "SELECT requires_gated_access FROM question_details WHERE id = ?",
+    args: [detailsId],
+  });
+  assert.equal(details.rows[0]?.requires_gated_access, true);
+  const image = await dbClient.execute({
+    sql: "SELECT requires_gated_access FROM question_image_attachments WHERE id = ?",
+    args: [imageId],
+  });
+  assert.equal(image.rows[0]?.requires_gated_access, true);
+});
+
 test("confirmAgentWalletQuestionSubmissionRequest ignores spoofed submission logs", async () => {
   const payload = buildPayload("wallet-confirm-spoof");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;

@@ -43,6 +43,13 @@
       "when": 1781138400000,
       "tag": "0005_confidentiality",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781142000000,
+      "tag": "0006_pending_gated_attachments",
+      "breakpoints": true
     }
   ]
 }

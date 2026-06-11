@@ -1025,6 +1025,46 @@ export async function attachImagesToOperation(params: {
   }
 }
 
+export async function markImagesRequireGatedAccess(params: {
+  agentId?: string | null;
+  imageUrls: readonly string[];
+  ownerWalletAddress?: string | null;
+}) {
+  const attachmentIds = [
+    ...new Set(params.imageUrls.map(parseAttachmentIdFromImageUrl).filter((id): id is string => Boolean(id))),
+  ];
+  if (attachmentIds.length === 0) return 0;
+
+  const ownerWalletAddress = params.ownerWalletAddress?.trim().toLowerCase() ?? null;
+  const identityPredicate = params.agentId
+    ? eq(questionImageAttachments.agentId, params.agentId)
+    : ownerWalletAddress
+      ? eq(questionImageAttachments.ownerWalletAddress, ownerWalletAddress)
+      : null;
+  if (!identityPredicate) return 0;
+
+  let marked = 0;
+  const updatedAt = nowDate();
+  for (const attachmentId of attachmentIds) {
+    const [updated] = await db
+      .update(questionImageAttachments)
+      .set({
+        requiresGatedAccess: true,
+        updatedAt,
+      })
+      .where(
+        and(
+          eq(questionImageAttachments.id, attachmentId),
+          eq(questionImageAttachments.status, "approved"),
+          identityPredicate,
+        ),
+      )
+      .returning({ id: questionImageAttachments.id });
+    if (updated) marked += 1;
+  }
+  return marked;
+}
+
 export async function attachImagesToContent(params: {
   agentId?: string | null;
   contentId: string;

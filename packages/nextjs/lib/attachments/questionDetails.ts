@@ -481,6 +481,39 @@ export async function attachQuestionDetailsToContent(params: {
   return Boolean(updated);
 }
 
+export async function markQuestionDetailsRequiresGatedAccess(params: {
+  agentId?: string | null;
+  detailsUrl: string;
+  ownerWalletAddress?: string | null;
+}) {
+  const detailsId = parseQuestionDetailsIdFromDetailsUrl(params.detailsUrl);
+  if (!detailsId) return false;
+
+  const ownerWalletAddress =
+    params.ownerWalletAddress && isValidWalletAddress(params.ownerWalletAddress)
+      ? normalizeWalletAddress(params.ownerWalletAddress)
+      : null;
+  const identityPredicate =
+    params.agentId && ownerWalletAddress
+      ? or(eq(questionDetails.agentId, params.agentId), eq(questionDetails.ownerWalletAddress, ownerWalletAddress))
+      : params.agentId
+        ? eq(questionDetails.agentId, params.agentId)
+        : ownerWalletAddress
+          ? eq(questionDetails.ownerWalletAddress, ownerWalletAddress)
+          : null;
+  if (!identityPredicate) return false;
+
+  const [updated] = await db
+    .update(questionDetails)
+    .set({
+      requiresGatedAccess: true,
+      updatedAt: nowDate(),
+    })
+    .where(and(eq(questionDetails.id, detailsId), eq(questionDetails.status, "approved"), identityPredicate))
+    .returning({ id: questionDetails.id });
+  return Boolean(updated);
+}
+
 export async function sweepOrphanedQuestionDetails(
   params: {
     limit?: number;

@@ -65,8 +65,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return new NextResponse("Not found", { status: 404 });
   }
 
+  if (attachment.requiresGatedAccess && !attachment.contentId) {
+    return new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "private, no-store" } });
+  }
+
   const confidentiality = attachment.contentId ? await getQuestionConfidentiality(attachment.contentId) : null;
-  const gated = isConfidentialityCurrentlyGated(confidentiality);
+  const gated = attachment.requiresGatedAccess
+    ? !confidentiality?.publishedAt
+    : isConfidentialityCurrentlyGated(confidentiality);
   const gatedAuth =
     gated && attachment.contentId ? await authorizeGatedContextRequest(request, attachment.contentId) : null;
   if (gatedAuth && !gatedAuth.ok) {
@@ -132,13 +138,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const result = await get(attachment.normalizedBlobPathname, {
     access: "private",
-    ifNoneMatch: request.headers.get("if-none-match") ?? undefined,
+    ifNoneMatch: gated ? undefined : (request.headers.get("if-none-match") ?? undefined),
   });
   if (!result) {
     return new NextResponse("Not found", { status: 404 });
   }
 
-  if (result.statusCode === 304) {
+  if (!gated && result.statusCode === 304) {
     return new NextResponse(null, {
       status: 304,
       headers: {
