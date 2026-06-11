@@ -242,6 +242,13 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       totalVotes: "profile.totalVotes",
       updatedAt: "profile.updatedAt",
     },
+    profileSelfReportHistory: {
+      address: "profileSelfReportHistory.address",
+      blockNumber: "profileSelfReportHistory.blockNumber",
+      logIndex: "profileSelfReportHistory.logIndex",
+      selfReport: "profileSelfReportHistory.selfReport",
+      updatedAt: "profileSelfReportHistory.updatedAt",
+    },
     feedbackBonusAward: {
       asset: "feedbackBonusAward.asset",
       awardedAt: "feedbackBonusAward.awardedAt",
@@ -2352,6 +2359,8 @@ describe("registerCorrelationRoutes", () => {
     expect(selection).toContain("vote.stake");
     expect(selection).toContain("vote.epochIndex");
     expect(selection).toContain("vote.rbtsWeight");
+    expect(selection).toContain("profileSelfReportHistory.selfReport");
+    expect(selection).toContain("profileSelfReportHistory.updatedAt");
     const whereArg = queryBuilder.where.mock.calls[0]?.[0];
     const serialized = serializeExpression(whereArg);
     expect(serialized).toContain("vote.revealed");

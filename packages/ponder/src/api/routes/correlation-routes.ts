@@ -5,7 +5,7 @@ import { db } from "ponder:api";
 import {
   content,
   correlationEpochSnapshot,
-  profile,
+  profileSelfReportHistory,
   questionRewardPool,
   round,
   roundPayoutSnapshot,
@@ -35,6 +35,34 @@ const BASE_RATE_MAX_BPS = 9500;
 const BASE_RATE_NEUTRAL_BPS = 5000;
 const VOTE_SCAN_PAGE_SIZE = 1_000;
 const MAX_VOTE_SCAN_PAGES = 50;
+
+function historicalProfileSelfReportAtRoundOpen() {
+  return sql<string | null>`(
+    select ${profileSelfReportHistory.selfReport}
+    from ${profileSelfReportHistory}
+    where ${profileSelfReportHistory.address} = ${vote.identityHolder}
+      and ${round.startTime} is not null
+      and ${profileSelfReportHistory.updatedAt} <= ${round.startTime}
+    order by ${profileSelfReportHistory.updatedAt} desc,
+      ${profileSelfReportHistory.blockNumber} desc,
+      ${profileSelfReportHistory.logIndex} desc
+    limit 1
+  )`;
+}
+
+function historicalProfileUpdatedAtRoundOpen() {
+  return sql<bigint | null>`(
+    select ${profileSelfReportHistory.updatedAt}
+    from ${profileSelfReportHistory}
+    where ${profileSelfReportHistory.address} = ${vote.identityHolder}
+      and ${round.startTime} is not null
+      and ${profileSelfReportHistory.updatedAt} <= ${round.startTime}
+    order by ${profileSelfReportHistory.updatedAt} desc,
+      ${profileSelfReportHistory.blockNumber} desc,
+      ${profileSelfReportHistory.logIndex} desc
+    limit 1
+  )`;
+}
 
 async function getRoundContext(contentId: bigint, roundId: bigint) {
   const [requestedRound] = await db
@@ -285,8 +313,8 @@ export function registerCorrelationRoutes(app: ApiApp) {
           baseWeight: sql<bigint>`10000`,
           verifiedHuman: sql<boolean>`case when ${raterHumanCredential.rater} is not null then true else false end`,
           historicalVoteCount: sql<number>`case when coalesce(${voterStats.totalSettledVotes}, 0) > 0 then coalesce(${voterStats.totalSettledVotes}, 0) - 1 else 0 end`,
-          profileSelfReport: profile.selfReport,
-          profileUpdatedAt: profile.updatedAt,
+          profileSelfReport: historicalProfileSelfReportAtRoundOpen(),
+          profileUpdatedAt: historicalProfileUpdatedAtRoundOpen(),
           roundStartTime: round.startTime,
           targetAudience: content.targetAudience,
         })
@@ -322,7 +350,6 @@ export function registerCorrelationRoutes(app: ApiApp) {
             )`,
           ),
         )
-        .leftJoin(profile, eq(profile.address, vote.identityHolder))
         .where(
           and(
             eq(vote.contentId, contentId),

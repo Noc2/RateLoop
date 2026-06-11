@@ -947,6 +947,27 @@ export const profile = onchainTable(
   }),
 );
 
+export const profileSelfReportHistory = onchainTable(
+  "profile_self_report_history",
+  (t) => ({
+    id: t.text().primaryKey(), // `${address}-${blockNumber}-${logIndex}`
+    address: t.hex().notNull(),
+    name: t.text().notNull(),
+    selfReport: t.text().notNull(),
+    selfReportedRaterType: t.integer().notNull(),
+    createdAt: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+    blockNumber: t.bigint().notNull(),
+    logIndex: t.integer().notNull(),
+    transactionHash: t.hex(),
+  }),
+  (table) => ({
+    addressUpdatedAtIdx: index().on(table.address, table.updatedAt),
+    addressBlockIdx: index().on(table.address, table.blockNumber, table.logIndex),
+    updatedAtIdx: index().on(table.updatedAt),
+  }),
+);
+
 // ============================================================
 // VOTER ACCURACY STATS (global per voter)
 // ============================================================
