@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
 import {
   type TargetAudience,
@@ -3092,6 +3093,31 @@ export function ContentSubmissionSection() {
     </div>
   );
 
+  const privateContextControl = (
+    <div className="rounded-lg border border-base-300 p-4">
+      <label className="flex items-center justify-between gap-4">
+        <span className="flex min-w-0 items-center gap-2 text-base font-medium text-base-content">
+          <LockClosedIcon className="h-4 w-4 shrink-0 text-warning" />
+          <span>Private context</span>
+          <InfoTooltip
+            text="Use hosted private context for sensitive review material. Eligible raters must accept confidentiality terms before viewing, and the context stays private forever."
+            position="bottom"
+          />
+        </span>
+        <input
+          type="checkbox"
+          aria-label="Private context"
+          className="toggle toggle-warning"
+          checked={privateContextEnabled}
+          onChange={e => handlePrivateContextToggle(e.target.checked)}
+        />
+      </label>
+      <Link href="/docs/how-it-works" className="link link-primary mt-3 inline-flex text-sm">
+        Learn more
+      </Link>
+    </div>
+  );
+
   const questionPreviewCard =
     previewUrl || title || detailsPreviewText ? (
       <div className="surface-card rounded-2xl p-4 space-y-3">
@@ -4261,33 +4287,6 @@ export function ContentSubmissionSection() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-base-300 bg-base-100 p-4">
-                  <label className="flex items-start justify-between gap-4">
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-2 text-base font-medium text-base-content">
-                        <LockClosedIcon className="h-4 w-4 text-warning" />
-                        Private context
-                      </span>
-                      <span className="mt-1 block text-sm leading-relaxed text-base-content/60">
-                        Hosted images and details require wallet-signed confidentiality acceptance before viewing. Keep
-                        the question title public-safe.
-                      </span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      className="toggle toggle-warning"
-                      checked={privateContextEnabled}
-                      onChange={e => handlePrivateContextToggle(e.target.checked)}
-                    />
-                  </label>
-                  {privateContextEnabled ? (
-                    <div className="mt-4 text-sm leading-relaxed text-base-content/65">
-                      External context links and YouTube are disabled for private asks. Use RateLoop-hosted uploads or
-                      the description field.
-                    </div>
-                  ) : null}
-                </div>
-
                 <div>
                   <label className="mb-2 block text-base font-medium">
                     Description <span className="text-base-content/60">(optional)</span>
@@ -4383,13 +4382,6 @@ export function ContentSubmissionSection() {
                       YouTube
                     </button>
                   </div>
-                  {privateContextEnabled ? (
-                    <p className="mb-3 text-sm leading-relaxed text-base-content/60">
-                      Private context can include uploaded images and description text. Public external media is not
-                      allowed.
-                    </p>
-                  ) : null}
-
                   {mediaMode === "images" ? (
                     <div className="space-y-2">
                       <ImageAttachmentUploader
@@ -4648,6 +4640,7 @@ export function ContentSubmissionSection() {
               </div>
 
               <div className="space-y-4 xl:sticky xl:top-24">
+                {privateContextControl}
                 {questionPreviewCard}
                 {prohibitedContentNotice}
                 {isMissingGasBalance ? (
