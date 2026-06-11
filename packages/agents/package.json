@@ -98,6 +98,7 @@
   },
   "dependencies": {
     "@rateloop/contracts": "workspace:*",
+    "@rateloop/node-utils": "workspace:*",
     "@rateloop/sdk": "workspace:*",
     "dotenv": "^16.4.5",
     "viem": "2.39.0"

@@ -1,4 +1,8 @@
 import { type Hex, keccak256, stringToHex } from "viem";
+import {
+  normalizeTargetAudience,
+  type TargetAudience,
+} from "@rateloop/node-utils/profileSelfReport";
 
 export const DEFAULT_AGENT_TEMPLATE_ID = "generic_rating";
 export const DEFAULT_AGENT_TEMPLATE_VERSION = 1;
@@ -35,7 +39,7 @@ export type AgentQuestionSpecInput = {
     bundleIndex?: number;
     studyId?: string;
   } | null;
-  targetAudience?: JsonValue;
+  targetAudience?: TargetAudience | JsonValue | null;
   tags: readonly string[];
   templateInputs?: JsonValue;
   templateId?: string;
@@ -79,6 +83,9 @@ export function hashCanonicalJson(value: JsonValue): Hex {
 export function buildQuestionMetadata(
   input: AgentQuestionSpecInput,
 ): JsonValue {
+  const targetAudience = normalizeTargetAudience(
+    input.targetAudience,
+  ) as JsonValue;
   return {
     bounty: input.bounty
       ? {
@@ -98,7 +105,7 @@ export function buildQuestionMetadata(
       : null,
     schemaVersion: "rateloop.question.v2",
     study: input.study ?? null,
-    targetAudience: input.targetAudience ?? null,
+    targetAudience,
     tags: [...input.tags],
     templateInputs: input.templateInputs ?? null,
     templateId: input.templateId ?? DEFAULT_AGENT_TEMPLATE_ID,

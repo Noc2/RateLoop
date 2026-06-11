@@ -3,6 +3,7 @@ export const PROFILE_SELF_REPORT_SOURCE = "self_reported_public_profiles" as con
 export const PROFILE_SELF_REPORT_VERIFIED = false;
 export const PROFILE_SELF_REPORT_RESTRICTS_ELIGIBILITY = false;
 export const MAX_PROFILE_SELF_REPORT_LENGTH = 1600;
+export const TARGET_AUDIENCE_CAVEAT = "unverified_self_report" as const;
 
 export const PROFILE_SELF_REPORT_NOTICE =
   "Audience context is public, self-reported, unverified, and not used for vote eligibility. Governance may penalize clearly false context when public evidence supports it.";
@@ -172,11 +173,25 @@ export interface ProfileSelfReportBucket {
 export interface ProfileSelfReportAudienceContext {
   fields: {
     ageGroup: ProfileSelfReportBucket[];
+    aiAgentFramework: ProfileSelfReportBucket[];
+    aiAutonomy: ProfileSelfReportBucket[];
+    aiExpertise: ProfileSelfReportBucket[];
+    aiLanguages: ProfileSelfReportBucket[];
+    aiModelProvider: ProfileSelfReportBucket[];
     expertise: ProfileSelfReportBucket[];
+    hybridExpertise: ProfileSelfReportBucket[];
+    hybridLanguages: ProfileSelfReportBucket[];
+    hybridModelProvider: ProfileSelfReportBucket[];
+    hybridOversight: ProfileSelfReportBucket[];
     languages: ProfileSelfReportBucket[];
     nationalities: ProfileSelfReportBucket[];
     residenceCountry: ProfileSelfReportBucket[];
     roles: ProfileSelfReportBucket[];
+    teamCountry: ProfileSelfReportBucket[];
+    teamExpertise: ProfileSelfReportBucket[];
+    teamLanguages: ProfileSelfReportBucket[];
+    teamSize: ProfileSelfReportBucket[];
+    teamType: ProfileSelfReportBucket[];
   };
   missingSelfReportCount: number;
   note: string;
@@ -192,6 +207,58 @@ export interface ProfileSelfReportVoteRow {
   selfReport?: string | null;
 }
 
+export interface TargetAudienceAiCriteria {
+  agentFrameworks?: AiAgentFramework[];
+  autonomy?: AiAutonomy[];
+  expertise?: ExpertiseArea[];
+  languages?: LanguageCode[];
+  modelProviders?: AiModelProvider[];
+}
+
+export interface TargetAudienceTeamCriteria {
+  countries?: string[];
+  expertise?: ExpertiseArea[];
+  languages?: LanguageCode[];
+  sizes?: TeamSize[];
+  types?: TeamType[];
+}
+
+export interface TargetAudienceHybridCriteria {
+  expertise?: ExpertiseArea[];
+  languages?: LanguageCode[];
+  modelProviders?: AiModelProvider[];
+  oversight?: HybridOversight[];
+}
+
+export interface TargetAudience {
+  ageGroups?: AgeGroup[];
+  countries?: string[];
+  expertise?: ExpertiseArea[];
+  languages?: LanguageCode[];
+  nationalities?: string[];
+  roles?: ProfileRole[];
+  ai?: TargetAudienceAiCriteria;
+  team?: TargetAudienceTeamCriteria;
+  hybrid?: TargetAudienceHybridCriteria;
+}
+
+export type TargetAudienceValidationIssue = {
+  field: string;
+  message: string;
+  suggestion?: string;
+  value?: string;
+};
+
+export class TargetAudienceValidationError extends Error {
+  readonly issues: TargetAudienceValidationIssue[];
+
+  constructor(issues: TargetAudienceValidationIssue[]) {
+    super(formatTargetAudienceValidationIssues(issues));
+    this.name = "TargetAudienceValidationError";
+    this.issues = issues;
+  }
+}
+
 const AGE_GROUP_SET = new Set<string>(AGE_GROUP_OPTIONS);
 const LANGUAGE_SET = new Set<string>(LANGUAGE_OPTIONS);
 const ROLE_SET = new Set<string>(ROLE_OPTIONS);
@@ -204,6 +271,13 @@ const TEAM_SIZE_SET = new Set<string>(TEAM_SIZE_OPTIONS);
 const HYBRID_OVERSIGHT_SET = new Set<string>(HYBRID_OVERSIGHT_OPTIONS);
 const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
 const RATER_TYPE_NAMES = ["Unknown", "Human", "AI", "Team", "Hybrid"] as const;
+const ROLE_ALIASES: Record<string, ProfileRole> = {
+  dev: "engineer",
+  developer: "engineer",
+  designer: "product-design",
+  lawyer: "legal-policy",
+  policy: "legal-policy",
+};
 
 function asString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -281,6 +355,21 @@ function normalizeStringArray<T extends string>(
 
   const items = Array.from(seen).slice(0, options.maxItems) as T[];
   return items.length > 0 ? items : undefined;
+}
+
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+
+  return `{${Object.keys(value as Record<string, unknown>)
+    .sort()
+    .map(key => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+    .join(",")}}`;
 }
 
 function pruneUndefined<T extends object>(value: T): T {
@@ -377,11 +466,461 @@ export function profileSelfReportHasValues(report: ProfileSelfReport | null | un
 }
 
 export function serializeProfileSelfReport(value: unknown) {
-  const serialized = JSON.stringify(normalizeProfileSelfReport(value));
+  const serialized = stableJson(normalizeProfileSelfReport(value));
   if (serialized.length > MAX_PROFILE_SELF_REPORT_LENGTH) {
     throw new Error(`Self-report payload must be ${MAX_PROFILE_SELF_REPORT_LENGTH} characters or fewer.`);
   }
   return serialized;
+}
+
+function closestOption(value: string, options: readonly string[]) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
+  let best: { distance: number; option: string } | null = null;
+
+  for (const option of options) {
+    const distance = levenshteinDistance(normalized, option.toLowerCase());
+    if (!best || distance < best.distance || (distance === best.distance && option.localeCompare(best.option) < 0)) {
+      best = { distance, option };
+    }
+  }
+
+  if (!best) return undefined;
+  const threshold = Math.max(2, Math.floor(Math.max(normalized.length, best.option.length) / 3));
+  return best.distance <= threshold ? best.option : undefined;
+}
+
+function levenshteinDistance(left: string, right: string) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  const current = new Array<number>(right.length + 1);
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    current[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      current[rightIndex] = Math.min(
+        previous[rightIndex] + 1,
+        current[rightIndex - 1] + 1,
+        previous[rightIndex - 1] + substitutionCost,
+      );
+    }
+    for (let index = 0; index < current.length; index += 1) {
+      previous[index] = current[index];
+    }
+  }
+
+  return previous[right.length] ?? 0;
+}
+
+function formatTargetAudienceValidationIssues(issues: TargetAudienceValidationIssue[]) {
+  const first = issues[0];
+  if (!first) return "targetAudience is invalid.";
+  const suffix = first.suggestion ? ` Did you mean "${first.suggestion}"?` : "";
+  return `${first.field}: ${first.message}${suffix}`;
+}
+
+function prefixTargetAudienceIssues(
+  issues: TargetAudienceValidationIssue[],
+  fieldPrefix = "targetAudience",
+): TargetAudienceValidationIssue[] {
+  return issues.map(issue => ({
+    ...issue,
+    field: issue.field === "targetAudience"
+      ? fieldPrefix
+      : issue.field.startsWith("targetAudience.")
+        ? `${fieldPrefix}${issue.field.slice("targetAudience".length)}`
+        : issue.field,
+  }));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function normalizeTargetStringArray<T extends string>(params: {
+  allowed?: Set<string>;
+  aliases?: Record<string, T>;
+  field: string;
+  issues: TargetAudienceValidationIssue[];
+  maxItems?: number;
+  options?: readonly T[];
+  uppercaseCountryCodes?: boolean;
+  value: unknown;
+}): T[] | undefined {
+  if (params.value === undefined || params.value === null) return undefined;
+  if (!Array.isArray(params.value)) {
+    params.issues.push({
+      field: params.field,
+      message: "must be an array of strings.",
+    });
+    return undefined;
+  }
+
+  const seen = new Set<string>();
+  const normalizedValues: T[] = [];
+  for (const item of params.value) {
+    const raw = asString(item);
+    if (!raw) {
+      params.issues.push({
+        field: params.field,
+        message: "contains a blank value.",
+      });
+      continue;
+    }
+
+    let normalized: string | undefined;
+    if (params.uppercaseCountryCodes) {
+      normalized = normalizeCountryCode(raw);
+      if (!normalized) {
+        params.issues.push({
+          field: params.field,
+          message: "must contain ISO-3166 alpha-2 country codes.",
+          value: raw,
+        });
+        continue;
+      }
+    } else {
+      const direct = params.allowed?.has(raw) ? raw : undefined;
+      normalized = direct;
+      if (!normalized) {
+        const suggestion = params.aliases?.[raw.trim().toLowerCase()] ?? (params.options ? closestOption(raw, params.options) : undefined);
+        params.issues.push({
+          field: params.field,
+          message: `"${raw}" is not supported.`,
+          suggestion,
+          value: raw,
+        });
+        continue;
+      }
+    }
+
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      normalizedValues.push(normalized as T);
+    }
+  }
+
+  if (params.maxItems !== undefined && normalizedValues.length > params.maxItems) {
+    params.issues.push({
+      field: params.field,
+      message: `supports at most ${params.maxItems} values.`,
+    });
+  }
+
+  return normalizedValues.length > 0 ? normalizedValues.slice(0, params.maxItems) : undefined;
+}
+
+function assertKnownTargetAudienceFields(
+  value: Record<string, unknown>,
+  field: string,
+  allowed: readonly string[],
+  issues: TargetAudienceValidationIssue[],
+) {
+  const allowedSet = new Set(allowed);
+  for (const key of Object.keys(value)) {
+    if (!allowedSet.has(key)) {
+      issues.push({
+        field: field ? `${field}.${key}` : key,
+        message: "is not a supported targetAudience field.",
+      });
+    }
+  }
+}
+
+function normalizeTargetAudienceAi(value: unknown, issues: TargetAudienceValidationIssue[]) {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) {
+    issues.push({ field: "targetAudience.ai", message: "must be an object when provided." });
+    return undefined;
+  }
+  assertKnownTargetAudienceFields(value, "targetAudience.ai", [
+    "agentFrameworks",
+    "autonomy",
+    "expertise",
+    "languages",
+    "modelProviders",
+  ], issues);
+  const context = pruneUndefined<TargetAudienceAiCriteria>({
+    agentFrameworks: normalizeTargetStringArray<AiAgentFramework>({
+      allowed: AI_AGENT_FRAMEWORK_SET,
+      field: "targetAudience.ai.agentFrameworks",
+      issues,
+      options: AI_AGENT_FRAMEWORK_OPTIONS,
+      value: value.agentFrameworks,
+    }),
+    autonomy: normalizeTargetStringArray<AiAutonomy>({
+      allowed: AI_AUTONOMY_SET,
+      field: "targetAudience.ai.autonomy",
+      issues,
+      options: AI_AUTONOMY_OPTIONS,
+      value: value.autonomy,
+    }),
+    expertise: normalizeTargetStringArray<ExpertiseArea>({
+      allowed: EXPERTISE_SET,
+      field: "targetAudience.ai.expertise",
+      issues,
+      options: EXPERTISE_OPTIONS,
+      value: value.expertise,
+    }),
+    languages: normalizeTargetStringArray<LanguageCode>({
+      allowed: LANGUAGE_SET,
+      field: "targetAudience.ai.languages",
+      issues,
+      options: LANGUAGE_OPTIONS,
+      value: value.languages,
+    }),
+    modelProviders: normalizeTargetStringArray<AiModelProvider>({
+      allowed: AI_MODEL_PROVIDER_SET,
+      field: "targetAudience.ai.modelProviders",
+      issues,
+      options: AI_MODEL_PROVIDER_OPTIONS,
+      value: value.modelProviders,
+    }),
+  });
+  return Object.values(context).some(Boolean) ? context : undefined;
+}
+
+function normalizeTargetAudienceTeam(value: unknown, issues: TargetAudienceValidationIssue[]) {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) {
+    issues.push({ field: "targetAudience.team", message: "must be an object when provided." });
+    return undefined;
+  }
+  assertKnownTargetAudienceFields(value, "targetAudience.team", [
+    "countries",
+    "expertise",
+    "languages",
+    "sizes",
+    "types",
+  ], issues);
+  const context = pruneUndefined<TargetAudienceTeamCriteria>({
+    countries: normalizeTargetStringArray<string>({
+      field: "targetAudience.team.countries",
+      issues,
+      uppercaseCountryCodes: true,
+      value: value.countries,
+    }),
+    expertise: normalizeTargetStringArray<ExpertiseArea>({
+      allowed: EXPERTISE_SET,
+      field: "targetAudience.team.expertise",
+      issues,
+      options: EXPERTISE_OPTIONS,
+      value: value.expertise,
+    }),
+    languages: normalizeTargetStringArray<LanguageCode>({
+      allowed: LANGUAGE_SET,
+      field: "targetAudience.team.languages",
+      issues,
+      options: LANGUAGE_OPTIONS,
+      value: value.languages,
+    }),
+    sizes: normalizeTargetStringArray<TeamSize>({
+      allowed: TEAM_SIZE_SET,
+      field: "targetAudience.team.sizes",
+      issues,
+      options: TEAM_SIZE_OPTIONS,
+      value: value.sizes,
+    }),
+    types: normalizeTargetStringArray<TeamType>({
+      allowed: TEAM_TYPE_SET,
+      field: "targetAudience.team.types",
+      issues,
+      options: TEAM_TYPE_OPTIONS,
+      value: value.types,
+    }),
+  });
+  return Object.values(context).some(Boolean) ? context : undefined;
+}
+
+function normalizeTargetAudienceHybrid(value: unknown, issues: TargetAudienceValidationIssue[]) {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) {
+    issues.push({ field: "targetAudience.hybrid", message: "must be an object when provided." });
+    return undefined;
+  }
+  assertKnownTargetAudienceFields(value, "targetAudience.hybrid", [
+    "expertise",
+    "languages",
+    "modelProviders",
+    "oversight",
+  ], issues);
+  const context = pruneUndefined<TargetAudienceHybridCriteria>({
+    expertise: normalizeTargetStringArray<ExpertiseArea>({
+      allowed: EXPERTISE_SET,
+      field: "targetAudience.hybrid.expertise",
+      issues,
+      options: EXPERTISE_OPTIONS,
+      value: value.expertise,
+    }),
+    languages: normalizeTargetStringArray<LanguageCode>({
+      allowed: LANGUAGE_SET,
+      field: "targetAudience.hybrid.languages",
+      issues,
+      options: LANGUAGE_OPTIONS,
+      value: value.languages,
+    }),
+    modelProviders: normalizeTargetStringArray<AiModelProvider>({
+      allowed: AI_MODEL_PROVIDER_SET,
+      field: "targetAudience.hybrid.modelProviders",
+      issues,
+      options: AI_MODEL_PROVIDER_OPTIONS,
+      value: value.modelProviders,
+    }),
+    oversight: normalizeTargetStringArray<HybridOversight>({
+      allowed: HYBRID_OVERSIGHT_SET,
+      field: "targetAudience.hybrid.oversight",
+      issues,
+      options: HYBRID_OVERSIGHT_OPTIONS,
+      value: value.oversight,
+    }),
+  });
+  return Object.values(context).some(Boolean) ? context : undefined;
+}
+
+export function targetAudienceHasValues(value: TargetAudience | null | undefined) {
+  return Boolean(
+    value?.ageGroups?.length ||
+      value?.countries?.length ||
+      value?.expertise?.length ||
+      value?.languages?.length ||
+      value?.nationalities?.length ||
+      value?.roles?.length ||
+      value?.ai?.agentFrameworks?.length ||
+      value?.ai?.autonomy?.length ||
+      value?.ai?.expertise?.length ||
+      value?.ai?.languages?.length ||
+      value?.ai?.modelProviders?.length ||
+      value?.team?.countries?.length ||
+      value?.team?.expertise?.length ||
+      value?.team?.languages?.length ||
+      value?.team?.sizes?.length ||
+      value?.team?.types?.length ||
+      value?.hybrid?.expertise?.length ||
+      value?.hybrid?.languages?.length ||
+      value?.hybrid?.modelProviders?.length ||
+      value?.hybrid?.oversight?.length,
+  );
+}
+
+export function normalizeTargetAudience(
+  value: unknown,
+  options: { fieldPrefix?: string } = {},
+): TargetAudience | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) {
+    throw new TargetAudienceValidationError(
+      prefixTargetAudienceIssues(
+        [{ field: "targetAudience", message: "must be an object when provided." }],
+        options.fieldPrefix,
+      ),
+    );
+  }
+
+  const issues: TargetAudienceValidationIssue[] = [];
+  assertKnownTargetAudienceFields(value, "targetAudience", [
+    "ageGroups",
+    "ai",
+    "countries",
+    "expertise",
+    "hybrid",
+    "languages",
+    "nationalities",
+    "roles",
+    "team",
+  ], issues);
+  const audience = pruneUndefined<TargetAudience>({
+    ageGroups: normalizeTargetStringArray<AgeGroup>({
+      allowed: AGE_GROUP_SET,
+      field: "targetAudience.ageGroups",
+      issues,
+      options: AGE_GROUP_OPTIONS,
+      value: value.ageGroups,
+    }),
+    countries: normalizeTargetStringArray<string>({
+      field: "targetAudience.countries",
+      issues,
+      uppercaseCountryCodes: true,
+      value: value.countries,
+    }),
+    expertise: normalizeTargetStringArray<ExpertiseArea>({
+      allowed: EXPERTISE_SET,
+      field: "targetAudience.expertise",
+      issues,
+      options: EXPERTISE_OPTIONS,
+      value: value.expertise,
+    }),
+    languages: normalizeTargetStringArray<LanguageCode>({
+      allowed: LANGUAGE_SET,
+      field: "targetAudience.languages",
+      issues,
+      options: LANGUAGE_OPTIONS,
+      value: value.languages,
+    }),
+    nationalities: normalizeTargetStringArray<string>({
+      field: "targetAudience.nationalities",
+      issues,
+      uppercaseCountryCodes: true,
+      value: value.nationalities,
+    }),
+    roles: normalizeTargetStringArray<ProfileRole>({
+      aliases: ROLE_ALIASES,
+      allowed: ROLE_SET,
+      field: "targetAudience.roles",
+      issues,
+      options: ROLE_OPTIONS,
+      value: value.roles,
+    }),
+    ai: normalizeTargetAudienceAi(value.ai, issues),
+    team: normalizeTargetAudienceTeam(value.team, issues),
+    hybrid: normalizeTargetAudienceHybrid(value.hybrid, issues),
+  });
+
+  if (issues.length > 0) {
+    throw new TargetAudienceValidationError(prefixTargetAudienceIssues(issues, options.fieldPrefix));
+  }
+
+  return targetAudienceHasValues(audience) ? audience : null;
+}
+
+export function serializeTargetAudience(value: unknown) {
+  const normalized = normalizeTargetAudience(value);
+  return normalized ? stableJson(normalized) : "null";
+}
+
+export function getProfileSelfReportTaxonomy() {
+  return {
+    caveat: TARGET_AUDIENCE_CAVEAT,
+    selfReportSchemaVersion: PROFILE_SELF_REPORT_SCHEMA_VERSION,
+    source: PROFILE_SELF_REPORT_SOURCE,
+    targetAudience: {
+      ageGroups: [...AGE_GROUP_OPTIONS],
+      countries: "ISO-3166 alpha-2 country codes matching residenceCountry",
+      expertise: [...EXPERTISE_OPTIONS],
+      languages: [...LANGUAGE_OPTIONS],
+      nationalities: "ISO-3166 alpha-2 country codes",
+      roles: [...ROLE_OPTIONS],
+      ai: {
+        agentFrameworks: [...AI_AGENT_FRAMEWORK_OPTIONS],
+        autonomy: [...AI_AUTONOMY_OPTIONS],
+        expertise: [...EXPERTISE_OPTIONS],
+        languages: [...LANGUAGE_OPTIONS],
+        modelProviders: [...AI_MODEL_PROVIDER_OPTIONS],
+      },
+      team: {
+        countries: "ISO-3166 alpha-2 country codes",
+        expertise: [...EXPERTISE_OPTIONS],
+        languages: [...LANGUAGE_OPTIONS],
+        sizes: [...TEAM_SIZE_OPTIONS],
+        types: [...TEAM_TYPE_OPTIONS],
+      },
+      hybrid: {
+        expertise: [...EXPERTISE_OPTIONS],
+        languages: [...LANGUAGE_OPTIONS],
+        modelProviders: [...AI_MODEL_PROVIDER_OPTIONS],
+        oversight: [...HYBRID_OVERSIGHT_OPTIONS],
+      },
+    },
+  } as const;
 }
 
 export function parseProfileSelfReport(value: unknown): ProfileSelfReport | null {
@@ -399,11 +938,25 @@ export function parseProfileSelfReport(value: unknown): ProfileSelfReport | null
 function emptyBucketFields(): ProfileSelfReportAudienceContext["fields"] {
   return {
     ageGroup: [],
+    aiAgentFramework: [],
+    aiAutonomy: [],
+    aiExpertise: [],
+    aiLanguages: [],
+    aiModelProvider: [],
     expertise: [],
+    hybridExpertise: [],
+    hybridLanguages: [],
+    hybridModelProvider: [],
+    hybridOversight: [],
     languages: [],
     nationalities: [],
     residenceCountry: [],
     roles: [],
+    teamCountry: [],
+    teamExpertise: [],
+    teamLanguages: [],
+    teamSize: [],
+    teamType: [],
   };
 }
 
@@ -435,11 +988,25 @@ function sortedBuckets(map: Map<string, ProfileSelfReportBucket>) {
 export function aggregateProfileSelfReports(rows: Iterable<ProfileSelfReportVoteRow>): ProfileSelfReportAudienceContext {
   const fieldMaps = {
     ageGroup: new Map<string, ProfileSelfReportBucket>(),
+    aiAgentFramework: new Map<string, ProfileSelfReportBucket>(),
+    aiAutonomy: new Map<string, ProfileSelfReportBucket>(),
+    aiExpertise: new Map<string, ProfileSelfReportBucket>(),
+    aiLanguages: new Map<string, ProfileSelfReportBucket>(),
+    aiModelProvider: new Map<string, ProfileSelfReportBucket>(),
     expertise: new Map<string, ProfileSelfReportBucket>(),
+    hybridExpertise: new Map<string, ProfileSelfReportBucket>(),
+    hybridLanguages: new Map<string, ProfileSelfReportBucket>(),
+    hybridModelProvider: new Map<string, ProfileSelfReportBucket>(),
+    hybridOversight: new Map<string, ProfileSelfReportBucket>(),
     languages: new Map<string, ProfileSelfReportBucket>(),
     nationalities: new Map<string, ProfileSelfReportBucket>(),
     residenceCountry: new Map<string, ProfileSelfReportBucket>(),
     roles: new Map<string, ProfileSelfReportBucket>(),
+    teamCountry: new Map<string, ProfileSelfReportBucket>(),
+    teamExpertise: new Map<string, ProfileSelfReportBucket>(),
+    teamLanguages: new Map<string, ProfileSelfReportBucket>(),
+    teamSize: new Map<string, ProfileSelfReportBucket>(),
+    teamType: new Map<string, ProfileSelfReportBucket>(),
   };
   let missingSelfReportCount = 0;
   let selfReportedProfileCount = 0;
@@ -468,16 +1035,56 @@ export function aggregateProfileSelfReports(rows: Iterable<ProfileSelfReportVote
     for (const area of report.expertise ?? []) {
       addBucketCount(fieldMaps.expertise, area, row.isUp);
     }
+    if (report.ai?.modelProvider) addBucketCount(fieldMaps.aiModelProvider, report.ai.modelProvider, row.isUp);
+    if (report.ai?.agentFramework) addBucketCount(fieldMaps.aiAgentFramework, report.ai.agentFramework, row.isUp);
+    if (report.ai?.autonomy) addBucketCount(fieldMaps.aiAutonomy, report.ai.autonomy, row.isUp);
+    for (const language of report.ai?.languages ?? []) {
+      addBucketCount(fieldMaps.aiLanguages, language, row.isUp);
+    }
+    for (const area of report.ai?.expertise ?? []) {
+      addBucketCount(fieldMaps.aiExpertise, area, row.isUp);
+    }
+    if (report.team?.teamType) addBucketCount(fieldMaps.teamType, report.team.teamType, row.isUp);
+    if (report.team?.teamSize) addBucketCount(fieldMaps.teamSize, report.team.teamSize, row.isUp);
+    if (report.team?.country) addBucketCount(fieldMaps.teamCountry, report.team.country, row.isUp);
+    for (const language of report.team?.languages ?? []) {
+      addBucketCount(fieldMaps.teamLanguages, language, row.isUp);
+    }
+    for (const area of report.team?.expertise ?? []) {
+      addBucketCount(fieldMaps.teamExpertise, area, row.isUp);
+    }
+    if (report.hybrid?.oversight) addBucketCount(fieldMaps.hybridOversight, report.hybrid.oversight, row.isUp);
+    if (report.hybrid?.modelProvider) addBucketCount(fieldMaps.hybridModelProvider, report.hybrid.modelProvider, row.isUp);
+    for (const language of report.hybrid?.languages ?? []) {
+      addBucketCount(fieldMaps.hybridLanguages, language, row.isUp);
+    }
+    for (const area of report.hybrid?.expertise ?? []) {
+      addBucketCount(fieldMaps.hybridExpertise, area, row.isUp);
+    }
   }
 
   return {
     fields: {
       ageGroup: sortedBuckets(fieldMaps.ageGroup),
+      aiAgentFramework: sortedBuckets(fieldMaps.aiAgentFramework),
+      aiAutonomy: sortedBuckets(fieldMaps.aiAutonomy),
+      aiExpertise: sortedBuckets(fieldMaps.aiExpertise),
+      aiLanguages: sortedBuckets(fieldMaps.aiLanguages),
+      aiModelProvider: sortedBuckets(fieldMaps.aiModelProvider),
       expertise: sortedBuckets(fieldMaps.expertise),
+      hybridExpertise: sortedBuckets(fieldMaps.hybridExpertise),
+      hybridLanguages: sortedBuckets(fieldMaps.hybridLanguages),
+      hybridModelProvider: sortedBuckets(fieldMaps.hybridModelProvider),
+      hybridOversight: sortedBuckets(fieldMaps.hybridOversight),
       languages: sortedBuckets(fieldMaps.languages),
       nationalities: sortedBuckets(fieldMaps.nationalities),
       residenceCountry: sortedBuckets(fieldMaps.residenceCountry),
       roles: sortedBuckets(fieldMaps.roles),
+      teamCountry: sortedBuckets(fieldMaps.teamCountry),
+      teamExpertise: sortedBuckets(fieldMaps.teamExpertise),
+      teamLanguages: sortedBuckets(fieldMaps.teamLanguages),
+      teamSize: sortedBuckets(fieldMaps.teamSize),
+      teamType: sortedBuckets(fieldMaps.teamType),
     },
     missingSelfReportCount,
     note: PROFILE_SELF_REPORT_NOTICE,

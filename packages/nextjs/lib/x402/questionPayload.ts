@@ -1,3 +1,4 @@
+import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
 import { buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
 import {
@@ -280,16 +281,14 @@ function normalizeTemplateInputs(value: unknown, fieldName: string): AgentQuesti
   }
 }
 
-function normalizeJsonObject(value: unknown, fieldName: string): AgentQuestionSpecInput["targetAudience"] {
-  if (value === undefined || value === null) return null;
-  if (!isObject(value)) {
-    throw new X402QuestionInputError(`${fieldName} must be an object when provided.`);
-  }
-
+function normalizeQuestionTargetAudience(value: unknown, fieldName: string): AgentQuestionSpecInput["targetAudience"] {
   try {
-    return JSON.parse(JSON.stringify(value)) as AgentQuestionSpecInput["targetAudience"];
-  } catch {
-    throw new X402QuestionInputError(`${fieldName} must be JSON serializable.`);
+    return normalizeTargetAudience(value, { fieldPrefix: fieldName }) as AgentQuestionSpecInput["targetAudience"];
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new X402QuestionInputError(error.message);
+    }
+    throw new X402QuestionInputError(`${fieldName} is invalid.`);
   }
 }
 
@@ -500,7 +499,7 @@ function normalizeQuestion(
   const { tags, tagList } = normalizeTags(value.tags);
   const categoryId = parseNonNegativeInteger(value.categoryId, `${fieldPrefix}.categoryId`);
   const details = normalizeQuestionDetails(value, fieldPrefix);
-  const targetAudience = normalizeJsonObject(value.targetAudience, `${fieldPrefix}.targetAudience`);
+  const targetAudience = normalizeQuestionTargetAudience(value.targetAudience, `${fieldPrefix}.targetAudience`);
   const templateSelection = normalizeTemplateSelection(value, fieldPrefix, defaults);
 
   return {

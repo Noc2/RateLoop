@@ -4,9 +4,12 @@ import {
   MAX_PROFILE_SELF_REPORT_LENGTH,
   PROFILE_SELF_REPORT_NOTICE,
   RATER_TYPE,
+  TargetAudienceValidationError,
   aggregateProfileSelfReports,
   emptyProfileSelfReportAudienceContext,
   formatRaterTypeName,
+  getProfileSelfReportTaxonomy,
+  normalizeTargetAudience,
   normalizeProfileSelfReport,
   normalizeRaterType,
   parseProfileSelfReport,
@@ -111,7 +114,7 @@ test("serializeProfileSelfReport prunes input and respects the shared maximum le
     arbitraryHugeField: "x".repeat(MAX_PROFILE_SELF_REPORT_LENGTH * 2),
   });
 
-  assert.equal(serialized, JSON.stringify({ v: 2, ageGroup: "35-44", residenceCountry: "US" }));
+  assert.equal(serialized, JSON.stringify({ ageGroup: "35-44", residenceCountry: "US", v: 2 }));
   assert.equal(serialized.length < MAX_PROFILE_SELF_REPORT_LENGTH, true);
   assert.deepEqual(parseProfileSelfReport(serialized), {
     v: 2,
@@ -120,15 +123,114 @@ test("serializeProfileSelfReport prunes input and respects the shared maximum le
   });
 });
 
+test("serializeProfileSelfReport uses stable key order", () => {
+  assert.equal(
+    serializeProfileSelfReport({
+      roles: ["engineer"],
+      languages: ["de", "en"],
+      ageGroup: "25-34",
+    }),
+    serializeProfileSelfReport({
+      ageGroup: "25-34",
+      languages: ["de", "en"],
+      roles: ["engineer"],
+    }),
+  );
+});
+
+test("normalizeTargetAudience canonicalizes valid structured audience hints", () => {
+  assert.deepEqual(
+    normalizeTargetAudience({
+      ageGroups: ["25-34"],
+      countries: ["de", "US"],
+      languages: ["de", "en", "de"],
+      nationalities: ["fr"],
+      roles: ["engineer"],
+      expertise: ["ai"],
+      ai: {
+        modelProviders: ["openai"],
+        agentFrameworks: ["openai-agents"],
+        autonomy: ["tool-using"],
+        languages: ["en"],
+      },
+      team: {
+        countries: ["nl"],
+        types: ["research-lab"],
+        sizes: ["11-50"],
+      },
+      hybrid: {
+        oversight: ["human-in-the-loop"],
+        modelProviders: ["anthropic"],
+      },
+    }),
+    {
+      ageGroups: ["25-34"],
+      countries: ["DE", "US"],
+      languages: ["de", "en"],
+      nationalities: ["FR"],
+      roles: ["engineer"],
+      expertise: ["ai"],
+      ai: {
+        modelProviders: ["openai"],
+        agentFrameworks: ["openai-agents"],
+        autonomy: ["tool-using"],
+        languages: ["en"],
+      },
+      team: {
+        countries: ["NL"],
+        types: ["research-lab"],
+        sizes: ["11-50"],
+      },
+      hybrid: {
+        oversight: ["human-in-the-loop"],
+        modelProviders: ["anthropic"],
+      },
+    },
+  );
+});
+
+test("normalizeTargetAudience rejects invalid values with canonical suggestions", () => {
+  assert.throws(
+    () => normalizeTargetAudience({ roles: ["developer"] }),
+    (error: unknown) =>
+      error instanceof TargetAudienceValidationError &&
+      error.issues[0]?.field === "targetAudience.roles" &&
+      error.issues[0]?.suggestion === "engineer" &&
+      /developer/.test(error.message),
+  );
+});
+
+test("getProfileSelfReportTaxonomy exposes target-audience vocabularies", () => {
+  const taxonomy = getProfileSelfReportTaxonomy();
+  assert.equal(taxonomy.caveat, "unverified_self_report");
+  assert.ok(taxonomy.targetAudience.roles.includes("engineer"));
+  assert.ok(taxonomy.targetAudience.languages.includes("de"));
+  assert.ok(taxonomy.targetAudience.ai.modelProviders.includes("openai"));
+});
+
 test("emptyProfileSelfReportAudienceContext marks every revealed vote as missing", () => {
   assert.deepEqual(emptyProfileSelfReportAudienceContext(3), {
     fields: {
       ageGroup: [],
+      aiAgentFramework: [],
+      aiAutonomy: [],
+      aiExpertise: [],
+      aiLanguages: [],
+      aiModelProvider: [],
       expertise: [],
+      hybridExpertise: [],
+      hybridLanguages: [],
+      hybridModelProvider: [],
+      hybridOversight: [],
       languages: [],
       nationalities: [],
       residenceCountry: [],
       roles: [],
+      teamCountry: [],
+      teamExpertise: [],
+      teamLanguages: [],
+      teamSize: [],
+      teamType: [],
     },
     missingSelfReportCount: 3,
     note: PROFILE_SELF_REPORT_NOTICE,
@@ -150,6 +252,13 @@ test("aggregateProfileSelfReports counts up/down buckets and sorts deterministic
         languages: ["en", "de"],
         roles: ["engineer"],
         expertise: ["ai"],
+        ai: {
+          modelProvider: "openai",
+          agentFramework: "openai-agents",
+          autonomy: "tool-using",
+          languages: ["de"],
+          expertise: ["ai"],
+        },
       }),
     },
     {
@@ -161,6 +270,13 @@ test("aggregateProfileSelfReports counts up/down buckets and sorts deterministic
         languages: ["en"],
         roles: ["founder"],
         expertise: ["crypto"],
+        team: {
+          teamType: "research-lab",
+          teamSize: "11-50",
+          country: "DE",
+          languages: ["en"],
+          expertise: ["science"],
+        },
       }),
     },
     {
@@ -171,6 +287,12 @@ test("aggregateProfileSelfReports counts up/down buckets and sorts deterministic
         languages: ["fr"],
         roles: ["engineer"],
         expertise: ["ai"],
+        hybrid: {
+          oversight: "human-in-the-loop",
+          modelProvider: "anthropic",
+          languages: ["fr"],
+          expertise: ["health"],
+        },
       }),
     },
     { isUp: true, selfReport: null },
@@ -194,4 +316,13 @@ test("aggregateProfileSelfReports counts up/down buckets and sorts deterministic
     { value: "US", total: 2, up: 1, down: 0 },
     { value: "DE", total: 1, up: 0, down: 1 },
   ]);
+  assert.deepEqual(context.fields.nationalities, [{ value: "DE", total: 1, up: 0, down: 1 }]);
+  assert.deepEqual(context.fields.aiModelProvider, [{ value: "openai", total: 1, up: 1, down: 0 }]);
+  assert.deepEqual(context.fields.aiLanguages, [{ value: "de", total: 1, up: 1, down: 0 }]);
+  assert.deepEqual(context.fields.teamType, [{ value: "research-lab", total: 1, up: 0, down: 1 }]);
+  assert.deepEqual(context.fields.teamCountry, [{ value: "DE", total: 1, up: 0, down: 1 }]);
+  assert.deepEqual(context.fields.hybridOversight, [
+    { value: "human-in-the-loop", total: 1, up: 0, down: 0 },
+  ]);
+  assert.deepEqual(context.fields.hybridModelProvider, [{ value: "anthropic", total: 1, up: 0, down: 0 }]);
 });

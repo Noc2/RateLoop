@@ -36,6 +36,7 @@ import {
 } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { DEFAULT_ROUND_CONFIG } from "@rateloop/contracts/protocol";
+import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import type {
   AskHumansRequest,
   AskHumansResponse,
@@ -1473,9 +1474,9 @@ function normalizeLocalQuestion(
     value.categoryId,
     `${fieldPrefix}.categoryId`,
   );
-  const targetAudience = cloneJsonObject<
-    AgentQuestionSpecInput["targetAudience"]
-  >(value.targetAudience, `${fieldPrefix}.targetAudience`, null);
+  const targetAudience = normalizeTargetAudience(value.targetAudience, {
+    fieldPrefix: `${fieldPrefix}.targetAudience`,
+  }) as AgentQuestionSpecInput["targetAudience"];
   const templateSelection = normalizeTemplateSelection(
     value,
     fieldPrefix,

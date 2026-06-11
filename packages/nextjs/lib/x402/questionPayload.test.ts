@@ -289,20 +289,44 @@ test("parseX402QuestionRequest binds public target audience metadata into the pa
     question: {
       ...VALID_REQUEST.question,
       targetAudience: {
-        expertise: ["developer", "founder"],
-        roles: ["operator"],
+        countries: ["de"],
+        expertise: ["ai"],
+        languages: ["de", "en", "de"],
+        roles: ["engineer"],
       },
     },
   });
 
   assert.deepEqual(withAudience.questions[0].targetAudience, {
-    expertise: ["developer", "founder"],
-    roles: ["operator"],
+    countries: ["DE"],
+    expertise: ["ai"],
+    languages: ["de", "en"],
+    roles: ["engineer"],
   });
   assert.notEqual(withAudience.questions[0].questionMetadataHash, withoutAudience.questions[0].questionMetadataHash);
   assert.notEqual(
     buildX402QuestionOperation(withAudience).payloadHash,
     buildX402QuestionOperation(withoutAudience).payloadHash,
+  );
+});
+
+test("parseX402QuestionRequest rejects target audience aliases with suggestions", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          targetAudience: {
+            roles: ["developer"],
+          },
+        },
+      }),
+    (error: unknown) =>
+      error instanceof X402QuestionInputError &&
+      /questions\[0\]\.targetAudience\.roles/.test(error.message) &&
+      /developer/.test(error.message) &&
+      /engineer/.test(error.message),
   );
 });
 
