@@ -1,7 +1,10 @@
 import { lookupLegacyClaim, normalizeLegacyClaimAddress } from "./lookup";
 import { legacyClaimManifest } from "./manifest";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { concat, encodeAbiParameters, getAddress, keccak256 } from "viem";
 
 test("normalizes valid legacy claim addresses", () => {
@@ -87,4 +90,25 @@ test("every manifest entry's leaf hashes back to the merkle root via its proof",
 test("manifest entries sum exactly to allocationTotal", () => {
   const sum = legacyClaimManifest.entries.reduce((acc, e) => acc + BigInt(e.allocation), 0n);
   assert.equal(sum.toString(), legacyClaimManifest.allocationTotal);
+});
+
+test("deploy script seeds the same legacy addresses as the claim manifest", () => {
+  const deployScriptPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "..",
+    "foundry",
+    "script",
+    "Deploy.s.sol",
+  );
+  const deployScript = readFileSync(deployScriptPath, "utf8");
+  const accountsMatch = deployScript.match(/function _legacyContributorAccounts\(\)[\s\S]*?accounts = \[([\s\S]*?)\];/);
+
+  const accountsSource = accountsMatch?.[1];
+  assert.ok(accountsSource, "_legacyContributorAccounts list must exist in Deploy.s.sol");
+  const deployAccounts = [...accountsSource.matchAll(/0x[a-fA-F0-9]{40}/g)].map(match => getAddress(match[0]));
+  const manifestAccounts = legacyClaimManifest.entries.map(entry => getAddress(entry.address));
+
+  assert.deepEqual(deployAccounts, manifestAccounts);
 });

@@ -34,7 +34,7 @@ const tokenDistributionEntries: readonly TokenDistributionEntry[] = [
     label: "Legacy contributors",
     amount: 9_000_000,
     purpose:
-      "Prior-allocation-based contributor claims with 1% immediately claimable, 99% linearly unlocked over 24 months, and unclaimed balances recoverable to treasury after 27 months",
+      "Prior-allocation-based contributor claims plus standard-TTL seeded human credentials for the same legacy addresses",
     color: "var(--rateloop-blue)",
   },
   {
