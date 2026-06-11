@@ -145,9 +145,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceProof;
     mapping(bytes32 => IdentityBan) private _identityBans;
     address public confidentialityEscrow;
+    mapping(bytes32 => bytes32) private _identityBanSource;
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[27] private __gap;
+    uint256[26] private __gap;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt
@@ -638,7 +639,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         _writeIdentityBan(launchHumanIdentityKey(provider, nullifierHash), expiresAt, evidenceHash);
         address owner = _humanNullifierOwnerByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
         if (owner != address(0)) {
-            _writeIdentityBan(addressIdentityKey(owner), expiresAt, evidenceHash);
+            _writeDerivedIdentityBan(addressIdentityKey(owner), credentialIdentityKey(provider, nullifierHash));
         }
 
         emit IdentityBanned(provider, nullifierHash, expiresAt, permanent, evidenceHash, reason);
@@ -650,7 +651,12 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         delete _identityBans[launchHumanIdentityKey(provider, nullifierHash)];
         address owner = _humanNullifierOwnerByProvider[_humanNullifierSlotProvider(provider)][nullifierHash];
         if (owner != address(0)) {
-            delete _identityBans[addressIdentityKey(owner)];
+            bytes32 ownerAddressKey = addressIdentityKey(owner);
+            delete _identityBanSource[ownerAddressKey];
+            bytes32 canonical = _canonicalHumanIdentityKey[owner];
+            if (canonical != bytes32(0)) {
+                delete _identityBanSource[canonical];
+            }
         }
         emit IdentityUnbanned(provider, nullifierHash);
     }
@@ -1276,6 +1282,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function isIdentityKeyBanned(bytes32 identityKey) public view returns (bool) {
         if (identityKey == bytes32(0)) return false;
+        bytes32 sourceKey = _identityBanSource[identityKey];
+        if (sourceKey != bytes32(0)) {
+            return _isBanActive(_identityBans[sourceKey]);
+        }
         return _isBanActive(_identityBans[identityKey]);
     }
 
@@ -1388,8 +1398,14 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
 
     function _writeIdentityBan(bytes32 identityKey, uint64 expiresAt, bytes32 evidenceHash) private {
         if (identityKey == bytes32(0)) return;
+        delete _identityBanSource[identityKey];
         _identityBans[identityKey] =
             IdentityBan({ bannedAt: uint64(block.timestamp), expiresAt: expiresAt, evidenceHash: evidenceHash });
+    }
+
+    function _writeDerivedIdentityBan(bytes32 identityKey, bytes32 sourceKey) private {
+        if (identityKey == bytes32(0) || sourceKey == bytes32(0)) return;
+        _identityBanSource[identityKey] = sourceKey;
     }
 
     function _isBanActive(IdentityBan storage ban) private view returns (bool) {
@@ -1406,19 +1422,21 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     }
 
     function _propagateActiveBan(address rater, HumanCredentialProvider provider, bytes32 nullifierHash) private {
-        IdentityBan storage credentialBan = _identityBans[credentialIdentityKey(provider, nullifierHash)];
+        bytes32 sourceKey = credentialIdentityKey(provider, nullifierHash);
+        IdentityBan storage credentialBan = _identityBans[sourceKey];
         uint64 expiresAt = credentialBan.expiresAt;
         bytes32 evidenceHash = credentialBan.evidenceHash;
         if (!_isBanActive(credentialBan)) {
-            IdentityBan storage launchBan = _identityBans[launchHumanIdentityKey(provider, nullifierHash)];
+            sourceKey = launchHumanIdentityKey(provider, nullifierHash);
+            IdentityBan storage launchBan = _identityBans[sourceKey];
             if (!_isBanActive(launchBan)) return;
             expiresAt = launchBan.expiresAt;
             evidenceHash = launchBan.evidenceHash;
         }
-        _writeIdentityBan(addressIdentityKey(rater), expiresAt, evidenceHash);
+        _writeDerivedIdentityBan(addressIdentityKey(rater), sourceKey);
         bytes32 canonical = _canonicalHumanIdentityKey[rater];
         if (canonical != bytes32(0)) {
-            _writeIdentityBan(canonical, expiresAt, evidenceHash);
+            _writeDerivedIdentityBan(canonical, sourceKey);
         }
     }
 

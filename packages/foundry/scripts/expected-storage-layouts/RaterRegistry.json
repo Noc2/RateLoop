@@ -213,6 +213,12 @@
     {
       "slot": 32,
       "offset": 0,
+      "label": "_identityBanSource",
+      "type": "t_mapping(t_bytes32,t_bytes32)"
+    },
+    {
+      "slot": 33,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -227,8 +233,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[27]",
-      "numberOfBytes": "864",
+      "label": "uint256[26]",
+      "numberOfBytes": "832",
       "base": "t_uint256"
     },
     {
@@ -348,6 +354,14 @@
       "numberOfBytes": "32",
       "key": "t_bytes32",
       "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_bytes32)",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => bytes32)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_bytes32"
     },
     {
       "id": "t_mapping(t_bytes32,t_struct(IdentityBan))",

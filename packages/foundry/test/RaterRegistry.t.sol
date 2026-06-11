@@ -28,6 +28,18 @@ contract LaunchRaterRewardLibHarness {
     }
 }
 
+contract MockConfidentialityNexus {
+    mapping(uint8 => mapping(bytes32 => bool)) internal nexus;
+
+    function setNexus(uint8 provider, bytes32 nullifierHash, bool value) external {
+        nexus[provider][nullifierHash] = value;
+    }
+
+    function hasConfidentialityNexus(uint8 provider, bytes32 nullifierHash) external view returns (bool) {
+        return nexus[provider][nullifierHash];
+    }
+}
+
 contract RaterRegistryTest is Test {
     RaterRegistry internal registry;
     MockWorldIDVerifier internal worldIdRouter;
@@ -1250,6 +1262,46 @@ contract RaterRegistryTest is Test {
             registry.resolveRater(rater).identityKey != registry.resolveRater(otherRater).identityKey,
             "RR-1: distinct raters share canonical identityKey after revoke->clear->reseed"
         );
+    }
+
+    function test_UnbanClearsStaleAddressBanAfterNullifierRecycle() public {
+        MockConfidentialityNexus nexus = new MockConfidentialityNexus();
+        nexus.setNexus(uint8(RaterRegistry.HumanCredentialProvider.SeededHuman), SEEDED_ANCHOR_ID, true);
+
+        vm.prank(admin);
+        registry.setConfidentialityEscrow(address(nexus));
+        vm.prank(admin);
+        registry.seedHumanCredential(rater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+
+        bytes32 credentialKey = _credentialKey(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        bytes32 oldAddressKey = registry.addressIdentityKey(rater);
+        bytes32 newAddressKey = registry.addressIdentityKey(otherRater);
+
+        vm.prank(governance);
+        registry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            SEEDED_ANCHOR_ID,
+            uint64(block.timestamp + 30 days),
+            "verified leak",
+            EVIDENCE_HASH
+        );
+        assertTrue(registry.isIdentityKeyBanned(credentialKey));
+        assertTrue(registry.isIdentityKeyBanned(oldAddressKey));
+
+        vm.startPrank(admin);
+        registry.revokeHumanCredential(rater);
+        registry.clearRevokedHumanNullifier(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+        registry.seedHumanCredential(otherRater, uint64(block.timestamp + 365 days), SEEDED_ANCHOR_ID, EVIDENCE_HASH);
+        vm.stopPrank();
+        assertTrue(registry.isIdentityKeyBanned(oldAddressKey));
+        assertTrue(registry.isIdentityKeyBanned(newAddressKey));
+
+        vm.prank(governance);
+        registry.unbanIdentity(RaterRegistry.HumanCredentialProvider.SeededHuman, SEEDED_ANCHOR_ID);
+
+        assertFalse(registry.isIdentityKeyBanned(credentialKey));
+        assertFalse(registry.isIdentityKeyBanned(oldAddressKey));
+        assertFalse(registry.isIdentityKeyBanned(newAddressKey));
     }
 
     /// @notice RR-4 (2026-05-20 follow-up audit): governance can cap the SEEDER-seeded credential
