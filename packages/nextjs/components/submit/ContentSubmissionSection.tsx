@@ -2920,6 +2920,7 @@ export function ContentSubmissionSection() {
   const hasImageInput = imageUrls.some(url => url.trim());
   const hasVideoInput = Boolean(videoUrl.trim());
   const privateContextEnabled = contextVisibility === "gated";
+  const visibleMediaMode: MediaMode = privateContextEnabled ? "images" : mediaMode;
   const hasPrivateContextDraft = questionDrafts.some((draft, index) =>
     index === activeQuestionIndex ? privateContextEnabled : draft.contextVisibility === "gated",
   );
@@ -2932,7 +2933,7 @@ export function ContentSubmissionSection() {
     !hasImageInput &&
     !normalizedVideoUrl &&
     !hasVideoInput;
-  const imageMediaMissing = contextOrMediaMissing && mediaMode === "images";
+  const imageMediaMissing = contextOrMediaMissing && visibleMediaMode === "images";
   const videoMediaMissing = !privateContextEnabled && contextOrMediaMissing && mediaMode === "video";
   const pageHeading =
     submissionStep === "question" ? "Submit Question" : submissionStep === "bounty" ? "Bounty" : "Feedback Bonus";
@@ -4353,36 +4354,37 @@ export function ContentSubmissionSection() {
                   >
                     Media <span className="font-normal text-base-content/60">(optional)</span>
                     <span className="font-normal text-base-content/60">
-                      {mediaMode === "images" ? `(1-${MAX_SUBMISSION_IMAGE_URLS} images)` : "(YouTube)"}
+                      {visibleMediaMode === "images" ? `(1-${MAX_SUBMISSION_IMAGE_URLS} images)` : "(YouTube)"}
                     </span>
-                    <InfoTooltip text={mediaMode === "images" ? urlConfig.imageHint : urlConfig.videoHint} />
+                    <InfoTooltip text={visibleMediaMode === "images" ? urlConfig.imageHint : urlConfig.videoHint} />
                   </label>
-                  <div className="mb-3 grid grid-cols-2 gap-2">
+                  <div className={`mb-3 grid gap-2 ${privateContextEnabled ? "grid-cols-1" : "grid-cols-2"}`}>
                     <button
                       type="button"
-                      aria-pressed={mediaMode === "images"}
+                      aria-pressed={visibleMediaMode === "images"}
                       onClick={() => {
                         setMediaMode("images");
                         patchActiveQuestionDraft({ mediaMode: "images" });
                       }}
-                      className={`btn btn-sm ${mediaMode === "images" ? "btn-primary" : "btn-outline"}`}
+                      className={`btn btn-sm ${visibleMediaMode === "images" ? "btn-primary" : "btn-outline"}`}
                     >
                       Images
                     </button>
-                    <button
-                      type="button"
-                      aria-pressed={mediaMode === "video"}
-                      disabled={privateContextEnabled}
-                      onClick={() => {
-                        setMediaMode("video");
-                        patchActiveQuestionDraft({ mediaMode: "video" });
-                      }}
-                      className={`btn btn-sm ${mediaMode === "video" ? "btn-primary" : "btn-outline"}`}
-                    >
-                      YouTube
-                    </button>
+                    {!privateContextEnabled ? (
+                      <button
+                        type="button"
+                        aria-pressed={visibleMediaMode === "video"}
+                        onClick={() => {
+                          setMediaMode("video");
+                          patchActiveQuestionDraft({ mediaMode: "video" });
+                        }}
+                        className={`btn btn-sm ${visibleMediaMode === "video" ? "btn-primary" : "btn-outline"}`}
+                      >
+                        YouTube
+                      </button>
+                    ) : null}
                   </div>
-                  {mediaMode === "images" ? (
+                  {visibleMediaMode === "images" ? (
                     <div className="space-y-2">
                       <ImageAttachmentUploader
                         address={connectedAddress}
