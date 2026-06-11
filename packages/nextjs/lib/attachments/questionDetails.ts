@@ -50,6 +50,7 @@ export type CreateQuestionDetailsFromTextParams = {
   clientRequestId?: string | null;
   detailsId: string;
   requestUrl: string;
+  requiresGatedAccess?: boolean;
   sha256: string;
   sizeBytes: number;
   text: string;
@@ -392,6 +393,7 @@ export async function createQuestionDetailsFromText(params: CreateQuestionDetail
     ownerWalletAddress: params.uploader.ownerWalletAddress,
     agentId: params.uploader.kind === "agent" ? params.uploader.agentId : null,
     clientRequestId: params.clientRequestId ?? null,
+    requiresGatedAccess: params.requiresGatedAccess === true,
     sizeBytes: params.sizeBytes,
     sha256: params.sha256,
     createdAt,

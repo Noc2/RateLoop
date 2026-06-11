@@ -16,7 +16,22 @@ test("normalizes signed image upload challenge input", () => {
   assert.equal(normalized.ok, true);
   if (!normalized.ok) return;
   assert.equal(normalized.payload.normalizedAddress, "0x00000000000000000000000000000000000000aa");
+  assert.equal(normalized.payload.requiresGatedAccess, false);
   assert.equal(hashImageUploadChallengePayload(normalized.payload).length, 64);
+});
+
+test("includes gated access intent in image upload challenge hashes", () => {
+  const publicInput = normalizeImageUploadChallengeInput(validInput);
+  const gatedInput = normalizeImageUploadChallengeInput({ ...validInput, requiresGatedAccess: true });
+  assert.equal(publicInput.ok, true);
+  assert.equal(gatedInput.ok, true);
+  if (!publicInput.ok || !gatedInput.ok) return;
+
+  assert.equal(gatedInput.payload.requiresGatedAccess, true);
+  assert.notEqual(
+    hashImageUploadChallengePayload(publicInput.payload),
+    hashImageUploadChallengePayload(gatedInput.payload),
+  );
 });
 
 test("rejects unsupported upload content types and oversize files", () => {

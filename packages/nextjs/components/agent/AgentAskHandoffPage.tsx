@@ -232,7 +232,10 @@ type QuestionDetailsReference = {
   detailsUrl: string;
 };
 
-type UploadQuestionDetails = (text: string) => Promise<QuestionDetailsReference>;
+type UploadQuestionDetails = (
+  text: string,
+  options?: { requiresGatedAccess?: boolean },
+) => Promise<QuestionDetailsReference>;
 
 function DraftFieldLabel({ children, htmlFor, tooltip }: { children: ReactNode; htmlFor: string; tooltip: string }) {
   return (
@@ -446,6 +449,7 @@ async function sha256Hex(value: string) {
 }
 
 async function uploadQuestionDetailsForHandoff(params: {
+  requiresGatedAccess?: boolean;
   signMessageAsync: (input: { message: string }) => Promise<Hex>;
   submitterAddress: Address;
   text: string;
@@ -458,6 +462,7 @@ async function uploadQuestionDetailsForHandoff(params: {
     body: JSON.stringify({
       address: params.submitterAddress,
       detailsId,
+      requiresGatedAccess: params.requiresGatedAccess === true,
       sha256,
       sizeBytes,
     }),
@@ -479,6 +484,7 @@ async function uploadQuestionDetailsForHandoff(params: {
       address: params.submitterAddress,
       challengeId: challenge.challengeId,
       detailsId,
+      requiresGatedAccess: params.requiresGatedAccess === true,
       sha256,
       signature,
       sizeBytes,
@@ -847,7 +853,9 @@ async function applyDraftQuestion(
       nextQuestion.detailsHash = currentDetails.detailsHash;
       nextQuestion.detailsUrl = currentDetails.detailsUrl;
     } else {
-      const uploadedDetails = await uploadQuestionDetails(description);
+      const uploadedDetails = await uploadQuestionDetails(description, {
+        requiresGatedAccess: draft.confidentiality.visibility === "gated",
+      });
       nextQuestion.detailsHash = uploadedDetails.detailsHash;
       nextQuestion.detailsUrl = uploadedDetails.detailsUrl;
     }
@@ -1607,19 +1615,25 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       setDraftError(null);
       setIsSavingDraft(true);
       try {
-        const requestBody = await buildDraftRequestBody(handoff, draftForm, roundConfigBounds, async description => {
-          if (!address) {
-            throw new Error("Connect a wallet before saving a description.");
-          }
-          if (handoff.walletAddress && !sameAddress(handoff.walletAddress, address)) {
-            throw new Error("Connected wallet does not match this handoff.");
-          }
-          return uploadQuestionDetailsForHandoff({
-            signMessageAsync,
-            submitterAddress: address,
-            text: description,
-          });
-        });
+        const requestBody = await buildDraftRequestBody(
+          handoff,
+          draftForm,
+          roundConfigBounds,
+          async (description, options) => {
+            if (!address) {
+              throw new Error("Connect a wallet before saving a description.");
+            }
+            if (handoff.walletAddress && !sameAddress(handoff.walletAddress, address)) {
+              throw new Error("Connected wallet does not match this handoff.");
+            }
+            return uploadQuestionDetailsForHandoff({
+              requiresGatedAccess: options?.requiresGatedAccess,
+              signMessageAsync,
+              submitterAddress: address,
+              text: description,
+            });
+          },
+        );
         const response = await fetch(`/api/agent/handoffs/${handoffId}`, {
           body: JSON.stringify({
             requestBody,

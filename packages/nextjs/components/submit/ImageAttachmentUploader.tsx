@@ -18,6 +18,7 @@ type ImageAttachmentUploaderProps = {
   address?: string;
   disabled?: boolean;
   onUploaded: (imageUrl: string) => void;
+  requiresGatedAccess?: boolean;
 };
 
 type ChallengeResponse = {
@@ -98,7 +99,12 @@ async function pollApprovedImageUrl(attachmentId: string): Promise<string> {
   throw new Error("Image moderation is still processing. Please try again in a moment.");
 }
 
-export function ImageAttachmentUploader({ address, disabled = false, onUploaded }: ImageAttachmentUploaderProps) {
+export function ImageAttachmentUploader({
+  address,
+  disabled = false,
+  onUploaded,
+  requiresGatedAccess = false,
+}: ImageAttachmentUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { signMessageAsync } = useWalletMessageSigner({ address });
   const [isUploading, setIsUploading] = useState(false);
@@ -141,6 +147,7 @@ export function ImageAttachmentUploader({ address, disabled = false, onUploaded 
         attachmentId,
         filename: file.name || `${attachmentId}.${getFileExtension(file)}`,
         mimeType: file.type,
+        requiresGatedAccess,
         sha256,
         sizeBytes: file.size,
       };

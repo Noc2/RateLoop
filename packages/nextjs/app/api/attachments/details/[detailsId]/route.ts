@@ -22,6 +22,11 @@ const GATED_DETAILS_RESPONSE_HEADERS = {
   "X-Robots-Tag": "noindex, noimageindex",
 };
 
+const UNLINKED_DETAILS_RESPONSE_HEADERS = {
+  ...DETAILS_RESPONSE_HEADERS,
+  "Cache-Control": "private, no-store",
+};
+
 const GATED_DETAILS_NOT_FOUND_RESPONSE = {
   headers: GATED_DETAILS_RESPONSE_HEADERS,
   status: 404,
@@ -95,7 +100,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   return new NextResponse(details.normalizedText, {
     headers: {
-      ...DETAILS_RESPONSE_HEADERS,
+      ...(details.contentId ? DETAILS_RESPONSE_HEADERS : UNLINKED_DETAILS_RESPONSE_HEADERS),
       "Content-Type": "text/plain; charset=utf-8",
       "X-RateLoop-Details-Hash": `0x${details.sha256}`,
     },

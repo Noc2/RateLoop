@@ -1834,6 +1834,7 @@ export function ContentSubmissionSection() {
   const uploadQuestionDetailsForSubmission = async (
     text: string,
     submitterAddress: `0x${string}`,
+    requiresGatedAccess: boolean,
   ): Promise<typeof EMPTY_SUBMISSION_DETAILS> => {
     if (!text.trim()) return EMPTY_SUBMISSION_DETAILS;
 
@@ -1847,6 +1848,7 @@ export function ContentSubmissionSection() {
       body: JSON.stringify({
         address: submitterAddress,
         detailsId,
+        requiresGatedAccess,
         sha256,
         sizeBytes,
       }),
@@ -1868,6 +1870,7 @@ export function ContentSubmissionSection() {
         address: submitterAddress,
         challengeId: challenge.challengeId,
         detailsId,
+        requiresGatedAccess,
         sha256,
         signature,
         sizeBytes,
@@ -2341,7 +2344,11 @@ export function ContentSubmissionSection() {
 
       const submittedDetails = await Promise.all(
         validatedQuestions.map(question =>
-          uploadQuestionDetailsForSubmission(question.trimmedDetailsText, submitterAddress),
+          uploadQuestionDetailsForSubmission(
+            question.trimmedDetailsText,
+            submitterAddress,
+            question.contextVisibility === "gated",
+          ),
         ),
       );
       const hasGatedQuestions = validatedQuestions.some(question => question.contextVisibility === "gated");
@@ -4391,6 +4398,7 @@ export function ContentSubmissionSection() {
                         address={connectedAddress}
                         disabled={imageUrls.filter(url => url.trim()).length >= MAX_SUBMISSION_IMAGE_URLS}
                         onUploaded={handleUploadedImageUrl}
+                        requiresGatedAccess={privateContextEnabled}
                       />
                       {imageUrls.map((imageUrl, index) =>
                         imageUrl.trim() ? (
@@ -4400,12 +4408,18 @@ export function ContentSubmissionSection() {
                               imageUrlErrors[index] ? "border-error" : "border-base-300"
                             }`}
                           >
-                            <img
-                              src={imageUrl}
-                              alt={`Uploaded image ${index + 1}`}
-                              className="h-14 w-20 rounded-md object-cover"
-                              loading="lazy"
-                            />
+                            {privateContextEnabled ? (
+                              <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded-md bg-base-200 text-base-content/60">
+                                <LockClosedIcon className="h-5 w-5" aria-hidden="true" />
+                              </div>
+                            ) : (
+                              <img
+                                src={imageUrl}
+                                alt={`Uploaded image ${index + 1}`}
+                                className="h-14 w-20 rounded-md object-cover"
+                                loading="lazy"
+                              />
+                            )}
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-base-content">Uploaded image {index + 1}</p>
                               <p className="truncate text-xs text-base-content/60">RateLoop-hosted image context</p>

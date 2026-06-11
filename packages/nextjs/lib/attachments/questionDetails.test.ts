@@ -121,7 +121,28 @@ test("stores normalized approved details with a verifiable sha256 hash", async (
   const stored = await getQuestionDetails("det_questiondetails01");
   assert.equal(stored?.normalizedText, normalizedText);
   assert.equal(stored?.ownerWalletAddress, WALLET);
+  assert.equal(stored?.requiresGatedAccess, false);
   assert.equal(stored?.status, "approved");
+});
+
+test("persists gated access intent for approved details at upload time", async () => {
+  const normalizedText = "Private launch notes";
+  const result = await createQuestionDetailsFromText({
+    detailsId: "det_gateduploaddetail",
+    requestUrl: "https://preview.example/api/attachments/details/upload",
+    requiresGatedAccess: true,
+    sha256: sha256Hex(normalizedText),
+    sizeBytes: new TextEncoder().encode(normalizedText).byteLength,
+    text: normalizedText,
+    uploader: {
+      kind: "wallet",
+      ownerWalletAddress: WALLET,
+    },
+  });
+
+  assert.equal(result.status, "approved");
+  const stored = await getQuestionDetails("det_gateduploaddetail");
+  assert.equal(stored?.requiresGatedAccess, true);
 });
 
 test("does not publish details from localhost because on-chain details URLs must be public HTTPS", async () => {

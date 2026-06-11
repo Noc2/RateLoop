@@ -11,6 +11,7 @@ type ImageUploadChallengePayload = {
   filename: string;
   mimeType: string;
   normalizedAddress: `0x${string}`;
+  requiresGatedAccess: boolean;
   sha256: string;
   sizeBytes: number;
 };
@@ -60,6 +61,7 @@ export function normalizeImageUploadChallengeInput(
       filename,
       mimeType,
       normalizedAddress: normalizeWalletAddress(address),
+      requiresGatedAccess: body.requiresGatedAccess === true,
       sha256,
       sizeBytes,
     },
@@ -67,14 +69,16 @@ export function normalizeImageUploadChallengeInput(
 }
 
 export function hashImageUploadChallengePayload(payload: ImageUploadChallengePayload) {
-  return hashSignedActionPayload([
+  const fields = [
     payload.normalizedAddress,
     payload.attachmentId,
     payload.filename,
     payload.mimeType,
     String(payload.sizeBytes),
     payload.sha256,
-  ]);
+  ];
+  if (payload.requiresGatedAccess) fields.push("requires_gated_access");
+  return hashSignedActionPayload(fields);
 }
 
 export function buildImageUploadChallengeMessage(params: {

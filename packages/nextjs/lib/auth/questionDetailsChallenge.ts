@@ -9,6 +9,7 @@ export const UPLOAD_QUESTION_DETAILS_ACTION = "attachments:upload_question_detai
 type QuestionDetailsUploadChallengePayload = {
   detailsId: string;
   normalizedAddress: `0x${string}`;
+  requiresGatedAccess: boolean;
   sha256: string;
   sizeBytes: number;
 };
@@ -46,6 +47,7 @@ export function normalizeQuestionDetailsUploadChallengeInput(
     payload: {
       detailsId,
       normalizedAddress: normalizeWalletAddress(address),
+      requiresGatedAccess: body.requiresGatedAccess === true,
       sha256,
       sizeBytes,
     },
@@ -53,12 +55,9 @@ export function normalizeQuestionDetailsUploadChallengeInput(
 }
 
 export function hashQuestionDetailsUploadChallengePayload(payload: QuestionDetailsUploadChallengePayload) {
-  return hashSignedActionPayload([
-    payload.normalizedAddress,
-    payload.detailsId,
-    String(payload.sizeBytes),
-    payload.sha256,
-  ]);
+  const fields = [payload.normalizedAddress, payload.detailsId, String(payload.sizeBytes), payload.sha256];
+  if (payload.requiresGatedAccess) fields.push("requires_gated_access");
+  return hashSignedActionPayload(fields);
 }
 
 export function buildQuestionDetailsUploadChallengeMessage(params: {

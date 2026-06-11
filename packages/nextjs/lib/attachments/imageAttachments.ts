@@ -45,6 +45,7 @@ type CreatePendingImageAttachmentParams = {
   clientRequestId?: string | null;
   filename: string;
   mimeType: string;
+  requiresGatedAccess?: boolean;
   sha256: string;
   sizeBytes: number;
   uploader: UploaderIdentity;
@@ -423,6 +424,7 @@ export async function createPendingImageAttachment(params: CreatePendingImageAtt
       ownerWalletAddress: params.uploader.ownerWalletAddress,
       agentId: params.uploader.kind === "agent" ? params.uploader.agentId : null,
       clientRequestId: params.clientRequestId ?? null,
+      requiresGatedAccess: params.requiresGatedAccess === true,
       originalFilename: params.filename,
       mimeType: params.mimeType,
       sizeBytes: params.sizeBytes,

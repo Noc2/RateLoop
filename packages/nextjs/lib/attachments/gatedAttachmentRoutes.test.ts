@@ -249,6 +249,31 @@ test("pending gated hosted attachments fail closed before content linkage", asyn
   assert.equal(await image.text(), "Not found");
 });
 
+test("unattached public details avoid immutable cache headers", async () => {
+  const now = new Date("2026-06-11T12:00:00.000Z");
+  await db.insert(questionDetails).values({
+    id: DETAILS_ID,
+    uploaderKind: "wallet",
+    ownerWalletAddress: WALLET,
+    sizeBytes: new TextEncoder().encode(DETAILS_TEXT).byteLength,
+    sha256: createHash("sha256").update(DETAILS_TEXT).digest("hex"),
+    normalizedText: DETAILS_TEXT,
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const details = await getDetails(new NextRequest(`https://www.rateloop.ai/api/attachments/details/${DETAILS_ID}`), {
+    params: Promise.resolve({ detailsId: DETAILS_ID }),
+  });
+  assert.equal(details.status, 200);
+  assert.equal(await details.text(), DETAILS_TEXT);
+  assert.equal(details.headers.get("cache-control"), "private, no-store");
+  assert.equal(details.headers.get("access-control-allow-origin"), "*");
+  assert.match(details.headers.get("x-rateloop-details-hash") ?? "", /^0x[a-f0-9]{64}$/);
+});
+
 test("gated images require accepted wallet sessions and return watermarked no-store bytes", async () => {
   await seedGatedImage();
   const denied = await getImage(

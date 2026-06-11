@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
       clientRequestId: typeof payload.clientRequestId === "string" ? payload.clientRequestId : null,
       detailsId: normalized.detailsId,
       requestUrl: request.url,
+      requiresGatedAccess: normalized.requiresGatedAccess,
       sha256: normalized.sha256,
       sizeBytes: normalized.sizeBytes,
       text: payload.text,
