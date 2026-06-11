@@ -1024,6 +1024,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         _settleAfterRbtsSeed(votingEngine, contentIds[0], firstRoundId);
         _settleAfterRbtsSeed(votingEngine, contentIds[1], secondRoundId);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
         rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
 
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
@@ -1467,8 +1468,13 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         address[] memory voters = _threeVoters();
         bool[] memory directions = _directions(true, true, false);
 
-        _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
-        _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+        uint256 firstRoundId = _settleRoundWithoutBundleSync(voters, contentIds[0], directions);
+        uint256 secondRoundId = _settleRoundWithoutBundleSync(voters, contentIds[1], directions);
+
+        vm.startPrank(address(votingEngine));
+        rewardPoolEscrow.recordBundleQuestionTerminal(contentIds[0], firstRoundId, true);
+        rewardPoolEscrow.recordBundleQuestionTerminal(contentIds[1], secondRoundId, true);
+        vm.stopPrank();
 
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter2), 0);
 
@@ -1721,6 +1727,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         vm.warp(closesAt + 1);
         _settleAfterRbtsSeed(votingEngine, contentIds[0], firstRoundId);
         _settleAfterRbtsSeed(votingEngine, contentIds[1], secondRoundId);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
         rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
 
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), REWARD_POOL_AMOUNT / 4);
@@ -1759,6 +1766,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _assertThresholdReachedAtGt(contentIds[1], secondRoundId, closesAt);
         _settleAfterRbtsSeed(votingEngine, contentIds[0], firstRoundId);
         _settleAfterRbtsSeed(votingEngine, contentIds[1], secondRoundId);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
         rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
 
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), REWARD_POOL_AMOUNT / 4);
@@ -1796,6 +1804,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         );
         _settleAfterRbtsSeed(votingEngine, contentIds[0], firstRoundId);
         _settleAfterRbtsSeed(votingEngine, contentIds[1], secondRoundId);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
         rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
 
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), REWARD_POOL_AMOUNT / 4);
@@ -2178,7 +2187,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleRoundWithoutBundleSync(retryCompleters, contentIds[1], directions);
 
         (uint256 processedRounds, bool complete) = rewardPoolEscrow.syncQuestionBundleTerminals(bundleId, 10);
-        assertEq(processedRounds, 0);
+        assertEq(processedRounds, 4);
         assertTrue(complete);
         assertEq(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, retryCompleter1), 0);
 
@@ -3096,6 +3105,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
             );
             _settleAfterRbtsSeed(votingEngine, contentIds[contentIndex], roundIds[contentIndex]);
         }
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], roundIds[0]);
         rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], roundIds[1]);
 
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
@@ -6559,6 +6569,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
 
         _settleAfterRbtsSeed(votingEngine, contentIds[0], firstRoundId);
         _settleAfterRbtsSeed(votingEngine, contentIds[1], secondRoundId);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
         rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
 
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
@@ -6594,6 +6605,7 @@ contract QuestionRewardPoolEscrowTest is VotingTestBase {
         _settleAfterRbtsSeed(votingEngine, contentIds[1], secondRoundId);
         votingEngine.processUnrevealedVotes(contentIds[0], firstRoundId, 0, 0);
         votingEngine.processUnrevealedVotes(contentIds[1], secondRoundId, 0, 0);
+        rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[0], firstRoundId);
         rewardPoolEscrow.syncBundleQuestionTerminal(contentIds[1], secondRoundId);
 
         assertGt(rewardPoolEscrow.claimableQuestionBundleReward(bundleId, 0, voter1), 0);
