@@ -14,14 +14,11 @@ async function touchContent(context: { db: any }, contentId: bigint, timestamp: 
 ponder.on("FeedbackBonusEscrow:FeedbackBonusPoolCreated", async ({ event, context }) => {
   const { poolId, contentId, roundId, funder, awarder, amount, feedbackClosesAt, frontendFeeBps, asset } = event.args;
 
-  // The contract allows creating a pool that targets a round that is already
-  // terminal (settled/tied/reveal-failed). For such pools the on-chain award
-  // deadline is already max(feedbackClosesAt, settledAt + 24h)
-  // (FeedbackBonusEscrow._feedbackBonusAwardDeadline), but no further Round*
-  // terminal event will fire to trigger
-  // extendFeedbackBonusAwardDeadlinesForTerminalRound — so apply the same
-  // extension here. Cancelled rounds deliberately never set settledAt on the
-  // indexed round row and keep the requested deadline, matching the contract.
+  // Existing pools can be indexed after their target round is already settled.
+  // Apply the same settledAt-aware deadline calculation here because no later
+  // Round* terminal event will fire for this pool during a reindex. Cancelled
+  // rounds deliberately never set settledAt and keep the requested deadline,
+  // matching the contract.
   const targetRound = await context.db.find(round, {
     id: `${contentId}-${roundId}`,
   });
