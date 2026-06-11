@@ -99,16 +99,6 @@ import {
 } from "~~/lib/auth/imageUploadChallenge";
 import { getMaxImageUploadSizeBytes, isSupportedImageUploadMimeType } from "~~/lib/auth/imageUploadChallenge.shared";
 import {
-  CONFIDENTIALITY_TERMS_ACTION,
-  CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
-  CONFIDENTIALITY_TERMS_VERSION,
-  buildConfidentialityTermsChallengeMessage,
-  hasConfidentialityTermsAcceptance,
-  hashConfidentialityTermsPayload,
-  normalizeConfidentialityTermsInput,
-  recordConfidentialityTermsAcceptance,
-} from "~~/lib/confidentiality/context";
-import {
   ensureSignedActionChallengeTable,
   issueSignedActionChallenge,
   mapSignedActionError,
@@ -121,6 +111,16 @@ import {
   BOUNTY_ELIGIBILITY_VERIFIED_HUMAN,
   getBountyEligibilityCredentialMask,
 } from "~~/lib/bountyEligibility";
+import {
+  CONFIDENTIALITY_TERMS_ACTION,
+  CONFIDENTIALITY_TERMS_CHALLENGE_TITLE,
+  CONFIDENTIALITY_TERMS_VERSION,
+  buildConfidentialityTermsChallengeMessage,
+  hasConfidentialityTermsAcceptance,
+  hashConfidentialityTermsPayload,
+  normalizeConfidentialityTermsInput,
+  recordConfidentialityTermsAcceptance,
+} from "~~/lib/confidentiality/context";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { db } from "~~/lib/db";
 import { questionDetails, questionImageAttachments } from "~~/lib/db/schema";
@@ -1466,7 +1466,10 @@ async function listAuthenticatedGatedContextUrls(params: {
         .select({ id: questionImageAttachments.id, sha256: questionImageAttachments.sha256 })
         .from(questionImageAttachments)
         .where(
-          and(eq(questionImageAttachments.contentId, params.contentId), eq(questionImageAttachments.status, "approved")),
+          and(
+            eq(questionImageAttachments.contentId, params.contentId),
+            eq(questionImageAttachments.status, "approved"),
+          ),
         ),
     ]);
 
