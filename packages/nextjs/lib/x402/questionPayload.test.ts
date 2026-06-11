@@ -622,6 +622,32 @@ test("buildX402QuestionOperation binds bounty eligibility into the payload hash"
   assert.notEqual(first.payloadHash, second.payloadHash);
 });
 
+test("parseX402QuestionRequest uses the configured Ponder URL for canonical metadata URIs", () => {
+  const previousPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;
+  const previousAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+  process.env.NEXT_PUBLIC_PONDER_URL = "https://ponder.rateloop.ai";
+  delete process.env.NEXT_PUBLIC_APP_URL;
+  try {
+    const operation = buildX402QuestionOperation(parseX402QuestionRequest(VALID_REQUEST));
+
+    assert.match(
+      operation.canonicalPayload.questions[0].questionMetadataUri,
+      /^https:\/\/ponder\.rateloop\.ai\/question-metadata\/0x[a-f0-9]{64}$/,
+    );
+  } finally {
+    if (previousPonderUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_PONDER_URL;
+    } else {
+      process.env.NEXT_PUBLIC_PONDER_URL = previousPonderUrl;
+    }
+    if (previousAppUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_APP_URL;
+    } else {
+      process.env.NEXT_PUBLIC_APP_URL = previousAppUrl;
+    }
+  }
+});
+
 test("buildX402QuestionOperation is sensitive to bundle question order", () => {
   const first = buildX402QuestionOperation(
     parseX402QuestionRequest({

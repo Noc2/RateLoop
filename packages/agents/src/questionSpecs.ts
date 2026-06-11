@@ -107,7 +107,7 @@ export function hashCanonicalJson(value: JsonValue): Hex {
   return canonicalJsonHash(value);
 }
 
-function normalizeQuestionMetadataBaseUrl(baseUrl: string | null | undefined) {
+export function normalizeQuestionMetadataBaseUrl(baseUrl: string | null | undefined) {
   const raw = baseUrl?.trim() || DEFAULT_QUESTION_METADATA_BASE_URL;
   try {
     const parsed = new URL(raw);
@@ -196,7 +196,14 @@ export function buildDefaultResultSpec(
   };
 }
 
-export function buildQuestionSpecHashes(input: AgentQuestionSpecInput) {
+export type BuildQuestionSpecHashOptions = {
+  questionMetadataBaseUrl?: string | null;
+};
+
+export function buildQuestionSpecHashes(
+  input: AgentQuestionSpecInput,
+  options: BuildQuestionSpecHashOptions = {},
+) {
   const questionMetadata = buildQuestionMetadata(input);
   const questionMetadataHash = hashCanonicalJson(questionMetadata);
   const resultSpec = buildDefaultResultSpec(
@@ -208,7 +215,10 @@ export function buildQuestionSpecHashes(input: AgentQuestionSpecInput) {
   return {
     questionMetadata,
     questionMetadataHash,
-    questionMetadataUri: buildQuestionMetadataUri(questionMetadataHash),
+    questionMetadataUri: buildQuestionMetadataUri(
+      questionMetadataHash,
+      options.questionMetadataBaseUrl,
+    ),
     resultSpec,
     resultSpecHash: hashCanonicalJson(resultSpec),
   };

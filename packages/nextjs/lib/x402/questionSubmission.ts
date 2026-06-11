@@ -2800,6 +2800,7 @@ function agentWalletQuestionSubmissionPlanBody(params: {
     payment: params.plan.payment,
     payloadHash: params.plan.payloadHash,
     questionCount: params.payload.questions.length,
+    questionMetadataBaseUrl: questionMetadataBaseUrlForResponse(params.payload),
     ready: false,
     roundConfig: serializeQuestionRoundConfig(params.payload.roundConfig),
     status: "awaiting_wallet_signature",
@@ -2843,6 +2844,7 @@ function nativeX402QuestionSubmissionPlanBody(params: {
     paymentScheme: "eip3009_usdc_authorization",
     payloadHash: params.plan.payloadHash,
     questionCount: params.payload.questions.length,
+    questionMetadataBaseUrl: questionMetadataBaseUrlForResponse(params.payload),
     ready: false,
     roundConfig: params.plan.roundConfig,
     status: "awaiting_wallet_signature",
@@ -2869,6 +2871,22 @@ function nativeX402QuestionSubmissionPlanBody(params: {
       submitTool: "rateloop_ask_humans",
     },
   };
+}
+
+function questionMetadataBaseUrlForResponse(payload: X402QuestionPayload) {
+  const question = payload.questions[0];
+  if (!question?.questionMetadataUri) return undefined;
+
+  try {
+    const parsed = new URL(question.questionMetadataUri);
+    const suffix = `/question-metadata/${question.questionMetadataHash.toLowerCase()}`;
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    if (!pathname.endsWith(suffix)) return undefined;
+    const basePath = pathname.slice(0, -suffix.length);
+    return `${parsed.origin}${basePath}`;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function prepareAgentWalletQuestionSubmissionRequest(params: {

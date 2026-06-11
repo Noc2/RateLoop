@@ -46,6 +46,7 @@ const CLIENT_REQUEST_ID = "local-signer-test";
 const QUESTION_CONTEXT_URL = "https://example.com/context";
 const QUESTION_TITLE = "Should this agent proceed?";
 const QUESTION_TAG = "agent";
+const QUESTION_METADATA_BASE_URL = "https://ponder.rateloop.ai";
 const BOUNTY_START_BY = 1_893_456_000n;
 const BOUNTY_WINDOW_SECONDS = 1_200n;
 const FEEDBACK_WINDOW_SECONDS = 1_200n;
@@ -148,35 +149,38 @@ function roundConfig() {
   };
 }
 
-function questionSpec() {
+function questionSpec(questionMetadataBaseUrl?: string) {
   const template = findAgentResultTemplate("generic_rating");
   if (!template) throw new Error("Missing generic_rating template.");
-  return buildQuestionSpecHashes({
-    bounty: {
-      amount: BigInt(X402_AMOUNT),
-      asset: "USDC",
-      bountyEligibility: 0,
-      requiredSettledRounds: 1n,
-      requiredVoters: 3n,
+  return buildQuestionSpecHashes(
+    {
+      bounty: {
+        amount: BigInt(X402_AMOUNT),
+        asset: "USDC",
+        bountyEligibility: 0,
+        requiredSettledRounds: 1n,
+        requiredVoters: 3n,
+      },
+      categoryId: 1n,
+      contextUrl: QUESTION_CONTEXT_URL,
+      imageUrls: [],
+      roundConfig: roundConfigBigInt(),
+      study: { bundleIndex: 0 },
+      tags: [QUESTION_TAG],
+      targetAudience: null,
+      templateId: "generic_rating",
+      templateInputs: null,
+      templateVersion: 1,
+      title: QUESTION_TITLE,
+      videoUrl: "",
+      voteSemantics: template.voteSemantics,
     },
-    categoryId: 1n,
-    contextUrl: QUESTION_CONTEXT_URL,
-    imageUrls: [],
-    roundConfig: roundConfigBigInt(),
-    study: { bundleIndex: 0 },
-    tags: [QUESTION_TAG],
-    targetAudience: null,
-    templateId: "generic_rating",
-    templateInputs: null,
-    templateVersion: 1,
-    title: QUESTION_TITLE,
-    videoUrl: "",
-    voteSemantics: template.voteSemantics,
-  });
+    { questionMetadataBaseUrl },
+  );
 }
 
-function canonicalPayload() {
-  const spec = questionSpec();
+function canonicalPayload(questionMetadataBaseUrl?: string) {
+  const spec = questionSpec(questionMetadataBaseUrl);
   return {
     bounty: {
       amount: X402_AMOUNT,
@@ -223,14 +227,14 @@ function canonicalPayload() {
   };
 }
 
-function expectedPayloadHash() {
+function expectedPayloadHash(questionMetadataBaseUrl?: string) {
   return createHash("sha256")
-    .update(JSON.stringify(canonicalPayload()))
+    .update(JSON.stringify(canonicalPayload(questionMetadataBaseUrl)))
     .digest("hex");
 }
 
-function expectedOperationKey() {
-  return `0x${createHash("sha256").update(`rateloop:x402-question:${expectedPayloadHash()}`).digest("hex")}` as const;
+function expectedOperationKey(questionMetadataBaseUrl?: string) {
+  return `0x${createHash("sha256").update(`rateloop:x402-question:${expectedPayloadHash(questionMetadataBaseUrl)}`).digest("hex")}` as const;
 }
 
 function expectedSubmissionKey() {
@@ -263,14 +267,14 @@ function expectedSubmissionKey() {
   );
 }
 
-function expectedSalt() {
+function expectedSalt(questionMetadataBaseUrl?: string) {
   return `0x${createHash("sha256")
     .update(
       [
         "rateloop",
         "agent-wallet-question-salt",
-        expectedOperationKey(),
-        expectedPayloadHash(),
+        expectedOperationKey(questionMetadataBaseUrl),
+        expectedPayloadHash(questionMetadataBaseUrl),
         account.address.toLowerCase(),
         expectedSubmissionKey(),
         "0",
@@ -330,8 +334,8 @@ function submissionDetailsHash() {
   );
 }
 
-function expectedRevealCommitment() {
-  const spec = questionSpec();
+function expectedRevealCommitment(questionMetadataBaseUrl?: string) {
+  const spec = questionSpec(questionMetadataBaseUrl);
   return keccak256(
     encodeAbiParameters(
       [
@@ -366,7 +370,7 @@ function expectedRevealCommitment() {
         ),
         submissionDetailsHash(),
         1n,
-        expectedSalt(),
+        expectedSalt(questionMetadataBaseUrl),
         account.address,
         rewardTermsHash(),
         roundConfigHash(),
@@ -384,8 +388,8 @@ function x402StringArrayHash(values: readonly string[]) {
   );
 }
 
-function x402PaymentNonce(from = account.address) {
-  const spec = questionSpec();
+function x402PaymentNonce(from = account.address, questionMetadataBaseUrl?: string) {
+  const spec = questionSpec(questionMetadataBaseUrl);
   const submissionPayloadHash = keccak256(
     encodeAbiParameters(
       [
@@ -408,7 +412,7 @@ function x402PaymentNonce(from = account.address) {
         keccak256(stringToHex(QUESTION_TITLE)),
         keccak256(stringToHex(QUESTION_TAG)),
         1n,
-        expectedSalt(),
+        expectedSalt(questionMetadataBaseUrl),
       ],
     ),
   );
@@ -462,7 +466,10 @@ function reserveSubmissionData(revealCommitment = expectedRevealCommitment()) {
   });
 }
 
-function submitQuestionData(amount = BigInt(X402_AMOUNT)) {
+function submitQuestionData(
+  amount = BigInt(X402_AMOUNT),
+  questionMetadataBaseUrl?: string,
+) {
   return encodeFunctionData({
     abi: ContentRegistrySubmitQuestionWithConfidentialityAbi,
     args: [
@@ -473,17 +480,20 @@ function submitQuestionData(amount = BigInt(X402_AMOUNT)) {
       QUESTION_TAG,
       1n,
       EMPTY_DETAILS,
-      expectedSalt(),
+      expectedSalt(questionMetadataBaseUrl),
       rewardTerms(amount),
       roundConfig(),
-      questionSpec(),
+      questionSpec(questionMetadataBaseUrl),
       ZERO_CONFIDENTIALITY_CONFIG,
     ],
     functionName: "submitQuestionWithRewardAndRoundConfig",
   });
 }
 
-function submitX402QuestionData(amount = BigInt(X402_AMOUNT)) {
+function submitX402QuestionData(
+  amount = BigInt(X402_AMOUNT),
+  questionMetadataBaseUrl?: string,
+) {
   const signature = parseSignature(TEST_SIGNATURE);
   return encodeFunctionData({
     abi: X402QuestionSubmitterSubmitWithConfidentialityAbi,
@@ -495,14 +505,14 @@ function submitX402QuestionData(amount = BigInt(X402_AMOUNT)) {
       QUESTION_TAG,
       1n,
       EMPTY_DETAILS,
-      expectedSalt(),
+      expectedSalt(questionMetadataBaseUrl),
       rewardTerms(amount),
       roundConfig(),
-      questionSpec(),
+      questionSpec(questionMetadataBaseUrl),
       ZERO_CONFIDENTIALITY_CONFIG,
       {
         from: account.address,
-        nonce: x402PaymentNonce(),
+        nonce: x402PaymentNonce(account.address, questionMetadataBaseUrl),
         r: signature.r,
         s: signature.s,
         to: X402_SUBMITTER_ADDRESS,
@@ -533,10 +543,11 @@ function signedX402Authorization(
 
 function walletCallsResponse(
   overrides: Partial<AskHumansResponse> = {},
+  questionMetadataBaseUrl?: string,
 ): AskHumansResponse {
   return {
     chainId: 480,
-    operationKey: expectedOperationKey(),
+    operationKey: expectedOperationKey(questionMetadataBaseUrl),
     payment: {
       amount: X402_AMOUNT,
       asset: "USDC",
@@ -544,7 +555,8 @@ function walletCallsResponse(
       tokenAddress: X402_USDC_ADDRESS,
     },
     paymentMode: "wallet_calls",
-    payloadHash: expectedPayloadHash(),
+    payloadHash: expectedPayloadHash(questionMetadataBaseUrl),
+    questionMetadataBaseUrl,
     status: "awaiting_wallet_signature",
     transactionPlan: {
       calls: [
@@ -559,13 +571,15 @@ function walletCallsResponse(
           value: "0",
         },
         {
-          data: reserveSubmissionData(),
+          data: reserveSubmissionData(
+            expectedRevealCommitment(questionMetadataBaseUrl),
+          ),
           phase: "reserve_submission",
           to: CONTENT_REGISTRY_ADDRESS,
           value: "0",
         },
         {
-          data: submitQuestionData(),
+          data: submitQuestionData(BigInt(X402_AMOUNT), questionMetadataBaseUrl),
           phase: "submit_question",
           to: CONTENT_REGISTRY_ADDRESS,
           value: "0",
@@ -580,10 +594,11 @@ function walletCallsResponse(
 
 function x402CallsResponse(
   overrides: Partial<AskHumansResponse> = {},
+  questionMetadataBaseUrl?: string,
 ): AskHumansResponse {
   return {
     chainId: 480,
-    operationKey: expectedOperationKey(),
+    operationKey: expectedOperationKey(questionMetadataBaseUrl),
     payment: {
       amount: X402_AMOUNT,
       asset: "USDC",
@@ -591,18 +606,21 @@ function x402CallsResponse(
       tokenAddress: X402_USDC_ADDRESS,
     },
     paymentMode: "x402_authorization",
-    payloadHash: expectedPayloadHash(),
+    payloadHash: expectedPayloadHash(questionMetadataBaseUrl),
+    questionMetadataBaseUrl,
     status: "awaiting_wallet_signature",
     transactionPlan: {
       calls: [
         {
-          data: reserveSubmissionData(),
+          data: reserveSubmissionData(
+            expectedRevealCommitment(questionMetadataBaseUrl),
+          ),
           phase: "reserve_submission",
           to: CONTENT_REGISTRY_ADDRESS,
           value: "0",
         },
         {
-          data: submitX402QuestionData(),
+          data: submitX402QuestionData(BigInt(X402_AMOUNT), questionMetadataBaseUrl),
           phase: "submit_x402_question",
           to: X402_SUBMITTER_ADDRESS,
           value: "0",
@@ -811,6 +829,19 @@ describe("local signer", () => {
     const calls = validateLocalSignerTransactionPlan({
       accountAddress: account.address,
       ask: walletCallsResponse(),
+      config: validationConfig(),
+      expectedBountyAmount: BigInt(X402_AMOUNT),
+      expectedChainId: 480,
+      expectedPayload: askPayload(),
+    });
+
+    expect(calls).toHaveLength(3);
+  });
+
+  it("uses the server metadata base when validating local signer ask hashes", () => {
+    const calls = validateLocalSignerTransactionPlan({
+      accountAddress: account.address,
+      ask: walletCallsResponse({}, QUESTION_METADATA_BASE_URL),
       config: validationConfig(),
       expectedBountyAmount: BigInt(X402_AMOUNT),
       expectedChainId: 480,

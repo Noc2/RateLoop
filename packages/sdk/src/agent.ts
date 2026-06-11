@@ -441,6 +441,7 @@ export interface AskHumansResponse {
   paymentRequired?: boolean;
   paymentMode?: "wallet_calls" | "x402_authorization" | string;
   paymentScheme?: "wallet_calls" | "eip3009_usdc_authorization" | string;
+  questionMetadataBaseUrl?: string;
   rewardPoolId?: string | null;
   transactionPlan?: RateLoopAgentWalletTransactionPlan;
   transactionHashes?: string[];

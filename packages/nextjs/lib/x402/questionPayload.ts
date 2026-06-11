@@ -1,6 +1,10 @@
 import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
-import { buildQuestionMetadataUri, buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
+import {
+  buildQuestionMetadataUri,
+  buildQuestionSpecHashes,
+  normalizeQuestionMetadataBaseUrl,
+} from "~~/lib/agent/questionSpecs";
 import {
   type AgentQuestionSpecInput,
   DEFAULT_AGENT_TEMPLATE_ID,
@@ -106,6 +110,10 @@ export function assertSupportedX402BundleBounty(
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function questionMetadataBaseUrl() {
+  return normalizeQuestionMetadataBaseUrl(process.env.NEXT_PUBLIC_PONDER_URL ?? process.env.NEXT_PUBLIC_APP_URL);
 }
 
 function readString(value: unknown, fieldName: string): string {
@@ -742,33 +750,37 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
     templateInputs: topLevelTemplateInputs,
     templateVersion: topLevelTemplateVersion,
   };
+  const metadataBaseUrl = questionMetadataBaseUrl();
   const questions = rawQuestions.map((question, index) => {
     const normalizedQuestion = normalizeQuestion(question, index, templateDefaults);
-    const spec = buildQuestionSpecHashes({
-      bounty: {
-        amount: bounty.amount,
-        asset: bounty.asset,
-        bountyEligibility: bounty.bountyEligibility,
-        requiredSettledRounds: bounty.requiredSettledRounds,
-        requiredVoters: bounty.requiredVoters,
+    const spec = buildQuestionSpecHashes(
+      {
+        bounty: {
+          amount: bounty.amount,
+          asset: bounty.asset,
+          bountyEligibility: bounty.bountyEligibility,
+          requiredSettledRounds: bounty.requiredSettledRounds,
+          requiredVoters: bounty.requiredVoters,
+        },
+        categoryId: normalizedQuestion.categoryId,
+        confidentiality: normalizedQuestion.confidentiality,
+        contextUrl: normalizedQuestion.contextUrl,
+        imageUrls: normalizedQuestion.imageUrls,
+        roundConfig,
+        study: {
+          bundleIndex: index,
+        },
+        tags: normalizedQuestion.tagList,
+        targetAudience: normalizedQuestion.targetAudience,
+        templateId: normalizedQuestion.templateId,
+        templateInputs: normalizedQuestion.templateInputs,
+        templateVersion: normalizedQuestion.templateVersion,
+        title: normalizedQuestion.title,
+        videoUrl: normalizedQuestion.videoUrl,
+        voteSemantics: normalizedQuestion.template.voteSemantics,
       },
-      categoryId: normalizedQuestion.categoryId,
-      confidentiality: normalizedQuestion.confidentiality,
-      contextUrl: normalizedQuestion.contextUrl,
-      imageUrls: normalizedQuestion.imageUrls,
-      roundConfig,
-      study: {
-        bundleIndex: index,
-      },
-      tags: normalizedQuestion.tagList,
-      targetAudience: normalizedQuestion.targetAudience,
-      templateId: normalizedQuestion.templateId,
-      templateInputs: normalizedQuestion.templateInputs,
-      templateVersion: normalizedQuestion.templateVersion,
-      title: normalizedQuestion.title,
-      videoUrl: normalizedQuestion.videoUrl,
-      voteSemantics: normalizedQuestion.template.voteSemantics,
-    });
+      { questionMetadataBaseUrl: metadataBaseUrl },
+    );
 
     return {
       categoryId: normalizedQuestion.categoryId,
@@ -779,10 +791,7 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
       imageUrls: normalizedQuestion.imageUrls,
       questionMetadata: spec.questionMetadata,
       questionMetadataHash: spec.questionMetadataHash,
-      questionMetadataUri: buildQuestionMetadataUri(
-        spec.questionMetadataHash,
-        process.env.NEXT_PUBLIC_PONDER_URL ?? process.env.NEXT_PUBLIC_APP_URL,
-      ),
+      questionMetadataUri: spec.questionMetadataUri,
       resultSpecHash: spec.resultSpecHash,
       tags: normalizedQuestion.tags,
       tagList: normalizedQuestion.tagList,
@@ -831,7 +840,9 @@ export function toCanonicalQuestionPayload(payload: X402QuestionPayload) {
       detailsUrl: question.detailsUrl,
       imageUrls: question.imageUrls,
       questionMetadataHash: question.questionMetadataHash,
-      questionMetadataUri: question.questionMetadataUri ?? buildQuestionMetadataUri(question.questionMetadataHash),
+      questionMetadataUri:
+        question.questionMetadataUri ??
+        buildQuestionMetadataUri(question.questionMetadataHash, questionMetadataBaseUrl()),
       resultSpecHash: question.resultSpecHash,
       tags: question.tagList,
       targetAudience: question.targetAudience,

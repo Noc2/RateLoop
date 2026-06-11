@@ -49,6 +49,7 @@ import {
   DEFAULT_AGENT_TEMPLATE_ID,
   DEFAULT_AGENT_TEMPLATE_VERSION,
   buildQuestionSpecHashes,
+  normalizeQuestionMetadataBaseUrl,
   type AgentQuestionSpecInput,
 } from "./questionSpecs.js";
 import { findAgentResultTemplate } from "./templates.js";
@@ -158,6 +159,7 @@ type LocalSignerConfig = {
   lrepAddress?: Address;
   pollingIntervalMs: number;
   privateKey?: Hex;
+  questionMetadataBaseUrl?: string;
   questionRewardPoolEscrowAddress?: Address;
   receiptTimeoutMs: number;
   rpcUrl?: string;
@@ -269,6 +271,7 @@ type TransactionPlanValidationConfig = Pick<
   | "contentRegistryAddress"
   | "feedbackBonusEscrowAddress"
   | "lrepAddress"
+  | "questionMetadataBaseUrl"
   | "questionRewardPoolEscrowAddress"
   | "usdcAddress"
   | "x402QuestionSubmitterAddress"
@@ -428,6 +431,28 @@ function parseOptionalAddress(
     throw new Error(`${name} must be an EVM address.`);
   }
   return value as Address;
+}
+
+function parseQuestionMetadataBaseUrl(
+  value: string | undefined,
+  name: string,
+): string | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      throw new Error();
+    }
+    return normalizeQuestionMetadataBaseUrl(value);
+  } catch {
+    throw new Error(`${name} must be a public HTTPS URL without query or hash.`);
+  }
 }
 
 function assertRecord(value: unknown, name: string): JsonRecord {
@@ -1565,6 +1590,7 @@ function normalizeLocalQuestion(
     templateVersion?: number;
   },
   bounty: LocalQuestionPayload["bounty"],
+  questionMetadataBaseUrl: string | undefined,
   roundConfig: LocalQuestionRoundConfig,
 ): LocalQuestionItemPayload {
   if (!isJsonRecord(value)) {
@@ -1646,31 +1672,34 @@ function normalizeLocalQuestion(
     fieldPrefix,
     defaults,
   );
-  const spec = buildQuestionSpecHashes({
-    bounty: {
-      amount: bounty.amount,
-      asset: bounty.asset,
-      bountyEligibility: bounty.bountyEligibility,
-      requiredSettledRounds: bounty.requiredSettledRounds,
-      requiredVoters: bounty.requiredVoters,
+  const spec = buildQuestionSpecHashes(
+    {
+      bounty: {
+        amount: bounty.amount,
+        asset: bounty.asset,
+        bountyEligibility: bounty.bountyEligibility,
+        requiredSettledRounds: bounty.requiredSettledRounds,
+        requiredVoters: bounty.requiredVoters,
+      },
+      categoryId,
+      confidentiality,
+      contextUrl,
+      imageUrls,
+      roundConfig,
+      study: {
+        bundleIndex: index,
+      },
+      tags: tagList,
+      targetAudience,
+      templateId: templateSelection.templateId,
+      templateInputs: templateSelection.templateInputs,
+      templateVersion: templateSelection.templateVersion,
+      title,
+      videoUrl,
+      voteSemantics: templateSelection.template.voteSemantics,
     },
-    categoryId,
-    confidentiality,
-    contextUrl,
-    imageUrls,
-    roundConfig,
-    study: {
-      bundleIndex: index,
-    },
-    tags: tagList,
-    targetAudience,
-    templateId: templateSelection.templateId,
-    templateInputs: templateSelection.templateInputs,
-    templateVersion: templateSelection.templateVersion,
-    title,
-    videoUrl,
-    voteSemantics: templateSelection.template.voteSemantics,
-  });
+    { questionMetadataBaseUrl },
+  );
 
   return {
     categoryId,
@@ -1696,6 +1725,7 @@ function normalizeLocalQuestion(
 function parseLocalQuestionRequest(
   value: unknown,
   fallbackChainId?: number,
+  options: { questionMetadataBaseUrl?: string } = {},
 ): LocalQuestionPayload {
   const request = assertRecord(value, "ask payload");
   for (const key of Object.keys(request)) {
@@ -1755,6 +1785,7 @@ function parseLocalQuestionRequest(
       index,
       templateDefaults,
       bounty,
+      options.questionMetadataBaseUrl,
       roundConfig,
     ),
   );
@@ -1836,9 +1867,10 @@ function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
 export function buildLocalQuestionCanonicalPayload(
   payload: unknown,
   fallbackChainId?: number,
+  options: { questionMetadataBaseUrl?: string } = {},
 ) {
   return toCanonicalLocalQuestionPayload(
-    parseLocalQuestionRequest(payload, fallbackChainId),
+    parseLocalQuestionRequest(payload, fallbackChainId, options),
   );
 }
 
@@ -2117,11 +2149,13 @@ function buildQuestionBundleRevealCommitment(params: {
 function buildExpectedLocalSignerQuestionPlan(params: {
   expectedChainId?: number;
   payload: AskHumansRequest;
+  questionMetadataBaseUrl?: string;
   walletAddress: Address;
 }): ExpectedLocalSignerQuestionPlan {
   const payload = parseLocalQuestionRequest(
     params.payload,
     params.expectedChainId,
+    { questionMetadataBaseUrl: params.questionMetadataBaseUrl },
   );
   const operation = buildLocalQuestionOperation(payload);
   const rewardTerms = {
@@ -3127,6 +3161,14 @@ function validatePaymentMetadata(params: {
   }
 }
 
+function readAskQuestionMetadataBaseUrl(ask: AskHumansResponse): string | undefined {
+  const value = ask.questionMetadataBaseUrl;
+  return parseQuestionMetadataBaseUrl(
+    typeof value === "string" ? value : undefined,
+    "ask response questionMetadataBaseUrl",
+  );
+}
+
 export function validateLocalSignerTransactionPlan(params: {
   accountAddress: Address;
   ask: AskHumansResponse;
@@ -3171,6 +3213,9 @@ export function validateLocalSignerTransactionPlan(params: {
   const expectedPlan = buildExpectedLocalSignerQuestionPlan({
     expectedChainId: responseChainId,
     payload: params.expectedPayload,
+    questionMetadataBaseUrl:
+      readAskQuestionMetadataBaseUrl(params.ask) ??
+      params.config.questionMetadataBaseUrl,
     walletAddress: params.accountAddress,
   });
   if (expectedPlan.rewardTerms.amount !== params.expectedBountyAmount) {
@@ -3470,6 +3515,14 @@ export function loadLocalSignerConfig(
       optionString(options, "private-key") ??
         envString(env, "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY"),
       "RATELOOP_LOCAL_SIGNER_PRIVATE_KEY",
+    ),
+    questionMetadataBaseUrl: parseQuestionMetadataBaseUrl(
+      optionString(options, "question-metadata-base-url") ??
+        envString(env, "RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL") ??
+        envString(env, "RATELOOP_QUESTION_METADATA_BASE_URL") ??
+        envString(env, "NEXT_PUBLIC_PONDER_URL") ??
+        envString(env, "NEXT_PUBLIC_APP_URL"),
+      "RATELOOP_LOCAL_SIGNER_QUESTION_METADATA_BASE_URL",
     ),
     questionRewardPoolEscrowAddress: parseOptionalAddress(
       optionString(options, "question-reward-pool-escrow-address") ??
@@ -3791,6 +3844,9 @@ export async function askHumansWithLocalSigner(params: {
     const expectedPlan = buildExpectedLocalSignerQuestionPlan({
       expectedChainId: baseAsk.chainId,
       payload: baseAsk,
+      questionMetadataBaseUrl:
+        readAskQuestionMetadataBaseUrl(initialAsk) ??
+        params.config.questionMetadataBaseUrl,
       walletAddress: params.account.address,
     });
     if (expectedPlan.isBundleSubmission) {
