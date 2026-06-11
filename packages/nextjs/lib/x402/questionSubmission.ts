@@ -26,6 +26,7 @@ import {
 } from "viem";
 import { getImageAttachmentSubmissionValidationError } from "~~/lib/attachments/imageAttachments";
 import { attachQuestionDetailsToContent } from "~~/lib/attachments/questionDetails";
+import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
 import { dbClient } from "~~/lib/db";
 import {
   getPrimaryServerTargetNetwork,
@@ -2066,6 +2067,15 @@ async function syncSubmittedQuestionMetadata(params: {
     ];
   });
   if (entries.length === 0) return;
+  await Promise.all(
+    entries.map(entry =>
+      upsertQuestionConfidentialityFromMetadata({
+        contentId: entry.contentId,
+        metadata: entry.questionMetadata as Record<string, unknown> | null,
+        questionMetadataHash: entry.questionMetadataHash,
+      }),
+    ),
+  );
   try {
     await ponderApi.syncQuestionMetadata(entries);
   } catch (error) {

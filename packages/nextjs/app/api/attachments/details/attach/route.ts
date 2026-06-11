@@ -8,6 +8,7 @@ import {
   attachQuestionDetailsToContent,
   parseQuestionDetailsIdFromDetailsUrl,
 } from "~~/lib/attachments/questionDetails";
+import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
 import { getServerRpcOverrides, getServerTargetNetworkById } from "~~/lib/env/server";
 import { isJsonObjectBody, jsonBodyErrorResponse, parseJsonBody } from "~~/lib/http/jsonBody";
 import { normalizeContentId, normalizeWalletAddress } from "~~/lib/watchlist/contentWatch";
@@ -330,6 +331,15 @@ export async function POST(request: NextRequest) {
   let metadataSkipped = metadata.length - verifiedMetadata.length;
   const warnings: string[] = [];
   if (verifiedMetadata.length > 0) {
+    await Promise.all(
+      verifiedMetadata.map(entry =>
+        upsertQuestionConfidentialityFromMetadata({
+          contentId: entry.contentId,
+          metadata: entry.questionMetadata as Record<string, unknown> | null,
+          questionMetadataHash: entry.questionMetadataHash,
+        }),
+      ),
+    );
     try {
       const result = await ponderApi.syncQuestionMetadata(verifiedMetadata);
       metadataIndexed = result.updated;
