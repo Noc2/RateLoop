@@ -24,6 +24,7 @@ import {
   raterFollow,
   raterHumanCredential,
   raterHumanPresence,
+  raterIdentityBan,
   raterProfile,
   raterWorldCredential,
   rewardClaim,
@@ -74,11 +75,55 @@ const STREAK_MILESTONES = [
   { days: 90, baseBonus: 200 },
 ];
 
+type IndexedIdentityBan = {
+  active: boolean;
+  bannedAt: bigint;
+  evidenceHash: `0x${string}`;
+  expiresAt: bigint;
+  permanent: boolean;
+  provider: number;
+  reason: string;
+  unbannedAt: bigint | null;
+};
+
 function voteMatchesVoter(address: `0x${string}`) {
   return or(
     eq(vote.voter, address),
     eq(vote.identityHolder, address),
   );
+}
+
+function formatConfidentialitySanction(
+  identityBan: IndexedIdentityBan | null | undefined,
+  statusTimestamp: bigint,
+) {
+  if (!identityBan) {
+    return {
+      active: false,
+      provider: null,
+      permanent: false,
+      expiresAt: null,
+      evidenceHash: null,
+      reason: null,
+      bannedAt: null,
+      unbannedAt: null,
+    };
+  }
+
+  const active =
+    identityBan.active &&
+    (identityBan.permanent || identityBan.expiresAt > statusTimestamp);
+
+  return {
+    active,
+    provider: identityBan.provider,
+    permanent: identityBan.permanent,
+    expiresAt: identityBan.expiresAt,
+    evidenceHash: identityBan.evidenceHash,
+    reason: identityBan.reason,
+    bannedAt: identityBan.bannedAt,
+    unbannedAt: identityBan.unbannedAt,
+  };
 }
 
 function voteMatchesAnyVoter(addresses: `0x${string}`[]) {
@@ -636,11 +681,26 @@ export function registerDataRoutes(app: ApiApp) {
         .where(eq(advisoryVote.voter, address)),
     ]);
 
+    const [identityBan] =
+      humanCredential?.provider && humanCredential.nullifierHash !== ZERO_BYTES32
+        ? await db
+            .select()
+            .from(raterIdentityBan)
+            .where(
+              and(
+                eq(raterIdentityBan.provider, humanCredential.provider),
+                eq(raterIdentityBan.nullifierHash, humanCredential.nullifierHash),
+              ),
+            )
+            .limit(1)
+        : [];
+
     const wallSeconds = BigInt(Math.floor(Date.now() / 1000));
     const indexedChainTimestamp =
       maxBigInt([
         profile?.updatedAt,
         humanCredential?.updatedAt,
+        identityBan?.updatedAt,
         ...worldCredentialRows.map((row) => row.updatedAt),
         ...humanPresenceRows.map((row) => row.updatedAt),
         launchProgress?.updatedAt,
@@ -745,6 +805,10 @@ export function registerDataRoutes(app: ApiApp) {
         expiresAt: humanCredential?.expiresAt ?? null,
         evidenceHash: humanCredential?.evidenceHash ?? null,
       },
+      confidentialitySanction: formatConfidentialitySanction(
+        identityBan,
+        statusTimestamp,
+      ),
       worldCredentials: {
         activeMask: activeCredentialMask,
         freshRecheckMask,

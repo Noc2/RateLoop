@@ -215,6 +215,18 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       verified: "raterHumanCredential.verified",
       verifiedAt: "raterHumanCredential.verifiedAt",
     },
+    raterIdentityBan: {
+      active: "raterIdentityBan.active",
+      bannedAt: "raterIdentityBan.bannedAt",
+      evidenceHash: "raterIdentityBan.evidenceHash",
+      expiresAt: "raterIdentityBan.expiresAt",
+      nullifierHash: "raterIdentityBan.nullifierHash",
+      permanent: "raterIdentityBan.permanent",
+      provider: "raterIdentityBan.provider",
+      reason: "raterIdentityBan.reason",
+      unbannedAt: "raterIdentityBan.unbannedAt",
+      updatedAt: "raterIdentityBan.updatedAt",
+    },
     raterHumanPresence: {
       evidenceHash: "raterHumanPresence.evidenceHash",
       freshUntil: "raterHumanPresence.freshUntil",
@@ -750,6 +762,66 @@ describe("registerContentRoutes", () => {
         bondAmount: "2500000",
         bondAsset: "USDC",
         disclosurePolicy: "private_forever",
+        publishedAt: null,
+        visibility: "gated",
+      },
+    });
+  });
+
+  it("redacts context when gating comes only from indexed escrow events", async () => {
+    mockPonderModules(
+      [
+        {
+          id: 43n,
+          description: "Sensitive event-indexed prototype copy.",
+          detailsHash: `0x${"5".repeat(64)}`,
+          detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_eventindexed",
+          gated: true,
+          confidentialityBondAmount: 1_000_000n,
+          confidentialityBondAsset: "LREP",
+          confidentialityDisclosurePolicy: null,
+          confidentialityPublishedAt: null,
+          questionMetadata: null,
+          title: "Public-safe event title",
+        },
+      ],
+      [
+        [
+          {
+            contentId: 43n,
+            mediaIndex: 0,
+            mediaType: "image",
+            url: "https://www.rateloop.ai/api/attachments/images/att_eventindexed.webp",
+            canonicalUrl: "https://www.rateloop.ai/api/attachments/images/att_eventindexed.webp",
+            urlHost: "www.rateloop.ai",
+          },
+        ],
+        [{ count: 1 }],
+      ],
+    );
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/content?limit=5");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items[0]).toMatchObject({
+      contextAccess: "gated",
+      contextVisibility: "gated",
+      description: "",
+      detailsHash: null,
+      detailsUrl: null,
+      media: [],
+      confidentiality: {
+        bondAmount: "1000000",
+        bondAsset: "LREP",
+        disclosurePolicy: "after_settlement",
         publishedAt: null,
         visibility: "gated",
       },
@@ -1826,6 +1898,78 @@ describe("registerDataRoutes", () => {
         verifiedHumanCountsAsLaunchAnchor: true,
       },
     });
+  });
+
+  it("includes active confidentiality sanctions in rater participation status", async () => {
+    const nullifierHash = `0x${"9".repeat(64)}`;
+    const evidenceHash = `0x${"8".repeat(64)}`;
+    mockPonderModules([
+      {
+        raterType: 1,
+        updatedAt: 6_000n,
+        verified: true,
+        revoked: false,
+        provider: 3,
+        nullifierHash,
+        verifiedAt: 1_000n,
+        expiresAt: 9_999_999_999n,
+        evidenceHash,
+        active: true,
+        permanent: false,
+        reason: "verified leak",
+        bannedAt: 5_000n,
+        unbannedAt: null,
+        qualifyingRatingCount: 0,
+        rewardedRatingCount: 0,
+        distinctVerifiedAnchorCount: 0,
+        distinctAnchorRoundCount: 0,
+        payoutEligible: false,
+        launchCap: 0n,
+        fullLaunchCap: 0n,
+        capBps: 0,
+        fullCapUnlocked: false,
+        capUnlockNullifierHash: null,
+        launchPaid: 0n,
+        cohortIndex: null,
+        latestCreditedAt: null,
+        latestPaidAt: null,
+        minQualifyingScoreBps: 7_000,
+        minVoters: 3,
+        minVerifiedHumans: 1,
+        minDistinctVerifiedAnchors: 2,
+        minDistinctAnchorRounds: 2,
+        eligibilityRatingCount: 5,
+        rewardingRatingCount: 10,
+        unverifiedEarnedRaterCapBps: 2_500,
+        requireNoPendingCleanup: true,
+      },
+    ]);
+    const { registerDataRoutes } = await import(
+      "../src/api/routes/data-routes.js"
+    );
+
+    const app = new Hono();
+    registerDataRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/rater-participation-status/0x00000000000000000000000000000000000000aa",
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.confidentialitySanction).toMatchObject({
+      active: true,
+      provider: 3,
+      permanent: false,
+      expiresAt: "9999999999",
+      evidenceHash,
+      reason: "verified leak",
+      bannedAt: "5000",
+      unbannedAt: null,
+    });
+    expect(JSON.stringify(body.confidentialitySanction)).not.toContain(
+      nullifierHash,
+    );
   });
 
   it("expires rater participation status against wall-clock time", async () => {

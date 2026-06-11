@@ -76,6 +76,7 @@ vi.mock("ponder", () => ({
 
 vi.mock("ponder:schema", () => ({
   category: "category",
+  confidentialityConfig: "confidentialityConfig",
   content: "content",
   contentMedia: "contentMedia",
   globalStats: "globalStats",
@@ -106,7 +107,12 @@ function tableName(table: unknown) {
   return String(table);
 }
 
-function createDb(existingRound = { id: "1-2" }) {
+function createDb(
+  existingRound: Record<string, unknown> | null = { id: "1-2" },
+  options: {
+    confidentialityConfig?: Record<string, unknown> | null;
+  } = {},
+) {
   const updateCalls: Array<{
     table: string;
     key: Record<string, unknown>;
@@ -118,7 +124,12 @@ function createDb(existingRound = { id: "1-2" }) {
 
   return {
     db: {
-      find: vi.fn(async () => existingRound),
+      find: vi.fn(async (table: unknown) => {
+        if (tableName(table) === "confidentialityConfig") {
+          return options.confidentialityConfig ?? null;
+        }
+        return existingRound;
+      }),
       insert: vi.fn((table: unknown) => ({
         values: vi.fn((values: Record<string, unknown>) => {
           const normalizedTable = tableName(table);
@@ -447,6 +458,84 @@ describe("ContentRegistry ponder handlers", () => {
             mediaType: "image",
             url: imageUrl,
           }),
+        }),
+      ]),
+    );
+  });
+
+  it("applies confidentiality config that was indexed before content submission", async () => {
+    const { db, insertCalls, updateCalls } = createDb(
+      null,
+      {
+        confidentialityConfig: {
+          contentId: 7n,
+          gated: true,
+          bondAsset: 1,
+          bondAmount: 2_500_000n,
+          flags: 0,
+        },
+      },
+    );
+    const readContract = vi.fn(async () => ({
+      epochDuration: 600,
+      maxDuration: 7200,
+      minVoters: 5,
+      maxVoters: 50,
+    }));
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get("ContentRegistry:ContentSubmitted");
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          contentId: 7n,
+          submitter: "0x0000000000000000000000000000000000000001",
+          contentHash: "0xabc",
+          url: "https://example.com/question",
+          title: "Question?",
+          tags: "tag",
+          categoryId: 1n,
+        },
+        block: {
+          number: 42n,
+          timestamp: 999n,
+        },
+      },
+      context: {
+        client: { readContract },
+        contracts: {
+          ContentRegistry: {
+            address: REGISTRY_ADDRESS,
+          },
+        },
+        db,
+      },
+    });
+
+    expect(insertCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "content",
+          values: expect.objectContaining({
+            id: 7n,
+            gated: false,
+            confidentialityBondAmount: 0n,
+          }),
+        }),
+      ]),
+    );
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: { id: 7n },
+          table: "content",
+          values: {
+            gated: true,
+            confidentialityBondAsset: "USDC",
+            confidentialityBondAmount: 2_500_000n,
+          },
         }),
       ]),
     );

@@ -79,12 +79,14 @@ function createDb({
   feedbackBonusPools = [],
   roundVotes = [],
   voterStatsRow = null,
+  contentRecord: contentRecordOverride = {},
 }: {
   existingRound?: Record<string, unknown> | null;
   existingVote?: Record<string, unknown> | null;
   feedbackBonusPools?: Record<string, unknown>[];
   roundVotes?: Record<string, unknown>[];
   voterStatsRow?: Record<string, unknown> | null;
+  contentRecord?: Record<string, unknown>;
 } = {}) {
   const insertCalls: Array<{ table: string; values: Record<string, unknown> }> =
     [];
@@ -103,7 +105,12 @@ function createDb({
     ratingBps: 6400,
     categoryId: 0n,
     totalVotes: 0,
+    totalRounds: 0,
     lastActivityAt: 0n,
+    gated: false,
+    confidentialityDisclosurePolicy: null,
+    confidentialityPublishedAt: null,
+    ...contentRecordOverride,
   };
   const roundRecord = existingRound
     ? {
@@ -408,6 +415,62 @@ describe("RoundVotingEngine ponder handlers", () => {
     expect(updateCalls).not.toContainEqual(
       expect.objectContaining({ table: "feedbackBonusPool" }),
     );
+  });
+
+  it("marks after-settlement confidential content public when a round is terminal", async () => {
+    const registeredHandlers = await loadHandlers();
+    const { db, updateCalls } = createDb({
+      existingRound: { id: "7-2" },
+      contentRecord: {
+        gated: true,
+        confidentialityDisclosurePolicy: null,
+        confidentialityPublishedAt: null,
+      },
+    });
+
+    await registeredHandlers.get("RoundVotingEngine:RoundTied")!({
+      event: {
+        args: { contentId: 7n, roundId: 2n },
+        block: { number: 42n, timestamp: 3_000n },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).toContainEqual({
+      table: "content",
+      key: { id: 7n },
+      values: {
+        confidentialityPublishedAt: 3_000n,
+      },
+    });
+  });
+
+  it("keeps private-forever confidential content undisclosed at settlement", async () => {
+    const registeredHandlers = await loadHandlers();
+    const { db, updateCalls } = createDb({
+      existingRound: { id: "7-2" },
+      contentRecord: {
+        gated: true,
+        confidentialityDisclosurePolicy: "private_forever",
+        confidentialityPublishedAt: null,
+      },
+    });
+
+    await registeredHandlers.get("RoundVotingEngine:RoundRevealFailed")!({
+      event: {
+        args: { contentId: 7n, roundId: 2n },
+        block: { number: 42n, timestamp: 3_000n },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).not.toContainEqual({
+      table: "content",
+      key: { id: 7n },
+      values: {
+        confidentialityPublishedAt: 3_000n,
+      },
+    });
   });
 
   it("inserts per-round config snapshots before votes arrive", async () => {

@@ -204,6 +204,30 @@ function roundReferenceFields(referenceRatingBps: number) {
   };
 }
 
+function shouldPublishConfidentiality(contentRecord: Record<string, any> | null | undefined) {
+  return (
+    contentRecord?.gated === true &&
+    contentRecord.confidentialityPublishedAt == null &&
+    contentRecord.confidentialityDisclosurePolicy !== "private_forever"
+  );
+}
+
+async function publishConfidentialityAfterSettlement(params: {
+  context: any;
+  contentId: bigint;
+  publishedAt: bigint;
+  contentRecord?: Record<string, any> | null;
+}) {
+  const contentRecord =
+    params.contentRecord ??
+    (await params.context.db.find(content, { id: params.contentId }));
+  if (!shouldPublishConfidentiality(contentRecord)) return;
+
+  await params.context.db.update(content, { id: params.contentId }).set({
+    confidentialityPublishedAt: params.publishedAt,
+  });
+}
+
 function positiveBigIntOrNull(value: unknown): bigint | null {
   if (value === null || value === undefined) return null;
   try {
@@ -1188,6 +1212,12 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
     await context.db
       .update(content, { id: contentId })
       .set((row) => ({ totalRounds: row.totalRounds + 1 }));
+    await publishConfidentialityAfterSettlement({
+      context,
+      contentId,
+      publishedAt: event.block.timestamp,
+      contentRecord,
+    });
   }
 
   // Update global stats
@@ -1440,6 +1470,11 @@ ponder.on("RoundVotingEngine:RoundTied", async ({ event, context }) => {
     roundId,
     settledAt: event.block.timestamp,
   });
+  await publishConfidentialityAfterSettlement({
+    context,
+    contentId,
+    publishedAt: event.block.timestamp,
+  });
 });
 
 ponder.on("RoundVotingEngine:RoundRevealFailed", async ({ event, context }) => {
@@ -1488,6 +1523,11 @@ ponder.on("RoundVotingEngine:RoundRevealFailed", async ({ event, context }) => {
     contentId,
     roundId,
     settledAt: event.block.timestamp,
+  });
+  await publishConfidentialityAfterSettlement({
+    context,
+    contentId,
+    publishedAt: event.block.timestamp,
   });
 });
 

@@ -5,6 +5,7 @@ import { decodeEventLog } from "viem";
 import { ponder } from "ponder:registry";
 import {
   category,
+  confidentialityConfig,
   content,
   contentMedia,
   globalStats,
@@ -98,6 +99,28 @@ function mediaUrlParts(url: string) {
     canonicalUrl: canonical?.canonicalUrl ?? url.trim(),
     urlHost: canonical?.urlHost ?? "",
   };
+}
+
+function confidentialityBondAssetName(asset: number) {
+  return asset === 1 ? "USDC" : "LREP";
+}
+
+async function applyIndexedConfidentialityConfig(
+  context: Parameters<Parameters<typeof ponder.on>[1]>[0]["context"],
+  contentId: bigint,
+) {
+  const indexedConfig = await context.db.find(confidentialityConfig, {
+    contentId,
+  });
+  if (!indexedConfig) return;
+
+  await context.db.update(content, { id: contentId }).set({
+    gated: indexedConfig.gated,
+    confidentialityBondAsset: confidentialityBondAssetName(
+      indexedConfig.bondAsset,
+    ),
+    confidentialityBondAmount: indexedConfig.bondAmount,
+  });
 }
 
 async function resolveQuestionContentAnchorsFromReceipt(
@@ -267,6 +290,7 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
     contentId,
   );
   await upsertContentAnchors(context, contentId, anchors);
+  await applyIndexedConfidentialityConfig(context, contentId);
 
   // Increment category content count (skip if category not yet indexed)
   const existingCategory = await context.db.find(category, { id: categoryId });

@@ -5,6 +5,7 @@ import {
   AdvisoryVoteRecorderAbi,
   CategoryRegistryAbi,
   ClusterPayoutOracleAbi,
+  ConfidentialityEscrowAbi,
   ContentRegistryAbi,
   FeedbackRegistryAbi,
   LoopReputationAbi,
@@ -14,6 +15,7 @@ import {
   ProfileRegistryAbi,
   QuestionRewardPoolEscrowAbi,
   RaterRegistryAbi,
+  RaterRegistryConfidentialityAbi,
   RoundRewardDistributorAbi,
   RoundVotingEngineAbi,
 } from "@rateloop/contracts/abis";
@@ -91,6 +93,10 @@ const activeNetwork = getActiveNetwork();
 const activeChainId = NETWORKS[activeNetwork].chainId;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 let warnedAboutHardhatStartBlocks = false;
+const RaterRegistryIndexerAbi = [
+  ...RaterRegistryAbi,
+  ...RaterRegistryConfidentialityAbi,
+] as const;
 
 function readEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
@@ -378,6 +384,10 @@ const addresses = {
     "PONDER_RATER_REGISTRY_ADDRESS",
     "RaterRegistry",
   ),
+  confidentialityEscrow: resolveOptionalAddress(
+    "PONDER_CONFIDENTIALITY_ESCROW_ADDRESS",
+    "ConfidentialityEscrow",
+  ),
 };
 
 const startBlocks = {
@@ -436,6 +446,10 @@ const startBlocks = {
   raterRegistry: resolveStartBlock(
     "PONDER_RATER_REGISTRY_START_BLOCK",
     "RaterRegistry",
+  ),
+  confidentialityEscrow: resolveStartBlock(
+    "PONDER_CONFIDENTIALITY_ESCROW_START_BLOCK",
+    "ConfidentialityEscrow",
   ),
 };
 
@@ -553,10 +567,17 @@ export default createConfig({
       ),
     },
     RaterRegistry: {
-      abi: RaterRegistryAbi,
+      abi: RaterRegistryIndexerAbi,
       network: contractOnActiveNetwork(
         addresses.raterRegistry,
         startBlocks.raterRegistry,
+      ),
+    },
+    ConfidentialityEscrow: {
+      abi: ConfidentialityEscrowAbi,
+      network: contractOnActiveNetwork(
+        addresses.confidentialityEscrow,
+        startBlocks.confidentialityEscrow,
       ),
     },
   },

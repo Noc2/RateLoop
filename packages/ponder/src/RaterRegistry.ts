@@ -3,7 +3,9 @@ import {
   raterFollow,
   raterHumanCredential,
   raterHumanPresence,
+  raterIdentityBan,
   raterProfile,
+  raterRegistryConfig,
   raterWorldCredential,
 } from "ponder:schema";
 
@@ -43,6 +45,10 @@ function followId(follower: `0x${string}`, target: `0x${string}`) {
 
 function credentialKindId(rater: `0x${string}`, kind: number) {
   return `${rater}-${kind}`;
+}
+
+function identityBanId(provider: number, nullifierHash: `0x${string}`) {
+  return `${provider}-${nullifierHash}`;
 }
 
 ponder.on("RaterRegistry:RaterProfileUpdated", async ({ event, context }) => {
@@ -111,6 +117,108 @@ ponder.on("RaterRegistry:ProfileUnfollowed", async ({ event, context }) => {
       updatedAt: event.block.timestamp,
     });
 });
+
+ponder.on(
+  "RaterRegistry:ConfidentialityEscrowUpdated" as never,
+  async ({ event, context }: any) => {
+    const { newEscrow } = event.args as {
+      previousEscrow: `0x${string}`;
+      newEscrow: `0x${string}`;
+    };
+
+    await context.db
+      .insert(raterRegistryConfig)
+      .values({
+        id: "current",
+        confidentialityEscrow: newEscrow,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate({
+        confidentialityEscrow: newEscrow,
+        updatedAt: event.block.timestamp,
+      });
+  },
+);
+
+ponder.on(
+  "RaterRegistry:IdentityBanned" as never,
+  async ({ event, context }: any) => {
+    const {
+      provider,
+      nullifierHash,
+      expiresAt,
+      permanent,
+      evidenceHash,
+      reason,
+    } = event.args as {
+      provider: number | bigint;
+      nullifierHash: `0x${string}`;
+      expiresAt: bigint;
+      permanent: boolean;
+      evidenceHash: `0x${string}`;
+      reason: string;
+    };
+    const normalizedProvider = Number(provider);
+
+    await context.db
+      .insert(raterIdentityBan)
+      .values({
+        id: identityBanId(normalizedProvider, nullifierHash),
+        provider: normalizedProvider,
+        nullifierHash,
+        active: true,
+        permanent,
+        expiresAt,
+        evidenceHash,
+        reason,
+        bannedAt: event.block.timestamp,
+        unbannedAt: null,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate({
+        active: true,
+        permanent,
+        expiresAt,
+        evidenceHash,
+        reason,
+        bannedAt: event.block.timestamp,
+        unbannedAt: null,
+        updatedAt: event.block.timestamp,
+      });
+  },
+);
+
+ponder.on(
+  "RaterRegistry:IdentityUnbanned" as never,
+  async ({ event, context }: any) => {
+    const { provider, nullifierHash } = event.args as {
+      provider: number | bigint;
+      nullifierHash: `0x${string}`;
+    };
+    const normalizedProvider = Number(provider);
+
+    await context.db
+      .insert(raterIdentityBan)
+      .values({
+        id: identityBanId(normalizedProvider, nullifierHash),
+        provider: normalizedProvider,
+        nullifierHash,
+        active: false,
+        permanent: false,
+        expiresAt: 0n,
+        evidenceHash: ZERO_HASH,
+        reason: "",
+        bannedAt: 0n,
+        unbannedAt: event.block.timestamp,
+        updatedAt: event.block.timestamp,
+      })
+      .onConflictDoUpdate({
+        active: false,
+        unbannedAt: event.block.timestamp,
+        updatedAt: event.block.timestamp,
+      });
+  },
+);
 
 ponder.on(
   "RaterRegistry:HumanCredentialVerified",

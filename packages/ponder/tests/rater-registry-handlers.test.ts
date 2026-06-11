@@ -22,7 +22,9 @@ vi.mock("ponder:schema", () => ({
   raterFollow: "raterFollow",
   raterHumanCredential: "raterHumanCredential",
   raterHumanPresence: "raterHumanPresence",
+  raterIdentityBan: "raterIdentityBan",
   raterProfile: "raterProfile",
+  raterRegistryConfig: "raterRegistryConfig",
   raterWorldCredential: "raterWorldCredential",
 }));
 
@@ -82,6 +84,132 @@ afterEach(() => {
 });
 
 describe("RaterRegistry ponder handlers", () => {
+  it("indexes confidentiality escrow pointer updates", async () => {
+    const { db, upserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "RaterRegistry:ConfidentialityEscrowUpdated",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          previousEscrow: "0x0000000000000000000000000000000000000000",
+          newEscrow: "0x000000000000000000000000000000000000c0de",
+        },
+        block: { timestamp: 90n },
+      },
+      context: { db },
+    });
+
+    expect(upserts).toEqual([
+      {
+        table: "raterRegistryConfig",
+        values: {
+          id: "current",
+          confidentialityEscrow: "0x000000000000000000000000000000000000c0de",
+          updatedAt: 90n,
+        },
+        update: {
+          confidentialityEscrow: "0x000000000000000000000000000000000000c0de",
+          updatedAt: 90n,
+        },
+      },
+    ]);
+  });
+
+  it("indexes identity bans and unbans", async () => {
+    const { db, upserts } = createDb();
+    const registeredHandlers = await loadHandlers();
+    const bannedHandler = registeredHandlers.get("RaterRegistry:IdentityBanned");
+    const unbannedHandler = registeredHandlers.get(
+      "RaterRegistry:IdentityUnbanned",
+    );
+    const nullifierHash = `0x${"11".repeat(32)}`;
+    const evidenceHash = `0x${"22".repeat(32)}`;
+
+    expect(bannedHandler).toBeDefined();
+    expect(unbannedHandler).toBeDefined();
+
+    await bannedHandler!({
+      event: {
+        args: {
+          provider: 3,
+          nullifierHash,
+          expiresAt: 2_000n,
+          permanent: false,
+          evidenceHash,
+          reason: "verified leak",
+        },
+        block: { timestamp: 100n },
+      },
+      context: { db },
+    });
+
+    await unbannedHandler!({
+      event: {
+        args: {
+          provider: 3,
+          nullifierHash,
+        },
+        block: { timestamp: 150n },
+      },
+      context: { db },
+    });
+
+    expect(upserts).toEqual([
+      {
+        table: "raterIdentityBan",
+        values: {
+          id: `3-${nullifierHash}`,
+          provider: 3,
+          nullifierHash,
+          active: true,
+          permanent: false,
+          expiresAt: 2_000n,
+          evidenceHash,
+          reason: "verified leak",
+          bannedAt: 100n,
+          unbannedAt: null,
+          updatedAt: 100n,
+        },
+        update: {
+          active: true,
+          permanent: false,
+          expiresAt: 2_000n,
+          evidenceHash,
+          reason: "verified leak",
+          bannedAt: 100n,
+          unbannedAt: null,
+          updatedAt: 100n,
+        },
+      },
+      {
+        table: "raterIdentityBan",
+        values: {
+          id: `3-${nullifierHash}`,
+          provider: 3,
+          nullifierHash,
+          active: false,
+          permanent: false,
+          expiresAt: 0n,
+          evidenceHash: `0x${"0".repeat(64)}`,
+          reason: "",
+          bannedAt: 0n,
+          unbannedAt: 150n,
+          updatedAt: 150n,
+        },
+        update: {
+          active: false,
+          unbannedAt: 150n,
+          updatedAt: 150n,
+        },
+      },
+    ]);
+  });
+
   it("indexes public follow edges and deactivations", async () => {
     const { db, upserts } = createDb();
     const registeredHandlers = await loadHandlers();

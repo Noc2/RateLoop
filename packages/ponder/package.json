@@ -15,7 +15,7 @@
     "start:built-contracts": "node ./scripts/start.mjs",
     "codegen": "yarn build:contracts && ponder codegen",
     "serve": "ponder serve",
-    "check-types": "tsc --noEmit",
+    "check-types": "yarn build:contracts && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

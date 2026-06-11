@@ -654,6 +654,83 @@ export const questionBundleClaim = onchainTable(
 );
 
 // ============================================================
+// CONFIDENTIALITY
+// ============================================================
+
+export const confidentialityConfig = onchainTable(
+  "confidentiality_config",
+  (t) => ({
+    contentId: t.bigint().primaryKey(),
+    gated: t.boolean().notNull(),
+    bondAsset: t.integer().notNull(),
+    bondAmount: t.bigint().notNull(),
+    flags: t.integer().notNull(),
+    configuredAt: t.bigint().notNull(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    gatedIdx: index().on(table.gated),
+    bondAssetIdx: index().on(table.bondAsset),
+  }),
+);
+
+export const confidentialityBond = onchainTable(
+  "confidentiality_bond",
+  (t) => ({
+    id: t.text().primaryKey(), // `${contentId}-${identityKey}`
+    contentId: t.bigint().notNull(),
+    identityKey: t.hex().notNull(),
+    poster: t.hex().notNull(),
+    asset: t.integer().notNull(),
+    amount: t.bigint().notNull(),
+    status: t.text().notNull(), // "active", "released", or "slashed"
+    postedAt: t.bigint().notNull(),
+    releasedAt: t.bigint(),
+    slashedAt: t.bigint(),
+    reporterRecipient: t.hex(),
+    reporterAmount: t.bigint(),
+    confiscatedAmount: t.bigint(),
+    evidenceHash: t.hex(),
+    reason: t.text(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    contentIdx: index().on(table.contentId),
+    identityKeyIdx: index().on(table.identityKey),
+    posterIdx: index().on(table.poster),
+    statusIdx: index().on(table.status),
+  }),
+);
+
+export const raterIdentityBan = onchainTable(
+  "rater_identity_ban",
+  (t) => ({
+    id: t.text().primaryKey(), // `${provider}-${nullifierHash}`
+    provider: t.integer().notNull(),
+    nullifierHash: t.hex().notNull(),
+    active: t.boolean().notNull(),
+    permanent: t.boolean().notNull(),
+    expiresAt: t.bigint().notNull(),
+    evidenceHash: t.hex().notNull(),
+    reason: t.text().notNull(),
+    bannedAt: t.bigint().notNull(),
+    unbannedAt: t.bigint(),
+    updatedAt: t.bigint().notNull(),
+  }),
+  (table) => ({
+    providerNullifierIdx: index().on(table.provider, table.nullifierHash),
+    activeIdx: index().on(table.active),
+    expiresAtIdx: index().on(table.expiresAt),
+  }),
+);
+
+export const raterRegistryConfig = onchainTable("rater_registry_config", (t) => ({
+  id: t.text().primaryKey(),
+  confidentialityEscrow: t.hex(),
+  updatedAt: t.bigint().notNull(),
+}));
+
+// ============================================================
 // FEEDBACK BONUS POOLS
 // ============================================================
 
