@@ -15,6 +15,7 @@ contract MockERC20 is ERC20, EIP712 {
     );
     mapping(address => mapping(bytes32 => bool)) public authorizationState;
     mapping(address => bool) public blockedRecipients;
+    uint256 public transferShortfall;
     uint256 public authorizationTransferShortfall;
 
     constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) EIP712(name, "2") {
@@ -32,6 +33,10 @@ contract MockERC20 is ERC20, EIP712 {
 
     function setBlockedRecipient(address recipient, bool blocked) external {
         blockedRecipients[recipient] = blocked;
+    }
+
+    function setTransferShortfall(uint256 shortfall) external {
+        transferShortfall = shortfall;
     }
 
     function setAuthorizationTransferShortfall(uint256 shortfall) external {
@@ -87,6 +92,12 @@ contract MockERC20 is ERC20, EIP712 {
 
     function _update(address from, address to, uint256 value) internal override {
         require(!blockedRecipients[to], "MockERC20: recipient blocked");
-        super._update(from, to, value);
+        uint256 transferAmount = value;
+        uint256 shortfall = transferShortfall;
+        if (from != address(0) && to != address(0) && shortfall != 0) {
+            require(shortfall <= value, "MockERC20: shortfall exceeds value");
+            transferAmount = value - shortfall;
+        }
+        super._update(from, to, transferAmount);
     }
 }

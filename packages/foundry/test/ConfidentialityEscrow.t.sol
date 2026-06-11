@@ -12,7 +12,9 @@ import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { RoundRewardDistributor } from "../contracts/RoundRewardDistributor.sol";
 import { RoundVotingEngine } from "../contracts/RoundVotingEngine.sol";
+import { Eip3009Authorization } from "../contracts/interfaces/IEip3009.sol";
 import { IConfidentialityEscrow } from "../contracts/interfaces/IConfidentialityEscrow.sol";
+import { IRaterIdentityRegistry } from "../contracts/interfaces/IRaterIdentityRegistry.sol";
 import { VotePreflightLib } from "../contracts/libraries/VotePreflightLib.sol";
 import { RoundLib } from "../contracts/libraries/RoundLib.sol";
 import { MockCategoryRegistry } from "../contracts/mocks/MockCategoryRegistry.sol";
@@ -200,6 +202,90 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         );
     }
 
+    function testPostBondRejectsShortTransferReceipt() public {
+        uint256 contentId =
+            _submitGatedQuestionWithAsset("short-transfer", confidentialityEscrow.BOND_ASSET_USDC(), uint64(1e6));
+        IRaterIdentityRegistry.ResolvedRater memory resolved = raterRegistry.resolveRater(voter1);
+
+        usdcToken.setTransferShortfall(1);
+
+        vm.startPrank(voter1);
+        usdcToken.approve(address(confidentialityEscrow), 1e6);
+        vm.expectRevert("Bad token");
+        confidentialityEscrow.postBond(contentId);
+        vm.stopPrank();
+
+        assertFalse(confidentialityEscrow.hasActiveBond(contentId, resolved.identityKey));
+        assertEq(usdcToken.balanceOf(address(confidentialityEscrow)), 0);
+    }
+
+    function testPostBondWithAuthorizationRejectsShortReceipt() public {
+        uint256 authVoterKey = 0xA11CE123;
+        address authVoter = vm.addr(authVoterKey);
+        bytes32 authAnchor = keccak256("authorization-voter-world-id");
+
+        vm.startPrank(owner);
+        usdcToken.mint(authVoter, 10_000e6);
+        _seedRaterIdentity(raterRegistry, authVoter, authAnchor);
+        vm.stopPrank();
+
+        uint256 contentId = _submitGatedQuestionWithAsset(
+            "short-authorization", confidentialityEscrow.BOND_ASSET_USDC(), uint64(1e6)
+        );
+        IRaterIdentityRegistry.ResolvedRater memory resolved = raterRegistry.resolveRater(authVoter);
+        Eip3009Authorization memory authorization = _bondAuthorization(authVoter, authVoterKey, 1e6);
+
+        usdcToken.setAuthorizationTransferShortfall(1);
+
+        vm.prank(authVoter);
+        vm.expectRevert("Bad token");
+        confidentialityEscrow.postBondWithAuthorization(contentId, authorization);
+
+        assertFalse(confidentialityEscrow.hasActiveBond(contentId, resolved.identityKey));
+        assertEq(usdcToken.balanceOf(address(confidentialityEscrow)), 0);
+    }
+
+    function testPostBondWithPermitRejectsShortTransferReceipt() public {
+        ConfidentialityEscrow shortEscrow = ConfidentialityEscrow(
+            address(
+                new ERC1967Proxy(
+                    address(new ConfidentialityEscrow()),
+                    abi.encodeCall(
+                        ConfidentialityEscrow.initialize,
+                        (
+                            address(this),
+                            address(this),
+                            address(usdcToken),
+                            address(usdcToken),
+                            address(registry),
+                            address(protocolConfig),
+                            treasury
+                        )
+                    )
+                )
+            )
+        );
+        uint256 contentId = 999;
+        shortEscrow.configure(
+            contentId,
+            IConfidentialityEscrow.ConfidentialityConfig({
+                gated: true, bondAsset: shortEscrow.BOND_ASSET_LREP(), bondAmount: uint64(1e6), flags: 0
+            })
+        );
+        IRaterIdentityRegistry.ResolvedRater memory resolved = raterRegistry.resolveRater(voter1);
+
+        usdcToken.setTransferShortfall(1);
+
+        vm.startPrank(voter1);
+        usdcToken.approve(address(shortEscrow), 1e6);
+        vm.expectRevert("Bad token");
+        shortEscrow.postBondWithPermit(contentId, block.timestamp + 1 days, 0, bytes32(0), bytes32(0));
+        vm.stopPrank();
+
+        assertFalse(shortEscrow.hasActiveBond(contentId, resolved.identityKey));
+        assertEq(usdcToken.balanceOf(address(shortEscrow)), 0);
+    }
+
     function testBanDerivesKeysAndBlocksGatedCommitButNotRelease() public {
         uint256 contentId = _submitGatedQuestion("ban", 1e6);
         bytes32 identityKey = _postLrepBond(contentId, voter1);
@@ -253,12 +339,19 @@ contract ConfidentialityEscrowTest is VotingTestBase {
     }
 
     function _submitGatedQuestion(string memory label, uint64 bondAmount) internal returns (uint256 contentId) {
+        return _submitGatedQuestionWithAsset(label, confidentialityEscrow.BOND_ASSET_LREP(), bondAmount);
+    }
+
+    function _submitGatedQuestionWithAsset(string memory label, uint8 bondAsset, uint64 bondAmount)
+        internal
+        returns (uint256 contentId)
+    {
         string memory contextUrl = string.concat("https://example.com/private/", label);
         string memory title = string.concat("Private question ", label);
         bytes32 salt = keccak256(abi.encodePacked(label, block.timestamp, block.number));
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality =
             IConfidentialityEscrow.ConfidentialityConfig({
-                gated: true, bondAsset: confidentialityEscrow.BOND_ASSET_LREP(), bondAmount: bondAmount, flags: 0
+                gated: true, bondAsset: bondAsset, bondAmount: bondAmount, flags: 0
             });
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
         RoundLib.RoundConfig memory roundConfig = _defaultQuestionRoundConfig(registry);
@@ -297,6 +390,35 @@ contract ConfidentialityEscrowTest is VotingTestBase {
             roundConfig,
             _defaultQuestionSpec(),
             confidentiality
+        );
+    }
+
+    function _bondAuthorization(address from, uint256 signerKey, uint256 value)
+        internal
+        view
+        returns (Eip3009Authorization memory authorization)
+    {
+        authorization = Eip3009Authorization({
+            from: from,
+            to: address(confidentialityEscrow),
+            value: value,
+            validAfter: block.timestamp - 1,
+            validBefore: block.timestamp + 1 days,
+            nonce: keccak256(abi.encodePacked("confidentiality-bond", from, value, block.timestamp)),
+            v: 0,
+            r: bytes32(0),
+            s: bytes32(0)
+        });
+        (authorization.v, authorization.r, authorization.s) = vm.sign(
+            signerKey,
+            usdcToken.receiveWithAuthorizationDigest(
+                authorization.from,
+                authorization.to,
+                authorization.value,
+                authorization.validAfter,
+                authorization.validBefore,
+                authorization.nonce
+            )
         );
     }
 

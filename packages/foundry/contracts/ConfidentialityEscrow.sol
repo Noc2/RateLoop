@@ -198,7 +198,10 @@ contract ConfidentialityEscrow is
     }
 
     function postBond(uint256 contentId) external nonReentrant whenNotPaused returns (bytes32 identityKey) {
-        identityKey = _postBond(contentId, msg.sender, false);
+        (ConfidentialityConfig memory config, IRaterIdentityRegistry.ResolvedRater memory resolved) =
+            _validateBondPost(contentId, msg.sender);
+        _receiveExactBond(_bondToken(config.bondAsset), msg.sender, config.bondAmount);
+        identityKey = _recordBond(contentId, msg.sender, config, resolved);
     }
 
     function postBondWithPermit(uint256 contentId, uint256 permitDeadline, uint8 v, bytes32 r, bytes32 s)
@@ -212,7 +215,10 @@ contract ConfidentialityEscrow is
         try IERC20Permit(address(lrepToken))
             .permit(msg.sender, address(this), config.bondAmount, permitDeadline, v, r, s) { }
             catch { }
-        identityKey = _postBond(contentId, msg.sender, false);
+        IRaterIdentityRegistry.ResolvedRater memory resolved;
+        (config, resolved) = _validateBondPost(contentId, msg.sender);
+        _receiveExactBond(lrepToken, msg.sender, config.bondAmount);
+        identityKey = _recordBond(contentId, msg.sender, config, resolved);
     }
 
     function postBondWithAuthorization(uint256 contentId, Eip3009Authorization calldata authorization)
@@ -229,7 +235,10 @@ contract ConfidentialityEscrow is
         ) {
             revert("Bad authorization");
         }
-        identityKey = _postBond(contentId, msg.sender, true);
+        IRaterIdentityRegistry.ResolvedRater memory resolved;
+        (config, resolved) = _validateBondPost(contentId, msg.sender);
+        uint256 balanceBefore = usdcToken.balanceOf(address(this));
+        // slither-disable-next-line reentrancy-balance
         IReceiveWithAuthorizationToken(address(usdcToken))
             .receiveWithAuthorization(
                 authorization.from,
@@ -242,6 +251,8 @@ contract ConfidentialityEscrow is
                 authorization.r,
                 authorization.s
             );
+        if (usdcToken.balanceOf(address(this)) - balanceBefore != config.bondAmount) revert("Bad token");
+        identityKey = _recordBond(contentId, msg.sender, config, resolved);
     }
 
     function releaseBond(uint256 contentId, bytes32 identityKey)
@@ -314,29 +325,41 @@ contract ConfidentialityEscrow is
         return nullifierHasBond[provider][nullifierHash];
     }
 
-    function _postBond(uint256 contentId, address poster, bool paidViaAuthorization)
+    function _validateBondPost(uint256 contentId, address poster)
         private
-        returns (bytes32 identityKey)
+        view
+        returns (ConfidentialityConfig memory config, IRaterIdentityRegistry.ResolvedRater memory resolved)
     {
-        ConfidentialityConfig memory config = _configs[contentId];
+        config = _configs[contentId];
         if (!config.gated) revert("Not gated");
         if (config.bondAmount == 0) revert("No bond required");
-        IRaterIdentityRegistry.ResolvedRater memory resolved = _resolveRater(poster);
+        resolved = _resolveRater(poster);
         if (resolved.identityKey == bytes32(0) || !resolved.hasActiveHumanCredential) revert("Credential required");
         if (_isIdentityBanned(resolved.identityKey)) revert("Identity banned");
 
         BondPosition storage position = bonds[contentId][resolved.identityKey];
         if (position.poster != address(0) && !position.released && !position.slashed) revert("Bond exists");
+    }
 
+    function _receiveExactBond(IERC20 token, address from, uint256 amount) private {
+        uint256 balanceBefore = token.balanceOf(address(this));
+        token.safeTransferFrom(from, address(this), amount);
+        if (token.balanceOf(address(this)) - balanceBefore != amount) revert("Bad token");
+    }
+
+    function _recordBond(
+        uint256 contentId,
+        address poster,
+        ConfidentialityConfig memory config,
+        IRaterIdentityRegistry.ResolvedRater memory resolved
+    ) private returns (bytes32 identityKey) {
+        BondPosition storage position = bonds[contentId][resolved.identityKey];
         position.poster = poster;
         position.postedAt = block.timestamp.toUint64();
         position.amount = config.bondAmount;
         position.slashed = false;
         position.released = false;
         _markNullifierBonded(resolved.holder);
-        if (!paidViaAuthorization) {
-            _bondToken(config.bondAsset).safeTransferFrom(poster, address(this), config.bondAmount);
-        }
         emit BondPosted(contentId, resolved.identityKey, poster, config.bondAsset, config.bondAmount);
         return resolved.identityKey;
     }
