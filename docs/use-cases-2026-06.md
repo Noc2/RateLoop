@@ -21,10 +21,12 @@ Three constraints shape everything below:
    proprietary code review, confidential pre-launch research, enterprise model evals. What
    survives skews toward taste/judgment questions on public artifacts, which is conveniently
    where crowd > single expert.
-2. **No demographic or expertise targeting.** World ID proves humanness, not attributes. Most
-   market-research budgets pay for *whose* opinion; RateLoop can only sell "verified humans."
-   This is the single highest-leverage product gap (self-attested traits validated by peer
-   prediction would unlock category after category).
+2. **No enforced demographic or expertise targeting.** World ID proves humanness, not
+   attributes. RateLoop does have a self-reported audience-context system (rater profiles with
+   age/geo/language/role/expertise, advisory `targetAudience` on asks, post-hoc cohort summaries
+   in agent results), but nothing validates the claims and targeting gates no payouts — so it
+   can't yet carry the *whose opinion* premium most research budgets pay for. This is the single
+   highest-leverage product gap; see `audience-targeting-plan-2026-06.md` for the upgrade plan.
 3. **Latency of ~40 min–hours** fits background/long-running agents and non-urgent decisions;
    it excludes interactive loops and high-velocity crypto demand.
 
@@ -239,9 +241,11 @@ three markets than three question templates sold to the same person.
 - **The "verified human" claim needs careful wording.** World ID gating scopes bounty
   eligibility, not the public score; the honest pitch is "paid, verified-human-gated cohort with
   a public all-answers scope," and the result package already exposes both scopes.
-- **Targeting is the highest-leverage roadmap item.** Self-attested rater traits (language, geo,
-  role) validated by peer prediction would move use cases 2 and 5 up 1.5–3 points each. Every
-  incumbent's pricing scales with targeting because targeting is the value.
+- **Targeting is the highest-leverage roadmap item.** The self-reported audience-context system
+  already exists; hardening it (consistency screening, tested language/expertise, attested
+  attributes) and letting it carry payouts would move use cases 2 and 5 up 1.5–3 points each.
+  Every incumbent's pricing scales with targeting because targeting is the value. Plan:
+  `audience-targeting-plan-2026-06.md`.
 - **Prompt injection via rater feedback is the recurring trust objection** for every agent-facing
   use case. The `RATELOOP_UNTRUSTED_DATA` delimiters and structured numeric/enum fields are the
   right shape; keep free-text quarantined and lead with the structured fields in agent docs.
