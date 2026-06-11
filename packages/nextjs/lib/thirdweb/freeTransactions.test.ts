@@ -46,6 +46,12 @@ const PUBLIC_CONFIDENTIALITY_CONFIG = {
   bondAmount: 0n,
   flags: 0,
 } as const;
+const GATED_CONFIDENTIALITY_CONFIG = {
+  gated: true,
+  bondAsset: 0,
+  bondAmount: 0n,
+  flags: 0,
+} as const;
 const DETAILS_HASH = `0x${"8".repeat(64)}` as const;
 const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_sponsoreddetails01";
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
@@ -266,6 +272,7 @@ function submitQuestionWithRewardCall(
     description: string;
     detailsHash: `0x${string}`;
     detailsUrl: string;
+    confidentiality: typeof PUBLIC_CONFIDENTIALITY_CONFIG | typeof GATED_CONFIDENTIALITY_CONFIG;
     imageUrls: string[];
     tags: string;
     title: string;
@@ -277,6 +284,7 @@ function submitQuestionWithRewardCall(
     description: "Vote based on the source material.",
     detailsHash: EMPTY_DETAILS_HASH,
     detailsUrl: "",
+    confidentiality: PUBLIC_CONFIDENTIALITY_CONFIG,
     imageUrls: [] as string[],
     tags: "Products,Value",
     title: "Is this product worth recommending?",
@@ -314,7 +322,7 @@ function submitQuestionWithRewardCall(
         questionMetadataHash: `0x${"6".repeat(64)}`,
         resultSpecHash: `0x${"7".repeat(64)}`,
       },
-      PUBLIC_CONFIDENTIALITY_CONFIG,
+      question.confidentiality,
     ],
   );
 }
@@ -778,6 +786,48 @@ test("validates sponsored ContentRegistry submit question details", async () => 
   assert.equal(credentialedUrlDecision.isAllowed, false);
   if (credentialedUrlDecision.isAllowed) return;
   assert.equal(credentialedUrlDecision.debugCode, "unsupported_operation");
+});
+
+test("validates sponsored gated ContentRegistry submissions are hash-only", async () => {
+  const allowedGatedDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      submitQuestionWithRewardCall({
+        confidentiality: GATED_CONFIDENTIALITY_CONFIG,
+        contextUrl: "",
+        detailsHash: DETAILS_HASH,
+      }),
+    ]) as never,
+  );
+  assert.equal(allowedGatedDecision.isAllowed, true);
+
+  await dbModule.dbClient.execute("DELETE FROM free_transaction_reservations");
+  await dbModule.dbClient.execute("DELETE FROM free_transaction_quotas");
+
+  const publicContextDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      submitQuestionWithRewardCall({
+        confidentiality: GATED_CONFIDENTIALITY_CONFIG,
+        detailsHash: DETAILS_HASH,
+      }),
+    ]) as never,
+  );
+  assert.equal(publicContextDecision.isAllowed, false);
+  if (publicContextDecision.isAllowed) return;
+  assert.equal(publicContextDecision.debugCode, "unsupported_operation");
+
+  const publicDetailsDecision = await freeTransactions.evaluateFreeTransactionAllowance(
+    buildRequest([
+      submitQuestionWithRewardCall({
+        confidentiality: GATED_CONFIDENTIALITY_CONFIG,
+        contextUrl: "",
+        detailsHash: DETAILS_HASH,
+        detailsUrl: DETAILS_URL,
+      }),
+    ]) as never,
+  );
+  assert.equal(publicDetailsDecision.isAllowed, false);
+  if (publicDetailsDecision.isAllowed) return;
+  assert.equal(publicDetailsDecision.debugCode, "unsupported_operation");
 });
 
 test("validates sponsored ContentRegistry uploaded image ownership and origin", async () => {

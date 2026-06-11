@@ -206,6 +206,27 @@ test("parseX402QuestionRequest rejects external context for gated questions", ()
   );
 });
 
+test("parseX402QuestionRequest rejects gated questions without hosted details", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          confidentiality: {
+            visibility: "gated",
+          },
+          contextUrl: undefined,
+          detailsHash: undefined,
+          detailsUrl: undefined,
+          imageUrls: [UPLOADED_IMAGE_URL],
+          videoUrl: undefined,
+        },
+      }),
+    /detailsUrl is required for gated questions/,
+  );
+});
+
 test("parseX402QuestionRequest accepts video-only question context", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,

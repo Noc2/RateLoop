@@ -7,6 +7,8 @@ pragma solidity ^0.8.34;
 contract SubmissionMediaValidator {
     uint256 public constant MAX_IMAGE_URLS = 4;
     uint256 public constant MAX_URL_LENGTH = 2048;
+    uint256 internal constant MAX_QUESTION_LENGTH = 120;
+    uint256 internal constant MAX_TAGS_LENGTH = 256;
     uint256 internal constant YOUTUBE_VIDEO_ID_LENGTH = 11;
 
     error EmitterAlreadyInitialized();
@@ -45,6 +47,42 @@ contract SubmissionMediaValidator {
 
     function validateOptionalMediaSet(string[] calldata imageUrls, string calldata videoUrl) external pure {
         _validateMediaSet(imageUrls, videoUrl, false);
+    }
+
+    function validateContextSubmission(
+        string calldata contextUrl,
+        string[] calldata imageUrls,
+        string calldata videoUrl,
+        string calldata title,
+        string calldata tags,
+        bool gated
+    ) external pure {
+        bool hasContextUrl = bytes(contextUrl).length != 0;
+        if (gated) {
+            require(!hasContextUrl && imageUrls.length == 0 && bytes(videoUrl).length == 0, "Gated public refs");
+        } else {
+            require(hasContextUrl || imageUrls.length > 0 || bytes(videoUrl).length != 0, "Context or media required");
+        }
+        if (hasContextUrl) {
+            require(_isValidSubmissionUrl(contextUrl), "Invalid URL");
+        }
+        _validateMediaSet(imageUrls, videoUrl, false);
+        require(bytes(title).length > 0, "Question required");
+        require(bytes(title).length <= MAX_QUESTION_LENGTH, "Question too long");
+        require(bytes(tags).length > 0, "Tags required");
+        require(bytes(tags).length <= MAX_TAGS_LENGTH, "Tags too long");
+    }
+
+    function validateSubmissionDetails(string calldata detailsUrl, bytes32 detailsHash, bool gated) external pure {
+        if (bytes(detailsUrl).length != 0) {
+            require(detailsHash != bytes32(0), "Details hash required");
+            require(!gated, "Gated public refs");
+            require(_isValidSubmissionUrl(detailsUrl), "Invalid URL");
+        } else if (gated) {
+            require(detailsHash != bytes32(0), "Gated details hash required");
+        } else {
+            require(detailsHash == bytes32(0), "Details URL required");
+        }
     }
 
     function isSupportedVideoUrl(string calldata url) external pure returns (bool) {

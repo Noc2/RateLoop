@@ -135,6 +135,17 @@ function questionConfidentialityConfig(question: Pick<X402QuestionPayload["quest
   } as const;
 }
 
+function onChainQuestion(question: X402QuestionPayload["questions"][number]): X402QuestionPayload["questions"][number] {
+  if (question.confidentiality?.visibility !== "gated") return question;
+  return {
+    ...question,
+    contextUrl: "",
+    detailsUrl: "",
+    imageUrls: [],
+    videoUrl: "",
+  };
+}
+
 export type StoredPendingAgentCallback = {
   agentId: string;
   callbackUrl: string;
@@ -347,6 +358,7 @@ function feedbackBonusTokenAddress(config: X402QuestionSubmissionConfig, asset: 
 }
 
 function buildQuestionContentHash(question: X402QuestionPayload["questions"][number]): Hex {
+  const submittedQuestion = onChainQuestion(question);
   return keccak256(
     encodeAbiParameters(
       [
@@ -363,15 +375,15 @@ function buildQuestionContentHash(question: X402QuestionPayload["questions"][num
       ],
       [
         QUESTION_CONTEXT_DOMAIN,
-        question.contextUrl,
-        question.imageUrls,
-        question.videoUrl,
-        buildSubmissionDetailsHash(question.detailsUrl, question.detailsHash),
-        question.title,
-        question.tags,
-        question.categoryId,
-        question.questionMetadataHash,
-        question.resultSpecHash,
+        submittedQuestion.contextUrl,
+        submittedQuestion.imageUrls,
+        submittedQuestion.videoUrl,
+        buildSubmissionDetailsHash(submittedQuestion.detailsUrl, submittedQuestion.detailsHash),
+        submittedQuestion.title,
+        submittedQuestion.tags,
+        submittedQuestion.categoryId,
+        submittedQuestion.questionMetadataHash,
+        submittedQuestion.resultSpecHash,
       ],
     ),
   );
@@ -430,7 +442,7 @@ function buildExpectedQuestionContentHashes(payload: X402QuestionPayload): Hex[]
 }
 
 function buildExpectedQuestionContextUrls(payload: X402QuestionPayload): string[] {
-  return payload.questions.map(question => question.contextUrl);
+  return payload.questions.map(question => onChainQuestion(question).contextUrl);
 }
 
 function serializeExpectedRewardTerms(payload: X402QuestionPayload): StoredQuestionRewardTerms {
@@ -1072,6 +1084,12 @@ function createPublicQuestionClient(config: X402QuestionSubmissionConfig) {
   return createPublicClient({ chain: config.targetNetwork, transport: http(config.rpcUrl) });
 }
 
+function createSubmissionPublicClient(config: X402QuestionSubmissionConfig) {
+  return (
+    x402QuestionSubmissionTestOverrides?.createPublicQuestionClient?.(config) ?? createPublicQuestionClient(config)
+  );
+}
+
 type X402PublicClient = ReturnType<typeof createPublicQuestionClient>;
 
 async function resolveSubmissionMediaValidator(
@@ -1194,16 +1212,17 @@ async function preflightX402QuestionSubmissionWithClient(params: {
   const seenSubmissionKeys = new Set<Hex>();
 
   for (const [index, question] of params.payload.questions.entries()) {
+    const submittedQuestion = onChainQuestion(question);
     const resolvedCategoryId = question.categoryId;
     const submissionKey = buildQuestionSubmissionKey({
       categoryId: resolvedCategoryId,
-      contextUrl: question.contextUrl,
-      detailsHash: question.detailsHash,
-      detailsUrl: question.detailsUrl,
-      imageUrls: question.imageUrls,
-      title: question.title,
-      tags: question.tags,
-      videoUrl: question.videoUrl,
+      contextUrl: submittedQuestion.contextUrl,
+      detailsHash: submittedQuestion.detailsHash,
+      detailsUrl: submittedQuestion.detailsUrl,
+      imageUrls: submittedQuestion.imageUrls,
+      title: submittedQuestion.title,
+      tags: submittedQuestion.tags,
+      videoUrl: submittedQuestion.videoUrl,
     });
 
     const submissionKeyUsed = (await params.publicClient.readContract({
@@ -1236,7 +1255,7 @@ export async function preflightX402QuestionSubmission(params: {
   submissionKeys: Hex[];
 }> {
   const operation = buildX402QuestionOperation(params.payload);
-  const publicClient = createPublicQuestionClient(params.config);
+  const publicClient = createSubmissionPublicClient(params.config);
   const preflight = await preflightX402QuestionSubmissionWithClient({
     attachmentIdentity: {
       agentId: params.agentId,
@@ -1282,22 +1301,25 @@ function buildQuestionSubmissionCallContext(params: {
   submissionKeys: Hex[];
   submitter: Address;
 }) {
-  const questions = params.payload.questions.map((question, index) => ({
-    categoryId: question.categoryId,
-    confidentiality: question.confidentiality,
-    contextUrl: question.contextUrl,
-    detailsHash: question.detailsHash,
-    detailsUrl: question.detailsUrl,
-    imageUrls: question.imageUrls,
-    salt: params.salts[index],
-    spec: {
-      questionMetadataHash: question.questionMetadataHash,
-      resultSpecHash: question.resultSpecHash,
-    },
-    tags: question.tags,
-    title: question.title,
-    videoUrl: question.videoUrl,
-  }));
+  const questions = params.payload.questions.map((question, index) => {
+    const submittedQuestion = onChainQuestion(question);
+    return {
+      categoryId: question.categoryId,
+      confidentiality: question.confidentiality,
+      contextUrl: submittedQuestion.contextUrl,
+      detailsHash: submittedQuestion.detailsHash,
+      detailsUrl: submittedQuestion.detailsUrl,
+      imageUrls: submittedQuestion.imageUrls,
+      salt: params.salts[index],
+      spec: {
+        questionMetadataHash: question.questionMetadataHash,
+        resultSpecHash: question.resultSpecHash,
+      },
+      tags: question.tags,
+      title: question.title,
+      videoUrl: submittedQuestion.videoUrl,
+    };
+  });
   const rewardTerms = {
     asset: X402_SUBMISSION_REWARD_ASSET_USDC,
     amount: params.payload.bounty.amount,
@@ -1393,7 +1415,7 @@ async function buildAgentWalletQuestionSubmissionPlan(params: {
   payload: X402QuestionPayload;
   walletAddress: Address;
 }): Promise<AgentWalletQuestionSubmissionPlan> {
-  const publicClient = createPublicQuestionClient(params.config);
+  const publicClient = createSubmissionPublicClient(params.config);
   const operation = buildX402QuestionOperation(params.payload);
   const preflight = await preflightX402QuestionSubmissionWithClient({
     attachmentIdentity: {
@@ -1617,7 +1639,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
   const validBefore = BigInt(inputAuthorization.validBefore ?? defaultNativeX402ValidBefore().toString());
   assertNativeX402ValidityWindow(validAfter, validBefore);
 
-  const publicClient = createPublicQuestionClient(params.config);
+  const publicClient = createSubmissionPublicClient(params.config);
   const operation = buildX402QuestionOperation(params.payload);
   const preflight = await preflightX402QuestionSubmissionWithClient({
     attachmentIdentity: {

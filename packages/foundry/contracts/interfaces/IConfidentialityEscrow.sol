@@ -19,6 +19,7 @@ interface IConfidentialityEscrow {
     function postBondWithAuthorization(uint256 contentId, Eip3009Authorization calldata authorization)
         external
         returns (bytes32 identityKey);
+    function recordAccessNexus(uint256 contentId, address holder) external;
     function recordConfidentialityNexus(uint256 contentId, address holder) external;
     function releaseBond(uint256 contentId, bytes32 identityKey) external returns (uint256 amount);
     function slashBond(

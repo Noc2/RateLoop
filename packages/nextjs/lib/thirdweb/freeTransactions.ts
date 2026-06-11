@@ -777,6 +777,10 @@ type SponsoredSubmissionQuestion = {
   videoUrl: string;
 };
 
+type SponsoredSubmissionConfidentiality = {
+  gated: boolean;
+};
+
 function getTupleField(value: unknown, key: string, index: number) {
   if (Array.isArray(value)) return value[index];
   if (value && typeof value === "object") return (value as Record<string, unknown>)[key];
@@ -799,6 +803,15 @@ function readSubmissionDetailsField(value: unknown): { detailsHash: string; deta
   }
 
   return { detailsHash, detailsUrl };
+}
+
+function readSubmissionConfidentialityField(value: unknown): SponsoredSubmissionConfidentiality | null {
+  const gated = getTupleField(value, "gated", 0);
+  if (typeof gated !== "boolean") {
+    return null;
+  }
+
+  return { gated };
 }
 
 function readSponsoredSubmissionQuestionFromArgs(args: readonly unknown[]): SponsoredSubmissionQuestion | null {
@@ -876,6 +889,10 @@ function hasCanonicalDetails(detailsUrl: string, detailsHash: string) {
   return detailsUrl.trim() === detailsUrl && sanitizeExternalUrl(detailsUrl) === detailsUrl;
 }
 
+function hasCanonicalGatedDetails(detailsUrl: string, detailsHash: string) {
+  return !detailsUrl && /^0x[a-fA-F0-9]{64}$/.test(detailsHash) && detailsHash !== EMPTY_DETAILS_HASH;
+}
+
 function hasCanonicalVideoUrl(value: string) {
   if (!value) return true;
   const normalized = normalizeSubmissionMediaUrl(value);
@@ -894,6 +911,7 @@ function hasCanonicalUploadedImageUrls(imageUrls: readonly string[]) {
 async function validateSponsoredSubmissionQuestion(
   question: SponsoredSubmissionQuestion,
   walletAddress: `0x${string}`,
+  gated = false,
 ) {
   const title = question.title.trim();
   const tags = question.tags.trim();
@@ -902,11 +920,16 @@ async function validateSponsoredSubmissionQuestion(
   if (!tags || tags !== question.tags || tags.length > MAX_CONTENT_TAGS_LENGTH) return false;
   if (question.contextUrl.trim() !== question.contextUrl || question.videoUrl.trim() !== question.videoUrl)
     return false;
-  if (!hasCanonicalContextUrl(question.contextUrl) || !hasCanonicalVideoUrl(question.videoUrl)) return false;
-  if (!hasCanonicalDetails(question.detailsUrl, question.detailsHash)) return false;
-  if (question.videoUrl && question.imageUrls.length > 0) return false;
-  if (!question.contextUrl && question.imageUrls.length === 0 && !question.videoUrl) return false;
-  if (!hasCanonicalUploadedImageUrls(question.imageUrls)) return false;
+  if (gated) {
+    if (question.contextUrl || question.imageUrls.length > 0 || question.videoUrl) return false;
+    if (!hasCanonicalGatedDetails(question.detailsUrl, question.detailsHash)) return false;
+  } else {
+    if (!hasCanonicalContextUrl(question.contextUrl) || !hasCanonicalVideoUrl(question.videoUrl)) return false;
+    if (!hasCanonicalDetails(question.detailsUrl, question.detailsHash)) return false;
+    if (question.videoUrl && question.imageUrls.length > 0) return false;
+    if (!question.contextUrl && question.imageUrls.length === 0 && !question.videoUrl) return false;
+    if (!hasCanonicalUploadedImageUrls(question.imageUrls)) return false;
+  }
   if (getContentTitleValidationError(title)) return false;
 
   const parsedTags = parseTags(tags);
@@ -934,7 +957,13 @@ async function validateSponsoredContentRegistryCall(
 
   if (functionName === "submitQuestion" || functionName === "submitQuestionWithRewardAndRoundConfig") {
     const question = readSponsoredSubmissionQuestionFromArgs(args);
-    return question ? validateSponsoredSubmissionQuestion(question, walletAddress) : false;
+    const confidentiality =
+      functionName === "submitQuestionWithRewardAndRoundConfig"
+        ? readSubmissionConfidentialityField(args[11])
+        : { gated: false };
+    return question && confidentiality
+      ? validateSponsoredSubmissionQuestion(question, walletAddress, confidentiality.gated)
+      : false;
   }
 
   if (functionName === "submitQuestionBundleWithRewardAndRoundConfig") {
@@ -943,7 +972,7 @@ async function validateSponsoredContentRegistryCall(
 
     for (const value of questions) {
       const question = readSponsoredSubmissionQuestionFromTuple(value);
-      if (!question || !(await validateSponsoredSubmissionQuestion(question, walletAddress))) {
+      if (!question || !(await validateSponsoredSubmissionQuestion(question, walletAddress, false))) {
         return false;
       }
     }

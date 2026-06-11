@@ -309,6 +309,113 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         engine.openRound(secondContentId);
     }
 
+    function testZeroBondGatedAccessRecorderCreatesBanNexusWithoutCommit() public {
+        uint256 contentId = _submitGatedQuestion("zero-bond-access", 0);
+        uint8 provider = uint8(RaterRegistry.HumanCredentialProvider.SeededHuman);
+
+        assertFalse(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
+        vm.prank(owner);
+        confidentialityEscrow.recordAccessNexus(contentId, voter1);
+        assertTrue(confidentialityEscrow.hasConfidentialityNexus(provider, VOTER1_ANCHOR));
+
+        vm.prank(owner);
+        raterRegistry.banIdentity(
+            RaterRegistry.HumanCredentialProvider.SeededHuman,
+            VOTER1_ANCHOR,
+            uint64(block.timestamp + 365 days),
+            "verified view leak",
+            EVIDENCE_HASH
+        );
+
+        assertTrue(raterRegistry.isIdentityKeyBanned(raterRegistry.addressIdentityKey(voter1)));
+    }
+
+    function testRecordAccessNexusRequiresRecorderRole() public {
+        uint256 contentId = _submitGatedQuestion("zero-bond-access-role", 0);
+
+        vm.expectRevert();
+        vm.prank(voter1);
+        confidentialityEscrow.recordAccessNexus(contentId, voter1);
+    }
+
+    function testGatedQuestionRejectsPublicContextAndDetailsUrl() public {
+        IConfidentialityEscrow.ConfidentialityConfig memory confidentiality =
+            IConfidentialityEscrow.ConfidentialityConfig({
+                gated: true, bondAsset: confidentialityEscrow.BOND_ASSET_LREP(), bondAmount: 0, flags: 0
+            });
+        ContentRegistry.SubmissionDetails memory privateDetails =
+            ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: keccak256("private-details") });
+        ContentRegistry.SubmissionDetails memory publicDetails = ContentRegistry.SubmissionDetails({
+            detailsUrl: "https://example.com/private-details", detailsHash: keccak256("private-details")
+        });
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
+        RoundLib.RoundConfig memory roundConfig = _defaultQuestionRoundConfig(registry);
+        ContentRegistry.QuestionSpecCommitment memory spec = _defaultQuestionSpec();
+        string[] memory imageUrls = _emptyImageUrls();
+
+        vm.expectRevert("Gated public refs");
+        vm.prank(submitter);
+        registry.submitQuestionWithRewardAndRoundConfig(
+            "https://example.com/private-context",
+            imageUrls,
+            "",
+            "Private question public context",
+            "private",
+            1,
+            privateDetails,
+            keccak256("private-context-salt"),
+            rewardTerms,
+            roundConfig,
+            spec,
+            confidentiality
+        );
+
+        vm.expectRevert("Gated public refs");
+        vm.prank(submitter);
+        registry.submitQuestionWithRewardAndRoundConfig(
+            "",
+            imageUrls,
+            "",
+            "Private question public details",
+            "private",
+            1,
+            publicDetails,
+            keccak256("private-details-salt"),
+            rewardTerms,
+            roundConfig,
+            spec,
+            confidentiality
+        );
+    }
+
+    function testGatedQuestionRequiresPrivateDetailsHash() public {
+        IConfidentialityEscrow.ConfidentialityConfig memory confidentiality =
+            IConfidentialityEscrow.ConfidentialityConfig({
+                gated: true, bondAsset: confidentialityEscrow.BOND_ASSET_LREP(), bondAmount: 0, flags: 0
+            });
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
+        RoundLib.RoundConfig memory roundConfig = _defaultQuestionRoundConfig(registry);
+        ContentRegistry.QuestionSpecCommitment memory spec = _defaultQuestionSpec();
+        string[] memory imageUrls = _emptyImageUrls();
+
+        vm.expectRevert("Gated details hash required");
+        vm.prank(submitter);
+        registry.submitQuestionWithRewardAndRoundConfig(
+            "",
+            imageUrls,
+            "",
+            "Private question missing hash",
+            "private",
+            1,
+            _emptySubmissionDetails(),
+            keccak256("missing-private-details-hash"),
+            rewardTerms,
+            roundConfig,
+            spec,
+            confidentiality
+        );
+    }
+
     function testBanDerivesKeysAndBlocksGatedCommitButNotRelease() public {
         uint256 contentId = _submitGatedQuestion("ban", 1e6);
         bytes32 identityKey = _postLrepBond(contentId, voter1);
@@ -393,8 +500,11 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         internal
         returns (uint256 contentId)
     {
-        string memory contextUrl = string.concat("https://example.com/private/", label);
+        string memory contextUrl = "";
         string memory title = string.concat("Private question ", label);
+        ContentRegistry.SubmissionDetails memory details = ContentRegistry.SubmissionDetails({
+            detailsUrl: "", detailsHash: keccak256(abi.encodePacked("private-details", label))
+        });
         bytes32 salt = keccak256(abi.encodePacked(label, block.timestamp, block.number));
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality =
             IConfidentialityEscrow.ConfidentialityConfig({
@@ -402,14 +512,13 @@ contract ConfidentialityEscrowTest is VotingTestBase {
             });
         ContentRegistry.SubmissionRewardTerms memory rewardTerms = _defaultSubmissionRewardTerms(registry);
         RoundLib.RoundConfig memory roundConfig = _defaultQuestionRoundConfig(registry);
-        bytes32 submissionKey =
-            _questionSubmissionKey(contextUrl, _emptyImageUrls(), "", title, "private", 1, _emptySubmissionDetails());
+        bytes32 submissionKey = _questionSubmissionKey(contextUrl, _emptyImageUrls(), "", title, "private", 1, details);
         bytes32 revealCommitment = _questionRevealCommitment(
             submissionKey,
             keccak256(abi.encode(_emptyImageUrls(), "")),
             title,
             "private",
-            _emptySubmissionDetails(),
+            details,
             1,
             salt,
             submitter,
@@ -431,7 +540,7 @@ contract ConfidentialityEscrowTest is VotingTestBase {
             title,
             "private",
             1,
-            _emptySubmissionDetails(),
+            details,
             salt,
             rewardTerms,
             roundConfig,

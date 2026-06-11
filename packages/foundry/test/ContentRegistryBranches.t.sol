@@ -146,7 +146,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         MockQuestionRewardPoolEscrow replacementEscrow = new MockQuestionRewardPoolEscrow();
 
         vm.prank(owner);
-        vm.expectRevert("Pause required");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.setQuestionRewardPoolEscrow(address(replacementEscrow));
 
         assertEq(registry.questionRewardPoolEscrow(), address(mockQuestionRewardPoolEscrow));
@@ -183,11 +183,11 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SetProtocolConfigRejectsNoCodeOrWrongContract() public {
         vm.prank(owner);
-        vm.expectRevert("Invalid protocol config");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.setProtocolConfig(address(0xBEEF));
 
         vm.prank(owner);
-        vm.expectRevert("Invalid protocol config");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.setProtocolConfig(address(mockQuestionRewardPoolEscrow));
     }
 
@@ -1514,6 +1514,19 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         assertEq(registry.questionBundleRoundObserver(contentIds[0]), address(mockQuestionRewardPoolEscrow));
     }
 
+    function test_SubmitQuestionBundleWithReward_SnapshotsRoundObserverAcrossEscrowRotation() public {
+        uint256[] memory contentIds = _submitReservedQuestionBundleForDormancyTest();
+        MockQuestionRewardPoolEscrow replacementEscrow = new MockQuestionRewardPoolEscrow();
+
+        vm.startPrank(owner);
+        registry.pause();
+        registry.setQuestionRewardPoolEscrow(address(replacementEscrow));
+        vm.stopPrank();
+
+        assertEq(registry.questionRewardPoolEscrow(), address(replacementEscrow));
+        assertEq(registry.questionBundleRoundObserver(contentIds[0]), address(mockQuestionRewardPoolEscrow));
+    }
+
     function test_SubmitQuestionBundleWithReward_RejectsHighRoundVoterCap() public {
         ContentRegistry.BundleQuestionInput[] memory questions = new ContentRegistry.BundleQuestionInput[](2);
         questions[0] = ContentRegistry.BundleQuestionInput({
@@ -2702,7 +2715,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _vote(voter1, 1, true);
 
         vm.prank(submitter);
-        vm.expectRevert("Content has votes");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.cancelContent(1);
     }
 
@@ -2722,7 +2735,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         vm.stopPrank();
 
         vm.prank(submitter);
-        vm.expectRevert("Content has votes");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.cancelContent(1);
     }
 
@@ -2757,7 +2770,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         assertGt(registry.getRating(1), ratingBefore, "tracked old engine settlement updates rating");
         vm.warp(block.timestamp + 30 days);
-        vm.expectRevert("Dormancy period not elapsed");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.markDormant(1);
     }
 
@@ -3046,19 +3059,19 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_RevokeVotingEngine_RejectsCanonicalEngine() public {
         vm.prank(owner);
-        vm.expectRevert("Cannot revoke canonical engine");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.revokeVotingEngine(address(votingEngine));
     }
 
     function test_RevokeVotingEngine_RejectsZeroAddress() public {
         vm.prank(owner);
-        vm.expectRevert("Invalid address");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.revokeVotingEngine(address(0));
     }
 
     function test_RevokeVotingEngine_RejectsUnauthorizedEngine() public {
         vm.prank(owner);
-        vm.expectRevert("Engine not authorized");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.revokeVotingEngine(address(0xBEEF));
     }
 
@@ -3085,7 +3098,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _submitContentWithReservation(registry, "https://example.com/1", "goal", "goal", "tags", 0);
         vm.stopPrank();
 
-        vm.expectRevert("Dormancy period not elapsed");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.markDormant(1);
     }
 
@@ -3094,7 +3107,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.warp(block.timestamp + 31 days);
 
-        vm.expectRevert("Bundled content");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.markDormant(contentIds[0]);
     }
 
@@ -3253,7 +3266,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         _commitWithStakeToEngine(replacementEngine, voter4, 1, false, STAKE);
 
         vm.warp(T0 + 31 days);
-        vm.expectRevert("Content has active round");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.markDormant(1);
     }
 
@@ -3387,7 +3400,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         (,,,,, ContentRegistry.ContentStatus status,,,,) = registry.contents(2);
         assertEq(uint256(status), uint256(ContentRegistry.ContentStatus.Active));
 
-        vm.expectRevert("No submission key");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.releaseDormantSubmissionKey(1);
 
         bytes32 submissionKey =
@@ -3478,7 +3491,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
         vm.startPrank(submitter);
         lrepToken.approve(address(registry), 5e6);
-        vm.expectRevert("Dormant key released");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.reviveContent(1);
         vm.stopPrank();
     }
@@ -3569,7 +3582,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_MarkDormant_PhantomContentId_Reverts() public {
         vm.warp(block.timestamp + 31 days);
-        vm.expectRevert("Content does not exist");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.markDormant(999999);
     }
 

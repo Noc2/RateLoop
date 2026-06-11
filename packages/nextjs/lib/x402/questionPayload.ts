@@ -614,8 +614,11 @@ function normalizeQuestion(
   if (confidentiality.visibility === "gated") {
     if (contextUrl || videoUrl) {
       throw new X402QuestionInputError(
-        `${fieldPrefix}.confidentiality.visibility gated requires RateLoop-hosted imageUrls and/or detailsUrl; external contextUrl and videoUrl are not allowed.`,
+        `${fieldPrefix}.confidentiality.visibility gated requires a RateLoop-hosted detailsUrl; external contextUrl and videoUrl are not allowed.`,
       );
+    }
+    if (!details.detailsUrl) {
+      throw new X402QuestionInputError(`${fieldPrefix}.detailsUrl is required for gated questions.`);
     }
     if (details.detailsUrl && !isHostedQuestionDetailsUrl(details.detailsUrl)) {
       throw new X402QuestionInputError(

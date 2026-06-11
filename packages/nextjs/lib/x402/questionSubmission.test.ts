@@ -1,7 +1,14 @@
 import { ContentRegistryAbi, FeedbackBonusEscrowAbi, X402QuestionSubmitterAbi } from "@rateloop/contracts/abis";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { type Address, type Hex, type TransactionReceipt, encodeAbiParameters, encodeEventTopics } from "viem";
+import {
+  type Address,
+  type Hex,
+  type TransactionReceipt,
+  decodeFunctionData,
+  encodeAbiParameters,
+  encodeEventTopics,
+} from "viem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testMemory";
 import { X402QuestionInputError, type X402QuestionPayload } from "~~/lib/x402/questionPayload";
@@ -581,6 +588,19 @@ test("prepareAgentWalletQuestionSubmissionRequest stores optional feedback bonus
 test("prepareAgentWalletQuestionSubmissionRequest marks gated hosted attachments before confirm", async () => {
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const payload = buildPayload("wallet-prepare-gated-attachments");
+  setDefaultTestOverrides({
+    buildAgentWalletQuestionSubmissionPlan: undefined as never,
+    createPublicQuestionClient: () =>
+      ({
+        readContract: async ({ functionName }: { functionName: string }) => {
+          if (functionName === "protocolConfig") return "0x00000000000000000000000000000000000000bb";
+          if (functionName === "minSubmissionUsdcPool") return 0n;
+          if (functionName === "config") return { maxVoters: payload.roundConfig.maxVoters };
+          if (functionName === "submissionKeyUsed") return false;
+          return undefined;
+        },
+      }) as never,
+  });
   const detailsId = "det_preparegateddetail";
   const detailsHash = `0x${"7".repeat(64)}` as const;
   const detailsUrl = `https://www.rateloop.ai/api/attachments/details/${detailsId}`;
@@ -640,11 +660,31 @@ test("prepareAgentWalletQuestionSubmissionRequest marks gated hosted attachments
     status: "approved",
   });
 
-  await prepareAgentWalletQuestionSubmissionRequest({
+  const response = await prepareAgentWalletQuestionSubmissionRequest({
     agentId: "agent-wallet",
     payload,
     walletAddress,
   });
+  assert.equal(response.status, 202);
+  const plan = response.body as {
+    transactionPlan: { calls: Array<{ data: Hex; functionName: string; id: string }> };
+  };
+  const submitCall = plan.transactionPlan.calls.find(
+    call => call.functionName === "submitQuestionWithRewardAndRoundConfig",
+  );
+  assert.ok(submitCall);
+  const decoded = decodeFunctionData({
+    abi: ContentRegistryAbi,
+    data: submitCall.data,
+  });
+  assert.equal(decoded.functionName, "submitQuestionWithRewardAndRoundConfig");
+  const submitArgs = decoded.args as readonly unknown[];
+  assert.equal(submitArgs[0], "");
+  assert.deepEqual(submitArgs[1], []);
+  assert.equal(submitArgs[2], "");
+  const submittedDetails = submitArgs[6] as { 0?: string; 1?: Hex; detailsHash?: Hex; detailsUrl?: string };
+  assert.equal(submittedDetails.detailsUrl ?? submittedDetails[0], "");
+  assert.equal(submittedDetails.detailsHash ?? submittedDetails[1], detailsHash);
 
   const details = await dbClient.execute({
     sql: "SELECT requires_gated_access FROM question_details WHERE id = ?",

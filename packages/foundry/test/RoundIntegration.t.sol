@@ -3428,7 +3428,7 @@ contract RoundIntegrationTest is VotingTestBase {
         RoundVotingEngine replacementEngine = _deployReplacementVotingEngine();
 
         vm.prank(owner);
-        vm.expectRevert("Pause required");
+        vm.expectRevert(ContentRegistry.InvalidState.selector);
         registry.setVotingEngine(address(replacementEngine));
 
         _settleAfterRbtsSeed(votingEngine, contentId, roundId);

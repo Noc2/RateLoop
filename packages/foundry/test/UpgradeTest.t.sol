@@ -301,27 +301,6 @@ contract UpgradeTest is Test {
 
         assertEq(address(contentRegistry.submissionMediaValidator()), address(validator));
         assertEq(contentRegistry.submissionMediaValidator().authorizedEmitter(), address(contentRegistry));
-
-        vm.expectRevert("Validator exists");
-        contentRegistry.initializeSubmissionMediaValidator();
-    }
-
-    function test_ContentRegistry_MediaValidatorMigrationInitializesEmptySlot() public {
-        bytes32 validatorSlot = bytes32(uint256(25));
-        vm.store(address(contentRegistry), validatorSlot, bytes32(0));
-        assertEq(address(contentRegistry.submissionMediaValidator()), address(0));
-
-        ContentRegistry newImpl = new ContentRegistry();
-        vm.prank(governance);
-        contentRegistryAdmin.upgradeAndCall(
-            _proxy(address(contentRegistry)),
-            address(newImpl),
-            abi.encodeCall(ContentRegistry.initializeSubmissionMediaValidator, ())
-        );
-
-        SubmissionMediaValidator validator = contentRegistry.submissionMediaValidator();
-        assertTrue(address(validator) != address(0));
-        assertEq(validator.authorizedEmitter(), address(contentRegistry));
     }
 
     // =========================================================================

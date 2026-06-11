@@ -58,6 +58,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     error OnlyVotingEngine();
     error ActiveRoundOnPreviousEngine();
+    error InvalidState();
 
     // --- Access Control Roles ---
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
@@ -96,10 +97,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     uint256 internal constant DEFAULT_CONFIDENCE_MASS_INITIAL = 80e6;
 
     // String length limits (prevent storage bloat)
-    uint256 internal constant MAX_URL_LENGTH = 2048;
-    uint256 internal constant MAX_QUESTION_LENGTH = 120;
-    uint256 internal constant MAX_TAGS_LENGTH = 256;
-    uint256 internal constant MAX_IMAGE_URLS = 4;
     uint16 internal constant MAX_QUESTION_BUNDLE_ROUND_VOTERS = 100;
 
     // --- Enums ---
@@ -228,9 +225,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     SubmissionMediaValidator private immutable _defaultSubmissionMediaValidator;
     SubmissionMediaValidator public submissionMediaValidator;
+    mapping(uint256 => address) internal questionBundleRoundObserverByContent;
 
     /// @dev Reserved storage gap for future upgrades
-    uint256[41] private __gap;
+    uint256[40] private __gap;
 
     // --- Events ---
     event ContentSubmitted(
@@ -357,13 +355,6 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         bonusPool = _treasuryAuthority;
     }
 
-    /// @notice One-time migration hook for pre-storage-validator proxies.
-    /// @dev Safe to call through `upgradeAndCall`: the helper is always owned by this proxy.
-    function initializeSubmissionMediaValidator() external reinitializer(2) {
-        require(address(submissionMediaValidator) == address(0), "Validator exists");
-        _initializeSubmissionMediaValidator();
-    }
-
     function _initializeSubmissionMediaValidator() private {
         if (address(submissionMediaValidator) != address(0)) return;
         SubmissionMediaValidator validator = _defaultSubmissionMediaValidator;
@@ -376,10 +367,10 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ///      rounds can finish settlement callbacks. Operators should still follow up with
     ///      `revokeVotingEngine(prevEngine)` after old rounds have drained.
     function setVotingEngine(address _votingEngine) external onlyRole(CONFIG_ROLE) {
-        require(_votingEngine != address(0), "Invalid address");
+        if (_votingEngine == address(0)) revert InvalidState();
         require(_votingEngine.code.length != 0, "No code");
         if (votingEngine == _votingEngine) return;
-        require(votingEngine == address(0) || paused(), "Pause required");
+        if (votingEngine != address(0) && !paused()) revert InvalidState();
         uint256 nextGeneration;
         unchecked {
             nextGeneration = votingEngineGeneration + 1;
@@ -394,9 +385,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     ///      the old engine have been drained. Cannot be used on the canonical engine — call
     ///      `setVotingEngine` to rotate first.
     function revokeVotingEngine(address engine) external onlyRole(CONFIG_ROLE) {
-        require(engine != address(0), "Invalid address");
-        require(engine != votingEngine, "Cannot revoke canonical engine");
-        require(votingEngineCallbackGeneration[engine] != 0, "Engine not authorized");
+        if (engine == address(0)) revert InvalidState();
+        if (engine == votingEngine) revert InvalidState();
+        if (votingEngineCallbackGeneration[engine] == 0) revert InvalidState();
         delete votingEngineCallbackGeneration[engine];
         emit VotingEngineRevoked(engine);
     }
@@ -411,7 +402,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function setProtocolConfig(address _protocolConfig) external onlyRole(CONFIG_ROLE) {
-        require(_probeContractShape(_protocolConfig, 0x79502c55, 4), "Invalid protocol config");
+        if (!_probeContractShape(_protocolConfig, 0x79502c55, 4)) revert InvalidState();
         protocolConfig = ProtocolConfig(_protocolConfig);
     }
 
@@ -427,23 +418,23 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @notice Set or update the bounty escrow.
     function setQuestionRewardPoolEscrow(address _questionRewardPoolEscrow) external onlyRole(CONFIG_ROLE) {
-        require(_questionRewardPoolEscrow != address(0), "Invalid address");
+        if (_questionRewardPoolEscrow == address(0)) revert InvalidState();
         require(_questionRewardPoolEscrow.code.length != 0, "No code");
         if (questionRewardPoolEscrow == _questionRewardPoolEscrow) return;
-        require(questionRewardPoolEscrow == address(0) || paused(), "Pause required");
+        if (questionRewardPoolEscrow != address(0) && !paused()) revert InvalidState();
         questionRewardPoolEscrow = _questionRewardPoolEscrow;
         emit QuestionRewardPoolEscrowUpdated(_questionRewardPoolEscrow);
     }
 
     /// @notice Set the legacy cancellation sink address (can only be called by TREASURY_ROLE).
     function setBonusPool(address _bonusPool) external onlyRole(TREASURY_ROLE) {
-        require(_bonusPool != address(0), "Invalid address");
+        if (_bonusPool == address(0)) revert InvalidState();
         bonusPool = _bonusPool;
     }
 
     /// @notice Set the treasury address that receives slashed stakes (can only be called by TREASURY_ROLE).
     function setTreasury(address _treasury) external onlyRole(TREASURY_ROLE) {
-        require(_treasury != address(0), "Invalid address");
+        if (_treasury == address(0)) revert InvalidState();
         treasury = _treasury;
     }
 
@@ -535,9 +526,9 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         QuestionSpecCommitment memory spec,
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality
     ) public nonReentrant whenNotPaused returns (uint256) {
-        _validateSubmissionDetails(details);
-        SubmissionMetadata memory metadata =
-            _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, tags, categoryId);
+        SubmissionMetadata memory metadata = _validatedContextSubmissionMetadata(
+            contextUrl, imageUrls, videoUrl, title, tags, categoryId, confidentiality.gated
+        );
         return _submitValidatedQuestionWithMedia(
             metadata,
             imageUrls,
@@ -576,7 +567,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
         for (uint256 i = 0; i < questions.length; i++) {
             BundleQuestionInput calldata question = questions[i];
-            _validateSubmissionDetails(question.details);
+            _validateSubmissionDetails(question.details, false);
             _validateQuestionSpec(question.spec);
             SubmissionMetadata memory metadata = _validatedContextSubmissionMetadata(
                 question.contextUrl,
@@ -584,7 +575,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 question.videoUrl,
                 question.title,
                 question.tags,
-                question.categoryId
+                question.categoryId,
+                false
             );
             uint256 resolvedCategoryId = _resolveQuestionSubmissionCategory(metadata);
             bytes32 mediaHash = _submissionMediaHash(question.imageUrls, question.videoUrl);
@@ -637,6 +629,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
                 bundleId
             );
             contentIds[i] = contentId;
+            questionBundleRoundObserverByContent[contentId] = questionRewardPoolEscrow;
             emit QuestionBundleContentLinked(bundleId, contentId, i);
 
             emit ContentSubmitted(
@@ -684,9 +677,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     }
 
     function questionBundleRoundObserver(uint256 contentId) external view returns (address bundleRewardPoolEscrow) {
-        if (contentBundleId[contentId] != 0) {
-            bundleRewardPoolEscrow = questionRewardPoolEscrow;
-        }
+        bundleRewardPoolEscrow = questionBundleRoundObserverByContent[contentId];
     }
 
     /// @notice Submit a question with a context link, image evidence, or video evidence.
@@ -744,10 +735,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         address submitter,
         IConfidentialityEscrow.ConfidentialityConfig memory confidentiality
     ) public onlyRole(X402_GATEWAY_ROLE) nonReentrant whenNotPaused returns (uint256 contentId) {
-        require(submitter != address(0), "Invalid submitter");
+        if (submitter == address(0)) revert InvalidState();
         require(rewardTerms.asset == SUBMISSION_REWARD_ASSET_USDC, "USDC required");
-        SubmissionMetadata memory metadata =
-            _validatedContextSubmissionMetadata(contextUrl, imageUrls, videoUrl, title, tags, categoryId);
+        SubmissionMetadata memory metadata = _validatedContextSubmissionMetadata(
+            contextUrl, imageUrls, videoUrl, title, tags, categoryId, confidentiality.gated
+        );
         RoundLib.RoundConfig memory validatedRoundConfig = _validatedRoundConfig(roundConfig);
         (uint256 resolvedCategoryId, bytes32 submissionKey, PendingSubmission memory pending) = _prepareQuestionMediaSubmission(
             metadata,
@@ -759,7 +751,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             validatedRoundConfig,
             spec,
             submitter,
-            _hashConfidentiality(confidentiality)
+            _hashConfidentiality(confidentiality),
+            confidentiality.gated
         );
         contentId = _storeQuestionAndAttachReward(
             submissionKey,
@@ -794,13 +787,13 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         Content storage c = contents[contentId];
         require(_isSubmitterIdentity(contentId, msg.sender), "Not submitter");
         require(c.status == ContentStatus.Active, "Not active");
-        require(contentRoundTrackingEngine[contentId] == address(0), "Content has votes");
+        if (contentRoundTrackingEngine[contentId] != address(0)) revert InvalidState();
         if (votingEngine != address(0)) {
-            require(!IRoundVotingEngine(votingEngine).hasCommits(contentId), "Content has votes");
+            if (IRoundVotingEngine(votingEngine).hasCommits(contentId)) revert InvalidState();
         }
         // Cancelling a bundle member would permanently prevent the bundle escrow from
         // completing all configured round sets. Treat bundles as atomic once submitted.
-        require(contentBundleId[contentId] == 0, "Bundled content");
+        if (contentBundleId[contentId] != 0) revert InvalidState();
 
         c.status = ContentStatus.Cancelled;
 
@@ -819,25 +812,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         string memory videoUrl,
         string memory title,
         string memory tags,
-        uint256 categoryId
+        uint256 categoryId,
+        bool gated
     ) internal view returns (SubmissionMetadata memory metadata) {
-        bool hasContextUrl = bytes(contextUrl).length != 0;
-        if (hasContextUrl) {
-            submissionMediaValidator.validateContextUrl(contextUrl);
-        }
-        submissionMediaValidator.validateOptionalMediaSet(imageUrls, videoUrl);
-        require(hasContextUrl || imageUrls.length > 0 || bytes(videoUrl).length != 0, "Context or media required");
+        submissionMediaValidator.validateContextSubmission(contextUrl, imageUrls, videoUrl, title, tags, gated);
         metadata = SubmissionMetadata({ url: contextUrl, title: title, tags: tags, categoryId: categoryId });
-        _validateTextFields(metadata);
         require(address(categoryRegistry) != address(0), "Category unset");
-    }
-
-    function _validateTextFields(SubmissionMetadata memory metadata) internal pure {
-        require(bytes(metadata.url).length <= MAX_URL_LENGTH, "URL too long");
-        require(bytes(metadata.title).length > 0, "Question required");
-        require(bytes(metadata.title).length <= MAX_QUESTION_LENGTH, "Question too long");
-        require(bytes(metadata.tags).length > 0, "Tags required");
-        require(bytes(metadata.tags).length <= MAX_TAGS_LENGTH, "Tags too long");
     }
 
     function _submitValidatedQuestionWithMedia(
@@ -863,7 +843,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
             roundConfig,
             spec,
             msg.sender,
-            confidentialityHash
+            confidentialityHash,
+            confidentiality.gated
         );
         contentId = _storeQuestionAndAttachReward(
             submissionKey,
@@ -894,10 +875,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         RoundLib.RoundConfig memory roundConfig,
         QuestionSpecCommitment memory spec,
         address submitter,
-        bytes32 confidentialityHash
+        bytes32 confidentialityHash,
+        bool gated
     ) internal returns (uint256 resolvedCategoryId, bytes32 submissionKey, PendingSubmission memory pending) {
         _validateQuestionSpec(spec);
-        _validateSubmissionDetails(details);
+        _validateSubmissionDetails(details, gated);
         resolvedCategoryId = _resolveQuestionSubmissionCategory(metadata);
         bytes32 mediaHash = _submissionMediaHash(imageUrls, videoUrl);
         submissionKey = _deriveQuestionMediaSubmissionKey(metadata, mediaHash, details, resolvedCategoryId);
@@ -977,13 +959,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(spec.resultSpecHash != bytes32(0), "Bad spec");
     }
 
-    function _validateSubmissionDetails(SubmissionDetails memory details) internal view {
-        if (bytes(details.detailsUrl).length != 0) {
-            require(details.detailsHash != bytes32(0), "Details hash required");
-            submissionMediaValidator.validateContextUrl(details.detailsUrl);
-        } else {
-            require(details.detailsHash == bytes32(0), "Details URL required");
-        }
+    function _validateSubmissionDetails(SubmissionDetails memory details, bool gated) internal view {
+        submissionMediaValidator.validateSubmissionDetails(details.detailsUrl, details.detailsHash, gated);
     }
 
     function _resolveQuestionSubmissionCategory(SubmissionMetadata memory metadata)
@@ -1165,11 +1142,11 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @dev Anyone can call this. The mandatory submission bounty is not refunded.
     function markDormant(uint256 contentId) external nonReentrant whenNotPaused {
         Content storage c = contents[contentId];
-        require(c.id != 0, "Content does not exist");
+        if (c.id == 0) revert InvalidState();
         require(c.status == ContentStatus.Active, "Not active");
-        require(block.timestamp > dormancyAnchorAt[contentId] + DORMANCY_PERIOD, "Dormancy period not elapsed");
-        require(!_hasDormancyBlockingRound(contentId), "Content has active round");
-        require(contentBundleId[contentId] == 0, "Bundled content");
+        if (block.timestamp <= dormancyAnchorAt[contentId] + DORMANCY_PERIOD) revert InvalidState();
+        if (_hasDormancyBlockingRound(contentId)) revert InvalidState();
+        if (contentBundleId[contentId] != 0) revert InvalidState();
 
         c.status = ContentStatus.Dormant;
 
@@ -1190,8 +1167,8 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         require(c.dormantCount < MAX_REVIVALS, "Max revivals reached");
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
-        require(submissionKey != bytes32(0), "Dormant key released");
-        require(submissionKeyUsed[submissionKey], "Dormant key released");
+        if (submissionKey == bytes32(0)) revert InvalidState();
+        if (!submissionKeyUsed[submissionKey]) revert InvalidState();
         require(_isSubmitterIdentity(contentId, msg.sender), "Not original submitter");
         require(block.timestamp <= dormantKeyReleasableAt[contentId], "Revival window elapsed");
 
@@ -1212,12 +1189,12 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     /// @notice Release a dormant content key after the exclusive revival window expires.
     function releaseDormantSubmissionKey(uint256 contentId) external nonReentrant whenNotPaused {
         Content storage c = contents[contentId];
-        require(c.id != 0, "Content does not exist");
+        if (c.id == 0) revert InvalidState();
         require(c.status == ContentStatus.Dormant, "Not dormant");
-        require(contentBundleId[contentId] == 0, "Bundled content");
+        if (contentBundleId[contentId] != 0) revert InvalidState();
 
         bytes32 submissionKey = contentSubmissionKey[contentId];
-        require(submissionKey != bytes32(0), "No submission key");
+        if (submissionKey == bytes32(0)) revert InvalidState();
         require(block.timestamp > dormantKeyReleasableAt[contentId], "Revival window active");
 
         submissionKeyUsed[submissionKey] = false;
@@ -1281,7 +1258,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         uint256 callerGeneration = _authorizeSettlementCallback(contentId);
 
         Content storage c = contents[contentId];
-        require(c.id != 0, "Content does not exist");
+        if (c.id == 0) revert InvalidState();
         contentSettlementEngineGeneration[contentId] = callerGeneration;
 
         RatingLib.RatingState storage state = _ratingState[contentId];

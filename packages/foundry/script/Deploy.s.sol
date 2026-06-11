@@ -345,6 +345,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
             registry.renounceRole(registry.PAUSER_ROLE(), deployer);
             confidentialityEscrow.renounceRole(confidentialityEscrow.PAUSER_ROLE(), deployer);
             confidentialityEscrow.renounceRole(confidentialityEscrow.CONFIG_ROLE(), deployer);
+            confidentialityEscrow.renounceRole(confidentialityEscrow.ACCESS_RECORDER_ROLE(), deployer);
             confidentialityEscrow.renounceRole(confidentialityEscrow.DEFAULT_ADMIN_ROLE(), deployer);
         }
 

@@ -49,6 +49,7 @@ contract ConfidentialityEscrow is
     bytes32 public constant CONFIG_ROLE = keccak256("CONFIG_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant GOVERNANCE_ROLE = keccak256("GOVERNANCE_ROLE");
+    bytes32 public constant ACCESS_RECORDER_ROLE = keccak256("ACCESS_RECORDER_ROLE");
 
     uint8 public constant BOND_ASSET_LREP = 0;
     uint8 public constant BOND_ASSET_USDC = 1;
@@ -108,6 +109,7 @@ contract ConfidentialityEscrow is
     );
     event ConfiscationRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
     event BondBoundsUpdated(uint256 maxBond, uint256 evidenceWindow, uint256 maxBondLockDuration);
+    event ConfidentialityNexusRecorded(uint256 indexed contentId, address indexed holder, address indexed recorder);
 
     constructor() {
         _disableInitializers();
@@ -134,10 +136,12 @@ contract ConfidentialityEscrow is
         _grantRole(CONFIG_ROLE, governance);
         _grantRole(PAUSER_ROLE, governance);
         _grantRole(GOVERNANCE_ROLE, governance);
+        _grantRole(ACCESS_RECORDER_ROLE, governance);
         if (admin != governance) {
             _grantRole(DEFAULT_ADMIN_ROLE, admin);
             _grantRole(CONFIG_ROLE, admin);
             _grantRole(PAUSER_ROLE, admin);
+            _grantRole(ACCESS_RECORDER_ROLE, admin);
         }
 
         lrepToken = IERC20(lrepToken_);
@@ -273,8 +277,21 @@ contract ConfidentialityEscrow is
 
     function recordConfidentialityNexus(uint256 contentId, address holder) external {
         if (msg.sender != registry.votingEngine()) revert("Not voting engine");
+        _recordConfidentialityNexus(contentId, holder, msg.sender);
+    }
+
+    function recordAccessNexus(uint256 contentId, address holder)
+        external
+        onlyRole(ACCESS_RECORDER_ROLE)
+        whenNotPaused
+    {
+        _recordConfidentialityNexus(contentId, holder, msg.sender);
+    }
+
+    function _recordConfidentialityNexus(uint256 contentId, address holder, address recorder) private {
         if (!_configs[contentId].gated) return;
         _markNullifierBonded(holder);
+        emit ConfidentialityNexusRecorded(contentId, holder, recorder);
     }
 
     function slashBond(
