@@ -14,6 +14,7 @@ import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
 import { IClusterPayoutOracle } from "./interfaces/IClusterPayoutOracle.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
 import { IRoundPayoutSnapshotConsumer } from "./interfaces/IRoundPayoutSnapshotConsumer.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { QuestionRewardPoolEscrowBundleActionsLib } from "./libraries/QuestionRewardPoolEscrowBundleActionsLib.sol";
@@ -731,6 +732,7 @@ contract QuestionRewardPoolEscrow is
 
         (bytes32 identityKey, bytes32 commitKey, address rewardRecipient) =
             _resolveQuestionRewardClaim(rewardPool, roundId, msg.sender);
+        require(!_isIdentityBannedForRound(rewardPool.contentId, roundId, identityKey), "Identity banned");
         require(!_isExcludedClaimant(rewardPool, identityKey, rewardRecipient), "Excluded voter");
         require(commitKey != bytes32(0), "No commit");
         require(
@@ -828,6 +830,24 @@ contract QuestionRewardPoolEscrow is
         return QuestionRewardPoolEscrowTransferLib.settleClaimPayout(
             rewardToken, rewardRecipient, rewardAmount, frontendRecipient, frontendFee
         );
+    }
+
+    function _isIdentityBannedForRound(uint256 contentId, uint256 roundId, bytes32 identityKey)
+        internal
+        view
+        returns (bool)
+    {
+        if (identityKey == bytes32(0)) return false;
+        address registryAddress = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (registryAddress == address(0)) {
+            registryAddress = ProtocolConfig(votingEngine.protocolConfig()).raterRegistry();
+        }
+        if (registryAddress == address(0)) return false;
+        try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
+            return banned;
+        } catch {
+            return false;
+        }
     }
 
     /// @dev Extracted out of `_claimQuestionReward` so the 9/12-arg library calls do not coexist

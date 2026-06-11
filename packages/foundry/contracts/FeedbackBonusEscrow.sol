@@ -16,6 +16,7 @@ import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfac
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { IFeedbackRegistry } from "./interfaces/IFeedbackRegistry.sol";
 import { IRaterIdentityRegistry } from "./interfaces/IRaterIdentityRegistry.sol";
+import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 import { TokenTransferLib } from "./libraries/TokenTransferLib.sol";
 
@@ -321,6 +322,7 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
             _requireRevealedIndependentRater(pool, recipient);
         (bytes32 awardIdentityKey,,,,,) = votingEngine.commitIdentityState(pool.contentId, pool.roundId, commitKey);
         if (awardIdentityKey == bytes32(0)) awardIdentityKey = identityKey;
+        require(!_isIdentityBanned(pool, awardIdentityKey), "Identity banned");
         require(
             !identityKeyAwarded[poolId][identityKey] && !identityKeyAwarded[poolId][awardIdentityKey],
             "Rater already awarded"
@@ -719,6 +721,15 @@ contract FeedbackBonusEscrow is Initializable, AccessControlUpgradeable, Pausabl
     {
         if (amount == 0 || frontendRecipient == address(0)) return 0;
         return TokenTransferLib.tryTransfer(token, frontendRecipient, amount) ? amount : 0;
+    }
+
+    function _isIdentityBanned(FeedbackBonusPool storage pool, bytes32 identityKey) internal view returns (bool) {
+        if (identityKey == bytes32(0) || pool.raterRegistrySnapshot == address(0)) return false;
+        try IRaterRegistryStatus(pool.raterRegistrySnapshot).isIdentityKeyBanned(identityKey) returns (bool banned) {
+            return banned;
+        } catch {
+            return false;
+        }
     }
 
     function _identityKeyForRound(uint256 contentId, uint256 roundId, address account)

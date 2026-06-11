@@ -79,7 +79,9 @@ library LaunchRaterRewardLib {
             ) {
                 return bytes32(0);
             }
-            return raterRegistry.launchHumanIdentityKey(credential.provider, credential.nullifierHash);
+            bytes32 anchorId = raterRegistry.launchHumanIdentityKey(credential.provider, credential.nullifierHash);
+            if (raterRegistry.isIdentityKeyBanned(anchorId)) return bytes32(0);
+            return anchorId;
         } catch {
             return bytes32(0);
         }

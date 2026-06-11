@@ -1411,6 +1411,9 @@ contract LaunchDistributionPool is
             nullifierHash = credential.nullifierHash;
             provider = credential.provider;
             credentialKey = _credentialClaimKey(provider, credential.nullifierHash);
+            if (raterRegistry.isIdentityKeyBanned(credentialKey)) {
+                return (bytes32(0), bytes32(0), RaterRegistry.HumanCredentialProvider.None);
+            }
         }
     }
 

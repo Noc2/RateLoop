@@ -3,6 +3,7 @@ pragma solidity ^0.8.34;
 
 import { IFrontendRegistry } from "../interfaces/IFrontendRegistry.sol";
 import { IClusterPayoutOracle } from "../interfaces/IClusterPayoutOracle.sol";
+import { IRaterRegistryStatus } from "../interfaces/IRaterRegistryStatus.sol";
 import { ProtocolConfig } from "../ProtocolConfig.sol";
 import { RoundVotingEngine } from "../RoundVotingEngine.sol";
 import { RewardPool, RoundSnapshot, BOUNTY_ELIGIBILITY_OPEN } from "./QuestionRewardPoolEscrowTypes.sol";
@@ -201,6 +202,9 @@ library QuestionRewardPoolEscrowClaimLib {
         );
         if (
             commitKey == bytes32(0) || rewardClaimed[params.rewardPoolId][params.roundId][commitKey]
+                || _isIdentityBannedForRound(
+                    votingEngine, protocolConfig, rewardPool.contentId, params.roundId, identityKey
+                )
                 || _isExcludedClaimant(
                     rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, rewardRecipient
                 )
@@ -350,6 +354,7 @@ library QuestionRewardPoolEscrowClaimLib {
         );
         if (
             commitKey == bytes32(0)
+                || _isIdentityBannedForRound(votingEngine, protocolConfig, rewardPool.contentId, roundId, identityKey)
                 || _isExcludedClaimant(
                     rewardPool, rewardPoolPayerIdentity, rewardPoolPayerIdentityKey, identityKey, rewardRecipient
                 )
@@ -450,6 +455,26 @@ library QuestionRewardPoolEscrowClaimLib {
             );
         }
         return qualifiedQuestionRewardClaimants[rewardPoolId][roundId][snapshot.clusterSnapshotDigest][commitKey];
+    }
+
+    function _isIdentityBannedForRound(
+        RoundVotingEngine votingEngine,
+        ProtocolConfig protocolConfig,
+        uint256 contentId,
+        uint256 roundId,
+        bytes32 identityKey
+    ) private view returns (bool) {
+        if (identityKey == bytes32(0)) return false;
+        address registryAddress = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (registryAddress == address(0)) {
+            registryAddress = protocolConfig.raterRegistry();
+        }
+        if (registryAddress == address(0)) return false;
+        try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
+            return banned;
+        } catch {
+            return false;
+        }
     }
 
     function _nextEqualShare(uint256 totalAmount, uint256 eligibleVoters, uint256 claimedCount)

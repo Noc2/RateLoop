@@ -13,6 +13,7 @@ import { ContentRegistry } from "./ContentRegistry.sol";
 import { ProtocolConfig } from "./ProtocolConfig.sol";
 import { IFrontendRegistry } from "./interfaces/IFrontendRegistry.sol";
 import { ILaunchDistributionPool } from "./interfaces/ILaunchDistributionPool.sol";
+import { IRaterRegistryStatus } from "./interfaces/IRaterRegistryStatus.sol";
 import { FrontendFeeDustLib } from "./libraries/FrontendFeeDustLib.sol";
 import { LaunchRaterRewardLib } from "./libraries/LaunchRaterRewardLib.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
@@ -246,6 +247,7 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     ) internal {
         (,,, uint256 scoreWeight, uint256 stakeReturned) = votingEngine.rbtsCommitState(contentId, roundId, commitKey);
         uint256 reward;
+        bool surplusBlocked = _isCommitIdentityBanned(contentId, roundId, commitKey);
         if (scoreWeight > 0) {
             (,, uint256 totalScoreWeight, uint256 totalRewardClaimants, uint256 voterPool) =
                 votingEngine.rbtsRoundState(contentId, roundId);
@@ -259,6 +261,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
                     || totalScoreWeight == 0
             ) {
                 if (voterPool > 0) revert PoolExhausted();
+            } else if (surplusBlocked) {
+                roundVoterRewardClaimedCount[contentId][roundId] = claimedCount + 1;
             } else {
                 reward = claimedCount + 1 == totalRewardClaimants
                     ? voterPool - claimedAmount
@@ -275,7 +279,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             votingEngine.transferReward(rewardRecipient, reward);
         }
 
-        _claimLaunchRaterReward(contentId, roundId, commitKey, rewardRecipient, commit.stakeAmount);
+        if (!surplusBlocked) {
+            _claimLaunchRaterReward(contentId, roundId, commitKey, rewardRecipient, commit.stakeAmount);
+        }
         emit RewardClaimed(contentId, roundId, rewardRecipient, commit.voter, stakeReturned, reward);
     }
 
@@ -491,6 +497,25 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
             return minAgeSeconds;
         } catch {
             return 0;
+        }
+    }
+
+    function _isCommitIdentityBanned(uint256 contentId, uint256 roundId, bytes32 commitKey)
+        internal
+        view
+        returns (bool)
+    {
+        (bytes32 identityKey,,,,,) = votingEngine.commitIdentityState(contentId, roundId, commitKey);
+        if (identityKey == bytes32(0)) return false;
+        address registryAddress = votingEngine.roundRaterRegistrySnapshot(contentId, roundId);
+        if (registryAddress == address(0)) {
+            registryAddress = ProtocolConfig(votingEngine.protocolConfig()).raterRegistry();
+        }
+        if (registryAddress == address(0)) return false;
+        try IRaterRegistryStatus(registryAddress).isIdentityKeyBanned(identityKey) returns (bool banned) {
+            return banned;
+        } catch {
+            return false;
         }
     }
 
