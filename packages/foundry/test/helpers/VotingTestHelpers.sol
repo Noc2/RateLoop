@@ -90,6 +90,10 @@ abstract contract ContentSubmissionTestBase {
         return ContentRegistry.SubmissionDetails({ detailsUrl: "", detailsHash: bytes32(0) });
     }
 
+    function _defaultQuestionConfidentialityHash() internal pure returns (bytes32) {
+        return keccak256(abi.encode(false, uint8(0), uint64(0), uint8(0)));
+    }
+
     function _submitContentWithReservation(
         ContentRegistry registry,
         string memory url,
@@ -395,7 +399,7 @@ abstract contract ContentSubmissionTestBase {
             rewardTerms,
             roundConfig,
             spec,
-            bytes32(0)
+            _defaultQuestionConfidentialityHash()
         );
     }
 

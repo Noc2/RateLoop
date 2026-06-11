@@ -38,7 +38,18 @@ const QUESTION_CONTEXT_DOMAIN = keccak256(
   toBytes("rateloop-question-context-v5")
 );
 const QUESTION_REVEAL_DOMAIN = keccak256(
-  toBytes("rateloop-question-reveal-v7")
+  toBytes("rateloop-question-reveal-v8")
+);
+const DEFAULT_CONFIDENTIALITY_HASH = keccak256(
+  encodeAbiParameters(
+    [
+      { type: "bool" },
+      { type: "uint8" },
+      { type: "uint64" },
+      { type: "uint8" },
+    ],
+    [false, 0, 0n, 0]
+  )
 );
 const DEFAULT_ROUND_CONFIG = {
   epochDuration: 20 * 60,
@@ -463,6 +474,7 @@ const revealCommitment = keccak256(
       { type: "bytes32" },
       { type: "bytes32" },
       { type: "bytes32" },
+      { type: "bytes32" },
     ],
     [
       QUESTION_REVEAL_DOMAIN,
@@ -477,6 +489,7 @@ const revealCommitment = keccak256(
       roundConfigHash,
       DEFAULT_QUESTION_METADATA_HASH,
       DEFAULT_RESULT_SPEC_HASH,
+      DEFAULT_CONFIDENTIALITY_HASH,
     ]
   )
 );
