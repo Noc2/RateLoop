@@ -117,6 +117,9 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(uint8 => WorldIdV4Config) private _worldCredentialConfigs;
     mapping(uint8 => WorldIdV4Config) private _worldPresenceConfigs;
     mapping(address => mapping(address => bool)) internal isFollowing;
+    // Deprecated follow counters. Keep the original slots reserved for proxy-safe upgrades.
+    mapping(address => uint256) private followingCount;
+    mapping(address => uint256) private followerCount;
     mapping(address => address) public delegateTo;
     mapping(address => address) public delegateOf;
     mapping(address => address) public pendingDelegateTo;
@@ -144,7 +147,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     address public confidentialityEscrow;
 
     /// @dev Reserved storage gap for future proxy-safe upgrades.
-    uint256[25] private __gap;
+    uint256[27] private __gap;
 
     event RaterProfileUpdated(
         address indexed rater, RaterType indexed raterType, bytes32 indexed metadataHash, uint64 updatedAt

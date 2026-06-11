@@ -201,6 +201,18 @@
     {
       "slot": 30,
       "offset": 0,
+      "label": "_identityBans",
+      "type": "t_mapping(t_bytes32,t_struct(IdentityBan))"
+    },
+    {
+      "slot": 31,
+      "offset": 0,
+      "label": "confidentialityEscrow",
+      "type": "t_address"
+    },
+    {
+      "slot": 32,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -215,8 +227,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[29]",
-      "numberOfBytes": "928",
+      "label": "uint256[27]",
+      "numberOfBytes": "864",
       "base": "t_uint256"
     },
     {
@@ -336,6 +348,14 @@
       "numberOfBytes": "32",
       "key": "t_bytes32",
       "value": "t_bool"
+    },
+    {
+      "id": "t_mapping(t_bytes32,t_struct(IdentityBan))",
+      "encoding": "mapping",
+      "label": "mapping(bytes32 => struct RaterRegistry.IdentityBan)",
+      "numberOfBytes": "32",
+      "key": "t_bytes32",
+      "value": "t_struct(IdentityBan)"
     },
     {
       "id": "t_mapping(t_enum(HumanCredentialProvider),t_mapping(t_bytes32,t_address))",
@@ -477,6 +497,32 @@
           "slot": 0,
           "offset": 10,
           "label": "freshUntil",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 1,
+          "offset": 0,
+          "label": "evidenceHash",
+          "type": "t_bytes32"
+        }
+      ]
+    },
+    {
+      "id": "t_struct(IdentityBan)",
+      "encoding": "inplace",
+      "label": "struct RaterRegistry.IdentityBan",
+      "numberOfBytes": "64",
+      "members": [
+        {
+          "slot": 0,
+          "offset": 0,
+          "label": "bannedAt",
+          "type": "t_uint64"
+        },
+        {
+          "slot": 0,
+          "offset": 8,
+          "label": "expiresAt",
           "type": "t_uint64"
         },
         {
