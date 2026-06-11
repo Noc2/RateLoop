@@ -1040,7 +1040,7 @@ describe("registerLeaderboardRoutes", () => {
   });
 
   it("pages bounded-window accuracy leaderboards at the database layer", async () => {
-    const { queryBuilder } = mockPonderModules([]);
+    const { db, queryBuilder } = mockPonderModules([]);
     const { registerLeaderboardRoutes } = await import(
       "../src/api/routes/leaderboard-routes.js"
     );
@@ -1057,6 +1057,39 @@ describe("registerLeaderboardRoutes", () => {
     expect(queryBuilder.limit).toHaveBeenCalledWith(50);
     expect(queryBuilder.offset).toHaveBeenCalledWith(25);
     expect(queryBuilder.limit).not.toHaveBeenCalledWith(1000);
+
+    const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
+    expect(selection).toContain("vote.identityHolder");
+    const joins = serializeExpression(queryBuilder.leftJoin.mock.calls);
+    expect(joins).toContain("vote.identityHolder");
+    const groupBy = serializeExpression(queryBuilder.groupBy.mock.calls);
+    expect(groupBy).toContain("vote.identityHolder");
+    const orderBy = serializeExpression(queryBuilder.orderBy.mock.calls);
+    expect(orderBy).toContain("vote.identityHolder");
+  });
+
+  it("uses identity holders for bounded-window win-rate accuracy leaderboards", async () => {
+    const { db, queryBuilder } = mockPonderModules([]);
+    const { registerLeaderboardRoutes } = await import(
+      "../src/api/routes/leaderboard-routes.js"
+    );
+
+    const app = new Hono();
+    registerLeaderboardRoutes(app);
+
+    const response = await app.request(
+      "http://localhost/accuracy-leaderboard?window=7d&sortBy=winRate",
+    );
+
+    expect(response.status).toBe(200);
+    const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
+    expect(selection).toContain("vote.identityHolder");
+    const joins = serializeExpression(queryBuilder.leftJoin.mock.calls);
+    expect(joins).toContain("vote.identityHolder");
+    const groupBy = serializeExpression(queryBuilder.groupBy.mock.calls);
+    expect(groupBy).toContain("vote.identityHolder");
+    const orderBy = serializeExpression(queryBuilder.orderBy.mock.calls);
+    expect(orderBy).toContain("vote.identityHolder");
   });
 
   it("builds earnings leaderboards from net recipient reward amounts", async () => {

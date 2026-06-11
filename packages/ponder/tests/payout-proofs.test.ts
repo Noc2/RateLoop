@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { merkleProof } from "@rateloop/node-utils/correlationScoring";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 
 const proofParams = {
@@ -152,6 +153,64 @@ describe("payout artifact proof resolution", () => {
       }),
     ).resolves.toEqual(expect.objectContaining({ proof: [] }));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("builds fallback Merkle proofs from the matching round snapshot only", async () => {
+    const targetLeaf = `0x${"aa".repeat(32)}` as const;
+    const siblingLeaf = `0x${"bb".repeat(32)}` as const;
+    const unrelatedLeaf = `0x${"cc".repeat(32)}` as const;
+    const siblingWeight = {
+      ...artifact.payoutWeights[0],
+      commitKey: `0x${"55".repeat(32)}`,
+      identityKey: `0x${"66".repeat(32)}`,
+      leaf: siblingLeaf,
+      proof: undefined,
+    };
+    const unrelatedWeight = {
+      ...artifact.payoutWeights[0],
+      commitKey: `0x${"77".repeat(32)}`,
+      identityKey: `0x${"88".repeat(32)}`,
+      leaf: unrelatedLeaf,
+      proof: undefined,
+      roundId: "3",
+    };
+    const scopedArtifact = {
+      roundPayoutSnapshots: [
+        {
+          domain: proofParams.domain,
+          rewardPoolId: proofParams.rewardPoolId.toString(),
+          contentId: proofParams.contentId.toString(),
+          roundId: proofParams.roundId.toString(),
+          payoutWeights: [
+            {
+              ...artifact.payoutWeights[0],
+              leaf: targetLeaf,
+              proof: undefined,
+            },
+            siblingWeight,
+          ],
+        },
+        {
+          domain: proofParams.domain,
+          rewardPoolId: proofParams.rewardPoolId.toString(),
+          contentId: proofParams.contentId.toString(),
+          roundId: "3",
+          payoutWeights: [unrelatedWeight],
+        },
+      ],
+    };
+    const { resolveQuestionPayoutProof } = await loadResolver();
+    const artifactUri = `data:application/json;base64,${Buffer.from(JSON.stringify(scopedArtifact), "utf8").toString("base64")}`;
+
+    const result = await resolveQuestionPayoutProof({
+      ...proofParams,
+      artifactUri,
+    });
+
+    expect(result?.proof).toEqual(merkleProof([targetLeaf, siblingLeaf], targetLeaf));
+    expect(result?.proof).not.toEqual(
+      merkleProof([targetLeaf, siblingLeaf, unrelatedLeaf], targetLeaf),
+    );
   });
 
   it("rejects payout weights with malformed ABI hex widths", async () => {

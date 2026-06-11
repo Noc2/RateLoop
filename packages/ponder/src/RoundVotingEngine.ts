@@ -1172,6 +1172,7 @@ ponder.on("RoundVotingEngine:RoundSettled", async ({ event, context }) => {
       upWins,
       losingPool,
       settledAt: event.block.timestamp,
+      ...defaultRoundConfigFields(),
     });
   }
 
@@ -1353,7 +1354,6 @@ ponder.on("RoundVotingEngine:RoundCancelled", async ({ event, context }) => {
   if (existingRound) {
     await context.db.update(round, { id: roundKey }).set((row) => ({
       state: ROUND_STATE.Cancelled,
-      settledAt: event.block.timestamp,
       referenceRatingBps:
         row.referenceRatingBps > 0 ? row.referenceRatingBps : 5000,
       ratingBps: row.ratingBps > 0 ? row.ratingBps : 5000,
@@ -1382,7 +1382,7 @@ ponder.on("RoundVotingEngine:RoundCancelled", async ({ event, context }) => {
       downEvidence: 0n,
       settledRounds: 0,
       lowSince: 0n,
-      settledAt: event.block.timestamp,
+      ...defaultRoundConfigFields(),
     });
   }
 
@@ -1431,6 +1431,7 @@ ponder.on("RoundVotingEngine:RoundTied", async ({ event, context }) => {
       settledRounds: 0,
       lowSince: 0n,
       settledAt: event.block.timestamp,
+      ...defaultRoundConfigFields(),
     });
   }
 
@@ -1479,6 +1480,7 @@ ponder.on("RoundVotingEngine:RoundRevealFailed", async ({ event, context }) => {
       settledRounds: 0,
       lowSince: 0n,
       settledAt: event.block.timestamp,
+      ...defaultRoundConfigFields(),
     });
   }
 

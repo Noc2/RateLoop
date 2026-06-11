@@ -1,5 +1,5 @@
 import { ContentRegistryAbi } from "@rateloop/contracts/abis";
-import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { DEFAULT_ROUND_CONFIG, ROUND_STATE } from "@rateloop/contracts/protocol";
 import { eq } from "ponder";
 import { decodeEventLog } from "viem";
 import { ponder } from "ponder:registry";
@@ -27,6 +27,15 @@ const CONTENT_REGISTRY_MEDIA_VALIDATOR_ABI = [
 
 function displayRatingFromBps(ratingBps: number) {
   return Math.min(100, Math.max(0, Math.round(ratingBps / 100)));
+}
+
+function defaultRoundConfigFields() {
+  return {
+    epochDuration: DEFAULT_ROUND_CONFIG.epochDurationSeconds,
+    maxDuration: DEFAULT_ROUND_CONFIG.maxDurationSeconds,
+    minVoters: DEFAULT_ROUND_CONFIG.minVoters,
+    maxVoters: DEFAULT_ROUND_CONFIG.maxVoters,
+  };
 }
 
 function contentRegistryAddress(
@@ -467,6 +476,7 @@ ponder.on("ContentRegistry:RatingStateUpdated", async ({ event, context }) => {
       downEvidence,
       settledRounds: Number(settledRounds),
       lowSince,
+      ...defaultRoundConfigFields(),
     });
   }
 

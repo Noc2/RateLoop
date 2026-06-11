@@ -332,6 +332,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
     const raterTypeCondition = raterTypeFilterSql(raterTypeFilter, nowSeconds);
 
     if (sortBy === "signalScore") {
+      const voterIdentity = sql<`0x${string}`>`coalesce(${vote.identityHolder}, ${vote.voter})`;
       const aggregateTotalSettledVotes = sql<number>`count(*)`;
       const aggregateTotalWins = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 1 else 0 end end)`;
       // RBTS losses mirror voterStats semantics: only votes actually scored
@@ -344,7 +345,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       const aggregateSignalScoreBps = sql<number>`CAST((coalesce(sum(${vote.rbtsScoreBps}), 0) + ${SIGNAL_SCORE_PRIOR_BPS * SIGNAL_SCORE_PRIOR_WEIGHT}) AS FLOAT) / (${aggregateScoredVotes} + ${SIGNAL_SCORE_PRIOR_WEIGHT})`;
       const aggregateWinRate = sql<number>`CAST(${aggregateTotalWins} AS FLOAT) / ${aggregateTotalSettledVotes}`;
       const aggregateSelection = {
-        voter: vote.voter,
+        voter: voterIdentity,
         totalSettledVotes: aggregateTotalSettledVotes,
         totalWins: aggregateTotalWins,
         totalLosses: aggregateTotalLosses,
@@ -366,7 +367,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
           scoredVotes: aggregateScoredVotes,
           signalScoreBps: aggregateSignalScoreBps,
           winRate: aggregateWinRate,
-          voter: vote.voter,
+          voter: voterIdentity,
         },
       );
       const baseConditions = [
@@ -398,16 +399,16 @@ export function registerLeaderboardRoutes(app: ApiApp) {
                 ),
               )
               .innerJoin(content, eq(vote.contentId, content.id))
-              .leftJoin(profile, eq(vote.voter, profile.address))
-              .leftJoin(raterProfile, eq(vote.voter, raterProfile.address))
+              .leftJoin(profile, eq(voterIdentity, profile.address))
+              .leftJoin(raterProfile, eq(voterIdentity, raterProfile.address))
               .leftJoin(
                 raterHumanCredential,
-                eq(vote.voter, raterHumanCredential.rater),
+                eq(voterIdentity, raterHumanCredential.rater),
               )
-              .leftJoin(voterStats, eq(vote.voter, voterStats.voter))
+              .leftJoin(voterStats, eq(voterIdentity, voterStats.voter))
               .where(and(...baseConditions, eq(content.categoryId, categoryId)))
               .groupBy(
-                vote.voter,
+                voterIdentity,
                 profile.name,
                 voterStats.currentStreak,
                 voterStats.bestWinStreak,
@@ -428,16 +429,16 @@ export function registerLeaderboardRoutes(app: ApiApp) {
                   eq(vote.roundId, round.roundId),
                 ),
               )
-              .leftJoin(profile, eq(vote.voter, profile.address))
-              .leftJoin(raterProfile, eq(vote.voter, raterProfile.address))
+              .leftJoin(profile, eq(voterIdentity, profile.address))
+              .leftJoin(raterProfile, eq(voterIdentity, raterProfile.address))
               .leftJoin(
                 raterHumanCredential,
-                eq(vote.voter, raterHumanCredential.rater),
+                eq(voterIdentity, raterHumanCredential.rater),
               )
-              .leftJoin(voterStats, eq(vote.voter, voterStats.voter))
+              .leftJoin(voterStats, eq(voterIdentity, voterStats.voter))
               .where(and(...baseConditions))
               .groupBy(
-                vote.voter,
+                voterIdentity,
                 profile.name,
                 voterStats.currentStreak,
                 voterStats.bestWinStreak,
@@ -513,6 +514,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       windowBounds.startsAt !== null &&
       windowBounds.endsAt !== null
     ) {
+      const voterIdentity = sql<`0x${string}`>`coalesce(${vote.identityHolder}, ${vote.voter})`;
       const aggregateTotalSettledVotes = sql<number>`count(*)`;
       const aggregateTotalWins = sql<number>`sum(case when ${vote.rbtsRewardWeight} is not null then case when coalesce(${vote.rbtsRewardWeight}, 0) > 0 then 1 else 0 end else case when ${vote.isUp} = ${round.upWins} then 1 else 0 end end)`;
       // RBTS losses mirror voterStats semantics: only votes actually scored
@@ -523,7 +525,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
       const aggregateTotalStakeLost = sql<bigint>`coalesce(sum(case when ${vote.rbtsForfeitedStake} is not null then coalesce(${vote.rbtsForfeitedStake}, ${vote.stake}) else case when ${vote.isUp} = ${round.upWins} then 0 else ${vote.stake} end end), 0)`;
       const aggregateWinRate = sql<number>`CAST(${aggregateTotalWins} AS FLOAT) / ${aggregateTotalSettledVotes}`;
       const aggregateSelection = {
-        voter: vote.voter,
+        voter: voterIdentity,
         totalSettledVotes: aggregateTotalSettledVotes,
         totalWins: aggregateTotalWins,
         totalLosses: aggregateTotalLosses,
@@ -539,7 +541,7 @@ export function registerLeaderboardRoutes(app: ApiApp) {
           totalWins: aggregateTotalWins,
           totalStakeWon: aggregateTotalStakeWon,
           winRate: aggregateWinRate,
-          voter: vote.voter,
+          voter: voterIdentity,
         },
       );
 
@@ -564,14 +566,14 @@ export function registerLeaderboardRoutes(app: ApiApp) {
                 ),
               )
               .innerJoin(content, eq(vote.contentId, content.id))
-              .leftJoin(profile, eq(vote.voter, profile.address))
-              .leftJoin(raterProfile, eq(vote.voter, raterProfile.address))
+              .leftJoin(profile, eq(voterIdentity, profile.address))
+              .leftJoin(raterProfile, eq(voterIdentity, raterProfile.address))
               .leftJoin(
                 raterHumanCredential,
-                eq(vote.voter, raterHumanCredential.rater),
+                eq(voterIdentity, raterHumanCredential.rater),
               )
               .where(and(...baseConditions, eq(content.categoryId, categoryId)))
-              .groupBy(vote.voter, profile.name)
+              .groupBy(voterIdentity, profile.name)
               .having(sql`count(*) >= ${minVotes}`)
               .orderBy(...windowedOrderByExprs)
               .limit(limit)
@@ -586,14 +588,14 @@ export function registerLeaderboardRoutes(app: ApiApp) {
                   eq(vote.roundId, round.roundId),
                 ),
               )
-              .leftJoin(profile, eq(vote.voter, profile.address))
-              .leftJoin(raterProfile, eq(vote.voter, raterProfile.address))
+              .leftJoin(profile, eq(voterIdentity, profile.address))
+              .leftJoin(raterProfile, eq(voterIdentity, raterProfile.address))
               .leftJoin(
                 raterHumanCredential,
-                eq(vote.voter, raterHumanCredential.rater),
+                eq(voterIdentity, raterHumanCredential.rater),
               )
               .where(and(...baseConditions))
-              .groupBy(vote.voter, profile.name)
+              .groupBy(voterIdentity, profile.name)
               .having(sql`count(*) >= ${minVotes}`)
               .orderBy(...windowedOrderByExprs)
               .limit(limit)

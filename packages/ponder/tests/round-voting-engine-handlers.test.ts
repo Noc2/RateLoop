@@ -240,10 +240,6 @@ describe("RoundVotingEngine ponder handlers", () => {
     const registeredHandlers = await loadHandlers();
     const cases = [
       {
-        eventName: "RoundVotingEngine:RoundCancelled",
-        expectedState: 2,
-      },
-      {
         eventName: "RoundVotingEngine:RoundTied",
         expectedState: 3,
       },
@@ -288,11 +284,54 @@ describe("RoundVotingEngine ponder handlers", () => {
       expect(missing.insertCalls).toContainEqual({
         table: "round",
         values: expect.objectContaining({
+          maxVoters: 100,
           state: testCase.expectedState,
           settledAt: 1_235n,
         }),
       });
     }
+  });
+
+  it("keeps cancelled rounds without settledAt", async () => {
+    const registeredHandlers = await loadHandlers();
+    const { db, updateCalls } = createDb({
+      existingRound: { id: "7-2" },
+    });
+
+    await registeredHandlers.get("RoundVotingEngine:RoundCancelled")!({
+      event: {
+        args: { contentId: 7n, roundId: 2n },
+        block: { number: 42n, timestamp: 1_234n },
+      },
+      context: { db },
+    });
+
+    expect(updateCalls).toContainEqual({
+      table: "round",
+      key: { id: "7-2" },
+      values: expect.objectContaining({
+        state: 2,
+      }),
+    });
+    expect(updateCalls[0]?.values).not.toHaveProperty("settledAt");
+
+    const missing = createDb();
+    await registeredHandlers.get("RoundVotingEngine:RoundCancelled")!({
+      event: {
+        args: { contentId: 7n, roundId: 2n },
+        block: { number: 42n, timestamp: 1_235n },
+      },
+      context: { db: missing.db },
+    });
+
+    expect(missing.insertCalls).toContainEqual({
+      table: "round",
+      values: expect.objectContaining({
+        maxVoters: 100,
+        state: 2,
+      }),
+    });
+    expect(missing.insertCalls[0]?.values).not.toHaveProperty("settledAt");
   });
 
   it("extends feedback bonus award deadlines when a round becomes terminal", async () => {

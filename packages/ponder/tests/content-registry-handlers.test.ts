@@ -93,6 +93,12 @@ vi.mock("@rateloop/contracts/abis", () => ({
 }));
 
 vi.mock("@rateloop/contracts/protocol", () => ({
+  DEFAULT_ROUND_CONFIG: {
+    epochDurationSeconds: 1200,
+    maxDurationSeconds: 1200,
+    minVoters: 3,
+    maxVoters: 100,
+  },
   ROUND_STATE: { Settled: 1 },
 }));
 
@@ -747,6 +753,61 @@ describe("ContentRegistry ponder handlers", () => {
             downEvidence: 111n,
             lowSince: 777n,
             upEvidence: 345n,
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("uses protocol round config defaults for RatingStateUpdated fallback round inserts", async () => {
+    const { db, insertCalls } = createDb(null);
+    const registeredHandlers = await loadHandlers();
+    const handler = registeredHandlers.get(
+      "ContentRegistry:RatingStateUpdated",
+    );
+
+    expect(handler).toBeDefined();
+
+    await handler!({
+      event: {
+        args: {
+          confidenceMass: 123n,
+          conservativeRatingBps: 5200,
+          contentId: 1n,
+          downEvidence: 111n,
+          effectiveEvidence: 456n,
+          newRatingBps: 5700,
+          oldRatingBps: 5000,
+          referenceRatingBps: 5000,
+          roundId: 2n,
+          settledRounds: 3,
+          upEvidence: 345n,
+        },
+        block: {
+          number: 99n,
+          timestamp: 888n,
+        },
+      },
+      context: {
+        client: { readContract: vi.fn(async () => ({ lowSince: 777n })) },
+        contracts: {
+          ContentRegistry: {
+            address: "0x000000000000000000000000000000000000c0de",
+          },
+        },
+        db,
+      },
+    });
+
+    expect(insertCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: "round",
+          values: expect.objectContaining({
+            epochDuration: 1200,
+            maxDuration: 1200,
+            maxVoters: 100,
+            minVoters: 3,
           }),
         }),
       ]),

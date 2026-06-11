@@ -115,6 +115,7 @@ export async function resolveQuestionPayoutProof(
   }
 
   const leaves = payoutWeights
+    .filter((payoutWeight) => payoutWeightBelongsToSnapshot(payoutWeight, params))
     .map((payoutWeight) => normalizeHex(payoutWeight.leaf, 32))
     .filter((leaf): leaf is Hex => leaf !== null);
   const leaf = normalizeHex(candidate.leaf, 32);
@@ -355,16 +356,28 @@ function payoutWeightMatches(
   params: ResolveQuestionPayoutProofParams,
 ) {
   return (
+    payoutWeightBelongsToSnapshot(payoutWeight, params) &&
+    normalizeHex(payoutWeight.commitKey, 32)?.toLowerCase() ===
+      params.commitKey?.toLowerCase() &&
+    normalizeHex(payoutWeight.identityKey, 32)?.toLowerCase() ===
+      params.identityKey?.toLowerCase()
+  );
+}
+
+function payoutWeightBelongsToSnapshot(
+  payoutWeight: CandidatePayoutWeight,
+  params: Pick<
+    ResolveQuestionPayoutProofParams,
+    "domain" | "rewardPoolId" | "contentId" | "roundId"
+  >,
+) {
+  return (
     normalizeNumber(payoutWeight.domain) === params.domain &&
     normalizeBigIntString(payoutWeight.rewardPoolId) ===
       params.rewardPoolId.toString() &&
     normalizeBigIntString(payoutWeight.contentId) ===
       params.contentId.toString() &&
-    normalizeBigIntString(payoutWeight.roundId) === params.roundId.toString() &&
-    normalizeHex(payoutWeight.commitKey, 32)?.toLowerCase() ===
-      params.commitKey?.toLowerCase() &&
-    normalizeHex(payoutWeight.identityKey, 32)?.toLowerCase() ===
-      params.identityKey?.toLowerCase()
+    normalizeBigIntString(payoutWeight.roundId) === params.roundId.toString()
   );
 }
 
