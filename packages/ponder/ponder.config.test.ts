@@ -55,7 +55,6 @@ const itWithWorldChainPonderArtifacts = chain480 && missingWorldChainPonderContr
 const itWithHardhatArtifacts = chain31337 && missingHardhatPonderContracts.length === 0 ? it : it.skip;
 const itWithHardhatClusterPayoutOracleArtifact = chain31337?.ClusterPayoutOracle ? it : it.skip;
 const PONDER_CONFIG_TEST_TIMEOUT_MS = 30_000;
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ORIGINAL_ENV = { ...process.env };
 const VALID_ENV = {
   PONDER_NETWORK: "worldchainSepolia",
@@ -238,31 +237,20 @@ describe("ponder config", () => {
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
   itWithMissingSepoliaConfidentialityEscrowArtifact(
-    "uses zero address for missing optional live deployment artifacts",
+    "rejects missing optional live deployment artifacts",
     async () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const { default: config } = await loadPonderConfig(
-        {
-          NODE_ENV: "production",
-        },
-        [
-          "PONDER_CONFIDENTIALITY_ESCROW_ADDRESS",
-          "PONDER_CONFIDENTIALITY_ESCROW_START_BLOCK",
-        ],
-      );
-
-      const loadedConfig = config as any;
-
-      expect(
-        loadedConfig.contracts.ConfidentialityEscrow.network.worldchainSepolia
-          .address,
-      ).toBe(ZERO_ADDRESS);
-      expect(
-        loadedConfig.contracts.ConfidentialityEscrow.network.worldchainSepolia
-          .startBlock,
-      ).toBe(0);
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Missing optional shared deployment artifact for ConfidentialityEscrow"),
+      await expect(
+        loadPonderConfig(
+          {
+            NODE_ENV: "production",
+          },
+          [
+            "PONDER_CONFIDENTIALITY_ESCROW_ADDRESS",
+            "PONDER_CONFIDENTIALITY_ESCROW_START_BLOCK",
+          ],
+        ),
+      ).rejects.toThrow(
+        "Missing optional shared deployment artifact for ConfidentialityEscrow on chain 4801",
       );
     },
     PONDER_CONFIG_TEST_TIMEOUT_MS,

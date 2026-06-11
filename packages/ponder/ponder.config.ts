@@ -259,23 +259,21 @@ function resolveOptionalAddress(
     if (!isAddress(envValue)) {
       throw new Error(`${key} must be a valid address.`);
     }
-    if (
-      sharedAddress &&
-      envValue.toLowerCase() !== sharedAddress.toLowerCase()
-    ) {
-      throw new Error(
-        `${key}=${envValue} conflicts with ${contractName} from shared deployment artifacts (${sharedAddress}) for chain ${activeChainId}. Remove the env override or refresh shared deployments.`,
-      );
+    if (sharedAddress) {
+      if (envValue.toLowerCase() !== sharedAddress.toLowerCase()) {
+        throw new Error(
+          `${key}=${envValue} conflicts with ${contractName} from shared deployment artifacts (${sharedAddress}) for chain ${activeChainId}. Remove the env override or refresh shared deployments.`,
+        );
+      }
+      return envValue as `0x${string}`;
     }
-    return envValue as `0x${string}`;
   }
 
   if (sharedAddress) return sharedAddress;
 
-  console.warn(
-    `[ponder config] Missing optional shared deployment artifact for ${contractName} on chain ${activeChainId}; using ${ZERO_ADDRESS} until the deployment artifact is refreshed.`,
+  throw new Error(
+    `Missing optional shared deployment artifact for ${contractName} on chain ${activeChainId}. Run \`yarn deploy --network <network>\` to refresh shared deployments before starting Ponder for ${activeNetwork}.`,
   );
-  return ZERO_ADDRESS;
 }
 
 function resolveStartBlock(key: string, contractName: string): number {
