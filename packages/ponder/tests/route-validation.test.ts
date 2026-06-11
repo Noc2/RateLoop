@@ -107,6 +107,7 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       targetAudience: "content.targetAudience",
       questionMetadata: "content.questionMetadata",
       questionMetadataHash: "content.questionMetadataHash",
+      questionMetadataUri: "content.questionMetadataUri",
       resultSpecHash: "content.resultSpecHash",
       title: "content.title",
       totalVotes: "content.totalVotes",
@@ -575,6 +576,7 @@ describe("registerContentRoutes", () => {
         createdAt: 123n,
         questionMetadata: canonicalJson(questionMetadata),
         questionMetadataHash,
+        questionMetadataUri: `https://rateloop.ai/question-metadata/${questionMetadataHash}`,
         resultSpecHash: `0x${"3".repeat(64)}`,
         targetAudience: JSON.stringify(targetAudience),
         title: "German engineering feedback",
@@ -599,6 +601,7 @@ describe("registerContentRoutes", () => {
       {
         contentId: "42",
         createdAt: "123",
+        questionMetadataUri: `https://rateloop.ai/question-metadata/${questionMetadataHash}`,
         resultSpecHash: `0x${"3".repeat(64)}`,
         targetAudience,
         title: "German engineering feedback",
@@ -653,6 +656,7 @@ describe("registerContentRoutes", () => {
             targetAudience,
             title: "German engineering feedback",
           }),
+          questionMetadataUri: `https://rateloop.ai/question-metadata/${"2".repeat(64)}`,
           targetAudience: JSON.stringify(targetAudience),
           title: "German engineering feedback",
         },
@@ -673,6 +677,7 @@ describe("registerContentRoutes", () => {
     const body = await response.json();
     expect(body.items[0]).not.toHaveProperty("targetAudience");
     expect(body.items[0]).not.toHaveProperty("questionMetadata");
+    expect(body.items[0]).not.toHaveProperty("questionMetadataUri");
   });
 
   it("returns empty results for short generic searches without querying the database", async () => {
@@ -2305,7 +2310,18 @@ describe("registerCorrelationRoutes", () => {
           features: "",
         },
       ],
-      [[{ settledAt: 777n }], []],
+      [
+        [
+          {
+            questionMetadataHash: `0x${"2".repeat(64)}`,
+            questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+            resultSpecHash: `0x${"3".repeat(64)}`,
+            settledAt: 777n,
+            targetAudience: JSON.stringify({ languages: ["de"], roles: ["engineer"] }),
+          },
+        ],
+        [],
+      ],
     );
     const { registerCorrelationRoutes } = await import(
       "../src/api/routes/correlation-routes.js"
@@ -2349,6 +2365,12 @@ describe("registerCorrelationRoutes", () => {
     expect(body.roundContext).toEqual({
       trailingBaseRateUpBps: 5000,
       baseRateWindowRounds: 100,
+      questionMetadataRef: {
+        questionMetadataHash: `0x${"2".repeat(64)}`,
+        questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+        resultSpecHash: `0x${"3".repeat(64)}`,
+        targetAudienceHash: canonicalJsonHash({ languages: ["de"], roles: ["engineer"] }),
+      },
       settledRoundsInWindow: 0,
     });
     const selection = serializeExpression(db.select.mock.calls[0]?.[0]);
@@ -2514,6 +2536,12 @@ describe("registerCorrelationRoutes", () => {
     expect(body.roundContext).toEqual({
       trailingBaseRateUpBps: 6250,
       baseRateWindowRounds: 100,
+      questionMetadataRef: {
+        questionMetadataHash: null,
+        questionMetadataUri: null,
+        resultSpecHash: null,
+        targetAudienceHash: null,
+      },
       settledRoundsInWindow: 2,
     });
   });
@@ -2545,6 +2573,12 @@ describe("registerCorrelationRoutes", () => {
     expect(highBody.roundContext).toEqual({
       trailingBaseRateUpBps: 9500,
       baseRateWindowRounds: 100,
+      questionMetadataRef: {
+        questionMetadataHash: null,
+        questionMetadataUri: null,
+        resultSpecHash: null,
+        targetAudienceHash: null,
+      },
       settledRoundsInWindow: 1,
     });
 
@@ -2557,6 +2591,12 @@ describe("registerCorrelationRoutes", () => {
     expect(lowBody.roundContext).toEqual({
       trailingBaseRateUpBps: 500,
       baseRateWindowRounds: 100,
+      questionMetadataRef: {
+        questionMetadataHash: null,
+        questionMetadataUri: null,
+        resultSpecHash: null,
+        targetAudienceHash: null,
+      },
       settledRoundsInWindow: 1,
     });
   });
@@ -2587,6 +2627,12 @@ describe("registerCorrelationRoutes", () => {
     expect(emptyBody.roundContext).toEqual({
       trailingBaseRateUpBps: 5000,
       baseRateWindowRounds: 100,
+      questionMetadataRef: {
+        questionMetadataHash: null,
+        questionMetadataUri: null,
+        resultSpecHash: null,
+        targetAudienceHash: null,
+      },
       settledRoundsInWindow: 0,
     });
 
@@ -2598,6 +2644,12 @@ describe("registerCorrelationRoutes", () => {
     expect(zeroSumBody.roundContext).toEqual({
       trailingBaseRateUpBps: 5000,
       baseRateWindowRounds: 100,
+      questionMetadataRef: {
+        questionMetadataHash: null,
+        questionMetadataUri: null,
+        resultSpecHash: null,
+        targetAudienceHash: null,
+      },
       settledRoundsInWindow: 1,
     });
   });

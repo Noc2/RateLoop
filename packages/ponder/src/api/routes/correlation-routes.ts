@@ -1,4 +1,5 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { evaluateTargetAudienceEligibility } from "@rateloop/node-utils/profileSelfReport";
 import { and, asc, desc, eq, or, sql } from "ponder";
 import { db } from "ponder:api";
@@ -64,10 +65,49 @@ function historicalProfileUpdatedAtRoundOpen() {
   )`;
 }
 
+const HEX32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
+
+function normalizeHex32(value: unknown): `0x${string}` | null {
+  return typeof value === "string" && HEX32_PATTERN.test(value) ? (value.toLowerCase() as `0x${string}`) : null;
+}
+
+function normalizeString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function targetAudienceRefHash(value: unknown): `0x${string}` | null {
+  const parsed = parseStoredTargetAudience(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || "invalidTargetAudienceMetadata" in parsed) {
+    return null;
+  }
+  return canonicalJsonHash(parsed);
+}
+
+function questionMetadataRef(row: {
+  questionMetadataHash?: string | null;
+  questionMetadataUri?: string | null;
+  resultSpecHash?: string | null;
+  targetAudience?: string | null;
+} | null) {
+  return {
+    questionMetadataHash: normalizeHex32(row?.questionMetadataHash),
+    questionMetadataUri: normalizeString(row?.questionMetadataUri),
+    resultSpecHash: normalizeHex32(row?.resultSpecHash),
+    targetAudienceHash: targetAudienceRefHash(row?.targetAudience),
+  };
+}
+
 async function getRoundContext(contentId: bigint, roundId: bigint) {
   const [requestedRound] = await db
-    .select({ settledAt: round.settledAt })
+    .select({
+      questionMetadataHash: content.questionMetadataHash,
+      questionMetadataUri: content.questionMetadataUri,
+      resultSpecHash: content.resultSpecHash,
+      settledAt: round.settledAt,
+      targetAudience: content.targetAudience,
+    })
     .from(round)
+    .innerJoin(content, eq(content.id, round.contentId))
     .where(
       and(
         eq(round.contentId, contentId),
@@ -82,6 +122,7 @@ async function getRoundContext(contentId: bigint, roundId: bigint) {
     return {
       trailingBaseRateUpBps: BASE_RATE_NEUTRAL_BPS,
       baseRateWindowRounds: BASE_RATE_WINDOW_ROUNDS,
+      questionMetadataRef: questionMetadataRef(requestedRound ?? null),
       settledRoundsInWindow: 0,
     };
   }
@@ -117,6 +158,7 @@ async function getRoundContext(contentId: bigint, roundId: bigint) {
   return {
     trailingBaseRateUpBps,
     baseRateWindowRounds: BASE_RATE_WINDOW_ROUNDS,
+    questionMetadataRef: questionMetadataRef(requestedRound),
     settledRoundsInWindow: windowRounds.length,
   };
 }

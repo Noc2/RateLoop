@@ -41,6 +41,7 @@ interface VoteResponse {
 
 interface RoundVotesPage {
   excludedVotes: PublicExcludedCorrelationVote[];
+  questionMetadataRef: PublicQuestionMetadataRef;
   votes: CorrelationVoteInput[];
   /** Null when Ponder omits or malforms the round context (neutral fallback). */
   trailingBaseRateUpBps: number | null;
@@ -74,10 +75,18 @@ interface PublicRoundPayoutSnapshot {
   totalClaimWeight: string;
   weightRoot: Hex;
   reasonRoot: Hex;
+  questionMetadataRef: PublicQuestionMetadataRef;
   trailingBaseRateUpBps: number | null;
   eligibleVotes: PublicCorrelationVoteInput[];
   excludedVotes: PublicExcludedCorrelationVote[];
   payoutWeights: PublicPayoutWeight[];
+}
+
+interface PublicQuestionMetadataRef {
+  questionMetadataHash: Hex | null;
+  questionMetadataUri: string | null;
+  resultSpecHash: Hex | null;
+  targetAudienceHash: Hex | null;
 }
 
 interface PublicCorrelationVoteInput {
@@ -126,6 +135,7 @@ const PONDER_FETCH_TIMEOUT_MS = 5_000;
 const PONDER_JSON_MAX_BYTES = 5_000_000;
 const MAX_VOTE_PAGES_PER_ROUND = 50;
 const CANDIDATE_FINGERPRINT_VERSION = "rateloop-correlation-candidates-v1";
+const HEX32_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 const loggedAutomaticArtifactHashes = new Set<string>();
 
 export async function buildConfiguredCorrelationSnapshotArtifact(
@@ -180,7 +190,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
   const publicRounds: PublicRoundPayoutSnapshot[] = [];
 
   for (const candidate of candidates) {
-    const { excludedVotes, votes, trailingBaseRateUpBps } = await fetchRoundVotes(
+    const { excludedVotes, questionMetadataRef, votes, trailingBaseRateUpBps } = await fetchRoundVotes(
       config.ponderBaseUrl,
       candidate,
     );
@@ -208,6 +218,7 @@ export async function buildConfiguredCorrelationSnapshotArtifactForCandidates(
       totalClaimWeight: scored.totalClaimWeight.toString(),
       weightRoot: scored.weightRoot,
       reasonRoot: scored.reasonRoot,
+      questionMetadataRef,
       trailingBaseRateUpBps,
       eligibleVotes: votes.map((vote): PublicCorrelationVoteInput => ({
         account: vote.account,
@@ -503,6 +514,7 @@ async function fetchRoundVotes(
   const excludedVotes: PublicExcludedCorrelationVote[] = [];
   const excludedVoteKeys = new Set<string>();
   const votes: CorrelationVoteInput[] = [];
+  let questionMetadataRef = emptyQuestionMetadataRef();
   let trailingBaseRateUpBps: number | null = null;
   for (let page = 0; page < MAX_VOTE_PAGES_PER_ROUND; page += 1) {
     const offset = page * VOTE_PAGE_SIZE;
@@ -520,6 +532,9 @@ async function fetchRoundVotes(
     trailingBaseRateUpBps ??= parseRoundContextTrailingBaseRateUpBps(
       response.roundContext,
     );
+    if (page === 0) {
+      questionMetadataRef = parseRoundContextQuestionMetadataRef(response.roundContext);
+    }
     for (const excludedVote of (response.excludedVotes ?? []).map(parseExcludedVote)) {
       const key = `${excludedVote.commitKey.toLowerCase()}:${excludedVote.identityKey.toLowerCase()}`;
       if (excludedVoteKeys.has(key)) continue;
@@ -528,7 +543,7 @@ async function fetchRoundVotes(
     }
     votes.push(...items.map(parseVote));
     if (items.length < VOTE_PAGE_SIZE) {
-      return { excludedVotes, votes, trailingBaseRateUpBps };
+      return { excludedVotes, questionMetadataRef, votes, trailingBaseRateUpBps };
     }
   }
   throw new Error(
@@ -649,8 +664,38 @@ function parseRoundContextTrailingBaseRateUpBps(value: unknown): number | null {
   return parsed;
 }
 
+function emptyQuestionMetadataRef(): PublicQuestionMetadataRef {
+  return {
+    questionMetadataHash: null,
+    questionMetadataUri: null,
+    resultSpecHash: null,
+    targetAudienceHash: null,
+  };
+}
+
+function parseRoundContextQuestionMetadataRef(value: unknown): PublicQuestionMetadataRef {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return emptyQuestionMetadataRef();
+  }
+  const raw = (value as Record<string, unknown>).questionMetadataRef;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return emptyQuestionMetadataRef();
+  }
+  const record = raw as Record<string, unknown>;
+  return {
+    questionMetadataHash: parseOptionalHex(record.questionMetadataHash),
+    questionMetadataUri: parseOptionalString(record.questionMetadataUri),
+    resultSpecHash: parseOptionalHex(record.resultSpecHash),
+    targetAudienceHash: parseOptionalHex(record.targetAudienceHash),
+  };
+}
+
 function parseOptionalString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+function parseOptionalHex(value: unknown): Hex | null {
+  return typeof value === "string" && HEX32_PATTERN.test(value) ? (value.toLowerCase() as Hex) : null;
 }
 
 function parseNonNegativeNumber(value: unknown): number | null {

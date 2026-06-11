@@ -78,6 +78,12 @@ describe("automatic correlation artifact builder", () => {
           roundContext: {
             trailingBaseRateUpBps: 2_000,
             baseRateWindowRounds: 100,
+            questionMetadataRef: {
+              questionMetadataHash: `0x${"2".repeat(64)}`,
+              questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+              resultSpecHash: `0x${"3".repeat(64)}`,
+              targetAudienceHash: `0x${"4".repeat(64)}`,
+            },
             settledRoundsInWindow: 12,
           },
           items: [
@@ -151,6 +157,12 @@ describe("automatic correlation artifact builder", () => {
     expect(publicArtifact.artifactVersion).toBe("rateloop-correlation-artifact-v2");
     expect(publicArtifact.scorerVersion).toBe("rateloop-correlation-epoch-v2");
     expect(publicArtifact.roundPayoutSnapshots[0].trailingBaseRateUpBps).toBe(2_000);
+    expect(publicArtifact.roundPayoutSnapshots[0].questionMetadataRef).toEqual({
+      questionMetadataHash: `0x${"2".repeat(64)}`,
+      questionMetadataUri: `https://rateloop.ai/question-metadata/0x${"2".repeat(64)}`,
+      resultSpecHash: `0x${"3".repeat(64)}`,
+      targetAudienceHash: `0x${"4".repeat(64)}`,
+    });
     expect(publicArtifact.roundPayoutSnapshots[0].payoutWeights).toHaveLength(2);
     expect(publicArtifact.roundPayoutSnapshots[0].eligibleVotes).toHaveLength(2);
     expect(publicArtifact.roundPayoutSnapshots[0].excludedVotes).toHaveLength(0);
