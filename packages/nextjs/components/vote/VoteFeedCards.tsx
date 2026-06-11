@@ -1,12 +1,14 @@
 "use client";
 
-import { type MouseEvent, memo, useEffect, useState } from "react";
+import { type MouseEvent, type ReactNode, memo, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { useAccount } from "wagmi";
 import {
   ArrowTopRightOnSquareIcon,
   ChatBubbleLeftRightIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  LockClosedIcon,
 } from "@heroicons/react/24/outline";
 import { ShareIcon } from "@heroicons/react/24/outline";
 import { ContentEmbed } from "~~/components/content/ContentEmbed";
@@ -23,9 +25,11 @@ import { WatchContentButton } from "~~/components/shared/WatchContentButton";
 import { getVisibleContentRating } from "~~/hooks/contentFeed/shared";
 import type { ContentItem } from "~~/hooks/useContentFeed";
 import type { SubmitterProfile } from "~~/hooks/useSubmitterProfiles";
+import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { type ContentMediaItem, buildFallbackMediaItems, isUploadedImageUrl } from "~~/lib/contentMedia";
 import { getVisibleFeedbackBonusAmount, getVisibleRewardPoolAmount } from "~~/lib/vote/discoverFeedFilter";
 import { detectPlatform } from "~~/utils/platforms";
+import { notification } from "~~/utils/scaffold-eth";
 
 const ShareContentModal = dynamic(
   () => import("~~/components/shared/ShareContentModal").then(m => m.ShareContentModal),
@@ -51,6 +55,23 @@ function isInteractiveTarget(target: EventTarget | null) {
 
 function getQuestionText(item: ContentItem) {
   return item.question?.trim() || item.title;
+}
+
+function isPrivateContextItem(item: ContentItem) {
+  return item.contextAccess === "gated" || item.contextVisibility === "gated";
+}
+
+function PrivateContextBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md bg-warning/15 font-semibold text-warning ${
+        compact ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-sm"
+      }`}
+    >
+      <LockClosedIcon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+      Private context
+    </span>
+  );
 }
 
 function getCardMediaItems(item: ContentItem): ContentMediaItem[] {
@@ -358,6 +379,119 @@ function FeedContentHeader({ item, titleId, compact }: FeedContentHeaderProps) {
       >
         {questionText}
       </h2>
+      {isPrivateContextItem(item) ? (
+        <div className="mt-2 flex justify-center">
+          <PrivateContextBadge compact={compact} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ConfidentialContextGate({ children, item }: { children: ReactNode; item: ContentItem }) {
+  const gated = isPrivateContextItem(item);
+  const { address } = useAccount();
+  const { isPending: isSigning, signMessageAsync } = useWalletMessageSigner({ address });
+  const [accepted, setAccepted] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
+
+  useEffect(() => {
+    setAccepted(false);
+  }, [item.id]);
+
+  useEffect(() => {
+    if (!gated || !address) return;
+    let cancelled = false;
+    setIsChecking(true);
+    const params = new URLSearchParams({
+      address,
+      contentId: item.id.toString(),
+    });
+    fetch(`/api/confidentiality/terms/session?${params.toString()}`, {
+      credentials: "include",
+    })
+      .then(response => (response.ok ? response.json() : null))
+      .then(body => {
+        if (!cancelled && body?.hasSession === true) setAccepted(true);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setIsChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, gated, item.id]);
+
+  const acceptTerms = async () => {
+    if (!address) {
+      notification.warning("Connect a wallet to view private context.");
+      return;
+    }
+    setIsAccepting(true);
+    try {
+      const payload = {
+        address,
+        contentHash: item.contentHash,
+        contentId: item.id.toString(),
+        detailsHash: item.detailsHash ?? undefined,
+        questionMetadataHash: item.questionMetadataHash ?? undefined,
+      };
+      const challengeResponse = await fetch("/api/confidentiality/terms/challenge", {
+        body: JSON.stringify(payload),
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const challenge = await challengeResponse.json();
+      if (!challengeResponse.ok || typeof challenge.message !== "string" || typeof challenge.challengeId !== "string") {
+        throw new Error(challenge.error || "Could not create confidentiality challenge.");
+      }
+      const signature = await signMessageAsync({ message: challenge.message });
+      const acceptResponse = await fetch("/api/confidentiality/terms", {
+        body: JSON.stringify({
+          ...payload,
+          challengeId: challenge.challengeId,
+          signature,
+          termsVersion: challenge.termsVersion,
+        }),
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const acceptedBody = await acceptResponse.json();
+      if (!acceptResponse.ok || acceptedBody.accepted !== true) {
+        throw new Error(acceptedBody.error || "Could not record confidentiality acceptance.");
+      }
+      setAccepted(true);
+    } catch (error) {
+      notification.error(error instanceof Error ? error.message : "Could not unlock private context.");
+    } finally {
+      setIsAccepting(false);
+    }
+  };
+
+  if (!gated || accepted) return <>{children}</>;
+
+  return (
+    <div className="flex h-full min-h-[16rem] w-full flex-col items-center justify-center gap-4 bg-base-300 p-6 text-center">
+      <PrivateContextBadge />
+      <div className="max-w-md space-y-2">
+        <p className="text-base font-semibold text-base-content">Confidential context is locked</p>
+        <p className="text-sm leading-relaxed text-base-content/65">
+          Accept the question confidentiality terms with your wallet to view hosted context for this rating.
+        </p>
+      </div>
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        onClick={acceptTerms}
+        disabled={isChecking || isAccepting || isSigning}
+      >
+        {isChecking || isAccepting || isSigning ? <span className="loading loading-spinner loading-xs" /> : null}
+        Accept terms
+      </button>
     </div>
   );
 }
@@ -399,20 +533,22 @@ function ContentMediaCarousel({
 
   return (
     <>
-      <ContentEmbed
-        url={embedUrl}
-        thumbnailUrl={item.thumbnailUrl}
-        title={item.title}
-        description={item.description}
-        compact={compact}
-        showTextHeading={false}
-        isActive={isActive}
-        interactionMode={interactionMode}
-        imageFit="contain"
-        enableImageLightbox={Boolean(activeMediaIsImage)}
-        imageLightboxTriggerLabel="Open question image"
-        imageLightboxModalLabel={item.title ? `Image for ${item.title}` : "Question image"}
-      />
+      <ConfidentialContextGate item={item}>
+        <ContentEmbed
+          url={embedUrl}
+          thumbnailUrl={item.thumbnailUrl}
+          title={item.title}
+          description={item.description}
+          compact={compact}
+          showTextHeading={false}
+          isActive={isActive}
+          interactionMode={interactionMode}
+          imageFit="contain"
+          enableImageLightbox={Boolean(activeMediaIsImage)}
+          imageLightboxTriggerLabel="Open question image"
+          imageLightboxModalLabel={item.title ? `Image for ${item.title}` : "Question image"}
+        />
+      </ConfidentialContextGate>
       {hasCarouselControls ? (
         <>
           <button
@@ -467,7 +603,8 @@ function FeedContentMetaCard({
   const hasDescription = description.length > 0 || Boolean(item.detailsUrl);
   const contextUrl = item.url.trim();
   const contextLabel = getSourceLabel(contextUrl);
-  const hasContextLink = contextUrl.length > 0 && contextLabel.trim().length > 0;
+  const privateContext = isPrivateContextItem(item);
+  const hasContextLink = !privateContext && contextUrl.length > 0 && contextLabel.trim().length > 0;
   const rewardPoolTotal = getVisibleRewardPoolAmount(item);
   const rewardPoolCurrency = item.rewardPoolSummary?.currency;
   const feedbackBonusTotal = getVisibleFeedbackBonusAmount(item);
@@ -518,6 +655,7 @@ function FeedContentMetaCard({
       {feedbackBonusTotal > 0n ? (
         <FeedbackBonusAmountDisplay amount={feedbackBonusTotal} currency={feedbackBonusCurrency} />
       ) : null}
+      {privateContext ? <PrivateContextBadge compact /> : null}
       {!hasVisibleReward ? <NoRewardChip /> : null}
     </>
   );
