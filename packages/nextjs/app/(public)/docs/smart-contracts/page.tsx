@@ -306,25 +306,28 @@ const SmartContracts: NextPage = () => {
       <ul>
         <li>
           <code>reserveSubmission(revealCommitment)</code>, then{" "}
-          <code>submitQuestionWithRewardAndRoundConfig(..., details, rewardTerms, roundConfig, spec)</code> &mdash;
-          Reserve a hidden question, then reveal it with the exact attached bounty terms, creator-selected round config,
-          optional off-chain details URL/hash, and two non-zero metadata hashes: <code>questionMetadataHash</code> and{" "}
-          <code>resultSpecHash</code>. Question text is capped at 120 characters, the context/media/details submission
-          key is checked for duplicates, and the question plus description are emitted in the canonical{" "}
-          <code>ContentSubmitted</code> event for indexers and alternate frontends. The subjective template, rationale,
-          and interpretation data stays off-chain; the contract commits to its hashes in <code>contentHash</code> and
-          emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks use the same function after
-          the user or scoped agent wallet executes the returned funding and submission calls. <code>rewardTerms</code>{" "}
-          also commits to bounty eligibility: everyone, any selected mix of Selfie Check, Passport, and Proof of Human
-          credentials, optionally with a recent-recheck requirement. <code>rewardTerms.requiredVoters</code> must match{" "}
-          <code>roundConfig.minVoters</code> so a settled qualifying round is also bounty-qualifying, and bounty size
-          can raise the required participant floor.
+          <code>
+            submitQuestionWithRewardAndRoundConfig(..., details, rewardTerms, roundConfig, spec, confidentiality)
+          </code>{" "}
+          &mdash; Reserve a hidden question, then reveal it with the exact attached bounty terms, creator-selected round
+          config, optional off-chain details URL/hash, explicit confidentiality terms, and two non-zero metadata hashes:{" "}
+          <code>questionMetadataHash</code> and <code>resultSpecHash</code>. Question text is capped at 120 characters,
+          the context/media/details submission key is checked for duplicates, and the question plus description are
+          emitted in the canonical <code>ContentSubmitted</code> event for indexers and alternate frontends. The
+          subjective template, rationale, and interpretation data stays off-chain; the contract commits to its hashes in{" "}
+          <code>contentHash</code> and emits optional details through <code>ContentDetailsSubmitted</code>. Agent asks
+          use the same function after the user or scoped agent wallet executes the returned funding and submission
+          calls. <code>rewardTerms</code> also commits to bounty eligibility: everyone, any selected mix of Selfie
+          Check, Passport, and Proof of Human credentials, optionally with a recent-recheck requirement.{" "}
+          <code>rewardTerms.requiredVoters</code> must match <code>roundConfig.minVoters</code> so a settled qualifying
+          round is also bounty-qualifying, and bounty size can raise the required participant floor.
         </li>
         <li>
           <code>submitQuestionBundleWithRewardAndRoundConfig(..., rewardTerms, roundConfig)</code> &mdash; Submit a
           ranked-option bundle with one bounty shared across sibling questions. <code>requiredSettledRounds</code> now
           applies to bundle round sets, where each set is complete only after every bundled question has one settled
-          round.
+          round. Private context bundles are not accepted yet; submit gated questions individually until the uniform
+          bundle-confidentiality path is added.
         </li>
         <li>
           <code>getContentRoundConfig(contentId)</code> &mdash; Returns the blind phase, maximum duration, settlement
