@@ -383,22 +383,72 @@ abstract contract ContentSubmissionTestBase {
         RoundLib.RoundConfig memory roundConfig,
         ContentRegistry.QuestionSpecCommitment memory spec
     ) internal pure returns (bytes32) {
+        return _questionRevealCommitment(
+            submissionKey,
+            mediaHash,
+            title,
+            tags,
+            details,
+            categoryId,
+            salt,
+            submitter,
+            rewardTerms,
+            roundConfig,
+            spec,
+            bytes32(0)
+        );
+    }
+
+    function _questionRevealCommitment(
+        bytes32 submissionKey,
+        bytes32 mediaHash,
+        string memory title,
+        string memory tags,
+        ContentRegistry.SubmissionDetails memory details,
+        uint256 categoryId,
+        bytes32 salt,
+        address submitter,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec,
+        bytes32 confidentialityHash
+    ) internal pure returns (bytes32) {
+        bytes32 rewardHash = _hashSubmissionRewardTerms(rewardTerms);
+        bytes32 roundHash = keccak256(
+            abi.encode(roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters)
+        );
+        bytes32 titleTagsHash = keccak256(abi.encode(title, tags));
+        if (confidentialityHash != bytes32(0)) {
+            return keccak256(
+                abi.encode(
+                    QUESTION_REVEAL_DOMAIN,
+                    submissionKey,
+                    mediaHash,
+                    titleTagsHash,
+                    keccak256(abi.encode(details.detailsUrl, details.detailsHash)),
+                    categoryId,
+                    salt,
+                    submitter,
+                    rewardHash,
+                    roundHash,
+                    spec.questionMetadataHash,
+                    spec.resultSpecHash,
+                    confidentialityHash
+                )
+            );
+        }
         return keccak256(
             abi.encode(
                 QUESTION_REVEAL_DOMAIN,
                 submissionKey,
                 mediaHash,
-                keccak256(abi.encode(title, tags)),
+                titleTagsHash,
                 keccak256(abi.encode(details.detailsUrl, details.detailsHash)),
                 categoryId,
                 salt,
                 submitter,
-                _hashSubmissionRewardTerms(rewardTerms),
-                keccak256(
-                    abi.encode(
-                        roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters
-                    )
-                ),
+                rewardHash,
+                roundHash,
                 spec.questionMetadataHash,
                 spec.resultSpecHash
             )
