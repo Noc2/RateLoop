@@ -1950,7 +1950,12 @@ contract ContentRegistryBranchesTest is VotingTestBase {
         );
         MockCategoryRegistry mockCategoryRegistry2 = new MockCategoryRegistry();
         mockCategoryRegistry2.seedDefaultTestCategories();
+        ProtocolConfig noRaterConfig = _deployProtocolConfig(owner);
+        _setTlockRoundConfig(noRaterConfig, 1 hours, 7 days, 3, 100);
+        noRaterConfig.setCategoryRegistry(address(mockCategoryRegistry2));
+        noRaterConfig.setTreasury(treasury);
         reg2.setCategoryRegistry(address(mockCategoryRegistry2));
+        reg2.setProtocolConfig(address(noRaterConfig));
         reg2.setQuestionRewardPoolEscrow(address(mockQuestionRewardPoolEscrow));
         vm.stopPrank();
 
