@@ -524,6 +524,8 @@ export function buildAgentResultPackage(params: {
   const feedbackTypes = summarizeFeedbackTypes(params.feedback);
   const stateLabel = roundState === null ? null : ROUND_STATE_LABEL[roundState as keyof typeof ROUND_STATE_LABEL];
   const ratingText = ratingBps === null ? "no rating yet" : `${(ratingBps / 1000).toFixed(1)}/10`;
+  const gatedPrivateContext = hasGatedPrivateContext(params.content);
+  const questionText = gatedPrivateContext ? "" : (params.content.question ?? params.content.title);
   const feedbackText =
     feedbackTypes.length > 0
       ? `Public feedback includes ${feedbackTypes.join(", ")}.`
@@ -618,7 +620,7 @@ export function buildAgentResultPackage(params: {
       "The open result includes every revealed answer; bounty payouts may reflect a narrower eligible cohort.",
     );
   }
-  if (hasGatedPrivateContext(params.content)) {
+  if (gatedPrivateContext) {
     limitations.push(
       "This question used gated private context. Submitter-authored context is redacted from public result surfaces until disclosure; interpret the human signal with that context-access limitation.",
     );
@@ -657,7 +659,7 @@ export function buildAgentResultPackage(params: {
       downEvidence: downEvidence > 0n ? downEvidence.toString() : null,
       effectiveEvidence: params.content.ratingEffectiveEvidence ?? latestRound?.effectiveEvidence?.toString?.() ?? null,
       latestRound,
-      question: markUntrustedQuestionText(params.content.question ?? params.content.title),
+      question: markUntrustedQuestionText(questionText),
       ratingSettledRounds: settledRounds,
       status: params.content.status ?? null,
       upEvidence: upEvidence > 0n ? upEvidence.toString() : null,

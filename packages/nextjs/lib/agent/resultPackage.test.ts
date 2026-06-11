@@ -210,12 +210,14 @@ test("buildAgentResultPackage separates all answers from scoped bounty-eligible 
 });
 
 test("buildAgentResultPackage flags private context limitations", () => {
+  const secretQuestion = "SECRET: proprietary launch prompt";
   const result = buildAgentResultPackage({
     audienceContext: null,
     content: content({
       contextAccess: "gated",
       contextVisibility: "gated",
       description: "",
+      question: secretQuestion,
     }),
     feedback: [],
     latestRound: {
@@ -236,6 +238,7 @@ test("buildAgentResultPackage flags private context limitations", () => {
 
   assert.equal(result.protocolState.contextAccess, "gated");
   assert.ok(result.limitations.some(limitation => limitation.includes("gated private context")));
+  assert.ok(!result.protocolState.question.includes(secretQuestion));
 });
 
 test("buildAgentResultPackage uses bundle bounty scope when no single-question reward pool exists", () => {

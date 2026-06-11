@@ -870,6 +870,36 @@ test("rateloop_accept_confidentiality_terms exposes backend-pending gated accept
   assert.equal(body.wallet.address, AGENT.walletAddress);
 });
 
+test("rateloop_get_result redacts submitter-authored text for gated private context", async () => {
+  mock.method(console, "warn", () => {});
+  const secretQuestion = "SECRET: unreleased product positioning prompt";
+  __setMcpToolTestOverridesForTests({
+    getContentById: async () =>
+      ratingContent({
+        contextAccess: "gated",
+        contextVisibility: "gated",
+        question: secretQuestion,
+        title: "Public-safe prototype title",
+      }),
+  });
+
+  const result = await callPublicRateLoopMcpTool({
+    arguments: {
+      contentId: RATING_CONTENT_ID,
+    },
+    name: "rateloop_get_result",
+  });
+  const body = result as {
+    limitations: string[];
+    protocolState: { contextAccess: string; question: string };
+  };
+
+  assert.equal(body.protocolState.contextAccess, "gated");
+  assert.ok(body.limitations.some(limitation => limitation.includes("gated private context")));
+  assert.ok(!JSON.stringify(body).includes(secretQuestion));
+  assert.match(body.protocolState.question, /RATELOOP_UNTRUSTED_DATA_BEGIN/);
+});
+
 test("rateloop_get_rating_context can use a scoped managed agent wallet", async () => {
   __setMcpToolTestOverridesForTests({
     getContentById: async () => ratingContent(),
