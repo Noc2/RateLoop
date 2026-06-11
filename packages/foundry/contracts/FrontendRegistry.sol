@@ -287,8 +287,18 @@ contract FrontendRegistry is IFrontendRegistry, Initializable, AccessControlUpgr
         require(availableAt != 0, "Exit not requested");
         require(block.timestamp >= availableAt, "Unbonding period active");
 
+        uint256 pendingWithdrawal = pendingFeeWithdrawalAmount[msg.sender];
+        uint256 feeReviewAvailableAt = availableAt;
+        if (f.lrepFees > 0) {
+            feeReviewAvailableAt = availableAt - UNBONDING_PERIOD + FEE_WITHDRAWAL_DELAY;
+        }
+        if (pendingWithdrawal > 0 && pendingFeeWithdrawalReleaseAt[msg.sender] > feeReviewAvailableAt) {
+            feeReviewAvailableAt = pendingFeeWithdrawalReleaseAt[msg.sender];
+        }
+        require(block.timestamp >= feeReviewAvailableAt, "Fee withdrawal delay active");
+
         uint256 refund = uint256(f.stakedAmount);
-        uint256 pendingFees = uint256(f.lrepFees) + pendingFeeWithdrawalAmount[msg.sender];
+        uint256 pendingFees = uint256(f.lrepFees) + pendingWithdrawal;
         f.stakedAmount = 0;
         f.lrepFees = 0;
         f.operator = address(0); // Allow re-registration

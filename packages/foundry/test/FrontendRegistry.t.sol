@@ -235,9 +235,17 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(frontend1);
         registry.requestDeregister();
+        uint256 feeReviewAvailableAt = block.timestamp + registry.FEE_WITHDRAWAL_DELAY();
 
         uint256 balanceBefore = lrepToken.balanceOf(frontend1);
-        _completeDeregister(frontend1);
+        vm.warp(block.timestamp + registry.UNBONDING_PERIOD() + 1);
+        vm.prank(frontend1);
+        vm.expectRevert("Fee withdrawal delay active");
+        registry.completeDeregister();
+
+        vm.warp(feeReviewAvailableAt);
+        vm.prank(frontend1);
+        registry.completeDeregister();
 
         // Should receive stake + pending fees
         uint256 balanceAfter = lrepToken.balanceOf(frontend1);
@@ -934,15 +942,22 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(frontend1);
         registry.requestDeregister();
+        uint256 feeReviewAvailableAt = registry.pendingFeeWithdrawalReleaseAt(frontend1);
 
-        // Completion is blocked mid-exit; everything pays out at completeDeregister.
-        vm.warp(block.timestamp + registry.FEE_WITHDRAWAL_DELAY());
+        // Completion is blocked mid-exit and before fee review matures.
+        vm.warp(block.timestamp + registry.UNBONDING_PERIOD() + 1);
+        vm.prank(frontend1);
+        vm.expectRevert("Fee withdrawal delay active");
+        registry.completeDeregister();
+
+        vm.warp(feeReviewAvailableAt);
         vm.prank(frontend1);
         vm.expectRevert(IFrontendRegistry.FrontendExitPending.selector);
         registry.completeFeeWithdrawal();
 
         uint256 balanceBefore = lrepToken.balanceOf(frontend1);
-        _completeDeregister(frontend1);
+        vm.prank(frontend1);
+        registry.completeDeregister();
 
         assertEq(lrepToken.balanceOf(frontend1) - balanceBefore, STAKE + 150e6);
         assertEq(registry.pendingFeeWithdrawalAmount(frontend1), 0);
@@ -1022,9 +1037,12 @@ contract FrontendRegistryTest is Test {
 
         vm.prank(frontend1);
         registry.requestDeregister();
+        uint256 feeReviewAvailableAt = block.timestamp + registry.FEE_WITHDRAWAL_DELAY();
 
         uint256 balanceBefore = lrepToken.balanceOf(frontend1);
-        _completeDeregister(frontend1);
+        vm.warp(feeReviewAvailableAt);
+        vm.prank(frontend1);
+        registry.completeDeregister();
 
         assertEq(lrepToken.balanceOf(frontend1) - balanceBefore, STAKE + 200e6);
         assertEq(registry.getAccumulatedFees(frontend1), 0);
