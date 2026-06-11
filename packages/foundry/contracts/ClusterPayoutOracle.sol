@@ -1130,16 +1130,13 @@ contract ClusterPayoutOracle is IClusterPayoutOracle, AccessControl, ReentrancyG
         address proposer,
         address frontendOperator,
         address proposalTimeSnapshotProposer
-    ) private view {
+    ) private pure {
         if (
             challenger == proposer || challenger == frontendOperator
                 || (proposalTimeSnapshotProposer != address(0) && challenger == proposalTimeSnapshotProposer)
         ) {
             revert InvalidSnapshot();
         }
-        try frontendRegistry.isAuthorizedSnapshotProposer(frontendOperator, challenger) returns (bool authorized) {
-            if (authorized) revert InvalidSnapshot();
-        } catch { }
     }
 
     function _creditBond(address to, uint256 amount) private {

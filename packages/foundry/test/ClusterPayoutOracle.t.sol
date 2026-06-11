@@ -1491,11 +1491,10 @@ contract ClusterPayoutOracleTest is Test {
         assertEq(oracle.roundPayoutProposal(snapshotKey).challenger, unrelatedChallenger);
     }
 
-    function test_RotatedKeeperCannotChallengePriorKeeperCorrelationEpochButUnrelatedChallengerCan() public {
+    function test_RotatedKeeperCanChallengePriorKeeperCorrelationEpoch() public {
         address frontendOperator = address(0xFEE);
         address firstKeeper = address(0xCAFE);
         address secondKeeper = address(0xBEEF);
-        address unrelatedChallenger = address(0xCA11CE);
 
         frontendRegistry.setEligible(frontendOperator, true);
         frontendRegistry.setAuthorizedSnapshotFrontend(firstKeeper, frontendOperator);
@@ -1517,19 +1516,86 @@ contract ClusterPayoutOracleTest is Test {
         usdc.mint(secondKeeper, CHALLENGE_BOND);
         vm.startPrank(secondKeeper);
         usdc.approve(address(oracle), CHALLENGE_BOND);
-        vm.expectRevert(ClusterPayoutOracle.InvalidSnapshot.selector);
         oracle.challengeCorrelationEpoch(1, keccak256("rotated-keeper-challenge"));
-        vm.stopPrank();
-
-        usdc.mint(unrelatedChallenger, CHALLENGE_BOND);
-        vm.startPrank(unrelatedChallenger);
-        usdc.approve(address(oracle), CHALLENGE_BOND);
-        oracle.challengeCorrelationEpoch(1, keccak256("independent-challenge"));
         vm.stopPrank();
 
         ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
         assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
-        assertEq(snapshot.challenger, unrelatedChallenger);
+        assertEq(snapshot.challenger, secondKeeper);
+    }
+
+    function test_PostProposalSnapshotProposerAssignmentCannotCensorCorrelationEpochChallenge() public {
+        address frontendOperator = address(0xFEE);
+        address challenger = address(0xCA11CE);
+
+        frontendRegistry.setEligible(frontendOperator, true);
+
+        vm.prank(frontendOperator);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+
+        assertEq(oracle.correlationEpochSnapshot(1).proposalTimeSnapshotProposer, address(0));
+        frontendRegistry.setAuthorizedSnapshotFrontend(challenger, frontendOperator);
+        assertTrue(frontendRegistry.isAuthorizedSnapshotProposer(frontendOperator, challenger));
+
+        usdc.mint(challenger, CHALLENGE_BOND);
+        vm.startPrank(challenger);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        oracle.challengeCorrelationEpoch(1, keccak256("post-proposal-assignee-challenge"));
+        vm.stopPrank();
+
+        ClusterPayoutOracle.CorrelationEpochSnapshot memory snapshot = oracle.correlationEpochSnapshot(1);
+        assertEq(uint8(snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
+        assertEq(snapshot.challenger, challenger);
+    }
+
+    function test_PostProposalSnapshotProposerAssignmentCannotCensorRoundPayoutChallenge() public {
+        address frontendOperator = address(0xFEE);
+        address challenger = address(0xCA11CE);
+
+        frontendRegistry.setEligible(frontendOperator, true);
+
+        vm.prank(frontendOperator);
+        oracle.proposeCorrelationEpoch(
+            1,
+            1,
+            20,
+            keccak256("cluster-root"),
+            keccak256("params"),
+            keccak256("epoch-artifact"),
+            "ipfs://epoch",
+            _defaultEpochSources()
+        );
+        vm.warp(1 hours + 2);
+        oracle.finalizeCorrelationEpoch(1);
+
+        IClusterPayoutOracle.RoundPayoutSnapshotInput memory input = _defaultRoundPayoutInput(1);
+        vm.prank(frontendOperator);
+        oracle.proposeRoundPayoutSnapshot(input);
+        bytes32 snapshotKey =
+            oracle.roundPayoutSnapshotKey(input.domain, input.rewardPoolId, input.contentId, input.roundId);
+
+        assertEq(oracle.roundPayoutProposal(snapshotKey).proposalTimeSnapshotProposer, address(0));
+        frontendRegistry.setAuthorizedSnapshotFrontend(challenger, frontendOperator);
+        assertTrue(frontendRegistry.isAuthorizedSnapshotProposer(frontendOperator, challenger));
+
+        usdc.mint(challenger, CHALLENGE_BOND);
+        vm.startPrank(challenger);
+        usdc.approve(address(oracle), CHALLENGE_BOND);
+        oracle.challengeRoundPayoutSnapshot(snapshotKey, keccak256("post-proposal-assignee-challenge"));
+        vm.stopPrank();
+
+        ClusterPayoutOracle.RoundPayoutProposal memory proposal = oracle.roundPayoutProposal(snapshotKey);
+        assertEq(uint8(proposal.snapshot.status), uint8(IClusterPayoutOracle.SnapshotStatus.Challenged));
+        assertEq(proposal.challenger, challenger);
     }
 
     function test_ChallengesRequireUsdcApprovalAndRejectNativeToken() public {
