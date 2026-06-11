@@ -7,6 +7,7 @@ import {
   setTestConfig,
   settleRoundDirect,
   submitContentDirect,
+  transferLREP,
   waitForPonderIndexed,
   waitForPonderSync,
 } from "../helpers/admin-helpers";
@@ -55,6 +56,9 @@ test.describe("Tied round lifecycle", () => {
     const submitter = ANVIL_ACCOUNTS.account10;
     const uniqueId = Date.now();
     const url = `https://www.youtube.com/watch?v=tie_test_${uniqueId}`;
+    const funded = await transferLREP(submitter.address, BigInt(100e6), DEPLOYER.address, LREP_TOKEN);
+    expect(funded, "Content submitter top-up failed").toBe(true);
+
     const submitApproved = await approveLREP(CONTENT_REGISTRY, BigInt(10e6), submitter.address, LREP_TOKEN);
     expect(submitApproved, "Content submission approval failed").toBe(true);
 
