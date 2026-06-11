@@ -12,6 +12,7 @@ export const content = onchainTable(
     contentHash: t.hex().notNull(),
     questionMetadataHash: t.hex(),
     questionMetadata: t.text(),
+    questionMetadataUri: t.text(),
     resultSpecHash: t.hex(),
     targetAudience: t.text(),
     targetAudienceAgeGroups: t.text(),

@@ -1,5 +1,7 @@
 import { type Address, type Hex, encodeAbiParameters, keccak256, toBytes } from "viem";
 
+export { buildQuestionMetadataUri } from "~~/lib/agent/questionSpecs";
+
 const QUESTION_REVEAL_DOMAIN = keccak256(toBytes("rateloop-question-reveal-v7"));
 const QUESTION_CONTEXT_DOMAIN = keccak256(toBytes("rateloop-question-context-v5"));
 const QUESTION_BUNDLE_ITEM_DOMAIN = keccak256(toBytes("rateloop-question-bundle-item-v5"));

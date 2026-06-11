@@ -1657,6 +1657,7 @@ export function ContentSubmissionSection() {
       spec: {
         questionMetadata?: unknown;
         questionMetadataHash: `0x${string}`;
+        questionMetadataUri: string;
         resultSpecHash: `0x${string}`;
       };
       targetAudience?: unknown;
@@ -1675,6 +1676,7 @@ export function ContentSubmissionSection() {
         contentId: params.contentIds[index]?.toString() ?? "",
         questionMetadata: question.spec.questionMetadata ?? null,
         questionMetadataHash: question.spec.questionMetadataHash,
+        questionMetadataUri: question.spec.questionMetadataUri,
         resultSpecHash: question.spec.resultSpecHash,
         targetAudience: question.targetAudience ?? null,
       }))
@@ -2334,6 +2336,7 @@ export function ContentSubmissionSection() {
           spec: {
             questionMetadata: spec.questionMetadata,
             questionMetadataHash: spec.questionMetadataHash,
+            questionMetadataUri: spec.questionMetadataUri,
             resultSpecHash: spec.resultSpecHash,
           },
           targetAudience: question.targetAudience,
@@ -2355,6 +2358,15 @@ export function ContentSubmissionSection() {
       if (!primaryQuestion) {
         throw new Error("Question is missing.");
       }
+      const toQuestionContractSpec = (spec: (typeof bundleQuestions)[number]["spec"]) => ({
+        questionMetadataHash: spec.questionMetadataHash,
+        resultSpecHash: spec.resultSpecHash,
+      });
+      const contractBundleQuestions = bundleQuestions.map(question => ({
+        ...question,
+        spec: toQuestionContractSpec(question.spec),
+      }));
+      const primaryQuestionContractSpec = toQuestionContractSpec(primaryQuestion.spec);
       await assertContentRegistryQuestionSubmissionSelector(
         publicClient,
         registryAddress,
@@ -2506,7 +2518,7 @@ export function ContentSubmissionSection() {
               abi: QUESTION_SUBMISSION_ABI,
               address: registryAddress,
               args: isBundleSubmission
-                ? [bundleQuestions, rewardTerms, roundConfigAbi]
+                ? [contractBundleQuestions, rewardTerms, roundConfigAbi]
                 : [
                     primaryQuestion.contextUrl,
                     primaryQuestion.imageUrls,
@@ -2518,7 +2530,7 @@ export function ContentSubmissionSection() {
                     primaryQuestion.salt,
                     rewardTerms,
                     roundConfigAbi,
-                    primaryQuestion.spec,
+                    primaryQuestionContractSpec,
                   ],
               functionName: isBundleSubmission
                 ? "submitQuestionBundleWithRewardAndRoundConfig"
@@ -2561,7 +2573,7 @@ export function ContentSubmissionSection() {
               address: registryAddress,
               abi: QUESTION_SUBMISSION_ABI,
               functionName: "submitQuestionBundleWithRewardAndRoundConfig",
-              args: [bundleQuestions, rewardTerms, roundConfigAbi],
+              args: [contractBundleQuestions, rewardTerms, roundConfigAbi],
             } as const)
           : ({
               address: registryAddress,
@@ -2578,7 +2590,7 @@ export function ContentSubmissionSection() {
                 primaryQuestion.salt,
                 rewardTerms,
                 roundConfigAbi,
-                primaryQuestion.spec,
+                primaryQuestionContractSpec,
               ],
             } as const);
         const submitTxHash = localE2ETestWalletClient

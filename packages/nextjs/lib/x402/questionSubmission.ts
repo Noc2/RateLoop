@@ -43,6 +43,7 @@ import {
 } from "~~/lib/questionRoundConfig";
 import {
   buildQuestionBundleSubmissionRevealCommitment,
+  buildQuestionMetadataUri,
   buildQuestionSubmissionKey,
   buildQuestionSubmissionRevealCommitment,
 } from "~~/lib/questionSubmissionCommitment";
@@ -109,6 +110,7 @@ type StoredWalletSubmissionPlanReceipt = {
 type StoredQuestionMetadata = {
   questionMetadata?: unknown;
   questionMetadataHash: Hex;
+  questionMetadataUri?: string;
   resultSpecHash: Hex;
   targetAudience: TargetAudience | null;
 };
@@ -405,6 +407,7 @@ function serializeQuestionMetadata(payload: X402QuestionPayload): StoredQuestion
   return payload.questions.map(question => ({
     questionMetadata: question.questionMetadata,
     questionMetadataHash: question.questionMetadataHash,
+    questionMetadataUri: question.questionMetadataUri,
     resultSpecHash: question.resultSpecHash,
     targetAudience: normalizeTargetAudience(question.targetAudience),
   }));
@@ -434,6 +437,10 @@ function parseStoredQuestionMetadata(value: unknown): StoredQuestionMetadata[] |
       {
         ...(questionMetadata === undefined ? {} : { questionMetadata }),
         questionMetadataHash: record.questionMetadataHash.toLowerCase() as Hex,
+        questionMetadataUri:
+          typeof record.questionMetadataUri === "string" && record.questionMetadataUri.trim()
+            ? record.questionMetadataUri.trim()
+            : undefined,
         resultSpecHash: record.resultSpecHash.toLowerCase() as Hex,
         targetAudience,
       },
@@ -2052,6 +2059,7 @@ async function syncSubmittedQuestionMetadata(params: {
         contentId: contentId.toString(),
         questionMetadata: item.questionMetadata ?? null,
         questionMetadataHash: item.questionMetadataHash,
+        questionMetadataUri: item.questionMetadataUri ?? buildQuestionMetadataUri(item.questionMetadataHash),
         resultSpecHash: item.resultSpecHash,
         targetAudience: item.targetAudience,
       },

@@ -36,6 +36,7 @@ type QuestionMetadataInput = {
   contentId: string;
   questionMetadata: unknown | null;
   questionMetadataHash: Hex;
+  questionMetadataUri: string | null;
   resultSpecHash: Hex;
   targetAudience: TargetAudience | null;
 };
@@ -43,6 +44,7 @@ type QuestionMetadataInput = {
 type QuestionMetadataProof = {
   contentId: string;
   questionMetadataHash: Hex;
+  questionMetadataUri: string | null;
   resultSpecHash: Hex;
 };
 
@@ -121,6 +123,8 @@ function readQuestionMetadataAttachments(value: unknown): QuestionMetadataInput[
       contentId,
       questionMetadata,
       questionMetadataHash: questionMetadataHash as Hex,
+      questionMetadataUri:
+        typeof record.questionMetadataUri === "string" ? record.questionMetadataUri.trim() || null : null,
       resultSpecHash: resultSpecHash as Hex,
       targetAudience: normalizeTargetAudience(record.targetAudience),
     });
@@ -193,8 +197,10 @@ function collectDetailsProofsFromReceiptLogs(params: {
         typeof decoded.args.resultSpecHash === "string" &&
         BYTES32_PATTERN.test(decoded.args.resultSpecHash)
       ) {
-        metadataByContentId.set(decoded.args.contentId.toString(), {
+        const key = decoded.args.contentId.toString();
+        metadataByContentId.set(key, {
           questionMetadataHash: decoded.args.questionMetadataHash.toLowerCase() as Hex,
+          questionMetadataUri: null,
           resultSpecHash: decoded.args.resultSpecHash.toLowerCase() as Hex,
         });
       }
@@ -220,6 +226,7 @@ function collectDetailsProofsFromReceiptLogs(params: {
     metadataProofs.set(contentId, {
       contentId,
       questionMetadataHash: metadata.questionMetadataHash,
+      questionMetadataUri: metadata.questionMetadataUri,
       resultSpecHash: metadata.resultSpecHash,
     });
   }
@@ -313,6 +320,9 @@ export async function POST(request: NextRequest) {
     return (
       proof &&
       proof.questionMetadataHash.toLowerCase() === entry.questionMetadataHash.toLowerCase() &&
+      (entry.questionMetadataUri === null ||
+        proof.questionMetadataUri === null ||
+        proof.questionMetadataUri === entry.questionMetadataUri) &&
       proof.resultSpecHash.toLowerCase() === entry.resultSpecHash.toLowerCase()
     );
   });

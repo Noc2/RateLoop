@@ -75,6 +75,7 @@ type AudienceFilter = {
 
 const TARGET_AUDIENCE_RESPONSE_FIELDS = [
   "questionMetadata",
+  "questionMetadataUri",
   "targetAudience",
   "targetAudienceAgeGroups",
   "targetAudienceCountries",
@@ -552,6 +553,7 @@ async function updateQuestionMetadataRow(params: {
   contentId: bigint;
   questionMetadata: string | null;
   questionMetadataHash: Hex;
+  questionMetadataUri: string | null;
   resultSpecHash: Hex;
   targetAudience: TargetAudience | null;
 }) {
@@ -564,36 +566,39 @@ async function updateQuestionMetadataRow(params: {
         ${quoteIdentifier("questionMetadataHash")} = $1,
         ${quoteIdentifier("resultSpecHash")} = $2,
         ${quoteIdentifier("questionMetadata")} = coalesce($3, ${quoteIdentifier("questionMetadata")}),
-        ${quoteIdentifier("targetAudience")} = $4,
-        ${quoteIdentifier("targetAudienceAgeGroups")} = $5,
-        ${quoteIdentifier("targetAudienceCountries")} = $6,
-        ${quoteIdentifier("targetAudienceExpertise")} = $7,
-        ${quoteIdentifier("targetAudienceLanguages")} = $8,
-        ${quoteIdentifier("targetAudienceNationalities")} = $9,
-        ${quoteIdentifier("targetAudienceRoles")} = $10,
-        ${quoteIdentifier("targetAudienceAiAgentFrameworks")} = $11,
-        ${quoteIdentifier("targetAudienceAiAutonomy")} = $12,
-        ${quoteIdentifier("targetAudienceAiExpertise")} = $13,
-        ${quoteIdentifier("targetAudienceAiLanguages")} = $14,
-        ${quoteIdentifier("targetAudienceAiModelProviders")} = $15,
-        ${quoteIdentifier("targetAudienceTeamCountries")} = $16,
-        ${quoteIdentifier("targetAudienceTeamExpertise")} = $17,
-        ${quoteIdentifier("targetAudienceTeamLanguages")} = $18,
-        ${quoteIdentifier("targetAudienceTeamSizes")} = $19,
-        ${quoteIdentifier("targetAudienceTeamTypes")} = $20,
-        ${quoteIdentifier("targetAudienceHybridExpertise")} = $21,
-        ${quoteIdentifier("targetAudienceHybridLanguages")} = $22,
-        ${quoteIdentifier("targetAudienceHybridModelProviders")} = $23,
-        ${quoteIdentifier("targetAudienceHybridOversight")} = $24
-      where ${quoteIdentifier("id")} = $25
+        ${quoteIdentifier("questionMetadataUri")} = coalesce($4, ${quoteIdentifier("questionMetadataUri")}),
+        ${quoteIdentifier("targetAudience")} = $5,
+        ${quoteIdentifier("targetAudienceAgeGroups")} = $6,
+        ${quoteIdentifier("targetAudienceCountries")} = $7,
+        ${quoteIdentifier("targetAudienceExpertise")} = $8,
+        ${quoteIdentifier("targetAudienceLanguages")} = $9,
+        ${quoteIdentifier("targetAudienceNationalities")} = $10,
+        ${quoteIdentifier("targetAudienceRoles")} = $11,
+        ${quoteIdentifier("targetAudienceAiAgentFrameworks")} = $12,
+        ${quoteIdentifier("targetAudienceAiAutonomy")} = $13,
+        ${quoteIdentifier("targetAudienceAiExpertise")} = $14,
+        ${quoteIdentifier("targetAudienceAiLanguages")} = $15,
+        ${quoteIdentifier("targetAudienceAiModelProviders")} = $16,
+        ${quoteIdentifier("targetAudienceTeamCountries")} = $17,
+        ${quoteIdentifier("targetAudienceTeamExpertise")} = $18,
+        ${quoteIdentifier("targetAudienceTeamLanguages")} = $19,
+        ${quoteIdentifier("targetAudienceTeamSizes")} = $20,
+        ${quoteIdentifier("targetAudienceTeamTypes")} = $21,
+        ${quoteIdentifier("targetAudienceHybridExpertise")} = $22,
+        ${quoteIdentifier("targetAudienceHybridLanguages")} = $23,
+        ${quoteIdentifier("targetAudienceHybridModelProviders")} = $24,
+        ${quoteIdentifier("targetAudienceHybridOversight")} = $25
+      where ${quoteIdentifier("id")} = $26
         and (${quoteIdentifier("questionMetadataHash")} is null or lower(${quoteIdentifier("questionMetadataHash")}) = $1)
         and (${quoteIdentifier("resultSpecHash")} is null or lower(${quoteIdentifier("resultSpecHash")}) = $2)
         and ($3::text is null or ${quoteIdentifier("questionMetadata")} is null or ${quoteIdentifier("questionMetadata")} = $3)
+        and ($4::text is null or ${quoteIdentifier("questionMetadataUri")} is null or ${quoteIdentifier("questionMetadataUri")} = $4)
     `,
     [
       params.questionMetadataHash,
       params.resultSpecHash,
       params.questionMetadata,
+      params.questionMetadataUri,
       storage.targetAudience,
       storage.targetAudienceAgeGroups,
       storage.targetAudienceCountries,
@@ -649,6 +654,10 @@ function readQuestionMetadataItems(value: unknown) {
     const questionMetadataHash = readMetadataHash(record.questionMetadataHash);
     const resultSpecHash = readMetadataHash(record.resultSpecHash);
     if (contentId === null || !questionMetadataHash || !resultSpecHash) return [];
+    const questionMetadataUri =
+      typeof record.questionMetadataUri === "string" && record.questionMetadataUri.trim()
+        ? record.questionMetadataUri.trim()
+        : null;
     const questionMetadataInput = record.questionMetadata ?? null;
     let questionMetadata: string | null = null;
     let targetAudienceInput = record.targetAudience;
@@ -664,6 +673,7 @@ function readQuestionMetadataItems(value: unknown) {
         contentId,
         questionMetadata,
         questionMetadataHash,
+        questionMetadataUri,
         resultSpecHash,
         targetAudience: targetAudienceInput,
       },
@@ -923,6 +933,7 @@ export function registerContentRoutes(app: ApiApp) {
         contentId: content.id,
         questionMetadata: content.questionMetadata,
         questionMetadataHash: content.questionMetadataHash,
+        questionMetadataUri: content.questionMetadataUri,
         resultSpecHash: content.resultSpecHash,
         targetAudience: content.targetAudience,
         title: content.title,
@@ -951,6 +962,7 @@ export function registerContentRoutes(app: ApiApp) {
       items: rows.map((row) => ({
         contentId: row.contentId,
         createdAt: row.createdAt,
+        questionMetadataUri: row.questionMetadataUri,
         resultSpecHash: row.resultSpecHash,
         targetAudience: parseStoredJson(row.targetAudience),
         title: row.title,
@@ -999,6 +1011,7 @@ export function registerContentRoutes(app: ApiApp) {
         contentId: item.contentId,
         questionMetadata: item.questionMetadata,
         questionMetadataHash: item.questionMetadataHash,
+        questionMetadataUri: item.questionMetadataUri,
         resultSpecHash: item.resultSpecHash,
         targetAudience,
       });

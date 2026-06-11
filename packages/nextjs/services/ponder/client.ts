@@ -570,6 +570,7 @@ export interface PonderQuestionMetadataItem {
   contentId: string;
   questionMetadata?: unknown | null;
   questionMetadataHash: string;
+  questionMetadataUri?: string | null;
   resultSpecHash: string;
   targetAudience?: TargetAudience | null;
 }
@@ -580,6 +581,7 @@ export interface PonderQuestionMetadataResponse {
   items: Array<{
     contentId: string;
     createdAt: string;
+    questionMetadataUri?: string | null;
     resultSpecHash: string | null;
     targetAudience: TargetAudience | null;
     title: string;
