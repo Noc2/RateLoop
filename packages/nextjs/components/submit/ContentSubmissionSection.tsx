@@ -615,6 +615,7 @@ export function ContentSubmissionSection() {
   const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
   const [customSubcategory, setCustomSubcategory] = useState("");
   const [targetAudience, setTargetAudience] = useState<QuestionTargetAudienceDraft>(createEmptyTargetAudienceDraft());
+  const [showTargetAudienceSettings, setShowTargetAudienceSettings] = useState(false);
   const [targetAudienceCountryInput, setTargetAudienceCountryInput] = useState("");
   const [targetAudienceCountryError, setTargetAudienceCountryError] = useState<string | null>(null);
   const [targetAudienceNationalityInput, setTargetAudienceNationalityInput] = useState("");
@@ -2945,6 +2946,12 @@ export function ContentSubmissionSection() {
           ? "Optional feedback bonus unavailable for bundles"
           : "Optional feedback bonus";
   const targetAudienceSelectedCount = countTargetAudienceValues(targetAudience);
+  const targetAudienceSummaryText =
+    targetAudienceSelectedCount === 0
+      ? "No audience targeting selected."
+      : `${targetAudienceSelectedCount.toLocaleString()} ${
+          targetAudienceSelectedCount === 1 ? "criterion" : "criteria"
+        } selected.`;
 
   const submissionStepIndicator = (
     <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-base-content/55">
@@ -3001,65 +3008,86 @@ export function ContentSubmissionSection() {
   const detailsPreviewText = getDetailsPreviewText(detailsText);
   const targetAudiencePicker = (
     <div className="border-t border-base-300 pt-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-1.5 text-base font-medium">
-          Target audience <span className="font-normal text-base-content/60">(optional)</span>
-          <InfoTooltip text="Structured self-report criteria used for targeted bounty eligibility. Raters see the normal question feed." />
-        </label>
-        {targetAudienceSelectedCount > 0 ? (
-          <button
-            type="button"
-            onClick={() => {
-              updateTargetAudienceDraft(() => createEmptyTargetAudienceDraft());
-              setTargetAudienceCountryInput("");
-              setTargetAudienceCountryError(null);
-              setTargetAudienceNationalityInput("");
-              setTargetAudienceNationalityError(null);
-            }}
-            className="btn btn-ghost btn-sm"
-          >
-            Clear
-          </button>
-        ) : null}
-      </div>
-
-      <div className="space-y-4">
-        {TARGET_AUDIENCE_CHIP_GROUPS.map(group => (
-          <AudienceChipGroup
-            key={group.field}
-            label={group.label}
-            options={group.options}
-            selected={targetAudience[group.field]}
-            onToggle={value => handleTargetAudienceToggle(group.field, value)}
-          />
-        ))}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <AudienceCountryCodeInput
-            label="Residence country"
-            inputValue={targetAudienceCountryInput}
-            error={targetAudienceCountryError}
-            selected={targetAudience.countries}
-            onInputChange={value => {
-              setTargetAudienceCountryInput(value.toUpperCase());
-              setTargetAudienceCountryError(null);
-            }}
-            onAdd={() => handleTargetAudienceCodeAdd("countries")}
-            onRemove={value => handleTargetAudienceToggle("countries", value)}
-          />
-          <AudienceCountryCodeInput
-            label="Nationality"
-            inputValue={targetAudienceNationalityInput}
-            error={targetAudienceNationalityError}
-            selected={targetAudience.nationalities}
-            onInputChange={value => {
-              setTargetAudienceNationalityInput(value.toUpperCase());
-              setTargetAudienceNationalityError(null);
-            }}
-            onAdd={() => handleTargetAudienceCodeAdd("nationalities")}
-            onRemove={value => handleTargetAudienceToggle("nationalities", value)}
-          />
+      <div className="surface-card-nested rounded-lg p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                aria-expanded={showTargetAudienceSettings}
+                aria-controls="target-audience-settings"
+                onClick={() => setShowTargetAudienceSettings(current => !current)}
+                className="inline-flex items-center gap-2 text-left text-base font-medium text-base-content transition-colors hover:text-base-content/80"
+              >
+                <ChevronDownIcon
+                  className={`h-4 w-4 shrink-0 transition-transform ${showTargetAudienceSettings ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
+                <span>
+                  Target audience <span className="font-normal text-base-content/60">(optional)</span>
+                </span>
+              </button>
+              <InfoTooltip text="Structured self-report criteria used for targeted bounty eligibility. Raters see the normal question feed." />
+            </div>
+            <p className="mt-2 text-sm text-base-content/60">{targetAudienceSummaryText}</p>
+          </div>
+          {targetAudienceSelectedCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                updateTargetAudienceDraft(() => createEmptyTargetAudienceDraft());
+                setTargetAudienceCountryInput("");
+                setTargetAudienceCountryError(null);
+                setTargetAudienceNationalityInput("");
+                setTargetAudienceNationalityError(null);
+              }}
+              className="btn btn-ghost btn-sm"
+            >
+              Clear
+            </button>
+          ) : null}
         </div>
+
+        {showTargetAudienceSettings ? (
+          <div id="target-audience-settings" className="mt-4 space-y-4">
+            {TARGET_AUDIENCE_CHIP_GROUPS.map(group => (
+              <AudienceChipGroup
+                key={group.field}
+                label={group.label}
+                options={group.options}
+                selected={targetAudience[group.field]}
+                onToggle={value => handleTargetAudienceToggle(group.field, value)}
+              />
+            ))}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <AudienceCountryCodeInput
+                label="Residence country"
+                inputValue={targetAudienceCountryInput}
+                error={targetAudienceCountryError}
+                selected={targetAudience.countries}
+                onInputChange={value => {
+                  setTargetAudienceCountryInput(value.toUpperCase());
+                  setTargetAudienceCountryError(null);
+                }}
+                onAdd={() => handleTargetAudienceCodeAdd("countries")}
+                onRemove={value => handleTargetAudienceToggle("countries", value)}
+              />
+              <AudienceCountryCodeInput
+                label="Nationality"
+                inputValue={targetAudienceNationalityInput}
+                error={targetAudienceNationalityError}
+                selected={targetAudience.nationalities}
+                onInputChange={value => {
+                  setTargetAudienceNationalityInput(value.toUpperCase());
+                  setTargetAudienceNationalityError(null);
+                }}
+                onAdd={() => handleTargetAudienceCodeAdd("nationalities")}
+                onRemove={value => handleTargetAudienceToggle("nationalities", value)}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
