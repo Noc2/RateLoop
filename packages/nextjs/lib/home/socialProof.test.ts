@@ -1,8 +1,8 @@
-import { LEGACY_VERIFIED_HUMAN_COUNT, buildLandingPageSocialProofItems, formatUsdcPaidOut } from "./socialProof";
+import { buildLandingPageSocialProofItems, formatUsdcPaidOut } from "./socialProof";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("landing social proof includes legacy contributors in verified humans", () => {
+test("landing social proof uses the indexed verified human count", () => {
   const items = buildLandingPageSocialProofItems({
     totalVerifiedHumans: 3,
     totalVotes: 6,
@@ -10,15 +10,14 @@ test("landing social proof includes legacy contributors in verified humans", () 
     totalFeedbackBonusesPaid: "0",
   });
 
-  assert.equal(LEGACY_VERIFIED_HUMAN_COUNT, 9);
   assert.deepEqual(items, [
-    { value: "12", label: "Verified Humans" },
+    { value: "3", label: "Verified Humans" },
     { value: "6", label: "Ratings" },
     { value: "$0", label: "USDC Paid" },
   ]);
 });
 
-test("landing social proof falls back to legacy count when live verified total is invalid", () => {
+test("landing social proof falls back to zero when live verified total is invalid", () => {
   const [verifiedHumans] = buildLandingPageSocialProofItems({
     totalVerifiedHumans: "not-a-number",
     totalVotes: "not-a-number",
@@ -27,7 +26,7 @@ test("landing social proof falls back to legacy count when live verified total i
   });
 
   assert.deepEqual(verifiedHumans, {
-    value: LEGACY_VERIFIED_HUMAN_COUNT.toLocaleString("en-US"),
+    value: "0",
     label: "Verified Humans",
   });
 });
