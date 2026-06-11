@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { RoundVotingEngineAbi } from "@rateloop/contracts/abis";
+import {
+  type TargetAudience,
+  getProfileSelfReportTaxonomy,
+  normalizeTargetAudience,
+} from "@rateloop/node-utils/profileSelfReport";
 import { useQuery } from "@tanstack/react-query";
 import { decodeEventLog, isAddress, toHex } from "viem";
 import { useAccount, useConfig, useReadContract } from "wagmi";
@@ -27,7 +32,7 @@ import { useThirdwebSponsoredSubmitCalls } from "~~/hooks/useThirdwebSponsoredSu
 import { useTransactionStatusToast } from "~~/hooks/useTransactionStatusToast";
 import { useWalletMessageSigner } from "~~/hooks/useWalletMessageSigner";
 import { useWalletRpcRecovery } from "~~/hooks/useWalletRpcRecovery";
-import { buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
+import { type AgentQuestionSpecInput, buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
 import {
   MAX_QUESTION_DETAILS_TEXT_LENGTH,
   getQuestionDetailsTextSizeBytes,
@@ -159,6 +164,76 @@ const ROUND_RESPONSE_WINDOW_PRESETS = [
   { id: "14d", label: "14d", minutes: 14 * 24 * 60 },
   { id: "30d", label: "30d", minutes: 30 * 24 * 60 },
 ] as const;
+const TARGET_AUDIENCE_TAXONOMY = getProfileSelfReportTaxonomy().targetAudience;
+const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
+
+type TargetAudienceDraftField = "ageGroups" | "countries" | "expertise" | "languages" | "nationalities" | "roles";
+type QuestionTargetAudienceDraft = Record<TargetAudienceDraftField, string[]>;
+
+const TARGET_AUDIENCE_CHIP_GROUPS: Array<{
+  field: Extract<TargetAudienceDraftField, "ageGroups" | "expertise" | "languages" | "roles">;
+  label: string;
+  options: readonly string[];
+}> = [
+  { field: "roles", label: "Roles", options: TARGET_AUDIENCE_TAXONOMY.roles },
+  { field: "languages", label: "Languages", options: TARGET_AUDIENCE_TAXONOMY.languages },
+  { field: "expertise", label: "Expertise", options: TARGET_AUDIENCE_TAXONOMY.expertise },
+  { field: "ageGroups", label: "Age", options: TARGET_AUDIENCE_TAXONOMY.ageGroups },
+];
+
+function createEmptyTargetAudienceDraft(): QuestionTargetAudienceDraft {
+  return {
+    ageGroups: [],
+    countries: [],
+    expertise: [],
+    languages: [],
+    nationalities: [],
+    roles: [],
+  };
+}
+
+function cloneTargetAudienceDraft(draft: QuestionTargetAudienceDraft): QuestionTargetAudienceDraft {
+  return {
+    ageGroups: [...draft.ageGroups],
+    countries: [...draft.countries],
+    expertise: [...draft.expertise],
+    languages: [...draft.languages],
+    nationalities: [...draft.nationalities],
+    roles: [...draft.roles],
+  };
+}
+
+function targetAudienceDraftToMetadata(draft: QuestionTargetAudienceDraft): TargetAudience | null {
+  return normalizeTargetAudience({
+    ageGroups: draft.ageGroups,
+    countries: draft.countries,
+    expertise: draft.expertise,
+    languages: draft.languages,
+    nationalities: draft.nationalities,
+    roles: draft.roles,
+  });
+}
+
+function targetAudienceToQuestionSpecInput(value: TargetAudience | null): AgentQuestionSpecInput["targetAudience"] {
+  return value as unknown as AgentQuestionSpecInput["targetAudience"];
+}
+
+function countTargetAudienceValues(draft: QuestionTargetAudienceDraft) {
+  return Object.values(draft).reduce((total, values) => total + values.length, 0);
+}
+
+function formatAudienceOptionLabel(value: string) {
+  if (/^[a-z]{2,3}$/i.test(value)) return value.toUpperCase();
+  return value
+    .split("-")
+    .map(part => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function normalizeAudienceCountryCodeInput(value: string) {
+  const normalized = value.trim().toUpperCase();
+  return COUNTRY_CODE_PATTERN.test(normalized) ? normalized : null;
+}
 
 type QuestionDraft = {
   mediaMode: MediaMode;
@@ -170,6 +245,7 @@ type QuestionDraft = {
   selectedCategory: Category | null;
   selectedSubcategories: string[];
   customSubcategory: string;
+  targetAudience: QuestionTargetAudienceDraft;
 };
 
 type ValidatedQuestionDraft = {
@@ -183,6 +259,7 @@ type ValidatedQuestionDraft = {
   trimmedDetailsText: string;
   trimmedTitle: string;
   selectedCategory: Category | null;
+  targetAudience: TargetAudience | null;
 };
 
 type QuestionTaxonomySelection = Pick<QuestionDraft, "selectedCategory" | "selectedSubcategories">;
@@ -198,6 +275,7 @@ function createEmptyQuestionDraft(): QuestionDraft {
     selectedCategory: null,
     selectedSubcategories: [],
     customSubcategory: "",
+    targetAudience: createEmptyTargetAudienceDraft(),
   };
 }
 
@@ -379,6 +457,103 @@ function CategoryIcon({ name, className }: { name: string; className?: string })
   );
 }
 
+function AudienceChipGroup({
+  label,
+  onToggle,
+  options,
+  selected,
+}: {
+  label: string;
+  onToggle: (value: string) => void;
+  options: readonly string[];
+  selected: readonly string[];
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-base-content/60">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map(option => {
+          const isSelected = selected.includes(option);
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={() => onToggle(option)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                isSelected ? "pill-active" : "pill-inactive"
+              }`}
+            >
+              {formatAudienceOptionLabel(option)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AudienceCountryCodeInput({
+  error,
+  inputValue,
+  label,
+  onAdd,
+  onInputChange,
+  onRemove,
+  selected,
+}: {
+  error: string | null;
+  inputValue: string;
+  label: string;
+  onAdd: () => void;
+  onInputChange: (value: string) => void;
+  onRemove: (value: string) => void;
+  selected: readonly string[];
+}) {
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-base-content/60">{label}</p>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          inputMode="text"
+          autoCapitalize="characters"
+          placeholder="DE"
+          value={inputValue}
+          onChange={event => onInputChange(event.target.value)}
+          onKeyDown={event => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onAdd();
+            }
+          }}
+          maxLength={2}
+          className={`input input-bordered input-sm w-24 bg-base-100 uppercase ${error ? "input-error" : ""}`}
+        />
+        <button type="button" onClick={onAdd} className="btn btn-outline btn-sm">
+          Add
+        </button>
+      </div>
+      {error ? <p className="mt-1 text-sm text-error">{error}</p> : null}
+      {selected.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {selected.map(value => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onRemove(value)}
+              className="pill-active flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium"
+            >
+              {value}
+              <span className="opacity-70">×</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ContentSubmissionSection() {
   const wagmiConfig = useConfig();
   const { address: connectedAddress } = useAccount();
@@ -428,6 +603,11 @@ export function ContentSubmissionSection() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
   const [customSubcategory, setCustomSubcategory] = useState("");
+  const [targetAudience, setTargetAudience] = useState<QuestionTargetAudienceDraft>(createEmptyTargetAudienceDraft());
+  const [targetAudienceCountryInput, setTargetAudienceCountryInput] = useState("");
+  const [targetAudienceCountryError, setTargetAudienceCountryError] = useState<string | null>(null);
+  const [targetAudienceNationalityInput, setTargetAudienceNationalityInput] = useState("");
+  const [targetAudienceNationalityError, setTargetAudienceNationalityError] = useState<string | null>(null);
   const [questionCount, setQuestionCount] = useState(1);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [questionDrafts, setQuestionDrafts] = useState<QuestionDraft[]>([createEmptyQuestionDraft()]);
@@ -527,6 +707,7 @@ export function ContentSubmissionSection() {
     selectedCategory,
     selectedSubcategories,
     customSubcategory,
+    targetAudience: cloneTargetAudienceDraft(targetAudience),
   });
 
   const patchActiveQuestionDraft = (patch: Partial<QuestionDraft>) => {
@@ -550,6 +731,11 @@ export function ContentSubmissionSection() {
     setSelectedCategory(draft.selectedCategory);
     setSelectedSubcategories(draft.selectedSubcategories);
     setCustomSubcategory(draft.customSubcategory);
+    setTargetAudience(cloneTargetAudienceDraft(draft.targetAudience));
+    setTargetAudienceCountryInput("");
+    setTargetAudienceCountryError(null);
+    setTargetAudienceNationalityInput("");
+    setTargetAudienceNationalityError(null);
     setQuestionStepAttempted(false);
     setIsCategoryDropdownOpen(false);
     setCategorySearch("");
@@ -827,6 +1013,48 @@ export function ContentSubmissionSection() {
         return next;
       });
       setCustomSubcategory("");
+    }
+  };
+
+  const updateTargetAudienceDraft = (
+    updater: (current: QuestionTargetAudienceDraft) => QuestionTargetAudienceDraft,
+  ) => {
+    setTargetAudience(current => {
+      const next = updater(cloneTargetAudienceDraft(current));
+      patchActiveQuestionDraft({ targetAudience: cloneTargetAudienceDraft(next) });
+      return next;
+    });
+  };
+
+  const handleTargetAudienceToggle = (field: TargetAudienceDraftField, value: string) => {
+    updateTargetAudienceDraft(current => {
+      const selectedValues = current[field];
+      const nextValues = selectedValues.includes(value)
+        ? selectedValues.filter(item => item !== value)
+        : [...selectedValues, value];
+      return { ...current, [field]: nextValues };
+    });
+  };
+
+  const handleTargetAudienceCodeAdd = (field: Extract<TargetAudienceDraftField, "countries" | "nationalities">) => {
+    const rawValue = field === "countries" ? targetAudienceCountryInput : targetAudienceNationalityInput;
+    const normalized = normalizeAudienceCountryCodeInput(rawValue);
+    if (!normalized) {
+      const setError = field === "countries" ? setTargetAudienceCountryError : setTargetAudienceNationalityError;
+      setError("Use a two-letter country code.");
+      return;
+    }
+
+    updateTargetAudienceDraft(current => {
+      if (current[field].includes(normalized)) return current;
+      return { ...current, [field]: [...current[field], normalized] };
+    });
+    if (field === "countries") {
+      setTargetAudienceCountryInput("");
+      setTargetAudienceCountryError(null);
+    } else {
+      setTargetAudienceNationalityInput("");
+      setTargetAudienceNationalityError(null);
     }
   };
 
@@ -1502,6 +1730,7 @@ export function ContentSubmissionSection() {
     const nextTitleError = trimmedTitle ? getContentTitleValidationError(trimmedTitle) : null;
     const blockedContentTags = findBlockedContentTags(draft.selectedSubcategories);
     const submittedTags = serializeTags(draft.selectedSubcategories);
+    const submittedTargetAudience = targetAudienceDraftToMetadata(draft.targetAudience);
     const tagsValidationError =
       submittedTags.length > MAX_CONTENT_TAGS_LENGTH
         ? `Categories must be ${MAX_CONTENT_TAGS_LENGTH} characters or fewer.`
@@ -1543,6 +1772,7 @@ export function ContentSubmissionSection() {
       submittedImageUrls,
       submittedVideoUrl,
       submittedTags,
+      targetAudience: submittedTargetAudience,
       trimmedDetailsText,
       trimmedTitle,
     };
@@ -2084,6 +2314,7 @@ export function ContentSubmissionSection() {
             bundleIndex: index,
           },
           tags: question.submittedTags.split(",").filter(Boolean),
+          targetAudience: targetAudienceToQuestionSpecInput(question.targetAudience),
           title: question.trimmedTitle,
           videoUrl: question.submittedVideoUrl,
         });
@@ -2102,6 +2333,7 @@ export function ContentSubmissionSection() {
             questionMetadataHash: spec.questionMetadataHash,
             resultSpecHash: spec.resultSpecHash,
           },
+          targetAudience: question.targetAudience,
         };
       });
       const rewardTerms = {
@@ -2501,6 +2733,11 @@ export function ContentSubmissionSection() {
       setSelectedCategory(null);
       setSelectedSubcategories([]);
       setCustomSubcategory("");
+      setTargetAudience(createEmptyTargetAudienceDraft());
+      setTargetAudienceCountryInput("");
+      setTargetAudienceCountryError(null);
+      setTargetAudienceNationalityInput("");
+      setTargetAudienceNationalityError(null);
       setRewardAmount(defaultBountyAmount);
       setRewardAmountTouched(false);
       setRewardRequiredVoters("3");
@@ -2596,6 +2833,7 @@ export function ContentSubmissionSection() {
         : questionCount > 1
           ? "Optional feedback bonus unavailable for bundles"
           : "Optional feedback bonus";
+  const targetAudienceSelectedCount = countTargetAudienceValues(targetAudience);
 
   const submissionStepIndicator = (
     <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-base-content/55">
@@ -2650,6 +2888,71 @@ export function ContentSubmissionSection() {
   );
 
   const detailsPreviewText = getDetailsPreviewText(detailsText);
+  const targetAudiencePicker = (
+    <div className="border-t border-base-300 pt-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-1.5 text-base font-medium">
+          Target audience <span className="font-normal text-base-content/60">(optional)</span>
+          <InfoTooltip text="Structured self-report criteria used for targeted bounty eligibility. Raters see the normal question feed." />
+        </label>
+        {targetAudienceSelectedCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              updateTargetAudienceDraft(() => createEmptyTargetAudienceDraft());
+              setTargetAudienceCountryInput("");
+              setTargetAudienceCountryError(null);
+              setTargetAudienceNationalityInput("");
+              setTargetAudienceNationalityError(null);
+            }}
+            className="btn btn-ghost btn-sm"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+
+      <div className="space-y-4">
+        {TARGET_AUDIENCE_CHIP_GROUPS.map(group => (
+          <AudienceChipGroup
+            key={group.field}
+            label={group.label}
+            options={group.options}
+            selected={targetAudience[group.field]}
+            onToggle={value => handleTargetAudienceToggle(group.field, value)}
+          />
+        ))}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <AudienceCountryCodeInput
+            label="Residence country"
+            inputValue={targetAudienceCountryInput}
+            error={targetAudienceCountryError}
+            selected={targetAudience.countries}
+            onInputChange={value => {
+              setTargetAudienceCountryInput(value.toUpperCase());
+              setTargetAudienceCountryError(null);
+            }}
+            onAdd={() => handleTargetAudienceCodeAdd("countries")}
+            onRemove={value => handleTargetAudienceToggle("countries", value)}
+          />
+          <AudienceCountryCodeInput
+            label="Nationality"
+            inputValue={targetAudienceNationalityInput}
+            error={targetAudienceNationalityError}
+            selected={targetAudience.nationalities}
+            onInputChange={value => {
+              setTargetAudienceNationalityInput(value.toUpperCase());
+              setTargetAudienceNationalityError(null);
+            }}
+            onAdd={() => handleTargetAudienceCodeAdd("nationalities")}
+            onRemove={value => handleTargetAudienceToggle("nationalities", value)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   const questionPreviewCard =
     previewUrl || title || detailsPreviewText ? (
       <div className="surface-card rounded-2xl p-4 space-y-3">
@@ -4119,6 +4422,8 @@ export function ContentSubmissionSection() {
                     ) : null}
                   </div>
                 ) : null}
+
+                {targetAudiencePicker}
               </div>
 
               <div className="space-y-4 xl:sticky xl:top-24">
