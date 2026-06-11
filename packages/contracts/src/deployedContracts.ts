@@ -8112,6 +8112,30 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "roundConfidentialityEscrowSnapshotWord",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "snapshot",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "roundConfigSnapshot",
           inputs: [
             {
@@ -13888,6 +13912,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "revokeAdvisoryVoteRecorder",
+          inputs: [
+            {
+              name: "value",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "revokeRewardDistributor",
           inputs: [
             {
@@ -14507,6 +14544,25 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bytes32",
               indexed: false,
               internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "AdvisoryVoteRecorderAuthorizationUpdated",
+          inputs: [
+            {
+              name: "advisoryVoteRecorder",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+            {
+              name: "authorized",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
             },
           ],
           anonymous: false,
@@ -31489,6 +31545,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "recordConfidentialityNexus",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "holder",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "registry",
           inputs: [],
           outputs: [
@@ -32088,6 +32162,8 @@ const deployedContracts: GenericContractsDeclaration = {
         postBondWithAuthorization:
           "contracts/interfaces/IConfidentialityEscrow.sol",
         postBondWithPermit: "contracts/interfaces/IConfidentialityEscrow.sol",
+        recordConfidentialityNexus:
+          "contracts/interfaces/IConfidentialityEscrow.sol",
         releaseBond: "contracts/interfaces/IConfidentialityEscrow.sol",
         slashBond: "contracts/interfaces/IConfidentialityEscrow.sol",
         DEFAULT_ADMIN_ROLE:
@@ -37071,6 +37147,30 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "protocolConfig_",
               type: "address",
               internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "roundConfidentialityEscrowSnapshotWord",
+          inputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "roundId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "snapshot",
+              type: "uint256",
+              internalType: "uint256",
             },
           ],
           stateMutability: "view",
@@ -42853,6 +42953,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "revokeAdvisoryVoteRecorder",
+          inputs: [
+            {
+              name: "value",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "revokeRewardDistributor",
           inputs: [
             {
@@ -43472,6 +43585,25 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "bytes32",
               indexed: false,
               internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "AdvisoryVoteRecorderAuthorizationUpdated",
+          inputs: [
+            {
+              name: "advisoryVoteRecorder",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+            {
+              name: "authorized",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
             },
           ],
           anonymous: false,

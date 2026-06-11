@@ -823,6 +823,19 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "revokeAdvisoryVoteRecorder",
+    "inputs": [
+      {
+        "name": "value",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "revokeRewardDistributor",
     "inputs": [
       {
@@ -1442,6 +1455,25 @@ export const ProtocolConfigAbi = [
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AdvisoryVoteRecorderAuthorizationUpdated",
+    "inputs": [
+      {
+        "name": "advisoryVoteRecorder",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "authorized",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
       }
     ],
     "anonymous": false

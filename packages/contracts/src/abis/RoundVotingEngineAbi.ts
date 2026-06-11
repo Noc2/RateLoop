@@ -952,6 +952,30 @@ export const RoundVotingEngineAbi = [
   },
   {
     "type": "function",
+    "name": "roundConfidentialityEscrowSnapshotWord",
+    "inputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "snapshot",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "roundConfigSnapshot",
     "inputs": [
       {
