@@ -69,16 +69,16 @@ const musicVolume = (frame: number) => {
     if (frame < a - 9 || frame > b + 21) continue;
     const v =
       frame < a
-        ? interpolate(frame, [a - 9, a], [1, 0.34])
+        ? interpolate(frame, [a - 9, a], [1, 0.24])
         : frame <= b
-          ? 0.34
-          : interpolate(frame, [b, b + 21], [0.34, 1]);
+          ? 0.24
+          : interpolate(frame, [b, b + 21], [0.24, 1]);
     duck = Math.min(duck, v);
   }
   const base = interpolate(
     frame,
     [0, HOOK, starts[3], starts[4], PROMO_DURATION_IN_FRAMES - OUTRO, PROMO_DURATION_IN_FRAMES - 30],
-    [0.62, 0.48, 0.5, 0.56, 0.64, 0.7],
+    [0.44, 0.34, 0.36, 0.38, 0.42, 0.48],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   );
   const fadeIn = interpolate(frame, [0, 30], [0, 1], {
@@ -94,7 +94,7 @@ const musicVolume = (frame: number) => {
 
 export const RateLoopPromo = () => (
   <AbsoluteFill style={{ background: colors.surface }}>
-    <Audio src={staticFile("audio/music.m4a")} volume={musicVolume} />
+    <Audio src={staticFile("audio/music.mp3")} volume={musicVolume} />
     {BEATS.map(({ start, duration, vo, Scene, fadeIn, fadeOut }) => (
       <Sequence key={vo} from={start} durationInFrames={duration}>
         <SceneFade fadeIn={fadeIn} fadeOut={fadeOut}>
