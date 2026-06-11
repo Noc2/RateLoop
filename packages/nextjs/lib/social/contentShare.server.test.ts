@@ -1,6 +1,6 @@
+import { getContentShareDataForParam } from "./contentShare.server";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getContentShareDataForParam } from "./contentShare.server";
 
 test("getContentShareDataForParam preserves Ponder base path prefixes", async () => {
   const originalPonderUrl = process.env.NEXT_PUBLIC_PONDER_URL;

@@ -312,6 +312,34 @@ test("parseX402QuestionRequest accepts ordered question bundles", () => {
   assert.equal(payload.roundConfig.maxVoters, 50n);
 });
 
+test("parseX402QuestionRequest rejects gated question bundles", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: undefined,
+        questions: [
+          {
+            ...VALID_REQUEST.question,
+            confidentiality: { visibility: "gated" },
+            contextUrl: undefined,
+            detailsHash: DETAILS_HASH,
+            detailsUrl: DETAILS_URL,
+            imageUrls: [UPLOADED_IMAGE_URL],
+            videoUrl: undefined,
+          },
+          {
+            ...VALID_REQUEST.question,
+            contextUrl: "https://example.com/second",
+            imageUrls: [],
+            title: "Public sibling",
+          },
+        ],
+      }),
+    /Private context bundles are not supported yet/,
+  );
+});
+
 test("parseX402QuestionRequest preserves selected agent templates in hashes", () => {
   const generic = parseX402QuestionRequest(VALID_REQUEST);
   const goNoGo = parseX402QuestionRequest({

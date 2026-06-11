@@ -10,6 +10,7 @@ import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-uti
 import { createHash } from "crypto";
 import "server-only";
 import {
+  type Abi,
   type Address,
   type Hex,
   type TransactionReceipt,
@@ -44,6 +45,7 @@ import {
 } from "~~/lib/questionRoundConfig";
 import {
   buildQuestionBundleSubmissionRevealCommitment,
+  buildQuestionConfidentialityHash,
   buildQuestionMetadataUri,
   buildQuestionSubmissionKey,
   buildQuestionSubmissionRevealCommitment,
@@ -115,6 +117,16 @@ type StoredQuestionMetadata = {
   resultSpecHash: Hex;
   targetAudience: TargetAudience | null;
 };
+
+function questionConfidentialityConfig(question: Pick<X402QuestionPayload["questions"][number], "confidentiality">) {
+  const gated = question.confidentiality?.visibility === "gated";
+  return {
+    gated,
+    bondAsset: gated && question.confidentiality?.bond?.asset === "USDC" ? 1 : 0,
+    bondAmount: gated ? BigInt(question.confidentiality?.bond?.amount ?? "0") : 0n,
+    flags: 0,
+  } as const;
+}
 
 export type StoredPendingAgentCallback = {
   agentId: string;
@@ -740,6 +752,16 @@ const X402QuestionSubmitterAbi = [
         name: "spec",
         type: "tuple",
       },
+      {
+        components: [
+          { name: "gated", type: "bool" },
+          { name: "bondAsset", type: "uint8" },
+          { name: "bondAmount", type: "uint64" },
+          { name: "flags", type: "uint8" },
+        ],
+        name: "confidentiality",
+        type: "tuple",
+      },
       { name: "payer", type: "address" },
       { name: "payee", type: "address" },
       { name: "value", type: "uint256" },
@@ -802,6 +824,16 @@ const X402QuestionSubmitterAbi = [
       },
       {
         components: [
+          { name: "gated", type: "bool" },
+          { name: "bondAsset", type: "uint8" },
+          { name: "bondAmount", type: "uint64" },
+          { name: "flags", type: "uint8" },
+        ],
+        name: "confidentiality",
+        type: "tuple",
+      },
+      {
+        components: [
           { name: "from", type: "address" },
           { name: "to", type: "address" },
           { name: "value", type: "uint256" },
@@ -822,6 +854,11 @@ const X402QuestionSubmitterAbi = [
     type: "function",
   },
 ] as const;
+
+const ContentRegistrySubmitQuestionWithConfidentialityAbi = ContentRegistryAbi.filter(
+  item =>
+    item.type === "function" && item.name === "submitQuestionWithRewardAndRoundConfig" && item.inputs.length === 12,
+) as Abi;
 
 function rowToRecord(row: Record<string, unknown> | undefined): X402QuestionSubmissionRecord | null {
   if (!row) return null;
@@ -1197,6 +1234,7 @@ function buildQuestionSubmissionCallContext(params: {
 }) {
   const questions = params.payload.questions.map((question, index) => ({
     categoryId: question.categoryId,
+    confidentiality: question.confidentiality,
     contextUrl: question.contextUrl,
     detailsHash: question.detailsHash,
     detailsUrl: question.detailsUrl,
@@ -1264,6 +1302,7 @@ function buildQuestionSubmissionCallContext(params: {
         tags: primaryQuestion.tags,
         title: primaryQuestion.title,
         videoUrl: primaryQuestion.videoUrl,
+        confidentialityHash: buildQuestionConfidentialityHash(questionConfidentialityConfig(primaryQuestion)),
       });
 
   const submitFunctionName: "submitQuestionBundleWithRewardAndRoundConfig" | "submitQuestionWithRewardAndRoundConfig" =
@@ -1282,6 +1321,7 @@ function buildQuestionSubmissionCallContext(params: {
         rewardTerms,
         roundConfigAbi,
         primaryQuestion.spec,
+        questionConfidentialityConfig(primaryQuestion),
       ] as const);
 
   return {
@@ -1365,7 +1405,7 @@ async function buildAgentWalletQuestionSubmissionPlan(params: {
       },
       {
         data: encodeFunctionData({
-          abi: ContentRegistryAbi,
+          abi: context.isBundleSubmission ? ContentRegistryAbi : ContentRegistrySubmitQuestionWithConfidentialityAbi,
           functionName: context.submitFunctionName,
           args: context.submitArgs as never,
         }),
@@ -1574,6 +1614,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
       context.rewardTerms,
       context.roundConfigAbi,
       question.spec,
+      questionConfidentialityConfig(question),
       params.walletAddress,
       params.config.x402QuestionSubmitterAddress,
       params.payload.bounty.amount,
@@ -1640,6 +1681,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
                 context.rewardTerms,
                 context.roundConfigAbi,
                 question.spec,
+                questionConfidentialityConfig(question),
                 {
                   from: authorization.from,
                   nonce: authorization.nonce,

@@ -794,6 +794,11 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
       videoUrl: normalizedQuestion.videoUrl,
     };
   });
+  if (questions.length > 1 && questions.some(question => question.confidentiality.visibility === "gated")) {
+    throw new X402QuestionInputError(
+      "Private context bundles are not supported yet. Submit gated questions one at a time.",
+    );
+  }
 
   return {
     clientRequestId,

@@ -230,6 +230,71 @@ const CONTENT_REGISTRY_SUBMISSION_ABI = [
   },
   {
     type: "function",
+    name: "submitQuestionWithRewardAndRoundConfig",
+    inputs: [
+      { name: "contextUrl", type: "string" },
+      { name: "imageUrls", type: "string[]" },
+      { name: "videoUrl", type: "string" },
+      { name: "title", type: "string" },
+      { name: "tags", type: "string" },
+      { name: "categoryId", type: "uint256" },
+      {
+        name: "details",
+        type: "tuple",
+        components: [
+          { name: "detailsUrl", type: "string" },
+          { name: "detailsHash", type: "bytes32" },
+        ],
+      },
+      { name: "salt", type: "bytes32" },
+      {
+        name: "rewardTerms",
+        type: "tuple",
+        components: [
+          { name: "asset", type: "uint8" },
+          { name: "amount", type: "uint256" },
+          { name: "requiredVoters", type: "uint256" },
+          { name: "requiredSettledRounds", type: "uint256" },
+          { name: "bountyStartBy", type: "uint256" },
+          { name: "bountyWindowSeconds", type: "uint256" },
+          { name: "feedbackWindowSeconds", type: "uint256" },
+          { name: "bountyEligibility", type: "uint8" },
+        ],
+      },
+      {
+        name: "roundConfig",
+        type: "tuple",
+        components: [
+          { name: "epochDuration", type: "uint32" },
+          { name: "maxDuration", type: "uint32" },
+          { name: "minVoters", type: "uint16" },
+          { name: "maxVoters", type: "uint16" },
+        ],
+      },
+      {
+        name: "spec",
+        type: "tuple",
+        components: [
+          { name: "questionMetadataHash", type: "bytes32" },
+          { name: "resultSpecHash", type: "bytes32" },
+        ],
+      },
+      {
+        name: "confidentiality",
+        type: "tuple",
+        components: [
+          { name: "gated", type: "bool" },
+          { name: "bondAsset", type: "uint8" },
+          { name: "bondAmount", type: "uint64" },
+          { name: "flags", type: "uint8" },
+        ],
+      },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
     name: "submitQuestionBundleWithRewardAndRoundConfig",
     inputs: [
       {

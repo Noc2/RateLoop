@@ -19,6 +19,13 @@ import { E2E_RPC_URL } from "./service-urls";
 import { deriveAcceptedTlockTargetRound, deriveDrandRoundRevealableAtSeconds } from "./tlockRuntime";
 import { createTlockVoteCommit, packVoteRoundContext } from "@rateloop/contracts/voting";
 
+const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
+const PUBLIC_CONFIDENTIALITY_CONFIG = {
+  gated: false,
+  bondAsset: 0,
+  bondAmount: 0n,
+  flags: 0,
+} as const;
 const ANVIL_RPC = E2E_RPC_URL;
 // Contract gas costs shift as local protocol code evolves, so E2E helpers estimate
 // gas instead of relying on a stale fixed cap for vote/settlement transactions.
@@ -1018,6 +1025,16 @@ export async function submitContentDirect(
               { name: "resultSpecHash", type: "bytes32" },
             ],
           },
+          {
+            name: "confidentiality",
+            type: "tuple",
+            components: [
+              { name: "gated", type: "bool" },
+              { name: "bondAsset", type: "uint8" },
+              { name: "bondAmount", type: "uint64" },
+              { name: "flags", type: "uint8" },
+            ],
+          },
         ],
         outputs: [{ name: "", type: "uint256" }],
         stateMutability: "nonpayable",
@@ -1042,6 +1059,7 @@ export async function submitContentDirect(
         questionMetadataHash: DEFAULT_QUESTION_METADATA_HASH,
         resultSpecHash: DEFAULT_RESULT_SPEC_HASH,
       },
+      PUBLIC_CONFIDENTIALITY_CONFIG,
     ],
   });
   return sendTx(fromAddress, contractAddress, data);

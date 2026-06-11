@@ -40,6 +40,12 @@ const EXECUTOR = "0x2222222222222222222222222222222222222222" as const;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const SUCCESS_HASH = `0x${"1".repeat(64)}` as const;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
+const PUBLIC_CONFIDENTIALITY_CONFIG = {
+  gated: false,
+  bondAsset: 0,
+  bondAmount: 0n,
+  flags: 0,
+} as const;
 const DETAILS_HASH = `0x${"8".repeat(64)}` as const;
 const DETAILS_URL = "https://www.rateloop.ai/api/attachments/details/det_sponsoreddetails01";
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678" as const;
@@ -115,6 +121,16 @@ const submitQuestionWithRewardAndRoundConfigAbi = [
         components: [
           { name: "questionMetadataHash", type: "bytes32" },
           { name: "resultSpecHash", type: "bytes32" },
+        ],
+      },
+      {
+        name: "confidentiality",
+        type: "tuple",
+        components: [
+          { name: "gated", type: "bool" },
+          { name: "bondAsset", type: "uint8" },
+          { name: "bondAmount", type: "uint64" },
+          { name: "flags", type: "uint8" },
         ],
       },
     ],
@@ -298,6 +314,7 @@ function submitQuestionWithRewardCall(
         questionMetadataHash: `0x${"6".repeat(64)}`,
         resultSpecHash: `0x${"7".repeat(64)}`,
       },
+      PUBLIC_CONFIDENTIALITY_CONFIG,
     ],
   );
 }

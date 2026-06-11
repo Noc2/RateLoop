@@ -113,6 +113,7 @@ import {
 } from "~~/lib/questionRoundConfig";
 import {
   buildQuestionBundleSubmissionRevealCommitment,
+  buildQuestionConfidentialityHash,
   buildQuestionSubmissionKey,
   buildQuestionSubmissionRevealCommitment,
 } from "~~/lib/questionSubmissionCommitment";
@@ -2397,6 +2398,7 @@ export function ContentSubmissionSection() {
           videoUrl: question.submittedVideoUrl,
           title: question.trimmedTitle,
           tags: question.submittedTags,
+          contextVisibility: question.contextVisibility,
           categoryId: question.selectedCategory.id,
           detailsUrl: details.detailsUrl,
           detailsHash: details.detailsHash,
@@ -2422,6 +2424,11 @@ export function ContentSubmissionSection() {
       } as const;
       const roundConfigAbi = questionRoundConfigToAbi(selectedRoundConfig);
       const isBundleSubmission = bundleQuestions.length > 1;
+      if (isBundleSubmission && hasGatedQuestions) {
+        setSubmissionStep("question");
+        notification.warning("Private context bundles are not supported yet. Submit private questions one at a time.");
+        return;
+      }
       const primaryQuestion = bundleQuestions[0];
       if (!primaryQuestion) {
         throw new Error("Question is missing.");
@@ -2451,6 +2458,19 @@ export function ContentSubmissionSection() {
           tags: question.tags,
           videoUrl: question.videoUrl,
         });
+      const primaryQuestionConfidentiality = {
+        gated: primaryQuestion.contextVisibility === "gated",
+        bondAsset: confidentialityBondAsset === "USDC" ? 1 : 0,
+        bondAmount: primaryQuestion.contextVisibility === "gated" ? resolvedConfidentialityBondAtomic : 0n,
+        flags: 0,
+      } as const;
+      const primaryQuestionConfidentialityHash = buildQuestionConfidentialityHash(primaryQuestionConfidentiality);
+      const primaryQuestionConfidentialityAbi = {
+        gated: primaryQuestionConfidentiality.gated,
+        bondAsset: primaryQuestionConfidentiality.bondAsset,
+        bondAmount: primaryQuestionConfidentiality.bondAmount,
+        flags: primaryQuestionConfidentiality.flags,
+      } as const;
       const revealCommitment = isBundleSubmission
         ? buildQuestionBundleSubmissionRevealCommitment({
             questions: bundleQuestions,
@@ -2487,6 +2507,7 @@ export function ContentSubmissionSection() {
             tags: primaryQuestion.tags,
             title: primaryQuestion.title,
             videoUrl: primaryQuestion.videoUrl,
+            confidentialityHash: primaryQuestionConfidentialityHash,
           });
 
       cancelReservedSubmission = async (revealCommitment: `0x${string}`) => {
@@ -2599,6 +2620,7 @@ export function ContentSubmissionSection() {
                     rewardTerms,
                     roundConfigAbi,
                     primaryQuestionContractSpec,
+                    primaryQuestionConfidentialityAbi,
                   ],
               functionName: isBundleSubmission
                 ? "submitQuestionBundleWithRewardAndRoundConfig"
@@ -2659,6 +2681,7 @@ export function ContentSubmissionSection() {
                 rewardTerms,
                 roundConfigAbi,
                 primaryQuestionContractSpec,
+                primaryQuestionConfidentialityAbi,
               ],
             } as const);
         const submitTxHash = localE2ETestWalletClient

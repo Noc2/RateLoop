@@ -1,5 +1,5 @@
 import { ContentRegistryAbi } from "@rateloop/contracts/abis";
-import { encodeFunctionData } from "viem";
+import { type Abi, encodeFunctionData } from "viem";
 
 type SelectorProbePublicClient = {
   call: (args: { to: `0x${string}`; data: `0x${string}` }) => Promise<unknown>;
@@ -13,8 +13,18 @@ export const UNSUPPORTED_QUESTION_SUBMISSION_DEPLOYMENT_ERROR =
   "This ContentRegistry deployment does not support question submissions. Ask the operator to upgrade it or point the app at a compatible deployment.";
 
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as `0x${string}`;
+const PUBLIC_CONFIDENTIALITY_CONFIG = {
+  gated: false,
+  bondAsset: 0,
+  bondAmount: 0n,
+  flags: 0,
+} as const;
 const EIP1967_IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc" as const;
 const ZERO_ADDRESS = `0x${"0".repeat(40)}` as `0x${string}`;
+const ContentRegistrySubmitQuestionWithConfidentialityAbi = ContentRegistryAbi.filter(
+  item =>
+    item.type === "function" && item.name === "submitQuestionWithRewardAndRoundConfig" && item.inputs.length === 12,
+) as Abi;
 
 export function getSubmissionErrorMessage(error: unknown): string {
   return (
@@ -64,7 +74,7 @@ function buildQuestionSubmissionSelectorProbeData(kind: QuestionSubmissionSelect
   }
 
   return encodeFunctionData({
-    abi: ContentRegistryAbi,
+    abi: ContentRegistrySubmitQuestionWithConfidentialityAbi,
     functionName: "submitQuestionWithRewardAndRoundConfig",
     args: [
       "",
@@ -92,6 +102,7 @@ function buildQuestionSubmissionSelectorProbeData(kind: QuestionSubmissionSelect
         maxVoters: 3,
       },
       { questionMetadataHash: ZERO_BYTES32, resultSpecHash: ZERO_BYTES32 },
+      PUBLIC_CONFIDENTIALITY_CONFIG,
     ],
   });
 }
