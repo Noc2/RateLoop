@@ -3096,10 +3096,13 @@ export function ContentSubmissionSection() {
 
   const privateContextControl = (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:justify-end">
-      <label className="flex items-center gap-3">
+      <div className="flex items-center gap-3">
         <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-base-content">
           <LockClosedIcon className="h-4 w-4 shrink-0 text-warning" />
           <span>Private context</span>
+          <Link href="/docs/how-it-works" className="link link-primary font-normal">
+            More
+          </Link>
           <InfoTooltip
             text="Use hosted private context for sensitive review material. Eligible raters must accept confidentiality terms before viewing, and the context stays private forever."
             position="bottom"
@@ -3112,10 +3115,7 @@ export function ContentSubmissionSection() {
           checked={privateContextEnabled}
           onChange={e => handlePrivateContextToggle(e.target.checked)}
         />
-      </label>
-      <Link href="/docs/how-it-works" className="link link-primary text-sm">
-        Learn more
-      </Link>
+      </div>
     </div>
   );
 
