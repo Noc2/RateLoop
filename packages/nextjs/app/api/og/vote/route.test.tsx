@@ -131,6 +131,59 @@ test("keeps fallback vote social cards uncached", async () => {
   assert.equal(response.headers.get("vercel-cdn-cache-control"), null);
 });
 
+test("redacts gated vote social cards before fetching preview images", async () => {
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  process.env.DATABASE_URL = "memory:";
+  const dbModule = await import("~~/lib/db");
+  const dbTestMemory = await import("~~/lib/db/testMemory");
+  const confidentiality = await import("~~/lib/confidentiality/context");
+  dbModule.__setDatabaseResourcesForTests(dbTestMemory.createMemoryDatabaseResources());
+
+  const requestedUrls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
+    requestedUrls.push(url);
+
+    if (url === "https://ponder.example/api/content/88") {
+      return buildContentResponse({
+        title: "Secret launch concept",
+        description: "Confidential concept details.",
+        imageUrl: "https://img.youtube.com/vi/qRv7G7WpOoU/hqdefault.jpg",
+        url: "https://www.youtube.com/watch?v=qRv7G7WpOoU",
+      });
+    }
+
+    throw new Error(`Unexpected fetch: ${url}`);
+  }) as typeof fetch;
+
+  try {
+    await confidentiality.upsertQuestionConfidentialityFromMetadata({
+      contentId: "88",
+      metadata: {
+        confidentiality: {
+          disclosurePolicy: "after_settlement",
+          visibility: "gated",
+        },
+      },
+    });
+
+    const response = await GET(new NextRequest("https://www.rateloop.ai/api/og/vote?content=88"));
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/png");
+    assert.deepEqual(requestedUrls, ["https://ponder.example/api/content/88"]);
+    assert.ok((await response.arrayBuffer()).byteLength > 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    dbModule.__setDatabaseResourcesForTests(null);
+    if (originalDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+  }
+});
+
 test("rate-limits vote social cards before fetching share data", async () => {
   let fetched = false;
   __setRateLimitStoreForTests({
