@@ -2,15 +2,10 @@ import { ponder } from "ponder:registry";
 import {
   confidentialityBond,
   confidentialityConfig,
-  content,
 } from "ponder:schema";
 
 function bondId(contentId: bigint, identityKey: `0x${string}`) {
   return `${contentId.toString()}-${identityKey}`;
-}
-
-function bondAssetName(asset: number) {
-  return asset === 1 ? "USDC" : "LREP";
 }
 
 function toNumber(value: unknown) {
@@ -48,11 +43,6 @@ ponder.on(
         updatedAt: event.block.timestamp,
       });
 
-    await context.db.update(content, { id: contentId }).set({
-      gated,
-      confidentialityBondAsset: bondAssetName(asset),
-      confidentialityBondAmount: amount,
-    });
   },
 );
 

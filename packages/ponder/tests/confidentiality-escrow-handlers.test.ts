@@ -69,7 +69,7 @@ afterEach(() => {
 });
 
 describe("ConfidentialityEscrow ponder handlers", () => {
-  it("indexes confidentiality config and updates content gating fields", async () => {
+  it("indexes confidentiality config without requiring the content row to exist", async () => {
     const { db, inserts, updates } = createDb();
     const registeredHandlers = await loadHandlers();
     const handler = registeredHandlers.get(
@@ -113,17 +113,7 @@ describe("ConfidentialityEscrow ponder handlers", () => {
         },
       },
     ]);
-    expect(updates).toEqual([
-      {
-        table: "content",
-        key: { id: 42n },
-        values: {
-          gated: true,
-          confidentialityBondAsset: "USDC",
-          confidentialityBondAmount: 2_500_000n,
-        },
-      },
-    ]);
+    expect(updates).toEqual([]);
   });
 
   it("tracks posted and released bonds by content identity key", async () => {
