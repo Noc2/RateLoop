@@ -5,6 +5,7 @@ import {
   RoundVotingEngineAbi,
 } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
 import "server-only";
@@ -106,6 +107,7 @@ type StoredWalletSubmissionPlanReceipt = {
 };
 
 type StoredQuestionMetadata = {
+  questionMetadata?: unknown;
   questionMetadataHash: Hex;
   resultSpecHash: Hex;
   targetAudience: TargetAudience | null;
@@ -401,6 +403,7 @@ function serializeExpectedRewardTerms(payload: X402QuestionPayload): StoredQuest
 
 function serializeQuestionMetadata(payload: X402QuestionPayload): StoredQuestionMetadata[] {
   return payload.questions.map(question => ({
+    questionMetadata: question.questionMetadata,
     questionMetadataHash: question.questionMetadataHash,
     resultSpecHash: question.resultSpecHash,
     targetAudience: normalizeTargetAudience(question.targetAudience),
@@ -413,6 +416,14 @@ function parseStoredQuestionMetadata(value: unknown): StoredQuestionMetadata[] |
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
     const record = entry as Record<string, unknown>;
     if (!isBytes32Hex(record.questionMetadataHash) || !isBytes32Hex(record.resultSpecHash)) return [];
+    const questionMetadata = record.questionMetadata;
+    if (questionMetadata !== undefined && questionMetadata !== null) {
+      try {
+        if (canonicalJsonHash(questionMetadata).toLowerCase() !== record.questionMetadataHash.toLowerCase()) return [];
+      } catch {
+        return [];
+      }
+    }
     let targetAudience: TargetAudience | null;
     try {
       targetAudience = normalizeTargetAudience(record.targetAudience);
@@ -421,6 +432,7 @@ function parseStoredQuestionMetadata(value: unknown): StoredQuestionMetadata[] |
     }
     return [
       {
+        ...(questionMetadata === undefined ? {} : { questionMetadata }),
         questionMetadataHash: record.questionMetadataHash.toLowerCase() as Hex,
         resultSpecHash: record.resultSpecHash.toLowerCase() as Hex,
         targetAudience,
@@ -2038,6 +2050,7 @@ async function syncSubmittedQuestionMetadata(params: {
     return [
       {
         contentId: contentId.toString(),
+        questionMetadata: item.questionMetadata ?? null,
         questionMetadataHash: item.questionMetadataHash,
         resultSpecHash: item.resultSpecHash,
         targetAudience: item.targetAudience,

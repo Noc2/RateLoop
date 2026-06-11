@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { canonicalJson, canonicalJsonHash } from "@rateloop/node-utils/json";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 function serializeExpression(value: unknown) {
@@ -104,6 +105,9 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       submitter: "content.submitter",
       tags: "content.tags",
       targetAudience: "content.targetAudience",
+      questionMetadata: "content.questionMetadata",
+      questionMetadataHash: "content.questionMetadataHash",
+      resultSpecHash: "content.resultSpecHash",
       title: "content.title",
       totalVotes: "content.totalVotes",
       url: "content.url",
@@ -545,6 +549,123 @@ describe("registerContentRoutes", () => {
     expect(body.error).toContain("developer");
     expect(body.error).toContain("engineer");
     expect(db.select).not.toHaveBeenCalled();
+  });
+
+  it("serves verified question metadata by hash", async () => {
+    const targetAudience = { languages: ["de"], roles: ["engineer"] };
+    const questionMetadata = {
+      schemaVersion: "rateloop.question.v2",
+      targetAudience,
+      templateId: "generic_rating",
+      templateInputs: null,
+      templateVersion: 1,
+      title: "German engineering feedback",
+    };
+    const questionMetadataHash = canonicalJsonHash(questionMetadata);
+    mockPonderModules([
+      {
+        contentId: 42n,
+        createdAt: 123n,
+        questionMetadata: canonicalJson(questionMetadata),
+        questionMetadataHash,
+        resultSpecHash: `0x${"3".repeat(64)}`,
+        targetAudience: JSON.stringify(targetAudience),
+        title: "German engineering feedback",
+      },
+    ]);
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      `http://localhost/question-metadata/${questionMetadataHash}`,
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.questionMetadataHash).toBe(questionMetadataHash);
+    expect(body.questionMetadata).toEqual(questionMetadata);
+    expect(body.items).toEqual([
+      {
+        contentId: "42",
+        createdAt: "123",
+        resultSpecHash: `0x${"3".repeat(64)}`,
+        targetAudience,
+        title: "German engineering feedback",
+      },
+    ]);
+  });
+
+  it("does not serve mismatched question metadata preimages", async () => {
+    const questionMetadataHash = canonicalJsonHash({
+      schemaVersion: "rateloop.question.v2",
+      title: "Expected preimage",
+    });
+    mockPonderModules([
+      {
+        contentId: 42n,
+        createdAt: 123n,
+        questionMetadata: canonicalJson({
+          schemaVersion: "rateloop.question.v2",
+          title: "Different preimage",
+        }),
+        questionMetadataHash,
+        resultSpecHash: `0x${"3".repeat(64)}`,
+        targetAudience: null,
+        title: "Expected preimage",
+      },
+    ]);
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request(
+      `http://localhost/question-metadata/${questionMetadataHash}`,
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      error: "Question metadata preimage is not available.",
+    });
+  });
+
+  it("redacts targeting metadata from default content responses", async () => {
+    const targetAudience = { languages: ["de"], roles: ["engineer"] };
+    mockPonderModules(
+      [
+        {
+          id: 42n,
+          questionMetadata: canonicalJson({
+            schemaVersion: "rateloop.question.v2",
+            targetAudience,
+            title: "German engineering feedback",
+          }),
+          targetAudience: JSON.stringify(targetAudience),
+          title: "German engineering feedback",
+        },
+      ],
+      [[], [{ count: 1 }]],
+    );
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/content?limit=5");
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.items[0]).not.toHaveProperty("targetAudience");
+    expect(body.items[0]).not.toHaveProperty("questionMetadata");
   });
 
   it("returns empty results for short generic searches without querying the database", async () => {

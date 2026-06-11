@@ -1,4 +1,5 @@
 import { ROUND_STATE } from "@rateloop/contracts/protocol";
+import { canonicalJson, canonicalJsonHash } from "@rateloop/node-utils/json";
 import {
   aggregateProfileSelfReports,
   normalizeTargetAudience,
@@ -73,6 +74,7 @@ type AudienceFilter = {
 };
 
 const TARGET_AUDIENCE_RESPONSE_FIELDS = [
+  "questionMetadata",
   "targetAudience",
   "targetAudienceAgeGroups",
   "targetAudienceCountries",
@@ -548,6 +550,7 @@ function getMetadataUpdatePool() {
 
 async function updateQuestionMetadataRow(params: {
   contentId: bigint;
+  questionMetadata: string | null;
   questionMetadataHash: Hex;
   resultSpecHash: Hex;
   targetAudience: TargetAudience | null;
@@ -560,34 +563,37 @@ async function updateQuestionMetadataRow(params: {
       set
         ${quoteIdentifier("questionMetadataHash")} = $1,
         ${quoteIdentifier("resultSpecHash")} = $2,
-        ${quoteIdentifier("targetAudience")} = $3,
-        ${quoteIdentifier("targetAudienceAgeGroups")} = $4,
-        ${quoteIdentifier("targetAudienceCountries")} = $5,
-        ${quoteIdentifier("targetAudienceExpertise")} = $6,
-        ${quoteIdentifier("targetAudienceLanguages")} = $7,
-        ${quoteIdentifier("targetAudienceNationalities")} = $8,
-        ${quoteIdentifier("targetAudienceRoles")} = $9,
-        ${quoteIdentifier("targetAudienceAiAgentFrameworks")} = $10,
-        ${quoteIdentifier("targetAudienceAiAutonomy")} = $11,
-        ${quoteIdentifier("targetAudienceAiExpertise")} = $12,
-        ${quoteIdentifier("targetAudienceAiLanguages")} = $13,
-        ${quoteIdentifier("targetAudienceAiModelProviders")} = $14,
-        ${quoteIdentifier("targetAudienceTeamCountries")} = $15,
-        ${quoteIdentifier("targetAudienceTeamExpertise")} = $16,
-        ${quoteIdentifier("targetAudienceTeamLanguages")} = $17,
-        ${quoteIdentifier("targetAudienceTeamSizes")} = $18,
-        ${quoteIdentifier("targetAudienceTeamTypes")} = $19,
-        ${quoteIdentifier("targetAudienceHybridExpertise")} = $20,
-        ${quoteIdentifier("targetAudienceHybridLanguages")} = $21,
-        ${quoteIdentifier("targetAudienceHybridModelProviders")} = $22,
-        ${quoteIdentifier("targetAudienceHybridOversight")} = $23
-      where ${quoteIdentifier("id")} = $24
+        ${quoteIdentifier("questionMetadata")} = coalesce($3, ${quoteIdentifier("questionMetadata")}),
+        ${quoteIdentifier("targetAudience")} = $4,
+        ${quoteIdentifier("targetAudienceAgeGroups")} = $5,
+        ${quoteIdentifier("targetAudienceCountries")} = $6,
+        ${quoteIdentifier("targetAudienceExpertise")} = $7,
+        ${quoteIdentifier("targetAudienceLanguages")} = $8,
+        ${quoteIdentifier("targetAudienceNationalities")} = $9,
+        ${quoteIdentifier("targetAudienceRoles")} = $10,
+        ${quoteIdentifier("targetAudienceAiAgentFrameworks")} = $11,
+        ${quoteIdentifier("targetAudienceAiAutonomy")} = $12,
+        ${quoteIdentifier("targetAudienceAiExpertise")} = $13,
+        ${quoteIdentifier("targetAudienceAiLanguages")} = $14,
+        ${quoteIdentifier("targetAudienceAiModelProviders")} = $15,
+        ${quoteIdentifier("targetAudienceTeamCountries")} = $16,
+        ${quoteIdentifier("targetAudienceTeamExpertise")} = $17,
+        ${quoteIdentifier("targetAudienceTeamLanguages")} = $18,
+        ${quoteIdentifier("targetAudienceTeamSizes")} = $19,
+        ${quoteIdentifier("targetAudienceTeamTypes")} = $20,
+        ${quoteIdentifier("targetAudienceHybridExpertise")} = $21,
+        ${quoteIdentifier("targetAudienceHybridLanguages")} = $22,
+        ${quoteIdentifier("targetAudienceHybridModelProviders")} = $23,
+        ${quoteIdentifier("targetAudienceHybridOversight")} = $24
+      where ${quoteIdentifier("id")} = $25
         and (${quoteIdentifier("questionMetadataHash")} is null or lower(${quoteIdentifier("questionMetadataHash")}) = $1)
         and (${quoteIdentifier("resultSpecHash")} is null or lower(${quoteIdentifier("resultSpecHash")}) = $2)
+        and ($3::text is null or ${quoteIdentifier("questionMetadata")} is null or ${quoteIdentifier("questionMetadata")} = $3)
     `,
     [
       params.questionMetadataHash,
       params.resultSpecHash,
+      params.questionMetadata,
       storage.targetAudience,
       storage.targetAudienceAgeGroups,
       storage.targetAudienceCountries,
@@ -630,6 +636,10 @@ function readMetadataHash(value: unknown) {
   return BYTES32_PATTERN.test(hash) ? (hash as `0x${string}`) : null;
 }
 
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function readQuestionMetadataItems(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.slice(0, MAX_TARGET_AUDIENCE_METADATA_ITEMS).flatMap((entry) => {
@@ -639,15 +649,35 @@ function readQuestionMetadataItems(value: unknown) {
     const questionMetadataHash = readMetadataHash(record.questionMetadataHash);
     const resultSpecHash = readMetadataHash(record.resultSpecHash);
     if (contentId === null || !questionMetadataHash || !resultSpecHash) return [];
+    const questionMetadataInput = record.questionMetadata ?? null;
+    let questionMetadata: string | null = null;
+    let targetAudienceInput = record.targetAudience;
+    if (questionMetadataInput !== null) {
+      if (!isJsonRecord(questionMetadataInput)) return [];
+      if (canonicalJsonHash(questionMetadataInput).toLowerCase() !== questionMetadataHash) return [];
+      questionMetadata = canonicalJson(questionMetadataInput);
+      targetAudienceInput =
+        questionMetadataInput.targetAudience === undefined ? targetAudienceInput : questionMetadataInput.targetAudience;
+    }
     return [
       {
         contentId,
+        questionMetadata,
         questionMetadataHash,
         resultSpecHash,
-        targetAudience: record.targetAudience,
+        targetAudience: targetAudienceInput,
       },
     ];
   });
+}
+
+function parseStoredJson(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function getRoundAdvisoryCommitCount() {
@@ -884,6 +914,50 @@ async function getAudienceContextForContent(contentId: bigint) {
 }
 
 export function registerContentRoutes(app: ApiApp) {
+  app.get("/question-metadata/:hash", async (c) => {
+    const hash = readMetadataHash(c.req.param("hash"));
+    if (!hash) return c.json({ error: "Invalid question metadata hash." }, 400);
+
+    const rows = await db
+      .select({
+        contentId: content.id,
+        questionMetadata: content.questionMetadata,
+        questionMetadataHash: content.questionMetadataHash,
+        resultSpecHash: content.resultSpecHash,
+        targetAudience: content.targetAudience,
+        title: content.title,
+        createdAt: content.createdAt,
+      })
+      .from(content)
+      .where(eq(content.questionMetadataHash, hash))
+      .orderBy(asc(content.id))
+      .limit(100);
+
+    if (rows.length === 0) {
+      return c.json({ error: "Question metadata not found." }, 404);
+    }
+
+    const verifiedMetadata = rows
+      .map((row) => parseStoredJson(row.questionMetadata))
+      .find((value) => value !== null && canonicalJsonHash(value).toLowerCase() === hash);
+
+    if (!verifiedMetadata) {
+      return c.json({ error: "Question metadata preimage is not available." }, 404);
+    }
+
+    return jsonBig(c, {
+      questionMetadata: verifiedMetadata,
+      questionMetadataHash: hash,
+      items: rows.map((row) => ({
+        contentId: row.contentId,
+        createdAt: row.createdAt,
+        resultSpecHash: row.resultSpecHash,
+        targetAudience: parseStoredJson(row.targetAudience),
+        title: row.title,
+      })),
+    });
+  });
+
   app.post("/question-metadata", async (c) => {
     const authError = authorizeMetadataSync(c);
     if (authError) {
@@ -923,6 +997,7 @@ export function registerContentRoutes(app: ApiApp) {
 
       const rowCount = await updateQuestionMetadataRow({
         contentId: item.contentId,
+        questionMetadata: item.questionMetadata,
         questionMetadataHash: item.questionMetadataHash,
         resultSpecHash: item.resultSpecHash,
         targetAudience,

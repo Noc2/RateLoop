@@ -1655,6 +1655,7 @@ export function ContentSubmissionSection() {
       detailsHash: `0x${string}`;
       detailsUrl: string;
       spec: {
+        questionMetadata?: unknown;
         questionMetadataHash: `0x${string}`;
         resultSpecHash: `0x${string}`;
       };
@@ -1672,6 +1673,7 @@ export function ContentSubmissionSection() {
     const metadata = params.questions
       .map((question, index) => ({
         contentId: params.contentIds[index]?.toString() ?? "",
+        questionMetadata: question.spec.questionMetadata ?? null,
         questionMetadataHash: question.spec.questionMetadataHash,
         resultSpecHash: question.spec.resultSpecHash,
         targetAudience: question.targetAudience ?? null,
@@ -2330,6 +2332,7 @@ export function ContentSubmissionSection() {
           detailsHash: details.detailsHash,
           salt: createRandomHex32(),
           spec: {
+            questionMetadata: spec.questionMetadata,
             questionMetadataHash: spec.questionMetadataHash,
             resultSpecHash: spec.resultSpecHash,
           },

@@ -60,6 +60,8 @@ export type X402QuestionPayload = {
   };
 };
 
+type X402QuestionMetadata = ReturnType<typeof buildQuestionSpecHashes>["questionMetadata"];
+
 export type X402QuestionItemPayload = {
   contextUrl: string;
   imageUrls: string[];
@@ -74,6 +76,7 @@ export type X402QuestionItemPayload = {
   templateId: string;
   templateInputs: AgentQuestionSpecInput["templateInputs"];
   templateVersion: number;
+  questionMetadata?: X402QuestionMetadata;
   questionMetadataHash: `0x${string}`;
   resultSpecHash: `0x${string}`;
 };
@@ -645,6 +648,7 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
       detailsHash: normalizedQuestion.detailsHash,
       detailsUrl: normalizedQuestion.detailsUrl,
       imageUrls: normalizedQuestion.imageUrls,
+      questionMetadata: spec.questionMetadata,
       questionMetadataHash: spec.questionMetadataHash,
       resultSpecHash: spec.resultSpecHash,
       tags: normalizedQuestion.tags,

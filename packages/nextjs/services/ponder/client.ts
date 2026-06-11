@@ -568,9 +568,22 @@ export interface PonderContentQuery {
 
 export interface PonderQuestionMetadataItem {
   contentId: string;
+  questionMetadata?: unknown | null;
   questionMetadataHash: string;
   resultSpecHash: string;
   targetAudience?: TargetAudience | null;
+}
+
+export interface PonderQuestionMetadataResponse {
+  questionMetadata: unknown;
+  questionMetadataHash: string;
+  items: Array<{
+    contentId: string;
+    createdAt: string;
+    resultSpecHash: string | null;
+    targetAudience: TargetAudience | null;
+    title: string;
+  }>;
 }
 
 export interface PonderQuestionMetadataSyncResponse {
@@ -1293,6 +1306,10 @@ export const ponderApi = {
     return ponderPost<PonderQuestionMetadataSyncResponse>("/question-metadata", {
       metadata,
     });
+  },
+
+  getQuestionMetadata(questionMetadataHash: string) {
+    return ponderGet<PonderQuestionMetadataResponse>(`/question-metadata/${questionMetadataHash}`);
   },
 
   async getContentWindow(params?: PonderContentQuery) {

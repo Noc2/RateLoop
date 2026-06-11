@@ -1,8 +1,9 @@
-import { type Hex, keccak256, stringToHex } from "viem";
+import { type Hex } from "viem";
 import {
   normalizeTargetAudience,
   type TargetAudience,
 } from "@rateloop/node-utils/profileSelfReport";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
 
 export const DEFAULT_AGENT_TEMPLATE_ID = "generic_rating";
 export const DEFAULT_AGENT_TEMPLATE_VERSION = 1;
@@ -52,21 +53,6 @@ export type AgentQuestionSpecInput = {
   };
 };
 
-function stableJson(value: JsonValue): string {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
-  }
-
-  if (Array.isArray(value)) {
-    return `[${value.map(stableJson).join(",")}]`;
-  }
-
-  return `{${Object.keys(value)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
-    .join(",")}}`;
-}
-
 function serializeRoundConfig(config: AgentQuestionRoundConfig) {
   return {
     epochDuration: config.epochDuration.toString(),
@@ -77,7 +63,7 @@ function serializeRoundConfig(config: AgentQuestionRoundConfig) {
 }
 
 export function hashCanonicalJson(value: JsonValue): Hex {
-  return keccak256(stringToHex(stableJson(value)));
+  return canonicalJsonHash(value);
 }
 
 export function buildQuestionMetadata(

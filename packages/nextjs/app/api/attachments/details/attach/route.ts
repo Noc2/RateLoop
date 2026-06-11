@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ContentRegistryAbi } from "@rateloop/contracts/abis";
 import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
+import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { type Address, type Hex, createPublicClient, decodeEventLog, http, isAddress } from "viem";
 import {
@@ -33,6 +34,7 @@ type ContentDetailsProof = DetailsAttachmentInput & {
 
 type QuestionMetadataInput = {
   contentId: string;
+  questionMetadata: unknown | null;
   questionMetadataHash: Hex;
   resultSpecHash: Hex;
   targetAudience: TargetAudience | null;
@@ -111,8 +113,13 @@ function readQuestionMetadataAttachments(value: unknown): QuestionMetadataInput[
       typeof record.questionMetadataHash === "string" ? record.questionMetadataHash.trim().toLowerCase() : "";
     const resultSpecHash = typeof record.resultSpecHash === "string" ? record.resultSpecHash.trim().toLowerCase() : "";
     if (!contentId || !BYTES32_PATTERN.test(questionMetadataHash) || !BYTES32_PATTERN.test(resultSpecHash)) continue;
+    const questionMetadata = record.questionMetadata ?? null;
+    if (questionMetadata !== null && canonicalJsonHash(questionMetadata).toLowerCase() !== questionMetadataHash) {
+      throw new Error("questionMetadata does not match questionMetadataHash.");
+    }
     metadata.push({
       contentId,
+      questionMetadata,
       questionMetadataHash: questionMetadataHash as Hex,
       resultSpecHash: resultSpecHash as Hex,
       targetAudience: normalizeTargetAudience(record.targetAudience),
