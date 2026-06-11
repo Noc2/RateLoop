@@ -1,6 +1,6 @@
 import { normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { createHash } from "crypto";
-import { buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
+import { buildQuestionMetadataUri, buildQuestionSpecHashes } from "~~/lib/agent/questionSpecs";
 import {
   type AgentQuestionSpecInput,
   DEFAULT_AGENT_TEMPLATE_ID,
@@ -31,6 +31,9 @@ const X402_MIN_REWARD_POOL_REQUIRED_VOTERS = 3n;
 const X402_MIN_REWARD_POOL_SETTLED_ROUNDS = 1n;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as const;
+const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "after_settlement";
+const QUESTION_DETAILS_PATH_PATTERN = /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/;
+const RATELOOP_PRODUCTION_ORIGINS = new Set(["https://rateloop.ai", "https://www.rateloop.ai"]);
 
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{4,160}$/;
 
@@ -61,8 +64,10 @@ export type X402QuestionPayload = {
 };
 
 type X402QuestionMetadata = ReturnType<typeof buildQuestionSpecHashes>["questionMetadata"];
+type X402QuestionConfidentiality = NonNullable<AgentQuestionSpecInput["confidentiality"]>;
 
 export type X402QuestionItemPayload = {
+  confidentiality: X402QuestionConfidentiality;
   contextUrl: string;
   imageUrls: string[];
   videoUrl: string;
@@ -78,6 +83,7 @@ export type X402QuestionItemPayload = {
   templateVersion: number;
   questionMetadata?: X402QuestionMetadata;
   questionMetadataHash: `0x${string}`;
+  questionMetadataUri?: string;
   resultSpecHash: `0x${string}`;
 };
 
@@ -196,6 +202,39 @@ function normalizeQuestionDetails(value: Record<string, unknown>, fieldPrefix: s
   };
 }
 
+function normalizeOrigin(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getAllowedQuestionDetailsOrigins() {
+  return new Set(
+    [
+      ...RATELOOP_PRODUCTION_ORIGINS,
+      normalizeOrigin(process.env.APP_URL),
+      normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL),
+      normalizeOrigin(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null),
+    ].filter((origin): origin is string => Boolean(origin)),
+  );
+}
+
+function isHostedQuestionDetailsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) {
+      return false;
+    }
+    return QUESTION_DETAILS_PATH_PATTERN.test(parsed.pathname) && getAllowedQuestionDetailsOrigins().has(parsed.origin);
+  } catch {
+    return false;
+  }
+}
+
 function isYouTubeVideoUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -295,10 +334,73 @@ function normalizeQuestionTargetAudience(value: unknown, fieldName: string): Age
   }
 }
 
+function normalizeQuestionConfidentiality(value: unknown, fieldName: string): X402QuestionConfidentiality {
+  if (value === undefined || value === null) {
+    return {
+      bond: null,
+      disclosurePolicy: null,
+      visibility: "public",
+    };
+  }
+  if (!isObject(value)) {
+    throw new X402QuestionInputError(`${fieldName} must be an object when provided.`);
+  }
+
+  const visibility = readOptionalString(value.visibility) || "public";
+  if (visibility !== "public" && visibility !== "gated") {
+    throw new X402QuestionInputError(`${fieldName}.visibility must be public or gated.`);
+  }
+  if (visibility === "public") {
+    if (value.bond !== undefined && value.bond !== null) {
+      throw new X402QuestionInputError(`${fieldName}.bond is only supported for gated questions.`);
+    }
+    return {
+      bond: null,
+      disclosurePolicy: null,
+      visibility,
+    };
+  }
+
+  const rawDisclosurePolicy = readOptionalString(value.disclosurePolicy) || DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY;
+  const disclosurePolicy =
+    rawDisclosurePolicy === "private_until_settlement"
+      ? DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY
+      : rawDisclosurePolicy;
+  if (disclosurePolicy !== DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY && disclosurePolicy !== "private_forever") {
+    throw new X402QuestionInputError(`${fieldName}.disclosurePolicy must be after_settlement or private_forever.`);
+  }
+
+  let bond: NonNullable<X402QuestionConfidentiality["bond"]> | null = null;
+  if (value.bond !== undefined && value.bond !== null) {
+    if (!isObject(value.bond)) {
+      throw new X402QuestionInputError(`${fieldName}.bond must be an object when provided.`);
+    }
+    const amount = parseNonNegativeInteger(value.bond.amount ?? 0n, `${fieldName}.bond.amount`);
+    const asset = readOptionalString(value.bond.asset).toUpperCase() || "LREP";
+    if (asset !== "LREP" && asset !== "USDC") {
+      throw new X402QuestionInputError(`${fieldName}.bond.asset must be LREP or USDC.`);
+    }
+    bond = {
+      amount: amount.toString(),
+      asset,
+    };
+  }
+
+  return {
+    bond: bond ?? {
+      amount: "0",
+      asset: "LREP",
+    },
+    disclosurePolicy,
+    visibility,
+  };
+}
+
 function normalizeTemplateSelection(
   value: Record<string, unknown>,
   fieldPrefix: string,
   defaults: {
+    confidentiality?: X402QuestionConfidentiality;
     templateId?: string;
     templateInputs?: AgentQuestionSpecInput["templateInputs"];
     templateVersion?: number;
@@ -468,6 +570,7 @@ function normalizeQuestion(
   value: unknown,
   index: number,
   defaults: {
+    confidentiality?: X402QuestionConfidentiality;
     templateId?: string;
     templateInputs?: AgentQuestionSpecInput["templateInputs"];
     templateVersion?: number;
@@ -489,24 +592,46 @@ function normalizeQuestion(
   const contextUrl = rawContextUrl ? normalizeQuestionContextUrl(rawContextUrl, `${fieldPrefix}.contextUrl`) : "";
   const rawVideoUrl = readOptionalString(value.videoUrl);
   const videoUrl = rawVideoUrl ? normalizeHttpsUrl(rawVideoUrl, `${fieldPrefix}.videoUrl`) : "";
+  const details = normalizeQuestionDetails(value, fieldPrefix);
+  const confidentiality = normalizeQuestionConfidentiality(
+    value.confidentiality ?? defaults.confidentiality,
+    `${fieldPrefix}.confidentiality`,
+  );
   if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {
     throw new X402QuestionInputError(`${fieldPrefix}.videoUrl must be a supported YouTube URL.`);
   }
   if (videoUrl && imageUrls.length > 0) {
     throw new X402QuestionInputError("Use imageUrls or videoUrl, not both.");
   }
-  if (!contextUrl && imageUrls.length === 0 && !videoUrl) {
+  if (confidentiality.visibility === "gated") {
+    if (contextUrl || videoUrl) {
+      throw new X402QuestionInputError(
+        `${fieldPrefix}.confidentiality.visibility gated requires RateLoop-hosted imageUrls and/or detailsUrl; external contextUrl and videoUrl are not allowed.`,
+      );
+    }
+    if (details.detailsUrl && !isHostedQuestionDetailsUrl(details.detailsUrl)) {
+      throw new X402QuestionInputError(
+        `${fieldPrefix}.detailsUrl must be a RateLoop-hosted details attachment for gated questions.`,
+      );
+    }
+  }
+  if (
+    !contextUrl &&
+    imageUrls.length === 0 &&
+    !videoUrl &&
+    !(confidentiality.visibility === "gated" && details.detailsUrl)
+  ) {
     throw new X402QuestionInputError(`${fieldPrefix}.contextUrl, imageUrls, or videoUrl is required.`);
   }
 
   const { tags, tagList } = normalizeTags(value.tags);
   const categoryId = parseNonNegativeInteger(value.categoryId, `${fieldPrefix}.categoryId`);
-  const details = normalizeQuestionDetails(value, fieldPrefix);
   const targetAudience = normalizeQuestionTargetAudience(value.targetAudience, `${fieldPrefix}.targetAudience`);
   const templateSelection = normalizeTemplateSelection(value, fieldPrefix, defaults);
 
   return {
     categoryId,
+    confidentiality,
     contextUrl,
     detailsHash: details.detailsHash,
     detailsUrl: details.detailsUrl,
@@ -543,6 +668,7 @@ const X402_QUESTION_TOP_LEVEL_FIELDS = new Set<string>([
   "templateId",
   "templateInputs",
   "templateVersion",
+  "confidentiality",
   "chainId",
   // Used by signingIntents.ts when persisting the same requestBody
   "maxPaymentAmount",
@@ -611,6 +737,7 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
       ? DEFAULT_AGENT_TEMPLATE_VERSION
       : Number.parseInt(String(value.templateVersion), 10);
   const templateDefaults = {
+    confidentiality: normalizeQuestionConfidentiality(value.confidentiality, "confidentiality"),
     templateId: readOptionalString(value.templateId) || DEFAULT_AGENT_TEMPLATE_ID,
     templateInputs: topLevelTemplateInputs,
     templateVersion: topLevelTemplateVersion,
@@ -626,6 +753,7 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
         requiredVoters: bounty.requiredVoters,
       },
       categoryId: normalizedQuestion.categoryId,
+      confidentiality: normalizedQuestion.confidentiality,
       contextUrl: normalizedQuestion.contextUrl,
       imageUrls: normalizedQuestion.imageUrls,
       roundConfig,
@@ -644,12 +772,17 @@ export function parseX402QuestionRequest(value: unknown, fallbackChainId?: numbe
 
     return {
       categoryId: normalizedQuestion.categoryId,
+      confidentiality: normalizedQuestion.confidentiality,
       contextUrl: normalizedQuestion.contextUrl,
       detailsHash: normalizedQuestion.detailsHash,
       detailsUrl: normalizedQuestion.detailsUrl,
       imageUrls: normalizedQuestion.imageUrls,
       questionMetadata: spec.questionMetadata,
       questionMetadataHash: spec.questionMetadataHash,
+      questionMetadataUri: buildQuestionMetadataUri(
+        spec.questionMetadataHash,
+        process.env.NEXT_PUBLIC_PONDER_URL ?? process.env.NEXT_PUBLIC_APP_URL,
+      ),
       resultSpecHash: spec.resultSpecHash,
       tags: normalizedQuestion.tags,
       tagList: normalizedQuestion.tagList,
@@ -687,11 +820,13 @@ export function toCanonicalQuestionPayload(payload: X402QuestionPayload) {
     clientRequestId: payload.clientRequestId,
     questions: payload.questions.map(question => ({
       categoryId: question.categoryId.toString(),
+      confidentiality: question.confidentiality,
       contextUrl: question.contextUrl,
       detailsHash: question.detailsHash,
       detailsUrl: question.detailsUrl,
       imageUrls: question.imageUrls,
       questionMetadataHash: question.questionMetadataHash,
+      questionMetadataUri: question.questionMetadataUri ?? buildQuestionMetadataUri(question.questionMetadataHash),
       resultSpecHash: question.resultSpecHash,
       tags: question.tagList,
       targetAudience: question.targetAudience,

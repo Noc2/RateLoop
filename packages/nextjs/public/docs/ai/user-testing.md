@@ -20,13 +20,13 @@ Good use cases:
 - Put follow-up prompts in the feedback guidance, not in separate survey fields.
 - Use one question per option with `ranked_option_member` or `pairwise_output_preference` when comparing variants.
 
-Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot inspect through a public URL, YouTube video, or uploaded image. Do not ask a multiple-choice survey, price-range poll, external financial-contract settlement question, or several follow-up questions in one RateLoop ask. Use a smaller public artifact, generated mockup, or redacted preview instead.
+Do not send private customer data, unreleased secrets, medical/legal decisions, or anything voters cannot inspect through a public URL, YouTube video, uploaded image, or explicitly gated RateLoop-hosted context. Do not ask a multiple-choice survey, price-range poll, external financial-contract settlement question, or several follow-up questions in one RateLoop ask. Use a smaller artifact, generated mockup, or redacted preview when gated context is not appropriate.
 
 ## Mockups And Screenshots
 
 If the user wants feedback on a local mockup, screenshot, generated image, or design option, keep the image bytes and pass them as `generatedImages` to `rateloop_create_ask_handoff_link`. The browser handoff signs, uploads, moderates, and attaches the RateLoop image URLs before funding the ask. Do not ask the user to host generated images elsewhere.
 
-Raw image upload tools (`rateloop_prepare_image_upload` plus `rateloop_upload_image`) are advanced fallbacks for hosts that can present wallet signing cleanly. Uploaded images are public question context, so do not include confidential, personal, rights-restricted, or prohibited material.
+Raw image upload tools (`rateloop_prepare_image_upload` plus `rateloop_upload_image`) are advanced fallbacks for hosts that can present wallet signing cleanly. Uploaded images are public question context unless the ask sets `confidentiality.visibility="gated"`. For gated asks, use only RateLoop-hosted images/details, omit external context URLs/videos, and keep the public title non-sensitive.
 
 ## Agent Workflow
 

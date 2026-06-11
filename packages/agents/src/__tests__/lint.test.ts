@@ -69,6 +69,84 @@ describe("agent question linting", () => {
     });
   });
 
+  it("accepts gated hosted context and warns about public titles", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        confidentiality: {
+          disclosurePolicy: "after_settlement",
+          visibility: "gated",
+        },
+        contextUrl: undefined,
+        detailsHash: DETAILS_HASH,
+        detailsUrl: DETAILS_URL,
+        imageUrls: [UPLOADED_IMAGE_URL],
+      },
+    });
+
+    expect(summarizeLintFindings(findings)).toEqual({
+      errorCount: 0,
+      ok: true,
+      warningCount: 1,
+    });
+    expect(findings).toEqual([
+      expect.objectContaining({
+        level: "warning",
+        path: "question.title",
+      }),
+    ]);
+  });
+
+  it("rejects external context on gated questions", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        confidentiality: {
+          visibility: "gated",
+        },
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          path: "question.confidentiality.visibility",
+        }),
+      ]),
+    );
+  });
+
+  it("warns when gated questions use a nonzero bond", () => {
+    const findings = lintAgentAskRequest({
+      ...VALID_REQUEST,
+      question: {
+        ...VALID_REQUEST.question,
+        confidentiality: {
+          bond: {
+            amount: "1000000",
+            asset: "LREP",
+          },
+          visibility: "gated",
+        },
+        contextUrl: undefined,
+        detailsHash: DETAILS_HASH,
+        detailsUrl: DETAILS_URL,
+      },
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warning",
+          path: "question.confidentiality.bond.amount",
+        }),
+      ]),
+    );
+  });
+
   it("accepts public HTTPS details URLs with matching hashes", () => {
     const findings = lintAgentAskRequest({
       ...VALID_REQUEST,

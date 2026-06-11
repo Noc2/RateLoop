@@ -12,6 +12,7 @@ const AGENT_TRACE_REVIEW_TEMPLATE_ID = "agent_trace_review";
 const AGENT_TRACE_REVIEW_REQUIRED_INPUTS = ["traceId", "taskGoal", "reviewFocus"] as const;
 const UPLOADED_IMAGE_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/images\/att_[A-Za-z0-9_-]{16,80}\.webp$/;
 const UPLOADED_IMAGE_ATTACHMENT_HASH_PATTERN = /^#sha256=0x[a-fA-F0-9]{64}$/;
+const QUESTION_DETAILS_ATTACHMENT_PATH_PATTERN = /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/;
 const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const SURVEY_STYLE_PATTERN =
   /\b(multiple[-\s]?choice|answer options?|choose one|choose from|select one|select from|price range|pricing range)\b/i;
@@ -91,6 +92,41 @@ function hasInvalidUploadedImageUrlList(value: unknown): boolean {
   return !Array.isArray(value) || value.some(url => !looksLikeUploadedImageUrl(url));
 }
 
+function looksLikeHostedDetailsUrl(value: unknown): boolean {
+  if (typeof value !== "string" || !looksLikeHttpsUrl(value)) return false;
+  const parsed = new URL(value);
+  return !parsed.search && !parsed.hash && QUESTION_DETAILS_ATTACHMENT_PATH_PATTERN.test(parsed.pathname);
+}
+
+function readConfidentiality(value: unknown) {
+  if (!isObject(value)) {
+    return {
+      bondAmount: 0n,
+      disclosurePolicy: null,
+      hasBond: false,
+      isObject: value === undefined || value === null,
+      visibility: "public",
+    } as const;
+  }
+  const visibility = typeof value.visibility === "string" ? value.visibility.trim() : "public";
+  const disclosurePolicy = typeof value.disclosurePolicy === "string" ? value.disclosurePolicy.trim() : null;
+  const rawBond = isObject(value.bond) ? value.bond : null;
+  const rawBondAmount = rawBond?.amount;
+  const bondAmount =
+    typeof rawBondAmount === "string" || typeof rawBondAmount === "number" || typeof rawBondAmount === "bigint"
+      ? /^\d+$/.test(String(rawBondAmount).trim())
+        ? BigInt(String(rawBondAmount).trim())
+        : -1n
+      : 0n;
+  return {
+    bondAmount,
+    disclosurePolicy,
+    hasBond: value.bond !== undefined && value.bond !== null,
+    isObject: true,
+    visibility,
+  } as const;
+}
+
 function pushFinding(
   findings: QuestionLintFinding[],
   level: QuestionLintFinding["level"],
@@ -142,6 +178,7 @@ export function lintAgentQuestion(
   path = "question",
   inheritedTemplateId?: string,
   inheritedTemplateInputs?: JsonValue,
+  inheritedConfidentiality?: unknown,
 ): QuestionLintFinding[] {
   const findings: QuestionLintFinding[] = [];
   const title = typeof question.title === "string" ? question.title.trim() : "";
@@ -152,6 +189,7 @@ export function lintAgentQuestion(
     : isObject(inheritedTemplateInputs)
       ? inheritedTemplateInputs
       : null;
+  const confidentiality = readConfidentiality(question.confidentiality ?? inheritedConfidentiality);
 
   if (!title) pushFinding(findings, "error", `${path}.title`, "Question title is required.");
   if (title.length > 120) pushFinding(findings, "error", `${path}.title`, "Question title must fit the 120 character on-chain limit.");
@@ -197,7 +235,56 @@ export function lintAgentQuestion(
   const hasContextUrl = typeof question.contextUrl === "string" && question.contextUrl.trim().length > 0;
   const hasImageUrls = Array.isArray(question.imageUrls) && question.imageUrls.length > 0;
   const hasVideoUrl = typeof question.videoUrl === "string" && question.videoUrl.trim().length > 0;
-  if (!hasContextUrl && !hasImageUrls && !hasVideoUrl) {
+  const isGated = confidentiality.visibility === "gated";
+  if (!confidentiality.isObject) {
+    pushFinding(findings, "error", `${path}.confidentiality`, "Confidentiality must be an object when provided.");
+  } else if (confidentiality.visibility !== "public" && confidentiality.visibility !== "gated") {
+    pushFinding(findings, "error", `${path}.confidentiality.visibility`, "Confidentiality visibility must be public or gated.");
+  } else if (isGated) {
+    if (
+      confidentiality.disclosurePolicy !== null &&
+      confidentiality.disclosurePolicy !== "after_settlement" &&
+      confidentiality.disclosurePolicy !== "private_until_settlement" &&
+      confidentiality.disclosurePolicy !== "private_forever"
+    ) {
+      pushFinding(
+        findings,
+        "error",
+        `${path}.confidentiality.disclosurePolicy`,
+        "Gated disclosure policy must be after_settlement or private_forever.",
+      );
+    }
+    if (confidentiality.bondAmount < 0n) {
+      pushFinding(findings, "error", `${path}.confidentiality.bond.amount`, "Bond amount must be a non-negative atomic integer.");
+    } else if (confidentiality.bondAmount > 0n) {
+      pushFinding(
+        findings,
+        "warning",
+        `${path}.confidentiality.bond.amount`,
+        "Nonzero confidentiality bonds can recruit a thinner rater pool; use the smallest deterrent that fits the risk.",
+      );
+    }
+    if (hasContextUrl || hasVideoUrl) {
+      pushFinding(
+        findings,
+        "error",
+        `${path}.confidentiality.visibility`,
+        "Private context requires RateLoop-hosted imageUrls and/or detailsUrl; external contextUrl and videoUrl are public.",
+      );
+    }
+    if (detailsUrl && !looksLikeHostedDetailsUrl(detailsUrl)) {
+      pushFinding(findings, "error", `${path}.detailsUrl`, "Private context details must use a RateLoop-hosted details attachment URL.");
+    }
+    pushFinding(
+      findings,
+      "warning",
+      `${path}.title`,
+      "Keep private-context titles non-sensitive and unbranded; titles remain public.",
+    );
+  } else if (confidentiality.hasBond) {
+    pushFinding(findings, "error", `${path}.confidentiality.bond`, "Bonds are only supported for gated private context.");
+  }
+  if (!hasContextUrl && !hasImageUrls && !hasVideoUrl && !(isGated && detailsUrl)) {
     pushFinding(findings, "error", `${path}.contextUrl`, "Context URL, image URL, or video URL is required.");
   } else if (hasContextUrl && !looksLikeHttpsUrl(question.contextUrl)) {
     pushFinding(findings, "error", `${path}.contextUrl`, "Context URL must be a public HTTPS URL.");
@@ -303,6 +390,7 @@ export function lintAgentAskRequest(input: unknown): QuestionLintFinding[] {
         request.question ? "question" : `questions.${index}`,
         request.templateId,
         request.templateInputs,
+        request.confidentiality,
       ),
     );
   });

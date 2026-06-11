@@ -123,10 +123,45 @@ const targetAudienceInputSchema = {
   type: "object",
 } satisfies JsonSchema;
 
+const agentQuestionConfidentialityInputSchema = {
+  additionalProperties: false,
+  properties: {
+    bond: {
+      additionalProperties: false,
+      properties: {
+        amount: {
+          default: "0",
+          description: "Optional slashable confidentiality bond amount in atomic units. Use 0 for no bond.",
+          pattern: "^\\d+$",
+          type: ["integer", "string"],
+        },
+        asset: {
+          default: "LREP",
+          enum: ["LREP", "lrep", "USDC", "usdc"],
+          type: "string",
+        },
+      },
+      type: ["object", "null"],
+    },
+    disclosurePolicy: {
+      default: "after_settlement",
+      enum: ["after_settlement", "private_until_settlement", "private_forever"],
+      type: "string",
+    },
+    visibility: {
+      default: "public",
+      enum: ["public", "gated"],
+      type: "string",
+    },
+  },
+  type: "object",
+} satisfies JsonSchema;
+
 const agentQuestionInputSchema = {
   additionalProperties: true,
   properties: {
     categoryId: { description: "RateLoop category id.", type: ["integer", "string"] },
+    confidentiality: agentQuestionConfidentialityInputSchema,
     contextUrl: {
       description:
         "Optional HTTPS page URL voters should inspect. For images, upload bytes first and use imageUrls. Required when both imageUrls and videoUrl are empty.",
@@ -456,6 +491,11 @@ const agentAskInputBaseProperties = {
     description: "Idempotency key chosen by the agent.",
     pattern: "^[A-Za-z0-9._:-]{4,160}$",
     type: "string",
+  },
+  confidentiality: {
+    ...agentQuestionConfidentialityInputSchema,
+    description:
+      "Optional default confidentiality settings for every question. Set visibility=gated for private RateLoop-hosted context.",
   },
   dryRun: {
     default: false,

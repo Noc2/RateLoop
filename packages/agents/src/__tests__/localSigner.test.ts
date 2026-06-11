@@ -157,11 +157,17 @@ function canonicalPayload() {
     questions: [
       {
         categoryId: "1",
+        confidentiality: {
+          bond: null,
+          disclosurePolicy: null,
+          visibility: "public",
+        },
         contextUrl: QUESTION_CONTEXT_URL,
         detailsHash: EMPTY_DETAILS_HASH,
         detailsUrl: "",
         imageUrls: [],
         questionMetadataHash: spec.questionMetadataHash,
+        questionMetadataUri: spec.questionMetadataUri,
         resultSpecHash: spec.resultSpecHash,
         tags: [QUESTION_TAG],
         targetAudience: null,
@@ -1121,6 +1127,39 @@ describe("local signer round config alignment", () => {
       minVoters: "5",
       maxVoters: "100",
     });
+  });
+
+  it("binds gated confidentiality into the canonical payload", () => {
+    const canonical = buildLocalQuestionCanonicalPayload(
+      fiveVoterAskPayload({
+        question: {
+          categoryId: "1",
+          confidentiality: {
+            bond: {
+              amount: "1000000",
+              asset: "LREP",
+            },
+            disclosurePolicy: "private_until_settlement",
+            visibility: "gated",
+          },
+          detailsHash: `0x${"4".repeat(64)}`,
+          detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+          tags: [QUESTION_TAG],
+          title: QUESTION_TITLE,
+        },
+      }),
+      480,
+    );
+
+    expect(canonical.questions[0].confidentiality).toEqual({
+      bond: {
+        amount: "1000000",
+        asset: "LREP",
+      },
+      disclosurePolicy: "after_settlement",
+      visibility: "gated",
+    });
+    expect(canonical.questions[0].contextUrl).toBe("");
   });
 
   it("rejects an explicit roundConfig.minVoters that mismatches bounty.requiredVoters", () => {

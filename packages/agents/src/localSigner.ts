@@ -91,6 +91,7 @@ const BOUNTY_ELIGIBILITY_CREDENTIAL_MASK = 2 | 4 | 8;
 const BOUNTY_ELIGIBILITY_RECENT_RECHECK_FLAG = 128;
 const X402_MAX_QUESTION_BUNDLE_COUNT = 10;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
+const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "after_settlement";
 const QUESTION_CONTEXT_DOMAIN = keccak256(
   stringToHex("rateloop-question-context-v5"),
 );
@@ -114,6 +115,8 @@ const DIRECT_IMAGE_URL_PATH_PATTERN = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i;
 const IMAGE_ATTACHMENT_PATH_PATTERN =
   /^\/api\/attachments\/images\/(att_[A-Za-z0-9_-]{16,80})\.webp$/;
 const IMAGE_ATTACHMENT_HASH_PATTERN = /^#sha256=0x[a-fA-F0-9]{64}$/;
+const QUESTION_DETAILS_ATTACHMENT_PATH_PATTERN =
+  /^\/api\/attachments\/details\/det_[A-Za-z0-9_-]{16,80}$/;
 const DEFAULT_IMAGE_ATTACHMENT_ORIGINS = new Set([
   "https://www.rateloop.ai",
   "https://rateloop.ai",
@@ -127,6 +130,7 @@ const X402_QUESTION_TOP_LEVEL_FIELDS = new Set([
   "templateId",
   "templateInputs",
   "templateVersion",
+  "confidentiality",
   "chainId",
   "maxPaymentAmount",
   "paymentMode",
@@ -294,13 +298,19 @@ type LocalQuestionPayload = {
   roundConfig: LocalQuestionRoundConfig;
 };
 
+type LocalQuestionConfidentiality = NonNullable<
+  AgentQuestionSpecInput["confidentiality"]
+>;
+
 type LocalQuestionItemPayload = {
   categoryId: bigint;
+  confidentiality: LocalQuestionConfidentiality;
   contextUrl: string;
   detailsHash: Hex;
   detailsUrl: string;
   imageUrls: string[];
   questionMetadataHash: Hex;
+  questionMetadataUri: string;
   resultSpecHash: Hex;
   tags: string;
   tagList: string[];
@@ -1139,6 +1149,40 @@ function normalizeImageAttachmentUrl(value: string, fieldName: string): string {
   return parsed.toString();
 }
 
+function allowedRateLoopAttachmentOrigins() {
+  const configuredOrigins = [
+    process.env.APP_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+  ]
+    .map((origin) => {
+      try {
+        return origin ? new URL(origin).origin : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter((origin): origin is string => Boolean(origin));
+  return new Set([...DEFAULT_IMAGE_ATTACHMENT_ORIGINS, ...configuredOrigins]);
+}
+
+function isHostedQuestionDetailsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === "https:" &&
+      !parsed.username &&
+      !parsed.password &&
+      !parsed.search &&
+      !parsed.hash &&
+      QUESTION_DETAILS_ATTACHMENT_PATH_PATTERN.test(parsed.pathname) &&
+      allowedRateLoopAttachmentOrigins().has(parsed.origin)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function normalizeImageUrls(value: unknown): string[] {
   if (value === undefined || value === null) {
     return [];
@@ -1206,6 +1250,7 @@ function normalizeTemplateSelection(
   value: JsonRecord,
   fieldPrefix: string,
   defaults: {
+    confidentiality?: LocalQuestionConfidentiality;
     templateId?: string;
     templateInputs?: AgentQuestionSpecInput["templateInputs"];
     templateVersion?: number;
@@ -1263,6 +1308,81 @@ function normalizeLocalChainId(
     throw new Error("chainId must be a positive integer.");
   }
   return chainId;
+}
+
+function normalizeLocalQuestionConfidentiality(
+  value: unknown,
+  fieldName: string,
+): LocalQuestionConfidentiality {
+  if (value === undefined || value === null) {
+    return {
+      bond: null,
+      disclosurePolicy: null,
+      visibility: "public",
+    };
+  }
+  if (!isJsonRecord(value)) {
+    throw new Error(`${fieldName} must be an object when provided.`);
+  }
+
+  const visibility = readOptionalString(value.visibility) || "public";
+  if (visibility !== "public" && visibility !== "gated") {
+    throw new Error(`${fieldName}.visibility must be public or gated.`);
+  }
+  if (visibility === "public") {
+    if (value.bond !== undefined && value.bond !== null) {
+      throw new Error(`${fieldName}.bond is only supported for gated questions.`);
+    }
+    return {
+      bond: null,
+      disclosurePolicy: null,
+      visibility,
+    };
+  }
+
+  const rawDisclosurePolicy =
+    readOptionalString(value.disclosurePolicy) ||
+    DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY;
+  const disclosurePolicy =
+    rawDisclosurePolicy === "private_until_settlement"
+      ? DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY
+      : rawDisclosurePolicy;
+  if (
+    disclosurePolicy !== DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY &&
+    disclosurePolicy !== "private_forever"
+  ) {
+    throw new Error(
+      `${fieldName}.disclosurePolicy must be after_settlement or private_forever.`,
+    );
+  }
+
+  let bond: NonNullable<LocalQuestionConfidentiality["bond"]> | null = null;
+  if (value.bond !== undefined && value.bond !== null) {
+    if (!isJsonRecord(value.bond)) {
+      throw new Error(`${fieldName}.bond must be an object when provided.`);
+    }
+    const amount = parseNonNegativeInteger(
+      value.bond.amount ?? 0n,
+      `${fieldName}.bond.amount`,
+    );
+    const asset = readOptionalString(value.bond.asset).toUpperCase() || "LREP";
+    if (asset !== "LREP" && asset !== "USDC") {
+      throw new Error(`${fieldName}.bond.asset must be LREP or USDC.`);
+    }
+    bond = {
+      amount: amount.toString(),
+      asset,
+    };
+  }
+
+  return {
+    bond: bond ?? {
+      amount: "0",
+      asset: "LREP",
+    },
+    disclosurePolicy,
+    visibility,
+  };
 }
 
 function normalizeLocalBounty(value: unknown): LocalQuestionPayload["bounty"] {
@@ -1417,6 +1537,7 @@ function normalizeLocalQuestion(
   value: unknown,
   index: number,
   defaults: {
+    confidentiality?: LocalQuestionConfidentiality;
     templateId?: string;
     templateInputs?: AgentQuestionSpecInput["templateInputs"];
     templateVersion?: number;
@@ -1447,6 +1568,10 @@ function normalizeLocalQuestion(
   const detailsUrl = rawDetailsUrl
     ? sanitizeHttpsUrl(rawDetailsUrl, `${fieldPrefix}.detailsUrl`)
     : "";
+  const confidentiality = normalizeLocalQuestionConfidentiality(
+    value.confidentiality ?? defaults.confidentiality,
+    `${fieldPrefix}.confidentiality`,
+  );
   if (detailsUrl && detailsHash.toLowerCase() === EMPTY_DETAILS_HASH) {
     throw new Error(
       `${fieldPrefix}.detailsHash is required when detailsUrl is provided.`,
@@ -1463,7 +1588,24 @@ function normalizeLocalQuestion(
   if (videoUrl && imageUrls.length > 0) {
     throw new Error("Use imageUrls or videoUrl, not both.");
   }
-  if (!contextUrl && imageUrls.length === 0 && !videoUrl) {
+  if (confidentiality.visibility === "gated") {
+    if (contextUrl || videoUrl) {
+      throw new Error(
+        `${fieldPrefix}.confidentiality.visibility gated requires RateLoop-hosted imageUrls and/or detailsUrl; external contextUrl and videoUrl are not allowed.`,
+      );
+    }
+    if (detailsUrl && !isHostedQuestionDetailsUrl(detailsUrl)) {
+      throw new Error(
+        `${fieldPrefix}.detailsUrl must be a RateLoop-hosted details attachment for gated questions.`,
+      );
+    }
+  }
+  if (
+    !contextUrl &&
+    imageUrls.length === 0 &&
+    !videoUrl &&
+    !(confidentiality.visibility === "gated" && detailsUrl)
+  ) {
     throw new Error(
       `${fieldPrefix}.contextUrl, imageUrls, or videoUrl is required.`,
     );
@@ -1491,6 +1633,7 @@ function normalizeLocalQuestion(
       requiredVoters: bounty.requiredVoters,
     },
     categoryId,
+    confidentiality,
     contextUrl,
     imageUrls,
     roundConfig,
@@ -1509,11 +1652,13 @@ function normalizeLocalQuestion(
 
   return {
     categoryId,
+    confidentiality,
     contextUrl,
     detailsHash,
     detailsUrl,
     imageUrls,
     questionMetadataHash: spec.questionMetadataHash,
+    questionMetadataUri: spec.questionMetadataUri,
     resultSpecHash: spec.resultSpecHash,
     tags,
     tagList,
@@ -1573,6 +1718,10 @@ function parseLocalQuestionRequest(
       ? DEFAULT_AGENT_TEMPLATE_VERSION
       : Number.parseInt(String(request.templateVersion), 10);
   const templateDefaults = {
+    confidentiality: normalizeLocalQuestionConfidentiality(
+      request.confidentiality,
+      "confidentiality",
+    ),
     templateId:
       readOptionalString(request.templateId) || DEFAULT_AGENT_TEMPLATE_ID,
     templateInputs: topLevelTemplateInputs,
@@ -1624,11 +1773,13 @@ function toCanonicalLocalQuestionPayload(payload: LocalQuestionPayload) {
     clientRequestId: payload.clientRequestId,
     questions: payload.questions.map((question) => ({
       categoryId: question.categoryId.toString(),
+      confidentiality: question.confidentiality,
       contextUrl: question.contextUrl,
       detailsHash: question.detailsHash,
       detailsUrl: question.detailsUrl,
       imageUrls: question.imageUrls,
       questionMetadataHash: question.questionMetadataHash,
+      questionMetadataUri: question.questionMetadataUri,
       resultSpecHash: question.resultSpecHash,
       tags: question.tagList,
       targetAudience: question.targetAudience,

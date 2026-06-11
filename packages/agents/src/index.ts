@@ -1,12 +1,15 @@
 export {
   DEFAULT_AGENT_TEMPLATE_ID,
   DEFAULT_AGENT_TEMPLATE_VERSION,
+  DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY,
   buildDefaultResultSpec,
   buildQuestionMetadata,
+  buildQuestionMetadataUri,
   buildQuestionSpecHashes,
   hashCanonicalJson,
+  normalizeQuestionConfidentiality,
 } from "./questionSpecs";
-export type { AgentQuestionSpecInput } from "./questionSpecs";
+export type { AgentQuestionConfidentialityInput, AgentQuestionSpecInput } from "./questionSpecs";
 export {
   AGENT_RESULT_TEMPLATES,
   findAgentResultTemplate,

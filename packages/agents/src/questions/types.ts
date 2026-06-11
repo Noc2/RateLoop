@@ -5,9 +5,19 @@ export type JsonValue =
   | { [key: string]: JsonValue };
 export type JsonObject = Record<string, unknown>;
 
+export type AgentQuestionConfidentialityExample = {
+  visibility?: "public" | "gated";
+  disclosurePolicy?: "after_settlement" | "private_until_settlement" | "private_forever";
+  bond?: {
+    amount?: string | number | bigint;
+    asset?: "LREP" | "lrep" | "USDC" | "usdc" | string;
+  } | null;
+};
+
 export type AgentQuestionExample = {
   title: string;
   description?: string;
+  confidentiality?: AgentQuestionConfidentialityExample;
   contextUrl?: string;
   categoryId: string | number | bigint;
   detailsHash?: string;
@@ -57,6 +67,7 @@ export type AgentAskExample = {
   templateId?: string;
   templateInputs?: JsonValue;
   templateVersion?: number;
+  confidentiality?: AgentQuestionConfidentialityExample;
 };
 
 export type QuestionLintFinding = {

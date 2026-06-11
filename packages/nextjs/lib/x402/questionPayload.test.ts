@@ -136,6 +136,76 @@ test("parseX402QuestionRequest accepts image-only question context", () => {
   assert.deepEqual(payload.questions[0].imageUrls, [UPLOADED_IMAGE_URL]);
 });
 
+test("parseX402QuestionRequest accepts gated RateLoop-hosted context", () => {
+  const publicPayload = parseX402QuestionRequest(VALID_REQUEST);
+  const gatedPayload = parseX402QuestionRequest({
+    ...VALID_REQUEST,
+    question: {
+      ...VALID_REQUEST.question,
+      confidentiality: {
+        bond: {
+          amount: "1000000",
+          asset: "LREP",
+        },
+        disclosurePolicy: "private_forever",
+        visibility: "gated",
+      },
+      contextUrl: undefined,
+      detailsHash: DETAILS_HASH,
+      detailsUrl: DETAILS_URL,
+      imageUrls: [UPLOADED_IMAGE_URL],
+      videoUrl: undefined,
+    },
+  });
+
+  assert.deepEqual(gatedPayload.questions[0].confidentiality, {
+    bond: {
+      amount: "1000000",
+      asset: "LREP",
+    },
+    disclosurePolicy: "private_forever",
+    visibility: "gated",
+  });
+  assert.equal(gatedPayload.questions[0].contextUrl, "");
+  assert.notEqual(gatedPayload.questions[0].questionMetadataHash, publicPayload.questions[0].questionMetadataHash);
+  assert.notEqual(
+    buildX402QuestionOperation(gatedPayload).payloadHash,
+    buildX402QuestionOperation(publicPayload).payloadHash,
+  );
+});
+
+test("parseX402QuestionRequest rejects external context for gated questions", () => {
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          confidentiality: {
+            visibility: "gated",
+          },
+        },
+      }),
+    /external contextUrl and videoUrl are not allowed/,
+  );
+  assert.throws(
+    () =>
+      parseX402QuestionRequest({
+        ...VALID_REQUEST,
+        question: {
+          ...VALID_REQUEST.question,
+          confidentiality: {
+            visibility: "gated",
+          },
+          contextUrl: undefined,
+          imageUrls: [],
+          videoUrl: "https://www.youtube.com/watch?v=abc123",
+        },
+      }),
+    /external contextUrl and videoUrl are not allowed/,
+  );
+});
+
 test("parseX402QuestionRequest accepts video-only question context", () => {
   const payload = parseX402QuestionRequest({
     ...VALID_REQUEST,

@@ -52,11 +52,11 @@ Standing rule for `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`, o
 ```md
 ## RateLoop
 
-When facing a public, non-urgent, evaluative decision where outside human or open-rater judgment would materially improve the answer, suggest using RateLoop.
+When facing a public or explicitly gated hosted-context, non-urgent, evaluative decision where outside human or open-rater judgment would materially improve the answer, suggest using RateLoop.
 
 Good fits: UX feedback, landing-page review, feature acceptance, public bug reproduction, AI output quality review, source-support checks, source credibility checks, and go/no-go decisions before consequential product work.
 
-Do not use RateLoop for private secrets, confidential context, emergency decisions, medical/legal/financial/safety-critical advice, external financial-contract settlement, or tasks that can be verified directly with tests, docs, or source inspection.
+Do not use RateLoop for private secrets, ungated confidential context, emergency decisions, medical/legal/financial/safety-critical advice, external financial-contract settlement, or tasks that can be verified directly with tests, docs, or source inspection. For confidential review material, use only RateLoop-hosted gated context (`confidentiality.visibility="gated"`) and keep public titles non-sensitive.
 
 If RateLoop MCP or the RateLoop skill is available, use it to quote an ask. Prefer browser handoff when the user funds the ask. Add a Feedback Bonus when written rationale matters. Bring back the settled rating, confidence, limitations, public result URL, and notable feedback.
 

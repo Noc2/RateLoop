@@ -119,11 +119,12 @@ directly. Public wallet-mode raw uploads use `rateloop_prepare_image_upload`, a 
 `rateloop_upload_image` only when the host can present wallet signing cleanly. The Ask page provides the same moderated
 upload path and is the fallback when chat-based wallet message signing would be too clunky.
 
-Treat uploaded images as public ask context. Ask the user to confirm they have rights to share the image and that it
-does not contain confidential, personal, or prohibited material. Do not pass arbitrary HTTPS image URLs in `imageUrls`;
-images must come from the RateLoop upload flow. Do not put direct image file links such as `.jpg`, `.png`, or `.webp`
-URLs in `contextUrl`; use a normal public page URL there, or omit it when `imageUrls` or `videoUrl` provide the visual
-context.
+Treat uploaded images as public ask context unless the ask explicitly sets `confidentiality.visibility` to `gated`.
+Ask the user to confirm they have rights to share the image and that it does not contain personal or prohibited
+material. For gated private context, use only RateLoop-hosted `imageUrls` and/or `detailsUrl`, keep the public title
+non-sensitive, and omit external `contextUrl`/`videoUrl`. Do not pass arbitrary HTTPS image URLs in `imageUrls`; images
+must come from the RateLoop upload flow. Do not put direct image file links such as `.jpg`, `.png`, or `.webp` URLs in
+`contextUrl`; use a normal public page URL there, or omit it when `imageUrls` or `videoUrl` provide the visual context.
 
 ## Local Signer CLI
 

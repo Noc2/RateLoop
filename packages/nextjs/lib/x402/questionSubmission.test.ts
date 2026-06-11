@@ -40,6 +40,11 @@ function buildPayload(clientRequestId: string): X402QuestionPayload {
     questions: [
       {
         categoryId: 5n,
+        confidentiality: {
+          bond: null,
+          disclosurePolicy: null,
+          visibility: "public",
+        },
         contextUrl: "https://example.com/context",
         detailsHash: `0x${"0".repeat(64)}` as const,
         detailsUrl: "",

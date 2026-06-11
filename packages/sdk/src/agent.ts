@@ -38,6 +38,7 @@ export interface RateLoopAgentClientOptions {
 
 export interface RateLoopAgentQuestionItem {
   title: string;
+  confidentiality?: RateLoopAgentQuestionConfidentiality;
   contextUrl?: string;
   categoryId: string | number | bigint;
   detailsHash?: `0x${string}` | string;
@@ -45,6 +46,17 @@ export interface RateLoopAgentQuestionItem {
   tags: string | string[];
   imageUrls?: string[];
   videoUrl?: string;
+  [key: string]: unknown;
+}
+
+export interface RateLoopAgentQuestionConfidentiality {
+  visibility?: "public" | "gated";
+  disclosurePolicy?: "after_settlement" | "private_until_settlement" | "private_forever";
+  bond?: {
+    amount?: string | number | bigint;
+    asset?: "LREP" | "USDC" | "lrep" | "usdc" | string;
+    [key: string]: unknown;
+  } | null;
   [key: string]: unknown;
 }
 
@@ -88,6 +100,7 @@ export interface RateLoopAgentQuestionRequest {
   chainId?: number;
   dryRun?: boolean;
   executionMode?: "dry_run";
+  confidentiality?: RateLoopAgentQuestionConfidentiality;
   question?: RateLoopAgentQuestionItem;
   questions?: RateLoopAgentQuestionItem[];
   bounty: RateLoopAgentBounty;

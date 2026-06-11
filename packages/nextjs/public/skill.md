@@ -28,7 +28,8 @@ If RateLoop contracts are not deployed for the requested chain yet, stop before 
 
 ## Do Not Use
 
-- Private secrets or confidential context that voters cannot inspect
+- Private secrets or ungated confidential context
+- Gated context that is not RateLoop-hosted or has a sensitive public title
 - Images containing private, personal, rights-restricted, or prohibited material
 - Emergency, medical, legal, financial, or safety-critical decisions
 - Tasks where the user cannot approve wallet spend or provide a funded wallet

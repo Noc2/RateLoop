@@ -8,6 +8,8 @@ import { canonicalJsonHash } from "@rateloop/node-utils/json";
 export const DEFAULT_AGENT_TEMPLATE_ID = "generic_rating";
 export const DEFAULT_AGENT_TEMPLATE_VERSION = 1;
 export const PREDICTED_RATING_SYSTEM = "rateloop.robust_bts_binary.v1";
+export const DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY = "after_settlement";
+export const DEFAULT_QUESTION_METADATA_BASE_URL = "https://rateloop.ai";
 
 type JsonValue =
   | string
@@ -16,6 +18,15 @@ type JsonValue =
   | null
   | JsonValue[]
   | { [key: string]: JsonValue };
+
+export type AgentQuestionConfidentialityInput = {
+  visibility?: "public" | "gated";
+  disclosurePolicy?: "after_settlement" | "private_until_settlement" | "private_forever" | null;
+  bond?: {
+    amount?: bigint | number | string | null;
+    asset?: "LREP" | "USDC" | "lrep" | "usdc" | string | null;
+  } | null;
+} | null;
 
 export type AgentQuestionRoundConfig = {
   epochDuration: bigint | number | string;
@@ -33,6 +44,7 @@ export type AgentQuestionSpecInput = {
     requiredVoters?: bigint | string;
   };
   categoryId: bigint | string;
+  confidentiality?: AgentQuestionConfidentialityInput;
   contextUrl: string;
   imageUrls: readonly string[];
   roundConfig?: AgentQuestionRoundConfig;
@@ -62,8 +74,56 @@ function serializeRoundConfig(config: AgentQuestionRoundConfig) {
   };
 }
 
+export function normalizeQuestionConfidentiality(
+  input: AgentQuestionConfidentialityInput | undefined,
+): JsonValue {
+  const visibility = input?.visibility === "gated" ? "gated" : "public";
+  if (visibility === "public") {
+    return {
+      bond: null,
+      disclosurePolicy: null,
+      visibility,
+    };
+  }
+
+  const rawPolicy = input?.disclosurePolicy ?? DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY;
+  const disclosurePolicy =
+    rawPolicy === "private_until_settlement" ? DEFAULT_CONFIDENTIALITY_DISCLOSURE_POLICY : rawPolicy;
+  const rawBond = input?.bond ?? null;
+  const amount = rawBond?.amount === undefined || rawBond?.amount === null ? "0" : rawBond.amount.toString();
+  const asset = (rawBond?.asset ?? "LREP").toString().toUpperCase();
+
+  return {
+    bond: {
+      amount,
+      asset,
+    },
+    disclosurePolicy,
+    visibility,
+  };
+}
+
 export function hashCanonicalJson(value: JsonValue): Hex {
   return canonicalJsonHash(value);
+}
+
+function normalizeQuestionMetadataBaseUrl(baseUrl: string | null | undefined) {
+  const raw = baseUrl?.trim() || DEFAULT_QUESTION_METADATA_BASE_URL;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "https:") return DEFAULT_QUESTION_METADATA_BASE_URL;
+    const pathname = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.origin}${pathname}`;
+  } catch {
+    return DEFAULT_QUESTION_METADATA_BASE_URL;
+  }
+}
+
+export function buildQuestionMetadataUri(
+  questionMetadataHash: Hex,
+  baseUrl?: string | null,
+) {
+  return `${normalizeQuestionMetadataBaseUrl(baseUrl)}/question-metadata/${questionMetadataHash.toLowerCase()}`;
 }
 
 export function buildQuestionMetadata(
@@ -84,12 +144,13 @@ export function buildQuestionMetadata(
         }
       : null,
     categoryId: input.categoryId.toString(),
+    confidentiality: normalizeQuestionConfidentiality(input.confidentiality),
     contextUrl: input.contextUrl,
     imageUrls: [...input.imageUrls],
     roundConfig: input.roundConfig
       ? serializeRoundConfig(input.roundConfig)
       : null,
-    schemaVersion: "rateloop.question.v2",
+    schemaVersion: "rateloop.question.v3",
     study: input.study ?? null,
     targetAudience,
     tags: [...input.tags],
@@ -137,6 +198,7 @@ export function buildDefaultResultSpec(
 
 export function buildQuestionSpecHashes(input: AgentQuestionSpecInput) {
   const questionMetadata = buildQuestionMetadata(input);
+  const questionMetadataHash = hashCanonicalJson(questionMetadata);
   const resultSpec = buildDefaultResultSpec(
     input.templateId,
     input.templateVersion,
@@ -145,7 +207,8 @@ export function buildQuestionSpecHashes(input: AgentQuestionSpecInput) {
 
   return {
     questionMetadata,
-    questionMetadataHash: hashCanonicalJson(questionMetadata),
+    questionMetadataHash,
+    questionMetadataUri: buildQuestionMetadataUri(questionMetadataHash),
     resultSpec,
     resultSpecHash: hashCanonicalJson(resultSpec),
   };

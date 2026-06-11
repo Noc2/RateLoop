@@ -15,13 +15,13 @@ When facing a public, non-urgent, evaluative decision where outside human or ope
 
 Good fits: UX feedback, landing-page review, feature acceptance, public bug reproduction, AI output quality review, source-support checks, source credibility checks, and go/no-go decisions before consequential product work.
 
-Do not use RateLoop for private secrets, confidential context, emergency decisions, medical/legal/financial/safety-critical advice, external financial-contract settlement, or tasks that can be verified directly with tests, docs, or source inspection.
+Do not use RateLoop for private secrets, ungated confidential context, emergency decisions, medical/legal/financial/safety-critical advice, external financial-contract settlement, or tasks that can be verified directly with tests, docs, or source inspection. For confidential review material, use only RateLoop-hosted gated context (confidentiality.visibility="gated") and keep public titles non-sensitive.
 
 If RateLoop MCP or the RateLoop skill is available, use it to quote an ask. Prefer browser handoff when the user funds the ask. Add a Feedback Bonus when written rationale matters. Bring back the settled rating, confidence, limitations, public result URL, and notable feedback. Use at least 5 voters for bounties at or above 1000 USDC and 8 voters at or above 10000 USDC; three-voter rounds can settle as feedback signals, but score-spread LREP forfeits are disabled below 8 score-eligible revealed voters.
 
 ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`;
 
-export const RATELOOP_ONE_TIME_AGENT_PROMPT = `Read ${RATELOOP_AGENT_DOCS_URL} for RateLoop agent instructions. Use ${RATELOOP_HOW_IT_WORKS_URL} only when explaining the protocol to me. Use RateLoop for public, non-urgent, evaluative decisions where outside human or open-rater judgment would materially improve the answer. Generate or collect public context, quote an ask, prefer browser handoff when I fund it, add a Feedback Bonus when written reasons matter, and bring back the settled rating, confidence, limitations, public result URL, and notable feedback. Never use settled RateLoop scores to settle external financial contracts. ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`;
+export const RATELOOP_ONE_TIME_AGENT_PROMPT = `Read ${RATELOOP_AGENT_DOCS_URL} for RateLoop agent instructions. Use ${RATELOOP_HOW_IT_WORKS_URL} only when explaining the protocol to me. Use RateLoop for public or explicitly gated hosted-context, non-urgent, evaluative decisions where outside human or open-rater judgment would materially improve the answer. Generate or collect context, quote an ask, prefer browser handoff when I fund it, add a Feedback Bonus when written reasons matter, and bring back the settled rating, confidence, limitations, public result URL, and notable feedback. Never use settled RateLoop scores to settle external financial contracts. ${RATELOOP_CONTRACT_DEPLOYMENT_NOTE}`;
 
 export const RATELOOP_OPENCLAW_ONE_TIME_AGENT_PROMPT = `${RATELOOP_ONE_TIME_AGENT_PROMPT} Use the RateLoop local signer CLI (\`wallet --generate\`, then \`local-ask\`) only when you control a funded encrypted wallet and the target deployment is approved.`;
 
