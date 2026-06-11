@@ -12,6 +12,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ExclamationTriangleIcon,
+  LockClosedIcon,
   PhotoIcon,
   ShieldCheckIcon,
   TagIcon,
@@ -139,10 +140,12 @@ type ImageSignatureStep = {
 
 type QuestionSummary = {
   categoryId: string;
+  confidentiality: DraftConfidentiality;
   contextUrl: string;
   description: string;
   detailsHash: string;
   detailsUrl: string;
+  imageUrls: string[];
   tags: string[];
   templateId: string;
   title: string;
@@ -158,10 +161,12 @@ type RoundSettings = {
 
 type DraftQuestionForm = {
   categoryId: string;
+  confidentiality: DraftConfidentiality;
   contextUrl: string;
   description: string;
   detailsHash: string;
   detailsUrl: string;
+  imageUrls: string[];
   tags: string;
   templateId: string;
   title: string;
@@ -190,6 +195,17 @@ type SubmittedContentModalState = {
   title: string;
 };
 
+type ConfidentialityVisibility = "public" | "gated";
+type ConfidentialityDisclosurePolicy = "after_settlement" | "private_forever";
+type ConfidentialityBondAsset = "LREP" | "USDC";
+
+type DraftConfidentiality = {
+  bondAmount: string;
+  bondAsset: ConfidentialityBondAsset;
+  disclosurePolicy: ConfidentialityDisclosurePolicy;
+  visibility: ConfidentialityVisibility;
+};
+
 const SECONDS_PER_MINUTE = 60;
 const EMPTY_DETAILS_HASH = `0x${"0".repeat(64)}` as Hex;
 const SINGLE_QUESTION_SUBMISSION_SELECTOR = "0x339aaa84";
@@ -199,8 +215,16 @@ const BOUNTY_AMOUNT_TOOLTIP =
   "USDC amount funded from the connected wallet when the ask is submitted. Use up to 6 decimal places.";
 const FEEDBACK_BONUS_AMOUNT_TOOLTIP =
   "Optional pool reserved for useful public feedback after settlement. Use up to 6 decimal places.";
+const CONFIDENTIALITY_BOND_AMOUNT_TOOLTIP =
+  "Atomic LREP or USDC amount raters must post before private context is served. Use 0 for no extra bond.";
 const REQUIRED_VOTERS_TOOLTIP =
   "Eligible revealed voters required before the bounty can qualify for payout and the round can settle.";
+const DEFAULT_DRAFT_CONFIDENTIALITY: DraftConfidentiality = {
+  bondAmount: "0",
+  bondAsset: "LREP",
+  disclosurePolicy: "after_settlement",
+  visibility: "public",
+};
 
 type QuestionDetailsReference = {
   detailsHash: Hex;
@@ -295,6 +319,84 @@ function readQuestionRecords(handoff: Handoff | null): JsonRecord[] {
 function readQuestionTags(value: unknown) {
   const tags = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   return tags.map(tag => readString(tag)).filter(Boolean);
+}
+
+function readStringArray(value: unknown) {
+  return Array.isArray(value) ? value.map(entry => readString(entry)).filter(Boolean) : [];
+}
+
+function cloneDraftConfidentiality(value: DraftConfidentiality): DraftConfidentiality {
+  return { ...value };
+}
+
+function readConfidentialityVisibility(value: unknown, fallback: ConfidentialityVisibility) {
+  const visibility = readString(value);
+  return visibility === "gated" || visibility === "public" ? visibility : fallback;
+}
+
+function readDisclosurePolicy(value: unknown, fallback: ConfidentialityDisclosurePolicy) {
+  const policy = readString(value);
+  return policy === "private_forever" ? "private_forever" : policy === "after_settlement" ? policy : fallback;
+}
+
+function readConfidentialityBondAsset(value: unknown, fallback: ConfidentialityBondAsset) {
+  const asset = readString(value).toUpperCase();
+  return asset === "USDC" || asset === "LREP" ? asset : fallback;
+}
+
+function readAtomicAmountInput(value: unknown, fallback: string) {
+  const amount = readDisplayValue(value);
+  if (!/^\d+$/.test(amount)) return fallback;
+
+  return BigInt(amount).toString();
+}
+
+function readDraftConfidentiality(
+  value: unknown,
+  inherited: DraftConfidentiality = DEFAULT_DRAFT_CONFIDENTIALITY,
+): DraftConfidentiality {
+  const source = isJsonRecord(value) ? value : null;
+  if (!source) return cloneDraftConfidentiality(inherited);
+
+  const bond = isJsonRecord(source.bond) ? source.bond : null;
+  return {
+    bondAmount: readAtomicAmountInput(bond?.amount ?? source.bondAmount, inherited.bondAmount),
+    bondAsset: readConfidentialityBondAsset(bond?.asset ?? source.bondAsset, inherited.bondAsset),
+    disclosurePolicy: readDisclosurePolicy(source.disclosurePolicy, inherited.disclosurePolicy),
+    visibility: readConfidentialityVisibility(source.visibility, inherited.visibility),
+  };
+}
+
+function normalizeAtomicAmountInput(value: string): string | null {
+  return value === "" || /^\d+$/.test(value) ? value : null;
+}
+
+function parseAtomicAmountInput(value: string, fieldName: string) {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(`${fieldName} must be a non-negative atomic integer.`);
+  }
+
+  return BigInt(trimmed).toString();
+}
+
+function buildDraftConfidentialityInput(confidentiality: DraftConfidentiality): JsonRecord {
+  if (confidentiality.visibility !== "gated") {
+    return { visibility: "public" };
+  }
+
+  return {
+    bond: {
+      amount: parseAtomicAmountInput(confidentiality.bondAmount, "Confidentiality bond"),
+      asset: confidentiality.bondAsset,
+    },
+    disclosurePolicy: confidentiality.disclosurePolicy,
+    visibility: "gated",
+  };
+}
+
+function draftQuestionHasHostedContext(question: Pick<DraftQuestionForm, "description" | "detailsUrl" | "imageUrls">) {
+  return Boolean(question.description.trim() || question.detailsUrl.trim() || question.imageUrls.length > 0);
 }
 
 function readQuestionDetailsReference(source: JsonRecord | null | undefined): QuestionDetailsReference | null {
@@ -410,12 +512,15 @@ async function uploadQuestionDetailsForHandoff(params: {
 }
 
 function readQuestionSummaries(handoff: Handoff | null): QuestionSummary[] {
+  const topLevelConfidentiality = readDraftConfidentiality(handoff?.requestBody?.confidentiality);
   return readQuestionRecords(handoff).map((question, index) => ({
     categoryId: readDisplayValue(question.categoryId),
+    confidentiality: readDraftConfidentiality(question.confidentiality, topLevelConfidentiality),
     contextUrl: readString(question.contextUrl),
     description: readString(question.description),
     detailsHash: readString(question.detailsHash),
     detailsUrl: readString(question.detailsUrl),
+    imageUrls: readStringArray(question.imageUrls),
     tags: readQuestionTags(question.tags),
     templateId: readString(question.templateId),
     title: readString(question.title) || `Question ${index + 1}`,
@@ -536,22 +641,26 @@ function createDraftForm(handoff: Handoff): DraftForm {
     questions: questions.length
       ? questions.map(question => ({
           categoryId: question.categoryId,
-          contextUrl: question.contextUrl,
+          confidentiality: question.confidentiality,
+          contextUrl: question.confidentiality.visibility === "gated" ? "" : question.contextUrl,
           description: question.description,
           detailsHash: question.detailsHash,
           detailsUrl: question.detailsUrl,
+          imageUrls: question.imageUrls,
           tags: question.tags.join(", "),
           templateId: question.templateId,
           title: question.title,
-          videoUrl: question.videoUrl,
+          videoUrl: question.confidentiality.visibility === "gated" ? "" : question.videoUrl,
         }))
       : [
           {
             categoryId: "",
+            confidentiality: readDraftConfidentiality(handoff.requestBody?.confidentiality),
             contextUrl: "",
             description: "",
             detailsHash: EMPTY_DETAILS_HASH,
             detailsUrl: "",
+            imageUrls: [],
             tags: "",
             templateId: "",
             title: readQuestionTitle(handoff),
@@ -689,6 +798,7 @@ function parseTagsInput(value: string) {
 async function applyDraftQuestion(
   baseQuestion: JsonRecord,
   draft: DraftQuestionForm,
+  hasHandoffImageContext: boolean,
   index: number,
   uploadQuestionDetails: UploadQuestionDetails,
 ): Promise<JsonRecord> {
@@ -704,21 +814,27 @@ async function applyDraftQuestion(
   const nextQuestion: JsonRecord = {
     ...baseQuestion,
     categoryId,
+    confidentiality: buildDraftConfidentialityInput(draft.confidentiality),
     tags,
     title,
   };
   const contextUrl = draft.contextUrl.trim();
   const videoUrl = draft.videoUrl.trim();
   const templateId = draft.templateId.trim();
-  if (contextUrl) {
-    nextQuestion.contextUrl = contextUrl;
-  } else {
+  if (draft.confidentiality.visibility === "gated") {
     delete nextQuestion.contextUrl;
-  }
-  if (videoUrl) {
-    nextQuestion.videoUrl = videoUrl;
-  } else {
     delete nextQuestion.videoUrl;
+  } else {
+    if (contextUrl) {
+      nextQuestion.contextUrl = contextUrl;
+    } else {
+      delete nextQuestion.contextUrl;
+    }
+    if (videoUrl) {
+      nextQuestion.videoUrl = videoUrl;
+    } else {
+      delete nextQuestion.videoUrl;
+    }
   }
   if (templateId) {
     nextQuestion.templateId = templateId;
@@ -744,6 +860,16 @@ async function applyDraftQuestion(
     if (baseDescription) {
       delete nextQuestion.detailsHash;
       delete nextQuestion.detailsUrl;
+    }
+  }
+  if (draft.confidentiality.visibility === "gated") {
+    const hasHostedContext = Boolean(
+      readQuestionDetailsReference(nextQuestion) ||
+        readStringArray(nextQuestion.imageUrls).length ||
+        hasHandoffImageContext,
+    );
+    if (!hasHostedContext) {
+      throw new Error(`Question ${index + 1} needs a hosted image or description for private context.`);
     }
   }
   return nextQuestion;
@@ -838,6 +964,7 @@ async function buildDraftRequestBody(
         await applyDraftQuestion(
           isJsonRecord(question) ? question : {},
           form.questions[index] ?? form.questions[0],
+          Boolean(handoff.assets?.length),
           index,
           uploadQuestionDetails,
         ),
@@ -848,13 +975,25 @@ async function buildDraftRequestBody(
   }
 
   if (isJsonRecord(requestBody.question)) {
-    requestBody.question = await applyDraftQuestion(requestBody.question, form.questions[0], 0, uploadQuestionDetails);
+    requestBody.question = await applyDraftQuestion(
+      requestBody.question,
+      form.questions[0],
+      Boolean(handoff.assets?.length),
+      0,
+      uploadQuestionDetails,
+    );
     return requestBody;
   }
 
   return {
     ...requestBody,
-    ...(await applyDraftQuestion(requestBody, form.questions[0], 0, uploadQuestionDetails)),
+    ...(await applyDraftQuestion(
+      requestBody,
+      form.questions[0],
+      Boolean(handoff.assets?.length),
+      0,
+      uploadQuestionDetails,
+    )),
   };
 }
 
@@ -1099,13 +1238,32 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
     handoff && !hasQuestionBundle && !feedbackBonusSummary && !isFeedbackBonusStep && !isTerminalStatus,
   );
   const hasImageContext = Boolean(handoff?.assets?.length);
+  const privateContextCount =
+    draftForm?.questions.filter(question => question.confidentiality.visibility === "gated").length ??
+    questionSummaries.filter(question => question.confidentiality.visibility === "gated").length;
+  const hasPrivateContextDraft = privateContextCount > 0;
+  const primaryPrivateConfidentiality =
+    draftForm?.questions.find(question => question.confidentiality.visibility === "gated")?.confidentiality ??
+    questionSummaries.find(question => question.confidentiality.visibility === "gated")?.confidentiality ??
+    DEFAULT_DRAFT_CONFIDENTIALITY;
+  const contextSummaryLabel = hasPrivateContextDraft
+    ? privateContextCount > 1
+      ? `Private (${privateContextCount})`
+      : "Private"
+    : "Public";
   const webMcpQuestions = useMemo<HandoffWebMcpQuestion[]>(() => {
     if (draftForm?.questions.length) {
       return draftForm.questions.map(question => ({
         categoryId: question.categoryId,
-        hasPublicContext: Boolean(
-          question.contextUrl.trim() || question.videoUrl.trim() || question.description.trim() || hasImageContext,
-        ),
+        hasPublicContext:
+          question.confidentiality.visibility === "gated"
+            ? draftQuestionHasHostedContext(question) || hasImageContext
+            : Boolean(
+                question.contextUrl.trim() ||
+                  question.videoUrl.trim() ||
+                  question.description.trim() ||
+                  hasImageContext,
+              ),
         tags: parseTagsInput(question.tags),
         title: question.title,
       }));
@@ -1113,7 +1271,14 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
 
     return questionSummaries.map(question => ({
       categoryId: question.categoryId,
-      hasPublicContext: Boolean(question.contextUrl || question.videoUrl || question.description || hasImageContext),
+      hasPublicContext:
+        question.confidentiality.visibility === "gated"
+          ? draftQuestionHasHostedContext({
+              description: question.description,
+              detailsUrl: question.detailsUrl,
+              imageUrls: question.imageUrls,
+            }) || hasImageContext
+          : Boolean(question.contextUrl || question.videoUrl || question.description || hasImageContext),
       tags: question.tags,
       title: question.title,
     }));
@@ -1341,6 +1506,112 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
         questions: current.questions.map((question, questionIndex) =>
           questionIndex === index ? { ...question, ...patch } : question,
         ),
+      };
+    });
+    setDraftError(null);
+  }, []);
+
+  const updateDraftQuestionPrivateContext = useCallback((index: number, enabled: boolean) => {
+    setDraftForm(current => {
+      if (!current) return current;
+      const sharedConfidentiality =
+        current.questions.find(
+          (question, questionIndex) => questionIndex !== index && question.confidentiality.visibility === "gated",
+        )?.confidentiality ?? current.questions[index]?.confidentiality;
+
+      return {
+        ...current,
+        questions: current.questions.map((question, questionIndex) => {
+          if (questionIndex !== index) return question;
+
+          const nextConfidentiality: DraftConfidentiality = enabled
+            ? {
+                ...question.confidentiality,
+                bondAmount: sharedConfidentiality?.bondAmount ?? "0",
+                bondAsset: sharedConfidentiality?.bondAsset ?? "LREP",
+                disclosurePolicy: question.confidentiality.disclosurePolicy,
+                visibility: "gated",
+              }
+            : {
+                ...question.confidentiality,
+                visibility: "public",
+              };
+
+          return {
+            ...question,
+            confidentiality: nextConfidentiality,
+            contextUrl: enabled ? "" : question.contextUrl,
+            videoUrl: enabled ? "" : question.videoUrl,
+          };
+        }),
+      };
+    });
+    setDraftError(null);
+  }, []);
+
+  const updateDraftQuestionDisclosurePolicy = useCallback(
+    (index: number, disclosurePolicy: ConfidentialityDisclosurePolicy) => {
+      updateDraftQuestion(index, {
+        confidentiality: {
+          ...(draftForm?.questions[index]?.confidentiality ?? DEFAULT_DRAFT_CONFIDENTIALITY),
+          disclosurePolicy,
+        },
+      });
+    },
+    [draftForm?.questions, updateDraftQuestion],
+  );
+
+  const updateDraftPrivateConfidentialityBond = useCallback((patch: Partial<DraftConfidentiality>) => {
+    setDraftForm(current => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        questions: current.questions.map(question =>
+          question.confidentiality.visibility === "gated"
+            ? {
+                ...question,
+                confidentiality: {
+                  ...question.confidentiality,
+                  ...patch,
+                },
+              }
+            : question,
+        ),
+      };
+    });
+    setDraftError(null);
+  }, []);
+
+  const updateDraftConfidentialityBondAmount = useCallback(
+    (value: string) => {
+      const normalizedValue = normalizeAtomicAmountInput(value);
+      if (normalizedValue === null) return;
+
+      updateDraftPrivateConfidentialityBond({ bondAmount: normalizedValue });
+    },
+    [updateDraftPrivateConfidentialityBond],
+  );
+
+  const formatDraftConfidentialityBondAmount = useCallback(() => {
+    setDraftForm(current => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        questions: current.questions.map(question => {
+          if (question.confidentiality.visibility !== "gated") return question;
+          const bondAmount = /^\d+$/.test(question.confidentiality.bondAmount.trim())
+            ? BigInt(question.confidentiality.bondAmount.trim()).toString()
+            : "0";
+          return {
+            ...question,
+            confidentiality: {
+              ...question.confidentiality,
+              bondAmount,
+            },
+          };
+        }),
       };
     });
     setDraftError(null);
@@ -1705,7 +1976,7 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
       {handoff ? (
         <>
           <section className="surface-card rounded-lg p-5">
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-5">
               <div className="surface-card-nested rounded-lg p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
                   <WalletIcon className="h-4 w-4" />
@@ -1727,6 +1998,15 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                 </div>
                 <p className={`mt-2 text-sm font-semibold ${feedbackBonusSummary ? "" : "text-warning"}`}>
                   {feedbackBonusDraftLabel}
+                </p>
+              </div>
+              <div className="surface-card-nested rounded-lg p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-base-content/60">
+                  <LockClosedIcon className="h-4 w-4" />
+                  <span>Context</span>
+                </div>
+                <p className={`mt-2 text-sm font-semibold ${hasPrivateContextDraft ? "text-warning" : ""}`}>
+                  {contextSummaryLabel}
                 </p>
               </div>
               <div className="surface-card-nested rounded-lg p-4">
@@ -1825,6 +2105,60 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                           />
                         </label>
 
+                        <div className="mt-4 rounded-lg border border-base-300/70 bg-base-100 p-4">
+                          <label className="flex items-start justify-between gap-4">
+                            <span className="min-w-0">
+                              <span className="flex items-center gap-2 text-sm font-semibold text-base-content">
+                                <LockClosedIcon className="h-4 w-4 text-warning" />
+                                <span>Private context</span>
+                              </span>
+                              <span className="mt-1 block text-sm leading-relaxed text-base-content/60">
+                                Hosted images and description attachments require wallet-signed confidentiality
+                                acceptance before viewing.
+                              </span>
+                            </span>
+                            <input
+                              type="checkbox"
+                              className="toggle toggle-warning"
+                              checked={question.confidentiality.visibility === "gated"}
+                              disabled={!canEditDraft}
+                              onChange={event => updateDraftQuestionPrivateContext(index, event.target.checked)}
+                            />
+                          </label>
+                          {question.confidentiality.visibility === "gated" ? (
+                            <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem] sm:items-end">
+                              <p className="text-sm leading-relaxed text-base-content/65">
+                                External context links and YouTube are disabled for private asks. Keep the title
+                                public-safe.
+                              </p>
+                              <label className="form-control">
+                                <span className="label-text text-sm font-medium">Disclosure</span>
+                                <select
+                                  className="select select-bordered select-sm bg-base-100"
+                                  disabled={!canEditDraft}
+                                  value={question.confidentiality.disclosurePolicy}
+                                  onChange={event =>
+                                    updateDraftQuestionDisclosurePolicy(
+                                      index,
+                                      event.target.value as ConfidentialityDisclosurePolicy,
+                                    )
+                                  }
+                                >
+                                  <option value="after_settlement">After settlement</option>
+                                  <option value="private_forever">Private forever</option>
+                                </select>
+                              </label>
+                            </div>
+                          ) : null}
+                          {question.confidentiality.visibility === "gated" &&
+                          !draftQuestionHasHostedContext(question) &&
+                          !hasImageContext ? (
+                            <p className="mt-3 text-sm text-warning">
+                              Add a hosted image or description before submitting private context.
+                            </p>
+                          ) : null}
+                        </div>
+
                         <label className="form-control mt-4">
                           <span className="label-text text-xs font-semibold uppercase tracking-wide text-base-content/45">
                             Description <span className="text-base-content/35">(optional)</span>
@@ -1874,7 +2208,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                             </span>
                             <input
                               className="input input-bordered mt-1 w-full"
-                              disabled={!canEditDraft}
+                              disabled={!canEditDraft || question.confidentiality.visibility === "gated"}
+                              placeholder={
+                                question.confidentiality.visibility === "gated"
+                                  ? "Private context uses hosted images/details only"
+                                  : undefined
+                              }
                               value={question.contextUrl}
                               onChange={event => updateDraftQuestion(index, { contextUrl: event.target.value })}
                             />
@@ -1885,7 +2224,12 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                             </span>
                             <input
                               className="input input-bordered mt-1 w-full"
-                              disabled={!canEditDraft}
+                              disabled={!canEditDraft || question.confidentiality.visibility === "gated"}
+                              placeholder={
+                                question.confidentiality.visibility === "gated"
+                                  ? "Disabled for private context"
+                                  : undefined
+                              }
                               value={question.videoUrl}
                               onChange={event => updateDraftQuestion(index, { videoUrl: event.target.value })}
                             />
@@ -1931,6 +2275,56 @@ export function AgentAskHandoffPage({ handoffId }: { handoffId: string }) {
                       onBlur={formatDraftFeedbackBonusAmount}
                       onChange={event => updateDraftFeedbackBonusAmount(event.target.value)}
                     />
+                  </div>
+                ) : null}
+
+                {hasPrivateContextDraft ? (
+                  <div className="mt-5 rounded-lg border border-warning/30 bg-warning/10 p-4">
+                    <div className="flex items-start gap-2">
+                      <LockClosedIcon className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-base-content">Confidentiality bond</p>
+                        <p className="mt-1 text-sm leading-relaxed text-base-content/65">
+                          Optional extra bond raters must post before private context is served. Use 0 for no extra
+                          bond.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)] lg:grid-cols-1 xl:grid-cols-[9rem_minmax(0,1fr)]">
+                      <label className="form-control">
+                        <span className="label-text text-sm font-medium">Asset</span>
+                        <select
+                          className="select select-bordered select-sm bg-base-100"
+                          disabled={!canEditDraft}
+                          value={primaryPrivateConfidentiality.bondAsset}
+                          onChange={event =>
+                            updateDraftPrivateConfidentialityBond({
+                              bondAsset: event.target.value as ConfidentialityBondAsset,
+                            })
+                          }
+                        >
+                          <option value="LREP">LREP</option>
+                          <option value="USDC">USDC</option>
+                        </select>
+                      </label>
+                      <label className="form-control">
+                        <DraftFieldLabel
+                          htmlFor="agent-ask-confidentiality-bond-amount"
+                          tooltip={CONFIDENTIALITY_BOND_AMOUNT_TOOLTIP}
+                        >
+                          Amount
+                        </DraftFieldLabel>
+                        <input
+                          id="agent-ask-confidentiality-bond-amount"
+                          className="input input-bordered input-sm mt-1 w-full bg-base-100"
+                          disabled={!canEditDraft}
+                          inputMode="numeric"
+                          value={primaryPrivateConfidentiality.bondAmount}
+                          onBlur={formatDraftConfidentialityBondAmount}
+                          onChange={event => updateDraftConfidentialityBondAmount(event.target.value)}
+                        />
+                      </label>
+                    </div>
                   </div>
                 ) : null}
 
