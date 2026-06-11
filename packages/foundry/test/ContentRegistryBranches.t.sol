@@ -173,7 +173,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SetCategoryRegistryRejectsNoCodeOrWrongContract() public {
         vm.prank(owner);
-        vm.expectRevert("No code");
+        vm.expectRevert("Invalid category registry");
         registry.setCategoryRegistry(address(0xBEEF));
 
         vm.prank(owner);
@@ -183,7 +183,7 @@ contract ContentRegistryBranchesTest is VotingTestBase {
 
     function test_SetProtocolConfigRejectsNoCodeOrWrongContract() public {
         vm.prank(owner);
-        vm.expectRevert("No code");
+        vm.expectRevert("Invalid protocol config");
         registry.setProtocolConfig(address(0xBEEF));
 
         vm.prank(owner);

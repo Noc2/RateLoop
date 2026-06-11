@@ -403,15 +403,26 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
 
     /// @notice Set the CategoryRegistry address (can only be called by CONFIG_ROLE).
     function setCategoryRegistry(address _categoryRegistry) external onlyRole(CONFIG_ROLE) {
-        require(_categoryRegistry != address(0), "Invalid address");
-        require(_categoryRegistry.code.length != 0, "No code");
+        require(
+            _probeContractShape(_categoryRegistry, ICategoryRegistry.isCategory.selector, 36),
+            "Invalid category registry"
+        );
         categoryRegistry = ICategoryRegistry(_categoryRegistry);
     }
 
     function setProtocolConfig(address _protocolConfig) external onlyRole(CONFIG_ROLE) {
-        require(_protocolConfig != address(0), "Invalid address");
-        require(_protocolConfig.code.length != 0, "No code");
+        require(_probeContractShape(_protocolConfig, 0x79502c55, 4), "Invalid protocol config");
         protocolConfig = ProtocolConfig(_protocolConfig);
+    }
+
+    function _probeContractShape(address target, bytes4 selector, uint256 inputSize) private view returns (bool valid) {
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, selector)
+            mstore(add(ptr, 0x04), 0)
+            valid := staticcall(gas(), target, ptr, inputSize, 0, 0)
+            if iszero(returndatasize()) { valid := 0 }
+        }
     }
 
     /// @notice Set or update the bounty escrow.
