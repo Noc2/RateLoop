@@ -1,6 +1,7 @@
 import { and, eq, isNotNull, or } from "drizzle-orm";
 import "server-only";
 import { RATE_ROUTE } from "~~/constants/routes";
+import { getQuestionConfidentiality, isConfidentialityCurrentlyGated } from "~~/lib/confidentiality/context";
 import { db, dbClient } from "~~/lib/db";
 import { notificationEmailDeliveries, notificationEmailSubscriptions, watchedContent } from "~~/lib/db/schema";
 import { getNotificationDeliverySecret, getOptionalAppUrl } from "~~/lib/env/server";
@@ -61,6 +62,10 @@ interface NotificationEventResponse {
   followedResolutions: NotificationEventResolutionItem[];
   trackedResolutions: NotificationEventResolutionItem[];
 }
+
+const PRIVATE_CONTEXT_EMAIL_TITLE = "Private RateLoop question";
+const PRIVATE_CONTEXT_EMAIL_DESCRIPTION =
+  "This notification references a question with private RateLoop-hosted context.";
 
 interface EmailCandidate {
   walletAddress: string;
@@ -166,6 +171,45 @@ async function getNotificationEvents(walletAddress: string): Promise<Notificatio
   return ponderGet<NotificationEventResponse>(`/notification-events/${walletAddress}`, {
     watched: watchedIds.join(","),
   });
+}
+
+async function redactGatedNotificationEvents(events: NotificationEventResponse): Promise<NotificationEventResponse> {
+  const contentIds = [
+    ...new Set(
+      [
+        ...events.settlingSoon.map(item => item.contentId),
+        ...events.followedSubmissions.map(item => item.contentId),
+        ...events.followedResolutions.map(item => item.contentId),
+        ...events.trackedResolutions.map(item => item.contentId),
+      ].filter(Boolean),
+    ),
+  ];
+  if (contentIds.length === 0) return events;
+
+  const gatedIds = new Set<string>();
+  await Promise.all(
+    contentIds.map(async contentId => {
+      const confidentiality = await getQuestionConfidentiality(contentId);
+      if (isConfidentialityCurrentlyGated(confidentiality)) gatedIds.add(contentId);
+    }),
+  );
+  if (gatedIds.size === 0) return events;
+
+  const redact = <T extends { contentId: string; description: string; title: string }>(item: T): T =>
+    gatedIds.has(item.contentId)
+      ? {
+          ...item,
+          description: PRIVATE_CONTEXT_EMAIL_DESCRIPTION,
+          title: PRIVATE_CONTEXT_EMAIL_TITLE,
+        }
+      : item;
+
+  return {
+    followedResolutions: events.followedResolutions.map(redact),
+    followedSubmissions: events.followedSubmissions.map(redact),
+    settlingSoon: events.settlingSoon.map(redact),
+    trackedResolutions: events.trackedResolutions.map(redact),
+  };
 }
 
 function getDisplayName(address: string, profileName: string | null) {
@@ -440,7 +484,7 @@ export async function deliverNotificationEmails() {
   for (const subscription of subscriptions) {
     let candidates: EmailCandidate[];
     try {
-      const events = await getNotificationEvents(subscription.walletAddress);
+      const events = await redactGatedNotificationEvents(await getNotificationEvents(subscription.walletAddress));
       candidates = buildCandidates(subscription, events, appUrl);
     } catch (error) {
       console.error("Failed to prepare notification email candidates:", subscription.walletAddress, error);

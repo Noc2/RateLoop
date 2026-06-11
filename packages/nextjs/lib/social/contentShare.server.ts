@@ -6,6 +6,7 @@ import {
   normalizeContentShareContentId,
 } from "./contentShare";
 import "server-only";
+import { getQuestionConfidentiality, isConfidentialityCurrentlyGated } from "~~/lib/confidentiality/context";
 
 const CONTENT_SHARE_FETCH_TIMEOUT_MS = 2_500;
 
@@ -69,7 +70,20 @@ export async function getContentShareDataForParam(
 
   try {
     const content = await fetchContentForShare(ponderUrl, contentId, options.fetchImpl ?? fetch);
-    return content ? buildContentShareData(content, options.origin ?? getContentShareOrigin()) : null;
+    if (!content) return null;
+    const confidentiality = await getQuestionConfidentiality(content.id).catch(() => null);
+    const shareContent = isConfidentialityCurrentlyGated(confidentiality)
+      ? {
+          ...content,
+          contentMetadata: null,
+          description: "This question uses private RateLoop-hosted context.",
+          imageUrl: null,
+          thumbnailUrl: null,
+          title: "Private RateLoop question",
+          url: null,
+        }
+      : content;
+    return buildContentShareData(shareContent, options.origin ?? getContentShareOrigin());
   } catch {
     return null;
   }
