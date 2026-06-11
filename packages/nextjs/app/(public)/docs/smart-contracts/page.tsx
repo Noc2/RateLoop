@@ -297,7 +297,7 @@ const SmartContracts: NextPage = () => {
               <td>
                 <span className="badge badge-secondary badge-sm">Cancelled</span>
               </td>
-              <td>Voluntarily removed by the submitter (1 LREP cancellation fee).</td>
+              <td>Voluntarily removed by the submitter before votes. No cancellation fee is charged.</td>
             </tr>
           </tbody>
         </table>
@@ -332,8 +332,8 @@ const SmartContracts: NextPage = () => {
           still use the governed default.
         </li>
         <li>
-          <code>cancelContent(contentId)</code> &mdash; Cancel own content (1 LREP fee to the configured
-          cancellation-fee sink, treasury by default).
+          <code>cancelContent(contentId)</code> &mdash; Cancel own content before votes. Attached submission bounties
+          stay non-refundable, and no cancellation fee is charged.
         </li>
         <li>
           <code>markDormant(contentId)</code> &mdash; Mark inactive content as dormant after 30 days. Permissionless;
@@ -567,8 +567,9 @@ const SmartContracts: NextPage = () => {
       <ul>
         <li>
           <code>claimReward(contentId, roundId)</code> &mdash; Claim settled-round voter payouts. Positive RBTS score
-          spreads receive full stake plus their share of the 96% voter share of forfeited stake; negative spreads
-          forfeit without a revealed-loser rebate once the score-spread economic threshold is met.
+          spreads receive full stake plus their share of the 96% voter share of forfeited stake remaining after the
+          settlement-caller incentive; negative spreads forfeit without a revealed-loser rebate once the score-spread
+          economic threshold is met.
         </li>
         <li>
           <code>sweepStrandedLrepToTreasury()</code> &mdash; Governance-only recovery path for any LREP mistakenly sent
@@ -719,8 +720,9 @@ const SmartContracts: NextPage = () => {
       <ul>
         <li>
           RBTS score-spread settlement compares each revealed report&apos;s scoreBps with the stake-weighted mean score.
-          Positive spreads receive full stake plus the 96% voter share of forfeited stake; negative spreads forfeit
-          without a revealed-loser rebate. {protocolDocFacts.scoreSpreadForfeitPolicyLabel}
+          Positive spreads receive full stake plus the 96% voter share of forfeited stake remaining after the
+          settlement-caller incentive; negative spreads forfeit without a revealed-loser rebate.{" "}
+          {protocolDocFacts.scoreSpreadForfeitPolicyLabel}
         </li>
         <li>
           <code>calculateVoterReward(shares, totalWinningShares, voterPool)</code> &mdash; Share-proportional reward

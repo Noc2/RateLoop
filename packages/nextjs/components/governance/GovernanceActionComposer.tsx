@@ -684,16 +684,16 @@ const actionTemplates: readonly GovernanceActionTemplate[] = [
   {
     id: "content-set-bonus-pool",
     group: "Content Registry",
-    label: "Set cancellation fee sink",
+    label: "Set legacy cancellation sink",
     mode: "proposal",
     contractName: "ContentRegistry",
     functionName: "setBonusPool",
     description:
-      "Create a proposal to update the address that receives cancellation fees. The default should be treasury.",
+      "Create a proposal to update the legacy cancellation sink retained for contract compatibility. Content cancellation does not currently charge a fee.",
     advanced: true,
-    fields: [{ key: "bonusPool", label: "Fee sink address", type: "address", required: true }],
-    buildArgs: (_, parser) => [parser.address("bonusPool", "Fee sink address")],
-    buildDescription: values => `Set ContentRegistry cancellation fee sink to ${values.bonusPool || "address"}`,
+    fields: [{ key: "bonusPool", label: "Legacy sink address", type: "address", required: true }],
+    buildArgs: (_, parser) => [parser.address("bonusPool", "Legacy sink address")],
+    buildDescription: values => `Set ContentRegistry legacy cancellation sink to ${values.bonusPool || "address"}`,
   },
   {
     id: "content-set-treasury",

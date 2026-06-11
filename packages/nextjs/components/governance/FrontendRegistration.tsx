@@ -183,7 +183,8 @@ export function FrontendRegistration() {
   });
 
   // Parse frontend info
-  const isRegistered = frontendInfo && frontendInfo[1] > 0n; // stakedAmount > 0
+  const operator = frontendInfo ? frontendInfo[0] : undefined;
+  const isRegistered = Boolean(operator && operator !== ZERO_ADDRESS);
   const stakedAmount = frontendInfo ? Number(frontendInfo[1]) / 1e6 : 0;
   const isEligible = frontendInfo ? frontendInfo[2] : false;
   const isSlashed = frontendInfo ? frontendInfo[3] : false;

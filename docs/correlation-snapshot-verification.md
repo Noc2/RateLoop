@@ -8,8 +8,8 @@ it during the challenge window, and governance arbitrates challenged roots.
 
 Every automatic artifact carries:
 
-- `artifactVersion`: `rateloop-correlation-artifact-v1`
-- `scorerVersion`: `rateloop-correlation-epoch-v1`
+- `artifactVersion`: `rateloop-correlation-artifact-v2`
+- `scorerVersion`: `rateloop-correlation-epoch-v2`
 - `eligibilitySpecVersion`: `rateloop-correlation-eligibility-v1`
 - `canonicalJsonVersion`: `rateloop-canonical-json-v1`
 - `featureSpecVersion`: `rateloop-correlation-features-v1`

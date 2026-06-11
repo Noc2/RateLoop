@@ -224,9 +224,9 @@ const Tokenomics = () => {
       <h2>Treasury</h2>
       <p>
         The protocol treasury starts with <strong>25M LREP</strong> on the governor/timelock from launch. It grows over
-        time through governance-routed settlement remainder, cancellation fees from voluntary content withdrawals, and
-        forfeited unrevealed past-epoch reports swept during settlement cleanup. Treasury spending follows the same
-        governance proposal path as upgrades and other governed config changes.
+        time through governance-routed settlement remainder and forfeited unrevealed past-epoch reports swept during
+        settlement cleanup. Voluntary content cancellation does not charge a treasury fee. Treasury spending follows the
+        same governance proposal path as upgrades and other governed config changes.
       </p>
       <p>
         Appropriate treasury uses include ecosystem grants, partner activation, integration support, research and data

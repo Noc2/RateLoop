@@ -85,7 +85,7 @@ export const TreasuryBalance = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
         <PoolStat
           title="Treasury"
-          tooltip="Balance held by the governance-controlled treasury. Funded by the 1% settlement fee, cancellation fees, and forfeited unrevealed votes."
+          tooltip="Balance held by the governance-controlled treasury. Funded by settlement remainder and forfeited unrevealed votes."
           value={treasuryBalanceRaw}
           isLoading={treasuryLoading}
           Icon={BuildingLibraryIcon}

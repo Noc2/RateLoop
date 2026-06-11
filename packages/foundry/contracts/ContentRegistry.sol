@@ -197,7 +197,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
     IERC20 public lrepToken;
     address public votingEngine;
     ICategoryRegistry public categoryRegistry;
-    address public bonusPool; // Cancellation fee sink (anti-spam), typically the treasury
+    address public bonusPool; // Legacy cancellation sink retained for upgrade/storage compatibility
     address public treasury; // Receives 100% of slashed stakes (governance timelock)
     uint256 public nextContentId;
     uint256 internal nextQuestionBundleId;
@@ -483,7 +483,7 @@ contract ContentRegistry is Initializable, AccessControlUpgradeable, PausableUpg
         emit QuestionBundleRewardPoolEscrowUpdated(_questionBundleRewardPoolEscrow);
     }
 
-    /// @notice Set the cancellation fee sink address (can only be called by TREASURY_ROLE).
+    /// @notice Set the legacy cancellation sink address (can only be called by TREASURY_ROLE).
     function setBonusPool(address _bonusPool) external onlyRole(TREASURY_ROLE) {
         require(_bonusPool != address(0), "Invalid address");
         bonusPool = _bonusPool;

@@ -178,8 +178,8 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
     }
 
     /// @notice Sweep any LREP accidentally held by the distributor to the protocol treasury.
-    /// @dev Historical cancellation fees were mistakenly routed here in some deployments. This contract does not
-    ///      custody live reward inventory, so governance can safely recover the full balance to treasury.
+    /// @dev Historical LREP balances were mistakenly routed here in some deployments. This contract does not custody
+    ///      live reward inventory, so governance can safely recover the full balance to treasury.
     function sweepStrandedLrepToTreasury() external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant returns (uint256 amount) {
         address treasury = _protocolTreasury();
         if (treasury == address(0)) revert TreasuryNotSet();
@@ -498,8 +498,9 @@ contract RoundRewardDistributor is Initializable, AccessControlUpgradeable, Reen
 
     /// @notice Claim frontend fees for a settled round.
     /// @dev AUDIT NOTE: This path intentionally crystallizes historical frontend fees against the
-    ///      frontend's current slash/bond status. Permissionless callers can therefore finalize an
-    ///      old round while a frontend is still slashed, underbonded, or deregistered.
+    ///      frontend's current slash/bond status. The current operator (or the frontend address
+    ///      itself when no distinct operator is registered) must call it, so finalized fees cannot
+    ///      be pulled forward by unrelated accounts.
     function claimFrontendFee(uint256 contentId, uint256 roundId, address frontend)
         external
         nonReentrant

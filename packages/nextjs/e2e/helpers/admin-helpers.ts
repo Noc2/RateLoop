@@ -1334,7 +1334,7 @@ export async function approveLREP(
 /**
  * Claim frontend fees for a settled round.
  * Calls RoundRewardDistributor.claimFrontendFee(uint256 contentId, uint256 roundId, address frontend).
- * Permissionless, but the fee is credited or paid to the frontend specified in the round snapshot.
+ * Must be sent by the current frontend operator, or by the frontend address when no distinct operator is registered.
  */
 export async function claimFrontendFee(
   contentId: number | bigint,
