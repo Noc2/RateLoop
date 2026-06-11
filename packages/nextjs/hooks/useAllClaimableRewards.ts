@@ -80,17 +80,23 @@ export function useAllClaimableRewards() {
   const { data: distributorInfo } = useDeployedContractInfo({ contractName: "RoundRewardDistributor" });
   const { data: engineInfo } = useDeployedContractInfo({ contractName: "RoundVotingEngine" as any });
 
-  const claimedContracts = useMemo(() => {
-    if (!distributorInfo || !engineInfo || !address || terminalVotes.length === 0) return [];
-    return terminalVotes.map(v => {
-      const lookup = buildRoundClaimStateLookup({
+  const claimLookups = useMemo(() => {
+    return terminalVotes.map(v =>
+      buildRoundClaimStateLookup({
         contentId: BigInt(v.contentId),
         roundId: BigInt(v.roundId),
         connectedAddress: address as `0x${string}`,
         voter: v.voter,
         commitKey: v.commitKey,
         settled: v.roundState === ROUND_STATE.Settled,
-      });
+      }),
+    );
+  }, [address, terminalVotes]);
+
+  const claimedContracts = useMemo(() => {
+    if (!distributorInfo || !engineInfo || !address || terminalVotes.length === 0) return [];
+    return claimLookups.flatMap(lookup => {
+      if (!lookup) return [];
       return {
         address: lookup.contract === "distributor" ? distributorInfo.address : engineInfo.address,
         abi: lookup.contract === "distributor" ? distributorInfo.abi : engineInfo.abi,
@@ -98,7 +104,7 @@ export function useAllClaimableRewards() {
         args: lookup.args,
       };
     });
-  }, [distributorInfo, engineInfo, address, terminalVotes]);
+  }, [distributorInfo, engineInfo, address, terminalVotes.length, claimLookups]);
 
   const {
     data: claimedResults,
@@ -111,12 +117,16 @@ export function useAllClaimableRewards() {
 
   // --- Step 4: Classify unclaimed votes into reward-path and refund-path claims ---
   const unclaimedVotes = useMemo(() => {
-    if (!claimedResults || claimedResults.length !== terminalVotes.length) return [];
+    if (terminalVotes.length === 0) return [];
+    if (claimedContracts.length === 0) return terminalVotes;
+    if (!claimedResults || claimedResults.length !== claimedContracts.length) return [];
+    let claimedIndex = 0;
     return terminalVotes.filter((_, i) => {
-      const r = claimedResults[i];
+      if (!claimLookups[i]) return true;
+      const r = claimedResults[claimedIndex++];
       return r?.status === "success" && r.result === false;
     });
-  }, [terminalVotes, claimedResults]);
+  }, [terminalVotes, claimedContracts.length, claimedResults, claimLookups]);
 
   const { rewardVotes, refundVotes } = useMemo(() => {
     const rewards: typeof unclaimedVotes = [];

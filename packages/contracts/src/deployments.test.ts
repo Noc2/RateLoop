@@ -149,11 +149,9 @@ test("confidentiality ABI snippets expose indexer event surface", () => {
     true,
   );
   assert.deepEqual(
-    [
-      "ConfidentialityEscrowUpdated",
-      "IdentityBanned",
-      "IdentityUnbanned",
-    ].every((eventName) => raterEvents.has(eventName)),
+    ["IdentityBanned", "IdentityUnbanned"].every((eventName) =>
+      raterEvents.has(eventName),
+    ),
     true,
   );
 });

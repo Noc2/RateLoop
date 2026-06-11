@@ -203,6 +203,19 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "confidentialityEscrow",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "config",
     "inputs": [],
     "outputs": [
@@ -979,6 +992,19 @@ export const ProtocolConfigAbi = [
   },
   {
     "type": "function",
+    "name": "setConfidentialityEscrow",
+    "inputs": [
+      {
+        "name": "value",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setConfig",
     "inputs": [
       {
@@ -1452,6 +1478,19 @@ export const ProtocolConfigAbi = [
     "inputs": [
       {
         "name": "clusterPayoutOracle",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ConfidentialityEscrowUpdated",
+    "inputs": [
+      {
+        "name": "confidentialityEscrow",
         "type": "address",
         "indexed": false,
         "internalType": "address"

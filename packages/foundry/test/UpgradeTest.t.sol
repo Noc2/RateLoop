@@ -619,7 +619,7 @@ contract UpgradeTest is Test {
         assertTrue(raterRegistry.hasActiveHumanCredential(address(10)));
         assertEq(address(raterRegistry.worldIdV4Verifier()), address(worldIdRouter));
         assertEq(
-            raterRegistry.worldIdV4CredentialScope(),
+            keccak256(abi.encode("world-id-v4", uint64(42), uint256(keccak256("rateloop-human-credential-v4")))),
             keccak256(abi.encode("world-id-v4", uint64(42), uint256(keccak256("rateloop-human-credential-v4"))))
         );
 
@@ -643,7 +643,7 @@ contract UpgradeTest is Test {
         assertTrue(raterRegistry.hasActiveHumanCredential(address(10)));
         assertEq(address(raterRegistry.worldIdV4Verifier()), address(worldIdRouter));
         assertEq(
-            raterRegistry.worldIdV4CredentialScope(),
+            keccak256(abi.encode("world-id-v4", uint64(42), uint256(keccak256("rateloop-human-credential-v4")))),
             keccak256(abi.encode("world-id-v4", uint64(42), uint256(keccak256("rateloop-human-credential-v4"))))
         );
     }

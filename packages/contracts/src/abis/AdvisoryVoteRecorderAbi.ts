@@ -778,6 +778,11 @@ export const AdvisoryVoteRecorderAbi = [
   },
   {
     "type": "error",
+    "name": "ConfidentialityGated",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "CooldownActive",
     "inputs": []
   },

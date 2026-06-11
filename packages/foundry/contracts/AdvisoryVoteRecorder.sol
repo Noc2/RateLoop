@@ -846,11 +846,8 @@ contract AdvisoryVoteRecorder is Ownable, ReentrancyGuardTransient {
         return IRaterIdentityRegistry(snapshot);
     }
 
-    function _isGatedContent(uint256 contentId, uint256 roundId) internal view returns (bool) {
-        address escrow = votingEngine.roundConfidentialityEscrowSnapshot(contentId, roundId);
-        if (escrow == address(0)) {
-            escrow = protocolConfig.confidentialityEscrow();
-        }
+    function _isGatedContent(uint256 contentId, uint256) internal view returns (bool) {
+        address escrow = protocolConfig.confidentialityEscrow();
         if (escrow == address(0)) return false;
         try IConfidentialityEscrow(escrow).confidentialityConfig(contentId) returns (
             IConfidentialityEscrow.ConfidentialityConfig memory config

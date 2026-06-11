@@ -616,38 +616,6 @@ export const ContentRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "questionBundleRewardPoolEscrow",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "questionBundleRewardPoolEscrowForBundle",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "questionBundleRoundObserver",
     "inputs": [
       {
@@ -811,19 +779,6 @@ export const ContentRegistryAbi = [
     "inputs": [
       {
         "name": "_protocolConfig",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setQuestionBundleRewardPoolEscrow",
-    "inputs": [
-      {
-        "name": "_questionBundleRewardPoolEscrow",
         "type": "address",
         "internalType": "address"
       }
@@ -1305,6 +1260,33 @@ export const ContentRegistryAbi = [
         "name": "submitter",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "confidentiality",
+        "type": "tuple",
+        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
+        "components": [
+          {
+            "name": "gated",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "bondAsset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "bondAmount",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "flags",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
       }
     ],
     "outputs": [
@@ -1460,6 +1442,190 @@ export const ContentRegistryAbi = [
             "name": "resultSpecHash",
             "type": "bytes32",
             "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "submitQuestionWithRewardAndRoundConfig",
+    "inputs": [
+      {
+        "name": "contextUrl",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "imageUrls",
+        "type": "string[]",
+        "internalType": "string[]"
+      },
+      {
+        "name": "videoUrl",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "tags",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "categoryId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "details",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionDetails",
+        "components": [
+          {
+            "name": "detailsUrl",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "detailsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "rewardTerms",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionRewardTerms",
+        "components": [
+          {
+            "name": "asset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "requiredVoters",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "requiredSettledRounds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bountyStartBy",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bountyWindowSeconds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "feedbackWindowSeconds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bountyEligibility",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      },
+      {
+        "name": "roundConfig",
+        "type": "tuple",
+        "internalType": "struct RoundLib.RoundConfig",
+        "components": [
+          {
+            "name": "epochDuration",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxDuration",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "minVoters",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxVoters",
+            "type": "uint16",
+            "internalType": "uint16"
+          }
+        ]
+      },
+      {
+        "name": "spec",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.QuestionSpecCommitment",
+        "components": [
+          {
+            "name": "questionMetadataHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "resultSpecHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "confidentiality",
+        "type": "tuple",
+        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
+        "components": [
+          {
+            "name": "gated",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "bondAsset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "bondAmount",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "flags",
+            "type": "uint8",
+            "internalType": "uint8"
           }
         ]
       }
@@ -1840,19 +2006,6 @@ export const ContentRegistryAbi = [
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "QuestionBundleRewardPoolEscrowUpdated",
-    "inputs": [
-      {
-        "name": "rewardPoolEscrow",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
       }
     ],
     "anonymous": false

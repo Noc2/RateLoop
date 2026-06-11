@@ -5193,38 +5193,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "questionBundleRewardPoolEscrow",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "questionBundleRewardPoolEscrowForBundle",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "questionBundleRoundObserver",
           inputs: [
             {
@@ -5388,19 +5356,6 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "_protocolConfig",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setQuestionBundleRewardPoolEscrow",
-          inputs: [
-            {
-              name: "_questionBundleRewardPoolEscrow",
               type: "address",
               internalType: "address",
             },
@@ -5883,6 +5838,34 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "confidentiality",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
           ],
           outputs: [
             {
@@ -6037,6 +6020,191 @@ const deployedContracts: GenericContractsDeclaration = {
                   name: "resultSpecHash",
                   type: "bytes32",
                   internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "submitQuestionWithRewardAndRoundConfig",
+          inputs: [
+            {
+              name: "contextUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "imageUrls",
+              type: "string[]",
+              internalType: "string[]",
+            },
+            {
+              name: "videoUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "title",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "tags",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "categoryId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "salt",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "rewardTerms",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionRewardTerms",
+              components: [
+                {
+                  name: "asset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "amount",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredVoters",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredSettledRounds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyStartBy",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "feedbackWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyEligibility",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "roundConfig",
+              type: "tuple",
+              internalType: "struct RoundLib.RoundConfig",
+              components: [
+                {
+                  name: "epochDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "maxDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "minVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "maxVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+              ],
+            },
+            {
+              name: "spec",
+              type: "tuple",
+              internalType: "struct ContentRegistry.QuestionSpecCommitment",
+              components: [
+                {
+                  name: "questionMetadataHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "resultSpecHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "confidentiality",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
                 },
               ],
             },
@@ -6417,19 +6585,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: true,
               internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "QuestionBundleRewardPoolEscrowUpdated",
-          inputs: [
-            {
-              name: "rewardPoolEscrow",
-              type: "address",
-              indexed: false,
-              internalType: "address",
             },
           ],
           anonymous: false,
@@ -7011,19 +7166,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "DEFAULT_ADMIN_ROLE",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "advisoryRoundContext",
           inputs: [
             {
@@ -7098,35 +7240,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "cancelledRoundRefundClaimed",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -13155,6 +13268,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "confidentialityEscrow",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "config",
           inputs: [],
           outputs: [
@@ -13931,6 +14057,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setConfidentialityEscrow",
+          inputs: [
+            {
+              name: "value",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setConfig",
           inputs: [
             {
@@ -14404,6 +14543,19 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "clusterPayoutOracle",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ConfidentialityEscrowUpdated",
+          inputs: [
+            {
+              name: "confidentialityEscrow",
               type: "address",
               indexed: false,
               internalType: "address",
@@ -22231,6 +22383,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "GOVERNANCE_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "LAUNCH_CONSUMER_ROLE",
           inputs: [],
           outputs: [
@@ -22468,6 +22633,39 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "banIdentity",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "expiresAt",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reason",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "clearRevokedHumanNullifier",
           inputs: [
             {
@@ -22483,6 +22681,19 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "confidentialityEscrow",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -22507,44 +22718,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "credentialKindBit",
-          inputs: [
-            {
-              name: "kind",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "credentialScope",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -22620,44 +22793,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "followerCount",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "followingCount",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -23043,49 +23178,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "hashToField",
-          inputs: [
-            {
-              name: "value",
-              type: "bytes",
-              internalType: "bytes",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "humanNullifierOwnerByProvider",
-          inputs: [
-            {
-              name: "provider",
-              type: "uint8",
-              internalType: "enum RaterRegistry.HumanCredentialProvider",
-            },
-            {
-              name: "nullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "initialize",
           inputs: [
             {
@@ -23144,17 +23236,12 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "isFollowing",
+          name: "isIdentityKeyBanned",
           inputs: [
             {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [
@@ -23363,30 +23450,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "revokedHumanNullifierByProvider",
-          inputs: [
-            {
-              name: "provider",
-              type: "uint8",
-              internalType: "enum RaterRegistry.HumanCredentialProvider",
-            },
-            {
-              name: "nullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "rotateCanonicalIdentityKey",
           inputs: [
             {
@@ -23421,6 +23484,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "evidenceHash",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setConfidentialityEscrow",
+          inputs: [
+            {
+              name: "newEscrow",
+              type: "address",
+              internalType: "address",
             },
           ],
           outputs: [],
@@ -23663,6 +23739,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "unbanIdentity",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "unfollowProfile",
           inputs: [
             {
@@ -23673,30 +23767,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "worldCredentialSignalHash",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "kind",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "pure",
         },
         {
           type: "function",
@@ -23754,25 +23824,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "worldIdSignalHash",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
           name: "worldIdV4Action",
           inputs: [],
           outputs: [
@@ -23793,19 +23844,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldIdV4CredentialScope",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -23913,30 +23951,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldPresenceSignalHash",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "kind",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "pure",
         },
         {
           type: "function",
@@ -24236,6 +24250,68 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "evidenceHash",
               type: "bytes32",
               indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "IdentityBanned",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              indexed: true,
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "expiresAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "permanent",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "reason",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "IdentityUnbanned",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              indexed: true,
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
               internalType: "bytes32",
             },
           ],
@@ -24779,6 +24855,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "InvalidBan",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "InvalidCredential",
           inputs: [],
         },
@@ -24889,6 +24970,223 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "computeX402QuestionPaymentNonce",
+          inputs: [
+            {
+              name: "metadata",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionMetadata",
+              components: [
+                {
+                  name: "url",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "title",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "tags",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "categoryId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+              ],
+            },
+            {
+              name: "imageUrls",
+              type: "string[]",
+              internalType: "string[]",
+            },
+            {
+              name: "videoUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "salt",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "rewardTerms",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionRewardTerms",
+              components: [
+                {
+                  name: "asset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "amount",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredVoters",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredSettledRounds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyStartBy",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "feedbackWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyEligibility",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "roundConfig",
+              type: "tuple",
+              internalType: "struct RoundLib.RoundConfig",
+              components: [
+                {
+                  name: "epochDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "maxDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "minVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "maxVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+              ],
+            },
+            {
+              name: "spec",
+              type: "tuple",
+              internalType: "struct ContentRegistry.QuestionSpecCommitment",
+              components: [
+                {
+                  name: "questionMetadataHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "resultSpecHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "confidentiality",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "payer",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "payee",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "validAfter",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "validBefore",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -25159,6 +25457,243 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "submitQuestionWithX402Payment",
+          inputs: [
+            {
+              name: "contextUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "imageUrls",
+              type: "string[]",
+              internalType: "string[]",
+            },
+            {
+              name: "videoUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "title",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "tags",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "categoryId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "salt",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "rewardTerms",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionRewardTerms",
+              components: [
+                {
+                  name: "asset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "amount",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredVoters",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredSettledRounds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyStartBy",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "feedbackWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyEligibility",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "roundConfig",
+              type: "tuple",
+              internalType: "struct RoundLib.RoundConfig",
+              components: [
+                {
+                  name: "epochDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "maxDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "minVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "maxVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+              ],
+            },
+            {
+              name: "spec",
+              type: "tuple",
+              internalType: "struct ContentRegistry.QuestionSpecCommitment",
+              components: [
+                {
+                  name: "questionMetadataHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "resultSpecHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "confidentiality",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "paymentAuthorization",
+              type: "tuple",
+              internalType: "struct Eip3009Authorization",
+              components: [
+                {
+                  name: "from",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "to",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "value",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "validAfter",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "validBefore",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "nonce",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "v",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "r",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "s",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
           stateMutability: "nonpayable",
         },
         {
@@ -26468,30 +27003,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "legacyContributorLeaf",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "allocation",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
           name: "legacyContributorRoot",
           inputs: [],
           outputs: [
@@ -27191,19 +27702,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "remainingEarnedRaterPool",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "remainingLegacyContributorPool",
           inputs: [],
           outputs: [
             {
@@ -29365,6 +29863,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "AlreadyRevealed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ConfidentialityGated",
           inputs: [],
         },
         {
@@ -32249,38 +32752,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "questionBundleRewardPoolEscrow",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "questionBundleRewardPoolEscrowForBundle",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "questionBundleRoundObserver",
           inputs: [
             {
@@ -32444,19 +32915,6 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "_protocolConfig",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setQuestionBundleRewardPoolEscrow",
-          inputs: [
-            {
-              name: "_questionBundleRewardPoolEscrow",
               type: "address",
               internalType: "address",
             },
@@ -32939,6 +33397,34 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "confidentiality",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
           ],
           outputs: [
             {
@@ -33093,6 +33579,191 @@ const deployedContracts: GenericContractsDeclaration = {
                   name: "resultSpecHash",
                   type: "bytes32",
                   internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "submitQuestionWithRewardAndRoundConfig",
+          inputs: [
+            {
+              name: "contextUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "imageUrls",
+              type: "string[]",
+              internalType: "string[]",
+            },
+            {
+              name: "videoUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "title",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "tags",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "categoryId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "salt",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "rewardTerms",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionRewardTerms",
+              components: [
+                {
+                  name: "asset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "amount",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredVoters",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredSettledRounds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyStartBy",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "feedbackWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyEligibility",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "roundConfig",
+              type: "tuple",
+              internalType: "struct RoundLib.RoundConfig",
+              components: [
+                {
+                  name: "epochDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "maxDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "minVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "maxVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+              ],
+            },
+            {
+              name: "spec",
+              type: "tuple",
+              internalType: "struct ContentRegistry.QuestionSpecCommitment",
+              components: [
+                {
+                  name: "questionMetadataHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "resultSpecHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "confidentiality",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
                 },
               ],
             },
@@ -33473,19 +34144,6 @@ const deployedContracts: GenericContractsDeclaration = {
               type: "uint256",
               indexed: true,
               internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "QuestionBundleRewardPoolEscrowUpdated",
-          inputs: [
-            {
-              name: "rewardPoolEscrow",
-              type: "address",
-              indexed: false,
-              internalType: "address",
             },
           ],
           anonymous: false,
@@ -34067,19 +34725,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "DEFAULT_ADMIN_ROLE",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "advisoryRoundContext",
           inputs: [
             {
@@ -34154,35 +34799,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "cancelledRoundRefundClaimed",
-          inputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -40211,6 +40827,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "confidentialityEscrow",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "config",
           inputs: [],
           outputs: [
@@ -40987,6 +41616,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "setConfidentialityEscrow",
+          inputs: [
+            {
+              name: "value",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "setConfig",
           inputs: [
             {
@@ -41460,6 +42102,19 @@ const deployedContracts: GenericContractsDeclaration = {
           inputs: [
             {
               name: "clusterPayoutOracle",
+              type: "address",
+              indexed: false,
+              internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "ConfidentialityEscrowUpdated",
+          inputs: [
+            {
+              name: "confidentialityEscrow",
               type: "address",
               indexed: false,
               internalType: "address",
@@ -48316,6 +48971,19 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "GOVERNANCE_ROLE",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "LAUNCH_CONSUMER_ROLE",
           inputs: [],
           outputs: [
@@ -48553,6 +49221,39 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "banIdentity",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "expiresAt",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "reason",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "clearRevokedHumanNullifier",
           inputs: [
             {
@@ -48568,6 +49269,19 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "confidentialityEscrow",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -48592,44 +49306,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "credentialKindBit",
-          inputs: [
-            {
-              name: "kind",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "credentialScope",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -48705,44 +49381,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "followerCount",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "followingCount",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -49128,49 +49766,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "hashToField",
-          inputs: [
-            {
-              name: "value",
-              type: "bytes",
-              internalType: "bytes",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
-          name: "humanNullifierOwnerByProvider",
-          inputs: [
-            {
-              name: "provider",
-              type: "uint8",
-              internalType: "enum RaterRegistry.HumanCredentialProvider",
-            },
-            {
-              name: "nullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "initialize",
           inputs: [
             {
@@ -49229,17 +49824,12 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "isFollowing",
+          name: "isIdentityKeyBanned",
           inputs: [
             {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
+              name: "identityKey",
+              type: "bytes32",
+              internalType: "bytes32",
             },
           ],
           outputs: [
@@ -49448,30 +50038,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "revokedHumanNullifierByProvider",
-          inputs: [
-            {
-              name: "provider",
-              type: "uint8",
-              internalType: "enum RaterRegistry.HumanCredentialProvider",
-            },
-            {
-              name: "nullifierHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "rotateCanonicalIdentityKey",
           inputs: [
             {
@@ -49506,6 +50072,19 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "evidenceHash",
               type: "bytes32",
               internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "setConfidentialityEscrow",
+          inputs: [
+            {
+              name: "newEscrow",
+              type: "address",
+              internalType: "address",
             },
           ],
           outputs: [],
@@ -49748,6 +50327,24 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
+          name: "unbanIdentity",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "unfollowProfile",
           inputs: [
             {
@@ -49758,30 +50355,6 @@ const deployedContracts: GenericContractsDeclaration = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "worldCredentialSignalHash",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "kind",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "pure",
         },
         {
           type: "function",
@@ -49839,25 +50412,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "worldIdSignalHash",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
           name: "worldIdV4Action",
           inputs: [],
           outputs: [
@@ -49878,19 +50432,6 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "",
               type: "uint256",
               internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldIdV4CredentialScope",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
             },
           ],
           stateMutability: "view",
@@ -49998,30 +50539,6 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "worldPresenceSignalHash",
-          inputs: [
-            {
-              name: "rater",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "kind",
-              type: "uint8",
-              internalType: "uint8",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "pure",
         },
         {
           type: "function",
@@ -50321,6 +50838,68 @@ const deployedContracts: GenericContractsDeclaration = {
               name: "evidenceHash",
               type: "bytes32",
               indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "IdentityBanned",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              indexed: true,
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
+              internalType: "bytes32",
+            },
+            {
+              name: "expiresAt",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+            {
+              name: "permanent",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "evidenceHash",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+            {
+              name: "reason",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "IdentityUnbanned",
+          inputs: [
+            {
+              name: "provider",
+              type: "uint8",
+              indexed: true,
+              internalType: "enum RaterRegistry.HumanCredentialProvider",
+            },
+            {
+              name: "nullifierHash",
+              type: "bytes32",
+              indexed: true,
               internalType: "bytes32",
             },
           ],
@@ -50864,6 +51443,11 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "error",
+          name: "InvalidBan",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "InvalidCredential",
           inputs: [],
         },
@@ -50974,6 +51558,223 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "computeX402QuestionPaymentNonce",
+          inputs: [
+            {
+              name: "metadata",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionMetadata",
+              components: [
+                {
+                  name: "url",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "title",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "tags",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "categoryId",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+              ],
+            },
+            {
+              name: "imageUrls",
+              type: "string[]",
+              internalType: "string[]",
+            },
+            {
+              name: "videoUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "salt",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "rewardTerms",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionRewardTerms",
+              components: [
+                {
+                  name: "asset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "amount",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredVoters",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredSettledRounds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyStartBy",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "feedbackWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyEligibility",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "roundConfig",
+              type: "tuple",
+              internalType: "struct RoundLib.RoundConfig",
+              components: [
+                {
+                  name: "epochDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "maxDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "minVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "maxVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+              ],
+            },
+            {
+              name: "spec",
+              type: "tuple",
+              internalType: "struct ContentRegistry.QuestionSpecCommitment",
+              components: [
+                {
+                  name: "questionMetadataHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "resultSpecHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "confidentiality",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "payer",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "payee",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "value",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "validAfter",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "validBefore",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -51244,6 +52045,243 @@ const deployedContracts: GenericContractsDeclaration = {
             },
           ],
           outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "submitQuestionWithX402Payment",
+          inputs: [
+            {
+              name: "contextUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "imageUrls",
+              type: "string[]",
+              internalType: "string[]",
+            },
+            {
+              name: "videoUrl",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "title",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "tags",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "categoryId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "details",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionDetails",
+              components: [
+                {
+                  name: "detailsUrl",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "detailsHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "salt",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "rewardTerms",
+              type: "tuple",
+              internalType: "struct ContentRegistry.SubmissionRewardTerms",
+              components: [
+                {
+                  name: "asset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "amount",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredVoters",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "requiredSettledRounds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyStartBy",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "feedbackWindowSeconds",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "bountyEligibility",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "roundConfig",
+              type: "tuple",
+              internalType: "struct RoundLib.RoundConfig",
+              components: [
+                {
+                  name: "epochDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "maxDuration",
+                  type: "uint32",
+                  internalType: "uint32",
+                },
+                {
+                  name: "minVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "maxVoters",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+              ],
+            },
+            {
+              name: "spec",
+              type: "tuple",
+              internalType: "struct ContentRegistry.QuestionSpecCommitment",
+              components: [
+                {
+                  name: "questionMetadataHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "resultSpecHash",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+            {
+              name: "confidentiality",
+              type: "tuple",
+              internalType:
+                "struct IConfidentialityEscrow.ConfidentialityConfig",
+              components: [
+                {
+                  name: "gated",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "bondAsset",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "bondAmount",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "flags",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+              ],
+            },
+            {
+              name: "paymentAuthorization",
+              type: "tuple",
+              internalType: "struct Eip3009Authorization",
+              components: [
+                {
+                  name: "from",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "to",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "value",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "validAfter",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "validBefore",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "nonce",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "v",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "r",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+                {
+                  name: "s",
+                  type: "bytes32",
+                  internalType: "bytes32",
+                },
+              ],
+            },
+          ],
+          outputs: [
+            {
+              name: "contentId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
           stateMutability: "nonpayable",
         },
         {
@@ -52553,30 +53591,6 @@ const deployedContracts: GenericContractsDeclaration = {
         },
         {
           type: "function",
-          name: "legacyContributorLeaf",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "allocation",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [
-            {
-              name: "",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          stateMutability: "pure",
-        },
-        {
-          type: "function",
           name: "legacyContributorRoot",
           inputs: [],
           outputs: [
@@ -53276,19 +54290,6 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "function",
           name: "remainingEarnedRaterPool",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "remainingLegacyContributorPool",
           inputs: [],
           outputs: [
             {
@@ -58041,6 +59042,11 @@ const deployedContracts: GenericContractsDeclaration = {
         {
           type: "error",
           name: "AlreadyRevealed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ConfidentialityGated",
           inputs: [],
         },
         {

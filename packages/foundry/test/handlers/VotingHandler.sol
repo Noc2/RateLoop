@@ -296,9 +296,6 @@ contract VotingHandler is VotingTestBase {
             return;
         }
 
-        // Check if already refunded on-chain
-        if (engine.cancelledRoundRefundClaimed(contentId, roundId, voter)) return;
-
         uint256 balBefore = lrepToken.balanceOf(voter);
 
         vm.prank(voter);

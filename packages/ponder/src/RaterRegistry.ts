@@ -5,7 +5,6 @@ import {
   raterHumanPresence,
   raterIdentityBan,
   raterProfile,
-  raterRegistryConfig,
   raterWorldCredential,
 } from "ponder:schema";
 
@@ -117,28 +116,6 @@ ponder.on("RaterRegistry:ProfileUnfollowed", async ({ event, context }) => {
       updatedAt: event.block.timestamp,
     });
 });
-
-ponder.on(
-  "RaterRegistry:ConfidentialityEscrowUpdated" as never,
-  async ({ event, context }: any) => {
-    const { newEscrow } = event.args as {
-      previousEscrow: `0x${string}`;
-      newEscrow: `0x${string}`;
-    };
-
-    await context.db
-      .insert(raterRegistryConfig)
-      .values({
-        id: "current",
-        confidentialityEscrow: newEscrow,
-        updatedAt: event.block.timestamp,
-      })
-      .onConflictDoUpdate({
-        confidentialityEscrow: newEscrow,
-        updatedAt: event.block.timestamp,
-      });
-  },
-);
 
 ponder.on(
   "RaterRegistry:IdentityBanned" as never,

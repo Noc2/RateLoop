@@ -17,9 +17,9 @@ interface ClaimLookupBaseParams {
   commitKey?: string | null;
 }
 
-interface ClaimStateLookup {
+export interface ClaimStateLookup {
   contract: "distributor" | "engine";
-  functionName: "rewardCommitClaimed" | "rewardClaimed" | "cancelledRoundRefundClaimed";
+  functionName: "rewardCommitClaimed" | "rewardClaimed";
   args: readonly [bigint, bigint, ClaimHex];
 }
 
@@ -107,7 +107,9 @@ function claimAccount(params: Pick<ClaimLookupBaseParams, "connectedAddress" | "
   return normalizeClaimAddress(params.voter) ?? params.connectedAddress;
 }
 
-export function buildRoundClaimStateLookup(params: ClaimLookupBaseParams & { settled: boolean }): ClaimStateLookup {
+export function buildRoundClaimStateLookup(
+  params: ClaimLookupBaseParams & { settled: boolean },
+): ClaimStateLookup | null {
   if (params.settled) {
     const commitKey = normalizeCommitKey(params.commitKey);
     if (commitKey) {
@@ -124,11 +126,7 @@ export function buildRoundClaimStateLookup(params: ClaimLookupBaseParams & { set
     };
   }
 
-  return {
-    contract: "engine",
-    functionName: "cancelledRoundRefundClaimed",
-    args: [params.contentId, params.roundId, claimAccount(params)],
-  };
+  return null;
 }
 
 export function calculateLastClaimAwarePoolShare({

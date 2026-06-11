@@ -180,6 +180,222 @@ export const X402QuestionSubmitterAbi = [
         ]
       },
       {
+        "name": "confidentiality",
+        "type": "tuple",
+        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
+        "components": [
+          {
+            "name": "gated",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "bondAsset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "bondAmount",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "flags",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      },
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "payee",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validAfter",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validBefore",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "computeX402QuestionPaymentNonce",
+    "inputs": [
+      {
+        "name": "metadata",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionMetadata",
+        "components": [
+          {
+            "name": "url",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "title",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "tags",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "categoryId",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "imageUrls",
+        "type": "string[]",
+        "internalType": "string[]"
+      },
+      {
+        "name": "videoUrl",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "details",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionDetails",
+        "components": [
+          {
+            "name": "detailsUrl",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "detailsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "rewardTerms",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionRewardTerms",
+        "components": [
+          {
+            "name": "asset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "requiredVoters",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "requiredSettledRounds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bountyStartBy",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bountyWindowSeconds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "feedbackWindowSeconds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bountyEligibility",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      },
+      {
+        "name": "roundConfig",
+        "type": "tuple",
+        "internalType": "struct RoundLib.RoundConfig",
+        "components": [
+          {
+            "name": "epochDuration",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxDuration",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "minVoters",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxVoters",
+            "type": "uint16",
+            "internalType": "uint16"
+          }
+        ]
+      },
+      {
+        "name": "spec",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.QuestionSpecCommitment",
+        "components": [
+          {
+            "name": "questionMetadataHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "resultSpecHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
         "name": "payer",
         "type": "address",
         "internalType": "address"
@@ -294,6 +510,242 @@ export const X402QuestionSubmitterAbi = [
       }
     ],
     "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "submitQuestionWithX402Payment",
+    "inputs": [
+      {
+        "name": "contextUrl",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "imageUrls",
+        "type": "string[]",
+        "internalType": "string[]"
+      },
+      {
+        "name": "videoUrl",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "title",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "tags",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "categoryId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "details",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionDetails",
+        "components": [
+          {
+            "name": "detailsUrl",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "detailsHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "rewardTerms",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.SubmissionRewardTerms",
+        "components": [
+          {
+            "name": "asset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "requiredVoters",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "requiredSettledRounds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bountyStartBy",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bountyWindowSeconds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "feedbackWindowSeconds",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "bountyEligibility",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      },
+      {
+        "name": "roundConfig",
+        "type": "tuple",
+        "internalType": "struct RoundLib.RoundConfig",
+        "components": [
+          {
+            "name": "epochDuration",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxDuration",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "minVoters",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxVoters",
+            "type": "uint16",
+            "internalType": "uint16"
+          }
+        ]
+      },
+      {
+        "name": "spec",
+        "type": "tuple",
+        "internalType": "struct ContentRegistry.QuestionSpecCommitment",
+        "components": [
+          {
+            "name": "questionMetadataHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "resultSpecHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "confidentiality",
+        "type": "tuple",
+        "internalType": "struct IConfidentialityEscrow.ConfidentialityConfig",
+        "components": [
+          {
+            "name": "gated",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "bondAsset",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "bondAmount",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "flags",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      },
+      {
+        "name": "paymentAuthorization",
+        "type": "tuple",
+        "internalType": "struct Eip3009Authorization",
+        "components": [
+          {
+            "name": "from",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "to",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "value",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "validAfter",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "validBefore",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "v",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "r",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "s",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "contentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {

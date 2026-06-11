@@ -89,7 +89,6 @@ contract RoundVotingEngine is
     error NothingProcessed();
 
     // --- Access Control Roles ---
-    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     // --- Constants ---
@@ -170,7 +169,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => uint256))) internal commitRbtsForfeitedStake;
 
     // Cancelled/tied round refund claims: contentId => roundId => voter => claimed
-    mapping(uint256 => mapping(uint256 => mapping(address => bool))) public cancelledRoundRefundClaimed;
+    mapping(uint256 => mapping(uint256 => mapping(address => bool))) internal cancelledRoundRefundClaimed;
     mapping(uint256 => mapping(uint256 => mapping(bytes32 => bool))) internal cancelledRoundRefundCommitClaimed;
 
     // Fast zero/non-zero indicator for content vote history. Public so the IRoundVotingEngine
@@ -200,7 +199,7 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) internal roundFrontendPool;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundEligibleFrontendCount;
     mapping(uint256 => mapping(uint256 => address)) public roundRaterRegistrySnapshot;
-    mapping(uint256 => mapping(uint256 => address)) public roundConfidentialityEscrowSnapshot;
+    mapping(uint256 => mapping(uint256 => address)) internal roundConfidentialityEscrowSnapshot;
     mapping(uint256 => mapping(uint256 => address)) internal roundAdvisoryVoteRecorderSnapshot;
 
     // --- Events ---
@@ -304,7 +303,7 @@ contract RoundVotingEngine is
         if (_registry == address(0)) revert InvalidAddress();
         if (_protocolConfig == address(0)) revert InvalidAddress();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, _governance);
+        _grantRole(bytes32(0), _governance);
         _grantRole(PAUSER_ROLE, _governance);
 
         lrepToken = IERC20(_lrepToken);
@@ -517,10 +516,8 @@ contract RoundVotingEngine is
         if (round.thresholdReachedAt != 0) revert ThresholdReached();
 
         IRaterIdentityRegistry roundRaterRegistry = _getRoundRaterRegistry(contentId, roundId);
-        IRaterIdentityRegistry.ResolvedRater memory resolved =
-            VotePreflightLib.validateVoterAndContent(roundRaterRegistry, registry, voter, contentId);
-        VotePreflightLib.validateConfidentialityGate(
-            roundRaterRegistry, roundConfidentialityEscrowSnapshot[contentId][roundId], contentId, resolved
+        IRaterIdentityRegistry.ResolvedRater memory resolved = VotePreflightLib.validateVoterContentAndConfidentiality(
+            roundRaterRegistry, registry, voter, contentId, roundConfidentialityEscrowSnapshot[contentId][roundId]
         );
         (uint8 credentialMask, uint8 freshCredentialMask) =
             _credentialStatusBits(roundRaterRegistry, resolved.holder, resolved.hasActiveHumanCredential);
@@ -870,7 +867,7 @@ contract RoundVotingEngine is
     /// @param roundId Round id that failed to notify.
     function replayBundleObserverNotify(uint256 contentId, uint256 roundId)
         external
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyRole(bytes32(0))
         returns (bool settled)
     {
         // Derive `settled` from the engine's authoritative round state rather than accepting

@@ -113,7 +113,6 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(categoryRegistry));
         registry.setQuestionRewardPoolEscrow(address(new MockQuestionRewardPoolEscrow()));
-        registry.setConfidentialityEscrow(address(confidentialityEscrow));
         confidentialityEscrow.grantRole(confidentialityEscrow.CONFIG_ROLE(), address(registry));
 
         protocolConfig.setRewardDistributor(address(rewardDistributor));
@@ -306,12 +305,6 @@ contract ConfidentialityEscrowTest is VotingTestBase {
         pure
         returns (bytes32)
     {
-        if (
-            !confidentiality.gated && confidentiality.bondAsset == 0 && confidentiality.bondAmount == 0
-                && confidentiality.flags == 0
-        ) {
-            return bytes32(0);
-        }
         return keccak256(
             abi.encode(
                 confidentiality.gated, confidentiality.bondAsset, confidentiality.bondAmount, confidentiality.flags

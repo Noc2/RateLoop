@@ -84,46 +84,12 @@ afterEach(() => {
 });
 
 describe("RaterRegistry ponder handlers", () => {
-  it("indexes confidentiality escrow pointer updates", async () => {
-    const { db, upserts } = createDb();
-    const registeredHandlers = await loadHandlers();
-    const handler = registeredHandlers.get(
-      "RaterRegistry:ConfidentialityEscrowUpdated",
-    );
-
-    expect(handler).toBeDefined();
-
-    await handler!({
-      event: {
-        args: {
-          previousEscrow: "0x0000000000000000000000000000000000000000",
-          newEscrow: "0x000000000000000000000000000000000000c0de",
-        },
-        block: { timestamp: 90n },
-      },
-      context: { db },
-    });
-
-    expect(upserts).toEqual([
-      {
-        table: "raterRegistryConfig",
-        values: {
-          id: "current",
-          confidentialityEscrow: "0x000000000000000000000000000000000000c0de",
-          updatedAt: 90n,
-        },
-        update: {
-          confidentialityEscrow: "0x000000000000000000000000000000000000c0de",
-          updatedAt: 90n,
-        },
-      },
-    ]);
-  });
-
   it("indexes identity bans and unbans", async () => {
     const { db, upserts } = createDb();
     const registeredHandlers = await loadHandlers();
-    const bannedHandler = registeredHandlers.get("RaterRegistry:IdentityBanned");
+    const bannedHandler = registeredHandlers.get(
+      "RaterRegistry:IdentityBanned",
+    );
     const unbannedHandler = registeredHandlers.get(
       "RaterRegistry:IdentityUnbanned",
     );

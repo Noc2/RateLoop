@@ -951,30 +951,6 @@ export const LaunchDistributionPoolAbi = [
   },
   {
     "type": "function",
-    "name": "legacyContributorLeaf",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "allocation",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
     "name": "legacyContributorRoot",
     "inputs": [],
     "outputs": [
@@ -1674,19 +1650,6 @@ export const LaunchDistributionPoolAbi = [
   {
     "type": "function",
     "name": "remainingEarnedRaterPool",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "remainingLegacyContributorPool",
     "inputs": [],
     "outputs": [
       {

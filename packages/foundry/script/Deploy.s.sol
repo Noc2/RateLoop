@@ -327,7 +327,6 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         registry.pause();
         registry.setVotingEngine(address(votingEngine));
         registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
-        registry.setConfidentialityEscrow(address(confidentialityEscrow));
         registry.unpause();
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(categoryRegistry));

@@ -45,6 +45,18 @@ library VotePreflightLib {
         _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
     }
 
+    function validateVoterContentAndConfidentiality(
+        IRaterIdentityRegistry identityRegistry,
+        ContentRegistry registry,
+        address voter,
+        uint256 contentId,
+        address confidentialityEscrow
+    ) external view returns (IRaterIdentityRegistry.ResolvedRater memory resolved) {
+        resolved = resolveRater(identityRegistry, voter);
+        _validateContentAndNotSubmitter(registry, voter, contentId, resolved);
+        _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
+    }
+
     function validateRoundOpener(
         IRaterIdentityRegistry identityRegistry,
         ContentRegistry registry,
@@ -61,6 +73,15 @@ library VotePreflightLib {
         uint256 contentId,
         IRaterIdentityRegistry.ResolvedRater memory resolved
     ) external view {
+        _validateConfidentialityGate(identityRegistry, confidentialityEscrow, contentId, resolved);
+    }
+
+    function _validateConfidentialityGate(
+        IRaterIdentityRegistry identityRegistry,
+        address confidentialityEscrow,
+        uint256 contentId,
+        IRaterIdentityRegistry.ResolvedRater memory resolved
+    ) private view {
         if (confidentialityEscrow == address(0)) return;
         IConfidentialityEscrow escrow = IConfidentialityEscrow(confidentialityEscrow);
         IConfidentialityEscrow.ConfidentialityConfig memory config = escrow.confidentialityConfig(contentId);

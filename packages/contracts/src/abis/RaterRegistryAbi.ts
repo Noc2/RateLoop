@@ -96,6 +96,19 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "GOVERNANCE_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "LAUNCH_CONSUMER_ROLE",
     "inputs": [],
     "outputs": [
@@ -333,6 +346,39 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "banIdentity",
+    "inputs": [
+      {
+        "name": "provider",
+        "type": "uint8",
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "evidenceHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "clearRevokedHumanNullifier",
     "inputs": [
       {
@@ -348,6 +394,19 @@ export const RaterRegistryAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "confidentialityEscrow",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -372,44 +431,6 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "pure"
-  },
-  {
-    "type": "function",
-    "name": "credentialKindBit",
-    "inputs": [
-      {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
-    "name": "credentialScope",
-    "inputs": [
-      {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -485,44 +506,6 @@ export const RaterRegistryAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "followerCount",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "followingCount",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -908,49 +891,6 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "hashToField",
-    "inputs": [
-      {
-        "name": "value",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
-    "name": "humanNullifierOwnerByProvider",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "uint8",
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
-      },
-      {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "initialize",
     "inputs": [
       {
@@ -1009,17 +949,12 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "isFollowing",
+    "name": "isIdentityKeyBanned",
     "inputs": [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
+        "name": "identityKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [
@@ -1228,30 +1163,6 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "revokedHumanNullifierByProvider",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "uint8",
-        "internalType": "enum RaterRegistry.HumanCredentialProvider"
-      },
-      {
-        "name": "nullifierHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "rotateCanonicalIdentityKey",
     "inputs": [
       {
@@ -1286,6 +1197,19 @@ export const RaterRegistryAbi = [
         "name": "evidenceHash",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setConfidentialityEscrow",
+    "inputs": [
+      {
+        "name": "newEscrow",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -1528,6 +1452,24 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "unbanIdentity",
+    "inputs": [
+      {
+        "name": "provider",
+        "type": "uint8",
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "unfollowProfile",
     "inputs": [
       {
@@ -1538,30 +1480,6 @@ export const RaterRegistryAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "worldCredentialSignalHash",
-    "inputs": [
-      {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -1619,25 +1537,6 @@ export const RaterRegistryAbi = [
   },
   {
     "type": "function",
-    "name": "worldIdSignalHash",
-    "inputs": [
-      {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
     "name": "worldIdV4Action",
     "inputs": [],
     "outputs": [
@@ -1658,19 +1557,6 @@ export const RaterRegistryAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "worldIdV4CredentialScope",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -1778,30 +1664,6 @@ export const RaterRegistryAbi = [
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "worldPresenceSignalHash",
-    "inputs": [
-      {
-        "name": "rater",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -2101,6 +1963,68 @@ export const RaterRegistryAbi = [
         "name": "evidenceHash",
         "type": "bytes32",
         "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "IdentityBanned",
+    "inputs": [
+      {
+        "name": "provider",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      },
+      {
+        "name": "permanent",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      },
+      {
+        "name": "evidenceHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "IdentityUnbanned",
+    "inputs": [
+      {
+        "name": "provider",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum RaterRegistry.HumanCredentialProvider"
+      },
+      {
+        "name": "nullifierHash",
+        "type": "bytes32",
+        "indexed": true,
         "internalType": "bytes32"
       }
     ],
@@ -2640,6 +2564,11 @@ export const RaterRegistryAbi = [
   {
     "type": "error",
     "name": "InvalidAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidBan",
     "inputs": []
   },
   {

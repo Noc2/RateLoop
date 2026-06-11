@@ -62,7 +62,7 @@ abstract contract ContentSubmissionTestBase {
     bytes32 internal constant DEFAULT_QUESTION_METADATA_HASH = keccak256("rateloop.generic.question.metadata.v1");
     bytes32 internal constant DEFAULT_RESULT_SPEC_HASH = keccak256("rateloop.generic.result.spec.v1");
     bytes32 internal constant QUESTION_CONTEXT_DOMAIN = keccak256("rateloop-question-context-v5");
-    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v7");
+    bytes32 internal constant QUESTION_REVEAL_DOMAIN = keccak256("rateloop-question-reveal-v8");
     bytes32 internal constant QUESTION_BUNDLE_ITEM_DOMAIN = keccak256("rateloop-question-bundle-item-v5");
     bytes32 internal constant QUESTION_BUNDLE_DOMAIN = keccak256("rateloop-question-bundle-v5");
     bytes32 internal constant QUESTION_BUNDLE_REVEAL_DOMAIN = keccak256("rateloop-question-bundle-reveal-v6");
@@ -418,25 +418,6 @@ abstract contract ContentSubmissionTestBase {
             abi.encode(roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters)
         );
         bytes32 titleTagsHash = keccak256(abi.encode(title, tags));
-        if (confidentialityHash != bytes32(0)) {
-            return keccak256(
-                abi.encode(
-                    QUESTION_REVEAL_DOMAIN,
-                    submissionKey,
-                    mediaHash,
-                    titleTagsHash,
-                    keccak256(abi.encode(details.detailsUrl, details.detailsHash)),
-                    categoryId,
-                    salt,
-                    submitter,
-                    rewardHash,
-                    roundHash,
-                    spec.questionMetadataHash,
-                    spec.resultSpecHash,
-                    confidentialityHash
-                )
-            );
-        }
         return keccak256(
             abi.encode(
                 QUESTION_REVEAL_DOMAIN,
@@ -450,7 +431,8 @@ abstract contract ContentSubmissionTestBase {
                 rewardHash,
                 roundHash,
                 spec.questionMetadataHash,
-                spec.resultSpecHash
+                spec.resultSpecHash,
+                confidentialityHash
             )
         );
     }

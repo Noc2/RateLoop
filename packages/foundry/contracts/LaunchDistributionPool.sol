@@ -917,14 +917,6 @@ contract LaunchDistributionPool is
         return _remainingVerifiedReferralPool();
     }
 
-    function remainingLegacyContributorPool() external view returns (uint256) {
-        return _remainingLegacyContributorPool();
-    }
-
-    function legacyContributorLeaf(address account, uint256 allocation) external pure returns (bytes32) {
-        return _legacyContributorLeaf(account, allocation);
-    }
-
     function vestedLegacyContributorAllocation(address account, uint256 allocation, bytes32[] calldata proof)
         external
         view
