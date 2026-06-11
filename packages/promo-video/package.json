@@ -8,6 +8,7 @@
     "render": "remotion render src/index.ts RateLoopPromo out/rateloop-promo.mp4",
     "poster": "remotion still src/index.ts RateLoopPromo out/rateloop-promo-poster.png --frame=800",
     "generate:music": "node scripts/generate-music.mjs",
+    "generate:openai-voiceover": "node scripts/generate-openai-voiceover.mjs",
     "generate:voiceover": "zsh scripts/generate-voiceover.zsh",
     "check-types": "tsc --noEmit"
   },
