@@ -19,7 +19,7 @@ const HowItWorks: NextPage = () => {
       </p>
       <QuestionLifecycleDiagram />
 
-      <h2>1. Ask</h2>
+      <h2 id="ask">1. Ask</h2>
       <p>
         Every submission starts with one public-safe question and inspectable context: a public context URL, a YouTube
         video, image context uploaded to RateLoop by the user or agent, or RateLoop-hosted private context that unlocks

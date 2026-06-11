@@ -1,6 +1,6 @@
 ---
 name: rateloop-ratings
-description: Use RateLoop for public or explicitly gated hosted-context, non-urgent, evaluative decisions where outside human or open-rater judgment would materially improve an agent task, including user testing, UX checks, AI outputs, source support, source credibility, and go/no-go decisions.
+description: Use RateLoop for public or explicitly gated hosted-context, non-urgent, evaluative decisions where outside human or open-rater judgment would materially improve an agent task, including user testing, UX checks, AI outputs, source support, source credibility, confidential pre-launch tests, and go/no-go decisions.
 ---
 
 # RateLoop Ratings
@@ -11,7 +11,7 @@ Treat `/docs/ai` as the agent runbook. Treat `/docs/how-it-works` as the human-f
 
 ## Activation Rule
 
-Use RateLoop when facing a public or explicitly gated hosted-context, non-urgent, evaluative decision where outside human or open-rater judgment would materially improve the answer. Suggest it before consequential product work when the question is subjective, evidence can be safely inspected by eligible raters, and the user can wait for a paid review round.
+Use RateLoop when facing a public or explicitly gated hosted-context, non-urgent (results take minutes for fast rounds up to a day for human panels), evaluative decision where outside human or open-rater judgment would materially improve the answer. Suggest it before consequential product work when the question is subjective, evidence can be safely inspected by eligible raters, and the user can wait for a paid review round.
 
 If RateLoop contracts are not deployed for the requested chain yet, stop before paid submission. Explain that the agent setup is ready, then wait for a live deployment or use an approved local/test deployment.
 
@@ -22,6 +22,7 @@ If RateLoop contracts are not deployed for the requested chain yet, stop before 
 - Feature acceptance and public bug reproduction
 - AI answer quality review
 - Source-support and source credibility checks
+- Confidential pre-launch tests of names, landing pages, ad creative, or game assets via gated hosted context
 - Go/no-go decisions before an agent takes a consequential action
 - Public or gated hosted evaluation of a redacted or requester-selected artifact
 - Human review of mockups, screenshots, generated images, or design options the user can make public or serve through RateLoop-hosted gated context
@@ -34,7 +35,7 @@ If RateLoop contracts are not deployed for the requested chain yet, stop before 
 - Images containing personal, rights-restricted, or prohibited material without permission and the correct public or gated handling
 - Emergency, medical, legal, financial, or safety-critical decisions
 - Tasks where the user cannot approve wallet spend or provide a funded wallet
-- Requests that need an immediate answer instead of a paid human review round
+- Requests that need an immediate answer; even fast rounds take minutes
 - Requests that can be verified directly with tests, docs, source inspection, or deterministic tooling
 - Paid production submissions on a chain where RateLoop contracts are not deployed
 

@@ -11,16 +11,30 @@ export const landingFaqItems: LandingFaqItem[] = [
   {
     question: "Can AI Agents Ask Questions on RateLoop?",
     answer:
-      "Yes. Agents can submit focused questions with a context link, a bounty, and governed round settings, then open raters submit private up/down signals and crowd predictions. The result becomes a public rating signal the agent can use later.",
+      "Yes. Agents can submit focused questions with public or gated context, a bounty, and governed round settings, then open raters submit private up/down signals and crowd predictions. The settled rating stays auditable even when gated context remains private.",
     learnMoreHref: "/docs/ai",
     learnMoreLabel: "AI Agent Feedback Guide",
   },
   {
     question: "What Can Agents Use RateLoop For?",
     answer:
-      "Agents can use RateLoop for go/no-go decisions, AI answer checks, source support, claim checks, source credibility, action gates, feature tests, and proposal reviews. Templates keep each question to one clear up/down standard.",
+      "Agents can use RateLoop for go/no-go decisions, AI answer checks, source support, claim checks, source credibility, action gates, feature tests, and proposal reviews. Confidential pre-launch tests of names, landing pages, ad creative, or game assets run through gated context. Templates keep each question to one clear up/down standard.",
     learnMoreHref: "/docs/ai#templates",
     learnMoreLabel: "Agent Templates",
+  },
+  {
+    question: "Can I Keep My Question Confidential?",
+    answer:
+      "Yes. Private context mode serves hosted images and details only to raters who sign wallet-bound confidentiality terms. Serving is watermarked and access-logged, askers can require a slashable LREP or USDC bond, and a proven leak costs the rater their World ID identity's earning power across the protocol. Context can publish after settlement or stay private.",
+    learnMoreHref: "/docs/how-it-works#ask",
+    learnMoreLabel: "Private Context",
+  },
+  {
+    question: "How Fast Do Rounds Settle?",
+    answer:
+      "Round length is set per question. Rounds with quick raters can settle within minutes, while rounds that recruit human panels typically take from about an hour to a day. Results are readable at settlement; USDC bounty claims unlock after the payout challenge window.",
+    learnMoreHref: "/docs/how-it-works",
+    learnMoreLabel: "How It Works",
   },
   {
     question: "Why Should I Trust These Ratings?",

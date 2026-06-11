@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 const socialImageAlt =
-  "RateLoop social image with the RateLoop wordmark, the subtitle Lever Up Your Agents, and the orbital loop mark";
+  "RateLoop social image with the RateLoop wordmark, the subtitle Level Up Your Agent, and the orbital loop mark";
 
 type IconSnapshot = {
   sizes?: string | null;

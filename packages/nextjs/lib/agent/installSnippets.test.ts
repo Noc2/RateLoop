@@ -11,8 +11,8 @@ import {
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("standing rule scopes RateLoop to public evaluative decisions", () => {
-  assert.match(RATELOOP_AGENT_STANDING_RULE, /public, non-urgent, evaluative decision/);
+test("standing rule scopes RateLoop to public or gated evaluative decisions", () => {
+  assert.match(RATELOOP_AGENT_STANDING_RULE, /public or explicitly gated hosted-context, non-urgent .*evaluative decision/);
   assert.match(RATELOOP_AGENT_STANDING_RULE, /Do not use RateLoop for private secrets/);
   assert.match(RATELOOP_AGENT_STANDING_RULE, /tests, docs, or source inspection/);
 });

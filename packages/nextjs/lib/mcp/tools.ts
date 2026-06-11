@@ -341,7 +341,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: false,
     },
     description:
-      "Create a browser handoff link for normal human-wallet asks. Use this for public URL, YouTube, or generated/local image context; share the returned handoffUrl with the user. Do not ask users to paste raw wallet signatures.",
+      "Create a browser handoff link for normal human-wallet asks. Use this for public URL, YouTube, generated/local image, or gated RateLoop-hosted private context; share the returned handoffUrl with the user. Do not ask users to paste raw wallet signatures.",
     inputSchema: agentCreateAskHandoffInputSchema,
     name: "rateloop_create_ask_handoff_link",
     outputSchema: agentAskHandoffOutputSchema,
@@ -422,7 +422,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       readOnlyHint: true,
     },
     description:
-      "Preflight and price a paid question before reserving spend. Returns Terms and Privacy Notice links for low-friction operator review.",
+      "Preflight and price a paid question before reserving spend. Supports gated RateLoop-hosted private context via question.confidentiality. Returns Terms and Privacy Notice links for low-friction operator review.",
     inputSchema: agentQuoteInputSchema,
     name: "rateloop_quote_question",
     outputSchema: agentQuoteOutputSchema,

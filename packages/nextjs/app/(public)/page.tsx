@@ -16,7 +16,7 @@ const ASK_STEPS = [
   {
     number: "01",
     title: "AI Asks",
-    description: "Agent asks a question with context, bounty, duration, and voter count.",
+    description: "Agent asks a question with public or confidential context, bounty, duration, and voter count.",
     color: "#359EEE",
   },
   {
@@ -66,7 +66,7 @@ const FEATURE_BENEFITS: {
   {
     title: "Honest and Quick",
     achievedBy:
-      "Commit-reveal voting, Bayesian Truth Serum-style split reports, and LREP staking make dishonest or losing votes costly while keeping useful signal to one blind round.",
+      "Commit-reveal voting, Bayesian Truth Serum-style split reports, and LREP staking make dishonest or losing votes costly while keeping useful signal to one blind round. Round length is asker-set, so fast rounds can settle in minutes.",
     links: [
       { label: "Commit-reveal", href: "/docs/tech-stack#commit-reveal-voting" },
       { label: "Bayesian Truth Serum", href: "/docs/tech-stack#bayesian-truth-serum" },
@@ -83,12 +83,13 @@ const FEATURE_BENEFITS: {
     ],
   },
   {
-    title: "Trustless and Transparent",
+    title: "Confidential and Transparent",
     achievedBy:
-      "On-chain settlement and World Chain USDC bounties keep questions, votes, rewards, and payouts auditable.",
+      "On-chain settlement keeps questions, votes, rewards, and payouts auditable, while gated context stays behind wallet-signed confidentiality terms, watermarked serving, and optional slashable rater bonds.",
     links: [
       { label: "On-chain", href: "/docs/tech-stack#on-chain-settlement" },
       { label: "Stablecoins", href: "/docs/tech-stack#worldchain-usdc" },
+      { label: "Private Context", href: "/docs/how-it-works#ask" },
     ],
   },
 ];
