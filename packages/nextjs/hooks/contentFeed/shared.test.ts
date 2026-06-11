@@ -194,6 +194,32 @@ test("mapContentItem marks linked submitter addresses as own content", () => {
   assert.equal(item.isOwnContent, true);
 });
 
+test("mapContentItem preserves private-context metadata for feed gates", () => {
+  const item = mapContentItem({
+    categoryId: "1",
+    confidentiality: {
+      bondAmount: "0",
+      disclosurePolicy: "after_settlement",
+      publishedAt: null,
+      visibility: "gated",
+    },
+    contentHash: "hash-private",
+    contextAccess: "gated",
+    contextVisibility: "gated",
+    description: "",
+    id: "7",
+    rating: 50,
+    submitter: "0x00000000000000000000000000000000000000aa",
+    tags: "",
+    title: "Private context question",
+    url: "",
+  });
+
+  assert.equal(item.contextAccess, "gated");
+  assert.equal(item.contextVisibility, "gated");
+  assert.equal(item.confidentiality?.visibility, "gated");
+});
+
 test("mapContentItem keeps neutral protocol rating hidden until a round settles", () => {
   const item = mapContentItem({
     id: "5",

@@ -55,6 +55,16 @@ export interface ContentItem {
   id: bigint;
   url: string;
   media: ContentMediaItem[];
+  contextAccess?: "public" | "gated" | string;
+  contextVisibility?: "public" | "gated" | string;
+  confidentiality?: {
+    bondAmount?: string;
+    bondAsset?: "LREP" | "USDC" | string;
+    disclosurePolicy?: "after_settlement" | "private_forever" | string;
+    publishedAt?: string | null;
+    visibility?: "public" | "gated" | string;
+    [key: string]: unknown;
+  } | null;
   question?: string;
   title: string;
   description: string;
@@ -349,6 +359,9 @@ export function mapContentItem(
       canonicalUrl?: string | null;
       urlHost?: string | null;
     }> | null;
+    contextAccess?: "public" | "gated" | string;
+    contextVisibility?: "public" | "gated" | string;
+    confidentiality?: ContentItem["confidentiality"];
     question?: string | null;
     title: string;
     description: string;
@@ -580,6 +593,9 @@ export function mapContentItem(
     id: BigInt(item.id),
     url,
     media: media.length > 0 ? media : buildFallbackMediaItems(url),
+    contextAccess: item.contextAccess ?? "public",
+    contextVisibility: item.contextVisibility ?? item.contextAccess ?? "public",
+    confidentiality: item.confidentiality ?? null,
     question: item.question?.trim() || item.title,
     title: item.title,
     description: item.description,
