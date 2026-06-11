@@ -157,9 +157,9 @@ async function upsertContentAnchors(
   if (!firstAnchor) return;
 
   await context.db.update(content, { id: contentId }).set({
-    questionMetadataHash: firstAnchor.questionMetadataHash,
-    resultSpecHash: firstAnchor.resultSpecHash,
-  });
+      questionMetadataHash: firstAnchor.questionMetadataHash,
+      resultSpecHash: firstAnchor.resultSpecHash,
+    });
 
   for (const anchor of anchors) {
     if (anchor.mediaType !== 1 && anchor.mediaType !== 2) continue;
@@ -225,6 +225,8 @@ ponder.on("ContentRegistry:ContentSubmitted", async ({ event, context }) => {
       id: contentId,
       submitter,
       contentHash,
+      gated: false,
+      confidentialityBondAmount: 0n,
       url,
       canonicalUrl: canonicalUrl?.canonicalUrl ?? url.trim(),
       urlHost: canonicalUrl?.urlHost ?? "",

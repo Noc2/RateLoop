@@ -73,6 +73,14 @@ type AudienceFilter = {
   queryNames: readonly string[];
 };
 
+type ContentConfidentialityState = {
+  bondAmount: bigint;
+  bondAsset: "LREP" | "USDC";
+  disclosurePolicy: "after_settlement" | "private_forever";
+  publishedAt: bigint | null;
+  visibility: "public" | "gated";
+};
+
 const TARGET_AUDIENCE_RESPONSE_FIELDS = [
   "questionMetadata",
   "questionMetadataUri",
@@ -124,7 +132,16 @@ function createContentSearchVector() {
   return sql`(
     setweight(to_tsvector('simple', coalesce(${content.title}, '')), 'A') ||
     setweight(to_tsvector('simple', coalesce(${content.tags}, '')), 'B') ||
-    setweight(to_tsvector('simple', coalesce(${content.description}, '')), 'C')
+    setweight(
+      to_tsvector(
+        'simple',
+        case
+          when ${content.gated} = true and ${content.confidentialityPublishedAt} is null then ''
+          else coalesce(${content.description}, '')
+        end
+      ),
+      'C'
+    )
   )`;
 }
 
@@ -508,6 +525,86 @@ function formatContentTargetAudience<T extends Record<string, unknown>>(item: T,
   return redacted;
 }
 
+function parseBigIntish(value: unknown) {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+  if (typeof value === "string" && /^[0-9]+$/.test(value.trim())) return BigInt(value.trim());
+  return 0n;
+}
+
+function normalizeDisclosurePolicy(value: unknown): ContentConfidentialityState["disclosurePolicy"] {
+  return value === "private_forever" ? "private_forever" : "after_settlement";
+}
+
+function normalizeBondAsset(value: unknown): ContentConfidentialityState["bondAsset"] {
+  return typeof value === "string" && value.trim().toUpperCase() === "USDC" ? "USDC" : "LREP";
+}
+
+function readQuestionMetadataConfidentiality(value: unknown): ContentConfidentialityState | null {
+  if (!isJsonRecord(value) || !isJsonRecord(value.confidentiality)) return null;
+  const confidentiality = value.confidentiality;
+  if (confidentiality.visibility !== "gated") return null;
+  const bond = isJsonRecord(confidentiality.bond) ? confidentiality.bond : {};
+  return {
+    visibility: "gated",
+    disclosurePolicy: normalizeDisclosurePolicy(confidentiality.disclosurePolicy),
+    bondAsset: normalizeBondAsset(bond.asset),
+    bondAmount: parseBigIntish(bond.amount),
+    publishedAt: null,
+  };
+}
+
+function rowConfidentialityState(record: Record<string, unknown>): ContentConfidentialityState {
+  const metadataState = readQuestionMetadataConfidentiality(parseStoredJson(record.questionMetadata as string | null));
+  const rowGated = record.gated === true || metadataState?.visibility === "gated";
+  const publishedAt =
+    typeof record.confidentialityPublishedAt === "bigint"
+      ? record.confidentialityPublishedAt
+      : metadataState?.publishedAt ?? null;
+
+  if (!rowGated) {
+    return {
+      visibility: "public",
+      disclosurePolicy: "after_settlement",
+      bondAsset: "LREP",
+      bondAmount: 0n,
+      publishedAt: null,
+    };
+  }
+
+  return {
+    visibility: "gated",
+    disclosurePolicy: normalizeDisclosurePolicy(record.confidentialityDisclosurePolicy ?? metadataState?.disclosurePolicy),
+    bondAsset: normalizeBondAsset(record.confidentialityBondAsset ?? metadataState?.bondAsset),
+    bondAmount: parseBigIntish(record.confidentialityBondAmount ?? metadataState?.bondAmount),
+    publishedAt,
+  };
+}
+
+function formatConfidentialContent<T extends Record<string, unknown>>(item: T): T {
+  const formatted = { ...item };
+  const record = formatted as Record<string, unknown>;
+  const confidentiality = rowConfidentialityState(record);
+  const gatedUndisclosed = confidentiality.visibility === "gated" && confidentiality.publishedAt === null;
+
+  record.contextVisibility = confidentiality.visibility;
+  record.contextAccess = gatedUndisclosed ? "gated" : "public";
+  record.confidentiality = confidentiality;
+
+  if (gatedUndisclosed) {
+    record.description = "";
+    record.detailsUrl = null;
+    record.detailsHash = null;
+    record.media = [];
+  }
+
+  return formatted;
+}
+
+function formatContentResponse<T extends Record<string, unknown>>(item: T, includeTargetAudience = false): T {
+  return formatConfidentialContent(formatContentTargetAudience(item, includeTargetAudience));
+}
+
 function metadataSyncToken() {
   return process.env.PONDER_METADATA_SYNC_TOKEN?.trim() || null;
 }
@@ -555,6 +652,7 @@ async function updateQuestionMetadataRow(params: {
   questionMetadataHash: Hex;
   questionMetadataUri: string | null;
   resultSpecHash: Hex;
+  confidentiality: ContentConfidentialityState | null;
   targetAudience: TargetAudience | null;
 }) {
   const storage = targetAudienceStorageFields(params.targetAudience);
@@ -587,8 +685,12 @@ async function updateQuestionMetadataRow(params: {
         ${quoteIdentifier("targetAudienceHybridExpertise")} = $22,
         ${quoteIdentifier("targetAudienceHybridLanguages")} = $23,
         ${quoteIdentifier("targetAudienceHybridModelProviders")} = $24,
-        ${quoteIdentifier("targetAudienceHybridOversight")} = $25
-      where ${quoteIdentifier("id")} = $26
+        ${quoteIdentifier("targetAudienceHybridOversight")} = $25,
+        ${quoteIdentifier("gated")} = $26,
+        ${quoteIdentifier("confidentialityDisclosurePolicy")} = $27,
+        ${quoteIdentifier("confidentialityBondAsset")} = $28,
+        ${quoteIdentifier("confidentialityBondAmount")} = $29
+      where ${quoteIdentifier("id")} = $30
         and (${quoteIdentifier("questionMetadataHash")} is null or lower(${quoteIdentifier("questionMetadataHash")}) = $1)
         and (${quoteIdentifier("resultSpecHash")} is null or lower(${quoteIdentifier("resultSpecHash")}) = $2)
         and ($3::text is null or ${quoteIdentifier("questionMetadata")} is null or ${quoteIdentifier("questionMetadata")} = $3)
@@ -620,6 +722,10 @@ async function updateQuestionMetadataRow(params: {
       storage.targetAudienceHybridLanguages,
       storage.targetAudienceHybridModelProviders,
       storage.targetAudienceHybridOversight,
+      params.confidentiality?.visibility === "gated",
+      params.confidentiality?.disclosurePolicy ?? null,
+      params.confidentiality?.bondAsset ?? null,
+      params.confidentiality?.bondAmount.toString() ?? "0",
       params.contentId.toString(),
     ],
   );
@@ -660,11 +766,13 @@ function readQuestionMetadataItems(value: unknown) {
         : null;
     const questionMetadataInput = record.questionMetadata ?? null;
     let questionMetadata: string | null = null;
+    let confidentiality: ContentConfidentialityState | null = null;
     let targetAudienceInput = record.targetAudience;
     if (questionMetadataInput !== null) {
       if (!isJsonRecord(questionMetadataInput)) return [];
       if (canonicalJsonHash(questionMetadataInput).toLowerCase() !== questionMetadataHash) return [];
       questionMetadata = canonicalJson(questionMetadataInput);
+      confidentiality = readQuestionMetadataConfidentiality(questionMetadataInput);
       targetAudienceInput =
         questionMetadataInput.targetAudience === undefined ? targetAudienceInput : questionMetadataInput.targetAudience;
     }
@@ -675,6 +783,7 @@ function readQuestionMetadataItems(value: unknown) {
         questionMetadataHash,
         questionMetadataUri,
         resultSpecHash,
+        confidentiality,
         targetAudience: targetAudienceInput,
       },
     ];
@@ -1013,6 +1122,7 @@ export function registerContentRoutes(app: ApiApp) {
         questionMetadataHash: item.questionMetadataHash,
         questionMetadataUri: item.questionMetadataUri,
         resultSpecHash: item.resultSpecHash,
+        confidentiality: item.confidentiality,
         targetAudience,
       });
       if (rowCount > 0) {
@@ -1160,7 +1270,7 @@ export function registerContentRoutes(app: ApiApp) {
           )[0]?.count ?? 0)
         : null;
 
-    const responseItems = itemsWithBundles.map((item) => formatContentTargetAudience(item));
+    const responseItems = itemsWithBundles.map((item) => formatContentResponse(item));
     if (contentIds.length === 1 && responseItems.length === 1) {
       const sourceItem = itemsWithBundles[0];
       const responseItem = responseItems[0] as Record<string, unknown> | undefined;
@@ -1264,7 +1374,7 @@ export function registerContentRoutes(app: ApiApp) {
     const audienceContext = await getAudienceContextForContent(item.id);
 
     return jsonBig(c, {
-      content: formatContentTargetAudience(
+      content: formatContentResponse(
         contentWithBundle,
         includeTargetAudience === true,
       ),
@@ -1329,7 +1439,7 @@ export function registerContentRoutes(app: ApiApp) {
     const audienceContext = await getAudienceContextForContent(id);
 
     return jsonBig(c, {
-      content: formatContentTargetAudience(
+      content: formatContentResponse(
         contentWithBundle,
         includeTargetAudience === true,
       ),

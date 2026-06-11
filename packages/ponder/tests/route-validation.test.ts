@@ -92,6 +92,13 @@ function mockPonderModules<T>(result: T, additionalResults: unknown[] = []) {
       categoryId: "content.categoryId",
       createdAt: "content.createdAt",
       description: "content.description",
+      detailsHash: "content.detailsHash",
+      detailsUrl: "content.detailsUrl",
+      gated: "content.gated",
+      confidentialityBondAmount: "content.confidentialityBondAmount",
+      confidentialityBondAsset: "content.confidentialityBondAsset",
+      confidentialityDisclosurePolicy: "content.confidentialityDisclosurePolicy",
+      confidentialityPublishedAt: "content.confidentialityPublishedAt",
       conservativeRatingBps: "content.conservativeRatingBps",
       ratingBps: "content.ratingBps",
       ratingConfidenceMass: "content.ratingConfidenceMass",
@@ -680,6 +687,75 @@ describe("registerContentRoutes", () => {
     expect(body.items[0]).not.toHaveProperty("questionMetadataUri");
   });
 
+  it("redacts gated undisclosed context from default content responses", async () => {
+    const questionMetadata = {
+      schemaVersion: "rateloop.question.v3",
+      confidentiality: {
+        bond: { amount: "2500000", asset: "USDC" },
+        disclosurePolicy: "private_forever",
+        visibility: "gated",
+      },
+      title: "Public-safe prototype title",
+    };
+    mockPonderModules(
+      [
+        {
+          id: 42n,
+          description: "Sensitive unreleased landing-page copy.",
+          detailsHash: `0x${"4".repeat(64)}`,
+          detailsUrl: "https://www.rateloop.ai/api/attachments/details/det_abcdefghijklmnop",
+          gated: true,
+          confidentialityBondAmount: 2500000n,
+          confidentialityBondAsset: "USDC",
+          confidentialityDisclosurePolicy: "private_forever",
+          confidentialityPublishedAt: null,
+          questionMetadata: canonicalJson(questionMetadata),
+          title: "Public-safe prototype title",
+        },
+      ],
+      [
+        [
+          {
+            contentId: 42n,
+            mediaIndex: 0,
+            mediaType: "image",
+            url: "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp",
+            canonicalUrl: "https://www.rateloop.ai/api/attachments/images/att_abcdefghijklmnop.webp",
+            urlHost: "www.rateloop.ai",
+          },
+        ],
+        [{ count: 1 }],
+      ],
+    );
+    mockSharedModule();
+    const { registerContentRoutes } = await import(
+      "../src/api/routes/content-routes.js"
+    );
+
+    const app = new Hono();
+    registerContentRoutes(app);
+
+    const response = await app.request("http://localhost/content?limit=5");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items[0]).toMatchObject({
+      contextAccess: "gated",
+      contextVisibility: "gated",
+      description: "",
+      detailsHash: null,
+      detailsUrl: null,
+      media: [],
+      confidentiality: {
+        bondAmount: "2500000",
+        bondAsset: "USDC",
+        disclosurePolicy: "private_forever",
+        publishedAt: null,
+        visibility: "gated",
+      },
+    });
+  });
+
   it("returns empty results for short generic searches without querying the database", async () => {
     const { db } = mockPonderModules([]);
     mockSharedModule();
@@ -798,6 +874,10 @@ describe("registerContentRoutes", () => {
 
     const whereArg = queryBuilder.where.mock.calls[0]?.[0];
     expect(serializeExpression(whereArg)).toContain("websearch_to_tsquery");
+    expect(serializeExpression(whereArg)).toContain("content.gated");
+    expect(serializeExpression(whereArg)).toContain(
+      "content.confidentialityPublishedAt",
+    );
 
     const [firstOrderBy] = queryBuilder.orderBy.mock.calls[0] ?? [];
     expect(serializeExpression(firstOrderBy)).toContain("ts_rank_cd");

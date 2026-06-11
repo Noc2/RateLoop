@@ -14,6 +14,11 @@ export const content = onchainTable(
     questionMetadata: t.text(),
     questionMetadataUri: t.text(),
     resultSpecHash: t.hex(),
+    gated: t.boolean().notNull().default(false),
+    confidentialityDisclosurePolicy: t.text(),
+    confidentialityBondAsset: t.text(),
+    confidentialityBondAmount: t.bigint().notNull().default(0n),
+    confidentialityPublishedAt: t.bigint(),
     targetAudience: t.text(),
     targetAudienceAgeGroups: t.text(),
     targetAudienceCountries: t.text(),
@@ -88,7 +93,16 @@ export const content = onchainTable(
       sql`(
         setweight(to_tsvector('simple', coalesce(${table.title}, '')), 'A') ||
         setweight(to_tsvector('simple', coalesce(${table.tags}, '')), 'B') ||
-        setweight(to_tsvector('simple', coalesce(${table.description}, '')), 'C')
+        setweight(
+          to_tsvector(
+            'simple',
+            case
+              when ${table.gated} = true and ${table.confidentialityPublishedAt} is null then ''
+              else coalesce(${table.description}, '')
+            end
+          ),
+          'C'
+        )
       )`,
     ),
   }),
