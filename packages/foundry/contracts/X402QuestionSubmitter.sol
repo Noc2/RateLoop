@@ -8,6 +8,7 @@ import { ReentrancyGuardTransient } from "@openzeppelin/contracts/utils/Reentran
 
 import { ContentRegistry } from "./ContentRegistry.sol";
 import { Eip3009Authorization, IReceiveWithAuthorizationToken } from "./interfaces/IEip3009.sol";
+import { IConfidentialityEscrow } from "./interfaces/IConfidentialityEscrow.sol";
 import { RoundLib } from "./libraries/RoundLib.sol";
 
 contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
@@ -64,6 +65,70 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         ContentRegistry.QuestionSpecCommitment memory spec,
         Eip3009Authorization calldata paymentAuthorization
     ) external nonReentrant returns (uint256 contentId) {
+        return _submitQuestionWithX402Payment(
+            contextUrl,
+            imageUrls,
+            videoUrl,
+            title,
+            tags,
+            categoryId,
+            details,
+            salt,
+            rewardTerms,
+            roundConfig,
+            spec,
+            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
+            paymentAuthorization
+        );
+    }
+
+    function submitQuestionWithX402Payment(
+        string memory contextUrl,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        string memory title,
+        string memory tags,
+        uint256 categoryId,
+        ContentRegistry.SubmissionDetails memory details,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec,
+        IConfidentialityEscrow.ConfidentialityConfig memory confidentiality,
+        Eip3009Authorization calldata paymentAuthorization
+    ) public nonReentrant returns (uint256 contentId) {
+        return _submitQuestionWithX402Payment(
+            contextUrl,
+            imageUrls,
+            videoUrl,
+            title,
+            tags,
+            categoryId,
+            details,
+            salt,
+            rewardTerms,
+            roundConfig,
+            spec,
+            confidentiality,
+            paymentAuthorization
+        );
+    }
+
+    function _submitQuestionWithX402Payment(
+        string memory contextUrl,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        string memory title,
+        string memory tags,
+        uint256 categoryId,
+        ContentRegistry.SubmissionDetails memory details,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec,
+        IConfidentialityEscrow.ConfidentialityConfig memory confidentiality,
+        Eip3009Authorization calldata paymentAuthorization
+    ) internal returns (uint256 contentId) {
         require(rewardTerms.asset == REWARD_ASSET_USDC, "USDC required");
         require(paymentAuthorization.from != address(0), "Invalid payer");
         require(paymentAuthorization.to == address(this), "Bad payee");
@@ -81,6 +146,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
                     rewardTerms,
                     roundConfig,
                     spec,
+                    confidentiality,
                     paymentAuthorization.from,
                     paymentAuthorization.to,
                     paymentAuthorization.value,
@@ -122,7 +188,8 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
             rewardTerms,
             roundConfig,
             spec,
-            paymentAuthorization.from
+            paymentAuthorization.from,
+            confidentiality
         );
 
         emit X402QuestionSubmitted(
@@ -145,6 +212,40 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
         uint256 validAfter,
         uint256 validBefore
     ) public view returns (bytes32) {
+        return computeX402QuestionPaymentNonce(
+            metadata,
+            imageUrls,
+            videoUrl,
+            details,
+            salt,
+            rewardTerms,
+            roundConfig,
+            spec,
+            IConfidentialityEscrow.ConfidentialityConfig({ gated: false, bondAsset: 0, bondAmount: 0, flags: 0 }),
+            payer,
+            payee,
+            value,
+            validAfter,
+            validBefore
+        );
+    }
+
+    function computeX402QuestionPaymentNonce(
+        ContentRegistry.SubmissionMetadata memory metadata,
+        string[] memory imageUrls,
+        string memory videoUrl,
+        ContentRegistry.SubmissionDetails memory details,
+        bytes32 salt,
+        ContentRegistry.SubmissionRewardTerms memory rewardTerms,
+        RoundLib.RoundConfig memory roundConfig,
+        ContentRegistry.QuestionSpecCommitment memory spec,
+        IConfidentialityEscrow.ConfidentialityConfig memory confidentiality,
+        address payer,
+        address payee,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore
+    ) public view returns (bytes32) {
         return keccak256(
             abi.encode(
                 X402_QUESTION_PAYMENT_DOMAIN,
@@ -160,6 +261,7 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
                 _hashSubmissionPayload(metadata, imageUrls, videoUrl, details, salt),
                 _hashRewardTerms(rewardTerms),
                 _hashRoundConfig(roundConfig),
+                _hashConfidentiality(confidentiality),
                 spec.questionMetadataHash,
                 spec.resultSpecHash
             )
@@ -206,6 +308,18 @@ contract X402QuestionSubmitter is Ownable, ReentrancyGuardTransient {
     function _hashRoundConfig(RoundLib.RoundConfig memory roundConfig) private pure returns (bytes32) {
         return keccak256(
             abi.encode(roundConfig.epochDuration, roundConfig.maxDuration, roundConfig.minVoters, roundConfig.maxVoters)
+        );
+    }
+
+    function _hashConfidentiality(IConfidentialityEscrow.ConfidentialityConfig memory confidentiality)
+        private
+        pure
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encode(
+                confidentiality.gated, confidentiality.bondAsset, confidentiality.bondAmount, confidentiality.flags
+            )
         );
     }
 
