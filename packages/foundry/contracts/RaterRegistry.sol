@@ -105,7 +105,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
     mapping(HumanCredentialProvider => mapping(bytes32 => address)) private _lastRevokedOwnerByProvider;
     mapping(uint8 => mapping(bytes32 => address)) private _worldCredentialNullifierOwner;
     mapping(uint8 => mapping(bytes32 => bool)) private _revokedWorldCredentialNullifier;
-    mapping(uint8 => mapping(bytes32 => bool)) private _usedWorldPresenceNullifier;
+    mapping(uint8 => mapping(bytes32 => address)) private _worldPresenceNullifierOwner;
     mapping(uint8 => WorldIdV4Config) private _worldCredentialConfigs;
     mapping(uint8 => WorldIdV4Config) private _worldPresenceConfigs;
     mapping(address => mapping(address => bool)) public isFollowing;
@@ -949,6 +949,10 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         if (!config.enabled || address(config.verifier) == address(0)) revert WorldIdV4VerifierNotConfigured();
         if (nullifier == 0) revert InvalidCredential();
         bytes32 storedNullifier = bytes32(nullifier);
+        address presenceNullifierOwner = _worldPresenceNullifierOwner[kind][storedNullifier];
+        if (presenceNullifierOwner != address(0) && presenceNullifierOwner != msg.sender) {
+            revert NullifierAlreadyAssigned();
+        }
 
         uint256 signalHash = worldPresenceSignalHash(msg.sender, kind);
         bytes32 proofReplayKey = keccak256(
@@ -1001,6 +1005,7 @@ contract RaterRegistry is Initializable, AccessControlUpgradeable, IRaterIdentit
         );
 
         _usedWorldPresenceProof[kind][proofReplayKey] = true;
+        _worldPresenceNullifierOwner[kind][storedNullifier] = msg.sender;
         _humanPresence[msg.sender][kind] = HumanPresence({
             verified: true,
             kind: kind,

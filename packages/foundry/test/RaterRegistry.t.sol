@@ -680,7 +680,7 @@ contract RaterRegistryTest is Test {
 
         vm.prank(rater);
         registry.attestHumanCredentialWithV4Proof(
-            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), v4Proof
+            uint256(NULLIFIER_HASH), 2, uint64(block.timestamp + 1 hours), v4Proof
         );
 
         IRaterIdentityRegistry.ResolvedRater memory resolved = registry.resolveRater(rater);
@@ -929,6 +929,37 @@ contract RaterRegistryTest is Test {
         assertEq(presence.freshUntil, uint64(block.timestamp + WORLD_ID_V4_PRESENCE_TTL));
     }
 
+    function test_AttestHumanPresenceWithV4ProofRejectsPresenceNullifierOwnedByAnotherRater() public {
+        uint8 kind = registry.WORLD_CREDENTIAL_PROOF_OF_HUMAN();
+        uint256 presenceNullifier = uint256(keccak256("shared-presence-nullifier"));
+        uint64 expiresAtMin = uint64(block.timestamp + 1 hours);
+        uint256[5] memory proof;
+
+        vm.prank(rater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 2 hours), _emptyV4Proof()
+        );
+
+        vm.prank(otherRater);
+        registry.attestHumanCredentialWithV4Proof(
+            uint256(keccak256("other-presence-rater")), 2, uint64(block.timestamp + 2 hours), _emptyV4Proof()
+        );
+
+        worldIdRouter.setExpectedAction(WORLD_ID_V4_PRESENCE_ACTION);
+        worldIdRouter.setExpectedSignalHash(registry.worldPresenceSignalHash(rater, kind));
+        worldIdRouter.setExpectedNonce(3);
+
+        vm.prank(rater);
+        registry.attestHumanPresenceWithV4Proof(kind, presenceNullifier, 3, expiresAtMin, proof);
+
+        worldIdRouter.setExpectedSignalHash(registry.worldPresenceSignalHash(otherRater, kind));
+        worldIdRouter.setExpectedNonce(4);
+
+        vm.prank(otherRater);
+        vm.expectRevert(RaterRegistry.NullifierAlreadyAssigned.selector);
+        registry.attestHumanPresenceWithV4Proof(kind, presenceNullifier, 4, expiresAtMin, proof);
+    }
+
     function test_AttestHumanCredentialWithV4ProofBubblesInvalidProof() public {
         MockWorldIDVerifier verifier = new MockWorldIDVerifier();
         uint256[5] memory proof;
@@ -1046,13 +1077,13 @@ contract RaterRegistryTest is Test {
         vm.prank(rater);
         vm.expectRevert(RaterRegistry.InvalidCredential.selector);
         registry.attestHumanCredentialWithV4Proof(
-            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), _emptyV4Proof()
+            uint256(NULLIFIER_HASH), 2, uint64(block.timestamp + 1 hours), _emptyV4Proof()
         );
 
         vm.prank(otherRater);
         vm.expectRevert(RaterRegistry.InvalidCredential.selector);
         registry.attestHumanCredentialWithV4Proof(
-            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), _emptyV4Proof()
+            uint256(NULLIFIER_HASH), 3, uint64(block.timestamp + 1 hours), _emptyV4Proof()
         );
 
         vm.prank(admin);
@@ -1060,7 +1091,7 @@ contract RaterRegistryTest is Test {
 
         vm.prank(otherRater);
         registry.attestHumanCredentialWithV4Proof(
-            uint256(NULLIFIER_HASH), 1, uint64(block.timestamp + 1 hours), _emptyV4Proof()
+            uint256(NULLIFIER_HASH), 4, uint64(block.timestamp + 1 hours), _emptyV4Proof()
         );
         assertEq(
             registry.humanNullifierOwnerByProvider(RaterRegistry.HumanCredentialProvider.WorldIdV4, NULLIFIER_HASH),

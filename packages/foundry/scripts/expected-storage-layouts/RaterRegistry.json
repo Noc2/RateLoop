@@ -63,8 +63,8 @@
     {
       "slot": 10,
       "offset": 0,
-      "label": "_usedWorldPresenceNullifier",
-      "type": "t_mapping(t_uint8,t_mapping(t_bytes32,t_bool))"
+      "label": "_worldPresenceNullifierOwner",
+      "type": "t_mapping(t_uint8,t_mapping(t_bytes32,t_address))"
     },
     {
       "slot": 11,
