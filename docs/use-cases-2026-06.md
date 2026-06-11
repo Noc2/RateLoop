@@ -20,7 +20,9 @@ Three constraints shape everything below:
 1. **Public-only context** kills the largest demand pools in every adjacent category —
    proprietary code review, confidential pre-launch research, enterprise model evals. What
    survives skews toward taste/judgment questions on public artifacts, which is conveniently
-   where crowd > single expert.
+   where crowd > single expert. This is more fixable than it sounds: the protocol settles on
+   votes/hashes, not context bytes, and the market sells confidentiality on gated access +
+   NDA + deterrence rather than cryptography — see `private-context-plan-2026-06.md`.
 2. **No enforced demographic or expertise targeting.** World ID proves humanness, not
    attributes. RateLoop does have a self-reported audience-context system (rater profiles with
    age/geo/language/role/expertise, advisory `targetAudience` on asks, post-hoc cohort summaries
