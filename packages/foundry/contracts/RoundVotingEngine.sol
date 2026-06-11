@@ -199,7 +199,6 @@ contract RoundVotingEngine is
     mapping(uint256 => mapping(uint256 => uint256)) internal roundFrontendPool;
     mapping(uint256 => mapping(uint256 => uint256)) internal roundEligibleFrontendCount;
     mapping(uint256 => mapping(uint256 => address)) public roundRaterRegistrySnapshot;
-    mapping(uint256 => mapping(uint256 => address)) internal roundConfidentialityEscrowSnapshot;
     mapping(uint256 => mapping(uint256 => address)) internal roundAdvisoryVoteRecorderSnapshot;
 
     // --- Events ---
@@ -1816,7 +1815,8 @@ contract RoundVotingEngine is
     // Per-round content dormancy generation snapshot. If content becomes dormant and is later
     // revived, pre-dormancy rounds cannot resume reveal/settlement in the revived lifecycle.
     mapping(uint256 => mapping(uint256 => uint8)) internal roundContentDormantCountSnapshot;
+    mapping(uint256 => mapping(uint256 => address)) internal roundConfidentialityEscrowSnapshot;
 
     // --- Storage gap reserved for future upgrades ---
-    uint256[17] private __gap;
+    uint256[16] private __gap;
 }

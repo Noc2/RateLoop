@@ -411,6 +411,12 @@
     {
       "slot": 68,
       "offset": 0,
+      "label": "roundConfidentialityEscrowSnapshot",
+      "type": "t_mapping(t_uint256,t_mapping(t_uint256,t_address))"
+    },
+    {
+      "slot": 69,
+      "offset": 0,
       "label": "__gap",
       "type": "t_array(t_uint256)"
     }
@@ -432,8 +438,8 @@
     {
       "id": "t_array(t_uint256)",
       "encoding": "inplace",
-      "label": "uint256[17]",
-      "numberOfBytes": "544",
+      "label": "uint256[16]",
+      "numberOfBytes": "512",
       "base": "t_uint256"
     },
     {
