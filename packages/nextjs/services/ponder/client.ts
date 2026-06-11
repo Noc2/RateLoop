@@ -1156,6 +1156,13 @@ export interface PonderViewerRewardStatusesResponse {
 }
 
 export interface PonderProfileDetailResponse {
+  confidentialitySanction?: {
+    active: boolean;
+    evidenceHash?: string | null;
+    expiresAt?: string | null;
+    reason?: string | null;
+    scope?: string | null;
+  } | null;
   profile: PonderProfile | null;
   summary: PonderProfileSummary;
   earningsSummary: PonderProfileEarningsSummary;

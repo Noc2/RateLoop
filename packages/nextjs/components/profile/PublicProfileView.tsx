@@ -105,6 +105,15 @@ function formatTimestamp(timestamp: string) {
   });
 }
 
+function formatSanctionExpiry(value: string | null | undefined) {
+  if (!value) return "No expiry set";
+  const trimmed = value.trim();
+  const numeric = Number(trimmed);
+  const date = /^[0-9]+$/.test(trimmed) && Number.isFinite(numeric) ? new Date(numeric * 1000) : new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return "Expiry unavailable";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 function formatLaunchEligibility(rewardStatus: PonderRaterParticipationStatusResponse["launchRewards"]) {
   if (rewardStatus.eligible) {
     return `${rewardStatus.rewardedRatingCount}/${rewardStatus.qualifyingRatingCount} launch reward slots paid`;
@@ -808,6 +817,7 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
   const profileDetail = profileResult?.data ?? null;
   const summary = profileDetail?.profile ?? null;
   const social = profileDetail?.social ?? { followerCount: 0, followingCount: 0 };
+  const confidentialitySanction = profileDetail?.confidentialitySanction ?? null;
   const rewardStatus = rewardStatusQuery.data;
   const dailyStreak = useVoterStreak(normalizedAddress);
   const recentVotes = profileDetail?.recentVotes ?? [];
@@ -1324,6 +1334,43 @@ export function PublicProfileView({ address, embedded = false }: PublicProfileVi
 
           {profileError ? (
             <div className="mt-4 surface-card-nested rounded-2xl px-4 py-3 text-base text-error">{profileError}</div>
+          ) : null}
+
+          {!isEditing ? (
+            <div
+              className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+                confidentialitySanction?.active
+                  ? "border-error/30 bg-error/10 text-error"
+                  : "border-base-300 bg-base-100 text-base-content/65"
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold text-base-content">Confidentiality status</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                    confidentialitySanction?.active ? "bg-error/15 text-error" : "bg-success/10 text-success"
+                  }`}
+                >
+                  {confidentialitySanction?.active ? "Active sanction" : "No active sanction indexed"}
+                </span>
+              </div>
+              {confidentialitySanction?.active ? (
+                <div className="mt-2 space-y-1 text-sm leading-relaxed">
+                  <p>{confidentialitySanction.reason || "Governance-marked confidentiality breach."}</p>
+                  <p>Scope: {confidentialitySanction.scope || "surplus earning and gated-context access checks"}</p>
+                  <p>Expires: {formatSanctionExpiry(confidentialitySanction.expiresAt)}</p>
+                  {confidentialitySanction.evidenceHash ? (
+                    <p className="break-all font-mono text-xs text-base-content/60">
+                      Evidence {confidentialitySanction.evidenceHash}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-2 leading-relaxed">
+                  The public indexer has not reported an active confidentiality sanction for this profile.
+                </p>
+              )}
+            </div>
           ) : null}
 
           {ownProfile && isEditing ? (

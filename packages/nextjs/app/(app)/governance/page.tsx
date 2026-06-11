@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useAccount } from "wagmi";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
@@ -11,10 +11,22 @@ import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { REPUTATION_CONTRACT_NAME } from "~~/lib/contracts/reputation";
 import { getGovernanceReputationGateState } from "~~/lib/governance/reputationGate";
 import { replaceUrlPreservingHistoryState } from "~~/lib/ui/browserHistory";
+import { notification } from "~~/utils/scaffold-eth";
 
-type GovernanceTab = "profile" | "leaderboard" | "governance";
+type GovernanceTab = "profile" | "leaderboard" | "governance" | "breaches";
 
-const governanceTabs: GovernanceTab[] = ["profile", "leaderboard", "governance"];
+const governanceTabs: GovernanceTab[] = ["profile", "leaderboard", "governance", "breaches"];
+
+type BreachReport = {
+  accusedIdentityKey: string;
+  contentId: string;
+  createdAt: string;
+  evidenceHash: string;
+  evidenceUrl: string | null;
+  id: number;
+  reporter: string;
+  status: string;
+};
 
 function GovernanceSectionLoading() {
   return (
@@ -78,6 +90,175 @@ function normalizeGovernanceHash(hash: string): GovernanceTab | null {
   if (!hash) return "profile";
   if (hash === "accuracy") return "leaderboard";
   return governanceTabs.includes(hash as GovernanceTab) ? (hash as GovernanceTab) : null;
+}
+
+function ConfidentialityBreachesPanel({ reporter }: { reporter: `0x${string}` }) {
+  const [contentId, setContentId] = useState("");
+  const [accusedIdentityKey, setAccusedIdentityKey] = useState("");
+  const [evidenceHash, setEvidenceHash] = useState("");
+  const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [reports, setReports] = useState<BreachReport[]>([]);
+  const [isLoadingReports, setIsLoadingReports] = useState(false);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+
+  const loadReports = useCallback(async () => {
+    if (!contentId.trim()) {
+      notification.warning("Enter a content id first.");
+      return;
+    }
+    setIsLoadingReports(true);
+    try {
+      const params = new URLSearchParams({ contentId: contentId.trim() });
+      const response = await fetch(`/api/confidentiality/breaches?${params.toString()}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Could not load breach reports.");
+      setReports(Array.isArray(body.reports) ? body.reports : []);
+    } catch (error) {
+      notification.error(error instanceof Error ? error.message : "Could not load breach reports.");
+    } finally {
+      setIsLoadingReports(false);
+    }
+  }, [contentId]);
+
+  const submitReport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSubmittingReport(true);
+    try {
+      const response = await fetch("/api/confidentiality/breaches", {
+        body: JSON.stringify({
+          accusedIdentityKey,
+          contentId,
+          evidenceHash,
+          evidenceUrl: evidenceUrl.trim() || undefined,
+          reporter,
+        }),
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const body = await response.json();
+      if (!response.ok || body.ok !== true) {
+        throw new Error(body.error || "Could not submit breach report.");
+      }
+      notification.success("Breach report submitted.");
+      await loadReports();
+    } catch (error) {
+      notification.error(error instanceof Error ? error.message : "Could not submit breach report.");
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
+  const proposalTemplate = [
+    "Confidentiality breach proposal",
+    `Content: ${contentId.trim() || "<content id>"}`,
+    `Accused identity: ${accusedIdentityKey.trim() || "<identity key>"}`,
+    `Evidence hash: ${evidenceHash.trim() || "<bytes32 evidence hash>"}`,
+    evidenceUrl.trim() ? `Evidence URL: ${evidenceUrl.trim()}` : "Evidence URL: <optional>",
+    "Requested action: verify terms acceptance + access-log proof, slash any posted confidentiality bond, and apply the governance-approved surplus-earnings confidentiality sanction if evidence is valid.",
+  ].join("\n");
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
+      <form onSubmit={submitReport} className="surface-card rounded-2xl p-6">
+        <div className="mb-5">
+          <h2 className="text-xl font-semibold text-base-content">Confidentiality breach report</h2>
+          <p className="mt-2 text-sm leading-relaxed text-base-content/60">
+            Reports require a gated-context signed session for this wallet. Governance can use the evidence hash and
+            access-log proof to arbitrate slash or sanction proposals.
+          </p>
+        </div>
+        <div className="grid gap-4">
+          <label className="form-control">
+            <span className="label-text text-base-content/65">Content id</span>
+            <input
+              className="input input-bordered mt-2 bg-base-100"
+              inputMode="numeric"
+              value={contentId}
+              onChange={event => setContentId(event.target.value)}
+              placeholder="123"
+            />
+          </label>
+          <label className="form-control">
+            <span className="label-text text-base-content/65">Accused identity key</span>
+            <input
+              className="input input-bordered mt-2 bg-base-100 font-mono text-sm"
+              value={accusedIdentityKey}
+              onChange={event => setAccusedIdentityKey(event.target.value)}
+              placeholder="0x..."
+            />
+          </label>
+          <label className="form-control">
+            <span className="label-text text-base-content/65">Evidence hash</span>
+            <input
+              className="input input-bordered mt-2 bg-base-100 font-mono text-sm"
+              value={evidenceHash}
+              onChange={event => setEvidenceHash(event.target.value)}
+              placeholder="0x..."
+            />
+          </label>
+          <label className="form-control">
+            <span className="label-text text-base-content/65">Evidence URL</span>
+            <input
+              className="input input-bordered mt-2 bg-base-100"
+              type="url"
+              value={evidenceUrl}
+              onChange={event => setEvidenceUrl(event.target.value)}
+              placeholder="https://..."
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="btn btn-primary" disabled={isSubmittingReport}>
+              {isSubmittingReport ? <span className="loading loading-spinner loading-xs" /> : null}
+              Submit report
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => void loadReports()}
+              disabled={isLoadingReports}
+            >
+              {isLoadingReports ? <span className="loading loading-spinner loading-xs" /> : null}
+              Load reports
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <div className="space-y-6">
+        <div className="surface-card rounded-2xl p-6">
+          <h2 className="text-xl font-semibold text-base-content">Proposal template</h2>
+          <pre className="mt-4 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-base-300 p-4 text-xs leading-relaxed text-base-content/75">
+            {proposalTemplate}
+          </pre>
+        </div>
+
+        <div className="surface-card rounded-2xl p-6">
+          <h2 className="text-xl font-semibold text-base-content">Reports</h2>
+          <div className="mt-4 space-y-3">
+            {reports.length > 0 ? (
+              reports.map(report => (
+                <div key={report.id} className="rounded-xl border border-base-300 bg-base-100 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold text-base-content">#{report.id}</span>
+                    <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-semibold text-warning">
+                      {report.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1 font-mono text-xs text-base-content/60">
+                    <p className="break-all">identity {report.accusedIdentityKey}</p>
+                    <p className="break-all">evidence {report.evidenceHash}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-base-content/60">Load a content id to review submitted reports.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function GovernancePageInner() {
@@ -243,6 +424,14 @@ function GovernancePageInner() {
         >
           Governance
         </button>
+        <button
+          onClick={() => selectTab("breaches")}
+          className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
+            activeTab === "breaches" ? "pill-active" : "pill-inactive"
+          }`}
+        >
+          Breaches
+        </button>
       </div>
 
       {activeTab === "profile" && address && <PublicProfileView address={address as `0x${string}`} embedded />}
@@ -264,6 +453,8 @@ function GovernancePageInner() {
           <ProposalList />
         </div>
       )}
+
+      {activeTab === "breaches" && address && <ConfidentialityBreachesPanel reporter={address as `0x${string}`} />}
     </AppPageShell>
   );
 }
