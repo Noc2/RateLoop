@@ -1,12 +1,19 @@
 import { createHash, randomBytes } from "crypto";
 import { and, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
 import "server-only";
-import { verifyMessage } from "viem";
+import { type Address, type Chain, type Hex, createPublicClient, http } from "viem";
 import { db } from "~~/lib/db";
 import { signedActionChallenges } from "~~/lib/db/schema";
 
 const SIGNED_ACTION_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const STALE_USED_CHALLENGE_MS = 24 * 60 * 60 * 1000;
+
+type SignedActionVerificationClient = {
+  verifyMessage: (params: { address: Address; message: string; signature: Hex }) => Promise<boolean>;
+};
+
+let signedActionVerificationClient: SignedActionVerificationClient | null = null;
+let signedActionVerificationClientOverride: SignedActionVerificationClient | null = null;
 
 export function hashSignedActionPayload(parts: string[]): string {
   return createHash("sha256").update(parts.join("\n")).digest("hex");
@@ -97,6 +104,31 @@ export async function issueSignedActionChallenge(params: {
 
 export async function ensureSignedActionChallengeTable() {
   // Schema is managed via Drizzle migrations.
+}
+
+async function getSignedActionVerificationClient(): Promise<SignedActionVerificationClient> {
+  if (signedActionVerificationClientOverride) {
+    return signedActionVerificationClientOverride;
+  }
+
+  if (signedActionVerificationClient) {
+    return signedActionVerificationClient;
+  }
+
+  const { publicEnv } = await import("~~/utils/env/public");
+  const targetNetwork = publicEnv.targetNetworks[0];
+  const rpcUrl = publicEnv.rpcOverrides[targetNetwork.id] ?? targetNetwork.rpcUrls.default.http[0];
+
+  signedActionVerificationClient = createPublicClient({
+    chain: targetNetwork as Chain,
+    transport: http(rpcUrl),
+  });
+
+  return signedActionVerificationClient;
+}
+
+export function __setSignedActionVerificationClientForTests(client: SignedActionVerificationClient | null) {
+  signedActionVerificationClientOverride = client;
 }
 
 async function cleanupSignedActionChallenges(now = new Date()) {
@@ -196,18 +228,18 @@ export async function verifyAndConsumeSignedActionChallenge(
     expiresAt: challenge.expiresAt,
   });
 
-  let isValid = false;
   try {
-    isValid = await verifyMessage({
+    const verificationClient = await getSignedActionVerificationClient();
+    const isValid = await verificationClient.verifyMessage({
       address: params.walletAddress,
       message,
       signature: params.signature,
     });
-  } catch {
-    throw new Error("INVALID_SIGNATURE");
-  }
 
-  if (!isValid) {
+    if (!isValid) {
+      throw new Error("INVALID_SIGNATURE");
+    }
+  } catch {
     throw new Error("INVALID_SIGNATURE");
   }
 
