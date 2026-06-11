@@ -49,7 +49,7 @@ const clips = [
   },
   {
     name: "vo-02-ask",
-    text: "It turns the idea into one sharp RateLoop question, with money attached, and the right people ready to answer.",
+    text: "RateLoop turns the idea into a question real people can answer, with a bounty attached.",
   },
   {
     name: "vo-03-handoff",
@@ -75,7 +75,15 @@ const clips = [
 
 mkdirSync(audioDir, { recursive: true });
 
-for (const clip of clips) {
+const selectedClipNames = new Set(process.argv.slice(2));
+const clipsToGenerate = selectedClipNames.size ? clips.filter(clip => selectedClipNames.has(clip.name)) : clips;
+const unknownClipNames = [...selectedClipNames].filter(name => !clips.some(clip => clip.name === name));
+
+if (unknownClipNames.length) {
+  throw new Error(`Unknown voiceover clip(s): ${unknownClipNames.join(", ")}`);
+}
+
+for (const clip of clipsToGenerate) {
   const response = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: {
