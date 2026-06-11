@@ -217,13 +217,16 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
   const deploymentJson = makeDeploymentJson();
   const deploymentAddresses = buildDeploymentAddressMap(deploymentJson);
   const contentRegistryAddress = deploymentAddresses.get("ContentRegistry");
+  const protocolConfigAddress = deploymentAddresses.get("ProtocolConfig");
   const contentRegistryImplementation = addressFor(99);
+  const protocolConfigImplementation = addressFor(100);
   const restoreFetch = mockRpc((method, params) => {
     if (method === "eth_chainId") return "0x12c1";
     if (method === "eth_getStorageAt") {
-      assert.equal(params[0], contentRegistryAddress);
       assert.equal(params[1], EIP1967_IMPLEMENTATION_SLOT);
-      return encodeStorageAddress(contentRegistryImplementation);
+      if (params[0] === contentRegistryAddress) return encodeStorageAddress(contentRegistryImplementation);
+      if (params[0] === protocolConfigAddress) return encodeStorageAddress(protocolConfigImplementation);
+      throw new Error(`Unexpected proxy storage target ${params[0]}`);
     }
     if (method === "eth_getCode") return "0x6000";
     throw new Error(`Unexpected RPC method ${method}`);
@@ -239,6 +242,7 @@ test("validateLiveReadiness rejects live bytecode missing confidentiality select
     assert(result.failures.some(message => message.includes("X402QuestionSubmitter bytecode contains selector 0x1c2fa657")));
     assert(result.failures.some(message => message.includes("X402QuestionSubmitter bytecode contains selector 0x61b030bc")));
     assert(result.failures.some(message => message.includes("ContentRegistry implementation bytecode contains selector 0x774922ea")));
+    assert(result.failures.some(message => message.includes("ProtocolConfig implementation bytecode contains selector 0xd5011d75")));
   } finally {
     restoreFetch();
   }

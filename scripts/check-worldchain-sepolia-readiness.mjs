@@ -23,6 +23,7 @@ export const REQUIRED_DEPLOYED_CONTRACTS = [
   "LaunchDistributionPool",
   "LoopReputation",
   "ProfileRegistry",
+  "ProtocolConfig",
   "QuestionRewardPoolEscrow",
   "RaterRegistry",
   "RoundRewardDistributor",
@@ -42,6 +43,7 @@ export const PONDER_INDEXED_CONTRACTS = [
   "LaunchDistributionPool",
   "LoopReputation",
   "ProfileRegistry",
+  "ProtocolConfig",
   "QuestionRewardPoolEscrow",
   "RaterRegistry",
   "RoundRewardDistributor",
@@ -49,12 +51,15 @@ export const PONDER_INDEXED_CONTRACTS = [
 ];
 
 const PROXY_CONTRACTS = new Set([
+  "ConfidentialityEscrow",
   "ContentRegistry",
   "FeedbackBonusEscrow",
+  "FeedbackRegistry",
   "FrontendRegistry",
   "ProfileRegistry",
   "ProtocolConfig",
   "QuestionRewardPoolEscrow",
+  "RaterRegistry",
   "RoundRewardDistributor",
   "RoundVotingEngine",
 ]);
@@ -71,6 +76,12 @@ const REQUIRED_SELECTOR_CHECKS = [
     contractName: "ContentRegistry",
     selectors: [
       "0x774922ea", // submitQuestionWithRewardAndRoundConfig with confidentiality config
+    ],
+  },
+  {
+    contractName: "ProtocolConfig",
+    selectors: [
+      "0xd5011d75", // confidentialityEscrow()
     ],
   },
 ];
