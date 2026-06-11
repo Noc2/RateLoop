@@ -1,6 +1,6 @@
 import { del as deleteBlob, get as getBlob, put as putBlob } from "@vercel/blob";
 import { createHash, randomBytes } from "crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import "server-only";
@@ -1023,4 +1023,46 @@ export async function attachImagesToOperation(params: {
         ),
       );
   }
+}
+
+export async function attachImagesToContent(params: {
+  agentId?: string | null;
+  contentId: string;
+  imageUrls: readonly string[];
+  ownerWalletAddress?: string | null;
+}) {
+  const attachmentIds = [
+    ...new Set(params.imageUrls.map(parseAttachmentIdFromImageUrl).filter((id): id is string => Boolean(id))),
+  ];
+  if (attachmentIds.length === 0) return 0;
+
+  const ownerWalletAddress = params.ownerWalletAddress?.trim().toLowerCase() ?? null;
+  const identityPredicate = params.agentId
+    ? eq(questionImageAttachments.agentId, params.agentId)
+    : ownerWalletAddress
+      ? eq(questionImageAttachments.ownerWalletAddress, ownerWalletAddress)
+      : null;
+  if (!identityPredicate) return 0;
+
+  const updatedAt = nowDate();
+  let attached = 0;
+  for (const attachmentId of attachmentIds) {
+    const [updated] = await db
+      .update(questionImageAttachments)
+      .set({
+        contentId: params.contentId,
+        updatedAt,
+      })
+      .where(
+        and(
+          eq(questionImageAttachments.id, attachmentId),
+          eq(questionImageAttachments.status, "approved"),
+          identityPredicate,
+          or(isNull(questionImageAttachments.contentId), eq(questionImageAttachments.contentId, params.contentId)),
+        ),
+      )
+      .returning({ id: questionImageAttachments.id });
+    if (updated) attached += 1;
+  }
+  return attached;
 }

@@ -6,6 +6,7 @@ import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import {
   __setImageAttachmentBlobTestOverridesForTests,
+  attachImagesToContent,
   createImageAttachmentFromBuffer,
   createImageAttachmentId,
   createPendingImageAttachment,
@@ -764,6 +765,45 @@ test("allows uploaded RateLoop images owned by the submitting agent", async () =
     }),
     "Uploaded imageUrls must belong to the submitting wallet or agent.",
   );
+});
+
+test("attaches approved uploaded images to submitted content idempotently", async () => {
+  const now = new Date();
+  const sha256 = "d".repeat(64);
+  const imageUrl = `https://www.rateloop.ai/api/attachments/images/att_linkcontent00001.webp#sha256=0x${sha256}`;
+  await db.insert(questionImageAttachments).values({
+    id: "att_linkcontent00001",
+    uploaderKind: "wallet",
+    ownerWalletAddress: "0x00000000000000000000000000000000000000aa",
+    originalFilename: "mockup.png",
+    mimeType: "image/webp",
+    sha256,
+    sizeBytes: 1024,
+    status: "approved",
+    moderationStatus: "approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  assert.equal(
+    await attachImagesToContent({
+      contentId: "123",
+      imageUrls: [imageUrl, imageUrl],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
+    }),
+    1,
+  );
+  assert.equal((await getImageAttachment("att_linkcontent00001"))?.contentId, "123");
+
+  assert.equal(
+    await attachImagesToContent({
+      contentId: "456",
+      imageUrls: [imageUrl],
+      ownerWalletAddress: "0x00000000000000000000000000000000000000AA",
+    }),
+    0,
+  );
+  assert.equal((await getImageAttachment("att_linkcontent00001"))?.contentId, "123");
 });
 
 test("sweeps expired unattached image uploads and deletes stored files", async () => {

@@ -134,6 +134,7 @@ const TEST_CONFIG = {
   lrepAddress: "0x0000000000000000000000000000000000000016" as const,
   questionRewardPoolEscrowAddress: "0x0000000000000000000000000000000000000013" as const,
   rpcUrl: "http://localhost:8545",
+  submissionMediaValidatorAddress: "0x0000000000000000000000000000000000000017" as const,
   targetNetwork: { id: 480 } as never,
   usdcAddress: "0x0000000000000000000000000000000000000014" as const,
   x402QuestionSubmitterAddress: "0x0000000000000000000000000000000000000015" as const,
@@ -178,6 +179,10 @@ function setDefaultTestOverrides(
       submissionKeys: [`0x${"2".repeat(64)}` as const],
       walletAddress,
     }),
+    createPublicQuestionClient: () =>
+      ({
+        readContract: async () => TEST_CONFIG.submissionMediaValidatorAddress,
+      }) as never,
     resolveX402QuestionConfig: () => TEST_CONFIG,
     ...overrides,
   });
@@ -801,13 +806,15 @@ test("confirmAgentWalletQuestionSubmissionRequest rejects swapped bundle content
   );
 });
 
-test("confirmAgentWalletQuestionSubmissionRequest attaches approved question details rows", async () => {
+test("confirmAgentWalletQuestionSubmissionRequest attaches approved question details and image rows", async () => {
   const payload = buildPayload("wallet-confirm-details");
   const walletAddress = "0x00000000000000000000000000000000000000aa" as const;
   const transactionHash = `0x${"d".repeat(64)}` as const;
   const detailsId = "det_x402attachdetail";
   const detailsHash = `0x${"8".repeat(64)}` as const;
   const detailsUrl = `https://www.rateloop.ai/api/attachments/details/${detailsId}`;
+  const imageId = "att_x402attachimage1";
+  const imageUrl = `https://www.rateloop.ai/api/attachments/images/${imageId}.webp#sha256=0x${"a".repeat(64)}`;
   const [question] = payload.questions;
   assert.ok(question);
   payload.questions = [
@@ -815,6 +822,7 @@ test("confirmAgentWalletQuestionSubmissionRequest attaches approved question det
       ...question,
       detailsHash,
       detailsUrl,
+      imageUrls: [imageUrl],
     },
   ];
   const now = new Date();
@@ -848,6 +856,12 @@ test("confirmAgentWalletQuestionSubmissionRequest attaches approved question det
       now,
     ],
   });
+  await insertQuestionImageAttachment({
+    agentId: "agent-wallet",
+    id: imageId,
+    ownerWalletAddress: walletAddress,
+    status: "approved",
+  });
   await prepareAgentWalletQuestionSubmissionRequest({
     agentId: "agent-wallet",
     payload,
@@ -870,6 +884,11 @@ test("confirmAgentWalletQuestionSubmissionRequest attaches approved question det
           payload,
           submitter: walletAddress,
         }),
+        buildQuestionContentAnchoredLog({
+          address: TEST_CONFIG.submissionMediaValidatorAddress,
+          contentId: 123n,
+          url: imageUrl,
+        }),
         buildContentDetailsSubmittedLog({
           address: TEST_CONFIG.contentRegistryAddress,
           contentId: 123n,
@@ -889,6 +908,11 @@ test("confirmAgentWalletQuestionSubmissionRequest attaches approved question det
     args: [detailsId],
   });
   assert.equal(result.rows[0]?.content_id, "123");
+  const imageResult = await dbClient.execute({
+    sql: "SELECT content_id FROM question_image_attachments WHERE id = ?",
+    args: [imageId],
+  });
+  assert.equal(imageResult.rows[0]?.content_id, "123");
 });
 
 test("confirmFeedbackBonusQuestionSubmissionRequest verifies and stores the funded pool", async () => {

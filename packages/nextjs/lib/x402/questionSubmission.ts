@@ -25,7 +25,10 @@ import {
   parseSignature,
   toBytes,
 } from "viem";
-import { getImageAttachmentSubmissionValidationError } from "~~/lib/attachments/imageAttachments";
+import {
+  attachImagesToContent,
+  getImageAttachmentSubmissionValidationError,
+} from "~~/lib/attachments/imageAttachments";
 import { attachQuestionDetailsToContent } from "~~/lib/attachments/questionDetails";
 import { upsertQuestionConfidentialityFromMetadata } from "~~/lib/confidentiality/context";
 import { dbClient } from "~~/lib/db";
@@ -1044,6 +1047,20 @@ function createPublicQuestionClient(config: X402QuestionSubmissionConfig) {
 
 type X402PublicClient = ReturnType<typeof createPublicQuestionClient>;
 
+async function resolveSubmissionMediaValidator(
+  publicClient: X402PublicClient,
+  contentRegistryAddress: Address,
+): Promise<Address | null> {
+  const address = await publicClient
+    .readContract({
+      abi: ContentRegistryAbi,
+      address: contentRegistryAddress,
+      functionName: "submissionMediaValidator",
+    })
+    .catch(() => null);
+  return typeof address === "string" && isAddress(address) ? address : null;
+}
+
 async function waitForSuccessfulReceipt(publicClient: X402PublicClient, hash: Hex): Promise<TransactionReceipt> {
   const receipt = await publicClient.waitForTransactionReceipt({
     hash,
@@ -1732,6 +1749,7 @@ async function buildNativeX402QuestionSubmissionPlan(params: {
 function readSubmissionResult(
   receipt: TransactionReceipt,
   contentRegistryAddress: Address,
+  mediaValidatorAddress?: Address | null,
 ): {
   bundleId: bigint | null;
   bundleContentLinks: SubmittedBundleContentLink[];
@@ -1744,6 +1762,7 @@ function readSubmissionResult(
   submitters: Address[];
 } {
   const expectedEmitter = normalizedAddress(contentRegistryAddress);
+  const expectedMediaValidatorEmitter = mediaValidatorAddress ? normalizedAddress(mediaValidatorAddress) : null;
   let bundleId: bigint | null = null;
   const bundleContentLinks: SubmittedBundleContentLink[] = [];
   const contentIds: bigint[] = [];
@@ -1753,6 +1772,7 @@ function readSubmissionResult(
   const submittedContents: SubmittedQuestionContent[] = [];
   const submittedDetails: SubmittedQuestionDetails[] = [];
   const submitters = new Set<Address>();
+  const imageUrlsByContentId = new Map<string, string[]>();
 
   for (const log of receipt.logs) {
     try {
@@ -1762,11 +1782,16 @@ function readSubmissionResult(
         topics: log.topics,
       }) as { eventName: string; args: Record<string, unknown> };
 
-      if (log.address.toLowerCase() !== expectedEmitter) {
+      const normalizedLogAddress = log.address.toLowerCase();
+      if (normalizedLogAddress !== expectedEmitter && normalizedLogAddress !== expectedMediaValidatorEmitter) {
         continue;
       }
 
-      if (decoded.eventName === "ContentSubmitted" && typeof decoded.args.contentId === "bigint") {
+      if (
+        decoded.eventName === "ContentSubmitted" &&
+        normalizedLogAddress === expectedEmitter &&
+        typeof decoded.args.contentId === "bigint"
+      ) {
         contentIds.push(decoded.args.contentId);
         if (
           isBytes32Hex(decoded.args.contentHash) &&
@@ -1789,6 +1814,7 @@ function readSubmissionResult(
       }
       if (
         decoded.eventName === "ContentDetailsSubmitted" &&
+        normalizedLogAddress === expectedEmitter &&
         typeof decoded.args.contentId === "bigint" &&
         typeof decoded.args.detailsUrl === "string" &&
         isBytes32Hex(decoded.args.detailsHash)
@@ -1801,6 +1827,7 @@ function readSubmissionResult(
       }
       if (
         decoded.eventName === "QuestionBundleContentLinked" &&
+        normalizedLogAddress === expectedEmitter &&
         typeof decoded.args.bundleId === "bigint" &&
         typeof decoded.args.contentId === "bigint" &&
         typeof decoded.args.bundleIndex === "bigint"
@@ -1811,7 +1838,20 @@ function readSubmissionResult(
           contentId: decoded.args.contentId,
         });
       }
-      if (decoded.eventName === "QuestionBundleSubmitted") {
+      if (
+        decoded.eventName === "QuestionContentAnchored" &&
+        normalizedLogAddress === expectedMediaValidatorEmitter &&
+        typeof decoded.args.contentId === "bigint" &&
+        decoded.args.mediaType === 1 &&
+        typeof decoded.args.mediaIndex === "bigint" &&
+        typeof decoded.args.url === "string"
+      ) {
+        const key = decoded.args.contentId.toString();
+        const imageUrls = imageUrlsByContentId.get(key) ?? [];
+        imageUrls[Number(decoded.args.mediaIndex)] = decoded.args.url;
+        imageUrlsByContentId.set(key, imageUrls);
+      }
+      if (decoded.eventName === "QuestionBundleSubmitted" && normalizedLogAddress === expectedEmitter) {
         if (typeof decoded.args.bundleId === "bigint") {
           bundleId = decoded.args.bundleId;
         }
@@ -1837,6 +1877,7 @@ function readSubmissionResult(
         }
       } else if (
         decoded.eventName === "SubmissionRewardPoolAttached" &&
+        normalizedLogAddress === expectedEmitter &&
         typeof decoded.args.rewardPoolId === "bigint"
       ) {
         rewardPoolId = decoded.args.rewardPoolId;
@@ -1861,7 +1902,11 @@ function readSubmissionResult(
             submitter: decoded.args.submitter,
           });
         }
-      } else if (decoded.eventName === "ContentRoundConfigSet" && typeof decoded.args.contentId === "bigint") {
+      } else if (
+        decoded.eventName === "ContentRoundConfigSet" &&
+        normalizedLogAddress === expectedEmitter &&
+        typeof decoded.args.contentId === "bigint"
+      ) {
         roundConfigsByContentId.set(decoded.args.contentId.toString(), {
           epochDuration: toDecimalString(decoded.args.epochDuration),
           maxDuration: toDecimalString(decoded.args.maxDuration),
@@ -1872,6 +1917,10 @@ function readSubmissionResult(
     } catch {
       // Ignore logs from token transfers and other contracts in the same receipt.
     }
+  }
+
+  for (const content of submittedContents) {
+    content.imageUrls = (imageUrlsByContentId.get(content.contentId.toString()) ?? []).filter(Boolean);
   }
 
   return {
@@ -2083,6 +2132,25 @@ async function attachSubmittedQuestionDetails(params: {
       agentId: params.agentId,
       contentId,
       detailsUrl: details.detailsUrl,
+      ownerWalletAddress: params.ownerWalletAddress,
+    });
+  }
+}
+
+async function attachSubmittedQuestionImages(params: {
+  agentId?: string | null;
+  contentIds: readonly bigint[];
+  ownerWalletAddress: Address;
+  submittedContents: readonly SubmittedQuestionContent[];
+}) {
+  const allowedContentIds = new Set(params.contentIds.map(contentId => contentId.toString()));
+  for (const content of params.submittedContents) {
+    const contentId = content.contentId.toString();
+    if (!allowedContentIds.has(contentId) || content.imageUrls.length === 0) continue;
+    await attachImagesToContent({
+      agentId: params.agentId,
+      contentId,
+      imageUrls: content.imageUrls,
       ownerWalletAddress: params.ownerWalletAddress,
     });
   }
@@ -3013,7 +3081,8 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
   }
 
   const config = dependencies.resolveX402QuestionConfig(record.chainId);
-  const publicClient = createPublicQuestionClient(config);
+  const publicClient = dependencies.createPublicQuestionClient(config);
+  const mediaValidatorAddress = await resolveSubmissionMediaValidator(publicClient, config.contentRegistryAddress);
   const walletAddress = record.payerAddress.toLowerCase();
   const bundleContentLinks: SubmittedBundleContentLink[] = [];
   const rewardAttachments: SubmittedRewardAttachment[] = [];
@@ -3023,7 +3092,7 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
 
   for (const hash of params.transactionHashes) {
     const receipt = await dependencies.waitForSuccessfulReceipt(publicClient, hash);
-    const result = readSubmissionResult(receipt, config.contentRegistryAddress);
+    const result = readSubmissionResult(receipt, config.contentRegistryAddress, mediaValidatorAddress);
     bundleContentLinks.push(...result.bundleContentLinks);
     submittedContents.push(...result.submittedContents);
     submittedDetails.push(...result.submittedDetails);
@@ -3053,6 +3122,12 @@ export async function confirmAgentWalletQuestionSubmissionRequest(params: {
     contentIds,
     ownerWalletAddress: record.payerAddress as Address,
     submittedDetails,
+  });
+  await attachSubmittedQuestionImages({
+    agentId: planReceipt?.agentId,
+    contentIds,
+    ownerWalletAddress: record.payerAddress as Address,
+    submittedContents,
   });
   await syncSubmittedQuestionMetadata({
     contentIds,

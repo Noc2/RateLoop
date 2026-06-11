@@ -4,6 +4,7 @@ import { getSharedDeploymentAddress } from "@rateloop/contracts/deployments";
 import { canonicalJsonHash } from "@rateloop/node-utils/json";
 import { type TargetAudience, normalizeTargetAudience } from "@rateloop/node-utils/profileSelfReport";
 import { type Address, type Hex, createPublicClient, decodeEventLog, http, isAddress } from "viem";
+import { attachImagesToContent } from "~~/lib/attachments/imageAttachments";
 import {
   attachQuestionDetailsToContent,
   parseQuestionDetailsIdFromDetailsUrl,
@@ -47,6 +48,12 @@ type QuestionMetadataProof = {
   questionMetadataHash: Hex;
   questionMetadataUri: string | null;
   resultSpecHash: Hex;
+};
+
+type ImageAttachmentProof = {
+  contentId: string;
+  imageUrls: string[];
+  submitter: Address;
 };
 
 const RATE_LIMIT = { limit: 30, windowMs: 60_000 };
@@ -157,6 +164,7 @@ function collectDetailsProofsFromReceiptLogs(params: {
   const submittersByContentId = new Map<string, Address>();
   const detailsByContentId = new Map<string, Pick<DetailsAttachmentInput, "detailsHash" | "detailsUrl">>();
   const metadataByContentId = new Map<string, Omit<QuestionMetadataProof, "contentId">>();
+  const imageUrlsByContentId = new Map<string, string[]>();
 
   for (const log of params.logs) {
     try {
@@ -199,6 +207,15 @@ function collectDetailsProofsFromReceiptLogs(params: {
         BYTES32_PATTERN.test(decoded.args.resultSpecHash)
       ) {
         const key = decoded.args.contentId.toString();
+        if (
+          decoded.args.mediaType === 1 &&
+          typeof decoded.args.mediaIndex === "bigint" &&
+          typeof decoded.args.url === "string"
+        ) {
+          const imageUrls = imageUrlsByContentId.get(key) ?? [];
+          imageUrls[Number(decoded.args.mediaIndex)] = decoded.args.url;
+          imageUrlsByContentId.set(key, imageUrls);
+        }
         metadataByContentId.set(key, {
           questionMetadataHash: decoded.args.questionMetadataHash.toLowerCase() as Hex,
           questionMetadataUri: null,
@@ -231,7 +248,18 @@ function collectDetailsProofsFromReceiptLogs(params: {
       resultSpecHash: metadata.resultSpecHash,
     });
   }
-  return { detailsProofs: proofs, metadataProofs };
+  const imageProofs = new Map<string, ImageAttachmentProof>();
+  for (const [contentId, imageUrls] of imageUrlsByContentId.entries()) {
+    const submitter = submittersByContentId.get(contentId);
+    const compactImageUrls = imageUrls.filter(Boolean);
+    if (!submitter || compactImageUrls.length === 0) continue;
+    imageProofs.set(contentId, {
+      contentId,
+      imageUrls: compactImageUrls,
+      submitter,
+    });
+  }
+  return { detailsProofs: proofs, imageProofs, metadataProofs };
 }
 
 export async function POST(request: NextRequest) {
@@ -278,6 +306,7 @@ export async function POST(request: NextRequest) {
     .catch(() => null);
 
   const detailsProofs = new Map<string, ContentDetailsProof>();
+  const imageProofs = new Map<string, ImageAttachmentProof>();
   const metadataProofs = new Map<string, QuestionMetadataProof>();
   for (const transactionHash of transactionHashes) {
     const receipt = await context.publicClient.getTransactionReceipt({ hash: transactionHash }).catch(() => null);
@@ -289,6 +318,9 @@ export async function POST(request: NextRequest) {
     });
     for (const [contentId, proof] of receiptProofs.detailsProofs.entries()) {
       detailsProofs.set(contentId, proof);
+    }
+    for (const [contentId, proof] of receiptProofs.imageProofs.entries()) {
+      imageProofs.set(contentId, proof);
     }
     for (const [contentId, proof] of receiptProofs.metadataProofs.entries()) {
       metadataProofs.set(contentId, proof);
@@ -314,6 +346,15 @@ export async function POST(request: NextRequest) {
     ) {
       attached += 1;
     }
+  }
+
+  let imagesAttached = 0;
+  for (const proof of imageProofs.values()) {
+    imagesAttached += await attachImagesToContent({
+      contentId: proof.contentId,
+      imageUrls: proof.imageUrls,
+      ownerWalletAddress: normalizeWalletAddress(proof.submitter),
+    });
   }
 
   const verifiedMetadata = metadata.filter(entry => {
@@ -355,6 +396,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     attached,
+    imagesAttached,
     requested: details.length,
     metadataIndexed,
     metadataRequested: metadata.length,
