@@ -107,7 +107,8 @@ contract DeployRateLoopHarness is DeployRateLoop {
         address contentRegistry,
         address frontendRegistry,
         address questionRewardPoolEscrow,
-        address feedbackBonusEscrow
+        address feedbackBonusEscrow,
+        address confidentialityEscrow
     ) external pure returns (address[] memory) {
         return _buildQuorumExcludedHolders(
             launchDistribution,
@@ -117,7 +118,8 @@ contract DeployRateLoopHarness is DeployRateLoop {
             contentRegistry,
             frontendRegistry,
             questionRewardPoolEscrow,
-            feedbackBonusEscrow
+            feedbackBonusEscrow,
+            confidentialityEscrow
         );
     }
 
@@ -535,14 +537,16 @@ contract DeployRateLoopAllocationsTest is Test {
             address(0x1005),
             address(0x1006),
             address(0x1007),
-            address(0x1008)
+            address(0x1008),
+            address(0x1009)
         );
 
-        assertEq(holders.length, 8);
+        assertEq(holders.length, 9);
         assertEq(holders[0], address(0x1001));
         assertEq(holders[5], address(0x1006));
         assertEq(holders[6], address(0x1007));
         assertEq(holders[7], address(0x1008));
+        assertEq(holders[8], address(0x1009));
     }
 
     function test_BuildQuorumExcludedHoldersCompactsDuplicatesAndZeroes() public {
@@ -555,6 +559,7 @@ contract DeployRateLoopAllocationsTest is Test {
             address(0x1004),
             address(0),
             address(0x1004),
+            address(0x1007),
             address(0x1007),
             address(0x1007)
         );

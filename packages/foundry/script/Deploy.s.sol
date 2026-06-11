@@ -18,6 +18,7 @@ import { FeedbackBonusEscrow } from "../contracts/FeedbackBonusEscrow.sol";
 import { FeedbackRegistry } from "../contracts/FeedbackRegistry.sol";
 import { ProfileRegistry } from "../contracts/ProfileRegistry.sol";
 import { ProtocolConfig } from "../contracts/ProtocolConfig.sol";
+import { ConfidentialityEscrow } from "../contracts/ConfidentialityEscrow.sol";
 import { QuestionRewardPoolEscrow } from "../contracts/QuestionRewardPoolEscrow.sol";
 import { RaterRegistry } from "../contracts/RaterRegistry.sol";
 import { X402QuestionSubmitter } from "../contracts/X402QuestionSubmitter.sol";
@@ -132,6 +133,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         FrontendRegistry frontendRegistryImpl = new FrontendRegistry();
         ProfileRegistry profileRegistryImpl = new ProfileRegistry();
         ProtocolConfig protocolConfigImpl = new ProtocolConfig();
+        ConfidentialityEscrow confidentialityEscrowImpl = new ConfidentialityEscrow();
         QuestionRewardPoolEscrow questionRewardPoolEscrowImpl = new QuestionRewardPoolEscrow();
         FeedbackBonusEscrow feedbackBonusEscrowImpl = new FeedbackBonusEscrow();
         FeedbackRegistry feedbackRegistryImpl = new FeedbackRegistry();
@@ -270,6 +272,24 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         QuestionRewardPoolEscrow questionRewardPoolEscrow =
             QuestionRewardPoolEscrow(address(questionRewardPoolEscrowProxy));
 
+        TransparentUpgradeableProxy confidentialityEscrowProxy = new TransparentUpgradeableProxy(
+            address(confidentialityEscrowImpl),
+            governance,
+            abi.encodeCall(
+                ConfidentialityEscrow.initialize,
+                (
+                    deployer,
+                    governance,
+                    address(lrepToken),
+                    usdcTokenAddress,
+                    address(registry),
+                    address(protocolConfig),
+                    governance
+                )
+            )
+        );
+        ConfidentialityEscrow confidentialityEscrow = ConfidentialityEscrow(address(confidentialityEscrowProxy));
+
         X402QuestionSubmitter x402QuestionSubmitter =
             new X402QuestionSubmitter(registry, usdcTokenAddress, address(questionRewardPoolEscrow), governance);
 
@@ -307,18 +327,25 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         registry.pause();
         registry.setVotingEngine(address(votingEngine));
         registry.setQuestionRewardPoolEscrow(address(questionRewardPoolEscrow));
+        registry.setConfidentialityEscrow(address(confidentialityEscrow));
         registry.unpause();
         registry.setProtocolConfig(address(protocolConfig));
         registry.setCategoryRegistry(address(categoryRegistry));
         registry.grantRole(registry.X402_GATEWAY_ROLE(), address(x402QuestionSubmitter));
+        confidentialityEscrow.grantRole(confidentialityEscrow.CONFIG_ROLE(), address(registry));
 
         protocolConfig.setRewardDistributor(address(rewardDistributor));
         protocolConfig.setFrontendRegistry(address(frontendRegistry));
         protocolConfig.setCategoryRegistry(address(categoryRegistry));
         protocolConfig.setRaterRegistry(address(raterRegistry));
+        protocolConfig.setConfidentialityEscrow(address(confidentialityEscrow));
+        raterRegistry.setConfidentialityEscrow(address(confidentialityEscrow));
         if (!isLocalDev) {
             registry.renounceRole(registry.CONFIG_ROLE(), deployer);
             registry.renounceRole(registry.PAUSER_ROLE(), deployer);
+            confidentialityEscrow.renounceRole(confidentialityEscrow.PAUSER_ROLE(), deployer);
+            confidentialityEscrow.renounceRole(confidentialityEscrow.CONFIG_ROLE(), deployer);
+            confidentialityEscrow.renounceRole(confidentialityEscrow.DEFAULT_ADMIN_ROLE(), deployer);
         }
 
         profileRegistry.setRaterRegistry(address(raterRegistry));
@@ -397,7 +424,8 @@ contract DeployRateLoop is ScaffoldETHDeploy {
                 address(registry),
                 address(frontendRegistry),
                 address(questionRewardPoolEscrow),
-                address(feedbackBonusEscrow)
+                address(feedbackBonusEscrow),
+                address(confidentialityEscrow)
             );
             governor = new RateLoopGovernor(
                 IVotes(address(lrepToken)), TimelockController(payable(governance)), excludedHolders
@@ -451,6 +479,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         deployments.push(
             Deployment("QuestionRewardPoolEscrowProxyAdmin", _proxyAdmin(address(questionRewardPoolEscrowProxy)))
         );
+        deployments.push(Deployment("ConfidentialityEscrow", address(confidentialityEscrowProxy)));
+        deployments.push(
+            Deployment("ConfidentialityEscrowProxyAdmin", _proxyAdmin(address(confidentialityEscrowProxy)))
+        );
         deployments.push(Deployment("X402QuestionSubmitter", address(x402QuestionSubmitter)));
         deployments.push(Deployment("FeedbackRegistry", address(feedbackRegistryProxy)));
         deployments.push(Deployment("FeedbackRegistryProxyAdmin", _proxyAdmin(address(feedbackRegistryProxy))));
@@ -480,6 +512,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         console.log("ProtocolConfig:", address(protocolConfig));
         console.log("RoundRewardDistributor:", address(rewardDistributor));
         console.log("QuestionRewardPoolEscrow:", address(questionRewardPoolEscrow));
+        console.log("ConfidentialityEscrow:", address(confidentialityEscrow));
         console.log("X402QuestionSubmitter:", address(x402QuestionSubmitter));
         console.log("FeedbackRegistry:", address(feedbackRegistry));
         console.log("FeedbackBonusEscrow:", address(feedbackBonusEscrow));
@@ -640,9 +673,10 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         address contentRegistry,
         address frontendRegistry,
         address questionRewardPoolEscrow,
-        address feedbackBonusEscrow
+        address feedbackBonusEscrow,
+        address confidentialityEscrow
     ) internal pure returns (address[] memory holders) {
-        address[] memory temp = new address[](8);
+        address[] memory temp = new address[](9);
         uint256 count;
         count = _appendUnique(temp, count, launchDistribution);
         count = _appendUnique(temp, count, rewardDistributor);
@@ -652,6 +686,7 @@ contract DeployRateLoop is ScaffoldETHDeploy {
         count = _appendUnique(temp, count, frontendRegistry);
         count = _appendUnique(temp, count, questionRewardPoolEscrow);
         count = _appendUnique(temp, count, feedbackBonusEscrow);
+        count = _appendUnique(temp, count, confidentialityEscrow);
 
         holders = new address[](count);
         for (uint256 i = 0; i < count; i++) {
